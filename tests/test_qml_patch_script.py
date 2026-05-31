@@ -1,0 +1,555 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "native_agent/scripts/qml_patch.sh"
+SOURCE_DIR = ROOT / "device_qml"
+# Synthetic reduced fixtures. These are not stock firmware QML files.
+ORIGINAL_MAIN_APP = "\n".join(
+    [
+        "original main",
+        "            homePage,",
+        "            memoPage,",
+        "            settingsPage,",
+        "",
+        "    PageLoader {",
+        "        id: settingsPage",
+        "        sourceUrl: \"Settings.qml\"",
+        "    }",
+        "",
+    ]
+)
+ORIGINAL_HOME_PAGE = "\n".join(
+    [
+        "import QtQuick 1.1",
+        "import Components 1.0",
+        "import BtObjects 2.0",
+        "import \"js/utils.js\" as Utils",
+        "",
+        "Page {",
+        "    id: page",
+        "",
+        "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2",
+        "    property variant networkManager: global.mNetworkManager",
+        "    property string wifiIcon: \"\"",
+        "",
+        "    function aboutToShow() {",
+        "        originalHomeSetup()",
+        "    }",
+        "",
+        "    Connections {",
+        "        target: page",
+        "        onVisibleChanged: {",
+        "            if (visible) {",
+        "                var loader = smallDateTimePresent ? topDateTimeLoader : bigDateTimeLoader",
+        "                loader.item.setTime()",
+        "                loader.item.setDate()",
+        "            } else {",
+        "                originalHiddenHook()",
+        "            }",
+        "        }",
+        "    }",
+        "",
+        "    Item {",
+        "        id: buttonHolder",
+        "",
+        "        function buttonCount() {",
+        "            return answerButton.isVisible()",
+        "                    + cameraButton.isVisible()",
+        "                    + intercomButton.isVisible()",
+        "                    + activationsButton.isVisible()",
+        "                    + 2",
+        "        }",
+        "",
+        "        Flow {",
+        "            id: foobar",
+        "            height: buttonHolder.buttonCount() > 4 ? (buttonPrototype.height + spacing) * 2 : buttonPrototype.height",
+        "            anchors.horizontalCenterOffset: page.smallDateTimePresent ? 0 : (parent.width / 2 - width / 2) - page.width / 100 * 2 // 16",
+        "",
+        "            BasicButton {",
+        "                id: answerButton",
+        "                function isVisible() { return true }",
+        "                style: HomePageButtonStyle {",
+        "                    notificationsCount: answeringModel.obj.unreadMessages",
+        "                }",
+        "            }",
+        "",
+        "            BasicButton { id: intercomButton; function isVisible() { return true } }",
+        "            BasicButton { id: cameraButton; function isVisible() { return true } }",
+        "            BasicButton { id: activationsButton; function isVisible() { return true } }",
+        "",
+        "            BasicButton {",
+                "                objectName: \"memoButton\"",
+                "                style: HomePageButtonStyle {",
+                "                    notificationsCount: answeringModel.obj.unreadMemos",
+                "                }",
+        "            }",
+        "",
+        "            Item {",
+        "                id: verticalSpacingForSettingsButton",
+        "                visible: buttonHolder.buttonCount() === 5",
+        "            }",
+        "",
+        "            BasicButton {",
+        "                objectName: \"settingsButton\"",
+        "                onTouched: tabView.activateTab(settingsPage)",
+        "            }",
+        "        }",
+        "    }",
+        "",
+        "    Loader { id: favoritesLoader }",
+        "}",
+        "",
+    ]
+)
+ORIGINAL_MEMO_PAGE = "\n".join(
+    [
+        "import QtQuick 1.1",
+        "import BtObjects 2.0",
+        "import Components 1.0",
+        "import \"js/audiorecord.js\" as Utils",
+        "",
+        "GridPage {",
+        "    id: page",
+        "",
+        "    headerLabel: qsTr(\"Memo\") + trsl.empty",
+        "    onBackClicked: tabView.activateTab(homePage)",
+        "    onObjectClicked: {",
+        "        originalMemoOpen()",
+        "    }",
+        "",
+        "    topMargin: 86",
+        "    model: ObjectModel {",
+        "        source: answering.obj.memos",
+        "    }",
+        "}",
+        "",
+    ]
+)
+SOURCE_INSTALLED_FILES = (
+    "Alarm.qml",
+    "HomeAssistant.qml",
+    "js/c300x_ha.js",
+    "js/c300x_i18n.js",
+    "js/c300x_memos.js",
+)
+PATCH_OUTPUT_SHA256 = {
+    "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
+    "HomePage.qml": "6c6e03acf7047a0b95d084523e3c46736d5f88ea6b0ca4af14e364692d3825b6",
+    "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
+    "Alarm.qml": "b8364865e7148091dd496cbba8144f578957c5b70ee3ec7205e3d69db7f13771",
+    "HomeAssistant.qml": "e562321b3630be0f406cd1298aa3ae3f6d71eda4f72cf596ee29d303f285954a",
+    "js/c300x_ha.js": "ac4cc97327a8647dc6a29fbc3f2ffeb09d1690c0172d2f0a9e216f36aa745279",
+    "js/c300x_i18n.js": "6fa5959eb6437bbb8dbb2649fe7754908ae8930a7e3e6ad1714b0ae9ce64272d",
+    "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
+}
+
+
+def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    first_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    assert first_status["state"] == "patched"
+    assert first_status["changed_files"] > 0
+    _assert_complete_gui_patch(gui_dir)
+
+    second_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    assert second_status["state"] == "patched"
+    assert second_status["changed_files"] == 0
+    _assert_complete_gui_patch(gui_dir)
+
+    assert (backup_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
+    assert (backup_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+    assert (backup_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert not (backup_dir / "Alarm.qml").exists()
+    assert not (backup_dir / "HomeAssistant.qml").exists()
+    assert not (backup_dir / "js/c300x_ha.js").exists()
+    assert not (backup_dir / "js/c300x_i18n.js").exists()
+    assert not (backup_dir / "js/c300x_memos.js").exists()
+
+    restored_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore")
+    assert restored_status["state"] == "original"
+    assert restored_status["changed_files"] > 0
+    assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
+    assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+    assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert not (gui_dir / "Alarm.qml").exists()
+    assert not (gui_dir / "HomeAssistant.qml").exists()
+    assert not (gui_dir / "js").exists()
+
+
+def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+
+    assert status["state"] == "patched"
+    assert status["patched"] is True
+    _assert_complete_gui_patch(gui_dir)
+
+
+def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+
+    assert status["state"] == "patched"
+    assert {
+        relative_path: _sha256(gui_dir / relative_path)
+        for relative_path in PATCH_OUTPUT_SHA256
+    } == PATCH_OUTPUT_SHA256
+
+
+def test_qml_patch_apply_reports_reload_failure_without_patched_state(
+    tmp_path: Path,
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    result = _run_qml_patch_raw(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        env_overrides={
+            "C300X_QML_RELOAD_GUI": "1",
+            "C300X_QML_GUI_RELOAD_DELAY_SECONDS": "0",
+            "C300X_QML_GUI_WRAPPER": str(tmp_path / "missing-gui-wrapper"),
+        },
+    )
+
+    result.check_returncode()
+    status = json.loads(result.stdout)
+    assert status["state"] == "reload_failed"
+    assert status["patched"] is None
+    _assert_complete_gui_patch(gui_dir)
+
+
+def test_qml_patch_remounts_ro_after_write_action(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    mount_log = tmp_path / "mount.log"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = _fake_mount_env(tmp_path, mount_log)
+
+    result = _run_qml_patch_raw(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        no_remount=False,
+        env_overrides=env,
+    )
+
+    assert result.returncode == 0
+    assert mount_log.read_text().splitlines() == [
+        "-o remount,rw /",
+        "-o remount,ro /",
+    ]
+
+
+def test_qml_patch_does_not_remount_when_reapply_is_identical(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    mount_log = tmp_path / "mount.log"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = _fake_mount_env(tmp_path, mount_log)
+
+    first_result = _run_qml_patch_raw(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        no_remount=False,
+        env_overrides=env,
+    )
+    first_result.check_returncode()
+    mount_log.write_text("")
+
+    second_status = _run_qml_patch(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        no_remount=False,
+        env_overrides=env,
+    )
+
+    assert second_status["changed_files"] == 0
+    assert mount_log.read_text() == ""
+
+
+def test_qml_patch_remounts_ro_after_failed_write_action(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    mount_log = tmp_path / "mount.log"
+    source_dir = tmp_path / "missing-source"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    env = _fake_mount_env(tmp_path, mount_log)
+
+    result = _run_qml_patch_raw(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        no_remount=False,
+        source_dir=source_dir,
+        env_overrides=env,
+    )
+
+    assert result.returncode != 0
+    assert not mount_log.exists()
+
+
+def test_qml_patch_status_detects_partial_function_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    (gui_dir / "Alarm.qml").write_text("headerLabel: \"Alarmanlage\"\n")
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")
+
+    assert status["state"] == "partial"
+    assert status["patched"] is None
+
+
+def test_qml_patch_refuses_patched_home_page_without_original_backup(
+    tmp_path: Path,
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    (gui_dir / "HomePage.qml").write_text(
+        ORIGINAL_HOME_PAGE + "\n            Row { id: homeAssistantButtonRow }\n"
+    )
+
+    result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, "apply")
+
+    assert result.returncode != 0
+    assert "already patched" in result.stderr
+    assert not (backup_dir / "HomePage.qml").exists()
+
+
+def test_qml_patch_preserves_source_files_at_runtime(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    source_dir = tmp_path / "source"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _copy_source_tree(source_dir)
+    (source_dir / "HomePage.qml").write_text("old generated stock copy\n")
+    (source_dir / "MemoPage.qml").write_text("old generated stock copy\n")
+
+    status = _run_qml_patch(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        source_dir=source_dir,
+    )
+
+    assert status["state"] == "patched"
+    assert (source_dir / "HomePage.qml").exists()
+    assert (source_dir / "MemoPage.qml").exists()
+    _assert_complete_gui_patch(gui_dir, source_dir=source_dir)
+
+
+def test_qml_patch_restore_refuses_to_delete_stock_files_without_backups(
+    tmp_path: Path,
+) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    (gui_dir / "Alarm.qml").write_text("generated page\n")
+
+    result = _run_qml_patch_raw(tmp_path, gui_dir, backup_dir, "restore")
+
+    assert result.returncode != 0
+    assert "No original backup available for MainApp.qml" in result.stderr
+    assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
+    assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+    assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+
+
+def _run_qml_patch(
+    tmp_path: Path,
+    gui_dir: Path,
+    backup_dir: Path,
+    action: str,
+    *,
+    no_remount: bool = True,
+    source_dir: Path = SOURCE_DIR,
+    env_overrides: dict[str, str] | None = None,
+) -> dict[str, object]:
+    result = _run_qml_patch_raw(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        action,
+        no_remount=no_remount,
+        source_dir=source_dir,
+        env_overrides=env_overrides,
+    )
+    result.check_returncode()
+    return json.loads(result.stdout)
+
+
+def _run_qml_patch_raw(
+    tmp_path: Path,
+    gui_dir: Path,
+    backup_dir: Path,
+    action: str,
+    *,
+    no_remount: bool = True,
+    source_dir: Path = SOURCE_DIR,
+    env_overrides: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = {
+        **os.environ,
+        "C300X_QML_GUI_DIR": str(gui_dir),
+        "C300X_QML_SOURCE_DIR": str(source_dir),
+        "C300X_QML_BACKUP_DIR": str(backup_dir),
+        "C300X_QML_NO_REMOUNT": "1" if no_remount else "0",
+        "C300X_QML_RELOAD_GUI": "0",
+        "C300X_QML_GUI_ROOT": str(tmp_path),
+    }
+    if env_overrides:
+        env.update(env_overrides)
+    return subprocess.run(
+        [str(SCRIPT), action],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+
+def _write_original_gui(gui_dir: Path) -> None:
+    (gui_dir / "MainApp.qml").write_text(ORIGINAL_MAIN_APP)
+    (gui_dir / "HomePage.qml").write_text(ORIGINAL_HOME_PAGE)
+    (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)
+
+
+def _copy_source_tree(source_dir: Path) -> None:
+    for relative_path in SOURCE_INSTALLED_FILES:
+        source_file = SOURCE_DIR / relative_path
+        target_file = source_dir / relative_path
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_file, target_file)
+
+
+def _assert_complete_gui_patch(
+    gui_dir: Path,
+    *,
+    source_dir: Path = SOURCE_DIR,
+) -> None:
+    for relative_path in SOURCE_INSTALLED_FILES:
+        assert (gui_dir / relative_path).read_bytes() == (
+            source_dir / relative_path
+        ).read_bytes()
+
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert "originalHomeSetup()" in home_page
+    assert 'import "js/c300x_ha.js" as HAConfig' not in home_page
+    assert 'import "js/c300x_memos.js" as MemoSync' in home_page
+    assert "function refreshDisplayBridgeButtons()" not in home_page
+    assert "function startMessageNotificationWatch()" in home_page
+    assert "function stopMessageNotificationWatch()" in home_page
+    assert "MemoSync.syncHomeNotifications(page)" in home_page
+    assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in home_page
+    assert 'event.topic === "memos"' in home_page
+    assert 'event.topic === "answering_machine.messages"' in home_page
+    assert "id: homeAssistantButtonRow" in home_page
+    assert "width: buttonPrototype.width * 2 + foobar.spacing" in home_page
+    assert "spacing: foobar.spacing" in home_page
+    assert "anchors.left: foobar.right" not in home_page
+    assert "notificationsCount: page.unreadMessagesCount()" in home_page
+    assert "notificationsCount: page.unreadMemosCount()" in home_page
+    assert "visible: page.alarmButtonVisible" not in home_page
+    assert "visible: page.haButtonVisible" not in home_page
+    assert home_page.index('objectName: "settingsButton"') < home_page.index(
+        'objectName: "alarmButton"'
+    )
+    assert home_page.index('objectName: "alarmButton"') < home_page.index(
+        'objectName: "haButton"'
+    )
+    assert 'pressedIcon: "images/keylock_icon-small_p.svg"' in home_page
+    assert 'defaultIcon: "images/keylock_icon-small.svg"' in home_page
+    assert 'pressedIcon: "images/call/icon_call-home_p.svg"' in home_page
+    assert 'defaultIcon: "images/call/icon_call-home.svg"' in home_page
+    assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
+    assert 'trsl.language === "it" ? "Allarme"' in home_page
+    assert "buttonHolder.buttonCount() === 5" in home_page
+    assert "console.log(" not in home_page
+
+    memo_page = (gui_dir / "MemoPage.qml").read_text()
+    assert "originalMemoOpen()" in memo_page
+    assert 'import "js/c300x_memos.js" as MemoSync' in memo_page
+    assert "function aboutToShow()" in memo_page
+    assert "MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)" in memo_page
+
+    main_app = (gui_dir / "MainApp.qml").read_text()
+    assert (
+        "            memoPage,\n"
+        "            alarmPage,\n"
+        "            haPage,\n"
+        "            settingsPage,"
+    ) in main_app
+    assert (
+        '    PageLoader {\n'
+        '        id: alarmPage\n'
+        '        sourceUrl: "Alarm.qml"\n'
+        '    }\n\n'
+        '    PageLoader {\n'
+        '        id: haPage\n'
+        '        sourceUrl: "HomeAssistant.qml"\n'
+        '    }\n\n'
+        '    PageLoader {\n'
+        '        id: settingsPage'
+    ) in main_app
+    assert main_app.count("            alarmPage,") == 1
+    assert main_app.count("            haPage,") == 1
+    assert main_app.count('id: alarmPage') == 1
+    assert main_app.count('id: haPage') == 1
+    assert main_app.count('sourceUrl: "Alarm.qml"') == 1
+    assert main_app.count('sourceUrl: "HomeAssistant.qml"') == 1
+
+
+def _fake_mount_env(tmp_path: Path, mount_log: Path) -> dict[str, str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_mount = bin_dir / "mount"
+    fake_mount.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {mount_log}\n"
+        "exit 0\n"
+    )
+    fake_mount.chmod(0o700)
+    return {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()

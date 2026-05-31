@@ -1,0 +1,7 @@
+{
+  "name": "BTicino C300X",
+  "homeassistant": "2026.5.0",
+  "zip_release": true,
+  "filename": "ha-bticino-c300x.zip",
+  "render_readme": true
+}

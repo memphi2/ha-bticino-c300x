@@ -1,0 +1,1473 @@
+#include "c300x_agent.h"
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static void set_error(char *error, size_t error_len, const char *message)
+{
+    if (error_len == 0) {
+        return;
+    }
+    snprintf(error, error_len, "%s", message);
+}
+
+static void safe_copy(char *dest, size_t dest_len, const char *value)
+{
+    if (dest_len == 0) {
+        return;
+    }
+    snprintf(dest, dest_len, "%s", value != NULL ? value : "");
+}
+
+static int address_is_valid(const char *value)
+{
+    size_t len = strlen(value);
+    if (len == 0 || len >= C300X_MAX_ADDRESS_LEN) {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        if (!isdigit((unsigned char)value[index]) && value[index] != '#') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void c300x_default_config(struct c300x_config *config)
+{
+    memset(config, 0, sizeof(*config));
+    safe_copy(config->listen_host, sizeof(config->listen_host), "127.0.0.1");
+    safe_copy(config->config_path, sizeof(config->config_path), "config.json");
+    config->api_port = 8091;
+    config->ui_port = 8090;
+    config->allow_lan = 0;
+    config->display_bridge_enabled = 0;
+    safe_copy(config->device_model, sizeof(config->device_model), "C300X");
+    safe_copy(config->device_firmware, sizeof(config->device_firmware), "");
+    safe_copy(config->openwebnet_host, sizeof(config->openwebnet_host), "127.0.0.1");
+    config->openwebnet_port = 20000;
+    config->openwebnet_timeout_ms = 3000;
+    safe_copy(
+        config->stair_light_default_address,
+        sizeof(config->stair_light_default_address),
+        "10"
+    );
+    safe_copy(config->lock_id, sizeof(config->lock_id), "default");
+    safe_copy(config->lock_name, sizeof(config->lock_name), "Main door");
+    safe_copy(config->lock_address, sizeof(config->lock_address), "20");
+    config->lock_release_delay_ms = 2000;
+    config->maintenance_reboot_delay_ms = 500;
+    config->maintenance_agent_remove_script[0] = '\0';
+    config->maintenance_gui_reload_script[0] = '\0';
+    config->maintenance_qml_patch_script[0] = '\0';
+    safe_copy(
+        config->maintenance_firewall_path,
+        sizeof(config->maintenance_firewall_path),
+        "/etc/network/if-pre-up.d/iptables"
+    );
+    safe_copy(
+        config->maintenance_firewall_backup_path,
+        sizeof(config->maintenance_firewall_backup_path),
+        "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables"
+    );
+    safe_copy(
+        config->maintenance_ipv6_firewall_path,
+        sizeof(config->maintenance_ipv6_firewall_path),
+        "/etc/network/if-pre-up.d/iptables6"
+    );
+    safe_copy(
+        config->maintenance_ipv6_firewall_backup_path,
+        sizeof(config->maintenance_ipv6_firewall_backup_path),
+        "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables6"
+    );
+    config->maintenance_no_auth_allowed = 0;
+    config->mdns_enabled = 1;
+    safe_copy(config->mdns_name, sizeof(config->mdns_name), "BTicino C300X");
+    config->events_enabled = 1;
+    safe_copy(config->events_group, sizeof(config->events_group), "239.255.76.67");
+    config->events_port = 7667;
+    safe_copy(
+        config->subscription_store_path,
+        sizeof(config->subscription_store_path),
+        "/home/bticino/cfg/extra/c300x-native-agent/subscriptions.json"
+    );
+    config->callback_timeout_ms = 2500;
+    config->home_assistant_request_timeout_ms = 3000;
+    config->api_no_auth = 0;
+    config->video_enabled = 0;
+    safe_copy(config->video_av_host, sizeof(config->video_av_host), "127.0.0.1");
+    config->video_av_port = 30007;
+    config->video_av_timeout_ms = 5000;
+    config->video_av_high_resolution = 1;
+    config->video_rtsp_port = 6554;
+    config->video_rtp_port_start = 10000;
+    config->video_rtp_port_count = 100;
+    config->video_rtsp_keep_alive_ms = 7500;
+    safe_copy(config->video_rtsp_path, sizeof(config->video_rtsp_path), "/doorbell");
+    safe_copy(config->video_rtsp_video_path, sizeof(config->video_rtsp_video_path), "/doorbell-video");
+    safe_copy(config->video_rtsp_recorder_path, sizeof(config->video_rtsp_recorder_path), "/doorbell-recorder");
+    safe_copy(config->video_rtsp_username, sizeof(config->video_rtsp_username), "");
+    safe_copy(config->video_rtsp_password, sizeof(config->video_rtsp_password), "");
+    safe_copy(config->video_sip_from, sizeof(config->video_sip_from), "webrtc@127.0.0.1");
+    safe_copy(config->video_sip_to, sizeof(config->video_sip_to), "c300x@127.0.0.1");
+    safe_copy(config->video_sip_domain, sizeof(config->video_sip_domain), "");
+    safe_copy(config->video_sip_devaddr, sizeof(config->video_sip_devaddr), "20");
+    safe_copy(config->video_sip_local_ip, sizeof(config->video_sip_local_ip), "127.0.0.1");
+    config->video_sip_local_port = 5060;
+    config->video_sip_use_tcp = 1;
+    config->video_sip_debug = 0;
+    config->answering_machine_messages_enabled = 1;
+    safe_copy(
+        config->answering_machine_messages_root,
+        sizeof(config->answering_machine_messages_root),
+        "/home/bticino/cfg/extra/47/messages"
+    );
+    config->answering_machine_messages_watch = 1;
+    config->answering_machine_messages_max = 64;
+    config->system_metrics_enabled = 1;
+    config->system_metrics_watch = 1;
+    config->system_metrics_sample_interval_seconds = 30;
+    config->system_metrics_heartbeat_seconds = 600;
+    config->system_metrics_change_percent = 5;
+    config->memos_enabled = 1;
+    safe_copy(
+        config->memos_text_root,
+        sizeof(config->memos_text_root),
+        "/home/bticino/cfg/extra/47/memos_text"
+    );
+    safe_copy(
+        config->memos_voice_root,
+        sizeof(config->memos_voice_root),
+        "/home/bticino/cfg/extra/47/memos_voice"
+    );
+    config->memos_watch = 1;
+    config->memos_max = 64;
+}
+
+static char *read_file(const char *path, char *error, size_t error_len)
+{
+    FILE *file = fopen(path, "rb");
+    long size;
+    char *buffer;
+
+    if (file == NULL) {
+        snprintf(error, error_len, "cannot open config: %s", strerror(errno));
+        return NULL;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        set_error(error, error_len, "cannot seek config");
+        fclose(file);
+        return NULL;
+    }
+    size = ftell(file);
+    if (size < 0 || size > 1024 * 1024) {
+        set_error(error, error_len, "invalid config size");
+        fclose(file);
+        return NULL;
+    }
+    if (fseek(file, 0, SEEK_SET) != 0) {
+        set_error(error, error_len, "cannot rewind config");
+        fclose(file);
+        return NULL;
+    }
+    buffer = calloc((size_t)size + 1, 1);
+    if (buffer == NULL) {
+        set_error(error, error_len, "out of memory");
+        fclose(file);
+        return NULL;
+    }
+    if (fread(buffer, 1, (size_t)size, file) != (size_t)size) {
+        set_error(error, error_len, "cannot read config");
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
+    fclose(file);
+    return buffer;
+}
+
+static const char *skip_ws(const char *ptr, const char *end)
+{
+    while (ptr < end && isspace((unsigned char)*ptr)) {
+        ptr++;
+    }
+    return ptr;
+}
+
+static const char *skip_json_string(const char *ptr, const char *end)
+{
+    if (ptr >= end || *ptr != '"') {
+        return NULL;
+    }
+    ptr++;
+    while (ptr < end) {
+        if (*ptr == '\\') {
+            ptr += ptr + 1 < end ? 2 : 1;
+            continue;
+        }
+        if (*ptr == '"') {
+            return ptr + 1;
+        }
+        ptr++;
+    }
+    return NULL;
+}
+
+static const char *skip_json_value(const char *ptr, const char *end)
+{
+    int object_depth = 0;
+    int array_depth = 0;
+
+    ptr = skip_ws(ptr, end);
+    if (ptr >= end) {
+        return NULL;
+    }
+    if (*ptr == '"') {
+        return skip_json_string(ptr, end);
+    }
+    while (ptr < end) {
+        if (*ptr == '"') {
+            ptr = skip_json_string(ptr, end);
+            if (ptr == NULL) {
+                return NULL;
+            }
+            continue;
+        }
+        if (*ptr == '{') {
+            object_depth++;
+        } else if (*ptr == '}') {
+            if (object_depth == 0) {
+                break;
+            }
+            object_depth--;
+            if (object_depth == 0 && array_depth == 0) {
+                return ptr + 1;
+            }
+        } else if (*ptr == '[') {
+            array_depth++;
+        } else if (*ptr == ']') {
+            if (array_depth == 0) {
+                break;
+            }
+            array_depth--;
+            if (object_depth == 0 && array_depth == 0) {
+                return ptr + 1;
+            }
+        } else if (object_depth == 0 && array_depth == 0 && (*ptr == ',' || *ptr == '}')) {
+            return ptr;
+        }
+        ptr++;
+    }
+    return ptr;
+}
+
+static int key_equals(const char *start, const char *end, const char *key)
+{
+    size_t key_len = strlen(key);
+    return (size_t)(end - start) == key_len && strncmp(start, key, key_len) == 0;
+}
+
+static int find_member(
+    const char *object_start,
+    const char *object_end,
+    const char *key,
+    const char **value
+)
+{
+    const char *ptr = skip_ws(object_start, object_end);
+
+    if (ptr >= object_end || *ptr != '{') {
+        return 0;
+    }
+    ptr++;
+    while (ptr < object_end) {
+        const char *key_start;
+        const char *key_end;
+        const char *after_key;
+
+        ptr = skip_ws(ptr, object_end);
+        if (ptr >= object_end || *ptr == '}') {
+            return 0;
+        }
+        if (*ptr != '"') {
+            return 0;
+        }
+        key_start = ptr + 1;
+        after_key = skip_json_string(ptr, object_end);
+        if (after_key == NULL) {
+            return 0;
+        }
+        key_end = after_key - 1;
+        ptr = skip_ws(after_key, object_end);
+        if (ptr >= object_end || *ptr != ':') {
+            return 0;
+        }
+        ptr = skip_ws(ptr + 1, object_end);
+        if (key_equals(key_start, key_end, key)) {
+            *value = ptr;
+            return 1;
+        }
+        ptr = skip_json_value(ptr, object_end);
+        if (ptr == NULL) {
+            return 0;
+        }
+        ptr = skip_ws(ptr, object_end);
+        if (ptr < object_end && *ptr == ',') {
+            ptr++;
+        }
+    }
+    return 0;
+}
+
+static int object_bounds(const char *value, const char *document_end, const char **end)
+{
+    const char *after;
+
+    value = skip_ws(value, document_end);
+    if (value >= document_end || *value != '{') {
+        return 0;
+    }
+    after = skip_json_value(value, document_end);
+    if (after == NULL) {
+        return 0;
+    }
+    *end = after;
+    return 1;
+}
+
+static int nested_member(
+    const char *document,
+    const char *document_end,
+    const char *object_key,
+    const char *member_key,
+    const char **value
+)
+{
+    const char *object_value;
+    const char *object_end;
+
+    if (!find_member(document, document_end, object_key, &object_value)) {
+        return 0;
+    }
+    if (!object_bounds(object_value, document_end, &object_end)) {
+        return 0;
+    }
+    return find_member(object_value, object_end, member_key, value);
+}
+
+static int nested_member3(
+    const char *document,
+    const char *document_end,
+    const char *first_key,
+    const char *second_key,
+    const char *member_key,
+    const char **value
+)
+{
+    const char *object_value;
+    const char *object_end;
+
+    if (!nested_member(document, document_end, first_key, second_key, &object_value)) {
+        return 0;
+    }
+    if (!object_bounds(object_value, document_end, &object_end)) {
+        return 0;
+    }
+    return find_member(object_value, object_end, member_key, value);
+}
+
+static int nested_member4(
+    const char *document,
+    const char *document_end,
+    const char *first_key,
+    const char *second_key,
+    const char *third_key,
+    const char *member_key,
+    const char **value
+)
+{
+    const char *object_value;
+    const char *object_end;
+
+    if (!nested_member3(
+        document,
+        document_end,
+        first_key,
+        second_key,
+        third_key,
+        &object_value
+    )) {
+        return 0;
+    }
+    if (!object_bounds(object_value, document_end, &object_end)) {
+        return 0;
+    }
+    return find_member(object_value, object_end, member_key, value);
+}
+
+static int string_value(const char *value, const char *document_end, char *out, size_t out_len)
+{
+    const char *ptr;
+    size_t written = 0;
+
+    value = skip_ws(value, document_end);
+    if (value >= document_end || *value != '"') {
+        return 0;
+    }
+    ptr = value + 1;
+    while (ptr < document_end && *ptr != '"') {
+        char ch = *ptr++;
+        if (ch == '\\' && ptr < document_end) {
+            ch = *ptr++;
+        }
+        if (written + 1 < out_len) {
+            out[written++] = ch;
+        }
+    }
+    if (ptr >= document_end || *ptr != '"') {
+        return 0;
+    }
+    if (out_len > 0) {
+        out[written] = '\0';
+    }
+    return 1;
+}
+
+static int uint16_value(const char *value, const char *document_end, uint16_t *out)
+{
+    char *parse_end = NULL;
+    long parsed;
+
+    value = skip_ws(value, document_end);
+    parsed = strtol(value, &parse_end, 10);
+    if (parse_end == value || parsed <= 0 || parsed > 65535) {
+        return 0;
+    }
+    *out = (uint16_t)parsed;
+    return 1;
+}
+
+static int int_value(const char *value, const char *document_end, int *out)
+{
+    char *parse_end = NULL;
+    long parsed;
+
+    value = skip_ws(value, document_end);
+    parsed = strtol(value, &parse_end, 10);
+    if (parse_end == value || parsed <= 0 || parsed > 60000) {
+        return 0;
+    }
+    *out = (int)parsed;
+    return 1;
+}
+
+static int bool_value(const char *value, const char *document_end, int *out)
+{
+    value = skip_ws(value, document_end);
+    if ((size_t)(document_end - value) >= 4 && strncmp(value, "true", 4) == 0) {
+        *out = 1;
+        return 1;
+    }
+    if ((size_t)(document_end - value) >= 5 && strncmp(value, "false", 5) == 0) {
+        *out = 0;
+        return 1;
+    }
+    return 0;
+}
+
+int c300x_load_config(
+    const char *config_path,
+    struct c300x_config *config,
+    char *error,
+    size_t error_len
+)
+{
+    const char *env_token;
+    char *document = NULL;
+    const char *document_end;
+    const char *value;
+
+    c300x_default_config(config);
+    env_token = getenv("C300X_AGENT_TOKEN");
+    if (config_path != NULL && config_path[0] != '\0') {
+        safe_copy(config->config_path, sizeof(config->config_path), config_path);
+    }
+
+    if (config_path == NULL || config_path[0] == '\0') {
+        if (env_token != NULL && env_token[0] != '\0') {
+            safe_copy(config->api_token, sizeof(config->api_token), env_token);
+            config->api_token_from_env = 1;
+        }
+        return 1;
+    }
+
+    document = read_file(config_path, error, error_len);
+    if (document == NULL) {
+        return 0;
+    }
+    document_end = document + strlen(document);
+
+    if (nested_member(document, document_end, "listen", "host", &value)) {
+        if (!string_value(value, document_end, config->listen_host, sizeof(config->listen_host))) {
+            set_error(error, error_len, "listen.host must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "listen", "apiPort", &value)) {
+        if (!uint16_value(value, document_end, &config->api_port)) {
+            set_error(error, error_len, "listen.apiPort must be a valid port");
+            free(document);
+            return 0;
+        }
+    } else if (nested_member(document, document_end, "listen", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->api_port)) {
+            set_error(error, error_len, "listen.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "listen", "uiPort", &value)) {
+        if (!uint16_value(value, document_end, &config->ui_port)) {
+            set_error(error, error_len, "listen.uiPort must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "listen", "allowLan", &value)) {
+        if (!bool_value(value, document_end, &config->allow_lan)) {
+            set_error(error, error_len, "listen.allowLan must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "api", "token", &value)) {
+        if (!string_value(value, document_end, config->api_token, sizeof(config->api_token))) {
+            set_error(error, error_len, "api.token must be a string");
+            free(document);
+            return 0;
+        }
+        safe_copy(config->api_file_token, sizeof(config->api_file_token), config->api_token);
+    }
+    if (nested_member(document, document_end, "api", "noAuth", &value)) {
+        if (!bool_value(value, document_end, &config->api_no_auth)) {
+            set_error(error, error_len, "api.noAuth must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "device", "model", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->device_model,
+            sizeof(config->device_model)
+        )) {
+            set_error(error, error_len, "device.model must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "device", "firmware", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->device_firmware,
+            sizeof(config->device_firmware)
+        )) {
+            set_error(error, error_len, "device.firmware must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "device", "stairLightDefaultAddress", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->stair_light_default_address,
+            sizeof(config->stair_light_default_address)
+        )) {
+            set_error(error, error_len, "device.stairLightDefaultAddress must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "openwebnet", "host", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->openwebnet_host,
+            sizeof(config->openwebnet_host)
+        )) {
+            set_error(error, error_len, "openwebnet.host must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "openwebnet", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->openwebnet_port)) {
+            set_error(error, error_len, "openwebnet.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "openwebnet", "timeoutMs", &value)) {
+        if (!int_value(value, document_end, &config->openwebnet_timeout_ms)) {
+            set_error(error, error_len, "openwebnet.timeoutMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "locks", "releaseDelayMs", &value)) {
+        if (!int_value(value, document_end, &config->lock_release_delay_ms)) {
+            set_error(error, error_len, "locks.releaseDelayMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "maintenance", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_enabled)) {
+            set_error(error, error_len, "maintenance.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "maintenance", "adminToken", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_admin_token,
+            sizeof(config->maintenance_admin_token)
+        )) {
+            set_error(error, error_len, "maintenance.adminToken must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "sshStart", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_ssh_start_enabled)) {
+            set_error(error, error_len, "maintenance.sshStart.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "reboot", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_reboot_enabled)) {
+            set_error(error, error_len, "maintenance.reboot.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "reboot", "delayMs", &value)) {
+        if (!int_value(value, document_end, &config->maintenance_reboot_delay_ms)) {
+            set_error(error, error_len, "maintenance.reboot.delayMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "agentRemove", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_agent_remove_enabled)) {
+            set_error(error, error_len, "maintenance.agentRemove.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "agentRemove", "script", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_agent_remove_script,
+            sizeof(config->maintenance_agent_remove_script)
+        )) {
+            set_error(error, error_len, "maintenance.agentRemove.script must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "guiReload", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_gui_reload_enabled)) {
+            set_error(error, error_len, "maintenance.guiReload.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "guiReload", "script", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_gui_reload_script,
+            sizeof(config->maintenance_gui_reload_script)
+        )) {
+            set_error(error, error_len, "maintenance.guiReload.script must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "qmlPatch", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_qml_patch_enabled)) {
+            set_error(error, error_len, "maintenance.qmlPatch.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "qmlPatch", "script", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_qml_patch_script,
+            sizeof(config->maintenance_qml_patch_script)
+        )) {
+            set_error(error, error_len, "maintenance.qmlPatch.script must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "firewall", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_firewall_enabled)) {
+            set_error(error, error_len, "maintenance.firewall.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "firewall", "path", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_firewall_path,
+            sizeof(config->maintenance_firewall_path)
+        )) {
+            set_error(error, error_len, "maintenance.firewall.path must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "firewall", "backupPath", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_firewall_backup_path,
+            sizeof(config->maintenance_firewall_backup_path)
+        )) {
+            set_error(error, error_len, "maintenance.firewall.backupPath must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "ipv6Firewall", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_ipv6_firewall_enabled)) {
+            set_error(error, error_len, "maintenance.ipv6Firewall.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "ipv6Firewall", "path", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_ipv6_firewall_path,
+            sizeof(config->maintenance_ipv6_firewall_path)
+        )) {
+            set_error(error, error_len, "maintenance.ipv6Firewall.path must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "maintenance", "ipv6Firewall", "backupPath", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->maintenance_ipv6_firewall_backup_path,
+            sizeof(config->maintenance_ipv6_firewall_backup_path)
+        )) {
+            set_error(error, error_len, "maintenance.ipv6Firewall.backupPath must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "maintenance", "allowNoAuth", &value)) {
+        if (!bool_value(value, document_end, &config->maintenance_no_auth_allowed)) {
+            set_error(error, error_len, "maintenance.allowNoAuth must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mdns", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->mdns_enabled)) {
+            set_error(error, error_len, "mdns.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mdns", "name", &value)) {
+        if (!string_value(value, document_end, config->mdns_name, sizeof(config->mdns_name))) {
+            set_error(error, error_len, "mdns.name must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "events", "subscriptionStorePath", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->subscription_store_path,
+            sizeof(config->subscription_store_path)
+        )) {
+            set_error(error, error_len, "events.subscriptionStorePath must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "events", "callbackTimeoutMs", &value)) {
+        if (!int_value(value, document_end, &config->callback_timeout_ms)) {
+            set_error(error, error_len, "events.callbackTimeoutMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "events", "udp", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->events_enabled)) {
+            set_error(error, error_len, "events.udp.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "events", "udp", "group", &value)) {
+        if (!string_value(value, document_end, config->events_group, sizeof(config->events_group))) {
+            set_error(error, error_len, "events.udp.group must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "events", "udp", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->events_port)) {
+            set_error(error, error_len, "events.udp.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "answeringMachine", "messages", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->answering_machine_messages_enabled)) {
+            set_error(error, error_len, "answeringMachine.messages.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "answeringMachine", "messages", "root", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->answering_machine_messages_root,
+            sizeof(config->answering_machine_messages_root)
+        )) {
+            set_error(error, error_len, "answeringMachine.messages.root must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "answeringMachine", "messages", "watch", &value)) {
+        if (!bool_value(value, document_end, &config->answering_machine_messages_watch)) {
+            set_error(error, error_len, "answeringMachine.messages.watch must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "answeringMachine", "messages", "maxMessages", &value)) {
+        if (!int_value(value, document_end, &config->answering_machine_messages_max)) {
+            set_error(error, error_len, "answeringMachine.messages.maxMessages must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "systemMetrics", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->system_metrics_enabled)) {
+            set_error(error, error_len, "systemMetrics.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "systemMetrics", "watch", &value)) {
+        if (!bool_value(value, document_end, &config->system_metrics_watch)) {
+            set_error(error, error_len, "systemMetrics.watch must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "systemMetrics", "sampleIntervalSeconds", &value)) {
+        if (!int_value(value, document_end, &config->system_metrics_sample_interval_seconds)) {
+            set_error(error, error_len, "systemMetrics.sampleIntervalSeconds must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "systemMetrics", "heartbeatSeconds", &value)) {
+        if (!int_value(value, document_end, &config->system_metrics_heartbeat_seconds)) {
+            set_error(error, error_len, "systemMetrics.heartbeatSeconds must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "systemMetrics", "changePercent", &value)) {
+        if (!int_value(value, document_end, &config->system_metrics_change_percent)) {
+            set_error(error, error_len, "systemMetrics.changePercent must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "memos", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->memos_enabled)) {
+            set_error(error, error_len, "memos.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "memos", "textRoot", &value)) {
+        if (!string_value(value, document_end, config->memos_text_root, sizeof(config->memos_text_root))) {
+            set_error(error, error_len, "memos.textRoot must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "memos", "voiceRoot", &value)) {
+        if (!string_value(value, document_end, config->memos_voice_root, sizeof(config->memos_voice_root))) {
+            set_error(error, error_len, "memos.voiceRoot must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "memos", "watch", &value)) {
+        if (!bool_value(value, document_end, &config->memos_watch)) {
+            set_error(error, error_len, "memos.watch must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "memos", "maxMemos", &value)) {
+        if (!int_value(value, document_end, &config->memos_max)) {
+            set_error(error, error_len, "memos.maxMemos must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member4(document, document_end, "locks", "items", "default", "name", &value)) {
+        if (!string_value(value, document_end, config->lock_name, sizeof(config->lock_name))) {
+            set_error(error, error_len, "locks.items.default.name must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member4(document, document_end, "locks", "items", "default", "address", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->lock_address,
+            sizeof(config->lock_address)
+        )) {
+            set_error(error, error_len, "locks.items.default.address must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "displayBridge", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->display_bridge_enabled)) {
+            set_error(error, error_len, "displayBridge.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "webhookUrl", &value)) {
+        if (!string_value(value, document_end, config->home_assistant_webhook_url, sizeof(config->home_assistant_webhook_url))) {
+            set_error(error, error_len, "displayBridge.homeAssistant.webhookUrl must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "sharedSecret", &value)) {
+        if (!string_value(value, document_end, config->home_assistant_shared_secret, sizeof(config->home_assistant_shared_secret))) {
+            set_error(error, error_len, "displayBridge.homeAssistant.sharedSecret must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "requestTimeoutMs", &value)) {
+        if (!int_value(value, document_end, &config->home_assistant_request_timeout_ms)) {
+            set_error(error, error_len, "displayBridge.homeAssistant.requestTimeoutMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "video", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->video_enabled)) {
+            set_error(error, error_len, "video.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "av", "host", &value)) {
+        if (!string_value(value, document_end, config->video_av_host, sizeof(config->video_av_host))) {
+            set_error(error, error_len, "video.av.host must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "av", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->video_av_port)) {
+            set_error(error, error_len, "video.av.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "av", "timeoutMs", &value)) {
+        if (!int_value(value, document_end, &config->video_av_timeout_ms)) {
+            set_error(error, error_len, "video.av.timeoutMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "av", "highResolution", &value)) {
+        if (!bool_value(value, document_end, &config->video_av_high_resolution)) {
+            set_error(error, error_len, "video.av.highResolution must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->video_rtsp_port)) {
+            set_error(error, error_len, "video.rtsp.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "rtpPortStart", &value)) {
+        if (!uint16_value(value, document_end, &config->video_rtp_port_start)) {
+            set_error(error, error_len, "video.rtsp.rtpPortStart must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "rtpPortCount", &value)) {
+        if (!int_value(value, document_end, &config->video_rtp_port_count)) {
+            set_error(error, error_len, "video.rtsp.rtpPortCount must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "keepAliveMs", &value)) {
+        if (!int_value(value, document_end, &config->video_rtsp_keep_alive_ms)) {
+            set_error(error, error_len, "video.rtsp.keepAliveMs must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "path", &value)) {
+        if (!string_value(value, document_end, config->video_rtsp_path, sizeof(config->video_rtsp_path))) {
+            set_error(error, error_len, "video.rtsp.path must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "videoPath", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->video_rtsp_video_path,
+            sizeof(config->video_rtsp_video_path)
+        )) {
+            set_error(error, error_len, "video.rtsp.videoPath must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "recorderPath", &value)) {
+        if (!string_value(
+            value,
+            document_end,
+            config->video_rtsp_recorder_path,
+            sizeof(config->video_rtsp_recorder_path)
+        )) {
+            set_error(error, error_len, "video.rtsp.recorderPath must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "username", &value)) {
+        if (!string_value(value, document_end, config->video_rtsp_username, sizeof(config->video_rtsp_username))) {
+            set_error(error, error_len, "video.rtsp.username must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "rtsp", "password", &value)) {
+        if (!string_value(value, document_end, config->video_rtsp_password, sizeof(config->video_rtsp_password))) {
+            set_error(error, error_len, "video.rtsp.password must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "from", &value)) {
+        if (!string_value(value, document_end, config->video_sip_from, sizeof(config->video_sip_from))) {
+            set_error(error, error_len, "video.sip.from must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "to", &value)) {
+        if (!string_value(value, document_end, config->video_sip_to, sizeof(config->video_sip_to))) {
+            set_error(error, error_len, "video.sip.to must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "domain", &value)) {
+        if (!string_value(value, document_end, config->video_sip_domain, sizeof(config->video_sip_domain))) {
+            set_error(error, error_len, "video.sip.domain must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "devaddr", &value)) {
+        if (!string_value(value, document_end, config->video_sip_devaddr, sizeof(config->video_sip_devaddr))) {
+            set_error(error, error_len, "video.sip.devaddr must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "localIp", &value)) {
+        if (!string_value(value, document_end, config->video_sip_local_ip, sizeof(config->video_sip_local_ip))) {
+            set_error(error, error_len, "video.sip.localIp must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "localPort", &value)) {
+        if (!uint16_value(value, document_end, &config->video_sip_local_port)) {
+            set_error(error, error_len, "video.sip.localPort must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "useTcp", &value)) {
+        if (!bool_value(value, document_end, &config->video_sip_use_tcp)) {
+            set_error(error, error_len, "video.sip.useTcp must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "video", "sip", "debug", &value)) {
+        if (!bool_value(value, document_end, &config->video_sip_debug)) {
+            set_error(error, error_len, "video.sip.debug must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    free(document);
+    if (env_token != NULL && env_token[0] != '\0') {
+        safe_copy(config->api_token, sizeof(config->api_token), env_token);
+        config->api_token_from_env = 1;
+    }
+
+    if (strcmp(config->listen_host, "127.0.0.1") != 0 && !config->allow_lan) {
+        set_error(error, error_len, "LAN binding requires listen.allowLan=true");
+        return 0;
+    }
+    if (!address_is_valid(config->stair_light_default_address)) {
+        set_error(error, error_len, "invalid default stair-light address");
+        return 0;
+    }
+    if (!address_is_valid(config->lock_address)) {
+        set_error(error, error_len, "invalid default lock address");
+        return 0;
+    }
+    if (config->video_rtp_port_count < 4) {
+        set_error(error, error_len, "video.rtsp.rtpPortCount must be >= 4");
+        return 0;
+    }
+    if (!config->api_no_auth && config->api_token[0] == '\0') {
+        set_error(error, error_len, "api.token must be configured when api.noAuth=false");
+        return 0;
+    }
+    if (
+        config->maintenance_enabled
+        && (
+            config->maintenance_ssh_start_enabled
+            || config->maintenance_reboot_enabled
+            || config->maintenance_agent_remove_enabled
+            || config->maintenance_gui_reload_enabled
+            || config->maintenance_qml_patch_enabled
+            || config->maintenance_firewall_enabled
+            || config->maintenance_ipv6_firewall_enabled
+        )
+        && config->maintenance_admin_token[0] == '\0'
+        && !(config->api_no_auth && config->maintenance_no_auth_allowed)
+    ) {
+        set_error(error, error_len, "maintenance.adminToken must be set when maintenance actions are enabled");
+        return 0;
+    }
+    if (config->maintenance_qml_patch_enabled && config->maintenance_qml_patch_script[0] == '\0') {
+        set_error(error, error_len, "maintenance.qmlPatch.script must be set when enabled");
+        return 0;
+    }
+    if (config->maintenance_agent_remove_enabled && config->maintenance_agent_remove_script[0] == '\0') {
+        set_error(error, error_len, "maintenance.agentRemove.script must be set when enabled");
+        return 0;
+    }
+    if (config->maintenance_gui_reload_enabled && config->maintenance_gui_reload_script[0] == '\0') {
+        set_error(error, error_len, "maintenance.guiReload.script must be set when enabled");
+        return 0;
+    }
+    if (config->maintenance_firewall_enabled) {
+        if (
+            config->maintenance_firewall_path[0] == '\0'
+            || config->maintenance_firewall_backup_path[0] == '\0'
+        ) {
+            set_error(error, error_len, "maintenance.firewall paths must be set when enabled");
+            return 0;
+        }
+        if (
+            config->maintenance_firewall_path[0] != '/'
+            || config->maintenance_firewall_backup_path[0] != '/'
+        ) {
+            set_error(error, error_len, "maintenance.firewall paths must be absolute");
+            return 0;
+        }
+    }
+    if (config->maintenance_ipv6_firewall_enabled) {
+        if (
+            config->maintenance_ipv6_firewall_path[0] == '\0'
+            || config->maintenance_ipv6_firewall_backup_path[0] == '\0'
+        ) {
+            set_error(error, error_len, "maintenance.ipv6Firewall paths must be set when enabled");
+            return 0;
+        }
+        if (
+            config->maintenance_ipv6_firewall_path[0] != '/'
+            || config->maintenance_ipv6_firewall_backup_path[0] != '/'
+        ) {
+            set_error(error, error_len, "maintenance.ipv6Firewall paths must be absolute");
+            return 0;
+        }
+    }
+    if (config->video_rtsp_path[0] == '\0' || config->video_rtsp_video_path[0] == '\0') {
+        set_error(error, error_len, "video.rtsp.path and video.rtsp.videoPath must be set");
+        return 0;
+    }
+    if (
+        config->answering_machine_messages_enabled
+        && config->answering_machine_messages_root[0] == '\0'
+    ) {
+        set_error(error, error_len, "answeringMachine.messages.root must be set when enabled");
+        return 0;
+    }
+    if (config->answering_machine_messages_max > C300X_MAX_VOICEMAIL_MESSAGES) {
+        set_error(error, error_len, "answeringMachine.messages.maxMessages exceeds native limit");
+        return 0;
+    }
+    if (config->system_metrics_sample_interval_seconds < 5) {
+        set_error(error, error_len, "systemMetrics.sampleIntervalSeconds must be >= 5");
+        return 0;
+    }
+    if (config->system_metrics_heartbeat_seconds < config->system_metrics_sample_interval_seconds) {
+        set_error(error, error_len, "systemMetrics.heartbeatSeconds must be >= sampleIntervalSeconds");
+        return 0;
+    }
+    if (config->system_metrics_change_percent < 1 || config->system_metrics_change_percent > 100) {
+        set_error(error, error_len, "systemMetrics.changePercent must be between 1 and 100");
+        return 0;
+    }
+    if (config->memos_enabled && (config->memos_text_root[0] == '\0' || config->memos_voice_root[0] == '\0')) {
+        set_error(error, error_len, "memos.textRoot and memos.voiceRoot must be set when enabled");
+        return 0;
+    }
+    if (config->memos_max > C300X_MAX_VOICEMAIL_MESSAGES) {
+        set_error(error, error_len, "memos.maxMemos exceeds native limit");
+        return 0;
+    }
+    return 1;
+}
+
+static void write_json_string(FILE *file, const char *value)
+{
+    fputc('"', file);
+    for (size_t index = 0; value[index] != '\0'; index++) {
+        unsigned char ch = (unsigned char)value[index];
+        if (ch == '"' || ch == '\\') {
+            fputc('\\', file);
+            fputc(ch, file);
+        } else if (ch == '\n') {
+            fputs("\\n", file);
+        } else if (ch == '\r') {
+            fputs("\\r", file);
+        } else if (ch == '\t') {
+            fputs("\\t", file);
+        } else if (ch < 0x20) {
+            fprintf(file, "\\u%04x", ch);
+        } else {
+            fputc(ch, file);
+        }
+    }
+    fputc('"', file);
+}
+
+static void write_json_string_field(FILE *file, const char *name, const char *value, const char *suffix)
+{
+    fprintf(file, "    \"%s\": ", name);
+    write_json_string(file, value);
+    fprintf(file, "%s\n", suffix);
+}
+
+int c300x_save_config(
+    const struct c300x_config *config,
+    char *error,
+    size_t error_len
+)
+{
+    char temporary_path[C300X_MAX_PATH_LEN + 8];
+    FILE *file;
+
+    if (config->config_path[0] == '\0') {
+        set_error(error, error_len, "config path is not set");
+        return 0;
+    }
+    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", config->config_path) >= (int)sizeof(temporary_path)) {
+        set_error(error, error_len, "config path is too long");
+        return 0;
+    }
+    file = fopen(temporary_path, "w");
+    if (file == NULL) {
+        set_error(error, error_len, "unable to open temporary config file");
+        return 0;
+    }
+
+    fprintf(file, "{\n");
+    fprintf(file, "  \"listen\": {\n");
+    write_json_string_field(file, "host", config->listen_host, ",");
+    fprintf(file, "    \"apiPort\": %u,\n", config->api_port);
+    fprintf(file, "    \"uiPort\": %u,\n", config->ui_port);
+    fprintf(file, "    \"allowLan\": %s\n", config->allow_lan ? "true" : "false");
+    fprintf(file, "  },\n");
+    fprintf(file, "  \"api\": {\n");
+    write_json_string_field(
+        file,
+        "token",
+        config->api_token_from_env ? config->api_file_token : config->api_token,
+        ","
+    );
+    fprintf(file, "    \"noAuth\": %s\n", config->api_no_auth ? "true" : "false");
+    fprintf(file, "  },\n");
+    fprintf(file, "  \"device\": {\n");
+    write_json_string_field(file, "model", config->device_model, ",");
+    write_json_string_field(file, "firmware", config->device_firmware, ",");
+    write_json_string_field(file, "stairLightDefaultAddress", config->stair_light_default_address, "");
+    fprintf(file, "  },\n");
+    fprintf(file, "  \"openwebnet\": {\n");
+    write_json_string_field(file, "host", config->openwebnet_host, ",");
+    fprintf(file, "    \"port\": %u,\n", config->openwebnet_port);
+    fprintf(file, "    \"timeoutMs\": %d\n", config->openwebnet_timeout_ms);
+    fprintf(file, "  },\n");
+    fprintf(file, "  \"locks\": {\n");
+    fprintf(file, "    \"releaseDelayMs\": %d,\n", config->lock_release_delay_ms);
+    fprintf(file, "    \"items\": {\n");
+    fprintf(file, "      \"default\": {\n");
+    fprintf(file, "        \"name\": ");
+    write_json_string(file, config->lock_name);
+    fprintf(file, ",\n        \"address\": ");
+    write_json_string(file, config->lock_address);
+    fprintf(file, "\n      }\n    }\n  },\n");
+    fprintf(file, "  \"maintenance\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->maintenance_enabled ? "true" : "false");
+    write_json_string_field(file, "adminToken", config->maintenance_admin_token, ",");
+    fprintf(file, "    \"sshStart\": {\"enabled\": %s},\n", config->maintenance_ssh_start_enabled ? "true" : "false");
+    fprintf(file, "    \"reboot\": {\"enabled\": %s,\"delayMs\": %d},\n", config->maintenance_reboot_enabled ? "true" : "false", config->maintenance_reboot_delay_ms);
+    fprintf(file, "    \"agentRemove\": {\"enabled\": %s,\"script\": ", config->maintenance_agent_remove_enabled ? "true" : "false");
+    write_json_string(file, config->maintenance_agent_remove_script);
+    fprintf(file, "},\n");
+    fprintf(file, "    \"guiReload\": {\"enabled\": %s,\"script\": ", config->maintenance_gui_reload_enabled ? "true" : "false");
+    write_json_string(file, config->maintenance_gui_reload_script);
+    fprintf(file, "},\n");
+    fprintf(file, "    \"qmlPatch\": {\"enabled\": %s,\"script\": ", config->maintenance_qml_patch_enabled ? "true" : "false");
+    write_json_string(file, config->maintenance_qml_patch_script);
+    fprintf(file, "},\n");
+    fprintf(file, "    \"firewall\": {\"enabled\": %s,\"path\": ", config->maintenance_firewall_enabled ? "true" : "false");
+    write_json_string(file, config->maintenance_firewall_path);
+    fprintf(file, ",\"backupPath\": ");
+    write_json_string(file, config->maintenance_firewall_backup_path);
+    fprintf(file, "},\n");
+    fprintf(file, "    \"ipv6Firewall\": {\"enabled\": %s,\"path\": ", config->maintenance_ipv6_firewall_enabled ? "true" : "false");
+    write_json_string(file, config->maintenance_ipv6_firewall_path);
+    fprintf(file, ",\"backupPath\": ");
+    write_json_string(file, config->maintenance_ipv6_firewall_backup_path);
+    fprintf(file, "},\n");
+    fprintf(file, "    \"allowNoAuth\": %s\n  },\n", config->maintenance_no_auth_allowed ? "true" : "false");
+    fprintf(file, "  \"mdns\": {\"enabled\": %s,\"name\": ", config->mdns_enabled ? "true" : "false");
+    write_json_string(file, config->mdns_name);
+    fprintf(file, "},\n");
+    fprintf(file, "  \"events\": {\n");
+    write_json_string_field(file, "subscriptionStorePath", config->subscription_store_path, ",");
+    fprintf(file, "    \"callbackTimeoutMs\": %d,\n", config->callback_timeout_ms);
+    fprintf(file, "    \"udp\": {\"enabled\": %s,\"group\": ", config->events_enabled ? "true" : "false");
+    write_json_string(file, config->events_group);
+    fprintf(file, ",\"port\": %u}\n  },\n", config->events_port);
+    fprintf(file, "  \"answeringMachine\": {\n");
+    fprintf(file, "    \"messages\": {\"enabled\": %s,\"root\": ", config->answering_machine_messages_enabled ? "true" : "false");
+    write_json_string(file, config->answering_machine_messages_root);
+    fprintf(file, ",\"watch\": %s,\"maxMessages\": %d}\n  },\n", config->answering_machine_messages_watch ? "true" : "false", config->answering_machine_messages_max);
+    fprintf(file, "  \"memos\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->memos_enabled ? "true" : "false");
+    write_json_string_field(file, "textRoot", config->memos_text_root, ",");
+    write_json_string_field(file, "voiceRoot", config->memos_voice_root, ",");
+    fprintf(file, "    \"watch\": %s,\n", config->memos_watch ? "true" : "false");
+    fprintf(file, "    \"maxMemos\": %d\n  },\n", config->memos_max);
+    fprintf(file, "  \"systemMetrics\": {\"enabled\": %s,\"watch\": %s,\"sampleIntervalSeconds\": %d,\"heartbeatSeconds\": %d,\"changePercent\": %d},\n", config->system_metrics_enabled ? "true" : "false", config->system_metrics_watch ? "true" : "false", config->system_metrics_sample_interval_seconds, config->system_metrics_heartbeat_seconds, config->system_metrics_change_percent);
+    fprintf(file, "  \"video\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->video_enabled ? "true" : "false");
+    fprintf(file, "    \"av\": {\"host\": ");
+    write_json_string(file, config->video_av_host);
+    fprintf(file, ",\"port\": %u,\"timeoutMs\": %d,\"highResolution\": %s},\n", config->video_av_port, config->video_av_timeout_ms, config->video_av_high_resolution ? "true" : "false");
+    fprintf(file, "    \"sip\": {\"from\": ");
+    write_json_string(file, config->video_sip_from);
+    fprintf(file, ",\"to\": ");
+    write_json_string(file, config->video_sip_to);
+    fprintf(file, ",\"domain\": ");
+    write_json_string(file, config->video_sip_domain);
+    fprintf(file, ",\"devaddr\": ");
+    write_json_string(file, config->video_sip_devaddr);
+    fprintf(file, ",\"localIp\": ");
+    write_json_string(file, config->video_sip_local_ip);
+    fprintf(file, ",\"localPort\": %u,\"useTcp\": %s,\"debug\": %s},\n", config->video_sip_local_port, config->video_sip_use_tcp ? "true" : "false", config->video_sip_debug ? "true" : "false");
+    fprintf(file, "    \"rtsp\": {\"port\": %u,\"path\": ", config->video_rtsp_port);
+    write_json_string(file, config->video_rtsp_path);
+    fprintf(file, ",\"videoPath\": ");
+    write_json_string(file, config->video_rtsp_video_path);
+    fprintf(file, ",\"recorderPath\": ");
+    write_json_string(file, config->video_rtsp_recorder_path);
+    fprintf(file, ",\"username\": ");
+    write_json_string(file, config->video_rtsp_username);
+    fprintf(file, ",\"password\": ");
+    write_json_string(file, config->video_rtsp_password);
+    fprintf(file, ",\"keepAliveMs\": %d,\"rtpPortStart\": %u,\"rtpPortCount\": %d}\n  },\n", config->video_rtsp_keep_alive_ms, config->video_rtp_port_start, config->video_rtp_port_count);
+    fprintf(file, "  \"displayBridge\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->display_bridge_enabled ? "true" : "false");
+    fprintf(file, "    \"homeAssistant\": {\"webhookUrl\": ");
+    write_json_string(file, config->home_assistant_webhook_url);
+    fprintf(file, ",\"sharedSecret\": ");
+    write_json_string(file, config->home_assistant_shared_secret);
+    fprintf(file, ",\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
+
+    if (fclose(file) != 0) {
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to write temporary config file");
+        return 0;
+    }
+    (void)chmod(temporary_path, 0600);
+    if (rename(temporary_path, config->config_path) != 0) {
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to replace config file");
+        return 0;
+    }
+    (void)chmod(config->config_path, 0600);
+    return 1;
+}

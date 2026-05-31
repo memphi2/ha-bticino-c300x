@@ -1,0 +1,25 @@
+BTicino C300X Home Assistant Integration
+Copyright 2026 BTicino C300X contributors
+
+This product includes software developed for the BTicino C300X Home Assistant
+Integration project.
+
+This project is an independent community project. It is not affiliated with,
+endorsed by, sponsored by, or certified by BTicino, Legrand, Home Assistant,
+Nabu Casa, HACS, OpenAI, or other referenced projects.
+
+BTicino, Classe 300X, Legrand, Home Assistant, HACS, Nabu Casa, OpenAI, Codex,
+and other referenced names are trademarks or names of their respective owners.
+They are used only for compatibility, attribution, and descriptive reference.
+
+The project acknowledges public community research and reference work,
+including SlyOldFox's c300x-controller project, which is licensed under the
+Apache License, Version 2.0. This repository must not vendor or copy that
+controller source tree.
+
+The project thanks SlyOldFox for the public C300X groundwork and original
+community controller work.
+
+This repository must not contain BTicino/Legrand firmware images, extracted
+firmware trees, Android APKs, local device backups, local secrets, or copied
+stock device QML pages.

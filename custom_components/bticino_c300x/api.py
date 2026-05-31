@@ -1,0 +1,1212 @@
+"""Async client for the C300X device-agent HTTP API."""
+
+from __future__ import annotations
+
+import json
+import re
+from base64 import b64encode
+from typing import Any
+from urllib.parse import quote
+
+from aiohttp import ClientError, ClientSession
+
+from .const import (
+    DEFAULT_AGENT_PORT,
+    HEADER_MAINTENANCE_TOKEN,
+    LOCK_ID_PATTERN,
+    SMARTPHONE_FORWARDING_MODE_BLOCKED,
+    SMARTPHONE_FORWARDING_MODE_ENABLED,
+    SMARTPHONE_FORWARDING_MODES,
+    STAIR_LIGHT_ADDRESS_PATTERN,
+)
+from .fingerprint import fnv1a64_fingerprint
+from .forwarding import (
+    FORWARDING_CODE_BY_STATE,
+    FORWARDING_STATE_BY_CODE,
+    coerce_forwarding_mode_state,
+    forwarding_state_from_value,
+)
+
+_STAIR_LIGHT_ADDRESS_RE = re.compile(STAIR_LIGHT_ADDRESS_PATTERN)
+_LOCK_ID_RE = re.compile(LOCK_ID_PATTERN)
+_MEMO_ID_RE = re.compile(r"^(text|voice)/[A-Za-z0-9_.-]{1,64}$")
+_VIDEO_MESSAGE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_SETUP_TIMEOUT = 2.0
+
+
+class C300XAgentApiError(Exception):
+    """Base error for device-agent API failures."""
+
+
+class C300XAgentApiConnectionError(C300XAgentApiError):
+    """Raised when the device agent cannot be reached."""
+
+
+class C300XAgentApiResponseError(C300XAgentApiError):
+    """Raised when the device agent returns an invalid response."""
+
+
+class C300XAgentApiUnsupportedError(C300XAgentApiError):
+    """Raised when the installed device agent does not expose an endpoint."""
+
+
+class C300XAgentApi:
+    """Small async client for the C300X device agent API."""
+
+    def __init__(
+        self,
+        session: ClientSession,
+        base_url: str,
+        token: str,
+        maintenance_token: str = "",
+        timeout: float = 5.0,
+    ) -> None:
+        self._session = session
+        self._base_url = base_url.rstrip("/")
+        self._token = token
+        self._maintenance_token = maintenance_token
+        self._timeout = timeout
+
+    async def async_validate_setup(self) -> dict[str, Any]:
+        """Return agent/device metadata from `/api/v1/capabilities`."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/capabilities",
+            request_timeout=_SETUP_TIMEOUT,
+        )
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("capabilities returned non-object JSON")
+        agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
+        device = data.get("device") if isinstance(data.get("device"), dict) else {}
+        return {
+            "version": agent.get("version") or data.get("api_version"),
+            "implementation": agent.get("implementation"),
+            "api_version": data.get("api_version"),
+            "device_id": device.get("id"),
+            "model": device.get("model"),
+            "firmware": device.get("firmware"),
+            "capabilities": data.get("capabilities", {}),
+        }
+
+    async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
+        """Return smartphone forwarding status."""
+
+        try:
+            data = await self._request_json("GET", "/api/v1/smartphone-forwarding")
+        except C300XAgentApiUnsupportedError:
+            data = await self._request_json("GET", "/api/v1/state")
+        return normalize_smartphone_forwarding(data)
+
+    async def async_state(self) -> dict[str, Any]:
+        """Return the current aggregate device-agent state."""
+
+        data = await self._request_json("GET", "/api/v1/state")
+        return data if isinstance(data, dict) else {}
+
+    async def async_smartphone_forwarding_cached_status(self) -> dict[str, Any]:
+        """Return cached smartphone forwarding status without touching the device."""
+
+        data = await self._request_json("GET", "/api/v1/state")
+        return normalize_smartphone_forwarding(data)
+
+    async def async_set_smartphone_forwarding_enabled(
+        self,
+        enabled: bool,
+    ) -> dict[str, Any]:
+        """Enable all or block all smartphone forwarding."""
+
+        return await self.async_set_smartphone_forwarding_mode(
+            SMARTPHONE_FORWARDING_MODE_ENABLED
+            if enabled
+            else SMARTPHONE_FORWARDING_MODE_BLOCKED
+        )
+
+    async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
+        """Set the smartphone forwarding mode."""
+
+        normalized_mode = normalize_smartphone_forwarding_mode(mode)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/smartphone-forwarding",
+            json_data={"mode": normalized_mode},
+        )
+        return normalize_smartphone_forwarding(data)
+
+    async def async_stair_light(self, address: str) -> dict[str, Any]:
+        """Activate the staircase light through an agent endpoint."""
+
+        address = normalize_stair_light_address(address)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/stair-light/actions/activate",
+            json_data={"address": address},
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_unlock_door(self, lock_id: str = "default") -> dict[str, Any]:
+        """Unlock the configured C300X door lock through the device agent."""
+
+        normalized_lock_id = normalize_lock_id(lock_id)
+        data = await self._request_json(
+            "POST",
+            f"/api/v1/locks/{quote(normalized_lock_id, safe='')}/actions/unlock",
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_ringer_status(self) -> dict[str, Any]:
+        """Return ringer mute status."""
+
+        try:
+            data = await self._request_json("GET", "/api/v1/ringer")
+        except C300XAgentApiError:
+            data = await self._request_json("GET", "/api/v1/state")
+        return normalize_ringer(data)
+
+    async def async_answering_machine_status(self) -> dict[str, Any]:
+        """Return answering-machine status."""
+
+        try:
+            data = await self._request_json("GET", "/api/v1/answering-machine")
+        except C300XAgentApiError:
+            data = await self._request_json("GET", "/api/v1/state")
+        return normalize_answering_machine(data)
+
+    async def async_answering_machine_messages(self) -> dict[str, Any]:
+        """Return answering-machine video message metadata."""
+
+        data = await self._request_json("GET", "/api/v1/answering-machine/messages")
+        return normalize_answering_machine_messages(data)
+
+    async def async_answering_machine_message_video(
+        self,
+        message_id: str,
+    ) -> tuple[bytes, str]:
+        """Return a stored answering-machine video message."""
+
+        normalized_message_id = normalize_video_message_id(message_id)
+        return await self._request_bytes(
+            "GET",
+            (
+                "/api/v1/answering-machine/messages/"
+                f"{quote(normalized_message_id, safe='')}/video"
+            ),
+        )
+
+    async def async_delete_answering_machine_message(
+        self,
+        message_id: str,
+    ) -> dict[str, Any]:
+        """Delete a stored answering-machine video message."""
+
+        normalized_message_id = normalize_video_message_id(message_id)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/answering-machine/messages/actions/delete",
+            json_data={"id": normalized_message_id},
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_memos(self) -> dict[str, Any]:
+        """Return local manual text and voice memo metadata."""
+
+        data = await self._request_json("GET", "/api/v1/memos")
+        return normalize_memos(data)
+
+    async def async_memo_audio(self, memo_id: str) -> tuple[bytes, str]:
+        """Return a stored manual voice memo audio file."""
+
+        normalized_memo_id = normalize_memo_id(memo_id)
+        kind, entry_name = normalized_memo_id.split("/", 1)
+        if kind != "voice":
+            raise C300XAgentApiResponseError("memo id does not reference a voice memo")
+        return await self._request_bytes(
+            "GET",
+            f"/api/v1/memos/voice/{quote(entry_name, safe='')}/audio",
+        )
+
+    async def async_delete_memo(self, memo_id: str) -> dict[str, Any]:
+        """Delete a local manual memo by normalized agent memo id."""
+
+        normalized_memo_id = normalize_memo_id(memo_id)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/memos/actions/delete",
+            json_data={"id": normalized_memo_id},
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        """Return doorbell video availability and bridge status."""
+
+        try:
+            data = await self._request_json("GET", "/api/v1/video/doorbell/status")
+        except C300XAgentApiUnsupportedError:
+            data = await self._request_json("GET", "/api/v1/state")
+        return normalize_doorbell_video(data)
+
+    async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
+        """Start or renew the native doorbell video call on demand."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/video/doorbell/actions/activate",
+            json_data={"audio": bool(audio)},
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_stop_doorbell_video(self) -> dict[str, Any]:
+        """Stop the native doorbell video call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/video/doorbell/actions/stop",
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_system_metrics(self) -> dict[str, Any]:
+        """Return low-frequency device-agent system metrics."""
+
+        data = await self._request_json("GET", "/api/v1/system/metrics")
+        return normalize_system_metrics(data)
+
+    async def async_set_ringer_muted(self, muted: bool) -> dict[str, Any]:
+        """Mute or unmute the device ringer."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/ringer",
+            json_data={"muted": muted},
+        )
+        return normalize_ringer(data)
+
+    async def async_set_answering_machine_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Enable or disable the device answering machine."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/answering-machine",
+            json_data={"enabled": enabled},
+        )
+        return normalize_answering_machine(data)
+
+    async def async_register_event_subscription(
+        self,
+        callback_url: str,
+        token: str,
+        events: list[str],
+    ) -> dict[str, Any]:
+        """Register the HA event webhook with the device agent."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/events/subscriptions",
+            json_data={
+                "callback_url": callback_url,
+                "token": token,
+                "events": events,
+            },
+        )
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("event subscription returned non-object JSON")
+        return data
+
+    async def async_list_event_subscriptions(self) -> dict[str, Any]:
+        """Return persisted event subscriptions from the device agent."""
+
+        data = await self._request_json("GET", "/api/v1/events/subscriptions")
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError(
+                "event subscriptions returned non-object JSON"
+            )
+        return data
+
+    async def async_delete_event_subscription(self, subscription_id: str) -> None:
+        """Delete an event subscription from the device agent."""
+
+        await self._request_json("DELETE", f"/api/v1/events/subscriptions/{subscription_id}")
+
+    async def async_configure_display_bridge(
+        self,
+        *,
+        enabled: bool,
+        webhook_url: str = "",
+        shared_secret: str = "",
+    ) -> dict[str, Any]:
+        """Configure the display bridge callback on the running device agent."""
+
+        payload: dict[str, Any] = {"enabled": bool(enabled)}
+        if enabled:
+            payload["webhook_url"] = webhook_url
+            payload["shared_secret"] = shared_secret
+        data = await self._request_json(
+            "POST",
+            "/api/v1/display-bridge",
+            json_data=payload,
+        )
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("display bridge returned non-object JSON")
+        return data
+
+    async def async_display_bridge_status(self) -> dict[str, Any]:
+        """Return display-bridge configuration status without mutating the agent."""
+
+        data = await self._request_json("GET", "/api/v1/display-bridge")
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("display bridge status returned non-object JSON")
+        return data
+
+    async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+        """Wake local display-bridge UI long-poll listeners for one topic."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/display-bridge/events",
+            json_data={"topic": str(topic)},
+            request_timeout=2.0,
+        )
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("display bridge event returned non-object JSON")
+        return data
+
+    async def async_diagnostics(self) -> dict[str, Any]:
+        """Return non-sensitive runtime diagnostics from the device agent."""
+
+        data = await self._request_json("GET", "/api/v1/diagnostics")
+        if not isinstance(data, dict):
+            raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
+        return normalize_agent_diagnostics(data)
+
+    async def async_auth_config_status(self) -> dict[str, Any]:
+        """Return bootstrap/auth configuration status without exposing token values."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/auth",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_set_no_auth_enabled(
+        self,
+        enabled: bool,
+        *,
+        api_token: str | None = None,
+        maintenance_token: str | None = None,
+        maintenance_no_auth_allowed: bool | None = None,
+    ) -> dict[str, Any]:
+        """Enable or disable the agent bootstrap noAuth mode."""
+
+        payload: dict[str, Any] = {"noAuth": enabled}
+        if api_token:
+            payload["apiToken"] = api_token
+        if maintenance_token:
+            payload["maintenanceToken"] = maintenance_token
+        if maintenance_no_auth_allowed is not None:
+            payload["maintenanceNoAuthAllowed"] = maintenance_no_auth_allowed
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_set_mdns_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Enable or disable bootstrap mDNS discovery in the device agent."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data={"mdnsEnabled": bool(enabled)},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_set_ipv6_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Enable or disable the IPv6 firewall maintenance endpoint."""
+
+        payload: dict[str, Any] = {"ipv6FirewallEnabled": bool(enabled)}
+        if enabled:
+            payload["maintenanceEnabled"] = True
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_set_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Enable or disable the IPv4 firewall maintenance endpoint."""
+
+        payload: dict[str, Any] = {"firewallEnabled": bool(enabled)}
+        if enabled:
+            payload["maintenanceEnabled"] = True
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_set_maintenance_no_auth_allowed(
+        self,
+        enabled: bool,
+    ) -> dict[str, Any]:
+        """Allow or deny noAuth access to maintenance endpoints."""
+
+        payload: dict[str, Any] = {"maintenanceNoAuthAllowed": bool(enabled)}
+        if enabled:
+            payload["maintenanceEnabled"] = True
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_start_ssh(self) -> dict[str, Any]:
+        """Start the device SSH service through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/ssh/actions/start",
+            json_data={"confirm": "start_ssh"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_stop_ssh(self) -> dict[str, Any]:
+        """Stop the device SSH service through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/ssh/actions/stop",
+            json_data={"confirm": "stop_ssh"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_ssh_status(data)
+
+    async def async_ssh_status(self) -> dict[str, Any]:
+        """Return SSH service state through the maintenance API."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/ssh",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_ssh_status(data)
+
+    async def async_set_ssh_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Start or stop SSH through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/ssh",
+            json_data={"enabled": enabled},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_ssh_status(data)
+
+    async def async_reboot(self) -> dict[str, Any]:
+        """Schedule a device reboot through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/reboot",
+            json_data={"confirm": "reboot"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_remove_agent(self) -> dict[str, Any]:
+        """Schedule native agent removal while keeping SSH available."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/agent/actions/remove",
+            json_data={"confirm": "remove_agent"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_reload_gui(self) -> dict[str, Any]:
+        """Reload the C300X graphical interface through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/gui/actions/reload",
+            json_data={"confirm": "reload_gui"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+    async def async_firewall_status(self) -> dict[str, Any]:
+        """Return C300X persistent firewall rule state through the maintenance API."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/firewall",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_apply_firewall(self) -> dict[str, Any]:
+        """Apply the persistent C300X API firewall rule."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/firewall/actions/apply",
+            json_data={"confirm": "apply_firewall"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_restore_firewall(self) -> dict[str, Any]:
+        """Remove the persistent C300X API firewall rule."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/firewall/actions/restore",
+            json_data={"confirm": "restore_firewall"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_ipv6_firewall_status(self) -> dict[str, Any]:
+        """Return C300X persistent IPv6 firewall rule state."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/ipv6-firewall",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_apply_ipv6_firewall(self) -> dict[str, Any]:
+        """Apply the persistent C300X IPv6 API firewall rules."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/ipv6-firewall/actions/apply",
+            json_data={"confirm": "apply_ipv6_firewall"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_restore_ipv6_firewall(self) -> dict[str, Any]:
+        """Remove the persistent C300X IPv6 API firewall rules."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/ipv6-firewall/actions/restore",
+            json_data={"confirm": "restore_ipv6_firewall"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_firewall_status(data)
+
+    async def async_qml_patch_status(self) -> dict[str, Any]:
+        """Return device UI patch state through the maintenance API."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/qml-patch",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_qml_patch_status(data)
+
+    async def async_apply_qml_patch(self) -> dict[str, Any]:
+        """Apply the device UI patch through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/qml-patch/actions/apply",
+            json_data={"confirm": "apply_qml_patch"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_qml_patch_status(data)
+
+    async def async_restore_qml_patch(self) -> dict[str, Any]:
+        """Restore original device UI files through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/qml-patch/actions/restore",
+            json_data={"confirm": "restore_qml_patch"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_qml_patch_status(data)
+
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+        extra_headers: dict[str, str] | None = None,
+        request_timeout: float | None = None,
+    ) -> Any:
+        url = f"{self._base_url}{path}"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        if extra_headers:
+            headers.update(extra_headers)
+        try:
+            async with self._session.request(
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                timeout=self._timeout if request_timeout is None else request_timeout,
+            ) as response:
+                text = await response.text()
+                if response.status == 404:
+                    raise C300XAgentApiUnsupportedError(
+                        f"device-agent endpoint is not available: {path}"
+                    )
+                if response.status < 200 or response.status >= 300:
+                    raise C300XAgentApiConnectionError(
+                        f"device agent returned HTTP {response.status}"
+                    )
+        except TimeoutError as err:
+            raise C300XAgentApiConnectionError("device-agent request timed out") from err
+        except ClientError as err:
+            raise C300XAgentApiConnectionError(str(err)) from err
+
+        try:
+            return json.loads(text) if text else {}
+        except json.JSONDecodeError as err:
+            raise C300XAgentApiResponseError("device agent returned invalid JSON") from err
+
+    async def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> tuple[bytes, str]:
+        url = f"{self._base_url}{path}"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        if extra_headers:
+            headers.update(extra_headers)
+        try:
+            async with self._session.request(
+                method,
+                url,
+                headers=headers,
+                timeout=self._timeout,
+            ) as response:
+                if response.status == 404:
+                    raise C300XAgentApiUnsupportedError(
+                        f"device-agent endpoint is not available: {path}"
+                    )
+                if response.status < 200 or response.status >= 300:
+                    raise C300XAgentApiConnectionError(
+                        f"device agent returned HTTP {response.status}"
+                    )
+                content = await response.read()
+                content_type = response.headers.get(
+                    "Content-Type",
+                    "application/octet-stream",
+                )
+        except TimeoutError as err:
+            raise C300XAgentApiConnectionError("device-agent request timed out") from err
+        except ClientError as err:
+            raise C300XAgentApiConnectionError(str(err)) from err
+        return content, content_type.split(";", 1)[0]
+
+    def _maintenance_headers(self) -> dict[str, str]:
+        """Return maintenance authorization headers when configured."""
+
+        if not self._maintenance_token:
+            return {}
+        return {HEADER_MAINTENANCE_TOKEN: self._maintenance_token}
+
+
+def build_agent_base_url(host: str, port: int, use_ssl: bool) -> str:
+    """Build the device-agent base URL from config entry data."""
+
+    scheme = "https" if use_ssl else "http"
+    normalized_host = host.strip().strip("/")
+    normalized_port = port if port > 0 else DEFAULT_AGENT_PORT
+    if ":" in normalized_host and not normalized_host.startswith("["):
+        normalized_host = f"[{normalized_host}]"
+    return f"{scheme}://{normalized_host}:{normalized_port}"
+
+
+def encode_endpoint_url(url: str) -> str:
+    """Return a base64-encoded endpoint URL."""
+
+    return b64encode(url.encode("utf-8")).decode("ascii")
+
+
+def display_bridge_callback_fingerprint(
+    enabled: bool,
+    webhook_url: str,
+    shared_secret: str,
+) -> str:
+    """Return the non-secret display-bridge callback fingerprint used by the agent."""
+
+    material = f"{1 if enabled else 0}\n{webhook_url if enabled else ''}\n{shared_secret if enabled else ''}"
+    return fnv1a64_fingerprint(material)
+
+
+def normalize_stair_light_address(address: Any) -> str:
+    """Validate and normalize a staircase-light OpenWebNet address segment."""
+
+    value = str(address or "").strip()
+    if not _STAIR_LIGHT_ADDRESS_RE.fullmatch(value):
+        raise C300XAgentApiResponseError("invalid staircase light address")
+    return value
+
+
+def normalize_lock_id(lock_id: Any) -> str:
+    """Validate and normalize a configured C300X lock id."""
+
+    value = str(lock_id or "default").strip()
+    if not _LOCK_ID_RE.fullmatch(value):
+        raise C300XAgentApiResponseError("invalid lock id")
+    return value
+
+
+def normalize_memo_id(memo_id: Any) -> str:
+    """Validate and normalize a manual memo id."""
+
+    value = str(memo_id or "").strip()
+    if not _MEMO_ID_RE.fullmatch(value):
+        raise C300XAgentApiResponseError("invalid memo id")
+    return value
+
+
+def normalize_video_message_id(message_id: Any) -> str:
+    """Validate and normalize a stored answering-machine video message id."""
+
+    value = str(message_id or "").strip()
+    if not _VIDEO_MESSAGE_ID_RE.fullmatch(value):
+        raise C300XAgentApiResponseError("invalid video message id")
+    return value
+
+
+def normalize_doorbell_video(data: Any) -> dict[str, Any]:
+    """Normalize device-agent doorbell video status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("doorbell video returned non-object JSON")
+    if isinstance(data.get("state"), dict):
+        state = data["state"]
+        return {
+            "available": bool(state.get("video_available")),
+            "window_available": bool(state.get("video_available")),
+            "active_until": state.get("video_active_until"),
+            "stream_path": state.get("video_stream_path"),
+            "audio_stream_path": None,
+            "recorder_stream_path": None,
+            "bridge": {},
+            "raw": data,
+        }
+    bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
+    return {
+        "available": bool(data.get("available")),
+        "window_available": bool(data.get("window_available", data.get("available"))),
+        "active_until": data.get("active_until"),
+        "stream_path": data.get("stream_path"),
+        "audio_stream_path": data.get("audio_stream_path"),
+        "recorder_stream_path": data.get("recorder_stream_path"),
+        "bridge": bridge,
+        "raw": data,
+    }
+
+
+def normalize_system_metrics(data: Any) -> dict[str, Any]:
+    """Normalize device-agent system metric responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("system metrics returned non-object JSON")
+    return {
+        "cpu_count": _optional_int(data.get("cpu_count")),
+        "cpu_usage_percent": _optional_float(data.get("cpu_usage_percent")),
+        "load_1m": _optional_float(data.get("load_1m")),
+        "load_5m": _optional_float(data.get("load_5m")),
+        "load_15m": _optional_float(data.get("load_15m")),
+        "load_1m_percent": _optional_float(data.get("load_1m_percent")),
+        "load_5m_percent": _optional_float(data.get("load_5m_percent")),
+        "load_15m_percent": _optional_float(data.get("load_15m_percent")),
+        "temperature_c": _optional_float(data.get("temperature_c")),
+        "temperature_source": data.get("temperature_source"),
+        "raw": data,
+    }
+
+
+def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
+    """Normalize non-sensitive agent diagnostics."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
+    return {
+        "agent_write_count": _optional_int(data.get("agent_write_count")) or 0,
+        "last_write_reason": _optional_string(data.get("last_write_reason")),
+        "last_write_class": _optional_string(data.get("last_write_class")),
+        "subscription_store_writes": _optional_int(
+            data.get("subscription_store_writes")
+        )
+        or 0,
+        "qml_patch_last_action": _optional_string(data.get("qml_patch_last_action")),
+        "raw": data,
+    }
+
+
+def normalize_auth_config_status(data: Any) -> dict[str, Any]:
+    """Normalize bootstrap/auth configuration status."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("auth config returned non-object JSON")
+    no_auth = _optional_bool(data.get("noAuth"))
+    if no_auth is None:
+        no_auth = _optional_bool(data.get("no_auth"))
+    return {
+        "no_auth": bool(no_auth),
+        "restart_required": _optional_bool(data.get("restart_required")) is True,
+        "api_token_configured": bool(data.get("api_token_configured")),
+        "maintenance_token_configured": bool(data.get("maintenance_token_configured")),
+        "maintenance_enabled": _optional_bool(data.get("maintenance_enabled")),
+        "maintenance_no_auth_allowed": _optional_bool(
+            data.get("maintenance_no_auth_allowed")
+        ),
+        "mdns_enabled": _optional_bool(data.get("mdns_enabled")),
+        "firewall_enabled": _optional_bool(data.get("firewall_enabled")),
+        "ipv6_firewall_enabled": _optional_bool(data.get("ipv6_firewall_enabled")),
+        "raw": data,
+    }
+
+
+def normalize_ssh_status(data: Any) -> dict[str, Any]:
+    """Normalize maintenance SSH status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("SSH status returned non-object JSON")
+    raw_value = data.get("running", data.get("enabled"))
+    if raw_value is None:
+        return {"running": None, "enabled": None, "raw": data}
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().lower()
+        if normalized in {"true", "1", "on", "running", "enabled"}:
+            running = True
+        elif normalized in {"false", "0", "off", "stopped", "disabled"}:
+            running = False
+        else:
+            running = None
+    else:
+        running = bool(raw_value)
+    return {
+        "running": running,
+        "enabled": running,
+        "raw": data.get("raw", data),
+    }
+
+
+def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
+    """Normalize maintenance QML patch status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("QML patch status returned non-object JSON")
+    state = str(data.get("state") or "").strip().lower()
+    patched = _optional_bool(data.get("patched"))
+    if patched is None:
+        if state in {"patched", "applied"}:
+            patched = True
+        elif state in {"original", "restored", "not_patched"}:
+            patched = False
+    if not state:
+        if patched is True:
+            state = "patched"
+        elif patched is False:
+            state = "original"
+        else:
+            state = "unknown"
+    return {
+        "available": bool(data.get("available", True)),
+        "patched": patched,
+        "state": state,
+        "backup_available": _optional_bool(data.get("backup_available")),
+        "gui_running": _optional_bool(data.get("gui_running")),
+        "raw": data.get("raw", data),
+    }
+
+
+def normalize_firewall_status(data: Any) -> dict[str, Any]:
+    """Normalize maintenance firewall status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("firewall status returned non-object JSON")
+    state = _optional_string(data.get("state")) or "unknown"
+    patched = _optional_bool(data.get("patched"))
+    if patched is None and state == "patched":
+        patched = True
+    elif patched is None and state in {"original", "missing"}:
+        patched = False
+    return {
+        "available": data.get("available", True) is not False,
+        "state": state,
+        "patched": patched,
+        "family": _optional_string(data.get("family")),
+        "exists": _optional_bool(data.get("exists")),
+        "backup_available": _optional_bool(data.get("backup_available")),
+        "api_port": _optional_int(data.get("api_port")),
+        "changed_files": _optional_int(data.get("changed_files")),
+        "raw": data,
+    }
+
+
+def normalize_smartphone_forwarding_mode(mode: Any) -> str:
+    """Validate and normalize a smartphone-forwarding mode string."""
+
+    value = str(mode or "").strip().lower()
+    if value not in SMARTPHONE_FORWARDING_MODES:
+        raise C300XAgentApiResponseError("invalid smartphone-forwarding mode")
+    return value
+
+
+def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
+    """Normalize device-agent smartphone-forwarding responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("smartphone-forwarding returned non-object JSON")
+    if "state" in data and isinstance(data["state"], dict):
+        raw_value = data["state"].get("smartphone_forwarding")
+        if raw_value is None:
+            return {"mode": None, "state": "unknown", "raw": data}
+        normalized = coerce_forwarding_mode_state(raw_value, raw_value)
+        return {
+            "mode": normalized["mode"],
+            "state": normalized["state"],
+            "raw": data,
+        }
+    if (
+        "mode" in data
+        and isinstance(data["mode"], str)
+        and str(data["mode"]).strip().lower() in SMARTPHONE_FORWARDING_MODES
+    ):
+        state = normalize_smartphone_forwarding_mode(data["mode"])
+        return {
+            "mode": FORWARDING_CODE_BY_STATE[state],
+            "state": state,
+            "raw": data.get("raw"),
+        }
+    if data.get("mode") is None and data.get("state") == "unknown":
+        return {"mode": None, "state": "unknown", "raw": data.get("raw", data)}
+    if "enabled" in data:
+        enabled = forwarding_state_from_value(data["enabled"]) == SMARTPHONE_FORWARDING_MODE_ENABLED
+        return {
+            "mode": 0 if enabled else 2,
+            "state": (
+                SMARTPHONE_FORWARDING_MODE_ENABLED
+                if enabled
+                else SMARTPHONE_FORWARDING_MODE_BLOCKED
+            ),
+            "raw": data.get("raw"),
+        }
+    raw_mode = data.get("mode")
+    try:
+        mode = int(raw_mode)
+    except (TypeError, ValueError) as err:
+        raise C300XAgentApiResponseError("smartphone-forwarding mode is missing") from err
+    state = data.get("state") or FORWARDING_STATE_BY_CODE.get(mode, "unknown")
+    return {
+        "mode": mode,
+        "state": str(state),
+        "raw": data.get("raw"),
+    }
+
+
+def normalize_ringer(data: Any) -> dict[str, Any]:
+    """Normalize device-agent ringer mute responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("ringer returned non-object JSON")
+    raw_value: Any
+    if "state" in data and isinstance(data["state"], dict):
+        raw_value = data["state"].get("ringer_muted")
+        raw = data
+    else:
+        raw_value = data.get("muted")
+        raw = data.get("raw", data)
+    if raw_value is None:
+        return {"muted": None, "raw": raw}
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().lower()
+        if normalized in {"true", "1", "on", "muted"}:
+            return {"muted": True, "raw": raw}
+        if normalized in {"false", "0", "off", "unmuted"}:
+            return {"muted": False, "raw": raw}
+    return {"muted": bool(raw_value), "raw": raw}
+
+
+def normalize_answering_machine(data: Any) -> dict[str, Any]:
+    """Normalize device-agent answering-machine responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("answering-machine returned non-object JSON")
+    raw_value: Any
+    if "state" in data and isinstance(data["state"], dict):
+        raw_value = data["state"].get("answering_machine_enabled")
+        raw = data
+    else:
+        raw_value = data.get("enabled")
+        raw = data.get("raw", data)
+    result: dict[str, Any] = {
+        "enabled": None,
+        "greeting_message_enabled": _optional_bool(data.get("greeting_message_enabled")),
+        "status_fields": (
+            data.get("status_fields")
+            if isinstance(data.get("status_fields"), list)
+            else []
+        ),
+        "raw": raw,
+    }
+    if raw_value is None:
+        return result
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().lower()
+        if normalized in {"true", "1", "on", "enabled"}:
+            result["enabled"] = True
+            return result
+        if normalized in {"false", "0", "off", "disabled"}:
+            result["enabled"] = False
+            return result
+    result["enabled"] = bool(raw_value)
+    return result
+
+
+def normalize_answering_machine_messages(data: Any) -> dict[str, Any]:
+    """Normalize device-agent answering-machine video message metadata."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError(
+            "answering-machine messages returned non-object JSON"
+        )
+    messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    normalized_messages = [
+        message
+        for message in (_normalize_voicemail_message(item) for item in messages)
+        if message is not None
+    ]
+    return {
+        "available": bool(data.get("available", True)),
+        "total": _optional_int(data.get("total"), len(normalized_messages)),
+        "unread": _optional_int(data.get("unread"), 0),
+        "read": _optional_int(data.get("read"), 0),
+        "newest_at": data.get("newest_at"),
+        "messages": normalized_messages,
+        "raw": data,
+    }
+
+
+def normalize_memos(data: Any) -> dict[str, Any]:
+    """Normalize device-agent local memo metadata."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("memos returned non-object JSON")
+    memos = data.get("memos") if isinstance(data.get("memos"), list) else []
+    normalized_memos = [
+        memo
+        for memo in (_normalize_memo(item) for item in memos)
+        if memo is not None
+    ]
+    text_total = _optional_int(data.get("text_total"), None)
+    voice_total = _optional_int(data.get("voice_total"), None)
+    if text_total is None:
+        text_total = sum(1 for memo in normalized_memos if memo["kind"] == "text")
+    if voice_total is None:
+        voice_total = sum(1 for memo in normalized_memos if memo["kind"] == "voice")
+    return {
+        "available": bool(data.get("available", True)),
+        "total": _optional_int(data.get("total"), text_total + voice_total),
+        "text_total": text_total,
+        "voice_total": voice_total,
+        "unread": _optional_int(data.get("unread"), 0),
+        "read": _optional_int(data.get("read"), 0),
+        "newest_at": data.get("newest_at"),
+        "memos": normalized_memos,
+        "raw": data,
+    }
+
+
+def _normalize_voicemail_message(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    message_id = str(data.get("id") or "").strip()
+    if not message_id:
+        return None
+    return {
+        "id": message_id,
+        "read": _optional_bool(data.get("read")),
+        "date": data.get("date"),
+        "unix_time": _optional_int(data.get("unix_time")),
+        "iso_time": data.get("iso_time"),
+        "has_thumbnail": bool(data.get("has_thumbnail")),
+        "has_video": bool(data.get("has_video")),
+        "media_mime_type": data.get("media_mime_type"),
+        "media_size": _optional_int(data.get("media_size")),
+    }
+
+
+def _normalize_memo(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    memo_id = str(data.get("id") or "").strip()
+    kind = str(data.get("kind") or "").strip().lower()
+    if not memo_id or kind not in {"text", "voice"}:
+        return None
+    text = data.get("text")
+    return {
+        "id": memo_id,
+        "kind": kind,
+        "read": _optional_bool(data.get("read")),
+        "date": data.get("date"),
+        "unix_time": _optional_int(data.get("unix_time")),
+        "iso_time": data.get("iso_time"),
+        "has_text": bool(data.get("has_text")),
+        "has_audio": bool(data.get("has_audio")),
+        "audio_mime_type": data.get("audio_mime_type"),
+        "audio_size": _optional_int(data.get("audio_size")),
+        "text": text if isinstance(text, str) else None,
+        "text_truncated": bool(data.get("text_truncated")),
+    }
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"true", "1", "on", "enabled", "yes"}:
+        return True
+    if text in {"false", "0", "off", "disabled", "no"}:
+        return False
+    return None
+
+
+def _optional_int(value: Any, default: int | None = None) -> int | None:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as err:
+        raise C300XAgentApiResponseError("system metric value is invalid") from err

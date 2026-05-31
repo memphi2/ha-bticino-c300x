@@ -1,0 +1,547 @@
+"""Webhook endpoints for C300X device-agent and display-bridge events."""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from datetime import timedelta
+from hmac import compare_digest
+from typing import Any
+
+from aiohttp import web
+from homeassistant.components import webhook
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
+
+from .action import ActionValidationError
+from .agent_diagnostics import (
+    apply_agent_diagnostics_event,
+    async_refresh_agent_diagnostics,
+)
+from .api import C300XAgentApiResponseError, normalize_system_metrics
+from .capabilities import event_label
+from .const import (
+    CONF_EVENT_WEBHOOK_ID,
+    CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_SHARED_SECRET,
+    CONF_VIDEO_STREAM_PATH,
+    CONF_WEBHOOK_ID,
+    DEFAULT_EVENT_RESET_SECONDS,
+    DEFAULT_VIDEO_STREAM_PATH,
+    DOMAIN,
+    EVENT_AGENT_EVENT_RECEIVED,
+    HEADER_EVENT_TOKEN,
+    HEADER_SHARED_SECRET,
+    SIGNAL_EVENT_STATE_CHANGED,
+    SIGNAL_SYSTEM_METRICS_CHANGED,
+)
+from .data import C300XEventState
+from .entity import entry_config_value
+from .event_payload import agent_event_display_data
+from .event_types import normalize_event_type, payload_event_key
+from .executor import (
+    async_dashboard_payload,
+    async_execute_action,
+    async_execute_alarm_command,
+    async_execute_dashboard_action,
+    async_status,
+    async_trigger_stair_light,
+)
+from .forwarding import forwarding_state_from_value
+from .video import (
+    call_later,
+    optional_string,
+    resolve_doorbell_camera_entity_id,
+    safe_stream_path,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[], None]:
+    """Register the per-entry webhook and return an unregister callback."""
+
+    webhook_id = entry.data[CONF_WEBHOOK_ID]
+
+    async def _handler(
+        hass: HomeAssistant,
+        webhook_id: str,
+        request: web.Request,
+    ) -> web.Response:
+        return await _async_handle_webhook(hass, entry, request)
+
+    webhook.async_register(
+        hass,
+        DOMAIN,
+        entry.title,
+        webhook_id,
+        _handler,
+        local_only=False,
+        allowed_methods=("POST",),
+    )
+
+    def _unregister() -> None:
+        webhook.async_unregister(hass, webhook_id)
+
+    return _unregister
+
+
+def async_register_agent_event_webhook(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+) -> Callable[[], None]:
+    """Register the device-agent-to-HA push-event webhook."""
+
+    webhook_id = entry.data[CONF_EVENT_WEBHOOK_ID]
+
+    async def _handler(
+        hass: HomeAssistant,
+        webhook_id: str,
+        request: web.Request,
+    ) -> web.Response:
+        return await _async_handle_agent_event(hass, entry, event_state, request)
+
+    webhook.async_register(
+        hass,
+        DOMAIN,
+        f"{entry.title} device-agent events",
+        webhook_id,
+        _handler,
+        local_only=False,
+        allowed_methods=("POST",),
+    )
+
+    def _unregister() -> None:
+        webhook.async_unregister(hass, webhook_id)
+
+    return _unregister
+
+
+async def _async_handle_webhook(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    request: web.Request,
+) -> web.Response:
+    """Handle a webhook request from the local C300X display bridge."""
+
+    expected_secret = entry.data.get(CONF_SHARED_SECRET, "")
+    supplied_secret = request.headers.get(HEADER_SHARED_SECRET, "")
+    if not expected_secret or not compare_digest(expected_secret, supplied_secret):
+        return _json_error("unauthorized", status=401)
+
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001 - request body parsing must not leak details
+        return _json_error("invalid_json", status=400)
+
+    if not isinstance(payload, dict):
+        return _json_error("invalid_payload", status=400)
+
+    message_type = payload.get("type", "status")
+    try:
+        if message_type in {"status", "alarm_status"}:
+            return web.json_response(await async_status(hass, entry))
+        if message_type == "dashboard":
+            return web.json_response(await async_dashboard_payload(hass, entry))
+        if message_type == "action":
+            return web.json_response(
+                await async_execute_action(hass, entry, payload.get("action_id", ""))
+            )
+        if message_type == "dashboard_action":
+            return web.json_response(
+                await async_execute_dashboard_action(
+                    hass,
+                    entry,
+                    str(payload.get("entity_id", "")),
+                )
+            )
+        if message_type == "stair_light":
+            return web.json_response(
+                await async_trigger_stair_light(
+                    hass,
+                    entry,
+                    optional_string(payload.get("address")),
+                )
+            )
+        if message_type == "alarm_command":
+            return web.json_response(
+                await async_execute_alarm_command(
+                    hass,
+                    entry,
+                    str(payload.get("command", "")),
+                    optional_string(payload.get("code")),
+                    force=payload.get("force") is True,
+                    check=payload.get("check") is True,
+                )
+            )
+    except KeyError:
+        return _json_error("unknown_action", status=404)
+    except (ActionValidationError, ValueError) as err:
+        return _json_error(str(err), status=400)
+    except Exception as err:  # noqa: BLE001 - HA service errors should be contained
+        _LOGGER.warning("C300X webhook command failed: %s", err)
+        return _json_error("command_failed", status=500)
+
+    return _json_error("unsupported_type", status=400)
+
+
+async def _async_handle_agent_event(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    request: web.Request,
+) -> web.Response:
+    """Handle device-agent push events."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    runtime_event_state = getattr(runtime_data, "event_state", None)
+    if getattr(runtime_event_state, "event_sequence", None) is not None:
+        event_state = runtime_event_state
+
+    expected_token = entry.data.get(CONF_EVENT_WEBHOOK_TOKEN, "")
+    supplied_token = request.headers.get(HEADER_EVENT_TOKEN, "")
+    if not expected_token or not compare_digest(expected_token, supplied_token):
+        return _json_error("unauthorized", status=401)
+
+    payload = await _event_payload(request)
+    event_type = _normalize_event_type(_event_type_value(payload))
+    if not event_type:
+        return _json_error("unsupported_event", status=400)
+
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    if event_type == "system_metrics_changed":
+        _apply_system_metrics_event(hass, entry, data)
+        return web.json_response({"ok": True})
+    if event_type == "agent_diagnostics_changed":
+        if apply_agent_diagnostics_event(hass, entry, data) is None:
+            await async_refresh_agent_diagnostics(hass, entry)
+        return web.json_response({"ok": True})
+
+    event_at = dt_util.utcnow().isoformat()
+    event_state.last_event = event_type
+    event_state.last_event_time = event_at
+    event_state.event_sequence += 1
+    if event_type == "doorbell_pressed":
+        _activate_doorbell_state(hass, entry, event_state, payload, data)
+    elif event_type == "doorbell_view_requested":
+        _activate_video_state(
+            hass,
+            entry,
+            event_state,
+            payload,
+            data,
+            default_available=True,
+        )
+    elif event_type == "doorbell_media_closed":
+        _clear_video_state(event_state)
+    elif event_type in {"door_unlock_started", "door_unlock_ended"}:
+        event_state.door_unlock_state = event_type
+    elif event_type in {"call_started", "call_ended"}:
+        event_state.call_active = event_type == "call_started"
+    elif event_type in {"ringer_muted", "ringer_unmuted"}:
+        event_state.ringer_muted = event_type == "ringer_muted"
+    elif event_type == "smartphone_forwarding_changed":
+        event_state.smartphone_forwarding_mode = _optional_forwarding_mode(
+            data.get("mode")
+        )
+    elif event_type == "answering_machine_messages_changed":
+        _apply_voicemail_event(event_state, data)
+    elif event_type == "memos_changed":
+        _apply_memos_event(event_state, data)
+
+    event_data = _event_data(
+        hass,
+        entry,
+        event_state,
+        event_type,
+        event_at,
+        payload,
+        data,
+    )
+    event_state.last_event_data = event_data
+
+    hass.bus.async_fire(
+        EVENT_AGENT_EVENT_RECEIVED,
+        event_data,
+    )
+    async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
+    return web.json_response({"ok": True})
+
+
+async def _event_payload(request: web.Request) -> dict[str, Any]:
+    if request.method != "POST":
+        return {}
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001 - event parsing must not leak details
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _activate_doorbell_state(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    payload: dict[str, Any],
+    data: dict[str, Any],
+) -> None:
+    _activate_video_state(
+        hass,
+        entry,
+        event_state,
+        payload,
+        data,
+        default_available=False,
+    )
+
+
+def _activate_video_state(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    payload: dict[str, Any],
+    data: dict[str, Any],
+    *,
+    default_available: bool,
+) -> None:
+    video = data.get("video") if isinstance(data.get("video"), dict) else {}
+    event_state.video_available = bool(video.get("available", default_available))
+    stream_path = video.get("stream_path") or video.get("rtsp_url")
+    event_state.video_stream_path = str(stream_path) if stream_path else None
+    ttl_seconds = _ttl_seconds(payload.get("ttl_seconds"))
+    event_state.video_active_until = (
+        (dt_util.utcnow() + timedelta(seconds=ttl_seconds)).isoformat()
+        if ttl_seconds > 0
+        else None
+    )
+    _schedule_video_reset(hass, entry, event_state, ttl_seconds)
+
+
+def _schedule_video_reset(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    ttl_seconds: int,
+) -> None:
+    if event_state.reset_video:
+        event_state.reset_video()
+        event_state.reset_video = None
+    if ttl_seconds <= 0:
+        return
+
+    def _reset_video(now=None) -> None:
+        event_state.reset_video = None
+        _clear_video_state(event_state, cancel_timer=False)
+        async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
+
+    event_state.reset_video = call_later(hass, ttl_seconds, _reset_video)
+
+
+def _clear_video_state(
+    event_state: C300XEventState,
+    *,
+    cancel_timer: bool = True,
+) -> None:
+    if cancel_timer and event_state.reset_video:
+        event_state.reset_video()
+    event_state.reset_video = None
+    event_state.video_available = False
+    event_state.video_active_until = None
+    event_state.video_stream_path = None
+
+
+def _event_data(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    event_type: str,
+    event_at: str,
+    payload: dict[str, Any],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    label = event_label(event_type, getattr(hass.config, "language", None))
+    label_en = event_label(event_type, "en")
+    label_de = event_label(event_type, "de")
+    label_it = event_label(event_type, "it")
+    event_name = label or label_en or event_type
+    event_data: dict[str, Any] = {
+        "entry_id": entry.entry_id,
+        "event": event_name,
+        "event_key": event_type,
+        "event_name": event_name,
+        "event_type": event_type,
+        "event_value": event_name,
+        "event_label": label,
+        "event_label_en": label_en,
+        "event_label_de": label_de,
+        "event_label_it": label_it,
+        "event_at": event_at,
+        "data": data,
+    }
+    if event_type in {"doorbell_pressed", "doorbell_view_requested"}:
+        event_data.update(
+            _doorbell_event_data(
+                hass,
+                entry,
+                event_state,
+                _ttl_seconds(payload.get("ttl_seconds")),
+            )
+        )
+    elif event_type in {"door_unlock_started", "door_unlock_ended"}:
+        event_data["address"] = data.get("address")
+    elif event_type in {"ringer_muted", "ringer_unmuted"}:
+        event_data["muted"] = event_state.ringer_muted
+    elif event_type == "smartphone_forwarding_changed":
+        event_data["mode"] = event_state.smartphone_forwarding_mode
+    elif event_type == "answering_machine_messages_changed":
+        event_data["voicemail"] = _voicemail_event_data(event_state)
+    elif event_type == "memos_changed":
+        event_data["memos"] = _memos_event_data(event_state)
+    return agent_event_display_data(
+        event_data,
+        getattr(hass.config, "language", None),
+    )
+
+
+def _apply_voicemail_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
+    voicemail = data.get("voicemail") if isinstance(data.get("voicemail"), dict) else data
+    event_state.voicemail_available = _optional_bool(voicemail.get("available"))
+    event_state.voicemail_total = _optional_int(voicemail.get("total"))
+    event_state.voicemail_unread = _optional_int(voicemail.get("unread"))
+    event_state.voicemail_read = _optional_int(voicemail.get("read"))
+    event_state.voicemail_newest_at = optional_string(voicemail.get("newest_at"))
+
+
+def _voicemail_event_data(event_state: C300XEventState) -> dict[str, Any]:
+    return {
+        "available": event_state.voicemail_available,
+        "total": event_state.voicemail_total,
+        "unread": event_state.voicemail_unread,
+        "read": event_state.voicemail_read,
+        "newest_at": event_state.voicemail_newest_at,
+    }
+
+
+def _apply_memos_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
+    memos = data.get("memos") if isinstance(data.get("memos"), dict) else data
+    event_state.memos_available = _optional_bool(memos.get("available"))
+    event_state.memos_total = _optional_int(memos.get("total"))
+    event_state.memos_text_total = _optional_int(memos.get("text_total"))
+    event_state.memos_voice_total = _optional_int(memos.get("voice_total"))
+    event_state.memos_unread = _optional_int(memos.get("unread"))
+    event_state.memos_read = _optional_int(memos.get("read"))
+    event_state.memos_newest_at = optional_string(memos.get("newest_at"))
+
+
+def _memos_event_data(event_state: C300XEventState) -> dict[str, Any]:
+    return {
+        "available": event_state.memos_available,
+        "total": event_state.memos_total,
+        "text_total": event_state.memos_text_total,
+        "voice_total": event_state.memos_voice_total,
+        "unread": event_state.memos_unread,
+        "read": event_state.memos_read,
+        "newest_at": event_state.memos_newest_at,
+    }
+
+
+def _apply_system_metrics_event(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    data: dict[str, Any],
+) -> None:
+    metrics = (
+        data.get("system_metrics")
+        if isinstance(data.get("system_metrics"), dict)
+        else data
+    )
+    try:
+        entry.runtime_data.system_metrics = normalize_system_metrics(metrics)
+    except C300XAgentApiResponseError:
+        _LOGGER.debug("Ignoring invalid C300X system metrics event payload")
+        return
+    entry.runtime_data.system_metrics_updated_at = dt_util.utcnow()
+    async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
+
+
+def _doorbell_event_data(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+    active_seconds: int,
+) -> dict[str, Any]:
+    event_data = {
+        "active_seconds": active_seconds,
+        "active_until": event_state.video_active_until,
+        **_video_event_data(hass, entry, event_state),
+    }
+    return event_data
+
+
+def _video_event_data(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_state: C300XEventState,
+) -> dict[str, Any]:
+    camera_entity_id = resolve_doorbell_camera_entity_id(hass, entry)
+    stream_path = safe_stream_path(
+        event_state.video_stream_path
+        or entry_config_value(entry, CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
+    )
+    event_data: dict[str, Any] = {
+        "video_available": camera_entity_id is not None,
+        "video_window_available": event_state.video_available,
+        "video_active_until": event_state.video_active_until,
+        "stream_path": stream_path,
+    }
+    if camera_entity_id is not None:
+        event_data["camera_entity_id"] = camera_entity_id
+    return event_data
+
+
+def _normalize_event_type(value: Any) -> str:
+    return normalize_event_type(value) or ""
+
+
+def _event_type_value(payload: dict[str, Any]) -> Any:
+    if not isinstance(payload, dict):
+        return ""
+    return payload_event_key(payload) or ""
+
+
+def _ttl_seconds(value: Any) -> int:
+    try:
+        ttl_seconds = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_EVENT_RESET_SECONDS
+    return max(ttl_seconds, 0)
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"true", "1", "on", "muted"}:
+        return True
+    if text in {"false", "0", "off", "unmuted"}:
+        return False
+    return None
+
+
+def _optional_forwarding_mode(value: Any) -> str | None:
+    return forwarding_state_from_value(value)
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_error(error: str, status: int) -> web.Response:
+    return web.json_response({"ok": False, "error": error}, status=status)

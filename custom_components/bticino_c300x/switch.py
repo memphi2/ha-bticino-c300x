@@ -1,0 +1,1013 @@
+"""Switches for BTicino C300X."""
+
+from __future__ import annotations
+
+from homeassistant.components.switch import SwitchEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .agent_diagnostics import async_refresh_agent_diagnostics
+from .api import (
+    C300XAgentApiError,
+    C300XAgentApiResponseError,
+    C300XAgentApiUnsupportedError,
+    normalize_smartphone_forwarding,
+)
+from .capabilities import auth_config_supported, maintenance_action_is_advertised
+from .const import (
+    CONF_AGENT_TOKEN,
+    CONF_MAINTENANCE_TOKEN,
+    EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_AUTH_CONFIG_CHANGED,
+    SIGNAL_QML_PATCH_CHANGED,
+)
+from .entity import C300XEntity, entry_config_value, supports_capability
+from .event_payload import agent_event_key
+from .forwarding import coerce_forwarding_mode_state
+from .qml_patch import (
+    async_apply_qml_patch_and_confirm,
+    async_refresh_qml_patch_status,
+    async_restore_qml_patch_and_confirm,
+)
+
+PARALLEL_UPDATES = 1
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up C300X switches."""
+
+    entities: list[SwitchEntity] = []
+    if supports_capability(entry, "smartphone_forwarding"):
+        entities.append(C300XSmartphoneForwardingSwitch(entry))
+    if supports_capability(entry, "ringer"):
+        entities.append(C300XRingerMuteSwitch(entry))
+    if supports_capability(entry, "answering_machine"):
+        entities.append(C300XAnsweringMachineSwitch(entry))
+    entities.append(C300XNoAuthSwitch(entry))
+    entities.append(C300XMaintenanceNoAuthSwitch(entry))
+    entities.append(C300XMdnsDiscoverySwitch(entry))
+    entities.append(C300XMaintenanceSshSwitch(entry))
+    entities.append(C300XGuiFunctionPatchSwitch(entry))
+    entities.append(C300XFirewallPatchSwitch(entry))
+    entities.append(C300XIpv6FirewallPatchSwitch(entry))
+    if entities:
+        await _async_refresh_initial_states(entities)
+        async_add_entities(entities)
+
+
+class C300XSmartphoneForwardingSwitch(C300XEntity, SwitchEntity):
+    """Switch for all-calls smartphone forwarding."""
+
+    _attr_should_poll = False
+    _attr_translation_key = "smartphone_forwarding"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "smartphone_forwarding")
+        self._mode: int | None = None
+        self._state = "unknown"
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true when all calls are forwarded to smartphone."""
+
+        if self._mode is None:
+            return None
+        return self._mode == 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | int | None]:
+        """Return raw forwarding state metadata."""
+
+        return {"mode": self._mode, "state": self._state}
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable all smartphone forwarding."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Block all smartphone forwarding."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh forwarding state through the agent read-only endpoint."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_smartphone_forwarding_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_enabled(
+            enabled
+        )
+        self._apply_status(status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._mode = status.get("mode")
+        self._state = status.get("state", "unknown")
+        self._attr_available = True
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to push state updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_AGENT_EVENT_RECEIVED,
+                self._handle_agent_event,
+            )
+        )
+
+    @callback
+    def _handle_agent_event(self, event) -> None:
+        if event.data.get("entry_id") != self._entry.entry_id:
+            return
+        event_type = agent_event_key(event.data) or ""
+        if not event_type.startswith("smartphone_forwarding_"):
+            return
+        forwarding = _normalize_smartphone_forwarding_event(event.data)
+        self._state = forwarding.get("state")
+        self._mode = forwarding.get("mode")
+        self._attr_available = True
+        self.async_write_ha_state()
+
+
+def _normalize_smartphone_forwarding_event(payload: dict[str, object]) -> dict[str, str | int | None]:
+    mode = payload.get("mode")
+    state = payload.get("state")
+
+    try:
+        normalized = normalize_smartphone_forwarding({"mode": mode, "state": state})
+        if isinstance(normalized.get("mode"), int) and isinstance(
+            normalized.get("state"), str
+        ):
+            return {
+                "mode": normalized.get("mode"),
+                "state": normalized.get("state"),
+            }
+    except C300XAgentApiResponseError:
+        return _coerce_smartphone_forwarding_event(mode, state)
+    return _coerce_smartphone_forwarding_event(mode, state)
+
+
+def _coerce_smartphone_forwarding_event(mode: object, state: object) -> dict[str, str | int | None]:
+    return coerce_forwarding_mode_state(mode, state)
+
+
+class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
+    """Mute or unmute the C300X ringer."""
+
+    _attr_should_poll = False
+    _attr_translation_key = "ringer_mute"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "ringer_mute")
+        self._muted: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the ringer is muted."""
+
+        return self._muted
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Mute the ringer."""
+
+        await self._set_muted(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Unmute the ringer."""
+
+        await self._set_muted(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh ringer mute state."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_ringer_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_muted(self, muted: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_ringer_muted(muted)
+        self._apply_status(status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._muted = status.get("muted")
+        self._attr_available = True
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to push state updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_AGENT_EVENT_RECEIVED,
+                self._handle_agent_event,
+            )
+        )
+
+    @callback
+    def _handle_agent_event(self, event) -> None:
+        if event.data.get("entry_id") != self._entry.entry_id:
+            return
+        event_type = agent_event_key(event.data)
+        if event_type not in {"ringer_muted", "ringer_unmuted"}:
+            return
+        self._muted = event_type == "ringer_muted"
+        self._attr_available = True
+        self.async_write_ha_state()
+
+
+class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
+    """Enable or disable the C300X answering machine."""
+
+    _attr_should_poll = False
+    _attr_translation_key = "answering_machine"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "answering_machine")
+        self._enabled: bool | None = None
+        self._greeting_message_enabled: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the answering machine is enabled."""
+
+        return self._enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool | None]:
+        """Return answering-machine status metadata."""
+
+        return {"greeting_message_enabled": self._greeting_message_enabled}
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable the answering machine."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable the answering machine."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh answering-machine state."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_answering_machine_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_answering_machine_enabled(
+            enabled
+        )
+        self._apply_status(status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._enabled = status.get("enabled")
+        self._greeting_message_enabled = status.get("greeting_message_enabled")
+        self._attr_available = True
+
+
+class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
+    """Start or stop SSH through the device-agent maintenance API."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "maintenance_ssh"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "maintenance_ssh")
+        self._running: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether SSH is running."""
+
+        return self._running
+
+    @property
+    def available(self) -> bool:
+        """Return true when the SSH maintenance action is advertised."""
+
+        return super().available and _supports_maintenance_action(
+            self._entry,
+            "ssh_start",
+        )
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Start SSH."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Stop SSH."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh SSH state through the maintenance API."""
+
+        if not _supports_maintenance_action(self._entry, "ssh_start"):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_ssh_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
+        self._apply_status(status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._running = status.get("running")
+        self._attr_available = True
+
+
+class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
+    """Apply or restore the device GUI function patch."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "gui_function_patch"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "gui_function_patch")
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the GUI function patch is fully applied."""
+
+        patched = _qml_patch_status(self._entry).get("patched")
+        return patched if isinstance(patched, bool) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return read-only patch metadata."""
+
+        status = _qml_patch_status(self._entry)
+        return {
+            "state": status.get("state"),
+            "backup_available": status.get("backup_available"),
+            "gui_running": status.get("gui_running"),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return true when all GUI patch maintenance actions are advertised."""
+
+        return super().available and _supports_maintenance_actions(
+            self._entry,
+            "qml_status",
+            "qml_patch",
+            "qml_restore",
+        )
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Apply the GUI function patch."""
+
+        status = await async_apply_qml_patch_and_confirm(
+            self._entry,
+            self._dispatch_qml_patch_changed,
+        )
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Restore the original GUI files."""
+
+        status = await async_restore_qml_patch_and_confirm(
+            self._entry,
+            self._dispatch_qml_patch_changed,
+        )
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh GUI patch state through the read-only status endpoint."""
+
+        if not _supports_maintenance_actions(
+            self._entry,
+            "qml_status",
+            "qml_patch",
+            "qml_restore",
+        ):
+            return
+        try:
+            status = await async_refresh_qml_patch_status(self._entry)
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to GUI patch state updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_QML_PATCH_CHANGED,
+                self._handle_qml_patch_changed,
+            )
+        )
+
+    @callback
+    def _handle_qml_patch_changed(self, entry_id: str) -> None:
+        if entry_id != self._entry.entry_id:
+            return
+        self._apply_status(_qml_patch_status(self._entry))
+        self.async_write_ha_state()
+
+    def _dispatch_qml_patch_changed(self) -> None:
+        hass = getattr(self, "hass", None)
+        if hass is not None:
+            async_dispatcher_send(hass, SIGNAL_QML_PATCH_CHANGED, self._entry.entry_id)
+
+    def _apply_status(self, status: dict) -> None:
+        self._attr_available = bool(status.get("available", True))
+
+
+class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
+    """Apply or restore the persistent IPv4 API firewall patch."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "firewall_patch"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "firewall_patch")
+        self._status: dict[str, object] = {}
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the IPv4 firewall patch is fully applied."""
+
+        patched = self._status.get("patched")
+        return patched if isinstance(patched, bool) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return read-only IPv4 firewall patch metadata."""
+
+        return {
+            "state": self._status.get("state"),
+            "family": self._status.get("family"),
+            "exists": self._status.get("exists"),
+            "backup_available": self._status.get("backup_available"),
+            "api_port": self._status.get("api_port"),
+            "changed_files": self._status.get("changed_files"),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return true when IPv4 firewall maintenance is configurable."""
+
+        return super().available and _supports_firewall_switch(self._entry)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Apply the persistent IPv4 API firewall rule."""
+
+        await self._async_enable_maintenance_endpoint()
+        status = await self._entry.runtime_data.api.async_apply_firewall()
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Restore the original IPv4 firewall script."""
+
+        status = await self._entry.runtime_data.api.async_restore_firewall()
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh IPv4 firewall patch state through the read-only status endpoint."""
+
+        if not _supports_firewall_switch(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_firewall_status()
+        except C300XAgentApiUnsupportedError:
+            if await self._async_configured_endpoint_disabled():
+                self._apply_disabled_status()
+                return
+            self._attr_available = False
+            return
+        except C300XAgentApiError:
+            if await self._async_configured_endpoint_disabled():
+                self._apply_disabled_status()
+                return
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _async_enable_maintenance_endpoint(self) -> None:
+        """Enable IPv4 firewall maintenance before applying the explicit patch."""
+
+        if not _supports_auth_config(self._entry):
+            return
+        status = await self._entry.runtime_data.api.async_set_firewall_enabled(True)
+        _dispatch_auth_config_status(self, status)
+
+    async def _async_configured_endpoint_disabled(self) -> bool:
+        """Return true when config says the IPv4 firewall endpoint is disabled."""
+
+        if not _supports_auth_config(self._entry):
+            return False
+        try:
+            status = await self._entry.runtime_data.api.async_auth_config_status()
+        except C300XAgentApiError:
+            return False
+        _dispatch_auth_config_status(self, status)
+        return (
+            status.get("firewall_enabled") is False
+            or status.get("maintenance_enabled") is False
+        )
+
+    def _apply_disabled_status(self) -> None:
+        self._apply_status(
+            {
+                "available": True,
+                "family": "ipv4",
+                "patched": False,
+                "state": "disabled",
+            }
+        )
+
+    def _apply_status(self, status: dict) -> None:
+        self._status = status
+        self._attr_available = bool(status.get("available", True))
+
+
+class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
+    """Apply or restore the persistent IPv6 API firewall patch."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "ipv6_firewall_patch"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "ipv6_firewall_patch")
+        self._status: dict[str, object] = {}
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the IPv6 firewall patch is fully applied."""
+
+        patched = self._status.get("patched")
+        return patched if isinstance(patched, bool) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return read-only IPv6 firewall patch metadata."""
+
+        return {
+            "state": self._status.get("state"),
+            "family": self._status.get("family"),
+            "exists": self._status.get("exists"),
+            "backup_available": self._status.get("backup_available"),
+            "api_port": self._status.get("api_port"),
+            "changed_files": self._status.get("changed_files"),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return true when IPv6 firewall maintenance is configurable."""
+
+        return super().available and _supports_ipv6_firewall_switch(self._entry)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Apply the persistent IPv6 API firewall rules."""
+
+        await self._async_enable_maintenance_endpoint()
+        status = await self._entry.runtime_data.api.async_apply_ipv6_firewall()
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Restore the original IPv6 firewall script."""
+
+        status = await self._entry.runtime_data.api.async_restore_ipv6_firewall()
+        self._apply_status(status)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh IPv6 firewall patch state through the read-only status endpoint."""
+
+        if not _supports_ipv6_firewall_switch(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_ipv6_firewall_status()
+        except C300XAgentApiUnsupportedError:
+            if await self._async_configured_endpoint_disabled():
+                self._apply_disabled_status()
+                return
+            self._attr_available = False
+            return
+        except C300XAgentApiError:
+            if await self._async_configured_endpoint_disabled():
+                self._apply_disabled_status()
+                return
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _async_enable_maintenance_endpoint(self) -> None:
+        """Enable IPv6 firewall maintenance before applying the explicit patch."""
+
+        if not _supports_auth_config(self._entry):
+            return
+        status = (
+            await self._entry.runtime_data.api.async_set_ipv6_firewall_enabled(True)
+        )
+        _dispatch_auth_config_status(self, status)
+
+    async def _async_configured_endpoint_disabled(self) -> bool:
+        """Return true when config says the IPv6 firewall endpoint is disabled."""
+
+        if not _supports_auth_config(self._entry):
+            return False
+        try:
+            status = await self._entry.runtime_data.api.async_auth_config_status()
+        except C300XAgentApiError:
+            return False
+        _dispatch_auth_config_status(self, status)
+        return (
+            status.get("ipv6_firewall_enabled") is False
+            or status.get("maintenance_enabled") is False
+        )
+
+    def _apply_disabled_status(self) -> None:
+        self._apply_status(
+            {
+                "available": True,
+                "family": "ipv6",
+                "patched": False,
+                "state": "disabled",
+            }
+        )
+
+    def _apply_status(self, status: dict) -> None:
+        self._status = status
+        self._attr_available = bool(status.get("available", True))
+
+
+class _AuthConfigStatusEntity(C300XEntity):
+    """Mixin for switches backed by the shared agent auth-config endpoint."""
+
+    @property
+    def available(self) -> bool:
+        """Return true when the agent advertises auth configuration."""
+
+        return super().available and _supports_auth_config(self._entry)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to shared auth-config updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_AUTH_CONFIG_CHANGED,
+                self._handle_auth_config_status,
+            )
+        )
+
+    @callback
+    def _handle_auth_config_status(self, entry_id: str, status: dict) -> None:
+        if entry_id != self._entry.entry_id:
+            return
+        self._apply_status(status)
+        self.async_write_ha_state()
+
+
+def _dispatch_auth_config_status(entity: C300XEntity, status: dict) -> None:
+    hass = getattr(entity, "hass", None)
+    if hass is not None:
+        async_dispatcher_send(
+            hass,
+            SIGNAL_AUTH_CONFIG_CHANGED,
+            entity._entry.entry_id,
+            status,
+        )
+
+
+class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
+    """Enable or disable the native agent bootstrap noAuth mode."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "maintenance_no_auth"
+    _uses_auth_config_status = True
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "maintenance_no_auth")
+        self._enabled: bool | None = None
+        self._api_token_configured: bool | None = None
+        self._maintenance_token_configured: bool | None = None
+        self._maintenance_no_auth_allowed: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether noAuth bootstrap mode is enabled."""
+
+        return self._enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool | None]:
+        """Return non-sensitive auth configuration metadata."""
+
+        return {
+            "api_token_configured": self._api_token_configured,
+            "maintenance_token_configured": self._maintenance_token_configured,
+            "maintenance_no_auth_allowed": self._maintenance_no_auth_allowed,
+        }
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable noAuth bootstrap mode."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable noAuth bootstrap mode."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh noAuth state through the maintenance API."""
+
+        if not _supports_auth_config(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_auth_config_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_no_auth_enabled(
+            enabled,
+            api_token=_configured_token(self._entry, CONF_AGENT_TOKEN)
+            if not enabled
+            else None,
+            maintenance_token=_configured_token(self._entry, CONF_MAINTENANCE_TOKEN)
+            if not enabled
+            else None,
+            maintenance_no_auth_allowed=False if not enabled else None,
+        )
+        self._apply_status(status)
+        _dispatch_auth_config_status(self, status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._enabled = status.get("no_auth")
+        self._api_token_configured = status.get("api_token_configured")
+        self._maintenance_token_configured = status.get(
+            "maintenance_token_configured"
+        )
+        self._maintenance_no_auth_allowed = status.get("maintenance_no_auth_allowed")
+        self._attr_available = True
+
+
+class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
+    """Enable bootstrap mDNS discovery while the agent has no HA connection."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "maintenance_mdns_discovery"
+    _uses_auth_config_status = True
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "maintenance_mdns_discovery")
+        self._enabled: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether bootstrap mDNS discovery is enabled."""
+
+        return self._enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable bootstrap mDNS discovery."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable bootstrap mDNS discovery."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh mDNS discovery config through the maintenance API."""
+
+        if not _supports_auth_config(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_auth_config_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_mdns_enabled(enabled)
+        self._apply_status(status)
+        _dispatch_auth_config_status(self, status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._enabled = status.get("mdns_enabled")
+        self._attr_available = True
+
+
+class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
+    """Allow noAuth requests to use maintenance endpoints."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "maintenance_no_auth_access"
+    _uses_auth_config_status = True
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "maintenance_no_auth_access")
+        self._enabled: bool | None = None
+        self._no_auth: bool | None = None
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether noAuth maintenance access is allowed."""
+
+        return self._enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool | None]:
+        """Return related auth state metadata."""
+
+        return {"no_auth": self._no_auth}
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Allow noAuth maintenance access."""
+
+        await self._set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Deny noAuth maintenance access."""
+
+        await self._set_enabled(False)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh noAuth maintenance access state."""
+
+        if not _supports_auth_config(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_auth_config_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = (
+            await self._entry.runtime_data.api.async_set_maintenance_no_auth_allowed(
+                enabled
+            )
+        )
+        self._apply_status(status)
+        _dispatch_auth_config_status(self, status)
+
+    def _apply_status(self, status: dict) -> None:
+        self._enabled = status.get("maintenance_no_auth_allowed")
+        self._no_auth = status.get("no_auth")
+        self._attr_available = True
+
+
+async def _async_refresh_initial_states(entities: list[SwitchEntity]) -> None:
+    """Populate switch states once during setup without enabling periodic polling."""
+
+    auth_config_entities = [
+        entity
+        for entity in entities
+        if getattr(entity, "_uses_auth_config_status", False)
+        and _supports_auth_config(entity._entry)
+    ]
+    if auth_config_entities:
+        try:
+            status = (
+                await auth_config_entities[
+                    0
+                ]._entry.runtime_data.api.async_auth_config_status()
+            )
+        except C300XAgentApiError:
+            for entity in auth_config_entities:
+                entity._attr_available = False
+        else:
+            for entity in auth_config_entities:
+                entity._apply_status(status)
+
+    for entity in entities:
+        if entity in auth_config_entities:
+            continue
+        await entity.async_update()
+
+
+def _supports_maintenance_action(entry: ConfigEntry, action: str) -> bool:
+    capabilities = getattr(entry.runtime_data, "capabilities", {})
+    return maintenance_action_is_advertised(capabilities, action)
+
+
+def _supports_maintenance_actions(entry: ConfigEntry, *actions: str) -> bool:
+    return all(_supports_maintenance_action(entry, action) for action in actions)
+
+
+def _supports_firewall_switch(entry: ConfigEntry) -> bool:
+    return _supports_maintenance_actions(
+        entry,
+        "firewall_status",
+        "firewall_apply",
+        "firewall_restore",
+    ) or _supports_auth_config(entry)
+
+
+def _supports_ipv6_firewall_switch(entry: ConfigEntry) -> bool:
+    return _supports_maintenance_actions(
+        entry,
+        "ipv6_firewall_status",
+        "ipv6_firewall_apply",
+        "ipv6_firewall_restore",
+    ) or _supports_auth_config(entry)
+
+
+def _supports_auth_config(entry: ConfigEntry) -> bool:
+    capabilities = getattr(entry.runtime_data, "capabilities", {})
+    return auth_config_supported(capabilities)
+
+
+def _configured_token(entry: ConfigEntry, key: str) -> str | None:
+    token = str(entry_config_value(entry, key, "") or "").strip()
+    return token or None
+
+
+def _qml_patch_status(entry: ConfigEntry) -> dict[str, object]:
+    status = getattr(entry.runtime_data, "qml_patch_status", {})
+    return status if isinstance(status, dict) else {}
+
+
+async def _async_refresh_agent_diagnostics_if_possible(entity: C300XEntity) -> None:
+    hass = getattr(entity, "hass", None)
+    runtime_data = getattr(entity._entry, "runtime_data", None)
+    if hass is None or not hasattr(runtime_data, "capabilities"):
+        return
+    await async_refresh_agent_diagnostics(hass, entity._entry)

@@ -1,0 +1,52 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides: c300x-native-agent
+# Default-Start: 5
+# Default-Stop: 0 1 6
+# Short-Description: BTicino C300X native agent
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DEFAULT_AGENT_DIR="/home/bticino/cfg/extra/c300x-native-agent"
+AGENT_ENV="${C300X_AGENT_ENV:-$DEFAULT_AGENT_DIR/c300x-agent.env}"
+[ -r "$AGENT_ENV" ] && . "$AGENT_ENV"
+AGENT_DIR="${C300X_AGENT_DIR:-${AGENT_DIR:-$DEFAULT_AGENT_DIR}}"
+AGENT_BIN="$AGENT_DIR/c300x-agent-native"
+AGENT_CONFIG="$AGENT_DIR/config.json"
+AGENT_PID="$AGENT_DIR/c300x-agent-native.pid"
+
+[ -f /etc/init.d/functions ] && . /etc/init.d/functions
+
+case "$1" in
+    start)
+        if [ ! -x "$AGENT_BIN" ] || [ ! -f "$AGENT_CONFIG" ]; then
+            exit 1
+        fi
+        start-stop-daemon --start --quiet --oknodo --background \
+            --make-pidfile --pidfile "$AGENT_PID" \
+            --exec "$AGENT_BIN" -- --config "$AGENT_CONFIG"
+        ;;
+    stop)
+        start-stop-daemon --stop --quiet --oknodo \
+            --pidfile "$AGENT_PID" --retry=TERM/3/KILL/2
+        rm -f "$AGENT_PID"
+        ;;
+    restart)
+        "$0" stop
+        usleep 150000 >/dev/null 2>&1 || sleep 1
+        "$0" start
+        ;;
+    status)
+        if [ -f "$AGENT_PID" ] && kill -0 "$(cat "$AGENT_PID")" >/dev/null 2>&1; then
+            exit 0
+        fi
+        exit 3
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac
+
+exit 0

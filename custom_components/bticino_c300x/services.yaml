@@ -1,0 +1,178 @@
+run_action:
+  name: Run C300X action
+  description: Run one configured C300X action by its allowlisted action id.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    action_id:
+      name: Action ID
+      description: Configured action id to run.
+      required: true
+      selector:
+        text:
+
+alarm_command:
+  name: Send C300X alarm command
+  description: Send an alarm command to the configured alarm control panel entity.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    command:
+      name: Command
+      description: Alarm command to execute.
+      required: true
+      selector:
+        select:
+          options:
+            - arm_away
+            - arm_home
+            - arm_night
+            - arm_vacation
+            - disarm
+    code:
+      name: Code
+      description: Optional alarm code. The integration never stores this value.
+      required: false
+      selector:
+        text:
+          type: password
+    force:
+      name: Bypass open sensors
+      description: Force arming through Alarmo when open sensors block the selected arm mode.
+      required: false
+      default: false
+      selector:
+        boolean:
+
+stair_light:
+  name: Activate C300X stair light
+  description: Activate the staircase light through the configured C300X device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    address:
+      name: Stair light address
+      description: Optional OpenWebNet staircase-light address. Defaults to the configured integration address.
+      required: false
+      selector:
+        text:
+
+unlock_door:
+  name: Unlock C300X door
+  description: Unlock a configured C300X door through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    lock_id:
+      name: Lock ID
+      description: Optional C300X lock id reported by the device agent. Defaults to default.
+      required: false
+      selector:
+        text:
+
+reboot:
+  name: Reboot C300X
+  description: Schedule a C300X reboot through the local device-agent maintenance API.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+reload_gui:
+  name: Reload C300X GUI
+  description: Reload the C300X graphical interface through the local device-agent maintenance API.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+play_latest_video_message:
+  name: Play latest C300X video message
+  description: Play the latest stored C300X answering-machine video message on a media player.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    media_player_entity_id:
+      name: Media player
+      description: Media player entity that should play the latest video message.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+play_latest_voice_memo:
+  name: Play latest C300X voice memo
+  description: Play the latest stored C300X manual voice memo on a media player.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    media_player_entity_id:
+      name: Media player
+      description: Media player entity that should play the latest voice memo.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+delete_latest_video_message:
+  name: Delete latest C300X video message
+  description: Delete the latest stored C300X answering-machine video message. Requires the C300X GUI function patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+delete_latest_text_memo:
+  name: Delete latest C300X text memo
+  description: Delete the latest stored C300X manual text memo. Requires the C300X GUI function patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+delete_latest_voice_memo:
+  name: Delete latest C300X voice memo
+  description: Delete the latest stored C300X manual voice memo. Requires the C300X GUI function patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:

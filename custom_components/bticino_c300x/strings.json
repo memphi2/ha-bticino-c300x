@@ -1,0 +1,355 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BTicino C300X",
+        "description": "Enter the C300X address first. If the native device agent is not reachable, Home Assistant can guide a one-shot agent install before collecting tokens and feature options.",
+        "data": {
+          "name": "Name",
+          "agent_host": "Device agent host",
+          "agent_port": "Device agent HTTP port",
+          "agent_use_ssl": "Use HTTPS for device agent API"
+        }
+      },
+      "agent_missing": {
+        "title": "Native agent not found",
+        "description": "Home Assistant could not reach the C300X native agent at the configured address. You can install the bundled native agent now, or continue if you want to configure an already installed agent manually.",
+        "data": {
+          "bootstrap_install_agent": "Install native agent on the C300X"
+        }
+      },
+      "bootstrap_install": {
+        "title": "Install native C300X agent",
+        "description": "This writes the native agent, generated token config, startup script, and QML support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
+        "data": {
+          "bootstrap_ssh_username": "C300X SSH user",
+          "bootstrap_ssh_password": "C300X SSH password",
+          "bootstrap_apply_gui_patch": "Apply C300X GUI patch after install"
+        }
+      },
+      "agent_auth": {
+        "title": "Device agent credentials",
+        "description": "Enter the token details for the reachable native agent. Leave the API token empty only while the agent is still in noAuth bootstrap mode.",
+        "data": {
+          "agent_token": "Device agent API token",
+          "maintenance_token": "Device agent maintenance token",
+          "stair_light_address": "Stair light address"
+        }
+      },
+      "user_features": {
+        "title": "BTicino C300X features",
+        "description": "Select the Home Assistant features exposed by this C300X installation.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "data": {
+          "device_ui_enabled": "Patch C300X GUI functions",
+          "alarm_entity_id": "Alarmo entity",
+          "weather_entity_id": "Weather entity",
+          "video_enabled": "Create doorbell camera entity",
+          "video_port": "Doorbell RTSP port",
+          "video_stream_path": "Doorbell RTSP stream path",
+          "actions_json": "Dashboard action allowlist JSON",
+          "dashboard_prevent_return": "Keep dashboard page open after actions"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure BTicino C300X",
+        "description": "Update device agent connection, maintenance token, stair light address, or rotate webhook credentials.",
+        "data": {
+          "agent_host": "Device agent host",
+          "agent_port": "Device agent HTTP port",
+          "agent_use_ssl": "Use HTTPS for device agent API",
+          "agent_token": "Device agent API token",
+          "maintenance_token": "Device agent maintenance token",
+          "stair_light_address": "Stair light address",
+          "rotate_shared_secret": "Rotate shared secret"
+        }
+      },
+      "reconfigure_features": {
+        "title": "Reconfigure BTicino C300X features",
+        "description": "Update Alarmo, video, and GUI function patch settings.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "data": {
+          "device_ui_enabled": "Patch C300X GUI functions",
+          "alarm_entity_id": "Alarmo entity",
+          "weather_entity_id": "Weather entity",
+          "video_enabled": "Create doorbell camera entity",
+          "video_port": "Doorbell RTSP port",
+          "video_stream_path": "Doorbell RTSP stream path",
+          "actions_json": "Dashboard action allowlist JSON",
+          "dashboard_prevent_return": "Keep dashboard page open after actions"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "BTicino C300X is already configured.",
+      "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials."
+    },
+    "error": {
+      "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
+      "device_install_failed": "The SSH install failed. Check SSH access and try again.",
+      "device_install_verify_failed": "The installer finished, but the native agent did not answer with the generated token.",
+      "invalid_agent_port": "Enter a valid device agent port.",
+      "invalid_agent_host": "Enter the device agent host.",
+      "invalid_device_host": "Enter the C300X address.",
+      "installer_dependency_missing": "The Home Assistant Python SSH dependency is not loaded yet. Restart Home Assistant after installing or updating the integration.",
+      "invalid_ssh_password": "Enter the C300X SSH password.",
+      "invalid_ssh_username": "Enter the C300X SSH user.",
+      "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
+      "invalid_weather_entity": "Select a weather entity or leave the field empty.",
+      "required": "This field is required."
+    }
+  },
+  "options": {
+    "step": {
+      "connection": {
+        "title": "BTicino C300X connection",
+        "description": "Configure the local device-agent connection and maintenance token.",
+        "data": {
+          "agent_host": "Device agent host",
+          "agent_port": "Device agent HTTP port",
+          "agent_use_ssl": "Use HTTPS for device agent API",
+          "agent_token": "Device agent API token",
+          "maintenance_token": "Device agent maintenance token",
+          "stair_light_address": "Stair light address"
+        }
+      },
+      "features": {
+        "title": "BTicino C300X features",
+        "description": "Configure Alarmo, video, and GUI function patch settings.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "data": {
+          "device_ui_enabled": "Patch C300X GUI functions",
+          "alarm_entity_id": "Alarmo entity",
+          "weather_entity_id": "Weather entity",
+          "video_enabled": "Create doorbell camera entity",
+          "video_port": "Doorbell RTSP port",
+          "video_stream_path": "Doorbell RTSP stream path",
+          "actions_json": "Dashboard action allowlist JSON",
+          "dashboard_prevent_return": "Keep dashboard page open after actions"
+        }
+      }
+    },
+    "error": {
+      "invalid_action_map": "The action allowlist JSON is invalid.",
+      "invalid_actions": "The action allowlist JSON is invalid.",
+      "invalid_agent_host": "Enter the device agent host.",
+      "invalid_alarm_entity": "Select an alarm control panel entity or leave the field empty.",
+      "invalid_weather_entity": "Select a weather entity or leave the field empty."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "doorbell_video_available": {
+        "name": "Doorbell video available"
+      }
+    },
+    "button": {
+      "delete_latest_video_message": {
+        "name": "Delete latest video message"
+      },
+      "delete_latest_text_memo": {
+        "name": "Delete latest text memo"
+      },
+      "door_unlock": {
+        "name": "Door unlock"
+      },
+      "reboot": {
+        "name": "Reboot"
+      },
+      "remove_agent": {
+        "name": "Remove device agent"
+      },
+      "reload_gui": {
+        "name": "Reload device GUI"
+      },
+      "stair_light": {
+        "name": "Stair light"
+      },
+      "delete_latest_voice_memo": {
+        "name": "Delete latest voice memo"
+      }
+    },
+    "camera": {
+      "doorbell_camera": {
+        "name": "Doorbell camera"
+      }
+    },
+    "event": {
+      "doorbell_event": {
+        "name": "Doorbell ring event",
+        "state": {
+          "ring": "Ring"
+        }
+      },
+      "agent_event": {
+        "name": "Device event",
+        "state": {
+          "agent_restarted": "Agent restarted",
+          "answering_machine_messages_changed": "Video messages changed",
+          "call_ended": "Call ended",
+          "call_started": "Call started",
+          "door_unlock_ended": "Door unlock ended",
+          "door_unlock_started": "Door unlock started",
+          "doorbell_media_closed": "Doorbell camera stream ended",
+          "doorbell_pressed": "Doorbell pressed",
+          "doorbell_view_requested": "Doorbell view requested",
+          "memos_changed": "Memos changed",
+          "ringer_muted": "Ringer muted",
+          "ringer_unmuted": "Ringer unmuted",
+          "smartphone_forwarding_changed": "Smartphone forwarding changed",
+          "stair_light_activated": "Stair light activated"
+        }
+      }
+    },
+    "select": {
+      "smartphone_forwarding_mode": {
+        "name": "Smartphone forwarding mode"
+      }
+    },
+    "sensor": {
+      "connection_state": {
+        "name": "Connection state",
+        "state": {
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "disconnected": "Disconnected"
+        }
+      },
+      "agent": {
+        "name": "Device agent"
+      },
+      "agent_writes": {
+        "name": "Device agent writes"
+      },
+      "device_cpu": {
+        "name": "Device CPU"
+      },
+      "device_load": {
+        "name": "Device load"
+      },
+      "device_temperature": {
+        "name": "Device temperature"
+      },
+      "qml_patch_status": {
+        "name": "Device GUI function patch"
+      },
+      "last_connection_error": {
+        "name": "Last connection error"
+      },
+      "next_reconnect_delay": {
+        "name": "Next reconnect delay"
+      },
+      "reconnect_count": {
+        "name": "Reconnects"
+      },
+      "voicemail_messages": {
+        "name": "Video messages"
+      },
+      "voicemail_unread": {
+        "name": "Unread video messages"
+      },
+      "latest_video_message": {
+        "name": "Latest video message"
+      },
+      "text_memos": {
+        "name": "Text memos"
+      },
+      "latest_text_memo": {
+        "name": "Latest text memo"
+      },
+      "voice_memos": {
+        "name": "Voice memos"
+      },
+      "latest_voice_memo": {
+        "name": "Latest voice memo"
+      },
+      "doorbell_state": {
+        "name": "Doorbell state"
+      }
+    },
+    "switch": {
+      "answering_machine": {
+        "name": "Answering machine"
+      },
+      "ringer_mute": {
+        "name": "Ringer mute"
+      },
+      "maintenance_ssh": {
+        "name": "SSH"
+      },
+      "maintenance_no_auth": {
+        "name": "Agent noAuth"
+      },
+      "maintenance_no_auth_access": {
+        "name": "Agent noAuth maintenance"
+      },
+      "maintenance_mdns_discovery": {
+        "name": "Agent mDNS discovery"
+      },
+      "gui_function_patch": {
+        "name": "Device GUI patch"
+      },
+      "firewall_patch": {
+        "name": "API firewall patch"
+      },
+      "ipv6_firewall_patch": {
+        "name": "IPv6 firewall patch"
+      },
+      "smartphone_forwarding": {
+        "name": "Smartphone forwarding"
+      }
+    }
+  },
+  "exceptions": {
+    "alarm_not_configured": {
+      "message": "No alarm control panel entity is configured."
+    },
+    "agent_command_failed": {
+      "message": "The C300X device-agent command failed or is not supported by the installed agent."
+    },
+    "gui_function_patch_required": {
+      "message": "This action requires the C300X GUI function patch. Enable and apply the GUI patch in the integration options first."
+    },
+    "entry_id_required": {
+      "message": "Entry ID is required when more than one BTicino C300X entry exists."
+    },
+    "invalid_action_id": {
+      "message": "The action ID is invalid."
+    },
+    "invalid_alarm_command": {
+      "message": "The alarm command is invalid."
+    },
+    "invalid_lock_id": {
+      "message": "The lock ID is invalid."
+    },
+    "maintenance_action_not_supported": {
+      "message": "The C300X device-agent maintenance action is not supported, not enabled, or no maintenance token is configured."
+    },
+    "video_message_not_available": {
+      "message": "No C300X video message is available."
+    },
+    "text_memo_not_available": {
+      "message": "No C300X text memo is available."
+    },
+    "unknown_action": {
+      "message": "The action ID {action_id} is not configured."
+    },
+    "unknown_entry": {
+      "message": "The selected BTicino C300X entry does not exist."
+    },
+    "voice_memo_not_available": {
+      "message": "No C300X voice memo is available."
+    }
+  },
+  "issues": {
+    "agent_capability_mismatch": {
+      "title": "C300X device agent capabilities are missing",
+      "description": "The configured C300X device agent for {entry_title} answered without usable capabilities. Update or reconfigure the local device agent, then reload the integration."
+    },
+    "invalid_action_map": {
+      "title": "C300X dashboard action allowlist is invalid",
+      "description": "The action allowlist for {entry_title} cannot be parsed: {error}. Fix the configured action map, then reload the integration."
+    },
+    "missing_alarm_entity": {
+      "title": "Configured C300X alarm entity is missing",
+      "description": "{entry_title} references {entity_id}, but Home Assistant does not know that entity. Pick an existing alarm control panel entity in the integration options or clear the alarm setting."
+    }
+  }
+}

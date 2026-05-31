@@ -1,0 +1,113 @@
+"""Binary sensors for BTicino C300X push events."""
+
+from __future__ import annotations
+
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import EVENT_AGENT_EVENT_RECEIVED
+from .entity import C300XEntity, supports_capability
+from .event_payload import agent_event_key
+from .video import call_later, event_active_seconds
+
+PARALLEL_UPDATES = 0
+VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
+VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up C300X binary sensors."""
+
+    entities = []
+    if supports_capability(entry, "doorbell_video"):
+        entities.append(C300XDoorbellVideoAvailableBinarySensor(entry))
+    async_add_entities(entities)
+
+
+class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
+    """Doorbell video availability from push-event metadata."""
+
+    _attr_should_poll = False
+    _attr_translation_key = "doorbell_video_available"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "doorbell_video_available")
+        self._available = False
+        self._active_until: str | None = None
+        self._stream_path: str | None = None
+        self._reset = None
+
+    @property
+    def is_on(self) -> bool:
+        """Return true while a recent doorbell video window is active."""
+
+        return self._available or bool(
+            self._entry.runtime_data.event_state.video_available
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return video window metadata."""
+
+        event_state = self._entry.runtime_data.event_state
+        attributes = {}
+        active_until = self._active_until or event_state.video_active_until
+        stream_path = self._stream_path or event_state.video_stream_path
+        if active_until:
+            attributes["active_until"] = active_until
+        if stream_path:
+            attributes["stream_path"] = stream_path
+        return attributes
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to runtime event-state updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_AGENT_EVENT_RECEIVED,
+                self._handle_agent_event,
+            )
+        )
+
+    @callback
+    def _handle_agent_event(self, event) -> None:
+        if event.data.get("entry_id") != self._entry.entry_id:
+            return
+        event_type = agent_event_key(event.data)
+        if event_type not in VIDEO_WINDOW_EVENTS | VIDEO_WINDOW_CLOSED_EVENTS:
+            return
+        if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
+            self._clear()
+            self.async_write_ha_state()
+            return
+        self._available = bool(event.data.get("video_window_available", True))
+        self._active_until = event.data.get("video_active_until") or event.data.get(
+            "active_until"
+        )
+        self._stream_path = event.data.get("stream_path")
+        if self._reset:
+            self._reset()
+        active_seconds = event_active_seconds(event.data)
+
+        def _reset(now=None) -> None:
+            self._reset = None
+            self._clear(cancel_timer=False)
+            self.async_write_ha_state()
+
+        self._reset = call_later(self.hass, active_seconds, _reset)
+        self.async_write_ha_state()
+
+    def _clear(self, *, cancel_timer: bool = True) -> None:
+        if cancel_timer and self._reset:
+            self._reset()
+        self._reset = None
+        self._available = False
+        self._active_until = None
+        self._stream_path = None

@@ -1,0 +1,138 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "apiPort": 8091,
+    "uiPort": 8090,
+    "allowLan": false
+  },
+  "api": {
+    "token": "",
+    "noAuth": true
+  },
+  "device": {
+    "model": "C300X",
+    "firmware": "",
+    "stairLightDefaultAddress": "10"
+  },
+  "openwebnet": {
+    "host": "127.0.0.1",
+    "port": 20000,
+    "timeoutMs": 3000
+  },
+  "locks": {
+    "releaseDelayMs": 2000,
+    "items": {
+      "default": {
+        "name": "Main door",
+        "address": "20"
+      }
+    }
+  },
+  "maintenance": {
+    "enabled": true,
+    "adminToken": "",
+    "sshStart": {
+      "enabled": false
+    },
+    "reboot": {
+      "enabled": false,
+      "delayMs": 500
+    },
+    "agentRemove": {
+      "enabled": false,
+      "script": "/home/bticino/cfg/extra/c300x-native-agent/remove_agent.sh"
+    },
+    "guiReload": {
+      "enabled": false,
+      "script": ""
+    },
+    "qmlPatch": {
+      "enabled": false,
+      "script": ""
+    },
+    "firewall": {
+      "enabled": false,
+      "path": "/etc/network/if-pre-up.d/iptables",
+      "backupPath": "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables"
+    },
+    "ipv6Firewall": {
+      "enabled": false,
+      "path": "/etc/network/if-pre-up.d/iptables6",
+      "backupPath": "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables6"
+    },
+    "allowNoAuth": true
+  },
+  "mdns": {
+    "enabled": true,
+    "name": "BTicino C300X"
+  },
+  "events": {
+    "subscriptionStorePath": "/home/bticino/cfg/extra/c300x-native-agent/subscriptions.json",
+    "callbackTimeoutMs": 2500,
+    "udp": {
+      "enabled": true,
+      "group": "239.255.76.67",
+      "port": 7667
+    }
+  },
+  "answeringMachine": {
+    "messages": {
+      "enabled": true,
+      "root": "/home/bticino/cfg/extra/47/messages",
+      "watch": true,
+      "maxMessages": 64
+    }
+  },
+  "memos": {
+    "enabled": true,
+    "textRoot": "/home/bticino/cfg/extra/47/memos_text",
+    "voiceRoot": "/home/bticino/cfg/extra/47/memos_voice",
+    "watch": true,
+    "maxMemos": 64
+  },
+  "systemMetrics": {
+    "enabled": true,
+    "watch": true,
+    "sampleIntervalSeconds": 30,
+    "heartbeatSeconds": 600,
+    "changePercent": 5
+  },
+  "video": {
+    "enabled": false,
+    "av": {
+      "host": "127.0.0.1",
+      "port": 30007,
+      "timeoutMs": 5000,
+      "highResolution": true
+    },
+    "sip": {
+      "from": "webrtc@127.0.0.1",
+      "to": "c300x@127.0.0.1",
+      "domain": "",
+      "devaddr": "20",
+      "localIp": "127.0.0.1",
+      "localPort": 5060,
+      "useTcp": true,
+      "debug": false
+    },
+    "rtsp": {
+      "port": 6554,
+      "path": "/doorbell",
+      "videoPath": "/doorbell-video",
+      "recorderPath": "/doorbell-recorder",
+      "username": "",
+      "password": "",
+      "keepAliveMs": 7500,
+      "rtpPortStart": 10000,
+      "rtpPortCount": 100
+    }
+  },
+  "displayBridge": {
+    "enabled": true,
+    "homeAssistant": {
+      "webhookUrl": "http://homeassistant.local:8123/api/webhook/REPLACE_WITH_WEBHOOK_ID",
+      "sharedSecret": "REPLACE_WITH_SHARED_SECRET",
+      "requestTimeoutMs": 3000
+    }
+  }
+}

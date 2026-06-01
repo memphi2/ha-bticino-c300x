@@ -43,6 +43,7 @@
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
+          "dashboard_entities": "Dashboard entities",
           "video_enabled": "Create doorbell camera entity",
           "video_port": "Doorbell RTSP port",
           "video_stream_path": "Doorbell RTSP stream path",
@@ -70,6 +71,7 @@
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
+          "dashboard_entities": "Dashboard entities",
           "video_enabled": "Create doorbell camera entity",
           "video_port": "Doorbell RTSP port",
           "video_stream_path": "Doorbell RTSP stream path",
@@ -118,6 +120,7 @@
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
+          "dashboard_entities": "Dashboard entities",
           "video_enabled": "Create doorbell camera entity",
           "video_port": "Doorbell RTSP port",
           "video_stream_path": "Doorbell RTSP stream path",
@@ -215,6 +218,14 @@
       "agent": {
         "name": "Device agent"
       },
+      "agent_status": {
+        "name": "Device agent status",
+        "state": {
+          "ok": "OK",
+          "warning": "Warning",
+          "error": "Error"
+        }
+      },
       "agent_writes": {
         "name": "Device agent writes"
       },
@@ -223,6 +234,9 @@
       },
       "device_load": {
         "name": "Device load"
+      },
+      "device_memory": {
+        "name": "Device memory"
       },
       "device_temperature": {
         "name": "Device temperature"
@@ -261,7 +275,20 @@
         "name": "Latest voice memo"
       },
       "doorbell_state": {
-        "name": "Doorbell state"
+        "name": "Doorbell state",
+        "state": {
+          "idle": "Idle",
+          "ringing": "Ringing",
+          "view_requested": "Camera view active",
+          "view_requeste": "Camera view active",
+          "pressed": "Doorbell pressed",
+          "ring": "Ringing",
+          "doorbell_pressed": "Doorbell pressed",
+          "doorbell_view_requested": "Camera view active",
+          "doorbell_media_closed": "Camera stream ended",
+          "media_closed": "Camera stream ended",
+          "closed": "Camera stream ended"
+        }
       }
     },
     "switch": {
@@ -291,6 +318,12 @@
       },
       "ipv6_firewall_patch": {
         "name": "IPv6 firewall patch"
+      },
+      "native_mqtt_bridge": {
+        "name": "Native MQTT bridge"
+      },
+      "legacy_mqtt_bridge": {
+        "name": "Legacy MQTT bridge"
       },
       "smartphone_forwarding": {
         "name": "Smartphone forwarding"
@@ -342,6 +375,33 @@
     "agent_capability_mismatch": {
       "title": "C300X device agent capabilities are missing",
       "description": "The configured C300X device agent for {entry_title} answered without usable capabilities. Update or reconfigure the local device agent, then reload the integration."
+    },
+    "device_agent_update_required": {
+      "title": "C300X device agent update required",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Update C300X device agent",
+            "description": "Home Assistant will upload the packaged native agent through the currently configured maintenance API. SSH credentials are not needed. Active GUI and firewall patches are checked read-only first and refreshed only if they were already active.\n\nInstalled: {installed_version} (API {installed_api_version})\nPackaged: {available_version} (API {available_api_version})\nReason: {reason}"
+          },
+          "ssh_install": {
+            "title": "Reinstall C300X device agent over SSH",
+            "description": "This installed agent cannot update itself yet. Home Assistant will use these one-time SSH credentials to install the packaged agent, then refresh only active GUI and firewall patches. The SSH credentials are not stored.\n\nInstalled: {installed_version} (API {installed_api_version})\nPackaged: {available_version} (API {available_api_version})\nReason: {reason}",
+            "data": {
+              "bootstrap_ssh_username": "SSH username",
+              "bootstrap_ssh_password": "SSH password"
+            }
+          }
+        },
+        "error": {
+          "ssh_install_failed": "The SSH repair install failed. Check SSH access and retry.",
+          "update_failed": "The device-agent update failed. Check that maintenance access is enabled and retry.",
+          "update_verify_failed": "The update was sent, but the agent still reports an older or incompatible bundle."
+        },
+        "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded."
+        }
+      }
     },
     "invalid_action_map": {
       "title": "C300X dashboard action allowlist is invalid",

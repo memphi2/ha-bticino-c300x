@@ -385,6 +385,7 @@ def test_remove_agent_button_is_created_without_agent_capabilities() -> None:
             for entity in entities
             if isinstance(entity, C300XRemoveAgentButton)
         )
+        assert remove_agent._attr_entity_registry_enabled_default is False
         assert remove_agent.available is False
 
     asyncio.run(_run())

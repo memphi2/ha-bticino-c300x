@@ -36,6 +36,10 @@ helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
 )
+config_validation = sys.modules.setdefault(
+    "homeassistant.helpers.config_validation",
+    types.ModuleType("homeassistant.helpers.config_validation"),
+)
 dispatcher = sys.modules.setdefault(
     "homeassistant.helpers.dispatcher",
     types.ModuleType("homeassistant.helpers.dispatcher"),
@@ -47,6 +51,8 @@ entity = sys.modules.setdefault(
 
 if not hasattr(dispatcher, "async_dispatcher_connect"):
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
+if not hasattr(config_validation, "config_entry_only_config_schema"):
+    config_validation.config_entry_only_config_schema = lambda *_args, **_kwargs: object()
 
 if not hasattr(entity, "Entity"):
 
@@ -59,12 +65,14 @@ if not hasattr(entity, "Entity"):
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
 
+helpers.config_validation = config_validation
 helpers.dispatcher = dispatcher
 helpers.entity = entity
 
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_UI_ENABLED,
     CONF_STAIR_LIGHT_ADDRESS,
@@ -75,11 +83,13 @@ from custom_components.bticino_c300x.executor import (  # noqa: E402
     async_dashboard_payload,
     async_execute_action,
     async_execute_alarm_command,
+    async_execute_dashboard_action,
     async_status,
     async_trigger_stair_light,
     async_unlock_door,
     configured_actions,
     configured_alarm_entity_id,
+    configured_dashboard_entities,
     configured_weather_entity_id,
 )
 
@@ -105,6 +115,7 @@ class FakeServices:
     targets: list[dict[str, Any] | None] = field(default_factory=list)
     states: FakeStates | None = None
     mutate_alarm_states: bool = True
+    error: Exception | None = None
 
     async def async_call(
         self,
@@ -116,6 +127,8 @@ class FakeServices:
     ) -> None:
         self.calls.append((domain, service, data, blocking))
         self.targets.append(target)
+        if self.error is not None:
+            raise self.error
         if self.states is None or not self.mutate_alarm_states:
             return
         entity_id = data.get("entity_id")
@@ -267,6 +280,94 @@ def test_async_execute_action_forwards_target_only_actions() -> None:
     assert hass.services.targets == [{"area_id": "kitchen"}]
 
 
+def test_async_execute_dashboard_action_toggles_selected_switch() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["switch.entry"]})
+
+    result = run(async_execute_dashboard_action(hass, entry, "switch.entry"))
+
+    assert result == {"ok": True, "action_id": "switch.entry"}
+    assert hass.services.calls == [
+        ("switch", "toggle", {"entity_id": "switch.entry"}, True)
+    ]
+
+
+def test_async_execute_dashboard_action_presses_selected_button() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["button.restart"]})
+
+    result = run(async_execute_dashboard_action(hass, entry, "button.restart"))
+
+    assert result == {"ok": True, "action_id": "button.restart"}
+    assert hass.services.calls == [
+        ("button", "press", {"entity_id": "button.restart"}, True)
+    ]
+
+
+def test_async_execute_dashboard_action_adjusts_selected_slider() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "input_number.target": FakeState(
+                    "18",
+                    attributes={"min": 15, "max": 20, "step": 0.5},
+                )
+            }
+        )
+    )
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_number.target"]})
+
+    result = run(
+        async_execute_dashboard_action(
+            hass,
+            entry,
+            "input_number.target:increment",
+        )
+    )
+
+    assert result == {"ok": True, "action_id": "input_number.target"}
+    assert hass.services.calls == [
+        (
+            "input_number",
+            "set_value",
+            {"entity_id": "input_number.target", "value": 18.5},
+            True,
+        )
+    ]
+
+
+def test_async_execute_dashboard_action_clamps_zero_minimum_slider() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "input_number.target": FakeState(
+                    "0",
+                    attributes={"min": 0, "max": 20, "step": 1},
+                )
+            }
+        )
+    )
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_number.target"]})
+
+    result = run(
+        async_execute_dashboard_action(
+            hass,
+            entry,
+            "input_number.target:decrement",
+        )
+    )
+
+    assert result == {"ok": True, "action_id": "input_number.target"}
+    assert hass.services.calls == [
+        (
+            "input_number",
+            "set_value",
+            {"entity_id": "input_number.target", "value": 0.0},
+            True,
+        )
+    ]
+
+
 def test_async_execute_action_rejects_unknown_action() -> None:
     hass = FakeHass()
     entry = FakeEntry(options={CONF_ACTIONS: {}})
@@ -332,15 +433,37 @@ def test_configured_dashboard_entities_respect_empty_option_overrides() -> None:
         data={
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.old",
             CONF_WEATHER_ENTITY_ID: "weather.old",
+            CONF_DASHBOARD_ENTITIES: ["switch.old"],
         },
         options={
             CONF_ALARM_ENTITY_ID: "",
             CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
         },
     )
 
     assert configured_alarm_entity_id(entry) is None
     assert configured_weather_entity_id(entry) is None
+    assert configured_dashboard_entities(entry) == ()
+
+
+def test_configured_dashboard_entities_normalizes_supported_entities() -> None:
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: [
+                " Switch.Entry ",
+                "sensor.temperature",
+                "switch.entry",
+                "media_player.tv",
+                "bad",
+            ]
+        },
+    )
+
+    assert configured_dashboard_entities(entry) == (
+        "switch.entry",
+        "sensor.temperature",
+    )
 
 
 def test_async_execute_alarm_command_calls_alarm_service() -> None:
@@ -456,7 +579,7 @@ def test_async_execute_alarm_command_forces_alarmo_open_sensors() -> None:
     ]
 
 
-def test_async_execute_alarm_command_returns_alarmo_blockers_without_service_call() -> None:
+def test_async_execute_alarm_command_returns_alarmo_blockers_after_service_call() -> None:
     alarmo_entity = types.SimpleNamespace(
         entity_id="alarm_control_panel.alarmo",
         area_id="area-1",
@@ -490,6 +613,7 @@ def test_async_execute_alarm_command_returns_alarmo_blockers_without_service_cal
             }
         },
     )
+    hass.services.mutate_alarm_states = False
     entry = FakeEntry(data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo"})
 
     result = run(async_execute_alarm_command(hass, entry, "arm_away", None))
@@ -510,7 +634,41 @@ def test_async_execute_alarm_command_returns_alarmo_blockers_without_service_cal
         ],
         "blocking_sensor_count": 1,
     }
-    assert hass.services.calls == []
+    assert hass.services.calls == [
+        (
+            "alarm_control_panel",
+            "alarm_arm_away",
+            {"entity_id": "alarm_control_panel.alarmo"},
+            True,
+        ),
+    ]
+
+
+def test_async_execute_alarm_command_returns_invalid_code_error() -> None:
+    hass = FakeHass(
+        states=FakeStates({"alarm_control_panel.home": FakeState("armed_away")})
+    )
+    hass.services.error = RuntimeError("Invalid code")
+    entry = FakeEntry(data={CONF_ALARM_ENTITY_ID: "alarm_control_panel.home"})
+
+    result = run(async_execute_alarm_command(hass, entry, "disarm", "0000"))
+
+    assert result == {
+        "ok": False,
+        "error": "invalid_code",
+        "command": "disarm",
+        "entity_id": "alarm_control_panel.home",
+        "state": "armed_away",
+        "message": "Invalid code",
+    }
+    assert hass.services.calls == [
+        (
+            "alarm_control_panel",
+            "alarm_disarm",
+            {"entity_id": "alarm_control_panel.home", "code": "0000"},
+            True,
+        ),
+    ]
 
 
 def test_async_execute_alarm_command_check_only_never_calls_service() -> None:
@@ -1331,6 +1489,102 @@ def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:
             "width": 240,
             "height": 135,
             "name": "door_image",
+        }
+    ]
+
+
+def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "switch.entry": FakeState("on", attributes={"friendly_name": "Entry"}),
+                "sensor.temperature": FakeState(
+                    "21.5",
+                    attributes={
+                        "friendly_name": "Temperature",
+                        "unit_of_measurement": "C",
+                    },
+                ),
+                "binary_sensor.window": FakeState(
+                    "off",
+                    attributes={"friendly_name": "Window"},
+                ),
+                "button.restart": FakeState(
+                    "unknown",
+                    attributes={"friendly_name": "Restart"},
+                ),
+                "input_number.target": FakeState(
+                    "18",
+                    attributes={
+                        "friendly_name": "Target",
+                        "min": 15,
+                        "max": 23,
+                        "step": 0.5,
+                        "unit_of_measurement": "C",
+                    },
+                ),
+            }
+        )
+    )
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: [
+                "switch.entry",
+                "sensor.temperature",
+                "binary_sensor.window",
+                "button.restart",
+                "input_number.target",
+            ],
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    pages = {page["title"]: page for page in result["data"]["pages"]}
+    page = pages["Home Assistant"]
+    assert page["switches"] == [
+        {
+            "domain": "c300x",
+            "entity_id": "switch.entry",
+            "name": "Entry",
+            "state": True,
+            "state_label": "Ein",
+        }
+    ]
+    assert page["entities"] == [
+        {
+            "domain": "c300x",
+            "entity_id": "sensor.temperature",
+            "name": "Temperature",
+            "state": False,
+            "state_label": "21.5 C",
+        },
+        {
+            "domain": "c300x",
+            "entity_id": "binary_sensor.window",
+            "name": "Window",
+            "state": False,
+            "state_label": "Aus",
+        },
+    ]
+    assert page["buttons"] == [
+        {
+            "domain": "c300x",
+            "entity_id": "button.restart",
+            "name": "Restart",
+            "state_label": "Ausfuehren",
+        }
+    ]
+    assert page["sliders"] == [
+        {
+            "domain": "c300x",
+            "entity_id": "input_number.target",
+            "max": 23.0,
+            "min": 15.0,
+            "name": "Target",
+            "state_label": "18 C",
+            "step": 0.5,
+            "value": 18.0,
         }
     ]
 

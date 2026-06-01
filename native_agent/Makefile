@@ -3,20 +3,25 @@ PYTHON ?= python3
 ARMHF_CC ?= arm-linux-gnueabihf-gcc
 ARMHF_READELF ?= arm-linux-gnueabihf-readelf
 C300X_DEVICE_SYSROOT ?=
-INTEGRATION_VERSION ?= $(shell $(PYTHON) -c 'import json; print(json.load(open("../custom_components/bticino_c300x/manifest.json"))["version"])')
+AGENT_VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 BUILD_DIR := build
 HOST_BUILD_DIR := $(BUILD_DIR)/host
 ARMHF_BUILD_DIR := $(BUILD_DIR)/armhf
 TARGET := $(HOST_BUILD_DIR)/c300x-agent-native
 ARMHF_TARGET := $(ARMHF_BUILD_DIR)/c300x-agent-native
 SOURCES := $(wildcard src/*.c)
+HEADERS := $(wildcard src/*.h)
 OBJECTS := $(patsubst src/%.c,$(HOST_BUILD_DIR)/%.o,$(SOURCES))
 ARMHF_OBJECTS := $(patsubst src/%.c,$(ARMHF_BUILD_DIR)/%.o,$(SOURCES))
 ARMHF_OBJECTS += $(ARMHF_BUILD_DIR)/arm_start.o
+STACK_USAGE_LIMIT ?= 24576
 
-CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -DC300X_NATIVE_AGENT_VERSION=\"$(INTEGRATION_VERSION)\"
+CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -DC300X_NATIVE_AGENT_VERSION=\"$(AGENT_VERSION)\"
 LDFLAGS ?= -pthread
 ARMHF_CFLAGS ?= $(CFLAGS) -D_TIME_BITS=32
+ifeq ($(STACK_USAGE),1)
+ARMHF_CFLAGS += -fstack-usage
+endif
 ifneq ($(C300X_DEVICE_SYSROOT),)
 ARMHF_PTHREAD_LDFLAGS := -Wl,-rpath-link,$(C300X_DEVICE_SYSROOT)/lib -L$(C300X_DEVICE_SYSROOT)/lib -l:libpthread.so.0 -l:libc.so.6 -l:ld-linux-armhf.so.3
 else
@@ -24,7 +29,7 @@ ARMHF_PTHREAD_LDFLAGS := -Wl,--no-as-needed -l:libpthread.so.0
 endif
 ARMHF_LDFLAGS ?= $(LDFLAGS) $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
 
-.PHONY: all armhf armhf-abi-check check smoke clean
+.PHONY: all armhf armhf-abi-check armhf-stack-check check smoke clean
 
 all: $(TARGET)
 
@@ -37,16 +42,21 @@ armhf-abi-check: $(ARMHF_TARGET)
 		exit 1; \
 	} || echo "ARMHF ABI check passed"
 
+armhf-stack-check:
+	$(MAKE) clean
+	$(MAKE) armhf STACK_USAGE=1
+	$(PYTHON) ../scripts/check_stack_usage.py $(ARMHF_BUILD_DIR) --limit $(STACK_USAGE_LIMIT)
+
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS) $(LDFLAGS)
 
 $(ARMHF_TARGET): $(ARMHF_OBJECTS)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -o $@ $(ARMHF_OBJECTS) $(ARMHF_LDFLAGS)
 
-$(HOST_BUILD_DIR)/%.o: src/%.c src/c300x_agent.h | $(HOST_BUILD_DIR)
+$(HOST_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(HOST_BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(ARMHF_BUILD_DIR)/%.o: src/%.c src/c300x_agent.h | $(ARMHF_BUILD_DIR)
+$(ARMHF_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(ARMHF_BUILD_DIR)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -c $< -o $@
 
 $(ARMHF_BUILD_DIR)/arm_start.o: src/arm_start.S | $(ARMHF_BUILD_DIR)

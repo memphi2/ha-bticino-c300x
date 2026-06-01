@@ -8,7 +8,7 @@ from homeassistant.helpers import issue_registry as ir
 
 try:
     from homeassistant.helpers import entity_registry as er
-except ModuleNotFoundError:  # pragma: no cover - local test stubs
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
     er = None
 
 from .action import ActionValidationError, validate_action_map
@@ -17,11 +17,13 @@ from .const import CONF_ACTIONS, CONF_ALARM_ENTITY_ID, DOMAIN
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
+DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
         MISSING_ALARM_ENTITY_ISSUE,
         AGENT_CAPABILITY_MISMATCH_ISSUE,
+        DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     }
 )
 
@@ -42,6 +44,7 @@ def async_sync_entry_repair_issues(
     _sync_action_map_issue(hass, entry)
     _sync_missing_alarm_entity_issue(hass, entry)
     _sync_agent_capability_issue(hass, entry)
+    _sync_device_agent_update_issue(hass, entry)
 
 
 @callback
@@ -105,6 +108,14 @@ def _sync_missing_alarm_entity_issue(hass: HomeAssistant, entry: ConfigEntry) ->
 
 
 def _sync_agent_capability_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    connection_state = getattr(entry.runtime_data, "connection_state", None)
+    if connection_state is not None and not getattr(connection_state, "available", True):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            AGENT_CAPABILITY_MISMATCH_ISSUE,
+        )
+        return
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     if isinstance(capabilities, dict) and capabilities:
         async_delete_repair_issue(
@@ -121,12 +132,28 @@ def _sync_agent_capability_issue(hass: HomeAssistant, entry: ConfigEntry) -> Non
     )
 
 
+def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    update_state = getattr(entry.runtime_data, "agent_update_state", None)
+    if update_state is None or not getattr(update_state, "update_required", False):
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_AGENT_UPDATE_REQUIRED_ISSUE)
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        is_fixable=getattr(update_state, "repair_fixable", False),
+        placeholders=update_state.repair_placeholders,
+    )
+
+
 def _create_issue(
     hass: HomeAssistant,
     entry: ConfigEntry,
     issue_type: str,
     *,
     severity: ir.IssueSeverity,
+    is_fixable: bool = False,
     placeholders: dict[str, str] | None = None,
 ) -> None:
     translation_placeholders = {
@@ -138,7 +165,7 @@ def _create_issue(
         hass=hass,
         domain=DOMAIN,
         issue_id=repair_issue_id(issue_type, entry.entry_id),
-        is_fixable=False,
+        is_fixable=is_fixable,
         is_persistent=False,
         severity=severity,
         translation_key=issue_type,

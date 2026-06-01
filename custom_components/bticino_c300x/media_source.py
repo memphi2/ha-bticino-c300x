@@ -30,6 +30,7 @@ from .memos import (
     voice_memo_media_url,
     voice_memo_title,
 )
+from .message_refresh import async_answering_machine_messages, async_memos
 from .video_messages import (
     VIDEO_MESSAGE_PLAYBACK_MIME_TYPE,
     video_message_items,
@@ -128,15 +129,11 @@ class C300XStoredMediaSource(MediaSource):
 
 
 async def _async_messages_for_entry(entry: Any) -> dict[str, Any]:
-    messages = await entry.runtime_data.api.async_answering_machine_messages()
-    entry.runtime_data.answering_machine_messages = messages
-    return messages
+    return await async_answering_machine_messages(entry, force_refresh=True)
 
 
 async def _async_memos_for_entry(entry: Any) -> dict[str, Any]:
-    memos = await entry.runtime_data.api.async_memos()
-    entry.runtime_data.memos = memos
-    return memos
+    return await async_memos(entry, force_refresh=True)
 
 
 def _message_children(entry_id: str, messages: dict[str, Any]) -> list[BrowseMediaSource]:

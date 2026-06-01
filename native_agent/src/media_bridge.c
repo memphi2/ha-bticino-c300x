@@ -1127,6 +1127,35 @@ bool c300x_media_talkback_running(const struct c300x_video *video) {
     return running;
 }
 
+void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_video_status *status)
+{
+    int open_fds = 0;
+    int active_threads = 0;
+
+    if (status == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&g_bridge.mutex);
+    if (g_bridge.video == video) {
+        status->bridge_running = g_bridge.running ? 1 : 0;
+        status->bridge_media_active = g_bridge.media_active ? 1 : 0;
+        status->bridge_stop_in_progress = g_bridge.stop_in_progress ? 1 : 0;
+        open_fds += g_bridge.listen_fd >= 0 ? 1 : 0;
+        open_fds += g_bridge.client_fd >= 0 ? 1 : 0;
+        open_fds += g_bridge.rtp_fd >= 0 ? 1 : 0;
+        open_fds += g_bridge.audio_rtp_fd >= 0 ? 1 : 0;
+        open_fds += g_bridge.talkback_fd >= 0 ? 1 : 0;
+        open_fds += g_bridge.sip_fd >= 0 ? 1 : 0;
+        active_threads += g_bridge.running ? 1 : 0;
+        active_threads += g_bridge.relay_started ? 1 : 0;
+        active_threads += g_bridge.sip_monitor_started ? 1 : 0;
+        active_threads += g_bridge.talkback_started ? 1 : 0;
+        status->bridge_open_fds = open_fds;
+        status->bridge_active_threads = active_threads;
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
+}
+
 static int parse_client_port(const char *transport) {
     const char *pos = strstr(transport, "client_port=");
     if (pos == NULL) {
@@ -1163,7 +1192,7 @@ static void send_rtsp_response(int fd, int status, const char *cseq, const char 
         body_len,
         body ? body : ""
     );
-    if (n > 0) {
+    if (n > 0 && n < (int)sizeof(response)) {
         (void)send_all(fd, response, (size_t)n);
     }
 }
@@ -1175,11 +1204,20 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     char cseq[64];
     char transport[512];
     bool media_started = false;
+    bool busy = false;
 
     pthread_mutex_lock(&g_bridge.mutex);
-    g_bridge.client_fd = fd;
-    snprintf(g_bridge.session_id, sizeof(g_bridge.session_id), "%ld", (long)time(NULL));
+    busy = g_bridge.client_fd >= 0 && g_bridge.client_fd != fd;
+    if (!busy) {
+        g_bridge.client_fd = fd;
+        snprintf(g_bridge.session_id, sizeof(g_bridge.session_id), "%ld", (long)time(NULL));
+    }
     pthread_mutex_unlock(&g_bridge.mutex);
+    if (busy) {
+        send_rtsp_response(fd, 453, "1", NULL, NULL);
+        close(fd);
+        return;
+    }
     c300x_video_bridge_client_connected(g_bridge.video);
 
     while (g_bridge.running) {

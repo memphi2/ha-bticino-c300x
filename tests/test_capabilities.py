@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
-from custom_components.bticino_c300x import _entry_config_value, _entry_platforms
+from custom_components.bticino_c300x import (
+    _entry_config_value,
+    _entry_platforms,
+    async_migrate_entry,
+)
 from custom_components.bticino_c300x.capabilities import (
     auth_config_supported,
     event_label,
@@ -11,8 +16,14 @@ from custom_components.bticino_c300x.capabilities import (
     ha_event_types_for_capabilities,
 )
 from custom_components.bticino_c300x.const import (
+    CONF_AGENT_HOST,
+    CONF_AGENT_TOKEN,
+    CONF_EVENT_WEBHOOK_ID,
+    CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
+    CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
+    CONF_WEBHOOK_ID,
 )
 
 
@@ -99,6 +110,46 @@ def test_entry_config_value_honors_blank_option_override() -> None:
     )
 
     assert _entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "") == ""
+
+
+def test_migrate_entry_repairs_update_shape_without_overwriting_optional_blanks() -> None:
+    class FakeConfigEntries:
+        def __init__(self) -> None:
+            self.update_kwargs = None
+
+        def async_update_entry(self, entry, **kwargs):  # noqa: ANN001
+            self.update_kwargs = kwargs
+            for key, value in kwargs.items():
+                setattr(entry, key, value)
+
+    hass = SimpleNamespace(config_entries=FakeConfigEntries())
+    entry = SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "c300x.local",
+            CONF_AGENT_TOKEN: "stored-token",
+        },
+        options={
+            CONF_AGENT_HOST: "",
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+        },
+        minor_version=1,
+    )
+
+    assert asyncio.run(async_migrate_entry(hass, entry)) is True
+
+    update = hass.config_entries.update_kwargs
+    assert update is not None
+    assert update["minor_version"] == 2
+    assert update["data"][CONF_AGENT_HOST] == "c300x.local"
+    assert update["data"][CONF_AGENT_TOKEN] == "stored-token"
+    assert update["data"][CONF_WEBHOOK_ID]
+    assert update["data"][CONF_SHARED_SECRET]
+    assert update["data"][CONF_EVENT_WEBHOOK_ID]
+    assert update["data"][CONF_EVENT_WEBHOOK_TOKEN]
+    assert CONF_AGENT_HOST not in update["options"]
+    assert CONF_AGENT_TOKEN not in update["options"]
+    assert update["options"][CONF_MAINTENANCE_TOKEN] == ""
 
 
 def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:

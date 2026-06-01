@@ -120,13 +120,17 @@ from custom_components.bticino_c300x import agent_diagnostics
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
 )
+from custom_components.bticino_c300x.doorbell_state import normalize_doorbell_state
 from custom_components.bticino_c300x.sensor import (
     C300XAgentInfoSensor,
+    C300XAgentStatusSensor,
     C300XAgentWritesSensor,
     C300XConnectionStateSensor,
     C300XDeviceCpuSensor,
     C300XDeviceLoadSensor,
+    C300XDeviceMemorySensor,
     C300XDeviceTemperatureSensor,
+    C300XDoorbellStateSensor,
     C300XLatestTextMemoSensor,
     C300XLatestVideoMessageSensor,
     C300XLatestVoiceMemoSensor,
@@ -134,11 +138,15 @@ from custom_components.bticino_c300x.sensor import (
     C300XTextMemosSensor,
     C300XVoiceMemosSensor,
 )
+from custom_components.bticino_c300x.sensor import (
+    async_setup_entry as async_setup_sensor_entry,
+)
 
 
 class _FakeApi:
     def __init__(self) -> None:
         self.metrics_calls = 0
+        self.answering_machine_messages_calls = 0
         self.memos_calls = 0
         self.qml_patch_status_calls = 0
         self.diagnostics_calls = 0
@@ -154,6 +162,10 @@ class _FakeApi:
             "load_1m_percent": 5.5,
             "load_5m_percent": 11.0,
             "load_15m_percent": 16.5,
+            "memory_total_kb": 262144,
+            "memory_available_kb": 196608,
+            "memory_used_kb": 65536,
+            "memory_usage_percent": 25.0,
             "temperature_c": 40.0,
             "temperature_source": "sysfs",
             "raw": {},
@@ -194,6 +206,28 @@ class _FakeApi:
             "raw": {},
         }
 
+    async def async_answering_machine_messages(self) -> dict[str, Any]:
+        self.answering_machine_messages_calls += 1
+        return {
+            "available": True,
+            "total": 1,
+            "unread": 1,
+            "read": 0,
+            "newest_at": "2024-03-09T16:02:02Z",
+            "messages": [
+                {
+                    "id": "message_1",
+                    "read": False,
+                    "unix_time": 1710000122,
+                    "iso_time": "2024-03-09T16:02:02Z",
+                    "has_video": True,
+                    "media_mime_type": "video/x-msvideo",
+                    "media_size": 12,
+                },
+            ],
+            "raw": {},
+        }
+
     async def async_validate_setup(self) -> dict[str, Any]:
         return {
             "version": "0.2.0",
@@ -208,10 +242,24 @@ class _FakeApi:
         self.diagnostics_calls += 1
         return {
             "agent_write_count": 2,
+            "last_write_at": 1770000000,
             "last_write_reason": "updated",
             "last_write_class": "subscription",
             "subscription_store_writes": 1,
             "qml_patch_last_action": "apply",
+            "loop_iterations": 10,
+            "poll_wakeups": 4,
+            "accepted_clients": 3,
+            "last_wake_reason": "api",
+            "last_poll_timeout_ms": 5000,
+            "last_poll_count": 6,
+            "open_fd_count": 9,
+            "video_running": False,
+            "video_media_starting": False,
+            "video_call_active": False,
+            "video_clients": 0,
+            "video_bridge_open_fds": 1,
+            "video_bridge_active_threads": 1,
             "raw": {},
         }
 
@@ -225,6 +273,9 @@ class _FakeApi:
             "gui_running": True,
             "raw": {},
         }
+
+    async def async_state(self) -> dict[str, Any]:
+        return {"doorbell": "view_requested"}
 
 
 class _FakeHass:
@@ -241,6 +292,10 @@ class _FakeHass:
 class _FakeConnectionState:
     available: bool = True
     connection_state: str = "connected"
+    reconnect_count: int = 0
+    last_reconnect_reason: str | None = None
+    last_connection_error: str | None = None
+    next_reconnect_delay_seconds: int | None = None
 
 
 @dataclass
@@ -268,6 +323,7 @@ class _FakeRuntimeData:
     qml_patch_status_updated_at: Any = None
     agent_diagnostics: dict[str, Any] = field(default_factory=dict)
     agent_diagnostics_updated_at: Any = None
+    agent_update_state: Any = None
 
 
 @dataclass
@@ -294,6 +350,112 @@ def test_agent_info_sensor_uses_device_agent_version_as_state() -> None:
     }
 
 
+def test_agent_info_sensor_updates_on_repair_refresh_signal() -> None:
+    entry = _FakeEntry()
+    entity = C300XAgentInfoSensor(entry)  # type: ignore[arg-type]
+    entry.runtime_data.agent_info = {
+        "version": "0.3.1",
+        "implementation": "native-c",
+        "api_version": "1",
+        "model": "C300X",
+        "firmware": "1.7.19",
+    }
+
+    entity._handle_agent_info_changed("entry-1")
+
+    assert entity._attr_native_value == "0.3.1"
+    assert entity._attr_extra_state_attributes["firmware"] == "1.7.19"
+    assert entity.wrote_state is True
+
+
+def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_write_count": 2,
+                "last_write_at": 1770000000,
+                "last_write_reason": "updated",
+                "last_write_class": "subscription",
+                "last_wake_reason": "api",
+                "poll_wakeups": 4,
+                "open_fd_count": 9,
+            },
+        )
+    )
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.available is True
+    assert entity.native_value == "ok"
+    assert entity.extra_state_attributes == {
+        "reason": "agent_ok",
+        "connection_state": "connected",
+        "last_connection_error": None,
+        "last_reconnect_reason": None,
+        "next_reconnect_delay_seconds": None,
+            "reconnect_count": 0,
+            "agent_write_count": 2,
+            "last_write_at": 1770000000,
+            "last_write_reason": "updated",
+            "last_write_class": "subscription",
+            "last_wake_reason": "api",
+            "poll_wakeups": 4,
+            "open_fd_count": 9,
+        }
+
+
+def test_agent_status_sensor_reports_connection_errors() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            connection_state=_FakeConnectionState(
+                available=False,
+                connection_state="disconnected",
+                reconnect_count=3,
+                last_reconnect_reason="ClientConnectorError",
+                last_connection_error="ClientConnectorError: connection refused",
+                next_reconnect_delay_seconds=300,
+            )
+        )
+    )
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.available is True
+    assert entity.native_value == "error"
+    assert entity.extra_state_attributes["reason"] == "agent_disconnected"
+    assert entity.extra_state_attributes["last_connection_error"] == (
+        "ClientConnectorError: connection refused"
+    )
+    assert entity.extra_state_attributes["next_reconnect_delay_seconds"] == 300
+
+
+def test_agent_status_sensor_warns_for_pending_update() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_update_state=types.SimpleNamespace(
+                update_required=True,
+                state="update_available",
+                reason="bundle_hash_mismatch",
+                installed_version="0.2.0",
+                available_version="0.3.1",
+            )
+        )
+    )
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "warning"
+    assert entity.extra_state_attributes["reason"] == "agent_update_required"
+    assert entity.extra_state_attributes["agent_update_state"] == "update_available"
+    assert entity.extra_state_attributes["agent_update_reason"] == "bundle_hash_mismatch"
+
+
+def test_agent_status_sensor_updates_on_agent_info_signal() -> None:
+    entry = _FakeEntry()
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    entity._handle_agent_info_changed("entry-1")
+
+    assert entity.wrote_state is True
+
+
 def test_agent_writes_sensor_exposes_safe_write_diagnostics() -> None:
     async def _run() -> None:
         entry = _FakeEntry()
@@ -303,10 +465,22 @@ def test_agent_writes_sensor_exposes_safe_write_diagnostics() -> None:
 
         assert entity.native_value == 2
         assert entity.extra_state_attributes == {
+            "last_write_at": 1770000000,
             "last_write_reason": "updated",
             "last_write_class": "subscription",
             "subscription_store_writes": 1,
             "qml_patch_last_action": "apply",
+            "last_wake_reason": "api",
+            "loop_iterations": 10,
+            "poll_wakeups": 4,
+            "accepted_clients": 3,
+            "open_fd_count": 9,
+            "video_running": False,
+            "video_media_starting": False,
+            "video_call_active": False,
+            "video_clients": 0,
+            "video_bridge_open_fds": 1,
+            "video_bridge_active_threads": 1,
         }
 
     asyncio.run(_run())
@@ -346,6 +520,7 @@ def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:
 def test_system_metric_sensors_are_disabled_by_default() -> None:
     assert C300XDeviceCpuSensor._attr_entity_registry_enabled_default is False
     assert C300XDeviceLoadSensor._attr_entity_registry_enabled_default is False
+    assert C300XDeviceMemorySensor._attr_entity_registry_enabled_default is False
     assert C300XDeviceTemperatureSensor._attr_entity_registry_enabled_default is False
 
 
@@ -405,6 +580,10 @@ def test_system_metric_sensor_skips_refresh_when_metrics_cached() -> None:
                 "load_1m_percent": 77.0,
                 "load_5m_percent": 66.0,
                 "load_15m_percent": 55.0,
+                "memory_total_kb": 262144,
+                "memory_available_kb": 196608,
+                "memory_used_kb": 65536,
+                "memory_usage_percent": 25.0,
                 "cpu_count": 1,
                 "temperature_c": 41.0,
                 "temperature_source": "sysfs",
@@ -432,6 +611,10 @@ def test_system_metric_sensor_uses_pushed_metrics_without_api_call() -> None:
                 "load_1m_percent": 12.0,
                 "load_5m_percent": 0.0,
                 "load_15m_percent": 0.0,
+                "memory_total_kb": 262144,
+                "memory_available_kb": 196608,
+                "memory_used_kb": 65536,
+                "memory_usage_percent": 25.0,
                 "cpu_count": 1,
                 "temperature_c": 41.0,
                 "temperature_source": "sysfs",
@@ -464,6 +647,75 @@ def test_cpu_metric_sensor_uses_pushed_cpu_percent() -> None:
 
     assert entity.native_value == 3.5
     assert entity.extra_state_attributes == {"cpu_count": 2}
+
+
+def test_memory_metric_sensor_uses_pushed_memory_percent() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            system_metrics={
+                "memory_total_kb": 262144,
+                "memory_available_kb": 196608,
+                "memory_used_kb": 65536,
+                "memory_usage_percent": 25.0,
+                "raw": {},
+            }
+        )
+    )
+    entity = C300XDeviceMemorySensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == 25.0
+    assert entity.extra_state_attributes == {
+        "memory_total_kb": 262144,
+        "memory_available_kb": 196608,
+        "memory_used_kb": 65536,
+    }
+
+
+def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    event = types.SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_view_requested",
+            "event_at": "2026-06-01T10:00:00Z",
+        }
+    )
+
+    entity._handle_agent_event(event)
+
+    assert entity.native_value == "doorbell_view_requested"
+    assert entity._attr_options == [
+        "idle",
+        "ringing",
+        "view_requested",
+        "view_requeste",
+        "pressed",
+        "ring",
+        "doorbell_pressed",
+        "doorbell_view_requested",
+        "doorbell_media_closed",
+        "media_closed",
+        "closed",
+    ]
+    assert entity.extra_state_attributes == {
+        "last_event_at": "2026-06-01T10:00:00Z"
+    }
+    assert entity.wrote_state is True
+
+
+def test_doorbell_state_accepts_raw_legacy_and_agent_values() -> None:
+    assert normalize_doorbell_state({"doorbell": "view_requested"}) == "view_requested"
+    assert normalize_doorbell_state({"doorbell": "view_requeste"}) == "view_requeste"
+    assert (
+        normalize_doorbell_state({"doorbell": "doorbell_view_requested"})
+        == "doorbell_view_requested"
+    )
+    assert normalize_doorbell_state({"state": {"doorbell": "pressed"}}) == "pressed"
+    assert (
+        normalize_doorbell_state({"doorbell": "doorbell_media_closed"})
+        == "doorbell_media_closed"
+    )
 
 
 def test_qml_patch_status_sensor_refreshes_maintenance_state() -> None:
@@ -788,6 +1040,49 @@ def test_latest_message_sensors_remain_unknown_until_metadata_is_loaded() -> Non
     assert C300XLatestVideoMessageSensor(entry).native_value is None  # type: ignore[arg-type]
     assert C300XLatestTextMemoSensor(entry).native_value is None  # type: ignore[arg-type]
     assert C300XLatestVoiceMemoSensor(entry).native_value is None  # type: ignore[arg-type]
+
+
+def test_message_sensors_load_one_startup_snapshot() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                capabilities={
+                    "answering_machine": {
+                        "supported": True,
+                        "messages": {"supported": True},
+                    },
+                    "memos": {"supported": True},
+                },
+            )
+        )
+        entities: list[Any] = []
+
+        await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+
+        assert entry.runtime_data.api.answering_machine_messages_calls == 1
+        assert entry.runtime_data.api.memos_calls == 1
+        latest_video_sensor = next(
+            entity
+            for entity in entities
+            if isinstance(entity, C300XLatestVideoMessageSensor)
+        )
+        text_sensor = next(
+            entity for entity in entities if isinstance(entity, C300XTextMemosSensor)
+        )
+        latest_text_sensor = next(
+            entity
+            for entity in entities
+            if isinstance(entity, C300XLatestTextMemoSensor)
+        )
+        voice_sensor = next(
+            entity for entity in entities if isinstance(entity, C300XVoiceMemosSensor)
+        )
+        assert latest_video_sensor.native_value == "Video message 2024-03-09T16:02:02Z"
+        assert text_sensor.native_value == 1
+        assert latest_text_sensor.native_value == "local memo"
+        assert voice_sensor.native_value == 1
+
+    asyncio.run(_run())
 
 
 def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:

@@ -5,9 +5,27 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="$ROOT_DIR/custom_components/bticino_c300x"
 
 discover_custom_components_dir() {
+    local storage_dir
+    local config_root
+    while IFS= read -r storage_dir; do
+        config_root="${storage_dir%/.storage}"
+        if [[ -d "$config_root/custom_components" ]]; then
+            printf '%s\n' "$config_root/custom_components"
+            return
+        fi
+    done < <(
+        find "/run/user/$(id -u)/gvfs" \
+            -maxdepth 2 \
+            -type d \
+            -name '.storage' \
+            -print 2>/dev/null
+    )
+
     find "/run/user/$(id -u)/gvfs" \
         -maxdepth 2 \
         -path '*/custom_components' \
+        -not -path '*/.codex-backups/*' \
+        -not -path '*/config/custom_components' \
         -type d \
         -print \
         -quit 2>/dev/null || true

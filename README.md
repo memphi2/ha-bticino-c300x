@@ -1,8 +1,8 @@
 # BTicino Classe 300X for Home Assistant (Unofficial)
 
-[![Validate](https://github.com/bticino-c300x/ha-bticino-c300x/actions/workflows/validate.yml/badge.svg)](https://github.com/bticino-c300x/ha-bticino-c300x/actions/workflows/validate.yml)
+[![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![GitHub Release](https://img.shields.io/github/v/release/bticino-c300x/ha-bticino-c300x?display_name=tag&sort=semver&label=release)](https://github.com/bticino-c300x/ha-bticino-c300x/releases/latest)
+[![Release](https://img.shields.io/badge/release-v0.3.1-0366d6?style=flat-square)](.github/release-notes/v0.3.1.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.2.0`
+- Current release line: `0.3.1`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -51,9 +51,8 @@ no fake Home Assistant entities.
 
 ## Screenshots
 
-Current development-build screenshots. Exact entities and display pages depend on
-the capabilities reported by the installed agent and the options enabled in Home
-Assistant.
+Screenshots show a representative setup. Exact entities and display pages depend
+on the installed agent capabilities and the options enabled in Home Assistant.
 
 ### Home Assistant Entities
 
@@ -134,7 +133,7 @@ HACS custom repository:
 4. Add this repository:
 
    ```text
-   https://github.com/bticino-c300x/ha-bticino-c300x
+   https://github.com/memphi2/ha-bticino-c300x
    ```
 
 5. Category: **Integration**.
@@ -152,8 +151,7 @@ Then restart Home Assistant.
 
 The HACS release asset is `ha-bticino-c300x.zip`. It contains the Home Assistant
 integration and the matching ARMHF native-agent bundle. Normal users should not
-need `make`, a cross compiler, Node.js, npm, `sshpass`, `ssh`, or `scp` inside
-Home Assistant.
+need Node.js, npm, a cross compiler, or SSH helper tools inside Home Assistant.
 
 ### 2. Add the integration
 
@@ -228,6 +226,7 @@ The feature step lets you enable only what you need:
 - Alarmo entity for the display page
 - Weather entity for the display page
 - Dynamic Home Assistant board JSON
+- Native MQTT bridge migration
 - Stair-light address
 - Optional maintenance controls
 
@@ -236,6 +235,29 @@ device UI. When enabled, the patch process backs up original QML files once,
 renders the target files, compares byte-for-byte, writes only changed files,
 remounts the root filesystem writable only for the final copy, and returns it to
 read-only immediately afterwards.
+
+### MQTT Migration
+
+Some rooted Classe 300X devices already have an older community MQTT patch
+installed. That path is useful for existing automations, but it usually runs as
+separate helper processes outside this integration. On a small C300X this can
+mean extra idle CPU load, duplicate event handling, more filesystem writes, and
+unclear ownership when Home Assistant and the old patch both try to represent
+the same device state.
+
+This integration therefore includes an optional native MQTT bridge in the C
+agent. It is meant as a controlled migration path, not as a second mandatory
+transport. The bridge can use the broker settings you configure in the agent
+JSON and can expose legacy-compatible topics for setups that still depend on
+them. Only one MQTT path should be active at a time: either keep the legacy
+bridge disabled, or migrate to the native bridge and disable/remove the old
+device-side MQTT patch through the maintenance controls.
+
+The migration is explicit. The installer and maintenance entities can detect
+whether legacy MQTT support is present, back up device-side legacy files before
+removal where needed, and restore them during remove-agent where possible. The
+goal is to keep old automations working while moving runtime work into the
+single low-idle native agent.
 
 ### Alarmo Display Page
 
@@ -321,62 +343,23 @@ possible, and leaves SSH available so the device remains reachable.
 
 ## Troubleshooting
 
-### Integration cannot connect
-
-- Check the agent host and port.
-- Check the API token.
-- Open `http://<agent-host>:8091/api/v1/health`.
-- If noAuth is off, use bearer authentication for `/api/v1/*`.
-- Check the C300X firewall patch and VLAN routing.
-- For IPv6, prefer stable ULA/global addressing over link-local callback URLs.
-
-### Entities are missing
-
-Entities are capability-gated. Check:
-
-```text
-GET /api/v1/capabilities
-```
-
-If the agent does not advertise a capability, Home Assistant will not create
-that entity.
-
-### Doorbell camera does not start
-
-- Enable video in the integration options.
-- Ensure the installed agent has video enabled.
-- Check that Home Assistant can reach the media port.
-- Avoid link-local hostnames for camera paths when using HA Cloud or mixed IPv4
-  and IPv6 networks.
-
-### Memos or video messages do not update
-
-The agent uses event/file-change paths for memo and message updates. There
-should be no periodic scan. Check the event subscription status and the relevant
-agent capabilities if Home Assistant does not receive updates.
+- Connection issues: verify the agent host, port, API token, firewall patch, and
+  that `http://<agent-host>:8091/api/v1/health` is reachable from Home
+  Assistant.
+- Missing entities: entities are capability-gated. If the agent does not report
+  a capability through `/api/v1/capabilities`, Home Assistant will not create the
+  matching entity.
+- Camera issues: keep video enabled in the integration options and avoid
+  link-local callback/stream URLs, especially with HA Cloud or mixed IPv4/IPv6
+  networks.
+- Memo/message issues: updates are event-driven. Check the subscription state
+  and the agent capabilities; there should be no periodic memo scan.
 
 ## Project Background and Attribution
 
-This project builds on the public groundwork of the C300X community, especially
-the ideas and behavior proven by SlyOldFox's `c300x-controller` project:
-
-```text
-https://github.com/slyoldfox/c300x-controller
-```
-
-Thanks to SlyOldFox for the C300X groundwork and the original community
-controller work that made the device behavior much easier to understand.
-
-The goal here is a cleaner Home Assistant integration with a native C device
-agent and without a required Node.js controller on the C300X.
-
-The optional alarm page is designed around Alarmo:
-
-```text
-https://github.com/nielsfaber/alarmo
-```
-
-Thanks to Niels Faber for building and maintaining Alarmo for Home Assistant.
+Thanks to SlyOldFox for the public C300X groundwork and original community
+controller work, and to Niels Faber for Alarmo, which the optional C300X alarm
+page is designed around.
 
 Development has been assisted by OpenAI Codex. The resulting code and
 documentation are maintained as normal project artifacts in this repository.
@@ -421,4 +404,5 @@ pip install -r requirements-dev.txt
 .venv/bin/ruff check .
 .venv/bin/python -m pytest
 make -C native_agent check
+make -C native_agent armhf-abi-check armhf-stack-check
 ```

@@ -122,3 +122,31 @@ def test_gui_and_firewall_writes_are_maintenance_only() -> None:
     assert '"apply_qml_patch"' in http_text
     assert '"apply_firewall"' in http_text
     assert '"apply_ipv6_firewall"' in http_text
+
+
+def test_config_mutation_writes_are_semantic_and_idempotent() -> None:
+    http_text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    config_text = (ROOT / "native_agent" / "src" / "config.c").read_text(
+        encoding="utf-8"
+    )
+    auth_body = http_text.rsplit("static void handle_auth_config_post", maxsplit=1)[
+        1
+    ].split("static void handle_mqtt_status", maxsplit=1)[0]
+    mqtt_body = http_text.rsplit("static void handle_mqtt_post", maxsplit=1)[1].split(
+        "static void handle_subscription_delete",
+        maxsplit=1,
+    )[0]
+    normalize_body = http_text.rsplit(
+        "static void handle_config_normalize",
+        maxsplit=1,
+    )[1].split("static void handle_api_request", maxsplit=1)[0]
+
+    assert "c300x_config_persisted_equal(&baseline, &updated)" in auth_body
+    assert "c300x_config_persisted_equal(config, &updated)" in mqtt_body
+    assert "c300x_save_config_if_changed(&updated" in auth_body
+    assert "c300x_save_config_if_changed(&updated" in mqtt_body
+    assert "c300x_save_config_if_changed(config" in normalize_body
+    assert "if (changed)" in normalize_body
+    assert "memcmp(&baseline" not in auth_body
+    assert "memcmp(config, &updated" not in mqtt_body
+    assert "return config->api_token_from_env ? config->api_file_token : config->api_token" in config_text

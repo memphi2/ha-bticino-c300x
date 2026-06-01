@@ -188,6 +188,7 @@ void c300x_video_status(const struct c300x_video *video, struct c300x_video_stat
     );
     snprintf(status->last_error, sizeof(status->last_error), "%s", video->last_error);
     pthread_mutex_unlock((pthread_mutex_t *)&video->mutex);
+    c300x_media_bridge_status(video, status);
 }
 
 void c300x_video_bridge_client_connected(struct c300x_video *video)

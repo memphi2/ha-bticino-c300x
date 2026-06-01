@@ -15,6 +15,8 @@ Page {
     property variant dashboardPages: []
     property variant badges: []
     property variant switches: []
+    property variant entities: []
+    property variant sliders: []
     property variant buttons: []
     property variant images: []
     property variant flowItems: []
@@ -61,7 +63,17 @@ Page {
         if (item.kind === "switch" && item.state) {
             return "#58d68d"
         }
+        if (item.kind === "entity" && item.state) {
+            return "#58d68d"
+        }
         return "#c7d0d9"
+    }
+
+    function sliderValueText(item) {
+        if (item.state_label && item.state_label.length > 0) {
+            return item.state_label
+        }
+        return String(item.value || "")
     }
 
     function buttonBackground(pressed) {
@@ -448,6 +460,163 @@ Page {
                 }
 
                 Grid {
+                    id: entityGrid
+                    width: parent.width
+                    columns: 2
+                    spacing: 10
+                    visible: entities.length > 0
+                    height: visible ? childrenRect.height : 0
+                    property int tileWidth: (width - spacing) / 2
+
+                    Repeater {
+                        model: entities
+
+                        Item {
+                            width: entityGrid.tileWidth
+                            height: 58
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(modelData) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 16
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                            }
+
+                            UbuntuLightText {
+                                text: itemDetail(modelData) + trsl.empty
+                                color: itemColor(modelData)
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                            }
+                        }
+                    }
+                }
+
+                Grid {
+                    id: sliderGrid
+                    width: parent.width
+                    columns: 1
+                    spacing: 10
+                    visible: sliders.length > 0
+                    height: visible ? childrenRect.height : 0
+
+                    Repeater {
+                        model: sliders
+
+                        Item {
+                            width: sliderGrid.width
+                            height: 64
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(modelData) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: minusButton.left
+                                anchors.rightMargin: 8
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                            }
+
+                            UbuntuLightText {
+                                text: sliderValueText(modelData) + trsl.empty
+                                color: "#c7d0d9"
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: minusButton.left
+                                anchors.rightMargin: 8
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                            }
+
+                            Item {
+                                id: minusButton
+                                width: 48
+                                height: 42
+                                anchors.right: plusButton.left
+                                anchors.rightMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: minusMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                    fillMode: Image.Stretch
+                                }
+
+                                UbuntuLightText {
+                                    text: "-" + trsl.empty
+                                    color: "white"
+                                    font.pixelSize: 26
+                                    anchors.centerIn: parent
+                                }
+
+                                BeepingMouseArea {
+                                    id: minusMouse
+                                    anchors.fill: parent
+                                    onClicked: Api.dashboardSliderAction(modelData, "decrement", status, page)
+                                }
+                            }
+
+                            Item {
+                                id: plusButton
+                                width: 48
+                                height: 42
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: plusMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                    fillMode: Image.Stretch
+                                }
+
+                                UbuntuLightText {
+                                    text: "+" + trsl.empty
+                                    color: "white"
+                                    font.pixelSize: 26
+                                    anchors.centerIn: parent
+                                }
+
+                                BeepingMouseArea {
+                                    id: plusMouse
+                                    anchors.fill: parent
+                                    onClicked: Api.dashboardSliderAction(modelData, "increment", status, page)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Grid {
                     id: buttonGrid
                     width: parent.width
                     columns: 2
@@ -502,7 +671,7 @@ Page {
                 }
 
                 UbuntuLightText {
-                    text: buttons.length === 0 && switches.length === 0 && images.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: buttons.length === 0 && switches.length === 0 && entities.length === 0 && sliders.length === 0 && images.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width

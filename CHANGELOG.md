@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.1 - 2026-06-02
+
+### Added
+
+- Home Assistant Repairs can update a mismatched native C300X agent without
+  asking for SSH credentials again when the installed agent supports self-update.
+- Guarded Legacy MQTT migration controls can disable or remove the old
+  `TcpDump2Mqtt` runtime and enable the native MQTT bridge with preserved broker
+  settings.
+- Agent diagnostics now expose safe runtime health details such as write
+  counters, wake reason, open file descriptors, and video-bridge state.
+
+### Changed
+
+- Device-agent bundles use deterministic file hashes so unchanged payloads are
+  skipped instead of rewritten.
+- Native-agent status/update buffers were moved off the stack and the ARMHF
+  stack budget is now enforced in CI.
+
 ## v0.2.0 - 2026-05-31
 
 Initial public release candidate for the native BTicino Classe 300X / C300X

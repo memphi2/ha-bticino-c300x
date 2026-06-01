@@ -10,6 +10,7 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_DASHBOARD_ENTITIES,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
     CONF_STAIR_LIGHT_ADDRESS,
@@ -25,6 +26,7 @@ async def async_get_config_entry_diagnostics(
     """Return safe diagnostics without secrets."""
 
     actions = entry.options.get(CONF_ACTIONS, {})
+    dashboard_entities = entry_config_value(entry, CONF_DASHBOARD_ENTITIES, [])
     return {
         "entry_title_configured": bool(entry.title),
         "agent_configured": bool(entry_config_value(entry, CONF_AGENT_HOST, "")),
@@ -46,6 +48,9 @@ async def async_get_config_entry_diagnostics(
         ),
         "action_count": len(actions) if isinstance(actions, dict) else 0,
         "action_ids_configured": bool(actions),
+        "dashboard_entity_count": len(dashboard_entities)
+        if isinstance(dashboard_entities, list)
+        else 0,
         "qml_patch_status": getattr(entry.runtime_data, "qml_patch_status", {}).get(
             "state"
         )
@@ -67,9 +72,23 @@ def _agent_write_diagnostics(entry: ConfigEntry) -> dict | None:
         key: diagnostics.get(key)
         for key in (
             "agent_write_count",
+            "last_write_at",
             "last_write_reason",
             "last_write_class",
             "subscription_store_writes",
             "qml_patch_last_action",
+            "last_wake_reason",
+            "loop_iterations",
+            "poll_wakeups",
+            "accepted_clients",
+            "last_poll_timeout_ms",
+            "last_poll_count",
+            "open_fd_count",
+            "video_running",
+            "video_media_starting",
+            "video_call_active",
+            "video_clients",
+            "video_bridge_open_fds",
+            "video_bridge_active_threads",
         )
     }

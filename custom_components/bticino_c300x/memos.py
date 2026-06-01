@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .const import DOMAIN
+from .message_metadata import latest_metadata_item, localized_choice, metadata_sort_key
 
 MAX_MEMO_STATE_LENGTH = 255
 DEFAULT_VOICE_MEMO_MIME_TYPE = "audio/wav"
@@ -34,10 +35,7 @@ def memo_kind_counts(memos: dict[str, Any], kind: str) -> tuple[int, int]:
 def latest_memo(memos: dict[str, Any], kind: str) -> dict[str, Any] | None:
     """Return newest memo item of one kind."""
 
-    items = memo_kind_items(memos, kind)
-    if not items:
-        return None
-    return max(items, key=memo_sort_key)
+    return latest_metadata_item(memo_kind_items(memos, kind))
 
 
 def latest_memo_id(memos: dict[str, Any], kind: str) -> str | None:
@@ -75,10 +73,7 @@ def voice_memo_items(memos: dict[str, Any]) -> list[dict[str, Any]]:
 def latest_voice_memo(memos: dict[str, Any]) -> dict[str, Any] | None:
     """Return the newest playable manual voice memo."""
 
-    items = voice_memo_items(memos)
-    if not items:
-        return None
-    return max(items, key=memo_sort_key)
+    return latest_metadata_item(voice_memo_items(memos))
 
 
 def latest_voice_memo_audio_id(memos: dict[str, Any]) -> str | None:
@@ -112,23 +107,37 @@ def latest_memo_label(
 def memo_kind_label(kind: str, language: str | None = None) -> str:
     """Return a translated memo kind label."""
 
-    language_code = str(language or "").lower()
-    if language_code.startswith("de"):
-        return "Sprach-Memo" if kind == "voice" else "Text-Memo"
-    if language_code.startswith("it"):
-        return "Memo vocale" if kind == "voice" else "Memo testuale"
-    return "Voice memo" if kind == "voice" else "Text memo"
+    if kind == "voice":
+        return localized_choice(
+            language,
+            de="Sprach-Memo",
+            it="Memo vocale",
+            en="Voice memo",
+        )
+    return localized_choice(
+        language,
+        de="Text-Memo",
+        it="Memo testuale",
+        en="Text memo",
+    )
 
 
 def no_memo_label(kind: str, language: str | None = None) -> str:
     """Return a translated no-memo state."""
 
-    language_code = str(language or "").lower()
-    if language_code.startswith("de"):
-        return "Keine Sprach-Memos" if kind == "voice" else "Keine Text-Memos"
-    if language_code.startswith("it"):
-        return "Nessun memo vocale" if kind == "voice" else "Nessun memo testuale"
-    return "No voice memo" if kind == "voice" else "No text memo"
+    if kind == "voice":
+        return localized_choice(
+            language,
+            de="Keine Sprach-Memos",
+            it="Nessun memo vocale",
+            en="No voice memo",
+        )
+    return localized_choice(
+        language,
+        de="Keine Text-Memos",
+        it="Nessun memo testuale",
+        en="No text memo",
+    )
 
 
 def latest_memo_attributes(
@@ -225,13 +234,7 @@ def _voice_memo_entry_name(memo_id: str) -> str:
 def memo_sort_key(memo: dict[str, Any]) -> tuple[int, str, str]:
     """Return a stable newest-first sort key for memo metadata."""
 
-    unix_time = memo.get("unix_time")
-    timestamp = unix_time if isinstance(unix_time, int) else 0
-    return (
-        timestamp,
-        str(memo.get("iso_time") or memo.get("date") or ""),
-        str(memo.get("id") or ""),
-    )
+    return metadata_sort_key(memo)
 
 
 def memo_state_text(value: Any) -> str | None:

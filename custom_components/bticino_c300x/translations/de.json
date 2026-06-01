@@ -43,6 +43,7 @@
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
+          "dashboard_entities": "Dashboard-Entitaeten",
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
@@ -70,6 +71,7 @@
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
+          "dashboard_entities": "Dashboard-Entitaeten",
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
@@ -118,6 +120,7 @@
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
+          "dashboard_entities": "Dashboard-Entitaeten",
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
@@ -215,6 +218,14 @@
       "agent": {
         "name": "Device-Agent"
       },
+      "agent_status": {
+        "name": "Device-Agent-Status",
+        "state": {
+          "ok": "OK",
+          "warning": "Warnung",
+          "error": "Fehler"
+        }
+      },
       "agent_writes": {
         "name": "Schreibvorgaenge"
       },
@@ -223,6 +234,9 @@
       },
       "device_load": {
         "name": "Geraetelast"
+      },
+      "device_memory": {
+        "name": "Speicherauslastung"
       },
       "device_temperature": {
         "name": "Geraetetemperatur"
@@ -261,7 +275,20 @@
         "name": "Letztes Audio"
       },
       "doorbell_state": {
-        "name": "Klingelstatus"
+        "name": "Klingelstatus",
+        "state": {
+          "idle": "Bereit",
+          "ringing": "Klingelt",
+          "view_requested": "Türkamera aktiv",
+          "view_requeste": "Türkamera aktiv",
+          "pressed": "Türklingel gedrückt",
+          "ring": "Klingelt",
+          "doorbell_pressed": "Türklingel gedrückt",
+          "doorbell_view_requested": "Türkamera aktiv",
+          "doorbell_media_closed": "Türkamera beendet",
+          "media_closed": "Türkamera beendet",
+          "closed": "Türkamera beendet"
+        }
       }
     },
     "switch": {
@@ -291,6 +318,12 @@
       },
       "ipv6_firewall_patch": {
         "name": "IPv6-Firewall"
+      },
+      "native_mqtt_bridge": {
+        "name": "Native MQTT-Bridge"
+      },
+      "legacy_mqtt_bridge": {
+        "name": "Legacy MQTT-Bridge"
       },
       "smartphone_forwarding": {
         "name": "Weiterleitung"
@@ -342,6 +375,33 @@
     "agent_capability_mismatch": {
       "title": "C300X Device-Agent meldet keine Capabilities",
       "description": "Der konfigurierte C300X Device-Agent fuer {entry_title} hat ohne nutzbare Capabilities geantwortet. Aktualisiere oder konfiguriere den lokalen Device-Agent neu und lade danach die Integration neu."
+    },
+    "device_agent_update_required": {
+      "title": "C300X Device-Agent muss aktualisiert werden",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X Device-Agent aktualisieren",
+            "description": "Home Assistant laedt den paketierten nativen Agent ueber die aktuell konfigurierte Maintenance-API hoch. SSH-Zugangsdaten werden nicht benoetigt. Aktive GUI- und Firewall-Patches werden vorher read-only geprueft und nur erneuert, wenn sie bereits aktiv waren.\n\nInstalliert: {installed_version} (API {installed_api_version})\nPaketiert: {available_version} (API {available_api_version})\nGrund: {reason}"
+          },
+          "ssh_install": {
+            "title": "C300X Device-Agent per SSH neu installieren",
+            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant nutzt diese einmaligen SSH-Zugangsdaten, installiert den paketierten Agent und erneuert danach nur aktive GUI- und Firewall-Patches. Die SSH-Zugangsdaten werden nicht gespeichert.\n\nInstalliert: {installed_version} (API {installed_api_version})\nPaketiert: {available_version} (API {available_api_version})\nGrund: {reason}",
+            "data": {
+              "bootstrap_ssh_username": "SSH-Benutzername",
+              "bootstrap_ssh_password": "SSH-Passwort"
+            }
+          }
+        },
+        "error": {
+          "ssh_install_failed": "Die SSH-Reparaturinstallation ist fehlgeschlagen. Pruefe den SSH-Zugriff und versuche es erneut.",
+          "update_failed": "Das Device-Agent-Update ist fehlgeschlagen. Pruefe, ob Maintenance-Zugriff aktiv ist, und versuche es erneut.",
+          "update_verify_failed": "Das Update wurde gesendet, aber der Agent meldet weiterhin ein altes oder inkompatibles Bundle."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
     },
     "invalid_action_map": {
       "title": "C300X Dashboard-Action-Allowlist ist ungueltig",

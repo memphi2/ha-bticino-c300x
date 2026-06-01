@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import config_validation as cv
@@ -38,6 +39,13 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
+from .entry_config import (
+    entry_config_value as _entry_config_value,
+)
+from .entry_config import (
+    normalized_update_options,
+)
+from .error_text import compact_error_text
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -68,11 +76,46 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     return True
 
 
+async def async_migrate_entry(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> bool:
+    """Normalize existing entries before Home Assistant sets them up."""
+
+    data = dict(getattr(entry, "data", {}) or {})
+    options = normalized_update_options(data, dict(getattr(entry, "options", {}) or {}))
+    original_data = dict(data)
+    original_options = dict(getattr(entry, "options", {}) or {})
+
+    if not str(data.get(CONF_AGENT_HOST, "") or "").strip() and data.get("controller_host"):
+        data[CONF_AGENT_HOST] = data["controller_host"]
+
+    _ensure_generated_setup_secret(data, CONF_WEBHOOK_ID, 24)
+    _ensure_generated_setup_secret(data, CONF_SHARED_SECRET, 32)
+    _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_ID, 24)
+    _ensure_generated_setup_secret(data, CONF_EVENT_WEBHOOK_TOKEN, 32)
+
+    if (
+        data != original_data
+        or options != original_options
+        or getattr(entry, "minor_version", 1) < 2
+    ):
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=1,
+            minor_version=2,
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Set up a C300X config entry."""
 
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+    from .agent_update import async_load_packaged_bundle_metadata, compare_agent_bundle
     from .capabilities import gate_capabilities
     from .events import async_start_agent_event_registration
     from .media import async_setup_media_view
@@ -91,7 +134,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         CONF_EVENT_WEBHOOK_ID,
         CONF_EVENT_WEBHOOK_TOKEN,
     )
-    if any(not _entry_config_value(entry, key) for key in required):
+    missing_required = tuple(key for key in required if not _entry_config_value(entry, key))
+    if missing_required:
+        _LOGGER.error(
+            "C300X config entry is missing required setup field(s): %s",
+            ", ".join(missing_required),
+        )
         return False
 
     agent_host = str(_entry_config_value(entry, CONF_AGENT_HOST, "")).strip()
@@ -112,13 +160,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
     try:
         setup_data = await api.async_validate_setup()
     except C300XAgentApiError as err:
-        _LOGGER.warning("C300X device agent is offline during setup: %s", err)
+        _LOGGER.info("C300X device agent is offline during setup: %s", err)
         setup_data = _offline_setup_data(err)
         capabilities = {}
         connection_state.mark_reconnecting(
             type(err).__name__,
             DEFAULT_RECONNECT_GRACE_SECONDS,
-            _connection_error_text(err),
+            compact_error_text(err),
         )
         connection_state.mark_unavailable()
         unregister_event_registration = _async_start_setup_recovery(
@@ -135,6 +183,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
             capabilities,
             doorbell_video_enabled=_entry_video_enabled(entry),
         )
+    agent_update_state = (
+        None
+        if not connection_state.available
+        else compare_agent_bundle(
+            setup_data,
+            await async_load_packaged_bundle_metadata(hass),
+        )
+    )
     unregister_webhook = async_register_webhook(hass, entry)
     unregister_event_webhook = async_register_agent_event_webhook(
         hass,
@@ -161,6 +217,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         unregister_event_registration=unregister_event_registration,
         unregister_display_bridge_updates=None,
         loaded_platforms=platforms,
+        agent_update_state=agent_update_state,
     )
     entry.runtime_data.unregister_display_bridge_updates = (
         _async_track_display_bridge_updates(hass, entry)
@@ -175,6 +232,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
     async_setup_media_view(hass)
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     return True
+
+
+def _ensure_generated_setup_secret(
+    data: dict[str, Any],
+    key: str,
+    token_bytes: int,
+) -> None:
+    """Generate a setup secret when an older config entry does not have one."""
+
+    value = data.get(key)
+    if isinstance(value, str) and value.strip():
+        return
+    if value not in (None, ""):
+        return
+    data[key] = secrets.token_urlsafe(token_bytes)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
@@ -257,7 +329,7 @@ def _offline_setup_data(err: Exception) -> dict[str, Any]:
         "model": None,
         "firmware": None,
         "capabilities": {},
-        "offline_error": _connection_error_text(err),
+        "offline_error": compact_error_text(err),
     }
 
 
@@ -287,7 +359,7 @@ def _async_start_setup_recovery(
             connection_state.mark_reconnecting(
                 type(err).__name__,
                 retry_delay_seconds,
-                _connection_error_text(err),
+                compact_error_text(err),
             )
             connection_state.mark_unavailable()
             async_dispatcher_send(
@@ -309,19 +381,6 @@ def _async_start_setup_recovery(
             retry_cancel()
 
     return _cancel
-
-
-def _connection_error_text(err: Exception) -> str:
-    """Return a compact connection error text for offline setup diagnostics."""
-
-    name = type(err).__name__
-    message = " ".join(str(err).split())
-    if not message or message == name:
-        return name
-    value = f"{name}: {message}"
-    if len(value) > 180:
-        return f"{value[:177]}..."
-    return value
 
 
 def _entry_video_enabled(entry: BticinoC300XConfigEntry) -> bool:
@@ -461,20 +520,3 @@ async def _async_notify_display_bridge_alarm(entry: BticinoC300XConfigEntry) -> 
         _LOGGER.debug("C300X device agent does not support display bridge events")
     except C300XAgentApiError:
         _LOGGER.debug("C300X display bridge alarm notification failed", exc_info=True)
-
-
-def _entry_config_value(
-    entry: BticinoC300XConfigEntry,
-    key: str,
-    default: Any = None,
-) -> Any:
-    """Return an option override when set, otherwise setup data."""
-
-    if key in entry.options:
-        value = entry.options[key]
-        if value is None or value == "":
-            return default
-        if isinstance(value, str) and not value.strip():
-            return default
-        return value
-    return entry.data.get(key, default)

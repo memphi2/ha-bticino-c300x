@@ -19,6 +19,11 @@ struct c300x_video_status {
     int media_starting;
     int stream_audio;
     int talkback_running;
+    int bridge_running;
+    int bridge_media_active;
+    int bridge_stop_in_progress;
+    int bridge_open_fds;
+    int bridge_active_threads;
     unsigned long long rtp_packets;
     char last_rtp_at[40];
     char last_media_started_at[40];

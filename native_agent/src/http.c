@@ -1,5 +1,7 @@
 #include "c300x_agent.h"
 #include "mdns.h"
+#include "mqtt_bridge.h"
+#include "sha256.h"
 #include "video_rtsp.h"
 
 #include <arpa/inet.h>
@@ -31,7 +33,8 @@
 #define REQUEST_BUFFER_SIZE 8192
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 16
-#define C300X_MAX_RECENT_EVENTS 32
+#define C300X_MAX_RECENT_EVENTS 16
+#define C300X_RECENT_EVENT_LEN 2048
 #define C300X_MAX_URL_LEN 512
 #define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
 #define C300X_DASHBOARD_DOMAIN "c300x"
@@ -58,6 +61,19 @@
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
 #define C300X_HOME_ASSISTANT_CONNECTED_SECONDS 300
+#define C300X_AGENT_UPDATE_STAGE ".update"
+#define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
+#define C300X_AGENT_BUNDLE_HASH_LEN 96
+#define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
+#define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
+#define C300X_LEGACY_MQTT_DIR "/etc/tcpdump2mqtt"
+#define C300X_LEGACY_MQTT_CONFIG "/etc/tcpdump2mqtt/TcpDump2Mqtt.conf"
+#define C300X_LEGACY_MQTT_SCRIPT "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
+#define C300X_LEGACY_MQTT_INIT_LINK "/etc/rc5.d/S99TcpDump2Mqtt"
+#define C300X_LEGACY_MQTT_INIT_TARGET "../tcpdump2mqtt/TcpDump2Mqtt.sh"
+#define C300X_LEGACY_MQTT_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt"
+#define C300X_LEGACY_MQTT_BACKUP_MARKER "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/.complete"
+#define C300X_LARGE_RESPONSE_SIZE 32768
 
 enum listener_kind {
     LISTENER_API = 1,
@@ -76,6 +92,22 @@ struct request {
     char headers[REQUEST_BUFFER_SIZE];
     char body[REQUEST_BUFFER_SIZE];
     size_t body_len;
+};
+
+struct request_workspace {
+    char buffer[REQUEST_BUFFER_SIZE];
+    struct request request;
+};
+
+struct agent_update_change_summary {
+    int changed_files;
+    int runtime_changed;
+    int qml_patch_changed;
+    int script_changed;
+    int firewall_patch_changed;
+    int ipv6_firewall_patch_changed;
+    int config_schema_changed;
+    int manifest_changed;
 };
 
 struct subscription {
@@ -153,6 +185,11 @@ struct system_metrics_sample {
     double load_1m_percent;
     double load_5m_percent;
     double load_15m_percent;
+    int has_memory;
+    long memory_total_kb;
+    long memory_available_kb;
+    long memory_used_kb;
+    double memory_usage_percent;
     int has_temperature;
     double temperature_c;
     char temperature_source[C300X_MAX_PATH_LEN];
@@ -170,10 +207,17 @@ struct agent_runtime {
     char display_bridge_shared_secret[C300X_MAX_TOKEN_LEN];
     unsigned long agent_write_count;
     unsigned long subscription_store_writes;
+    unsigned long loop_iterations;
+    unsigned long poll_wakeups;
+    unsigned long accepted_clients;
+    time_t last_write_at;
+    int last_poll_timeout_ms;
+    int last_poll_count;
     char last_write_reason[128];
     char last_write_class[32];
+    char last_wake_reason[64];
     char qml_patch_last_action[32];
-    char recent_events[C300X_MAX_RECENT_EVENTS][2048];
+    char recent_events[C300X_MAX_RECENT_EVENTS][C300X_RECENT_EVENT_LEN];
     int recent_count;
     struct c300x_video *video;
     struct voicemail_runtime voicemail;
@@ -195,6 +239,14 @@ struct agent_runtime {
     time_t system_metrics_last_dispatched_at;
     int network_online;
     time_t network_checked_at;
+    struct c300x_mqtt mqtt;
+};
+
+struct firewall_workspace {
+    char current[C300X_FIREWALL_BUFFER_SIZE];
+    char base[C300X_FIREWALL_BUFFER_SIZE];
+    char original_backup[C300X_FIREWALL_BUFFER_SIZE];
+    char desired[C300X_FIREWALL_BUFFER_SIZE];
 };
 
 static void send_json(int client_fd, int status, const char *reason, const char *body);
@@ -212,6 +264,7 @@ static int validate_alarm_code(const char *value);
 static int validate_event_name(const char *value);
 static int config_admin_authorized(const struct c300x_config *config, const struct request *request);
 static int auth_config_read_authorized(const struct c300x_config *config, const struct request *request);
+static int maintenance_authorized(const struct c300x_config *config, const struct request *request);
 static int maintenance_auth_available(const struct c300x_config *config);
 static int auth_config_requires_restart(
     const struct c300x_config *current,
@@ -248,7 +301,7 @@ static int forward_to_homeassistant(
     char *response,
     size_t response_len
 );
-static void mark_home_assistant_seen(struct agent_runtime *runtime, time_t now);
+static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, time_t now);
 static void handle_display_bridge_post(
     int client_fd,
     struct agent_runtime *runtime,
@@ -275,6 +328,17 @@ static void handle_auth_config_post(
     struct agent_runtime *runtime,
     const struct request *request
 );
+static void handle_mqtt_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct agent_runtime *runtime
+);
+static void handle_mqtt_post(
+    int client_fd,
+    struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
 static int parse_http_url(const char *url, char *host, size_t host_len, char *port, size_t port_len, char *path, size_t path_len);
 static void http_host_header_value(const char *host, const char *port, char *out, size_t out_len);
 static void set_socket_timeout(int fd, int timeout_ms);
@@ -296,6 +360,10 @@ static int system_metrics_watch_active(
     const struct agent_runtime *runtime
 );
 static const char *json_string(const char *value, char *out, size_t out_len);
+static void json_string_field(const char *body, const char *field, char *out, size_t out_len);
+static int json_bool_field(const char *body, const char *field, int *out);
+static int json_int_field(const char *body, const char *field, int *out);
+static int constant_time_equal(const char *left, size_t left_len, const char *right);
 static int metric_changed_percent(double previous, double current, int threshold_percent);
 static int metric_changed_points(double previous, double current, int threshold_points);
 static int event_requests_metrics_refresh(const char *event_type);
@@ -391,7 +459,49 @@ static void handle_remove_agent(
     const struct c300x_config *config,
     const struct request *request
 );
+static void handle_agent_update_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+);
+static void handle_agent_update_prepare(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
+static void handle_agent_update_file(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
+static void handle_agent_update_apply(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
+static void handle_config_normalize(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
+static int apply_agent_update_init_script(
+    const struct c300x_config *config,
+    const char *stage_path,
+    int *changed
+);
 static int client_is_loopback(int client_fd);
+static int path_parent_inplace(char *path);
+static int read_bounded_text_file(
+    const char *path,
+    char *out,
+    size_t out_len,
+    int *truncated
+);
+static int confirm_matches(const struct request *request, const char *expected);
 
 static void request_path_and_query(
     const char *line_path,
@@ -640,6 +750,33 @@ static void display_bridge_callback_fingerprint(
     fnv1a64_fingerprint(material, output, output_len);
 }
 
+static void runtime_set_wake_reason(struct agent_runtime *runtime, const char *reason)
+{
+    if (runtime == NULL || reason == NULL || reason[0] == '\0') {
+        return;
+    }
+    snprintf(runtime->last_wake_reason, sizeof(runtime->last_wake_reason), "%s", reason);
+}
+
+static int count_open_fds(void)
+{
+    int count = 0;
+    DIR *dir = opendir("/proc/self/fd");
+    struct dirent *entry;
+
+    if (dir == NULL) {
+        return -1;
+    }
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        count++;
+    }
+    closedir(dir);
+    return count;
+}
+
 static void record_agent_write(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
@@ -656,6 +793,7 @@ static void record_agent_write(
         return;
     }
     runtime->agent_write_count++;
+    runtime->last_write_at = time(NULL);
     snprintf(runtime->last_write_class, sizeof(runtime->last_write_class), "%s", write_class);
     snprintf(runtime->last_write_reason, sizeof(runtime->last_write_reason), "%s", reason);
     if (strcmp(write_class, "subscription") == 0) {
@@ -680,8 +818,9 @@ static void record_agent_write(
         snprintf(
             data,
             sizeof(data),
-            "{\"agent_write_count\":%lu,\"last_write_class\":%s,\"last_write_reason\":%s,\"subscription_store_writes\":%lu,\"qml_patch_last_action\":%s}",
+            "{\"agent_write_count\":%lu,\"last_write_at\":%ld,\"last_write_class\":%s,\"last_write_reason\":%s,\"subscription_store_writes\":%lu,\"qml_patch_last_action\":%s}",
             runtime->agent_write_count,
+            (long)runtime->last_write_at,
             write_class_json,
             reason_json,
             runtime->subscription_store_writes,
@@ -691,6 +830,191 @@ static void record_agent_write(
         return;
     }
     dispatch_event(config, runtime, "agent.diagnostics_changed", data, 30);
+}
+
+static int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len)
+{
+    if (out_len == 0 || config == NULL || config->config_path[0] == '\0') {
+        return 0;
+    }
+    if (snprintf(out, out_len, "%s", config->config_path) >= (int)out_len) {
+        return 0;
+    }
+    if (!path_parent_inplace(out)) {
+        return 0;
+    }
+    return out[0] != '\0';
+}
+
+static int agent_update_stage_dir(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
+)
+{
+    char base[C300X_MAX_PATH_LEN];
+
+    if (!agent_base_dir(config, base, sizeof(base))) {
+        return 0;
+    }
+    return snprintf(out, out_len, "%s/%s", base, C300X_AGENT_UPDATE_STAGE) < (int)out_len;
+}
+
+static int agent_bundle_manifest_path(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
+)
+{
+    char base[C300X_MAX_PATH_LEN];
+
+    if (!agent_base_dir(config, base, sizeof(base))) {
+        return 0;
+    }
+    return snprintf(out, out_len, "%s/%s", base, C300X_AGENT_BUNDLE_MANIFEST) < (int)out_len;
+}
+
+static int safe_agent_update_path(const char *path)
+{
+    size_t len;
+    const char *prefix = "device_agent/";
+
+    if (path == NULL || path[0] == '\0' || path[0] == '/' || strstr(path, "\\") != NULL) {
+        return 0;
+    }
+    len = strlen(path);
+    if (len >= C300X_MAX_PATH_LEN || strncmp(path, prefix, strlen(prefix)) != 0) {
+        return 0;
+    }
+    if (strstr(path, "/../") != NULL || strstr(path, "../") == path || strstr(path, "/..") == path + len - 3) {
+        return 0;
+    }
+    if (
+        strcmp(path, "device_agent/armhf/c300x-agent-native") == 0
+        || strcmp(path, "device_agent/scripts/qml_patch.sh") == 0
+        || strcmp(path, "device_agent/scripts/remove_agent.sh") == 0
+        || strcmp(path, "device_agent/scripts/bootstrap_firewall.sh") == 0
+        || strcmp(path, "device_agent/init/c300x-native-agent") == 0
+        || strcmp(path, "device_agent/bundle.json") == 0
+        || strncmp(path, "device_agent/qml/", strlen("device_agent/qml/")) == 0
+    ) {
+        return 1;
+    }
+    return 0;
+}
+
+static int agent_update_stage_path(
+    const struct c300x_config *config,
+    const char *bundle_path,
+    char *out,
+    size_t out_len
+)
+{
+    char stage_dir[C300X_MAX_PATH_LEN];
+
+    if (!safe_agent_update_path(bundle_path) || !agent_update_stage_dir(config, stage_dir, sizeof(stage_dir))) {
+        return 0;
+    }
+    return snprintf(out, out_len, "%s/%s", stage_dir, bundle_path) < (int)out_len;
+}
+
+static int agent_update_target_path(
+    const struct c300x_config *config,
+    const char *bundle_path,
+    char *out,
+    size_t out_len
+)
+{
+    char base[C300X_MAX_PATH_LEN];
+    const char *relative_target = NULL;
+
+    if (!safe_agent_update_path(bundle_path) || !agent_base_dir(config, base, sizeof(base))) {
+        return 0;
+    }
+    if (strcmp(bundle_path, "device_agent/armhf/c300x-agent-native") == 0) {
+        relative_target = "c300x-agent-native";
+    } else if (strcmp(bundle_path, "device_agent/scripts/qml_patch.sh") == 0) {
+        relative_target = "qml_patch.sh";
+    } else if (strcmp(bundle_path, "device_agent/scripts/remove_agent.sh") == 0) {
+        relative_target = "remove_agent.sh";
+    } else if (strcmp(bundle_path, "device_agent/scripts/bootstrap_firewall.sh") == 0) {
+        relative_target = "bootstrap_firewall.sh";
+    } else if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
+        if (snprintf(out, out_len, "%s", C300X_AGENT_INIT_SCRIPT) >= (int)out_len) {
+            return 0;
+        }
+        return 1;
+    } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
+        relative_target = C300X_AGENT_BUNDLE_MANIFEST;
+    } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
+        relative_target = bundle_path + strlen("device_agent/");
+    }
+    if (relative_target == NULL) {
+        return 0;
+    }
+    return snprintf(out, out_len, "%s/%s", base, relative_target) < (int)out_len;
+}
+
+static int read_agent_bundle_metadata(
+    const struct c300x_config *config,
+    char *bundle_hash,
+    size_t bundle_hash_len,
+    char *agent_version,
+    size_t agent_version_len,
+    char *api_version,
+    size_t api_version_len
+)
+{
+    char manifest_path[C300X_MAX_PATH_LEN];
+    char manifest[8192];
+    int truncated = 0;
+
+    if (bundle_hash_len > 0) {
+        bundle_hash[0] = '\0';
+    }
+    if (agent_version_len > 0) {
+        agent_version[0] = '\0';
+    }
+    if (api_version_len > 0) {
+        api_version[0] = '\0';
+    }
+    if (!agent_bundle_manifest_path(config, manifest_path, sizeof(manifest_path))) {
+        return 0;
+    }
+    if (!read_bounded_text_file(manifest_path, manifest, sizeof(manifest), &truncated) || truncated) {
+        return 0;
+    }
+    json_string_field(manifest, "bundle_hash", bundle_hash, bundle_hash_len);
+    json_string_field(manifest, "agent_version", agent_version, agent_version_len);
+    if (agent_version_len > 0 && agent_version[0] == '\0') {
+        json_string_field(manifest, "version", agent_version, agent_version_len);
+    }
+    json_string_field(manifest, "api_version", api_version, api_version_len);
+    return bundle_hash[0] != '\0' || agent_version[0] != '\0' || api_version[0] != '\0';
+}
+
+static int agent_update_manifest_field_changed(
+    const char *installed_manifest,
+    const char *staged_manifest,
+    const char *field
+)
+{
+    char installed_value[C300X_AGENT_BUNDLE_HASH_LEN];
+    char staged_value[C300X_AGENT_BUNDLE_HASH_LEN];
+
+    json_string_field(staged_manifest, field, staged_value, sizeof(staged_value));
+    if (staged_value[0] == '\0') {
+        return 0;
+    }
+    if (installed_manifest == NULL || installed_manifest[0] == '\0') {
+        return 1;
+    }
+    json_string_field(installed_manifest, field, installed_value, sizeof(installed_value));
+    return !constant_time_equal(
+        installed_value,
+        strlen(installed_value),
+        staged_value
+    );
 }
 
 static int display_bridge_active(
@@ -870,12 +1194,12 @@ static int forward_to_homeassistant(
     }
 
     if (ok) {
-        mark_home_assistant_seen(runtime, time(NULL));
+        mark_home_assistant_callback_seen(runtime, time(NULL));
     }
     return ok;
 }
 
-static void mark_home_assistant_seen(struct agent_runtime *runtime, time_t now)
+static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, time_t now)
 {
     if (runtime == NULL) {
         return;
@@ -1265,6 +1589,288 @@ static int mkdir_parent(const char *path, mode_t mode)
         return 0;
     }
     return mkdir_p(parent, mode);
+}
+
+static int remove_tree(const char *path)
+{
+    DIR *directory;
+    struct dirent *entry;
+
+    directory = opendir(path);
+    if (directory == NULL) {
+        return errno == ENOENT;
+    }
+    while ((entry = readdir(directory)) != NULL) {
+        char child[C300X_MAX_PATH_LEN];
+        DIR *child_directory;
+
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child)) {
+            closedir(directory);
+            return 0;
+        }
+        child_directory = opendir(child);
+        if (child_directory != NULL) {
+            closedir(child_directory);
+            if (!remove_tree(child)) {
+                closedir(directory);
+                return 0;
+            }
+        } else if (unlink(child) != 0) {
+            closedir(directory);
+            return 0;
+        }
+    }
+    closedir(directory);
+    return rmdir(path) == 0 || errno == ENOENT;
+}
+
+static int file_size_matches(const char *path, long expected_size)
+{
+    FILE *file;
+    long size;
+
+    file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return 0;
+    }
+    size = ftell(file);
+    fclose(file);
+    if (size < 0) {
+        return 0;
+    }
+    return size == expected_size;
+}
+
+static int parse_file_mode(const char *value, mode_t fallback, mode_t *mode)
+{
+    char *endptr = NULL;
+    long parsed;
+
+    if (mode == NULL) {
+        return 0;
+    }
+    if (value == NULL || value[0] == '\0') {
+        *mode = fallback;
+        return 1;
+    }
+    errno = 0;
+    parsed = strtol(value, &endptr, 8);
+    if (errno != 0 || endptr == value || *endptr != '\0' || parsed < 0 || parsed > 0777) {
+        return 0;
+    }
+    *mode = (mode_t)parsed;
+    return 1;
+}
+
+static int write_binary_chunk(
+    const char *path,
+    const unsigned char *data,
+    size_t data_len,
+    long offset,
+    mode_t mode
+)
+{
+    FILE *file;
+
+    if (path == NULL || path[0] == '\0' || offset < 0) {
+        return 0;
+    }
+    if (!mkdir_parent(path, 0755)) {
+        return 0;
+    }
+    if (offset == 0) {
+        file = fopen(path, "wb");
+    } else {
+        if (!file_size_matches(path, offset)) {
+            return 0;
+        }
+        file = fopen(path, "ab");
+    }
+    if (file == NULL) {
+        return 0;
+    }
+    if (data_len > 0 && fwrite(data, 1, data_len, file) != data_len) {
+        (void)fclose(file);
+        return 0;
+    }
+    if (fclose(file) != 0) {
+        return 0;
+    }
+    (void)chmod(path, mode);
+    return 1;
+}
+
+static int copy_binary_file(const char *source, const char *target, mode_t mode)
+{
+    char temporary_path[C300X_MAX_PATH_LEN + 8];
+    unsigned char buffer[4096];
+    FILE *in;
+    FILE *out;
+    size_t read_len;
+
+    if (!mkdir_parent(target, 0755)) {
+        return 0;
+    }
+    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", target) >= (int)sizeof(temporary_path)) {
+        return 0;
+    }
+    in = fopen(source, "rb");
+    if (in == NULL) {
+        return 0;
+    }
+    out = fopen(temporary_path, "wb");
+    if (out == NULL) {
+        fclose(in);
+        return 0;
+    }
+    while ((read_len = fread(buffer, 1, sizeof(buffer), in)) > 0) {
+        if (fwrite(buffer, 1, read_len, out) != read_len) {
+            fclose(in);
+            fclose(out);
+            (void)unlink(temporary_path);
+            return 0;
+        }
+    }
+    if (ferror(in)) {
+        fclose(in);
+        fclose(out);
+        (void)unlink(temporary_path);
+        return 0;
+    }
+    {
+        int close_in = fclose(in);
+        int close_out = fclose(out);
+        if (close_in != 0 || close_out != 0) {
+            (void)unlink(temporary_path);
+            return 0;
+        }
+    }
+    (void)chmod(temporary_path, mode);
+    if (rename(temporary_path, target) != 0) {
+        (void)unlink(temporary_path);
+        return 0;
+    }
+    (void)chmod(target, mode);
+    return 1;
+}
+
+static int file_content_matches(const char *source, const char *target)
+{
+    char source_sha[65];
+    char target_sha[65];
+
+    if (
+        !c300x_sha256_file_hex(source, source_sha, sizeof(source_sha))
+        || !c300x_sha256_file_hex(target, target_sha, sizeof(target_sha))
+    ) {
+        return 0;
+    }
+    return constant_time_equal(source_sha, strlen(source_sha), target_sha);
+}
+
+static int copy_binary_file_if_changed(
+    const char *source,
+    const char *target,
+    mode_t mode,
+    int *changed
+)
+{
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (file_content_matches(source, target)) {
+        return 1;
+    }
+    if (!copy_binary_file(source, target, mode)) {
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int base64_value(int ch)
+{
+    if (ch >= 'A' && ch <= 'Z') {
+        return ch - 'A';
+    }
+    if (ch >= 'a' && ch <= 'z') {
+        return ch - 'a' + 26;
+    }
+    if (ch >= '0' && ch <= '9') {
+        return ch - '0' + 52;
+    }
+    if (ch == '+') {
+        return 62;
+    }
+    if (ch == '/') {
+        return 63;
+    }
+    return -1;
+}
+
+static int base64_decode_bytes(
+    const char *input,
+    unsigned char *output,
+    size_t output_len,
+    size_t *decoded_len
+)
+{
+    int value = 0;
+    int bits = -8;
+    size_t used = 0;
+
+    if (decoded_len != NULL) {
+        *decoded_len = 0;
+    }
+    for (const unsigned char *ptr = (const unsigned char *)input; *ptr != '\0'; ptr++) {
+        int sextet;
+
+        if (isspace(*ptr)) {
+            continue;
+        }
+        if (*ptr == '=') {
+            break;
+        }
+        sextet = base64_value(*ptr);
+        if (sextet < 0) {
+            return 0;
+        }
+        value = (value << 6) | sextet;
+        bits += 6;
+        if (bits >= 0) {
+            if (used >= output_len) {
+                return 0;
+            }
+            output[used++] = (unsigned char)((value >> bits) & 0xff);
+            bits -= 8;
+        }
+    }
+    if (decoded_len != NULL) {
+        *decoded_len = used;
+    }
+    return 1;
+}
+
+static int sha256_hex_matches(const char *path, const char *expected)
+{
+    char actual[65];
+
+    if (expected == NULL || strlen(expected) != 64) {
+        return 0;
+    }
+    if (!c300x_sha256_file_hex(path, actual, sizeof(actual))) {
+        return 0;
+    }
+    return constant_time_equal(actual, strlen(actual), expected);
 }
 
 static int safe_voicemail_entry_name(const char *name)
@@ -2077,7 +2683,7 @@ static void voicemail_runtime_init(
     const char *root
 )
 {
-    struct voicemail_snapshot snapshot;
+    struct voicemail_snapshot *snapshot;
 
     memset(voicemail, 0, sizeof(*voicemail));
     voicemail->enabled = enabled;
@@ -2089,8 +2695,12 @@ static void voicemail_runtime_init(
     snprintf(voicemail->root, sizeof(voicemail->root), "%s", root != NULL ? root : "");
     voicemail->inotify_fd = -1;
 
-    voicemail_read_snapshot(voicemail, &snapshot);
-    voicemail->last_signature = voicemail_signature(&snapshot);
+    snapshot = calloc(1, sizeof(*snapshot));
+    if (snapshot != NULL) {
+        voicemail_read_snapshot(voicemail, snapshot);
+        voicemail->last_signature = voicemail_signature(snapshot);
+        free(snapshot);
+    }
     if (!voicemail->enabled || !voicemail->watch_enabled) {
         return;
     }
@@ -2119,26 +2729,40 @@ static void voicemail_init(struct agent_runtime *runtime, const struct c300x_con
     );
 }
 
-static unsigned long long memos_signature(struct agent_runtime *runtime)
+static unsigned long long memos_signature_for_snapshots(
+    const struct voicemail_snapshot *text,
+    const struct voicemail_snapshot *voice
+)
 {
-    struct voicemail_snapshot text;
-    struct voicemail_snapshot voice;
-    unsigned long long hash;
+    unsigned long long hash = voicemail_signature(text);
 
-    message_collection_read_snapshot(&runtime->text_memos, "text", &text);
-    message_collection_read_snapshot(&runtime->voice_memos, "voice", &voice);
-    hash = voicemail_signature(&text);
-    hash = signature_hash_bytes(hash, &voice.available, sizeof(voice.available));
-    hash = signature_hash_bytes(hash, &voice.total, sizeof(voice.total));
-    hash = signature_hash_bytes(hash, &voice.unread, sizeof(voice.unread));
-    hash = signature_hash_bytes(hash, &voice.read, sizeof(voice.read));
-    hash = signature_hash_bytes(hash, voice.newest_at, strlen(voice.newest_at));
-    for (int index = 0; index < voice.message_count; index++) {
-        const struct voicemail_message *message = &voice.messages[index];
+    hash = signature_hash_bytes(hash, &voice->available, sizeof(voice->available));
+    hash = signature_hash_bytes(hash, &voice->total, sizeof(voice->total));
+    hash = signature_hash_bytes(hash, &voice->unread, sizeof(voice->unread));
+    hash = signature_hash_bytes(hash, &voice->read, sizeof(voice->read));
+    hash = signature_hash_bytes(hash, voice->newest_at, strlen(voice->newest_at));
+    for (int index = 0; index < voice->message_count; index++) {
+        const struct voicemail_message *message = &voice->messages[index];
         hash = signature_hash_bytes(hash, message->id, strlen(message->id));
         hash = signature_hash_bytes(hash, &message->read, sizeof(message->read));
         hash = signature_hash_bytes(hash, &message->unix_time, sizeof(message->unix_time));
     }
+    return hash;
+}
+
+static unsigned long long memos_signature(struct agent_runtime *runtime)
+{
+    struct voicemail_snapshot *text = calloc(1, sizeof(*text));
+    struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
+    unsigned long long hash = 0;
+
+    if (text != NULL && voice != NULL) {
+        message_collection_read_snapshot(&runtime->text_memos, "text", text);
+        message_collection_read_snapshot(&runtime->voice_memos, "voice", voice);
+        hash = memos_signature_for_snapshots(text, voice);
+    }
+    free(text);
+    free(voice);
     return hash;
 }
 
@@ -2230,6 +2854,16 @@ static int appendf(char *buffer, size_t buffer_len, size_t *used, const char *fm
     }
     *used += (size_t)written;
     return 1;
+}
+
+static char *allocate_response_buffer(int client_fd, size_t size)
+{
+    char *buffer = calloc(1, size);
+
+    if (buffer == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+    }
+    return buffer;
 }
 
 static void ui_event_send(int client_fd, int changed, unsigned long revision, const char *topic)
@@ -2339,21 +2973,25 @@ static void voicemail_event_dispatch_snapshot(
     int force
 )
 {
-    struct voicemail_snapshot snapshot;
+    struct voicemail_snapshot *snapshot = calloc(1, sizeof(*snapshot));
     unsigned long long signature;
     char data[512];
     char newest_at_escaped[96];
     char newest_at_quoted[100];
     const char *newest_at_json = "null";
 
-    voicemail_read_snapshot(&runtime->voicemail, &snapshot);
-    signature = voicemail_signature(&snapshot);
+    if (snapshot == NULL) {
+        return;
+    }
+    voicemail_read_snapshot(&runtime->voicemail, snapshot);
+    signature = voicemail_signature(snapshot);
     if (!force && signature == runtime->voicemail.last_signature) {
+        free(snapshot);
         return;
     }
     runtime->voicemail.last_signature = signature;
-    if (snapshot.newest_at[0] != '\0') {
-        json_escape_string(snapshot.newest_at, newest_at_escaped, sizeof(newest_at_escaped));
+    if (snapshot->newest_at[0] != '\0') {
+        json_escape_string(snapshot->newest_at, newest_at_escaped, sizeof(newest_at_escaped));
         snprintf(newest_at_quoted, sizeof(newest_at_quoted), "\"%s\"", newest_at_escaped);
         newest_at_json = newest_at_quoted;
     }
@@ -2361,12 +2999,13 @@ static void voicemail_event_dispatch_snapshot(
         data,
         sizeof(data),
         "{\"voicemail\":{\"available\":%s,\"total\":%d,\"unread\":%d,\"read\":%d,\"newest_at\":%s}}",
-        snapshot.available ? "true" : "false",
-        snapshot.total,
-        snapshot.unread,
-        snapshot.read,
+        snapshot->available ? "true" : "false",
+        snapshot->total,
+        snapshot->unread,
+        snapshot->read,
         newest_at_json
     );
+    free(snapshot);
     ui_event_notify(runtime, "answering_machine.messages");
     dispatch_event(config, runtime, "answering_machine.messages_changed", data, 30);
 }
@@ -2398,8 +3037,8 @@ static void memos_event_dispatch_snapshot(
     int force
 )
 {
-    struct voicemail_snapshot text;
-    struct voicemail_snapshot voice;
+    struct voicemail_snapshot *text = calloc(1, sizeof(*text));
+    struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
     unsigned long long signature;
     char data[2048];
     char newest_at_escaped[96];
@@ -2407,15 +3046,22 @@ static void memos_event_dispatch_snapshot(
     const char *newest_at_json = "null";
     const char *newest_at;
 
-    signature = memos_signature(runtime);
+    if (text == NULL || voice == NULL) {
+        free(text);
+        free(voice);
+        return;
+    }
+    message_collection_read_snapshot(&runtime->text_memos, "text", text);
+    message_collection_read_snapshot(&runtime->voice_memos, "voice", voice);
+    signature = memos_signature_for_snapshots(text, voice);
     if (!force && signature == runtime->memos_last_signature) {
+        free(text);
+        free(voice);
         return;
     }
     runtime->memos_last_signature = signature;
 
-    message_collection_read_snapshot(&runtime->text_memos, "text", &text);
-    message_collection_read_snapshot(&runtime->voice_memos, "voice", &voice);
-    newest_at = newest_memo_time(&text, &voice);
+    newest_at = newest_memo_time(text, voice);
     if (newest_at[0] != '\0') {
         json_escape_string(newest_at, newest_at_escaped, sizeof(newest_at_escaped));
         snprintf(newest_at_quoted, sizeof(newest_at_quoted), "\"%s\"", newest_at_escaped);
@@ -2425,14 +3071,16 @@ static void memos_event_dispatch_snapshot(
         data,
         sizeof(data),
         "{\"memos\":{\"available\":%s,\"total\":%d,\"text_total\":%d,\"voice_total\":%d,\"unread\":%d,\"read\":%d,\"newest_at\":%s}}",
-        (text.available || voice.available) ? "true" : "false",
-        text.total + voice.total,
-        text.total,
-        voice.total,
-        text.unread + voice.unread,
-        text.read + voice.read,
+        (text->available || voice->available) ? "true" : "false",
+        text->total + voice->total,
+        text->total,
+        voice->total,
+        text->unread + voice->unread,
+        text->read + voice->read,
         newest_at_json
     );
+    free(text);
+    free(voice);
     ui_event_notify(runtime, "memos");
     dispatch_event(config, runtime, "memos.changed", data, 30);
 }
@@ -2813,14 +3461,35 @@ static void save_subscriptions(
 
 static void record_recent_event(struct agent_runtime *runtime, const char *event_json)
 {
+    size_t event_len = strlen(event_json);
+
     if (runtime->recent_count < C300X_MAX_RECENT_EVENTS) {
-        snprintf(runtime->recent_events[runtime->recent_count++], sizeof(runtime->recent_events[0]), "%s", event_json);
+        if (event_len < sizeof(runtime->recent_events[0])) {
+            memcpy(runtime->recent_events[runtime->recent_count], event_json, event_len + 1);
+        } else {
+            snprintf(
+                runtime->recent_events[runtime->recent_count],
+                sizeof(runtime->recent_events[0]),
+                "{\"type\":\"diagnostic.recent_event_truncated\",\"data\":{\"size\":%zu}}",
+                event_len
+            );
+        }
+        runtime->recent_count++;
         return;
     }
     for (int index = 1; index < C300X_MAX_RECENT_EVENTS; index++) {
-        snprintf(runtime->recent_events[index - 1], sizeof(runtime->recent_events[0]), "%s", runtime->recent_events[index]);
+        memcpy(runtime->recent_events[index - 1], runtime->recent_events[index], sizeof(runtime->recent_events[0]));
     }
-    snprintf(runtime->recent_events[C300X_MAX_RECENT_EVENTS - 1], sizeof(runtime->recent_events[0]), "%s", event_json);
+    if (event_len < sizeof(runtime->recent_events[0])) {
+        memcpy(runtime->recent_events[C300X_MAX_RECENT_EVENTS - 1], event_json, event_len + 1);
+    } else {
+        snprintf(
+            runtime->recent_events[C300X_MAX_RECENT_EVENTS - 1],
+            sizeof(runtime->recent_events[0]),
+            "{\"type\":\"diagnostic.recent_event_truncated\",\"data\":{\"size\":%zu}}",
+            event_len
+        );
+    }
 }
 
 static int parse_http_url(const char *url, char *host, size_t host_len, char *port, size_t port_len, char *path, size_t path_len)
@@ -3055,21 +3724,38 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
 
 static void handle_recent_events_get(int client_fd, const struct agent_runtime *runtime)
 {
-    char body[8192];
+    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     size_t used = 0;
 
-    used += (size_t)snprintf(body + used, sizeof(body) - used, "{\"ok\":true,\"events\":[");
-    for (int index = 0; index < runtime->recent_count && used < sizeof(body); index++) {
-        used += (size_t)snprintf(
-            body + used,
-            sizeof(body) - used,
+    if (body == NULL) {
+        return;
+    }
+    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "{\"ok\":true,\"events\":[")) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(body);
+        return;
+    }
+    for (int index = 0; index < runtime->recent_count; index++) {
+        if (!appendf(
+            body,
+            C300X_LARGE_RESPONSE_SIZE,
+            &used,
             "%s%s",
             index == 0 ? "" : ",",
             runtime->recent_events[index]
-        );
+        )) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            free(body);
+            return;
+        }
     }
-    snprintf(body + used, sizeof(body) - used, "]}\n");
+    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(body);
+        return;
+    }
     send_json(client_fd, 200, "OK", body);
+    free(body);
 }
 
 static void handle_subscriptions_post(
@@ -3115,7 +3801,6 @@ static void handle_subscriptions_post(
                 save_subscriptions(config, runtime, config->subscription_store_path, "deduplicated");
                 runtime->subscriptions_loaded_deduplicated = 0;
             }
-            mark_home_assistant_seen(runtime, time(NULL));
             json_string(runtime->subscriptions[0].id, subscription_id_json, sizeof(subscription_id_json));
             snprintf(body, sizeof(body), "{\"ok\":true,\"subscription\":{\"id\":%s}}\n", subscription_id_json);
             if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed")) {
@@ -3143,7 +3828,6 @@ static void handle_subscriptions_post(
         config->subscription_store_path,
         matching_index >= 0 ? "deduplicated" : (had_existing ? "replaced" : "created")
     );
-    mark_home_assistant_seen(runtime, time(NULL));
     json_string(runtime->subscriptions[0].id, subscription_id_json, sizeof(subscription_id_json));
     snprintf(body, sizeof(body), "{\"ok\":true,\"subscription\":{\"id\":%s}}\n", subscription_id_json);
     if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed")) {
@@ -3204,7 +3888,6 @@ static void handle_display_bridge_post(
     }
     (void)json_bool_field(request->body, "enabled", &enabled);
     if (!enabled) {
-        mark_home_assistant_seen(runtime, time(NULL));
         if (!display_bridge_runtime_active(runtime) && !config->display_bridge_enabled && !runtime->display_bridge_disabled) {
             handle_display_bridge_status(client_fd, config, runtime);
             return;
@@ -3238,7 +3921,6 @@ static void handle_display_bridge_post(
         && strcmp(runtime->display_bridge_webhook_url, webhook_url) == 0
         && strcmp(runtime->display_bridge_shared_secret, shared_secret) == 0
     ) {
-        mark_home_assistant_seen(runtime, time(NULL));
         handle_display_bridge_status(client_fd, config, runtime);
         return;
     }
@@ -3246,7 +3928,6 @@ static void handle_display_bridge_post(
     snprintf(runtime->display_bridge_shared_secret, sizeof(runtime->display_bridge_shared_secret), "%s", shared_secret);
     runtime->display_bridge_registered = 1;
     runtime->display_bridge_disabled = 0;
-    mark_home_assistant_seen(runtime, time(NULL));
     handle_display_bridge_status(client_fd, config, runtime);
 }
 
@@ -3275,7 +3956,7 @@ static void handle_display_bridge_event_post(
         return;
     }
 
-    mark_home_assistant_seen(runtime, time(NULL));
+    mark_home_assistant_callback_seen(runtime, time(NULL));
     ui_event_notify(runtime, topic);
     json_string(topic, topic_json, sizeof(topic_json));
     snprintf(
@@ -3292,22 +3973,67 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
 {
     char last_write_class[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_class))];
     char last_write_reason[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_reason))];
+    char last_wake_reason[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_wake_reason))];
     char qml_patch_last_action[C300X_JSON_QUOTED_LEN(sizeof(runtime->qml_patch_last_action))];
-    char body[768];
+    struct c300x_video_status video_status;
+    int open_fd_count = count_open_fds();
+    char body[2048];
 
     json_string(runtime->last_write_class, last_write_class, sizeof(last_write_class));
     json_string(runtime->last_write_reason, last_write_reason, sizeof(last_write_reason));
+    json_string(runtime->last_wake_reason, last_wake_reason, sizeof(last_wake_reason));
     json_string(runtime->qml_patch_last_action, qml_patch_last_action, sizeof(qml_patch_last_action));
-    snprintf(
-        body,
-        sizeof(body),
-        "{\"ok\":true,\"agent_write_count\":%lu,\"last_write_reason\":%s,\"last_write_class\":%s,\"subscription_store_writes\":%lu,\"qml_patch_last_action\":%s}\n",
-        runtime->agent_write_count,
-        last_write_reason,
-        last_write_class,
-        runtime->subscription_store_writes,
-        qml_patch_last_action
-    );
+    c300x_video_status(runtime->video, &video_status);
+    if (
+        snprintf(
+            body,
+            sizeof(body),
+            "{"
+            "\"ok\":true,"
+            "\"agent_write_count\":%lu,"
+            "\"last_write_at\":%ld,"
+            "\"last_write_reason\":%s,"
+            "\"last_write_class\":%s,"
+            "\"subscription_store_writes\":%lu,"
+            "\"qml_patch_last_action\":%s,"
+            "\"loop_iterations\":%lu,"
+            "\"poll_wakeups\":%lu,"
+            "\"accepted_clients\":%lu,"
+            "\"last_wake_reason\":%s,"
+            "\"last_poll_timeout_ms\":%d,"
+            "\"last_poll_count\":%d,"
+            "\"open_fd_count\":%d,"
+            "\"video_running\":%s,"
+            "\"video_media_starting\":%s,"
+            "\"video_call_active\":%s,"
+            "\"video_clients\":%d,"
+            "\"video_bridge_open_fds\":%d,"
+            "\"video_bridge_active_threads\":%d"
+            "}\n",
+            runtime->agent_write_count,
+            (long)runtime->last_write_at,
+            last_write_reason,
+            last_write_class,
+            runtime->subscription_store_writes,
+            qml_patch_last_action,
+            runtime->loop_iterations,
+            runtime->poll_wakeups,
+            runtime->accepted_clients,
+            last_wake_reason,
+            runtime->last_poll_timeout_ms,
+            runtime->last_poll_count,
+            open_fd_count,
+            video_status.running ? "true" : "false",
+            video_status.media_starting ? "true" : "false",
+            video_status.call_active ? "true" : "false",
+            video_status.clients,
+            video_status.bridge_open_fds,
+            video_status.bridge_active_threads
+        ) >= (int)sizeof(body)
+    ) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        return;
+    }
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -3341,7 +4067,7 @@ static void handle_setup_page(int client_fd)
         "<label class=\"opt\"><span><input id=\"ev\" type=\"checkbox\"> events</span><small>Listens for device events and forwards only subscribed event types to HA.</small></label>"
         "<label class=\"opt\"><span><input id=\"mm\" type=\"checkbox\"> memos</span><small>Exposes text and voice memos, including delete support when the GUI patch is active.</small></label>"
         "<label class=\"opt\"><span><input id=\"vm\" type=\"checkbox\"> video messages</span><small>Exposes answering-machine video messages for HA playback and deletion.</small></label>"
-        "<label class=\"opt\"><span><input id=\"sm\" type=\"checkbox\"> system metrics</span><small>Publishes CPU, load, and temperature only when HA subscribes to metric events.</small></label>"
+        "<label class=\"opt\"><span><input id=\"sm\" type=\"checkbox\"> system metrics</span><small>Publishes CPU, memory, load, and temperature only when HA subscribes to metric events.</small></label>"
         "<label class=\"opt\"><span><input id=\"me\" type=\"checkbox\"> maintenance</span><small>Allows protected maintenance endpoints such as SSH, reboot, GUI reload, QML patch, and firewall.</small></label>"
         "<label class=\"opt\"><span><input id=\"mn\" type=\"checkbox\"> allow noAuth maintenance</span><small>Allows maintenance calls without the maintenance token while noAuth is enabled. Keep this temporary.</small></label>"
         "<label class=\"opt\"><span><input id=\"md\" type=\"checkbox\"> mDNS discovery until HA connects</span><small>Advertises the agent on the local network only while HA is not connected.</small></label>"
@@ -3700,10 +4426,11 @@ static void handle_auth_config_post(
         return;
     }
 
-    if (memcmp(&baseline, &updated, sizeof(updated)) != 0) {
+    if (!c300x_config_persisted_equal(&baseline, &updated)) {
         int restart_required = config->restart_required
             || auth_config_requires_restart(config, &updated);
-        if (!c300x_save_config(&updated, error, sizeof(error))) {
+        int changed = 0;
+        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             char body[384];
             json_string(error, error_json, sizeof(error_json));
@@ -3716,9 +4443,946 @@ static void handle_auth_config_post(
         } else {
             *config = updated;
         }
-        record_agent_write(config, runtime, "config", "auth_config");
+        if (changed) {
+            record_agent_write(config, runtime, "config", "auth_config");
+        }
     }
     handle_auth_config_get(client_fd, config);
+}
+
+static int legacy_mqtt_installed(void);
+static int legacy_mqtt_startup_enabled(void);
+static int legacy_mqtt_running(void);
+
+static void handle_mqtt_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct agent_runtime *runtime
+)
+{
+    enum { MQTT_STATUS_BODY_LEN = 8192 };
+    struct mqtt_status_workspace {
+        char client_id[C300X_JSON_QUOTED_LEN(C300X_MAX_TOKEN_LEN)];
+        char command_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
+        char event_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
+        char json_event_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
+        char status_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
+        char availability_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
+        char command_host[C300X_JSON_QUOTED_LEN(C300X_MAX_HOST_LEN)];
+        char body[MQTT_STATUS_BODY_LEN];
+    };
+    struct mqtt_status_workspace *workspace = calloc(1, sizeof(*workspace));
+    int written;
+
+    if (workspace == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        return;
+    }
+    json_string(config->mqtt_client_id, workspace->client_id, sizeof(workspace->client_id));
+    json_string(config->mqtt_command_topic, workspace->command_topic, sizeof(workspace->command_topic));
+    json_string(config->mqtt_event_topic, workspace->event_topic, sizeof(workspace->event_topic));
+    json_string(config->mqtt_json_event_topic, workspace->json_event_topic, sizeof(workspace->json_event_topic));
+    json_string(config->mqtt_status_topic, workspace->status_topic, sizeof(workspace->status_topic));
+    json_string(
+        config->mqtt_availability_topic,
+        workspace->availability_topic,
+        sizeof(workspace->availability_topic)
+    );
+    json_string(config->mqtt_command_host, workspace->command_host, sizeof(workspace->command_host));
+    written = snprintf(
+        workspace->body,
+        sizeof(workspace->body),
+        "{"
+        "\"ok\":true,"
+        "\"enabled\":%s,"
+        "\"configured\":%s,"
+        "\"connected\":%s,"
+        "\"subscribed\":%s,"
+        "\"host_configured\":%s,"
+        "\"username_configured\":%s,"
+        "\"password_configured\":%s,"
+        "\"port\":%u,"
+        "\"client_id\":%s,"
+        "\"command_host\":%s,"
+        "\"command_port\":%u,"
+        "\"topics\":{\"command\":%s,\"event\":%s,\"json_event\":%s,\"status\":%s,\"availability\":%s},"
+        "\"qos\":%d,"
+        "\"keepalive_seconds\":%d,"
+        "\"reconnect_initial_seconds\":%d,"
+        "\"reconnect_max_seconds\":%d,"
+        "\"legacy_installed\":%s,"
+        "\"legacy_enabled\":%s,"
+        "\"legacy_running\":%s,"
+        "\"exclusive\":true"
+        "}\n",
+        config->mqtt_enabled ? "true" : "false",
+        (config->mqtt_host[0] != '\0') ? "true" : "false",
+        (runtime != NULL && runtime->mqtt.connected) ? "true" : "false",
+        (runtime != NULL && runtime->mqtt.subscribed) ? "true" : "false",
+        config->mqtt_host[0] != '\0' ? "true" : "false",
+        config->mqtt_username[0] != '\0' ? "true" : "false",
+        config->mqtt_password[0] != '\0' ? "true" : "false",
+        config->mqtt_port,
+        workspace->client_id,
+        workspace->command_host,
+        config->mqtt_command_port,
+        workspace->command_topic,
+        workspace->event_topic,
+        workspace->json_event_topic,
+        workspace->status_topic,
+        workspace->availability_topic,
+        config->mqtt_qos,
+        config->mqtt_keepalive_seconds,
+        config->mqtt_reconnect_initial_seconds,
+        config->mqtt_reconnect_max_seconds,
+        legacy_mqtt_installed() ? "true" : "false",
+        legacy_mqtt_startup_enabled() ? "true" : "false",
+        legacy_mqtt_running() ? "true" : "false"
+    );
+    if (written < 0 || written >= (int)sizeof(workspace->body)) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"mqtt_status_too_large\"}\n");
+        free(workspace);
+        return;
+    }
+    send_json(client_fd, 200, "OK", workspace->body);
+    free(workspace);
+}
+
+static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const char **error)
+{
+    if (config->mqtt_enabled && config->mqtt_host[0] == '\0') {
+        *error = "mqtt_host_required";
+        return 0;
+    }
+    if (config->mqtt_enabled && config->mqtt_client_id[0] == '\0') {
+        *error = "mqtt_client_id_required";
+        return 0;
+    }
+    if (config->mqtt_enabled && config->mqtt_command_topic[0] != '\0' && config->mqtt_command_host[0] == '\0') {
+        *error = "mqtt_command_host_required";
+        return 0;
+    }
+    if (config->mqtt_qos != 0) {
+        *error = "mqtt_qos_unsupported";
+        return 0;
+    }
+    if (config->mqtt_keepalive_seconds < 10) {
+        *error = "mqtt_keepalive_too_low";
+        return 0;
+    }
+    if (config->mqtt_reconnect_initial_seconds < 1) {
+        *error = "mqtt_reconnect_initial_too_low";
+        return 0;
+    }
+    if (config->mqtt_reconnect_max_seconds < config->mqtt_reconnect_initial_seconds) {
+        *error = "mqtt_reconnect_max_too_low";
+        return 0;
+    }
+    return 1;
+}
+
+static void firewall_remount_rw_if_needed(const char *path);
+static void firewall_remount_ro_if_needed(const char *path);
+static int run_detached_command(const char *program, const char *argument, int delay_ms);
+
+static int process_cmdline_contains(const char *needle)
+{
+    DIR *directory;
+    struct dirent *entry;
+
+    directory = opendir("/proc");
+    if (directory == NULL) {
+        return 0;
+    }
+    while ((entry = readdir(directory)) != NULL) {
+        char path[512];
+        char buffer[512];
+        FILE *file;
+        size_t read_len;
+        int is_pid = 1;
+
+        for (const char *ptr = entry->d_name; *ptr != '\0'; ptr++) {
+            if (!isdigit((unsigned char)*ptr)) {
+                is_pid = 0;
+                break;
+            }
+        }
+        if (!is_pid) {
+            continue;
+        }
+        if (snprintf(path, sizeof(path), "/proc/%s/cmdline", entry->d_name) >= (int)sizeof(path)) {
+            continue;
+        }
+        file = fopen(path, "r");
+        if (file == NULL) {
+            continue;
+        }
+        read_len = fread(buffer, 1, sizeof(buffer) - 1, file);
+        fclose(file);
+        if (read_len == 0) {
+            continue;
+        }
+        buffer[read_len] = '\0';
+        for (size_t index = 0; index < read_len; index++) {
+            if (buffer[index] == '\0') {
+                buffer[index] = ' ';
+            }
+        }
+        if (strstr(buffer, needle) != NULL) {
+            closedir(directory);
+            return 1;
+        }
+    }
+    closedir(directory);
+    return 0;
+}
+
+static int legacy_mqtt_installed(void)
+{
+    return path_exists(C300X_LEGACY_MQTT_SCRIPT)
+        || path_exists(C300X_LEGACY_MQTT_DIR)
+        || path_exists(C300X_LEGACY_MQTT_INIT_LINK)
+        || path_exists("/home/root/filter.py")
+        || path_exists("/etc/init.d/flexisipsh_bak");
+}
+
+static int legacy_mqtt_startup_enabled(void)
+{
+    return path_exists(C300X_LEGACY_MQTT_INIT_LINK);
+}
+
+static int legacy_mqtt_backup_available(void)
+{
+    return path_exists(C300X_LEGACY_MQTT_BACKUP_MARKER);
+}
+
+static int legacy_mqtt_running(void)
+{
+    return process_cmdline_contains("TcpDump2Mqtt")
+        || process_cmdline_contains("StartMqttSend")
+        || process_cmdline_contains("StartMqttReceive")
+        || process_cmdline_contains("mosquitto_sub")
+        || process_cmdline_contains("mosquitto_pub");
+}
+
+static void legacy_mqtt_stop_processes(void)
+{
+    int status;
+
+    status = system("pkill -f StartMqttSend >/dev/null 2>&1");
+    (void)status;
+    status = system("pkill -f StartMqttReceive >/dev/null 2>&1");
+    (void)status;
+    status = system("pkill -f TcpDump2Mqtt >/dev/null 2>&1");
+    (void)status;
+    status = system("pkill -f 'mosquitto_sub.*Bticino/rx' >/dev/null 2>&1");
+    (void)status;
+    status = system("pkill -f 'mosquitto_pub.*Bticino/tx' >/dev/null 2>&1");
+    (void)status;
+}
+
+static int run_fixed_shell_command(const char *command)
+{
+    int status = system(command);
+    if (status == -1) {
+        return 0;
+    }
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static int copy_trimmed_config_value(char *target, size_t target_len, const char *value)
+{
+    char buffer[512];
+    char *trimmed;
+    size_t len;
+
+    if (target_len == 0 || value == NULL) {
+        return 0;
+    }
+    if (snprintf(buffer, sizeof(buffer), "%s", value) >= (int)sizeof(buffer)) {
+        return 0;
+    }
+    trimmed = (char *)trim_ascii(buffer);
+    len = strlen(trimmed);
+    if (
+        len >= 2
+        && ((trimmed[0] == '"' && trimmed[len - 1] == '"') || (trimmed[0] == '\'' && trimmed[len - 1] == '\''))
+    ) {
+        trimmed[len - 1] = '\0';
+        trimmed++;
+        trimmed = (char *)trim_ascii(trimmed);
+    }
+    if (strlen(trimmed) >= target_len) {
+        return 0;
+    }
+    snprintf(target, target_len, "%s", trimmed);
+    return 1;
+}
+
+static int legacy_mqtt_copy_nonempty_value(char *target, size_t target_len, const char *value, int *imported)
+{
+    char buffer[512];
+
+    if (!copy_trimmed_config_value(buffer, sizeof(buffer), value)) {
+        return 0;
+    }
+    if (buffer[0] == '\0') {
+        return 1;
+    }
+    if (strlen(buffer) >= target_len) {
+        return 0;
+    }
+    snprintf(target, target_len, "%s", buffer);
+    if (imported != NULL) {
+        *imported = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_copy_optional_value(char *target, size_t target_len, const char *value, int *imported)
+{
+    if (!copy_trimmed_config_value(target, target_len, value)) {
+        return 0;
+    }
+    if (imported != NULL) {
+        *imported = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_import_port(const char *value, uint16_t *port, int *imported)
+{
+    char buffer[32];
+    char *end = NULL;
+    long parsed;
+
+    if (!copy_trimmed_config_value(buffer, sizeof(buffer), value)) {
+        return 0;
+    }
+    if (buffer[0] == '\0') {
+        return 1;
+    }
+    errno = 0;
+    parsed = strtol(buffer, &end, 10);
+    if (errno != 0 || end == NULL || *end != '\0' || parsed <= 0 || parsed > 65535) {
+        return 0;
+    }
+    *port = (uint16_t)parsed;
+    if (imported != NULL) {
+        *imported = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_import_config(struct c300x_config *updated, int *imported)
+{
+    char content[8192];
+    char *line;
+    char *saveptr = NULL;
+    int truncated = 0;
+
+    if (imported != NULL) {
+        *imported = 0;
+    }
+    if (!path_exists(C300X_LEGACY_MQTT_CONFIG)) {
+        return 1;
+    }
+    if (!read_bounded_text_file(C300X_LEGACY_MQTT_CONFIG, content, sizeof(content), &truncated) || truncated) {
+        return 0;
+    }
+    line = strtok_r(content, "\n", &saveptr);
+    while (line != NULL) {
+        char *trimmed = (char *)trim_ascii(line);
+        char *equals;
+        char *key;
+        char *value;
+
+        if (trimmed[0] == '\0' || trimmed[0] == '#') {
+            line = strtok_r(NULL, "\n", &saveptr);
+            continue;
+        }
+        equals = strchr(trimmed, '=');
+        if (equals == NULL) {
+            line = strtok_r(NULL, "\n", &saveptr);
+            continue;
+        }
+        *equals = '\0';
+        key = (char *)trim_ascii(trimmed);
+        value = (char *)trim_ascii(equals + 1);
+
+        if (strcmp(key, "MQTT_HOST") == 0) {
+            if (!legacy_mqtt_copy_nonempty_value(updated->mqtt_host, sizeof(updated->mqtt_host), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "MQTT_PORT") == 0) {
+            if (!legacy_mqtt_import_port(value, &updated->mqtt_port, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "MQTT_USER") == 0) {
+            if (!legacy_mqtt_copy_optional_value(updated->mqtt_username, sizeof(updated->mqtt_username), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "MQTT_PASS") == 0) {
+            if (!legacy_mqtt_copy_optional_value(updated->mqtt_password, sizeof(updated->mqtt_password), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "TOPIC_RX") == 0) {
+            if (!legacy_mqtt_copy_nonempty_value(updated->mqtt_command_topic, sizeof(updated->mqtt_command_topic), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "TOPIC_DUMP") == 0) {
+            if (!legacy_mqtt_copy_nonempty_value(updated->mqtt_event_topic, sizeof(updated->mqtt_event_topic), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "TOPIC_STARTD") == 0) {
+            if (!legacy_mqtt_copy_nonempty_value(updated->mqtt_status_topic, sizeof(updated->mqtt_status_topic), value, imported)) {
+                return 0;
+            }
+        } else if (strcmp(key, "TOPIC_LASTWILL") == 0) {
+            if (!legacy_mqtt_copy_nonempty_value(updated->mqtt_availability_topic, sizeof(updated->mqtt_availability_topic), value, imported)) {
+                return 0;
+            }
+        }
+        line = strtok_r(NULL, "\n", &saveptr);
+    }
+    return 1;
+}
+
+static int legacy_mqtt_backup_if_needed(int *changed)
+{
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (legacy_mqtt_backup_available()) {
+        return 1;
+    }
+    if (!legacy_mqtt_installed() && !path_exists("/etc/init.d/flexisipsh_bak")) {
+        return 1;
+    }
+    if (!run_fixed_shell_command(
+        "mkdir -p " C300X_LEGACY_MQTT_BACKUP_DIR "/etc "
+        C300X_LEGACY_MQTT_BACKUP_DIR "/home/root "
+        C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d"
+    )) {
+        return 0;
+    }
+    if (path_exists(C300X_LEGACY_MQTT_DIR)
+        && !run_fixed_shell_command(
+            "rm -rf " C300X_LEGACY_MQTT_BACKUP_DIR "/etc/tcpdump2mqtt "
+            "&& cp -a /etc/tcpdump2mqtt " C300X_LEGACY_MQTT_BACKUP_DIR "/etc/"
+        )) {
+        return 0;
+    }
+    if (path_exists("/home/root/filter.py")
+        && !copy_binary_file(
+            "/home/root/filter.py",
+            C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py",
+            0700
+        )) {
+        return 0;
+    }
+    if (path_exists("/etc/init.d/flexisipsh")
+        && !copy_binary_file(
+            "/etc/init.d/flexisipsh",
+            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh",
+            0700
+        )) {
+        return 0;
+    }
+    if (path_exists("/etc/init.d/flexisipsh_bak")
+        && !copy_binary_file(
+            "/etc/init.d/flexisipsh_bak",
+            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak",
+            0700
+        )) {
+        return 0;
+    }
+    if (!copy_binary_file("/dev/null", C300X_LEGACY_MQTT_BACKUP_MARKER, 0600)) {
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_restore_from_backup(int *changed)
+{
+    char current[256];
+    ssize_t len;
+
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (!legacy_mqtt_backup_available()) {
+        return 0;
+    }
+    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/etc/tcpdump2mqtt")
+        && !run_fixed_shell_command(
+            "rm -rf /etc/tcpdump2mqtt "
+            "&& cp -a " C300X_LEGACY_MQTT_BACKUP_DIR "/etc/tcpdump2mqtt /etc/"
+        )) {
+        return 0;
+    }
+    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py")
+        && !copy_binary_file(
+            C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py",
+            "/home/root/filter.py",
+            0700
+        )) {
+        return 0;
+    }
+    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh")
+        && !copy_binary_file(
+            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh",
+            "/etc/init.d/flexisipsh",
+            0700
+        )) {
+        return 0;
+    }
+    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak")
+        && !copy_binary_file(
+            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak",
+            "/etc/init.d/flexisipsh_bak",
+            0700
+        )) {
+        return 0;
+    }
+    len = readlink(C300X_LEGACY_MQTT_INIT_LINK, current, sizeof(current) - 1);
+    if (len >= 0) {
+        current[len] = '\0';
+        if (strcmp(current, C300X_LEGACY_MQTT_INIT_TARGET) == 0) {
+            if (changed != NULL) {
+                *changed = 1;
+            }
+            return 1;
+        }
+        if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+            return 0;
+        }
+    } else if (errno != ENOENT) {
+        return 0;
+    }
+    if (symlink(C300X_LEGACY_MQTT_INIT_TARGET, C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_remove_patch(int *changed)
+{
+    int had_legacy_patch = legacy_mqtt_installed();
+    int had_tcpdump2mqtt = path_exists(C300X_LEGACY_MQTT_DIR);
+
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (!legacy_mqtt_backup_if_needed(changed)) {
+        return 0;
+    }
+    if (!had_legacy_patch) {
+        return 1;
+    }
+    if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0 && errno != ENOENT) {
+        return 0;
+    }
+    if (path_exists("/etc/init.d/flexisipsh_bak")
+        && !copy_binary_file("/etc/init.d/flexisipsh_bak", "/etc/init.d/flexisipsh", 0700)) {
+        return 0;
+    } else if (!path_exists("/etc/init.d/flexisipsh_bak")
+        && path_exists("/etc/init.d/flexisipsh")
+        && !run_fixed_shell_command(
+            "sed '/\\/tmp\\/flexisip_restarted/d' /etc/init.d/flexisipsh >/tmp/c300x-flexisipsh "
+            "&& cp /tmp/c300x-flexisipsh /etc/init.d/flexisipsh "
+            "&& chmod 700 /etc/init.d/flexisipsh "
+            "&& rm -f /tmp/c300x-flexisipsh"
+        )) {
+        return 0;
+    }
+    (void)unlink("/etc/init.d/flexisipsh_bak");
+    if (!remove_tree(C300X_LEGACY_MQTT_DIR)) {
+        return 0;
+    }
+    if ((had_tcpdump2mqtt || path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py"))
+        && unlink("/home/root/filter.py") != 0 && errno != ENOENT) {
+        return 0;
+    }
+    if (changed != NULL && had_legacy_patch) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static void handle_legacy_mqtt_status(
+    int client_fd,
+    const struct c300x_config *config
+)
+{
+    char body[512];
+
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\"}\n",
+        legacy_mqtt_installed() ? "true" : "false",
+        legacy_mqtt_startup_enabled() ? "true" : "false",
+        legacy_mqtt_running() ? "true" : "false",
+        legacy_mqtt_backup_available() ? "true" : "false",
+        (config != NULL && config->mqtt_enabled) ? "true" : "false",
+        C300X_LEGACY_MQTT_SCRIPT,
+        C300X_LEGACY_MQTT_INIT_LINK
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_legacy_mqtt_post(
+    int client_fd,
+    struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    int enabled = 0;
+    int changed = 0;
+    int native_config_changed = 0;
+    int should_start_legacy = 0;
+    int should_stop_legacy = 0;
+    char error[C300X_MAX_ERROR_LEN];
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    if (!json_bool_field(request->body, "enabled", &enabled)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"enabled_required\"}\n");
+        return;
+    }
+    if (enabled && !legacy_mqtt_backup_available()) {
+        send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"legacy_mqtt_backup_missing\"}\n");
+        return;
+    }
+    if (enabled && config->mqtt_enabled) {
+        struct c300x_config updated = *config;
+        updated.mqtt_enabled = 0;
+        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &native_config_changed)) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            char body[256];
+            json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 500, "Internal Server Error", body);
+            return;
+        }
+        *config = updated;
+        if (runtime != NULL) {
+            c300x_mqtt_close(&runtime->mqtt);
+        }
+        if (native_config_changed) {
+            record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
+        }
+    }
+    firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (enabled) {
+        if (!legacy_mqtt_restore_from_backup(&changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_restore_failed\"}\n");
+            return;
+        }
+        should_start_legacy = 1;
+    } else {
+        if (!legacy_mqtt_remove_patch(&changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            return;
+        }
+        should_stop_legacy = 1;
+    }
+    firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+    if (should_stop_legacy) {
+        legacy_mqtt_stop_processes();
+    }
+    if (should_start_legacy) {
+        (void)run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
+    }
+    if (changed) {
+        record_agent_write(config, runtime, "legacy_mqtt", enabled ? "restore" : "remove");
+    }
+    handle_legacy_mqtt_status(client_fd, config);
+}
+
+static void handle_mqtt_migrate_legacy_post(
+    int client_fd,
+    struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct c300x_config *updated;
+    char error[C300X_MAX_ERROR_LEN];
+    const char *validation_error = NULL;
+    char validation_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+    char body[1024];
+    int legacy_was_installed;
+    int legacy_was_enabled;
+    int legacy_was_running;
+    int legacy_was_active;
+    int imported_config = 0;
+    int legacy_changed = 0;
+    int config_changed = 0;
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    if (!confirm_matches(request, "migrate_legacy_mqtt")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    updated = malloc(sizeof(*updated));
+    if (updated == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        return;
+    }
+    *updated = *config;
+
+    legacy_was_installed = legacy_mqtt_installed();
+    legacy_was_enabled = legacy_mqtt_startup_enabled();
+    legacy_was_running = legacy_mqtt_running();
+    legacy_was_active = legacy_was_enabled || legacy_was_running;
+
+    if (legacy_was_active) {
+        if (!legacy_mqtt_import_config(updated, &imported_config)) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_import_failed\"}\n");
+            free(updated);
+            return;
+        }
+        if (updated->mqtt_host[0] != '\0') {
+            updated->mqtt_enabled = 1;
+        }
+    }
+
+    if (!mqtt_runtime_config_is_valid(updated, &validation_error)) {
+        json_string(validation_error, validation_error_json, sizeof(validation_error_json));
+        snprintf(body, sizeof(body), "{\"ok\":false,\"error\":%s}\n", validation_error_json);
+        send_json(client_fd, 400, "Bad Request", body);
+        free(updated);
+        return;
+    }
+
+    if (!c300x_config_persisted_equal(config, updated)) {
+        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &config_changed)) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 500, "Internal Server Error", body);
+            free(updated);
+            return;
+        }
+        *config = *updated;
+        if (runtime != NULL) {
+            c300x_mqtt_close(&runtime->mqtt);
+            c300x_mqtt_reset_retry(&runtime->mqtt);
+        }
+    }
+
+    if (legacy_was_installed && legacy_was_active) {
+        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        if (!legacy_mqtt_remove_patch(&legacy_changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            free(updated);
+            return;
+        }
+        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        legacy_mqtt_stop_processes();
+    }
+
+    if (legacy_changed) {
+        record_agent_write(config, runtime, "legacy_mqtt", "migrate_remove");
+    }
+    if (config_changed) {
+        record_agent_write(config, runtime, "config", "mqtt_migrated_from_legacy");
+    }
+
+    snprintf(
+        body,
+        sizeof(body),
+        "{"
+        "\"ok\":true,"
+        "\"available\":true,"
+        "\"migrated\":%s,"
+        "\"legacy_was_installed\":%s,"
+        "\"legacy_was_enabled\":%s,"
+        "\"legacy_was_running\":%s,"
+        "\"legacy_removed\":%s,"
+        "\"legacy_backup_available\":%s,"
+        "\"imported_config\":%s,"
+        "\"native_enabled\":%s,"
+        "\"native_configured\":%s"
+        "}\n",
+        (legacy_changed || config_changed) ? "true" : "false",
+        legacy_was_installed ? "true" : "false",
+        legacy_was_enabled ? "true" : "false",
+        legacy_was_running ? "true" : "false",
+        !legacy_mqtt_installed() ? "true" : "false",
+        legacy_mqtt_backup_available() ? "true" : "false",
+        imported_config ? "true" : "false",
+        config->mqtt_enabled ? "true" : "false",
+        config->mqtt_host[0] != '\0' ? "true" : "false"
+    );
+    send_json(client_fd, 200, "OK", body);
+    free(updated);
+}
+
+static int maybe_json_mqtt_string(
+    const char *body,
+    const char *field,
+    char *out,
+    size_t out_len
+)
+{
+    char pattern[64];
+    const char *found;
+    const char *ptr;
+    size_t written = 0;
+
+    if (out_len == 0) {
+        return -1;
+    }
+    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
+    found = strstr(body, pattern);
+    if (found == NULL) {
+        return 0;
+    }
+    ptr = strchr(found + strlen(pattern), ':');
+    if (ptr == NULL) {
+        return -1;
+    }
+    ptr++;
+    while (*ptr != '\0' && isspace((unsigned char)*ptr)) {
+        ptr++;
+    }
+    if (*ptr != '"') {
+        return -1;
+    }
+    ptr++;
+    while (*ptr != '\0' && *ptr != '"') {
+        char ch = *ptr++;
+        if (ch == '\\' && *ptr != '\0') {
+            ch = *ptr++;
+        }
+        if (written + 1 >= out_len) {
+            return -1;
+        }
+        out[written++] = ch;
+    }
+    if (*ptr != '"') {
+        return -1;
+    }
+    out[written] = '\0';
+    return 1;
+}
+
+static void handle_mqtt_post(
+    int client_fd,
+    struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct c300x_config updated = *config;
+    char error[C300X_MAX_ERROR_LEN];
+    const char *validation_error = NULL;
+    char validation_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+    char body[2048];
+    int value = 0;
+    int port_result;
+    int legacy_changed = 0;
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    if (json_bool_field(request->body, "enabled", &value) || json_bool_field(request->body, "mqttEnabled", &value) || json_bool_field(request->body, "mqtt_enabled", &value)) {
+        updated.mqtt_enabled = value;
+    }
+    if (
+        maybe_json_mqtt_string(request->body, "host", updated.mqtt_host, sizeof(updated.mqtt_host)) < 0
+        || maybe_json_mqtt_string(request->body, "username", updated.mqtt_username, sizeof(updated.mqtt_username)) < 0
+        || maybe_json_mqtt_string(request->body, "password", updated.mqtt_password, sizeof(updated.mqtt_password)) < 0
+        || maybe_json_mqtt_string(request->body, "clientId", updated.mqtt_client_id, sizeof(updated.mqtt_client_id)) < 0
+        || maybe_json_mqtt_string(request->body, "client_id", updated.mqtt_client_id, sizeof(updated.mqtt_client_id)) < 0
+        || maybe_json_mqtt_string(request->body, "commandHost", updated.mqtt_command_host, sizeof(updated.mqtt_command_host)) < 0
+        || maybe_json_mqtt_string(request->body, "command_host", updated.mqtt_command_host, sizeof(updated.mqtt_command_host)) < 0
+        || maybe_json_mqtt_string(request->body, "commandTopic", updated.mqtt_command_topic, sizeof(updated.mqtt_command_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "eventTopic", updated.mqtt_event_topic, sizeof(updated.mqtt_event_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "jsonEventTopic", updated.mqtt_json_event_topic, sizeof(updated.mqtt_json_event_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "statusTopic", updated.mqtt_status_topic, sizeof(updated.mqtt_status_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "availabilityTopic", updated.mqtt_availability_topic, sizeof(updated.mqtt_availability_topic)) < 0
+    ) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_string\"}\n");
+        return;
+    }
+    port_result = json_optional_port(request->body, "port", &updated.mqtt_port);
+    if (port_result < 0) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_port\"}\n");
+        return;
+    }
+    port_result = json_optional_port(request->body, "commandPort", &updated.mqtt_command_port);
+    if (port_result == 0) {
+        port_result = json_optional_port(request->body, "command_port", &updated.mqtt_command_port);
+    }
+    if (port_result < 0) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_command_port\"}\n");
+        return;
+    }
+    if (json_int_field(request->body, "keepaliveSeconds", &value) || json_int_field(request->body, "keepalive_seconds", &value)) {
+        updated.mqtt_keepalive_seconds = value;
+    }
+    if (json_int_field(request->body, "reconnectInitialSeconds", &value) || json_int_field(request->body, "reconnect_initial_seconds", &value)) {
+        updated.mqtt_reconnect_initial_seconds = value;
+    }
+    if (json_int_field(request->body, "reconnectMaxSeconds", &value) || json_int_field(request->body, "reconnect_max_seconds", &value)) {
+        updated.mqtt_reconnect_max_seconds = value;
+    }
+    if (!mqtt_runtime_config_is_valid(&updated, &validation_error)) {
+        json_string(validation_error, validation_error_json, sizeof(validation_error_json));
+        snprintf(body, sizeof(body), "{\"ok\":false,\"error\":%s}\n", validation_error_json);
+        send_json(client_fd, 400, "Bad Request", body);
+        return;
+    }
+    if (!c300x_config_persisted_equal(config, &updated)) {
+        int changed = 0;
+        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &changed)) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 500, "Internal Server Error", body);
+            return;
+        }
+        *config = updated;
+        c300x_mqtt_close(&runtime->mqtt);
+        c300x_mqtt_reset_retry(&runtime->mqtt);
+        if (changed) {
+            record_agent_write(config, runtime, "config", "mqtt");
+        }
+    }
+    if (updated.mqtt_enabled && legacy_mqtt_installed()) {
+        firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        if (!legacy_mqtt_remove_patch(&legacy_changed)) {
+            firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            return;
+        }
+        firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
+        legacy_mqtt_stop_processes();
+        if (legacy_changed) {
+            record_agent_write(config, runtime, "legacy_mqtt", "remove_for_native");
+        }
+    }
+    handle_mqtt_status(client_fd, config, runtime);
 }
 
 static void handle_subscription_delete(
@@ -3756,9 +5420,6 @@ static void dispatch_event(
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
     int written;
 
-    if (!has_matching_subscription(runtime, event_type)) {
-        return;
-    }
     utc_now(occurred_at, sizeof(occurred_at));
     json_string(event_type, event_type_json, sizeof(event_type_json));
     written = snprintf(
@@ -3773,6 +5434,10 @@ static void dispatch_event(
         data_json
     );
     if (written < 0 || (size_t)written >= sizeof(event_json)) {
+        return;
+    }
+    c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, data_json);
+    if (!has_matching_subscription(runtime, event_type)) {
         return;
     }
     record_recent_event(runtime, event_json);
@@ -3794,7 +5459,7 @@ static void dispatch_event(
         }
         subscription->last_ok = post_callback(config, subscription, event_json);
         if (subscription->last_ok) {
-            mark_home_assistant_seen(runtime, time(NULL));
+            mark_home_assistant_callback_seen(runtime, time(NULL));
         }
         snprintf(subscription->last_event_type, sizeof(subscription->last_event_type), "%s", event_type);
         utc_now(subscription->last_delivered_at, sizeof(subscription->last_delivered_at));
@@ -3876,6 +5541,15 @@ static int system_metrics_changed(
     ) {
         return 1;
     }
+    if (previous->has_memory != current->has_memory) {
+        return 1;
+    }
+    if (
+        current->has_memory
+        && metric_changed_points(previous->memory_usage_percent, current->memory_usage_percent, config->system_metrics_change_percent)
+    ) {
+        return 1;
+    }
     if (previous->has_temperature != current->has_temperature) {
         return 1;
     }
@@ -3892,6 +5566,89 @@ static int event_requests_metrics_refresh(const char *event_type)
 {
     return strcmp(event_type, "answering_machine.messages_changed") == 0
         || strcmp(event_type, "memos.changed") == 0;
+}
+
+static int mqtt_command_is_valid(const char *command)
+{
+    size_t len = strlen(command);
+
+    if (len < 4 || len >= C300X_MAX_FRAME_LEN || command[0] != '*') {
+        return 0;
+    }
+    if (command[len - 2] != '#' || command[len - 1] != '#') {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        if (!isdigit((unsigned char)command[index]) && command[index] != '*' && command[index] != '#') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int send_all_bytes(int fd, const char *payload, size_t payload_len)
+{
+    size_t sent = 0;
+
+    while (sent < payload_len) {
+        ssize_t written = send(fd, payload + sent, payload_len - sent, MSG_NOSIGNAL);
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written <= 0) {
+            return 0;
+        }
+        sent += (size_t)written;
+    }
+    return 1;
+}
+
+static int send_mqtt_command_to_device(const struct c300x_config *config, const char *command)
+{
+    char port_text[16];
+    struct addrinfo hints;
+    struct addrinfo *result = NULL;
+    struct addrinfo *item;
+    int fd = -1;
+    int ok = 0;
+
+    if (!mqtt_command_is_valid(command)) {
+        return 0;
+    }
+    snprintf(port_text, sizeof(port_text), "%u", config->mqtt_command_port);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(config->mqtt_command_host, port_text, &hints, &result) != 0) {
+        return 0;
+    }
+    for (item = result; item != NULL; item = item->ai_next) {
+        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+        set_socket_timeout(fd, config->openwebnet_timeout_ms);
+        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
+            ok = send_all_bytes(fd, command, strlen(command)) && send_all_bytes(fd, "\n", 1);
+            close(fd);
+            break;
+        }
+        close(fd);
+        fd = -1;
+    }
+    freeaddrinfo(result);
+    return ok;
+}
+
+static void handle_mqtt_commands(const struct c300x_config *config, struct agent_runtime *runtime)
+{
+    char command[C300X_MAX_FRAME_LEN];
+
+    while (c300x_mqtt_take_command(&runtime->mqtt, command, sizeof(command))) {
+        if (!send_mqtt_command_to_device(config, command)) {
+            fprintf(stderr, "mqtt: rejected or failed command\n");
+        }
+    }
 }
 
 static int local_network_online(void)
@@ -3981,8 +5738,8 @@ static void system_metrics_dispatch_now(
 )
 {
     struct system_metrics_sample sample;
-    char metrics_json[1024];
-    char data[1100];
+    char metrics_json[2048];
+    char data[2300];
 
     if (!system_metrics_watch_active(config, runtime)) {
         return;
@@ -4011,8 +5768,8 @@ static void system_metrics_dispatch_if_due(
 )
 {
     struct system_metrics_sample sample;
-    char metrics_json[1024];
-    char data[1100];
+    char metrics_json[2048];
+    char data[2300];
     int heartbeat_due;
     int changed;
 
@@ -4565,9 +6322,22 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
     char stair_address[128];
     char lock_id[128];
     char lock_name[384];
+    char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
+    char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
+    char bundle_agent_version[C300X_MAX_VERSION_LEN];
+    char bundle_api_version[16];
     int maintenance_supported = maintenance_auth_available(config);
 
     c300x_mdns_device_id(device_id, sizeof(device_id));
+    (void)read_agent_bundle_metadata(
+        config,
+        bundle_hash,
+        sizeof(bundle_hash),
+        bundle_agent_version,
+        sizeof(bundle_agent_version),
+        bundle_api_version,
+        sizeof(bundle_api_version)
+    );
     json_escape_string(device_id, device_id_json, sizeof(device_id_json));
     json_escape_string(config->video_rtsp_video_path, video_path, sizeof(video_path));
     json_escape_string(config->video_rtsp_path, audio_path, sizeof(audio_path));
@@ -4577,12 +6347,13 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
     json_escape_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
     json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
     json_escape_string(config->lock_name, lock_name, sizeof(lock_name));
+    json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
     snprintf(
         body,
         sizeof(body),
         "{"
         "\"api_version\":\"1\","
-        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\"},"
+        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s},"
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
@@ -4594,14 +6365,17 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"in-house-only\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
         "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s},"
-        "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
-        "\"diagnostics\":{\"supported\":true,\"writes\":true},"
+        "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"memory\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
+        "\"mqtt\":{\"supported\":true,\"enabled\":%s,\"configured\":%s},"
+        "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
         "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
-        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_restore\":%s},"
+        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_restore\":%s},"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
         "}"
         "}\n",
         C300X_NATIVE_AGENT_VERSION,
+        bundle_hash_json,
+        maintenance_supported ? "true" : "false",
         device_id_json,
         device_model,
         device_firmware,
@@ -4629,6 +6403,8 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         config->system_metrics_sample_interval_seconds,
         config->system_metrics_heartbeat_seconds,
         config->system_metrics_change_percent,
+        config->mqtt_enabled ? "true" : "false",
+        config->mqtt_host[0] != '\0' ? "true" : "false",
         config->api_no_auth ? "true" : "false",
         config->api_token[0] != '\0' ? "true" : "false",
         config->maintenance_admin_token[0] != '\0' ? "true" : "false",
@@ -4638,6 +6414,13 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_reboot_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_agent_remove_enabled) ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
         (maintenance_supported && config->maintenance_gui_reload_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
@@ -4716,7 +6499,8 @@ static void handle_doorbell_video_get(
     struct agent_runtime *runtime
 )
 {
-    char body[12288];
+    enum { VIDEO_STATUS_BODY_LEN = 12288 };
+    char *body = malloc(VIDEO_STATUS_BODY_LEN);
     struct c300x_video_status video_status;
     int running = 0;
     int call_active = 0;
@@ -4724,6 +6508,11 @@ static void handle_doorbell_video_get(
     int media_starting = 0;
     int stream_audio = 0;
     int talkback_running = 0;
+    int bridge_running = 0;
+    int bridge_media_active = 0;
+    int bridge_stop_in_progress = 0;
+    int bridge_open_fds = 0;
+    int bridge_active_threads = 0;
     unsigned long long rtp_packets = 0;
     const char *last_rtp_at_json = "null";
     const char *last_media_started_at_json = "null";
@@ -4735,6 +6524,10 @@ static void handle_doorbell_video_get(
     char last_media_started_at_quoted[96];
     char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
 
+    if (body == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        return;
+    }
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
         running = video_status.running;
@@ -4743,6 +6536,11 @@ static void handle_doorbell_video_get(
         media_starting = video_status.media_starting;
         stream_audio = video_status.stream_audio;
         talkback_running = video_status.talkback_running;
+        bridge_running = video_status.bridge_running;
+        bridge_media_active = video_status.bridge_media_active;
+        bridge_stop_in_progress = video_status.bridge_stop_in_progress;
+        bridge_open_fds = video_status.bridge_open_fds;
+        bridge_active_threads = video_status.bridge_active_threads;
         rtp_packets = video_status.rtp_packets;
         last_rtp_at_json = json_string_or_null(
             video_status.last_rtp_at,
@@ -4765,7 +6563,7 @@ static void handle_doorbell_video_get(
     json_escape_string(config->video_rtsp_recorder_path, recorder_stream_path, sizeof(recorder_stream_path));
     snprintf(
         body,
-        sizeof(body),
+        VIDEO_STATUS_BODY_LEN,
         "{"
         "\"ok\":true,"
         "\"available\":%s,"
@@ -4777,6 +6575,11 @@ static void handle_doorbell_video_get(
         "\"bridge\":{"
         "\"enabled\":%s,"
         "\"running\":%s,"
+        "\"bridge_running\":%s,"
+        "\"media_active\":%s,"
+        "\"stop_in_progress\":%s,"
+        "\"open_fds\":%d,"
+        "\"active_threads\":%d,"
         "\"call_active\":%s,"
         "\"clients\":%d,"
         "\"media_starting\":%s,"
@@ -4804,6 +6607,11 @@ static void handle_doorbell_video_get(
         recorder_stream_path,
         config->video_enabled ? "true" : "false",
         running ? "true" : "false",
+        bridge_running ? "true" : "false",
+        bridge_media_active ? "true" : "false",
+        bridge_stop_in_progress ? "true" : "false",
+        bridge_open_fds,
+        bridge_active_threads,
         call_active ? "true" : "false",
         clients,
         media_starting ? "true" : "false",
@@ -4822,6 +6630,7 @@ static void handle_doorbell_video_get(
         C300X_TALKBACK_CODEC
     );
     send_json(client_fd, 200, "OK", body);
+    free(body);
 }
 
 static void handle_doorbell_video_activate(
@@ -4960,6 +6769,67 @@ static int read_cpu_jiffies(unsigned long long *total, unsigned long long *idle)
     return *total > 0;
 }
 
+static int read_memory_metrics(
+    long *total_kb,
+    long *available_kb,
+    long *used_kb,
+    double *usage_percent
+)
+{
+    FILE *file = fopen("/proc/meminfo", "r");
+    char line[160];
+    long total = -1;
+    long available = -1;
+    long free_kb = 0;
+    long buffers = 0;
+    long cached = 0;
+    long reclaimable = 0;
+
+    if (file == NULL) {
+        return 0;
+    }
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char key[64];
+        char unit[16];
+        long value;
+
+        if (sscanf(line, "%63s %ld %15s", key, &value, unit) < 2) {
+            continue;
+        }
+        if (strcmp(key, "MemTotal:") == 0) {
+            total = value;
+        } else if (strcmp(key, "MemAvailable:") == 0) {
+            available = value;
+        } else if (strcmp(key, "MemFree:") == 0) {
+            free_kb = value;
+        } else if (strcmp(key, "Buffers:") == 0) {
+            buffers = value;
+        } else if (strcmp(key, "Cached:") == 0) {
+            cached = value;
+        } else if (strcmp(key, "SReclaimable:") == 0) {
+            reclaimable = value;
+        }
+    }
+    fclose(file);
+    if (total <= 0) {
+        return 0;
+    }
+    if (available < 0) {
+        available = free_kb + buffers + cached + reclaimable;
+    }
+    if (available < 0) {
+        available = 0;
+    }
+    if (available > total) {
+        available = total;
+    }
+    *total_kb = total;
+    *available_kb = available;
+    *used_kb = total - available;
+    *usage_percent = ((double)*used_kb / (double)total) * 100.0;
+    return 1;
+}
+
 static double double_abs(double value)
 {
     return value < 0.0 ? -value : value;
@@ -5034,6 +6904,14 @@ static int read_system_metrics_sample(
     sample->load_1m_percent = load_percent(loads[0], sample->cpu_count);
     sample->load_5m_percent = load_percent(loads[1], sample->cpu_count);
     sample->load_15m_percent = load_percent(loads[2], sample->cpu_count);
+    if (read_memory_metrics(
+        &sample->memory_total_kb,
+        &sample->memory_available_kb,
+        &sample->memory_used_kb,
+        &sample->memory_usage_percent
+    )) {
+        sample->has_memory = 1;
+    }
     temperature = read_temperature_c(&temperature_source);
     if (temperature_source != NULL) {
         sample->has_temperature = 1;
@@ -5052,6 +6930,8 @@ static int system_metrics_json(
 {
     const char *prefix = include_ok ? "{\"ok\":true," : "{";
     char cpu_usage_json[32];
+    char memory_json[192];
+    char temperature_json[768];
     int written;
 
     if (sample->has_cpu_usage) {
@@ -5059,46 +6939,61 @@ static int system_metrics_json(
     } else {
         snprintf(cpu_usage_json, sizeof(cpu_usage_json), "null");
     }
-    if (!sample->has_temperature) {
-        written = snprintf(
-            body,
-            body_len,
-            "%s\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,\"temperature_c\":null,\"temperature_source\":null}",
-            prefix,
-            sample->cpu_count,
-            cpu_usage_json,
-            sample->load_1m,
-            sample->load_5m,
-            sample->load_15m,
-            sample->load_1m_percent,
-            sample->load_5m_percent,
-            sample->load_15m_percent
+    if (sample->has_memory) {
+        snprintf(
+            memory_json,
+            sizeof(memory_json),
+            "\"memory_total_kb\":%ld,\"memory_available_kb\":%ld,\"memory_used_kb\":%ld,\"memory_usage_percent\":%.1f",
+            sample->memory_total_kb,
+            sample->memory_available_kb,
+            sample->memory_used_kb,
+            sample->memory_usage_percent
         );
     } else {
-        written = snprintf(
-            body,
-            body_len,
-            "%s\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,\"temperature_c\":%.1f,\"temperature_source\":\"%s\"}",
-            prefix,
-            sample->cpu_count,
-            cpu_usage_json,
-            sample->load_1m,
-            sample->load_5m,
-            sample->load_15m,
-            sample->load_1m_percent,
-            sample->load_5m_percent,
-            sample->load_15m_percent,
+        snprintf(
+            memory_json,
+            sizeof(memory_json),
+            "\"memory_total_kb\":null,\"memory_available_kb\":null,\"memory_used_kb\":null,\"memory_usage_percent\":null"
+        );
+    }
+    if (sample->has_temperature) {
+        snprintf(
+            temperature_json,
+            sizeof(temperature_json),
+            "\"temperature_c\":%.1f,\"temperature_source\":\"%s\"",
             sample->temperature_c,
             sample->temperature_source
         );
+    } else {
+        snprintf(
+            temperature_json,
+            sizeof(temperature_json),
+            "\"temperature_c\":null,\"temperature_source\":null"
+        );
     }
+    written = snprintf(
+        body,
+        body_len,
+        "%s\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,%s,%s}",
+        prefix,
+        sample->cpu_count,
+        cpu_usage_json,
+        sample->load_1m,
+        sample->load_5m,
+        sample->load_15m,
+        sample->load_1m_percent,
+        sample->load_5m_percent,
+        sample->load_15m_percent,
+        memory_json,
+        temperature_json
+    );
     return written > 0 && (size_t)written < body_len;
 }
 
 static void handle_system_metrics(int client_fd, const struct agent_runtime *runtime)
 {
     struct system_metrics_sample sample;
-    char body[1024];
+    char body[2048];
 
     read_system_metrics_sample(
         &sample,
@@ -5438,45 +7333,52 @@ static void handle_answering_get(int client_fd, const struct c300x_config *confi
 
 static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime)
 {
-    struct voicemail_snapshot snapshot;
-    char body[32768];
+    struct voicemail_snapshot *snapshot = calloc(1, sizeof(*snapshot));
+    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     size_t used = 0;
     char newest_at[C300X_MAX_VOICEMAIL_DATE_LEN * 2];
     char reason[C300X_MAX_VOICEMAIL_REASON_LEN * 2];
     const char *newest_at_json = "null";
     const char *reason_json = "null";
 
+    if (snapshot == NULL || body == NULL) {
+        free(snapshot);
+        free(body);
+        return;
+    }
     voicemail_refresh_watches(&runtime->voicemail);
-    voicemail_read_snapshot(&runtime->voicemail, &snapshot);
-    if (snapshot.newest_at[0] != '\0') {
-        json_escape_string(snapshot.newest_at, newest_at, sizeof(newest_at));
+    voicemail_read_snapshot(&runtime->voicemail, snapshot);
+    if (snapshot->newest_at[0] != '\0') {
+        json_escape_string(snapshot->newest_at, newest_at, sizeof(newest_at));
         newest_at_json = newest_at;
     }
-    if (snapshot.reason[0] != '\0') {
-        json_escape_string(snapshot.reason, reason, sizeof(reason));
+    if (snapshot->reason[0] != '\0') {
+        json_escape_string(snapshot->reason, reason, sizeof(reason));
         reason_json = reason;
     }
     if (!appendf(
         body,
-        sizeof(body),
+        C300X_LARGE_RESPONSE_SIZE,
         &used,
         "{\"ok\":true,\"available\":%s,\"reason\":%s%s%s,\"total\":%d,\"unread\":%d,\"read\":%d,\"newest_at\":%s%s%s,\"messages\":[",
-        snapshot.available ? "true" : "false",
+        snapshot->available ? "true" : "false",
         reason_json == reason ? "\"" : "",
         reason_json,
         reason_json == reason ? "\"" : "",
-        snapshot.total,
-        snapshot.unread,
-        snapshot.read,
+        snapshot->total,
+        snapshot->unread,
+        snapshot->read,
         newest_at_json == newest_at ? "\"" : "",
         newest_at_json,
         newest_at_json == newest_at ? "\"" : ""
     )) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(snapshot);
+        free(body);
         return;
     }
-    for (int index = 0; index < snapshot.message_count; index++) {
-        const struct voicemail_message *message = &snapshot.messages[index];
+    for (int index = 0; index < snapshot->message_count; index++) {
+        const struct voicemail_message *message = &snapshot->messages[index];
         char message_id[C300X_MAX_VOICEMAIL_ID_LEN * 2];
         char date[C300X_MAX_VOICEMAIL_DATE_LEN * 2];
         char iso_time[80];
@@ -5518,7 +7420,7 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         }
         if (!appendf(
             body,
-            sizeof(body),
+            C300X_LARGE_RESPONSE_SIZE,
             &used,
             "%s{\"id\":\"%s\",\"read\":%s,\"date\":%s%s%s,\"unix_time\":%s,\"iso_time\":%s%s%s,\"has_thumbnail\":%s,\"has_video\":%s,\"media_mime_type\":%s%s%s,\"media_size\":%s}",
             index == 0 ? "" : ",",
@@ -5539,14 +7441,20 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
             media_size_json
         )) {
             send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            free(snapshot);
+            free(body);
             return;
         }
     }
-    if (!appendf(body, sizeof(body), &used, "]}\n")) {
+    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(snapshot);
+        free(body);
         return;
     }
     send_json(client_fd, 200, "OK", body);
+    free(snapshot);
+    free(body);
 }
 
 static void handle_answering_message_video_get(
@@ -5748,47 +7656,62 @@ static int append_memo_entries(
 
 static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
 {
-    struct voicemail_snapshot text;
-    struct voicemail_snapshot voice;
-    char body[32768];
+    struct voicemail_snapshot *text = calloc(1, sizeof(*text));
+    struct voicemail_snapshot *voice = calloc(1, sizeof(*voice));
+    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     size_t used = 0;
     char newest_at_escaped[C300X_MAX_VOICEMAIL_DATE_LEN * 2];
     const char *newest_at_json = "null";
     const char *newest_at_value;
     int first = 1;
 
-    message_collection_read_snapshot(&runtime->text_memos, "text", &text);
-    message_collection_read_snapshot(&runtime->voice_memos, "voice", &voice);
-    newest_at_value = newest_memo_time(&text, &voice);
+    if (text == NULL || voice == NULL || body == NULL) {
+        free(text);
+        free(voice);
+        free(body);
+        return;
+    }
+    message_collection_read_snapshot(&runtime->text_memos, "text", text);
+    message_collection_read_snapshot(&runtime->voice_memos, "voice", voice);
+    newest_at_value = newest_memo_time(text, voice);
     if (newest_at_value[0] != '\0') {
         json_escape_string(newest_at_value, newest_at_escaped, sizeof(newest_at_escaped));
         newest_at_json = newest_at_escaped;
     }
     if (!appendf(
         body,
-        sizeof(body),
+        C300X_LARGE_RESPONSE_SIZE,
         &used,
         "{\"ok\":true,\"available\":%s,\"total\":%d,\"text_total\":%d,\"voice_total\":%d,\"unread\":%d,\"read\":%d,\"newest_at\":%s%s%s,\"memos\":[",
-        (text.available || voice.available) ? "true" : "false",
-        text.total + voice.total,
-        text.total,
-        voice.total,
-        text.unread + voice.unread,
-        text.read + voice.read,
+        (text->available || voice->available) ? "true" : "false",
+        text->total + voice->total,
+        text->total,
+        voice->total,
+        text->unread + voice->unread,
+        text->read + voice->read,
         newest_at_json == newest_at_escaped ? "\"" : "",
         newest_at_json,
         newest_at_json == newest_at_escaped ? "\"" : ""
     )) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(text);
+        free(voice);
+        free(body);
         return;
     }
-    if (!append_memo_entries(body, sizeof(body), &used, &text, "text", &first)
-        || !append_memo_entries(body, sizeof(body), &used, &voice, "voice", &first)
-        || !appendf(body, sizeof(body), &used, "]}\n")) {
+    if (!append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, text, "text", &first)
+        || !append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, voice, "voice", &first)
+        || !appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(text);
+        free(voice);
+        free(body);
         return;
     }
     send_json(client_fd, 200, "OK", body);
+    free(text);
+    free(voice);
+    free(body);
 }
 
 static void handle_memo_audio_get(
@@ -6429,24 +8352,32 @@ static int firewall_remove_all_managed_blocks(
     size_t out_len
 )
 {
-    char without_ipv4[C300X_FIREWALL_BUFFER_SIZE];
+    char *without_ipv4 = calloc(1, C300X_FIREWALL_BUFFER_SIZE);
+    int ok;
 
-    if (!firewall_remove_block_for(
+    if (without_ipv4 == NULL) {
+        return 0;
+    }
+    ok = firewall_remove_block_for(
         content,
         C300X_FIREWALL_BEGIN,
         C300X_FIREWALL_END,
         without_ipv4,
-        sizeof(without_ipv4)
-    )) {
+        C300X_FIREWALL_BUFFER_SIZE
+    );
+    if (!ok) {
+        free(without_ipv4);
         return 0;
     }
-    return firewall_remove_block_for(
+    ok = firewall_remove_block_for(
         without_ipv4,
         C300X_IPV6_FIREWALL_BEGIN,
         C300X_IPV6_FIREWALL_END,
         out,
         out_len
     );
+    free(without_ipv4);
+    return ok;
 }
 
 static int firewall_build_managed_content(
@@ -6615,19 +8546,25 @@ static void handle_firewall_status(
     const struct request *request
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
+    char *current = allocate_response_buffer(client_fd, C300X_FIREWALL_BUFFER_SIZE);
     int exists = 0;
 
+    if (current == NULL) {
+        return;
+    }
     if (!maintenance_authorized(config, request)) {
         send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        free(current);
         return;
     }
     if (!maintenance_firewall_supported(config)) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
+        free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_firewall_path, current, sizeof(current), &exists)) {
+    if (!firewall_read_file(config->maintenance_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
+        free(current);
         return;
     }
     send_firewall_status_body(
@@ -6638,6 +8575,7 @@ static void handle_firewall_status(
         exists,
         -1
     );
+    free(current);
 }
 
 static int firewall_backup_original_if_needed(
@@ -6669,35 +8607,41 @@ static int firewall_apply(
     size_t state_len
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
-    char base[C300X_FIREWALL_BUFFER_SIZE];
-    char original_backup[C300X_FIREWALL_BUFFER_SIZE];
-    char desired[C300X_FIREWALL_BUFFER_SIZE];
+    struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
     int target_written = 0;
 
-    if (!firewall_read_file(config->maintenance_firewall_path, current, sizeof(current), &current_exists)) {
+    if (workspace == NULL) {
+        return 0;
+    }
+    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+        free(workspace);
         return 0;
     }
     if (!current_exists) {
         snprintf(state, state_len, "%s", "missing");
+        free(workspace);
         return 0;
     }
-    if (firewall_block_bounds(current, NULL, NULL) < 0) {
+    if (firewall_block_bounds(workspace->current, NULL, NULL) < 0) {
         snprintf(state, state_len, "%s", "partial");
+        free(workspace);
         return 0;
     }
-    if (!firewall_remove_block(current, base, sizeof(base))) {
+    if (!firewall_remove_block(workspace->current, workspace->base, sizeof(workspace->base))) {
+        free(workspace);
         return 0;
     }
-    if (!firewall_remove_all_managed_blocks(current, original_backup, sizeof(original_backup))) {
+    if (!firewall_remove_all_managed_blocks(workspace->current, workspace->original_backup, sizeof(workspace->original_backup))) {
+        free(workspace);
         return 0;
     }
-    if (!firewall_build_managed_content(config, base, desired, sizeof(desired))) {
+    if (!firewall_build_managed_content(config, workspace->base, workspace->desired, sizeof(workspace->desired))) {
+        free(workspace);
         return 0;
     }
-    if (strcmp(current, desired) == 0 && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -6705,16 +8649,19 @@ static int firewall_apply(
             *changed_files = 0;
         }
         snprintf(state, state_len, "%s", "patched");
+        free(workspace);
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_firewall_backup_path, original_backup, &backup_written)) {
+    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_firewall_backup_path, workspace->original_backup, &backup_written)) {
         firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+        free(workspace);
         return 0;
     }
-    if (strcmp(current, desired) != 0) {
-        if (!firewall_write_file(config->maintenance_firewall_path, desired, 0755)) {
+    if (strcmp(workspace->current, workspace->desired) != 0) {
+        if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
             firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+            free(workspace);
             return 0;
         }
         target_written = 1;
@@ -6727,6 +8674,7 @@ static int firewall_apply(
         *changed_files = backup_written + target_written;
     }
     snprintf(state, state_len, "%s", "patched");
+    free(workspace);
     return 1;
 }
 
@@ -6738,61 +8686,71 @@ static int firewall_restore(
     size_t state_len
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
-    char desired[C300X_FIREWALL_BUFFER_SIZE];
+    struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int target_written = 0;
 
-    if (!firewall_read_file(config->maintenance_firewall_path, current, sizeof(current), &current_exists)) {
+    if (workspace == NULL) {
         return 0;
     }
-    if (firewall_block_bounds(current, NULL, NULL) < 0) {
+    if (!firewall_read_file(config->maintenance_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+        free(workspace);
+        return 0;
+    }
+    if (firewall_block_bounds(workspace->current, NULL, NULL) < 0) {
         snprintf(state, state_len, "%s", "partial");
+        free(workspace);
         return 0;
     }
-    if (!firewall_remove_block(current, desired, sizeof(desired))) {
+    if (!firewall_remove_block(workspace->current, workspace->desired, sizeof(workspace->desired))) {
+        free(workspace);
         return 0;
     }
-    if (desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(
             config->maintenance_firewall_backup_path,
-            desired,
-            sizeof(desired),
+            workspace->desired,
+            sizeof(workspace->desired),
             &backup_exists
         ) || !backup_exists) {
+            free(workspace);
             return 0;
         }
     }
-    if (strcmp(current, desired) == 0) {
+    if (strcmp(workspace->current, workspace->desired) == 0) {
         if (exists != NULL) {
             *exists = current_exists;
         }
         if (changed_files != NULL) {
             *changed_files = 0;
         }
-        snprintf(state, state_len, "%s", firewall_state_for_content(current, current_exists));
+        snprintf(state, state_len, "%s", firewall_state_for_content(workspace->current, current_exists));
+        free(workspace);
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_firewall_path);
-    if (desired[0] == '\0' && !firewall_backup_available(config->maintenance_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_firewall_backup_path)) {
         if (unlink(config->maintenance_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+            free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_firewall_path, desired, 0755)) {
+    } else if (!firewall_write_file(config->maintenance_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_firewall_path);
+        free(workspace);
         return 0;
     }
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_firewall_path);
     if (exists != NULL) {
-        *exists = desired[0] != '\0' || firewall_backup_available(config->maintenance_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
     }
-    snprintf(state, state_len, "%s", desired[0] == '\0' ? "missing" : "original");
+    snprintf(state, state_len, "%s", workspace->desired[0] == '\0' ? "missing" : "original");
+    free(workspace);
     return 1;
 }
 
@@ -6812,19 +8770,25 @@ static void handle_ipv6_firewall_status(
     const struct request *request
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
+    char *current = allocate_response_buffer(client_fd, C300X_FIREWALL_BUFFER_SIZE);
     int exists = 0;
 
+    if (current == NULL) {
+        return;
+    }
     if (!maintenance_authorized(config, request)) {
         send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        free(current);
         return;
     }
     if (!maintenance_ipv6_firewall_supported(config)) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
+        free(current);
         return;
     }
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, sizeof(current), &exists)) {
+    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"firewall_status_failed\"}\n");
+        free(current);
         return;
     }
     send_firewall_status_body(
@@ -6835,6 +8799,7 @@ static void handle_ipv6_firewall_status(
         exists,
         -1
     );
+    free(current);
 }
 
 static int ipv6_firewall_apply(
@@ -6845,41 +8810,47 @@ static int ipv6_firewall_apply(
     size_t state_len
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
-    char base[C300X_FIREWALL_BUFFER_SIZE];
-    char original_backup[C300X_FIREWALL_BUFFER_SIZE];
-    char desired[C300X_FIREWALL_BUFFER_SIZE];
+    struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int backup_written = 0;
     int target_written = 0;
 
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, sizeof(current), &current_exists)) {
+    if (workspace == NULL) {
+        return 0;
+    }
+    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+        free(workspace);
         return 0;
     }
     if (!current_exists) {
         snprintf(state, state_len, "%s", "missing");
+        free(workspace);
         return 0;
     }
-    if (firewall_block_bounds_for(current, C300X_IPV6_FIREWALL_BEGIN, C300X_IPV6_FIREWALL_END, NULL, NULL) < 0) {
+    if (firewall_block_bounds_for(workspace->current, C300X_IPV6_FIREWALL_BEGIN, C300X_IPV6_FIREWALL_END, NULL, NULL) < 0) {
         snprintf(state, state_len, "%s", "partial");
+        free(workspace);
         return 0;
     }
     if (!firewall_remove_block_for(
-        current,
+        workspace->current,
         C300X_IPV6_FIREWALL_BEGIN,
         C300X_IPV6_FIREWALL_END,
-        base,
-        sizeof(base)
+        workspace->base,
+        sizeof(workspace->base)
     )) {
+        free(workspace);
         return 0;
     }
-    if (!firewall_remove_all_managed_blocks(current, original_backup, sizeof(original_backup))) {
+    if (!firewall_remove_all_managed_blocks(workspace->current, workspace->original_backup, sizeof(workspace->original_backup))) {
+        free(workspace);
         return 0;
     }
-    if (!firewall_build_ipv6_managed_content(config, base, desired, sizeof(desired))) {
+    if (!firewall_build_ipv6_managed_content(config, workspace->base, workspace->desired, sizeof(workspace->desired))) {
+        free(workspace);
         return 0;
     }
-    if (strcmp(current, desired) == 0 && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (strcmp(workspace->current, workspace->desired) == 0 && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (exists != NULL) {
             *exists = current_exists;
         }
@@ -6887,16 +8858,19 @@ static int ipv6_firewall_apply(
             *changed_files = 0;
         }
         snprintf(state, state_len, "%s", "patched");
+        free(workspace);
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_ipv6_firewall_backup_path, original_backup, &backup_written)) {
+    if (current_exists && !firewall_backup_original_if_needed(config->maintenance_ipv6_firewall_backup_path, workspace->original_backup, &backup_written)) {
         firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+        free(workspace);
         return 0;
     }
-    if (strcmp(current, desired) != 0) {
-        if (!firewall_write_file(config->maintenance_ipv6_firewall_path, desired, 0755)) {
+    if (strcmp(workspace->current, workspace->desired) != 0) {
+        if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
             firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+            free(workspace);
             return 0;
         }
         target_written = 1;
@@ -6909,6 +8883,7 @@ static int ipv6_firewall_apply(
         *changed_files = backup_written + target_written;
     }
     snprintf(state, state_len, "%s", "patched");
+    free(workspace);
     return 1;
 }
 
@@ -6920,67 +8895,77 @@ static int ipv6_firewall_restore(
     size_t state_len
 )
 {
-    char current[C300X_FIREWALL_BUFFER_SIZE];
-    char desired[C300X_FIREWALL_BUFFER_SIZE];
+    struct firewall_workspace *workspace = calloc(1, sizeof(*workspace));
     int current_exists = 0;
     int target_written = 0;
 
-    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, current, sizeof(current), &current_exists)) {
+    if (workspace == NULL) {
         return 0;
     }
-    if (firewall_block_bounds_for(current, C300X_IPV6_FIREWALL_BEGIN, C300X_IPV6_FIREWALL_END, NULL, NULL) < 0) {
+    if (!firewall_read_file(config->maintenance_ipv6_firewall_path, workspace->current, sizeof(workspace->current), &current_exists)) {
+        free(workspace);
+        return 0;
+    }
+    if (firewall_block_bounds_for(workspace->current, C300X_IPV6_FIREWALL_BEGIN, C300X_IPV6_FIREWALL_END, NULL, NULL) < 0) {
         snprintf(state, state_len, "%s", "partial");
+        free(workspace);
         return 0;
     }
     if (!firewall_remove_block_for(
-        current,
+        workspace->current,
         C300X_IPV6_FIREWALL_BEGIN,
         C300X_IPV6_FIREWALL_END,
-        desired,
-        sizeof(desired)
+        workspace->desired,
+        sizeof(workspace->desired)
     )) {
+        free(workspace);
         return 0;
     }
-    if (desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         int backup_exists = 0;
         if (!firewall_read_file(
             config->maintenance_ipv6_firewall_backup_path,
-            desired,
-            sizeof(desired),
+            workspace->desired,
+            sizeof(workspace->desired),
             &backup_exists
         ) || !backup_exists) {
+            free(workspace);
             return 0;
         }
     }
-    if (strcmp(current, desired) == 0) {
+    if (strcmp(workspace->current, workspace->desired) == 0) {
         if (exists != NULL) {
             *exists = current_exists;
         }
         if (changed_files != NULL) {
             *changed_files = 0;
         }
-        snprintf(state, state_len, "%s", ipv6_firewall_state_for_content(current, current_exists));
+        snprintf(state, state_len, "%s", ipv6_firewall_state_for_content(workspace->current, current_exists));
+        free(workspace);
         return 1;
     }
     firewall_remount_rw_if_needed(config->maintenance_ipv6_firewall_path);
-    if (desired[0] == '\0' && !firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
+    if (workspace->desired[0] == '\0' && !firewall_backup_available(config->maintenance_ipv6_firewall_backup_path)) {
         if (unlink(config->maintenance_ipv6_firewall_path) != 0 && errno != ENOENT) {
             firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+            free(workspace);
             return 0;
         }
-    } else if (!firewall_write_file(config->maintenance_ipv6_firewall_path, desired, 0755)) {
+    } else if (!firewall_write_file(config->maintenance_ipv6_firewall_path, workspace->desired, 0755)) {
         firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
+        free(workspace);
         return 0;
     }
     target_written = 1;
     firewall_remount_ro_if_needed(config->maintenance_ipv6_firewall_path);
     if (exists != NULL) {
-        *exists = desired[0] != '\0' || firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
+        *exists = workspace->desired[0] != '\0' || firewall_backup_available(config->maintenance_ipv6_firewall_backup_path);
     }
     if (changed_files != NULL) {
         *changed_files = target_written;
     }
-    snprintf(state, state_len, "%s", desired[0] == '\0' ? "missing" : "original");
+    snprintf(state, state_len, "%s", workspace->desired[0] == '\0' ? "missing" : "original");
+    free(workspace);
     return 1;
 }
 
@@ -7360,6 +9345,650 @@ static void handle_remove_agent(
     send_json(client_fd, 202, "Accepted", "{\"ok\":true,\"action\":\"remove_agent\",\"scheduled\":true,\"ssh_kept_running\":true}\n");
 }
 
+static void handle_agent_update_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+)
+{
+    char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
+    char agent_version[C300X_MAX_VERSION_LEN];
+    char api_version[16];
+    char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
+    char agent_version_json[C300X_JSON_QUOTED_LEN(C300X_MAX_VERSION_LEN)];
+    char api_version_json[64];
+    char stage_dir[C300X_MAX_PATH_LEN];
+    int staged = 0;
+    char body[512];
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    (void)read_agent_bundle_metadata(
+        config,
+        bundle_hash,
+        sizeof(bundle_hash),
+        agent_version,
+        sizeof(agent_version),
+        api_version,
+        sizeof(api_version)
+    );
+    if (agent_update_stage_dir(config, stage_dir, sizeof(stage_dir))) {
+        staged = path_is_directory(stage_dir);
+    }
+    json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
+    json_string(agent_version, agent_version_json, sizeof(agent_version_json));
+    json_string(api_version, api_version_json, sizeof(api_version_json));
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"supported\":true,\"version\":\"%s\",\"api_version\":\"1\",\"installed_bundle_hash\":%s,\"installed_agent_version\":%s,\"installed_bundle_api_version\":%s,\"staged\":%s}\n",
+        C300X_NATIVE_AGENT_VERSION,
+        bundle_hash_json,
+        agent_version_json,
+        api_version_json,
+        staged ? "true" : "false"
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_agent_update_prepare(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
+    char agent_version[C300X_MAX_VERSION_LEN];
+    char stage_dir[C300X_MAX_PATH_LEN];
+    char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
+    char agent_version_json[C300X_JSON_QUOTED_LEN(C300X_MAX_VERSION_LEN)];
+    char body[384];
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    json_string_field(request->body, "bundle_hash", bundle_hash, sizeof(bundle_hash));
+    json_string_field(request->body, "agent_version", agent_version, sizeof(agent_version));
+    if (strncmp(bundle_hash, "sha256:", strlen("sha256:")) != 0 || agent_version[0] == '\0') {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_update_metadata\"}\n");
+        return;
+    }
+    if (!agent_update_stage_dir(config, stage_dir, sizeof(stage_dir))) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"invalid_agent_dir\"}\n");
+        return;
+    }
+    if (!remove_tree(stage_dir) || !mkdir_p(stage_dir, 0700)) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"stage_prepare_failed\"}\n");
+        return;
+    }
+    record_agent_write(config, runtime, "agent_update", "prepare");
+    json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
+    json_string(agent_version, agent_version_json, sizeof(agent_version_json));
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"prepared\":true,\"bundle_hash\":%s,\"agent_version\":%s}\n",
+        bundle_hash_json,
+        agent_version_json
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_agent_update_file(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct agent_update_file_workspace {
+        char bundle_path[C300X_MAX_PATH_LEN];
+        char stage_path[C300X_MAX_PATH_LEN];
+        char data_text[REQUEST_BUFFER_SIZE];
+        unsigned char decoded[REQUEST_BUFFER_SIZE];
+        char bundle_path_json[C300X_MAX_PATH_JSON_LEN];
+        char body[2048];
+    };
+    struct agent_update_file_workspace *workspace;
+    char sha256[65];
+    char mode_text[8];
+    size_t decoded_len = 0;
+    mode_t mode;
+    int offset = 0;
+    int final = 0;
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    workspace = calloc(1, sizeof(*workspace));
+    if (workspace == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        return;
+    }
+    json_string_field(request->body, "path", workspace->bundle_path, sizeof(workspace->bundle_path));
+    json_string_field(request->body, "sha256", sha256, sizeof(sha256));
+    json_string_field(request->body, "mode", mode_text, sizeof(mode_text));
+    json_string_field(request->body, "data", workspace->data_text, sizeof(workspace->data_text));
+    (void)json_bool_field(request->body, "final", &final);
+    if (
+        !json_int_field(request->body, "offset", &offset)
+        || !agent_update_stage_path(config, workspace->bundle_path, workspace->stage_path, sizeof(workspace->stage_path))
+        || !parse_file_mode(mode_text, 0600, &mode)
+    ) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_update_file\"}\n");
+        free(workspace);
+        return;
+    }
+    if (!base64_decode_bytes(workspace->data_text, workspace->decoded, sizeof(workspace->decoded), &decoded_len)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_update_data\"}\n");
+        free(workspace);
+        return;
+    }
+    if (!write_binary_chunk(workspace->stage_path, workspace->decoded, decoded_len, offset, mode)) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_file_write_failed\"}\n");
+        free(workspace);
+        return;
+    }
+    record_agent_write(config, runtime, "agent_update", "upload_chunk");
+    if (final && !sha256_hex_matches(workspace->stage_path, sha256)) {
+        (void)unlink(workspace->stage_path);
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"update_file_hash_mismatch\"}\n");
+        free(workspace);
+        return;
+    }
+    json_string(workspace->bundle_path, workspace->bundle_path_json, sizeof(workspace->bundle_path_json));
+    snprintf(
+        workspace->body,
+        sizeof(workspace->body),
+        "{\"ok\":true,\"path\":%s,\"offset\":%d,\"bytes\":%zu,\"final\":%s}\n",
+        workspace->bundle_path_json,
+        offset,
+        decoded_len,
+        final ? "true" : "false"
+    );
+    send_json(client_fd, 200, "OK", workspace->body);
+    free(workspace);
+}
+
+static int agent_update_manifest_sha_for_path(
+    const char *manifest,
+    const char *bundle_path,
+    char *sha256,
+    size_t sha256_len
+)
+{
+    const char *found;
+
+    if (sha256_len > 0) {
+        sha256[0] = '\0';
+    }
+    found = strstr(manifest, bundle_path);
+    if (found == NULL) {
+        return 0;
+    }
+    json_string_field(found, "sha256", sha256, sha256_len);
+    return sha256[0] != '\0';
+}
+
+static int apply_agent_update_file(
+    const struct c300x_config *config,
+    const char *manifest,
+    const char *bundle_path,
+    mode_t fallback_mode,
+    struct agent_update_change_summary *summary
+)
+{
+    char stage_path[C300X_MAX_PATH_LEN];
+    char target_path[C300X_MAX_PATH_LEN];
+    char sha256[65];
+    int changed = 0;
+
+    if (
+        !agent_update_stage_path(config, bundle_path, stage_path, sizeof(stage_path))
+        || !agent_update_target_path(config, bundle_path, target_path, sizeof(target_path))
+    ) {
+        return 0;
+    }
+    if (access(stage_path, F_OK) != 0) {
+        return 0;
+    }
+    if (
+        strcmp(bundle_path, "device_agent/bundle.json") != 0
+        && (
+            !agent_update_manifest_sha_for_path(manifest, bundle_path, sha256, sizeof(sha256))
+            || !sha256_hex_matches(stage_path, sha256)
+        )
+    ) {
+        return 0;
+    }
+    if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
+        if (!apply_agent_update_init_script(config, stage_path, &changed)) {
+            return 0;
+        }
+        if (changed && summary != NULL) {
+            summary->changed_files++;
+            summary->script_changed = 1;
+        }
+        return 1;
+    }
+    if (!copy_binary_file_if_changed(stage_path, target_path, fallback_mode, &changed)) {
+        return 0;
+    }
+    if (changed && summary != NULL) {
+        summary->changed_files++;
+        if (strcmp(bundle_path, "device_agent/armhf/c300x-agent-native") == 0) {
+            summary->runtime_changed = 1;
+        } else if (strcmp(bundle_path, "device_agent/scripts/qml_patch.sh") == 0) {
+            summary->script_changed = 1;
+            summary->qml_patch_changed = 1;
+        } else if (strcmp(bundle_path, "device_agent/scripts/remove_agent.sh") == 0) {
+            summary->script_changed = 1;
+        } else if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
+            summary->script_changed = 1;
+        } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
+            summary->manifest_changed = 1;
+        } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
+            summary->qml_patch_changed = 1;
+        }
+    }
+    return 1;
+}
+
+static int render_agent_init_script(
+    const struct c300x_config *config,
+    const char *source_path,
+    const char *rendered_path
+)
+{
+    struct render_init_workspace {
+        char source[8192];
+        char rendered[8192];
+    };
+    struct render_init_workspace *workspace = calloc(1, sizeof(*workspace));
+    char base[C300X_MAX_PATH_LEN];
+    const char *needle = "DEFAULT_AGENT_DIR=\"/home/bticino/cfg/extra/c300x-native-agent\"";
+    const char *found;
+    int truncated = 0;
+    size_t prefix_len;
+
+    if (workspace == NULL) {
+        return 0;
+    }
+    if (
+        !agent_base_dir(config, base, sizeof(base))
+        || !read_bounded_text_file(source_path, workspace->source, sizeof(workspace->source), &truncated)
+        || truncated
+    ) {
+        free(workspace);
+        return 0;
+    }
+    found = strstr(workspace->source, needle);
+    if (found == NULL) {
+        free(workspace);
+        return 0;
+    }
+    prefix_len = (size_t)(found - workspace->source);
+    if (
+        snprintf(
+            workspace->rendered,
+            sizeof(workspace->rendered),
+            "%.*sDEFAULT_AGENT_DIR=\"%s\"%s",
+            (int)prefix_len,
+            workspace->source,
+            base,
+            found + strlen(needle)
+        ) >= (int)sizeof(workspace->rendered)
+    ) {
+        free(workspace);
+        return 0;
+    }
+    int ok = write_binary_chunk(
+        rendered_path,
+        (const unsigned char *)workspace->rendered,
+        strlen(workspace->rendered),
+        0,
+        0700
+    );
+    free(workspace);
+    return ok;
+}
+
+static int ensure_agent_init_link(void)
+{
+    char current[C300X_MAX_PATH_LEN];
+    ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
+
+    if (len >= 0) {
+        current[len] = '\0';
+        if (strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0) {
+            return 1;
+        }
+        (void)unlink(C300X_AGENT_INIT_LINK);
+    }
+    return symlink(C300X_AGENT_INIT_SCRIPT, C300X_AGENT_INIT_LINK) == 0 || errno == EEXIST;
+}
+
+static int agent_init_link_matches(void)
+{
+    char current[C300X_MAX_PATH_LEN];
+    ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
+
+    if (len < 0) {
+        return 0;
+    }
+    current[len] = '\0';
+    return strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0;
+}
+
+static int apply_agent_update_init_script(
+    const struct c300x_config *config,
+    const char *stage_path,
+    int *changed
+)
+{
+    char rendered_path[C300X_MAX_PATH_LEN + 16];
+    int content_changed;
+    int link_changed;
+
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (snprintf(rendered_path, sizeof(rendered_path), "%s.rendered", stage_path) >= (int)sizeof(rendered_path)) {
+        return 0;
+    }
+    if (!render_agent_init_script(config, stage_path, rendered_path)) {
+        (void)unlink(rendered_path);
+        return 0;
+    }
+    content_changed = !file_content_matches(rendered_path, C300X_AGENT_INIT_SCRIPT);
+    link_changed = !agent_init_link_matches();
+    if (!content_changed && !link_changed) {
+        (void)unlink(rendered_path);
+        return 1;
+    }
+    {
+        int status = system("mount -o remount,rw / >/dev/null 2>&1");
+        (void)status;
+    }
+    if (
+        (content_changed && !copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
+        || !ensure_agent_init_link()
+    ) {
+        (void)unlink(rendered_path);
+        {
+            int status = system("mount -o remount,ro / >/dev/null 2>&1");
+            (void)status;
+        }
+        return 0;
+    }
+    {
+        int status = system("mount -o remount,ro / >/dev/null 2>&1");
+        (void)status;
+    }
+    (void)unlink(rendered_path);
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int apply_agent_update_files(
+    const struct c300x_config *config,
+    const char *manifest,
+    const char *installed_manifest,
+    struct agent_update_change_summary *summary
+)
+{
+    static const struct {
+        const char *bundle_path;
+        mode_t mode;
+    } files[] = {
+        {"device_agent/armhf/c300x-agent-native", 0700},
+        {"device_agent/scripts/qml_patch.sh", 0700},
+        {"device_agent/scripts/remove_agent.sh", 0700},
+        {"device_agent/scripts/bootstrap_firewall.sh", 0700},
+        {"device_agent/qml/Alarm.qml", 0644},
+        {"device_agent/qml/HomeAssistant.qml", 0644},
+        {"device_agent/qml/js/c300x_ha.js", 0644},
+        {"device_agent/qml/js/c300x_i18n.js", 0644},
+        {"device_agent/qml/js/c300x_memos.js", 0644},
+        {"device_agent/bundle.json", 0600},
+    };
+
+    if (summary != NULL) {
+        memset(summary, 0, sizeof(*summary));
+        summary->runtime_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "runtime_hash"
+        );
+        summary->qml_patch_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "qml_patch_hash"
+        );
+        summary->script_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "script_hash"
+        );
+        summary->firewall_patch_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "firewall_patch_hash"
+        );
+        summary->ipv6_firewall_patch_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "ipv6_firewall_patch_hash"
+        );
+        summary->config_schema_changed = agent_update_manifest_field_changed(
+            installed_manifest,
+            manifest,
+            "config_schema_hash"
+        );
+    }
+    for (size_t index = 0; index < sizeof(files) / sizeof(files[0]); index++) {
+        if (
+            !apply_agent_update_file(
+                config,
+                manifest,
+                files[index].bundle_path,
+                files[index].mode,
+                summary
+            )
+        ) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void handle_agent_update_apply(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct agent_update_apply_workspace {
+        char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
+        char staged_bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
+        char staged_manifest[C300X_MAX_PATH_LEN];
+        char installed_manifest_path[C300X_MAX_PATH_LEN];
+        char installed_manifest[8192];
+        char manifest[8192];
+        char stage_dir[C300X_MAX_PATH_LEN];
+        char body[512];
+    };
+    struct agent_update_apply_workspace *workspace;
+    int truncated = 0;
+    int installed_truncated = 0;
+    struct agent_update_change_summary summary;
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    if (!confirm_matches(request, "update_agent")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    workspace = calloc(1, sizeof(*workspace));
+    if (workspace == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        return;
+    }
+    json_string_field(request->body, "bundle_hash", workspace->bundle_hash, sizeof(workspace->bundle_hash));
+    if (strncmp(workspace->bundle_hash, "sha256:", strlen("sha256:")) != 0) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_update_metadata\"}\n");
+        free(workspace);
+        return;
+    }
+    if (
+        !agent_update_stage_path(
+            config,
+            "device_agent/bundle.json",
+            workspace->staged_manifest,
+            sizeof(workspace->staged_manifest)
+        )
+    ) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"invalid_agent_dir\"}\n");
+        free(workspace);
+        return;
+    }
+    if (
+        !read_bounded_text_file(
+            workspace->staged_manifest,
+            workspace->manifest,
+            sizeof(workspace->manifest),
+            &truncated
+        )
+        || truncated
+    ) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"update_manifest_missing\"}\n");
+        free(workspace);
+        return;
+    }
+    json_string_field(
+        workspace->manifest,
+        "bundle_hash",
+        workspace->staged_bundle_hash,
+        sizeof(workspace->staged_bundle_hash)
+    );
+    if (
+        !constant_time_equal(
+            workspace->staged_bundle_hash,
+            strlen(workspace->staged_bundle_hash),
+            workspace->bundle_hash
+        )
+    ) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"update_bundle_hash_mismatch\"}\n");
+        free(workspace);
+        return;
+    }
+    if (
+        agent_bundle_manifest_path(
+            config,
+            workspace->installed_manifest_path,
+            sizeof(workspace->installed_manifest_path)
+        )
+        && !read_bounded_text_file(
+            workspace->installed_manifest_path,
+            workspace->installed_manifest,
+            sizeof(workspace->installed_manifest),
+            &installed_truncated
+        )
+    ) {
+        workspace->installed_manifest[0] = '\0';
+    }
+    if (installed_truncated) {
+        workspace->installed_manifest[0] = '\0';
+    }
+    if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest, &summary)) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        free(workspace);
+        return;
+    }
+    if (agent_update_stage_dir(config, workspace->stage_dir, sizeof(workspace->stage_dir))) {
+        (void)remove_tree(workspace->stage_dir);
+    }
+    record_agent_write(config, runtime, "agent_update", "apply");
+    if (summary.runtime_changed) {
+        (void)run_detached_command("/etc/init.d/c300x-native-agent", "restart", 500);
+    }
+    snprintf(
+        workspace->body,
+        sizeof(workspace->body),
+        "{\"ok\":true,\"action\":\"agent_update\",\"restart_scheduled\":%s,\"changed_files\":%d,\"runtime_changed\":%s,\"qml_patch_changed\":%s,\"script_changed\":%s,\"firewall_patch_changed\":%s,\"ipv6_firewall_patch_changed\":%s,\"config_schema_changed\":%s,\"manifest_changed\":%s}\n",
+        summary.runtime_changed ? "true" : "false",
+        summary.changed_files,
+        summary.runtime_changed ? "true" : "false",
+        summary.qml_patch_changed ? "true" : "false",
+        summary.script_changed ? "true" : "false",
+        summary.firewall_patch_changed ? "true" : "false",
+        summary.ipv6_firewall_patch_changed ? "true" : "false",
+        summary.config_schema_changed ? "true" : "false",
+        summary.manifest_changed ? "true" : "false"
+    );
+    send_json(
+        client_fd,
+        summary.runtime_changed ? 202 : 200,
+        summary.runtime_changed ? "Accepted" : "OK",
+        workspace->body
+    );
+    free(workspace);
+}
+
+static void handle_config_normalize(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    char error[C300X_MAX_ERROR_LEN];
+    char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+    char body[384];
+    int changed = 0;
+
+    if (!maintenance_authorized(config, request)) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        return;
+    }
+    if (!confirm_matches(request, "normalize_config")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    if (!c300x_save_config_if_changed(config, error, sizeof(error), &changed)) {
+        json_string(error, error_json, sizeof(error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n",
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
+        return;
+    }
+    if (changed) {
+        record_agent_write(config, runtime, "config", "normalize");
+    }
+    send_json(
+        client_fd,
+        200,
+        "OK",
+        changed
+            ? "{\"ok\":true,\"action\":\"normalize_config\",\"changed\":true}\n"
+            : "{\"ok\":true,\"action\":\"normalize_config\",\"changed\":false}\n"
+    );
+}
+
 static void handle_api_request(
     int client_fd,
     struct c300x_config *config,
@@ -7593,6 +10222,60 @@ static void handle_api_request(
         handle_remove_agent(client_fd, config, request);
         return;
     }
+    if (strcmp(request->path, "/api/v1/maintenance/update/status") == 0) {
+        if (strcmp(request->method, "GET") == 0) {
+            handle_agent_update_status(client_fd, config, request);
+            return;
+        }
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/update/prepare") == 0) {
+        handle_agent_update_prepare(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/update/file") == 0) {
+        handle_agent_update_file(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/update/apply") == 0) {
+        handle_agent_update_apply(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/config/actions/normalize") == 0) {
+        handle_config_normalize(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/mqtt/actions/migrate-legacy") == 0) {
+        handle_mqtt_migrate_legacy_post(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->path, "/api/v1/maintenance/mqtt") == 0) {
+        if (strcmp(request->method, "GET") == 0) {
+            if (!maintenance_authorized(config, request)) {
+                send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+                return;
+            }
+            handle_mqtt_status(client_fd, config, runtime);
+            return;
+        }
+        if (strcmp(request->method, "POST") == 0) {
+            handle_mqtt_post(client_fd, config, runtime, request);
+            return;
+        }
+    }
+    if (strcmp(request->path, "/api/v1/maintenance/legacy-mqtt") == 0) {
+        if (strcmp(request->method, "GET") == 0) {
+            if (!maintenance_authorized(config, request)) {
+                send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+                return;
+            }
+            handle_legacy_mqtt_status(client_fd, config);
+            return;
+        }
+        if (strcmp(request->method, "POST") == 0) {
+            handle_legacy_mqtt_post(client_fd, config, runtime, request);
+            return;
+        }
+    }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/gui/actions/reload") == 0) {
         handle_gui_reload(client_fd, config, request);
         return;
@@ -7748,13 +10431,18 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/state") == 0 || strcmp(request->path, "/ui/alarm/status") == 0) {
         char payload[128];
-        char response[32768];
+        char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
+        if (response == NULL) {
+            return 1;
+        }
         snprintf(payload, sizeof(payload), "{\"type\":\"status\"}");
-        if (!forward_to_homeassistant(config, runtime, payload, response, sizeof(response))) {
+        if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
             send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+            free(response);
             return 1;
         }
         send_json(client_fd, 200, "OK", response);
+        free(response);
         return 1;
     }
 
@@ -7790,7 +10478,11 @@ static void handle_ui_homeassistant(
     char entities[128];
     char entity_id[128];
     char payload[256];
-    char response[32768];
+    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
+
+    if (response == NULL) {
+        return;
+    }
 
     query_param_value(request->query, "domain", domain, sizeof(domain));
     query_param_value(request->query, "service", service, sizeof(service));
@@ -7800,16 +10492,19 @@ static void handle_ui_homeassistant(
 
     if (domain[0] == '\0' && service[0] == '\0' && entities[0] == '\0') {
         snprintf(payload, sizeof(payload), "{\"type\":\"dashboard\"}");
-        if (!forward_to_homeassistant(config, runtime, payload, response, sizeof(response))) {
+        if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
             send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+            free(response);
             return;
         }
         send_json(client_fd, 200, "OK", response);
+        free(response);
         return;
     }
 
     if (strcmp(domain, C300X_DASHBOARD_DOMAIN) != 0 || strcmp(service, "toggle") != 0 || entities[0] == '\0') {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_dashboard_command\"}\n");
+        free(response);
         return;
     }
 
@@ -7824,6 +10519,7 @@ static void handle_ui_homeassistant(
     }
     if (!validate_action_id(trimmed)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_action_id\"}\n");
+        free(response);
         return;
     }
     if (strcmp(trimmed, C300X_DASHBOARD_STAIR_LIGHT_ENTITY) == 0) {
@@ -7831,11 +10527,13 @@ static void handle_ui_homeassistant(
     } else {
         snprintf(payload, sizeof(payload), "{\"type\":\"dashboard_action\",\"entity_id\":\"%s\"}", trimmed);
     }
-    if (!forward_to_homeassistant(config, runtime, payload, response, sizeof(response))) {
+    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        free(response);
         return;
     }
     send_json(client_fd, 200, "OK", response);
+    free(response);
 }
 
 static void handle_ui_action(
@@ -7847,19 +10545,25 @@ static void handle_ui_action(
 {
     char action_id[128];
     char payload[256];
-    char response[32768];
+    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
 
+    if (response == NULL) {
+        return;
+    }
     query_param_value(request->query, "id", action_id, sizeof(action_id));
     if (action_id[0] == '\0' || !validate_action_id(action_id)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_action_id\"}\n");
+        free(response);
         return;
     }
     snprintf(payload, sizeof(payload), "{\"type\":\"action\",\"action_id\":\"%s\"}", action_id);
-    if (!forward_to_homeassistant(config, runtime, payload, response, sizeof(response))) {
+    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        free(response);
         return;
     }
     send_json(client_fd, 200, "OK", response);
+    free(response);
 }
 
 static void handle_ui_stair_light(
@@ -7910,13 +10614,17 @@ static void handle_ui_alarm_command(
     char force_text[8];
     char check_text[8];
     char payload[256];
-    char response[32768];
+    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     int force = 0;
     int check = 0;
 
+    if (response == NULL) {
+        return;
+    }
     query_param_value(request->query, "command", command, sizeof(command));
     if (!validate_alarm_command(command)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_alarm_command\"}\n");
+        free(response);
         return;
     }
     if (query_param_value(request->query, "force", force_text, sizeof(force_text))) {
@@ -7928,6 +10636,7 @@ static void handle_ui_alarm_command(
     if (query_param_value(request->query, "code", code, sizeof(code)) && code[0] != '\0') {
         if (!validate_alarm_code(code)) {
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_alarm_code\"}\n");
+            free(response);
             return;
         }
         snprintf(
@@ -7949,11 +10658,13 @@ static void handle_ui_alarm_command(
             check ? ",\"check\":true" : ""
         );
     }
-    if (!forward_to_homeassistant(config, runtime, payload, response, sizeof(response))) {
+    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        free(response);
         return;
     }
     send_json(client_fd, 200, "OK", response);
+    free(response);
 }
 
 static void handle_client(
@@ -7963,11 +10674,17 @@ static void handle_client(
     struct agent_runtime *runtime
 )
 {
-    char buffer[REQUEST_BUFFER_SIZE];
-    struct request request;
+    struct request_workspace *workspace = malloc(sizeof(*workspace));
     struct timeval receive_timeout;
     struct timeval send_timeout;
     int too_large = 0;
+    int close_client = 1;
+
+    if (workspace == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        close(client_fd);
+        return;
+    }
 
     receive_timeout.tv_sec = 0;
     receive_timeout.tv_usec = 500000;
@@ -7988,26 +10705,27 @@ static void handle_client(
         sizeof(send_timeout)
     );
 
-    if (!receive_http_request(client_fd, buffer, sizeof(buffer), &too_large)) {
+    if (!receive_http_request(client_fd, workspace->buffer, sizeof(workspace->buffer), &too_large)) {
         if (too_large) {
             send_json(client_fd, 413, "Payload Too Large", "{\"ok\":false,\"error\":\"request_too_large\"}\n");
         }
-        close(client_fd);
-        return;
+        goto cleanup;
     }
-    if (!parse_request(buffer, &request)) {
+    if (!parse_request(workspace->buffer, &workspace->request)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"bad_request\"}\n");
-        close(client_fd);
-        return;
+        goto cleanup;
     }
 
     if (kind == LISTENER_API) {
-        handle_api_request(client_fd, config, runtime, &request);
-        close(client_fd);
+        handle_api_request(client_fd, config, runtime, &workspace->request);
     } else {
-        if (handle_ui_request(client_fd, config, runtime, &request)) {
-            close(client_fd);
-        }
+        close_client = handle_ui_request(client_fd, config, runtime, &workspace->request);
+    }
+
+cleanup:
+    free(workspace);
+    if (close_client) {
+        close(client_fd);
     }
 }
 
@@ -8024,31 +10742,38 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 3 + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 3 + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
-    struct agent_runtime runtime;
+    struct agent_runtime *runtime = NULL;
     struct c300x_video *video = NULL;
     char video_error[C300X_MAX_ERROR_LEN];
     int ui_listener_enabled = 1;
+    int result = 1;
 
     if (!config->api_no_auth && config->api_token[0] == '\0') {
         fprintf(stderr, "api.token must be configured when api.noAuth=false\n");
         return 2;
     }
-    memset(&runtime, 0, sizeof(runtime));
-    runtime.ui_event_wait_fd = -1;
+    runtime = calloc(1, sizeof(*runtime));
+    if (runtime == NULL) {
+        fprintf(stderr, "failed to allocate agent runtime\n");
+        return 2;
+    }
+    runtime->ui_event_wait_fd = -1;
     c300x_mdns_init(&mdns);
-    load_subscriptions(&runtime, config->subscription_store_path);
-    voicemail_init(&runtime, config);
-    memos_init(&runtime, config);
-    system_metrics_init(config, &runtime);
+    c300x_mqtt_init(&runtime->mqtt);
+    load_subscriptions(runtime, config->subscription_store_path);
+    voicemail_init(runtime, config);
+    memos_init(runtime, config);
+    system_metrics_init(config, runtime);
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {
         fprintf(stderr, "failed to bind API listener on %s:%u: %s\n", config->listen_host, config->api_port, strerror(errno));
-        return 2;
+        result = 2;
+        goto cleanup;
     }
     listener_count++;
 
@@ -8057,8 +10782,8 @@ int c300x_run(struct c300x_config *config)
         listeners[listener_count].kind = LISTENER_UI;
         if (listeners[listener_count].fd < 0) {
             fprintf(stderr, "failed to bind UI listener on %s:%u: %s\n", C300X_UI_LISTEN_HOST, config->ui_port, strerror(errno));
-            close(listeners[0].fd);
-            return 2;
+            result = 2;
+            goto cleanup;
         }
         listener_count++;
     }
@@ -8067,19 +10792,11 @@ int c300x_run(struct c300x_config *config)
         video = c300x_video_create(config, video_error, sizeof(video_error));
         if (video == NULL) {
             fprintf(stderr, "%s\n", video_error[0] != '\0' ? video_error : "video: initialization failed");
-            for (nfds_t index = 0; index < listener_count; index++) {
-                close(listeners[index].fd);
-            }
-            if (udp_fd >= 0) {
-                close(udp_fd);
-            }
-            voicemail_close(&runtime.voicemail);
-            voicemail_close(&runtime.text_memos);
-            voicemail_close(&runtime.voice_memos);
-            return 2;
+            result = 2;
+            goto cleanup;
         }
     }
-    runtime.video = video;
+    runtime->video = video;
 
     fprintf(stderr, "c300x native agent %s listening api=%s:%u ui=%s\n",
         C300X_NATIVE_AGENT_VERSION,
@@ -8093,6 +10810,7 @@ int c300x_run(struct c300x_config *config)
         nfds_t poll_count = listener_count;
         int udp_poll_index = -1;
         int mdns_poll_index = -1;
+        int mqtt_poll_index = -1;
         int voicemail_poll_index = -1;
         int text_memos_poll_index = -1;
         int voice_memos_poll_index = -1;
@@ -8100,7 +10818,7 @@ int c300x_run(struct c300x_config *config)
         int video_poll_count = 0;
         int poll_timeout_ms = -1;
         time_t now = time(NULL);
-        int network_online = runtime_network_online(&runtime, now);
+        int network_online = runtime_network_online(runtime, now);
 
         for (index = 0; index < listener_count; index++) {
             poll_fds[index].fd = listeners[index].fd;
@@ -8110,10 +10828,11 @@ int c300x_run(struct c300x_config *config)
         c300x_mdns_open_if_needed(
             &mdns,
             config,
-            agent_has_home_assistant_connection(&runtime, now),
+            agent_has_home_assistant_connection(runtime, now),
             network_online,
             now
         );
+        c300x_mqtt_open_if_needed(&runtime->mqtt, config, network_online, now);
         if (udp_fd >= 0) {
             udp_poll_index = (int)poll_count;
             poll_fds[poll_count].fd = udp_fd;
@@ -8132,23 +10851,39 @@ int c300x_run(struct c300x_config *config)
                 timeout_until_ms(now, c300x_mdns_next_announce_at(&mdns))
             );
         }
-        if (runtime.voicemail.inotify_fd >= 0) {
+        if (c300x_mqtt_fd(&runtime->mqtt) >= 0) {
+            mqtt_poll_index = (int)poll_count;
+            poll_fds[poll_count].fd = c300x_mqtt_fd(&runtime->mqtt);
+            poll_fds[poll_count].events = POLLIN;
+            poll_fds[poll_count].revents = 0;
+            poll_count++;
+            poll_timeout_ms = min_timeout_ms(
+                poll_timeout_ms,
+                c300x_mqtt_poll_timeout_ms(&runtime->mqtt, now)
+            );
+        } else {
+            poll_timeout_ms = min_timeout_ms(
+                poll_timeout_ms,
+                c300x_mqtt_poll_timeout_ms(&runtime->mqtt, now)
+            );
+        }
+        if (runtime->voicemail.inotify_fd >= 0) {
             voicemail_poll_index = (int)poll_count;
-            poll_fds[poll_count].fd = runtime.voicemail.inotify_fd;
+            poll_fds[poll_count].fd = runtime->voicemail.inotify_fd;
             poll_fds[poll_count].events = POLLIN;
             poll_fds[poll_count].revents = 0;
             poll_count++;
         }
-        if (runtime.text_memos.inotify_fd >= 0) {
+        if (runtime->text_memos.inotify_fd >= 0) {
             text_memos_poll_index = (int)poll_count;
-            poll_fds[poll_count].fd = runtime.text_memos.inotify_fd;
+            poll_fds[poll_count].fd = runtime->text_memos.inotify_fd;
             poll_fds[poll_count].events = POLLIN;
             poll_fds[poll_count].revents = 0;
             poll_count++;
         }
-        if (runtime.voice_memos.inotify_fd >= 0) {
+        if (runtime->voice_memos.inotify_fd >= 0) {
             voice_memos_poll_index = (int)poll_count;
-            poll_fds[poll_count].fd = runtime.voice_memos.inotify_fd;
+            poll_fds[poll_count].fd = runtime->voice_memos.inotify_fd;
             poll_fds[poll_count].events = POLLIN;
             poll_fds[poll_count].revents = 0;
             poll_count++;
@@ -8163,22 +10898,33 @@ int c300x_run(struct c300x_config *config)
                 c300x_video_poll_timeout_ms(video)
             );
         }
-        if (system_metrics_watch_active(config, &runtime)) {
+        if (system_metrics_watch_active(config, runtime)) {
             poll_timeout_ms = min_timeout_ms(
                 poll_timeout_ms,
-                timeout_until_ms(now, runtime.system_metrics_next_sample_at)
+                timeout_until_ms(now, runtime->system_metrics_next_sample_at)
             );
         }
-        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, ui_event_timeout_ms(&runtime, now));
-        if (poll(poll_fds, poll_count, poll_timeout_ms) < 0) {
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, ui_event_timeout_ms(runtime, now));
+        runtime->loop_iterations++;
+        runtime->last_poll_timeout_ms = poll_timeout_ms;
+        runtime->last_poll_count = (int)poll_count;
+        int poll_result = poll(poll_fds, poll_count, poll_timeout_ms);
+        if (poll_result < 0) {
             if (errno == EINTR) {
                 continue;
             }
             fprintf(stderr, "poll failed: %s\n", strerror(errno));
             break;
         }
+        if (poll_result == 0) {
+            runtime_set_wake_reason(runtime, "timeout");
+        } else {
+            runtime->poll_wakeups++;
+            runtime_set_wake_reason(runtime, "event");
+        }
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
+                runtime_set_wake_reason(runtime, listeners[index].kind == LISTENER_UI ? "ui" : "api");
                 for (;;) {
                     int client_fd = accept(listeners[index].fd, NULL, NULL);
                     if (client_fd < 0) {
@@ -8190,51 +10936,70 @@ int c300x_run(struct c300x_config *config)
                         }
                         break;
                     }
-                    handle_client(client_fd, listeners[index].kind, config, &runtime);
+                    runtime->accepted_clients++;
+                    handle_client(client_fd, listeners[index].kind, config, runtime);
                 }
             }
         }
         if (udp_poll_index >= 0 && (poll_fds[udp_poll_index].revents & POLLIN) != 0) {
-            handle_udp_event(udp_fd, config, &runtime);
+            runtime_set_wake_reason(runtime, "udp_event");
+            handle_udp_event(udp_fd, config, runtime);
         }
         if (mdns_poll_index >= 0) {
             if ((poll_fds[mdns_poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+                runtime_set_wake_reason(runtime, "mdns_error");
                 c300x_mdns_close(&mdns);
             } else if ((poll_fds[mdns_poll_index].revents & POLLIN) != 0) {
+                runtime_set_wake_reason(runtime, "mdns");
                 c300x_mdns_handle_query(&mdns, config);
             }
         }
+        if (mqtt_poll_index >= 0) {
+            runtime_set_wake_reason(runtime, "mqtt");
+            c300x_mqtt_handle_poll(&runtime->mqtt, config, poll_fds[mqtt_poll_index].revents, time(NULL));
+            handle_mqtt_commands(config, runtime);
+        }
         if (voicemail_poll_index >= 0) {
             if ((poll_fds[voicemail_poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
-                voicemail_close(&runtime.voicemail);
+                runtime_set_wake_reason(runtime, "video_messages_error");
+                voicemail_close(&runtime->voicemail);
             } else if ((poll_fds[voicemail_poll_index].revents & POLLIN) != 0) {
-                handle_voicemail_inotify(config, &runtime);
+                runtime_set_wake_reason(runtime, "video_messages");
+                handle_voicemail_inotify(config, runtime);
             }
         }
         if (text_memos_poll_index >= 0) {
             if ((poll_fds[text_memos_poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
-                voicemail_close(&runtime.text_memos);
+                runtime_set_wake_reason(runtime, "text_memos_error");
+                voicemail_close(&runtime->text_memos);
             } else if ((poll_fds[text_memos_poll_index].revents & POLLIN) != 0) {
-                handle_memos_inotify(config, &runtime, &runtime.text_memos);
+                runtime_set_wake_reason(runtime, "text_memos");
+                handle_memos_inotify(config, runtime, &runtime->text_memos);
             }
         }
         if (voice_memos_poll_index >= 0) {
             if ((poll_fds[voice_memos_poll_index].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
-                voicemail_close(&runtime.voice_memos);
+                runtime_set_wake_reason(runtime, "voice_memos_error");
+                voicemail_close(&runtime->voice_memos);
             } else if ((poll_fds[voice_memos_poll_index].revents & POLLIN) != 0) {
-                handle_memos_inotify(config, &runtime, &runtime.voice_memos);
+                runtime_set_wake_reason(runtime, "voice_memos");
+                handle_memos_inotify(config, runtime, &runtime->voice_memos);
             }
         }
         if (video != NULL && video_poll_index >= 0 && video_poll_count > 0) {
+            runtime_set_wake_reason(runtime, "video");
             c300x_video_handle_pollfds(video, &poll_fds[video_poll_index], video_poll_count);
         }
-        ui_event_expire_wait(&runtime, time(NULL));
+        ui_event_expire_wait(runtime, time(NULL));
         c300x_mdns_announce_if_due(&mdns, config, time(NULL));
-        if (system_metrics_watch_active(config, &runtime)) {
-            system_metrics_dispatch_if_due(config, &runtime, time(NULL));
+        c300x_mqtt_tick(&runtime->mqtt, config, time(NULL));
+        handle_mqtt_commands(config, runtime);
+        if (system_metrics_watch_active(config, runtime)) {
+            system_metrics_dispatch_if_due(config, runtime, time(NULL));
         }
     }
 
+cleanup:
     for (nfds_t index = 0; index < listener_count; index++) {
         close(listeners[index].fd);
     }
@@ -8242,10 +11007,14 @@ int c300x_run(struct c300x_config *config)
         close(udp_fd);
     }
     c300x_mdns_close(&mdns);
-    voicemail_close(&runtime.voicemail);
-    voicemail_close(&runtime.text_memos);
-    voicemail_close(&runtime.voice_memos);
-    ui_event_close_wait(&runtime, 0);
+    if (runtime != NULL) {
+        c300x_mqtt_close(&runtime->mqtt);
+        voicemail_close(&runtime->voicemail);
+        voicemail_close(&runtime->text_memos);
+        voicemail_close(&runtime->voice_memos);
+        ui_event_close_wait(runtime, 0);
+    }
     c300x_video_destroy(video);
-    return 1;
+    free(runtime);
+    return result;
 }

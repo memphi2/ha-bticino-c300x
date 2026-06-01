@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from asyncio import Task
 from collections.abc import Callable
 from typing import Any
 
@@ -23,6 +24,7 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import C300XConnectionState
+from .error_text import compact_error_text
 from .event_types import HA_EVENT_TYPES
 from .fingerprint import fnv1a64_fingerprint
 
@@ -41,102 +43,155 @@ async def async_start_agent_event_registration(
 ) -> Callable[[], None] | None:
     """Register the HA event webhook with the C300X device agent."""
 
-    subscription_id: str | None = None
-    stopped = False
-    retry_cancel: CALLBACK_TYPE | None = None
-    registry_refresh_cancel: CALLBACK_TYPE | None = None
-    entity_registry_cancel: CALLBACK_TYPE | None = None
-    retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
-
-    async def _register(now: Any = None) -> None:
-        nonlocal registry_refresh_cancel, retry_cancel, retry_delay_seconds, subscription_id
-        if stopped:
-            return
-        if retry_cancel is not None:
-            retry_cancel()
-            retry_cancel = None
-        if registry_refresh_cancel is not None:
-            registry_refresh_cancel()
-            registry_refresh_cancel = None
-        base_url = await async_generate_agent_callback_url(
-            hass,
-            entry,
-            entry.data[CONF_EVENT_WEBHOOK_ID],
-        )
-        token = entry.data[CONF_EVENT_WEBHOOK_TOKEN]
-        try:
-            registration_events = _active_events_for_capabilities(
-                hass,
-                entry,
-                capabilities,
-            )
-            if registration_events:
-                subscription_id = await _ensure_subscription(
-                    api,
-                    callback_url=base_url,
-                    token=token,
-                    events=registration_events,
-                )
-            else:
-                await _remove_inactive_subscriptions(
-                    api,
-                    callback_url=base_url,
-                )
-                subscription_id = None
-            connection_state.mark_connected()
-            retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
-            async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
-            await async_refresh_agent_diagnostics(hass, entry)
-        except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
-            _LOGGER.debug("C300X event registration failed: %s", err)
-            connection_state.mark_reconnecting(
-                type(err).__name__,
-                retry_delay_seconds,
-                _connection_error_text(err),
-            )
-            _schedule_unavailable_expiry(hass, entry, connection_state)
-            async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
-            if not stopped:
-                retry_cancel = async_call_later(
-                    hass,
-                    retry_delay_seconds,
-                    _register,
-                )
-                if retry_delay_seconds < _MAX_REGISTRATION_RETRY_SECONDS:
-                    retry_delay_seconds = min(
-                        _MAX_REGISTRATION_RETRY_SECONDS,
-                        retry_delay_seconds * 2,
-                    )
-
-    def _schedule_registry_refresh(now: Any = None) -> None:
-        nonlocal registry_refresh_cancel
-        if stopped or registry_refresh_cancel is not None:
-            return
-        registry_refresh_cancel = async_call_later(
-            hass,
-            _ENTITY_REGISTRY_REFRESH_SECONDS,
-            _register,
-        )
-
-    entity_registry_cancel = _async_listen_entity_registry_updates(
+    return _AgentEventRegistration(
         hass,
-        _schedule_registry_refresh,
-    )
-    task = hass.async_create_task(_register())
+        entry,
+        api,
+        capabilities,
+        connection_state,
+    ).start()
 
-    def _unregister() -> None:
-        nonlocal stopped
-        stopped = True
-        if not task.done():
-            task.cancel()
-        if retry_cancel is not None:
-            retry_cancel()
-        if registry_refresh_cancel is not None:
-            registry_refresh_cancel()
-        if entity_registry_cancel is not None:
-            entity_registry_cancel()
 
-    return _unregister
+class _AgentEventRegistration:
+    """Manage one config entry's device-agent event subscription lifecycle."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        api: C300XAgentApi,
+        capabilities: dict[str, Any],
+        connection_state: C300XConnectionState,
+    ) -> None:
+        self._hass = hass
+        self._entry = entry
+        self._api = api
+        self._capabilities = capabilities
+        self._connection_state = connection_state
+        self._subscription_id: str | None = None
+        self._stopped = False
+        self._retry_cancel: CALLBACK_TYPE | None = None
+        self._registry_refresh_cancel: CALLBACK_TYPE | None = None
+        self._entity_registry_cancel: CALLBACK_TYPE | None = None
+        self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
+        self._task: Task[Any] | None = None
+
+    def start(self) -> Callable[[], None]:
+        """Start registration and return the cleanup callback."""
+
+        self._entity_registry_cancel = _async_listen_entity_registry_updates(
+            self._hass,
+            self._schedule_registry_refresh,
+        )
+        self._task = self._hass.async_create_task(self._register())
+        return self.unregister
+
+    def unregister(self) -> None:
+        """Stop retries, registry listeners, and the initial registration task."""
+
+        self._stopped = True
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+        self._cancel_retry()
+        self._cancel_registry_refresh()
+        if self._entity_registry_cancel is not None:
+            self._entity_registry_cancel()
+
+    async def _register(self, now: Any = None) -> None:
+        if not self._begin_register_attempt():
+            return
+        try:
+            await self._register_once()
+        except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
+            self._handle_registration_failure(err)
+
+    def _begin_register_attempt(self) -> bool:
+        if self._stopped:
+            return False
+        self._cancel_retry()
+        self._cancel_registry_refresh()
+        return True
+
+    async def _register_once(self) -> None:
+        base_url = await async_generate_agent_callback_url(
+            self._hass,
+            self._entry,
+            self._entry.data[CONF_EVENT_WEBHOOK_ID],
+        )
+        token = self._entry.data[CONF_EVENT_WEBHOOK_TOKEN]
+        registration_events = _active_events_for_capabilities(
+            self._hass,
+            self._entry,
+            self._capabilities,
+        )
+        if registration_events:
+            self._subscription_id = await _ensure_subscription(
+                self._api,
+                callback_url=base_url,
+                token=token,
+                events=registration_events,
+            )
+        else:
+            await _remove_inactive_subscriptions(self._api, callback_url=base_url)
+            self._subscription_id = None
+        self._connection_state.mark_connected()
+        self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
+        self._send_connection_state_changed()
+        await async_refresh_agent_diagnostics(self._hass, self._entry)
+
+    def _handle_registration_failure(self, err: Exception) -> None:
+        _LOGGER.debug("C300X event registration failed: %s", err)
+        self._connection_state.mark_reconnecting(
+            type(err).__name__,
+            self._retry_delay_seconds,
+            compact_error_text(err),
+        )
+        _schedule_unavailable_expiry(
+            self._hass,
+            self._entry,
+            self._connection_state,
+        )
+        self._send_connection_state_changed()
+        self._schedule_retry()
+
+    def _schedule_retry(self) -> None:
+        if self._stopped:
+            return
+        self._retry_cancel = async_call_later(
+            self._hass,
+            self._retry_delay_seconds,
+            self._register,
+        )
+        self._retry_delay_seconds = min(
+            _MAX_REGISTRATION_RETRY_SECONDS,
+            self._retry_delay_seconds * 2,
+        )
+
+    def _schedule_registry_refresh(self, now: Any = None) -> None:
+        if self._stopped or self._registry_refresh_cancel is not None:
+            return
+        self._registry_refresh_cancel = async_call_later(
+            self._hass,
+            _ENTITY_REGISTRY_REFRESH_SECONDS,
+            self._register,
+        )
+
+    def _cancel_retry(self) -> None:
+        if self._retry_cancel is not None:
+            self._retry_cancel()
+            self._retry_cancel = None
+
+    def _cancel_registry_refresh(self) -> None:
+        if self._registry_refresh_cancel is not None:
+            self._registry_refresh_cancel()
+            self._registry_refresh_cancel = None
+
+    def _send_connection_state_changed(self) -> None:
+        async_dispatcher_send(
+            self._hass,
+            SIGNAL_CONNECTION_STATE_CHANGED,
+            self._entry.entry_id,
+        )
 
 
 def _async_listen_entity_registry_updates(
@@ -181,6 +236,7 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     "system.metrics_changed": (
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
+        ("sensor", "device_memory"),
         ("sensor", "device_temperature"),
     ),
     "answering_machine.messages_changed": (
@@ -271,9 +327,6 @@ async def _ensure_subscription(
     subscriptions = _subscriptions(await api.async_list_event_subscriptions())
     for subscription in subscriptions:
         if _subscription_matches(subscription, callback_url, token, events):
-            # Confirm the persisted subscription once on setup/reconnect. The
-            # agent treats an identical POST as read-only and uses it to push
-            # current event-backed snapshots without HA polling the device.
             response = await api.async_register_event_subscription(
                 callback_url=callback_url,
                 token=token,
@@ -373,16 +426,3 @@ def _subscription_id(response: dict[str, Any]) -> str | None:
         return None
     value = subscription.get("id")
     return value if isinstance(value, str) and value else None
-
-
-def _connection_error_text(err: Exception) -> str:
-    """Return a compact connection error text for diagnostics."""
-
-    name = type(err).__name__
-    message = " ".join(str(err).split())
-    if not message or message == name:
-        return name
-    value = f"{name}: {message}"
-    if len(value) > 180:
-        return f"{value[:177]}..."
-    return value

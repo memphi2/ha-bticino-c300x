@@ -12,6 +12,14 @@ def _function_body(text: str, return_type: str, name: str) -> str:
     )[0]
 
 
+def _c300x_run_loop_body(text: str) -> str:
+    run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
+    return run_body.split("for (;;) {", maxsplit=1)[1].split(
+        "if (poll(poll_fds",
+        maxsplit=1,
+    )[0]
+
+
 def test_agent_skips_callback_io_without_local_network() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     dispatch_body = _function_body(text, "void", "dispatch_event")
@@ -95,12 +103,9 @@ def test_mdns_avoids_link_local_ipv6_advertisements() -> None:
 
 def test_main_loop_passes_cached_network_state_to_mdns() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    loop_body = text.split("for (;;) {", maxsplit=1)[1].split(
-        "if (poll(poll_fds",
-        maxsplit=1,
-    )[0]
+    loop_body = _c300x_run_loop_body(text)
 
-    assert "int network_online = runtime_network_online(&runtime, now);" in loop_body
+    assert "int network_online = runtime_network_online(runtime, now);" in loop_body
     assert "network_online,\n            now" in loop_body
 
 
@@ -145,10 +150,10 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     assert "runtime->home_assistant_last_seen_at" in body
     assert "C300X_HOME_ASSISTANT_CONNECTED_SECONDS" in body
     assert "runtime->subscription_count > 0" not in body
-    assert "mark_home_assistant_seen(runtime, time(NULL))" in subscription_body
-    assert "mark_home_assistant_seen(runtime, time(NULL))" in display_body
+    assert "mark_home_assistant_callback_seen(runtime, time(NULL))" not in subscription_body
+    assert "mark_home_assistant_callback_seen(runtime, time(NULL))" not in display_body
     assert "if (subscription->last_ok)" in dispatch_body
-    assert "mark_home_assistant_seen(runtime, time(NULL))" in dispatch_body
+    assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in dispatch_body
 
 
 def test_agent_keeps_only_one_loaded_subscription_and_cleans_store_lazily() -> None:

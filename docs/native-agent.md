@@ -8,7 +8,7 @@ The device runtime is a native C binary from `native_agent/`. Node.js and `node_
 
 ```bash
 make -C native_agent
-make -C native_agent armhf armhf-abi-check
+make -C native_agent armhf armhf-abi-check armhf-stack-check
 ```
 
 For HACS/user installs the preferred path is a version-matched packaged ARMHF
@@ -156,22 +156,18 @@ default config emits a push event when values change from the last HA push by
 the configured threshold, plus a 600 second heartbeat. CPU/load use
 percentage-point thresholds; temperature uses percent change.
 
-## Agent update concept
+## Agent updates
 
-Automatic updates should stay HA-orchestrated and explicit. The agent should not
-download arbitrary binaries on its own. A safe updater design is:
+Agent updates are HA-orchestrated and explicit. The C300X does not download
+arbitrary binaries on its own and does not check for updates in idle.
 
-- HA fetches release metadata through the normal integration update entity.
-- HA verifies version, architecture, SHA-256, and signature before upload.
-- The agent exposes a maintenance-only staging endpoint that accepts the binary
-  plus checksum, writes it to `cfg/extra` only once, verifies it locally, then
-  swaps the executable atomically.
-- The existing config and subscription store are preserved.
-- Rollback keeps the previous executable in one bounded slot.
-- A restart is explicit and can start SSH first when configured, so device
-  access is not lost.
-- No update check runs on the device in idle; the device only acts when HA
-  sends a verified package.
+- HA compares the installed agent and bundle state with the packaged bundle.
+- If an update is needed, Home Assistant raises a Repair.
+- The Repair uploads the packaged files through the maintenance API only after
+  user confirmation.
+- The agent verifies staged files before apply, preserves the existing config
+  and subscription store, and restarts only after the update request.
+- Older agents without self-update support still require the installer/SSH path.
 
 ## Smoke tests
 
@@ -182,6 +178,8 @@ make -C native_agent check
 `make -C native_agent smoke` is optional and intentionally separate because it
 exercises maintenance/write paths in a temporary runtime tree.
 
-## ABI guard
+## ABI and stack guards
 
-`armhf-abi-check` ensures the produced ARMHF binary stays compatible with the firmware glibc baseline.
+`armhf-abi-check` ensures the produced ARMHF binary stays compatible with the
+firmware glibc baseline. `armhf-stack-check` rejects oversized or dynamic stack
+usage records for the ARMHF build.

@@ -144,15 +144,6 @@ Page {
         }
         selectedCommand = command
         refreshCommandReadiness()
-        if (!selectedCommandReady) {
-            if (command.indexOf("arm_") === 0) {
-                setCommandFeedback("checking", command, "#f1c40f")
-                Api.alarmCheck(command, status, page)
-            } else {
-                setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-            }
-            return
-        }
         if (!commandRequiresPin(command)) {
             executeCommand(command, false)
         } else {
@@ -180,10 +171,6 @@ Page {
             return
         }
         refreshCommandReadiness()
-        if (!force && !selectedCommandReady) {
-            setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-            return
-        }
         var needsPin = commandRequiresPin(command)
         if (needsPin && pinCode.length === 0) {
             setCommandFeedback("pin_required", command, "#f1c40f")
@@ -504,14 +491,14 @@ Page {
                     UbuntuLightText {
                         text: feedbackDetail() + trsl.empty
                         color: "white"
-                        font.pixelSize: feedbackDetail().length > 36 ? 13 : 20
+                        font.pixelSize: feedbackDetail().length > 62 ? 11 : (feedbackDetail().length > 36 ? 13 : 20)
                         anchors.left: parent.left
                         anchors.leftMargin: 18
                         anchors.right: parent.right
                         anchors.rightMargin: 14
                         anchors.top: parent.top
                         anchors.topMargin: 36
-                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
                     }
                 }
 

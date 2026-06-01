@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -36,6 +34,8 @@ from .event_payload import agent_event_key
 from .executor import async_trigger_stair_light, async_unlock_door
 from .memos import latest_memo_attributes, latest_memo_id
 from .message_refresh import (
+    async_answering_machine_messages,
+    async_memos,
     schedule_answering_machine_messages_refresh,
     schedule_memos_refresh,
 )
@@ -168,6 +168,7 @@ class C300XRemoveAgentButton(C300XMaintenanceButton):
     """Button that removes the native agent and restores managed device patches."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_translation_key = "remove_agent"
     _maintenance_action = "agent_remove"
 
@@ -282,12 +283,10 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
         memo_id = latest_memo_id(self._entry.runtime_data.memos, self._memo_kind)
         if memo_id is None:
             try:
-                memos = await self._entry.runtime_data.api.async_memos()
+                memos = await async_memos(self._entry, force_refresh=True)
             except C300XAgentApiError as err:
                 self._attr_available = False
                 raise HomeAssistantError("C300X memo refresh failed") from err
-            self._entry.runtime_data.memos = memos
-            self._entry.runtime_data.memos_updated_at = datetime.now(UTC)
             self._attr_available = bool(memos.get("available", True))
             memo_id = latest_memo_id(self._entry.runtime_data.memos, self._memo_kind)
         if memo_id is None:
@@ -296,7 +295,7 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
 
         try:
             await self._entry.runtime_data.api.async_delete_memo(memo_id)
-            memos = await self._entry.runtime_data.api.async_memos()
+            memos = await async_memos(self._entry, force_refresh=True)
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support deleting memos"
@@ -304,8 +303,6 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X memo delete failed") from err
 
-        self._entry.runtime_data.memos = memos
-        self._entry.runtime_data.memos_updated_at = datetime.now(UTC)
         self._attr_available = bool(memos.get("available", True))
         async_dispatcher_send(self.hass, SIGNAL_MEMOS_CHANGED, self._entry.entry_id)
         await async_refresh_agent_diagnostics(self.hass, self._entry)
@@ -411,14 +408,13 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
         """Refresh message metadata on explicit HA update requests."""
 
         try:
-            messages = await self._entry.runtime_data.api.async_answering_machine_messages()
+            messages = await async_answering_machine_messages(
+                self._entry,
+                force_refresh=True,
+            )
         except C300XAgentApiError:
             self._attr_available = False
             return
-        self._entry.runtime_data.answering_machine_messages = messages
-        self._entry.runtime_data.answering_machine_messages_updated_at = datetime.now(
-            UTC
-        )
         self._attr_available = bool(messages.get("available", True))
 
     async def async_press(self) -> None:
@@ -431,16 +427,13 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
         )
         if message_id is None:
             try:
-                messages = (
-                    await self._entry.runtime_data.api.async_answering_machine_messages()
+                messages = await async_answering_machine_messages(
+                    self._entry,
+                    force_refresh=True,
                 )
             except C300XAgentApiError as err:
                 self._attr_available = False
                 raise HomeAssistantError("C300X video-message refresh failed") from err
-            self._entry.runtime_data.answering_machine_messages = messages
-            self._entry.runtime_data.answering_machine_messages_updated_at = datetime.now(
-                UTC
-            )
             self._attr_available = bool(messages.get("available", True))
             message_id = latest_video_message_id(
                 self._entry.runtime_data.answering_machine_messages
@@ -457,7 +450,10 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
             await self._entry.runtime_data.api.async_delete_answering_machine_message(
                 message_id
             )
-            messages = await self._entry.runtime_data.api.async_answering_machine_messages()
+            messages = await async_answering_machine_messages(
+                self._entry,
+                force_refresh=True,
+            )
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support deleting video messages"
@@ -465,10 +461,6 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X video-message delete failed") from err
 
-        self._entry.runtime_data.answering_machine_messages = messages
-        self._entry.runtime_data.answering_machine_messages_updated_at = datetime.now(
-            UTC
-        )
         self._attr_available = bool(messages.get("available", True))
         async_dispatcher_send(
             self.hass,

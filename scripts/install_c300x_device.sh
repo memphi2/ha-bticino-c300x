@@ -104,6 +104,9 @@ ssh_cmd "chmod 700 '$REMOTE_DIR/qml_patch.sh'"
 scp_cmd "$ROOT_DIR/native_agent/scripts/remove_agent.sh" "$REMOTE:$REMOTE_DIR/remove_agent.sh"
 ssh_cmd "chmod 700 '$REMOTE_DIR/remove_agent.sh'"
 
+scp_cmd "$ROOT_DIR/native_agent/scripts/bootstrap_firewall.sh" "$REMOTE:$REMOTE_DIR/bootstrap_firewall.sh"
+ssh_cmd "chmod 700 '$REMOTE_DIR/bootstrap_firewall.sh'"
+
 if [[ "$UPLOAD_AGENT" == "1" ]]; then
     remote_agent_tmp="$REMOTE_DIR/.c300x-agent-native.new"
     scp_cmd \

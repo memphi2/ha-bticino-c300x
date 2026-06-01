@@ -27,7 +27,9 @@ helpers = sys.modules.setdefault(
 )
 helpers_dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
 helpers_event = types.ModuleType("homeassistant.helpers.event")
+helpers_entity = types.ModuleType("homeassistant.helpers.entity")
 helpers_entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+helpers_config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 core = types.ModuleType("homeassistant.core")
 
 
@@ -36,6 +38,14 @@ class ConfigEntry:  # pragma: no cover - import-time stub only
 
 
 class HomeAssistant:  # pragma: no cover - import-time stub only
+    pass
+
+
+class DeviceInfo(dict):  # pragma: no cover - import-time stub only
+    pass
+
+
+class Entity:  # pragma: no cover - import-time stub only
     pass
 
 
@@ -89,13 +99,18 @@ webhook.async_generate_url = _webhook_url
 helpers_dispatcher.async_dispatcher_send = fake_dispatcher.async_dispatcher_send
 helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
 helpers_event.async_call_later = fake_scheduler.async_call_later
+helpers_entity.DeviceInfo = DeviceInfo
+helpers_entity.Entity = Entity
 helpers_entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
 helpers_entity_registry.async_get = lambda hass: getattr(hass, "entity_registry", None)
+helpers_config_validation.config_entry_only_config_schema = lambda _domain: dict
 
 components.webhook = webhook
 helpers.dispatcher = helpers_dispatcher
 helpers.event = helpers_event
+helpers.entity = helpers_entity
 helpers.entity_registry = helpers_entity_registry
+helpers.config_validation = helpers_config_validation
 core.HomeAssistant = HomeAssistant
 core.CALLBACK_TYPE = type(_ScheduledCall(0, lambda *args, **kwargs: None))
 core.callback = lambda func: func
@@ -104,7 +119,9 @@ homeassistant.components = components
 sys.modules["homeassistant.components.webhook"] = webhook
 sys.modules["homeassistant.helpers.dispatcher"] = helpers_dispatcher
 sys.modules["homeassistant.helpers.event"] = helpers_event
+sys.modules["homeassistant.helpers.entity"] = helpers_entity
 sys.modules["homeassistant.helpers.entity_registry"] = helpers_entity_registry
+sys.modules["homeassistant.helpers.config_validation"] = helpers_config_validation
 sys.modules["homeassistant.core"] = core
 
 
@@ -363,6 +380,7 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_
         _FakeEntityRegistry(
             disabled={
                 ("sensor", "device_cpu"),
+                ("sensor", "device_load"),
                 ("sensor", "device_temperature"),
             }
         ),

@@ -198,20 +198,11 @@ function createPage() {{
       this.refreshSoonCalls += 1;
     }},
       selectCommand(command) {{
-        if (this.selectedCommand !== command) {{
-          this.bypassOffered = false;
-        }}
-        this.selectedCommand = command;
-        this.refreshCommandReadiness();
-      if (!this.selectedCommandReady) {{
-        if (command.indexOf("arm_") === 0) {{
-          this.setCommandFeedback("checking", command, "#f1c40f");
-          Api.alarmCheck(command, statusItem, this);
-        }} else {{
-          this.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b");
-        }}
-        return;
+      if (this.selectedCommand !== command) {{
+        this.bypassOffered = false;
       }}
+      this.selectedCommand = command;
+      this.refreshCommandReadiness();
       if (!this.commandRequiresPin(command)) {{
         this.executeCommand(command, false);
       }} else {{
@@ -236,10 +227,6 @@ function createPage() {{
         return;
       }}
       this.refreshCommandReadiness();
-      if (!force && !this.selectedCommandReady) {{
-        this.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b");
-        return;
-      }}
       const needsPin = this.commandRequiresPin(command);
       if (needsPin && this.pinCode.length === 0) {{
         this.setCommandFeedback("pin_required", command, "#f1c40f");
@@ -359,9 +346,8 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   assert.strictEqual(page.modeColumnCount(), 3);
   assert.strictEqual(page.modeRowCount(), 1);
 
-  routes["/ui/alarm/command?command=arm_away&check=true"] = {{
+  routes["/ui/alarm/command?command=arm_away"] = {{
     ok: false,
-    check: true,
     error: "not_ready_to_arm",
     command: "arm_away",
     ready: false,
@@ -369,14 +355,13 @@ function assertBlockedModesLookLikeAlarmoCard() {{
     blocking_sensor_count: 1
   }};
   page.selectCommand("arm_away");
-  assert(calls.includes("/ui/alarm/command?command=arm_away&check=true"));
+  assert(calls.includes("/ui/alarm/command?command=arm_away"));
   assert.strictEqual(page.bypassVisible(), true);
   assert.strictEqual(page.feedbackTitle(), "Nicht bereit");
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Haustuer");
 
-  routes["/ui/alarm/command?command=arm_night&check=true"] = {{
+  routes["/ui/alarm/command?command=arm_night"] = {{
     ok: false,
-    check: true,
     error: "not_ready_to_arm",
     command: "arm_night",
     ready: false,
@@ -384,12 +369,11 @@ function assertBlockedModesLookLikeAlarmoCard() {{
     blocking_sensor_count: 1
   }};
   page.selectCommand("arm_night");
-  assert(calls.includes("/ui/alarm/command?command=arm_night&check=true"));
+  assert(calls.includes("/ui/alarm/command?command=arm_night"));
   assert.strictEqual(page.selectedCommand, "arm_night");
   assert.strictEqual(page.selectedCommandReady, false);
   assert.strictEqual(page.bypassVisible(), true);
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Kueche");
-  assert(!calls.includes("/ui/alarm/command?command=arm_night"));
 
   routes["/ui/alarm/command?command=arm_away&force=true"] = {{
     ok: true,
@@ -461,6 +445,52 @@ function assertServerSideBlockerUpdatesFeedbackWithoutHttpError() {{
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Fenster");
   assert.strictEqual(statusItem.text, "");
   assert.strictEqual(statusItem.color, "#ff6b6b");
+}}
+
+function assertInvalidCodeFeedbackIsExplicit() {{
+  const page = reset(statePayload("armed_away", [
+    command("disarm", "disarmed", {{ code_required: true, code_format: "number" }}),
+    command("arm_away", "armed_away", {{ ready: true }})
+  ]));
+  page.selectCommand("disarm");
+  page.appendDigit("0");
+  page.appendDigit("0");
+  page.appendDigit("0");
+  page.appendDigit("0");
+  routes["/ui/alarm/command?command=disarm&code=0000"] = {{
+    ok: false,
+    error: "invalid_code",
+    command: "disarm",
+    state: "armed_away"
+  }};
+  page.submitPin();
+  assert.strictEqual(statusItem.text, "PIN falsch: Aus");
+  assert.strictEqual(statusItem.color, "#ff6b6b");
+}}
+
+function assertAllOpenSensorsAreShown() {{
+  const page = reset(statePayload("disarmed", [
+    command("arm_away", "armed_away", {{
+      ready: false,
+      blocking_sensors: [
+        {{ entity_id: "binary_sensor.front", name: "Haustuer", state: "open" }},
+        {{ entity_id: "binary_sensor.window", name: "Fenster", state: "open" }},
+        {{ entity_id: "binary_sensor.garage", name: "Garage", state: "open" }},
+        {{ entity_id: "binary_sensor.kitchen", name: "Kueche", state: "open" }}
+      ],
+      blocking_sensor_count: 4
+    }})
+  ]));
+  routes["/ui/alarm/command?command=arm_away"] = {{
+    ok: false,
+    error: "not_ready_to_arm",
+    command: "arm_away",
+    ready: false,
+    blocking_sensors: page.alarmCommandDetails[0].blocking_sensors,
+    blocking_sensor_count: 4
+  }};
+  page.selectCommand("arm_away");
+  assert.strictEqual(page.feedbackDetail(), "Sensor offen: Haustuer, Fenster, Garage, Kueche");
 }}
 
 function assertTransportErrorDoesNotLeakRawApiError() {{
@@ -542,6 +572,8 @@ assertBlockedModesLookLikeAlarmoCard();
 assertReadyModeExecutesWithoutPin();
 assertDisarmRequiresConfiguredPin();
 assertServerSideBlockerUpdatesFeedbackWithoutHttpError();
+assertInvalidCodeFeedbackIsExplicit();
+assertAllOpenSensorsAreShown();
 assertTransportErrorDoesNotLeakRawApiError();
 assertDelayCountdownFeedbackWins();
 assertDisarmPinFeedbackWinsDuringDelay();

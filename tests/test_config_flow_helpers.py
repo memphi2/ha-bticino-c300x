@@ -68,6 +68,8 @@ homeassistant.const = const
 homeassistant.core = core
 homeassistant.helpers = helpers
 helpers.config_validation = config_validation
+helpers.selector = None
+sys.modules.pop("homeassistant.helpers.selector", None)
 
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XConfigFlow,
@@ -82,6 +84,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _connection_input,
     _current_connection_options,
     _current_feature_options,
+    _dashboard_entity_ids,
     _feature_input,
     _feature_input_defaults,
     _non_empty_string,
@@ -111,6 +114,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_BOOTSTRAP_APPLY_GUI_PATCH,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
+    CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_UI_ENABLED,
     CONF_MAINTENANCE_TOKEN,
@@ -258,6 +262,23 @@ def test_weather_entity_id_allows_empty_value() -> None:
     assert _weather_entity_id("") == ""
 
 
+def test_dashboard_entity_ids_accept_supported_entities() -> None:
+    assert _dashboard_entity_ids(
+        [" Switch.Entry ", "sensor.temperature", "switch.entry"]
+    ) == ["switch.entry", "sensor.temperature"]
+
+
+@pytest.mark.parametrize("value", ["media_player.tv", "sensor.", "bad"])
+def test_dashboard_entity_ids_reject_unsupported_entities(value: str) -> None:
+    with pytest.raises(vol.Invalid):
+        _dashboard_entity_ids(value)
+
+
+def test_dashboard_entity_ids_allows_empty_value() -> None:
+    assert _dashboard_entity_ids("") == []
+    assert _dashboard_entity_ids([]) == []
+
+
 def test_actions_json_is_stable_for_options_form() -> None:
     assert _actions_json({}) == ""
     assert (
@@ -383,6 +404,7 @@ def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
             CONF_DEVICE_UI_ENABLED: True,
             CONF_ALARM_ENTITY_ID: "",
             CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
             CONF_ACTIONS_JSON: "",
             CONF_DASHBOARD_PREVENT_RETURN: True,
         }
@@ -391,6 +413,7 @@ def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
     assert errors == {}
     assert data[CONF_ALARM_ENTITY_ID] == ""
     assert data[CONF_WEATHER_ENTITY_ID] == ""
+    assert data[CONF_DASHBOARD_ENTITIES] == []
     assert data[CONF_ACTIONS] == {}
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is True
 
@@ -410,6 +433,7 @@ def test_feature_schema_serializes_gui_entity_selectors() -> None:
     assert result[CONF_DEVICE_UI_ENABLED] is True
     assert CONF_ALARM_ENTITY_ID not in result
     assert CONF_WEATHER_ENTITY_ID not in result
+    assert CONF_DASHBOARD_ENTITIES not in result
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
 
 
@@ -426,6 +450,7 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert errors == {}
     assert data[CONF_ALARM_ENTITY_ID] == ""
     assert data[CONF_WEATHER_ENTITY_ID] == ""
+    assert data[CONF_DASHBOARD_ENTITIES] == []
     assert data[CONF_ACTIONS] == {}
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is True
 
@@ -443,6 +468,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
             CONF_DEVICE_UI_ENABLED: True,
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["switch.entry", "sensor.temperature"],
             CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
             CONF_DASHBOARD_PREVENT_RETURN: False,
         }
@@ -451,6 +477,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
     assert errors == {}
     assert data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert data[CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert data[CONF_DASHBOARD_ENTITIES] == ["switch.entry", "sensor.temperature"]
     assert data[CONF_ACTIONS] == {
         "standby": {
             "data": {},
@@ -835,9 +862,11 @@ def test_feature_schemas_place_gui_patch_first_and_hide_gui_dependent_fields() -
     assert _schema_key_names(setup_schema)[0] == CONF_DEVICE_UI_ENABLED
     assert CONF_ALARM_ENTITY_ID not in _schema_key_names(setup_schema)
     assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(setup_schema)
+    assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(setup_schema)
     assert _schema_key_names(reconfigure_schema)[0] == CONF_DEVICE_UI_ENABLED
     assert CONF_ALARM_ENTITY_ID not in _schema_key_names(reconfigure_schema)
     assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(reconfigure_schema)
+    assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(reconfigure_schema)
 
     enabled_schema = _setup_features_schema(
         "alarm_control_panel.home",
@@ -853,6 +882,7 @@ def test_feature_schemas_place_gui_patch_first_and_hide_gui_dependent_fields() -
         CONF_ALARM_ENTITY_ID,
     ]
     assert CONF_WEATHER_ENTITY_ID in _schema_key_names(enabled_schema)
+    assert CONF_DASHBOARD_ENTITIES in _schema_key_names(enabled_schema)
 
 
 def test_initial_flow_defaults_gui_patch_enabled() -> None:
@@ -906,6 +936,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.old",
             CONF_WEATHER_ENTITY_ID: "weather.old",
+            CONF_DASHBOARD_ENTITIES: ["switch.old"],
             CONF_VIDEO_ENABLED: False,
             CONF_VIDEO_PORT: 6554,
             CONF_VIDEO_STREAM_PATH: "/doorbell-video",
@@ -920,6 +951,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_STAIR_LIGHT_ADDRESS: "20#1",
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
             CONF_VIDEO_PORT: 6555,
             CONF_VIDEO_STREAM_PATH: "/custom-video",
@@ -949,6 +981,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert features[CONF_DASHBOARD_PREVENT_RETURN] is False
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert _current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is True
     assert _current_feature_options(entry)[CONF_ACTIONS] == {
         "standby": {"domain": "button", "service": "press"}
@@ -960,6 +993,7 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
     defaults = {
         CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
         CONF_WEATHER_ENTITY_ID: "weather.home",
+        CONF_DASHBOARD_ENTITIES: ["switch.entry"],
         CONF_ACTIONS: {
             "scene:leave": {
                 "data": {},
@@ -985,6 +1019,7 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
     assert errors == {}
     assert feature_data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert feature_data[CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert feature_data[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert feature_data[CONF_ACTIONS] == defaults[CONF_ACTIONS]
     assert feature_data[CONF_DASHBOARD_PREVENT_RETURN] is False
 
@@ -994,6 +1029,7 @@ def test_options_features_schema_keeps_dashboard_features_on_second_page() -> No
         data={
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
         },
         options={
             CONF_VIDEO_ENABLED: True,
@@ -1009,6 +1045,7 @@ def test_options_features_schema_keeps_dashboard_features_on_second_page() -> No
         {
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
             CONF_VIDEO_PORT: 6554,
             CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
@@ -1020,6 +1057,7 @@ def test_options_features_schema_keeps_dashboard_features_on_second_page() -> No
 
     assert result[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result[CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert result[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_DEVICE_UI_ENABLED] is True
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
@@ -1030,6 +1068,7 @@ def test_options_features_schema_hides_gui_dependent_fields_until_enabled() -> N
         data={
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["switch.entry"],
         },
         options={
             CONF_VIDEO_ENABLED: True,
@@ -1049,10 +1088,12 @@ def test_options_features_schema_hides_gui_dependent_fields_until_enabled() -> N
     assert disabled_keys[0] == CONF_DEVICE_UI_ENABLED
     assert CONF_ALARM_ENTITY_ID not in disabled_keys
     assert CONF_WEATHER_ENTITY_ID not in disabled_keys
+    assert CONF_DASHBOARD_ENTITIES not in disabled_keys
     assert CONF_ACTIONS_JSON not in disabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
     assert enabled_keys[:2] == [CONF_DEVICE_UI_ENABLED, CONF_ALARM_ENTITY_ID]
     assert CONF_WEATHER_ENTITY_ID in enabled_keys
+    assert CONF_DASHBOARD_ENTITIES in enabled_keys
     assert CONF_ACTIONS_JSON in enabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN in enabled_keys
 

@@ -24,6 +24,7 @@ helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
 )
+helpers_config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 helpers_dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
 helpers_event = types.ModuleType("homeassistant.helpers.event")
 helpers_entity = types.ModuleType("homeassistant.helpers.entity")
@@ -71,6 +72,8 @@ helpers.dispatcher = helpers_dispatcher
 helpers.event = helpers_event
 helpers.entity = helpers_entity
 helpers.entity_registry = helpers_entity_registry
+helpers.config_validation = helpers_config_validation
+helpers_config_validation.config_entry_only_config_schema = lambda domain: None
 helpers_entity_registry.async_get = lambda hass: None
 helpers_dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
 helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
@@ -99,6 +102,7 @@ sys.modules["homeassistant.config_entries"] = config_entries
 sys.modules["homeassistant.components"] = components
 sys.modules["homeassistant.core"] = core
 sys.modules["homeassistant.helpers"] = helpers
+sys.modules["homeassistant.helpers.config_validation"] = helpers_config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = helpers_dispatcher
 sys.modules["homeassistant.helpers.event"] = helpers_event
 sys.modules["homeassistant.helpers.entity"] = helpers_entity
@@ -229,6 +233,10 @@ def test_system_metrics_event_updates_cache_without_public_event() -> None:
                     "load_1m_percent": 12.0,
                     "load_5m_percent": 10.0,
                     "load_15m_percent": 8.0,
+                    "memory_total_kb": 262144,
+                    "memory_available_kb": 196608,
+                    "memory_used_kb": 65536,
+                    "memory_usage_percent": 25.0,
                     "temperature_c": 41.5,
                     "temperature_source": "sysfs",
                 }
@@ -248,6 +256,7 @@ def test_system_metrics_event_updates_cache_without_public_event() -> None:
     assert response.status == 200
     assert runtime_data.system_metrics["cpu_usage_percent"] == 3.5
     assert runtime_data.system_metrics["load_1m_percent"] == 12.0
+    assert runtime_data.system_metrics["memory_usage_percent"] == 25.0
     assert runtime_data.system_metrics_updated_at is not None
     assert event_state.last_event is None
     assert hass.bus.events == []

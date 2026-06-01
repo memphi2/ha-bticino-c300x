@@ -38,3 +38,37 @@ def test_native_agent_status_reports_talkback_runtime_state() -> None:
     assert "status->stream_audio = video->stream_audio;" in video
     assert "int talkback_running = c300x_media_talkback_running(video)" in video
     assert "status->talkback_running = talkback_running;" in video
+    assert "int bridge_open_fds;" in header
+    assert "int bridge_active_threads;" in header
+    assert "c300x_media_bridge_status(video, status);" in video
+
+
+def test_native_agent_rtsp_response_does_not_send_truncated_stack_buffer() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    response_body = media_bridge[
+        media_bridge.index("static void send_rtsp_response") :
+        media_bridge.index("static void handle_rtsp_client")
+    ]
+
+    assert "int n = snprintf(" in response_body
+    assert "n > 0 && n < (int)sizeof(response)" in response_body
+    assert "send_all(fd, response, (size_t)n)" in response_body
+
+
+def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    client_body = media_bridge[
+        media_bridge.index("static void handle_rtsp_client") :
+        media_bridge.index("static int create_rtsp_listener")
+    ]
+
+    assert "busy = g_bridge.client_fd >= 0 && g_bridge.client_fd != fd;" in client_body
+    assert "send_rtsp_response(fd, 453" in client_body
+    assert client_body.index("if (!busy)") < client_body.index("g_bridge.client_fd = fd;")
+    assert client_body.index("if (busy)") < client_body.index(
+        "c300x_video_bridge_client_connected"
+    )

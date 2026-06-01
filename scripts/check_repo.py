@@ -35,6 +35,11 @@ CODE_SUFFIXES = {
     ".sh",
 }
 JWT_PREFIX = "eyJ0" + "eXAiOiJKV1Qi"
+PUBLIC_REPOSITORY_URL = "https://github.com/" + "mem" + "phi2/ha-bticino-c300x"
+PUBLIC_REPOSITORY_URLS = (
+    PUBLIC_REPOSITORY_URL,
+    f"{PUBLIC_REPOSITORY_URL}/issues",
+)
 
 DENY_PATTERNS = {
     "bearer_token": re.compile(r"Authorization:\s*Bearer\s+", re.IGNORECASE),
@@ -81,6 +86,7 @@ REQUIRED_PATHS = [
     "hacs.json",
     "native_agent/Makefile",
     "native_agent/config.example.json",
+    "native_agent/scripts/bootstrap_firewall.sh",
     "native_agent/scripts/qml_patch.sh",
     "native_agent/src/main.c",
     "native_agent/test/smoke.py",
@@ -89,7 +95,7 @@ REQUIRED_PATHS = [
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",
-    ".github/release-notes/v0.2.0.md",
+    ".github/release-notes/v0.3.1.md",
     ".github/workflows/release.yml",
     ".github/workflows/validate.yml",
 ]
@@ -274,8 +280,11 @@ def check_secret_patterns() -> list[str]:
         if is_ignored(path) or not path.is_file() or path.suffix not in TEXT_SUFFIXES:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
+        text_for_secret_scan = text
+        for public_url in PUBLIC_REPOSITORY_URLS:
+            text_for_secret_scan = text_for_secret_scan.replace(public_url, "")
         for name, pattern in DENY_PATTERNS.items():
-            if pattern.search(text):
+            if pattern.search(text_for_secret_scan):
                 failures.append(f"possible secret/internal value ({name}) in {relative(path)}")
     return failures
 
@@ -357,8 +366,8 @@ def check_release_metadata() -> list[str]:
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         failures.append("manifest version must be a stable semver release")
         return failures
-    if version != "0.2.0":
-        failures.append(f"release metadata must stay on 0.2.0, got {version}")
+    if version != "0.3.1":
+        failures.append(f"release metadata must stay on 0.3.1, got {version}")
     release_tag = f"v{version}"
     release_note = ROOT / ".github" / "release-notes" / f"{release_tag}.md"
     required_mentions = {

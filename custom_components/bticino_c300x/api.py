@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from base64 import b64encode
 from typing import Any
 from urllib.parse import quote
@@ -13,11 +12,9 @@ from aiohttp import ClientError, ClientSession
 from .const import (
     DEFAULT_AGENT_PORT,
     HEADER_MAINTENANCE_TOKEN,
-    LOCK_ID_PATTERN,
     SMARTPHONE_FORWARDING_MODE_BLOCKED,
     SMARTPHONE_FORWARDING_MODE_ENABLED,
     SMARTPHONE_FORWARDING_MODES,
-    STAIR_LIGHT_ADDRESS_PATTERN,
 )
 from .fingerprint import fnv1a64_fingerprint
 from .forwarding import (
@@ -26,11 +23,13 @@ from .forwarding import (
     coerce_forwarding_mode_state,
     forwarding_state_from_value,
 )
+from .validation_patterns import (
+    LOCK_ID_RE,
+    MEMO_ID_RE,
+    STAIR_LIGHT_ADDRESS_RE,
+    VIDEO_MESSAGE_ID_RE,
+)
 
-_STAIR_LIGHT_ADDRESS_RE = re.compile(STAIR_LIGHT_ADDRESS_PATTERN)
-_LOCK_ID_RE = re.compile(LOCK_ID_PATTERN)
-_MEMO_ID_RE = re.compile(r"^(text|voice)/[A-Za-z0-9_.-]{1,64}$")
-_VIDEO_MESSAGE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _SETUP_TIMEOUT = 2.0
 
 
@@ -81,6 +80,7 @@ class C300XAgentApi:
         device = data.get("device") if isinstance(data.get("device"), dict) else {}
         return {
             "version": agent.get("version") or data.get("api_version"),
+            "agent": agent,
             "implementation": agent.get("implementation"),
             "api_version": data.get("api_version"),
             "device_id": device.get("id"),
@@ -142,7 +142,7 @@ class C300XAgentApi:
             "/api/v1/stair-light/actions/activate",
             json_data={"address": address},
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_unlock_door(self, lock_id: str = "default") -> dict[str, Any]:
         """Unlock the configured C300X door lock through the device agent."""
@@ -152,7 +152,7 @@ class C300XAgentApi:
             "POST",
             f"/api/v1/locks/{quote(normalized_lock_id, safe='')}/actions/unlock",
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_ringer_status(self) -> dict[str, Any]:
         """Return ringer mute status."""
@@ -205,7 +205,7 @@ class C300XAgentApi:
             "/api/v1/answering-machine/messages/actions/delete",
             json_data={"id": normalized_message_id},
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_memos(self) -> dict[str, Any]:
         """Return local manual text and voice memo metadata."""
@@ -234,7 +234,7 @@ class C300XAgentApi:
             "/api/v1/memos/actions/delete",
             json_data={"id": normalized_memo_id},
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         """Return doorbell video availability and bridge status."""
@@ -253,7 +253,7 @@ class C300XAgentApi:
             "/api/v1/video/doorbell/actions/activate",
             json_data={"audio": bool(audio)},
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         """Stop the native doorbell video call."""
@@ -262,7 +262,7 @@ class C300XAgentApi:
             "POST",
             "/api/v1/video/doorbell/actions/stop",
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_system_metrics(self) -> dict[str, Any]:
         """Return low-frequency device-agent system metrics."""
@@ -451,6 +451,140 @@ class C300XAgentApi:
         )
         return normalize_auth_config_status(data)
 
+    async def async_mqtt_status(self) -> dict[str, Any]:
+        """Return native MQTT bridge status."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/mqtt",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_mqtt_status(data)
+
+    async def async_set_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Enable or disable the native MQTT bridge."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/mqtt",
+            json_data={"enabled": bool(enabled)},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_mqtt_status(data)
+
+    async def async_migrate_legacy_mqtt_to_native(self) -> dict[str, Any]:
+        """Remove a legacy TcpDump2Mqtt install and enable native MQTT when needed."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/mqtt/actions/migrate-legacy",
+            json_data={"confirm": "migrate_legacy_mqtt"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
+    async def async_legacy_mqtt_status(self) -> dict[str, Any]:
+        """Return legacy TcpDump2Mqtt patch status."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/legacy-mqtt",
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_legacy_mqtt_status(data)
+
+    async def async_set_legacy_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
+        """Restore or remove the legacy TcpDump2Mqtt patch."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/legacy-mqtt",
+            json_data={"enabled": bool(enabled)},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_legacy_mqtt_status(data)
+
+    async def async_agent_update_status(self) -> dict[str, Any]:
+        """Return native-agent self-update status."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/maintenance/update/status",
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
+    async def async_prepare_agent_update(
+        self,
+        *,
+        bundle_hash: str,
+        agent_version: str,
+    ) -> dict[str, Any]:
+        """Prepare a staged native-agent self-update."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/update/prepare",
+            json_data={
+                "bundle_hash": bundle_hash,
+                "agent_version": agent_version,
+            },
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
+    async def async_upload_agent_update_chunk(
+        self,
+        *,
+        path: str,
+        sha256: str,
+        mode: str,
+        offset: int,
+        data: bytes,
+        final: bool,
+    ) -> dict[str, Any]:
+        """Upload one base64-encoded chunk for a staged agent update file."""
+
+        response = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/update/file",
+            json_data={
+                "path": path,
+                "sha256": sha256,
+                "mode": mode,
+                "offset": offset,
+                "data": b64encode(data).decode("ascii"),
+                "final": final,
+            },
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return _ok_response(response)
+
+    async def async_apply_agent_update(self, *, bundle_hash: str) -> dict[str, Any]:
+        """Apply a verified staged native-agent self-update."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/update/apply",
+            json_data={"bundle_hash": bundle_hash, "confirm": "update_agent"},
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return _ok_response(data)
+
+    async def async_normalize_agent_config(self) -> dict[str, Any]:
+        """Rewrite the device config with the current agent schema and values."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/config/actions/normalize",
+            json_data={"confirm": "normalize_config"},
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return _ok_response(data)
+
     async def async_set_maintenance_no_auth_allowed(
         self,
         enabled: bool,
@@ -477,7 +611,7 @@ class C300XAgentApi:
             json_data={"confirm": "start_ssh"},
             extra_headers=self._maintenance_headers(),
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_stop_ssh(self) -> dict[str, Any]:
         """Stop the device SSH service through the maintenance API."""
@@ -520,7 +654,7 @@ class C300XAgentApi:
             json_data={"confirm": "reboot"},
             extra_headers=self._maintenance_headers(),
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_remove_agent(self) -> dict[str, Any]:
         """Schedule native agent removal while keeping SSH available."""
@@ -531,7 +665,7 @@ class C300XAgentApi:
             json_data={"confirm": "remove_agent"},
             extra_headers=self._maintenance_headers(),
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_reload_gui(self) -> dict[str, Any]:
         """Reload the C300X graphical interface through the maintenance API."""
@@ -542,7 +676,7 @@ class C300XAgentApi:
             json_data={"confirm": "reload_gui"},
             extra_headers=self._maintenance_headers(),
         )
-        return data if isinstance(data, dict) else {"ok": True, "raw": data}
+        return _ok_response(data)
 
     async def async_firewall_status(self) -> dict[str, Any]:
         """Return C300X persistent firewall rule state through the maintenance API."""
@@ -751,40 +885,57 @@ def display_bridge_callback_fingerprint(
     return fnv1a64_fingerprint(material)
 
 
+def _ok_response(data: Any) -> dict[str, Any]:
+    """Return mutation responses as dictionaries."""
+
+    return data if isinstance(data, dict) else {"ok": True, "raw": data}
+
+
 def normalize_stair_light_address(address: Any) -> str:
     """Validate and normalize a staircase-light OpenWebNet address segment."""
 
-    value = str(address or "").strip()
-    if not _STAIR_LIGHT_ADDRESS_RE.fullmatch(value):
-        raise C300XAgentApiResponseError("invalid staircase light address")
-    return value
+    return _normalize_pattern_value(
+        address,
+        STAIR_LIGHT_ADDRESS_RE,
+        error="invalid staircase light address",
+    )
 
 
 def normalize_lock_id(lock_id: Any) -> str:
     """Validate and normalize a configured C300X lock id."""
 
-    value = str(lock_id or "default").strip()
-    if not _LOCK_ID_RE.fullmatch(value):
-        raise C300XAgentApiResponseError("invalid lock id")
-    return value
+    return _normalize_pattern_value(lock_id, LOCK_ID_RE, default="default", error="invalid lock id")
 
 
 def normalize_memo_id(memo_id: Any) -> str:
     """Validate and normalize a manual memo id."""
 
-    value = str(memo_id or "").strip()
-    if not _MEMO_ID_RE.fullmatch(value):
-        raise C300XAgentApiResponseError("invalid memo id")
-    return value
+    return _normalize_pattern_value(memo_id, MEMO_ID_RE, error="invalid memo id")
 
 
 def normalize_video_message_id(message_id: Any) -> str:
     """Validate and normalize a stored answering-machine video message id."""
 
-    value = str(message_id or "").strip()
-    if not _VIDEO_MESSAGE_ID_RE.fullmatch(value):
-        raise C300XAgentApiResponseError("invalid video message id")
-    return value
+    return _normalize_pattern_value(
+        message_id,
+        VIDEO_MESSAGE_ID_RE,
+        error="invalid video message id",
+    )
+
+
+def _normalize_pattern_value(
+    value: Any,
+    pattern: Any,
+    *,
+    error: str,
+    default: str = "",
+) -> str:
+    """Normalize one string value and validate it against a compiled pattern."""
+
+    normalized = str(value or default).strip()
+    if not pattern.fullmatch(normalized):
+        raise C300XAgentApiResponseError(error)
+    return normalized
 
 
 def normalize_doorbell_video(data: Any) -> dict[str, Any]:
@@ -831,6 +982,10 @@ def normalize_system_metrics(data: Any) -> dict[str, Any]:
         "load_1m_percent": _optional_float(data.get("load_1m_percent")),
         "load_5m_percent": _optional_float(data.get("load_5m_percent")),
         "load_15m_percent": _optional_float(data.get("load_15m_percent")),
+        "memory_total_kb": _optional_int(data.get("memory_total_kb")),
+        "memory_available_kb": _optional_int(data.get("memory_available_kb")),
+        "memory_used_kb": _optional_int(data.get("memory_used_kb")),
+        "memory_usage_percent": _optional_float(data.get("memory_usage_percent")),
         "temperature_c": _optional_float(data.get("temperature_c")),
         "temperature_source": data.get("temperature_source"),
         "raw": data,
@@ -844,6 +999,7 @@ def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
         raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
     return {
         "agent_write_count": _optional_int(data.get("agent_write_count")) or 0,
+        "last_write_at": _optional_int(data.get("last_write_at")),
         "last_write_reason": _optional_string(data.get("last_write_reason")),
         "last_write_class": _optional_string(data.get("last_write_class")),
         "subscription_store_writes": _optional_int(
@@ -851,6 +1007,21 @@ def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
         )
         or 0,
         "qml_patch_last_action": _optional_string(data.get("qml_patch_last_action")),
+        "loop_iterations": _optional_int(data.get("loop_iterations")),
+        "poll_wakeups": _optional_int(data.get("poll_wakeups")),
+        "accepted_clients": _optional_int(data.get("accepted_clients")),
+        "last_wake_reason": _optional_string(data.get("last_wake_reason")),
+        "last_poll_timeout_ms": _optional_int(data.get("last_poll_timeout_ms")),
+        "last_poll_count": _optional_int(data.get("last_poll_count")),
+        "open_fd_count": _optional_int(data.get("open_fd_count")),
+        "video_running": _optional_bool(data.get("video_running")),
+        "video_media_starting": _optional_bool(data.get("video_media_starting")),
+        "video_call_active": _optional_bool(data.get("video_call_active")),
+        "video_clients": _optional_int(data.get("video_clients")),
+        "video_bridge_open_fds": _optional_int(data.get("video_bridge_open_fds")),
+        "video_bridge_active_threads": _optional_int(
+            data.get("video_bridge_active_threads")
+        ),
         "raw": data,
     }
 
@@ -953,6 +1124,63 @@ def normalize_firewall_status(data: Any) -> dict[str, Any]:
         "backup_available": _optional_bool(data.get("backup_available")),
         "api_port": _optional_int(data.get("api_port")),
         "changed_files": _optional_int(data.get("changed_files")),
+        "raw": data,
+    }
+
+
+def normalize_mqtt_status(data: Any) -> dict[str, Any]:
+    """Normalize native MQTT bridge status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("MQTT status returned non-object JSON")
+    topics = data.get("topics") if isinstance(data.get("topics"), dict) else {}
+    return {
+        "available": data.get("available", True) is not False,
+        "enabled": _optional_bool(data.get("enabled")),
+        "configured": _optional_bool(data.get("configured")),
+        "connected": _optional_bool(data.get("connected")),
+        "subscribed": _optional_bool(data.get("subscribed")),
+        "host_configured": _optional_bool(data.get("host_configured")),
+        "username_configured": _optional_bool(data.get("username_configured")),
+        "password_configured": _optional_bool(data.get("password_configured")),
+        "port": _optional_int(data.get("port")),
+        "client_id": _optional_string(data.get("client_id")),
+        "command_host": _optional_string(data.get("command_host")),
+        "command_port": _optional_int(data.get("command_port")),
+        "command_topic": _optional_string(topics.get("command")),
+        "event_topic": _optional_string(topics.get("event")),
+        "json_event_topic": _optional_string(topics.get("json_event")),
+        "status_topic": _optional_string(topics.get("status")),
+        "availability_topic": _optional_string(topics.get("availability")),
+        "qos": _optional_int(data.get("qos")),
+        "keepalive_seconds": _optional_int(data.get("keepalive_seconds")),
+        "reconnect_initial_seconds": _optional_int(
+            data.get("reconnect_initial_seconds")
+        ),
+        "reconnect_max_seconds": _optional_int(data.get("reconnect_max_seconds")),
+        "legacy_installed": _optional_bool(data.get("legacy_installed")),
+        "legacy_enabled": _optional_bool(data.get("legacy_enabled")),
+        "legacy_running": _optional_bool(data.get("legacy_running")),
+        "exclusive": data.get("exclusive") is True,
+        "raw": data,
+    }
+
+
+def normalize_legacy_mqtt_status(data: Any) -> dict[str, Any]:
+    """Normalize legacy TcpDump2Mqtt patch status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("legacy MQTT status returned non-object JSON")
+    return {
+        "available": data.get("available", True) is not False,
+        "enabled": _optional_bool(data.get("enabled")),
+        "installed": _optional_bool(data.get("installed")),
+        "running": _optional_bool(data.get("running")),
+        "backup_available": _optional_bool(data.get("backup_available")),
+        "native_enabled": _optional_bool(data.get("native_enabled")),
+        "exclusive": data.get("exclusive") is True,
+        "script_path": _optional_string(data.get("script_path")),
+        "init_link": _optional_string(data.get("init_link")),
         "raw": data,
     }
 

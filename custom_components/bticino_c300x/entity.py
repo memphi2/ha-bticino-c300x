@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -11,6 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, DOMAIN, SIGNAL_CONNECTION_STATE_CHANGED
+from .entry_config import entry_config_value
 
 
 class C300XEntity(Entity):
@@ -59,19 +58,6 @@ def supports_capability(entry: ConfigEntry, capability: str) -> bool:
 
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     return capability_is_supported(capabilities, capability)
-
-
-def entry_config_value(entry: ConfigEntry, key: str, default: Any = None) -> Any:
-    """Return an option override when present, otherwise setup data."""
-
-    if key in entry.options:
-        value = entry.options[key]
-        if value in (None, ""):
-            return default
-        if isinstance(value, str) and not value.strip():
-            return default
-        return value
-    return entry.data.get(key, default)
 
 
 def entry_video_enabled(entry: ConfigEntry) -> bool:

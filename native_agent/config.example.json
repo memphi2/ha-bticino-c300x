@@ -75,6 +75,27 @@
       "port": 7667
     }
   },
+  "mqtt": {
+    "enabled": false,
+    "host": "",
+    "port": 1883,
+    "username": "",
+    "password": "",
+    "clientId": "c300x-native-agent",
+    "commandHost": "127.0.0.1",
+    "commandPort": 30006,
+    "topics": {
+      "command": "Bticino/rx",
+      "event": "Bticino/tx",
+      "jsonEvent": "",
+      "status": "Bticino/start_date",
+      "availability": "Bticino/LastWillT"
+    },
+    "qos": 0,
+    "keepaliveSeconds": 120,
+    "reconnectInitialSeconds": 30,
+    "reconnectMaxSeconds": 600
+  },
   "answeringMachine": {
     "messages": {
       "enabled": true,

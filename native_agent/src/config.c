@@ -1,3 +1,9 @@
+#ifdef __arm__
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE 1
+#endif
+#endif
+
 #include "c300x_agent.h"
 
 #include <ctype.h>
@@ -5,6 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __arm__
+#include <sys/syscall.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -97,6 +106,23 @@ void c300x_default_config(struct c300x_config *config)
         "/home/bticino/cfg/extra/c300x-native-agent/subscriptions.json"
     );
     config->callback_timeout_ms = 2500;
+    config->mqtt_enabled = 0;
+    config->mqtt_host[0] = '\0';
+    config->mqtt_port = 1883;
+    config->mqtt_username[0] = '\0';
+    config->mqtt_password[0] = '\0';
+    safe_copy(config->mqtt_client_id, sizeof(config->mqtt_client_id), "c300x-native-agent");
+    safe_copy(config->mqtt_command_host, sizeof(config->mqtt_command_host), "127.0.0.1");
+    config->mqtt_command_port = 30006;
+    safe_copy(config->mqtt_command_topic, sizeof(config->mqtt_command_topic), "Bticino/rx");
+    safe_copy(config->mqtt_event_topic, sizeof(config->mqtt_event_topic), "Bticino/tx");
+    config->mqtt_json_event_topic[0] = '\0';
+    safe_copy(config->mqtt_status_topic, sizeof(config->mqtt_status_topic), "Bticino/start_date");
+    safe_copy(config->mqtt_availability_topic, sizeof(config->mqtt_availability_topic), "Bticino/LastWillT");
+    config->mqtt_qos = 0;
+    config->mqtt_keepalive_seconds = 120;
+    config->mqtt_reconnect_initial_seconds = 30;
+    config->mqtt_reconnect_max_seconds = 600;
     config->home_assistant_request_timeout_ms = 3000;
     config->api_no_auth = 0;
     config->video_enabled = 0;
@@ -460,6 +486,26 @@ static int int_value(const char *value, const char *document_end, int *out)
     value = skip_ws(value, document_end);
     parsed = strtol(value, &parse_end, 10);
     if (parse_end == value || parsed <= 0 || parsed > 60000) {
+        return 0;
+    }
+    *out = (int)parsed;
+    return 1;
+}
+
+static int int_range_value(
+    const char *value,
+    const char *document_end,
+    int minimum,
+    int maximum,
+    int *out
+)
+{
+    char *parse_end = NULL;
+    long parsed;
+
+    value = skip_ws(value, document_end);
+    parsed = strtol(value, &parse_end, 10);
+    if (parse_end == value || parsed < minimum || parsed > maximum) {
         return 0;
     }
     *out = (int)parsed;
@@ -846,6 +892,125 @@ int c300x_load_config(
     if (nested_member3(document, document_end, "events", "udp", "port", &value)) {
         if (!uint16_value(value, document_end, &config->events_port)) {
             set_error(error, error_len, "events.udp.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->mqtt_enabled)) {
+            set_error(error, error_len, "mqtt.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "host", &value)) {
+        if (!string_value(value, document_end, config->mqtt_host, sizeof(config->mqtt_host))) {
+            set_error(error, error_len, "mqtt.host must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "port", &value)) {
+        if (!uint16_value(value, document_end, &config->mqtt_port)) {
+            set_error(error, error_len, "mqtt.port must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "username", &value)) {
+        if (!string_value(value, document_end, config->mqtt_username, sizeof(config->mqtt_username))) {
+            set_error(error, error_len, "mqtt.username must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "password", &value)) {
+        if (!string_value(value, document_end, config->mqtt_password, sizeof(config->mqtt_password))) {
+            set_error(error, error_len, "mqtt.password must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "clientId", &value)) {
+        if (!string_value(value, document_end, config->mqtt_client_id, sizeof(config->mqtt_client_id))) {
+            set_error(error, error_len, "mqtt.clientId must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "commandHost", &value)) {
+        if (!string_value(value, document_end, config->mqtt_command_host, sizeof(config->mqtt_command_host))) {
+            set_error(error, error_len, "mqtt.commandHost must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "commandPort", &value)) {
+        if (!uint16_value(value, document_end, &config->mqtt_command_port)) {
+            set_error(error, error_len, "mqtt.commandPort must be a valid port");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "mqtt", "topics", "command", &value)) {
+        if (!string_value(value, document_end, config->mqtt_command_topic, sizeof(config->mqtt_command_topic))) {
+            set_error(error, error_len, "mqtt.topics.command must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "mqtt", "topics", "event", &value)) {
+        if (!string_value(value, document_end, config->mqtt_event_topic, sizeof(config->mqtt_event_topic))) {
+            set_error(error, error_len, "mqtt.topics.event must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "mqtt", "topics", "jsonEvent", &value)) {
+        if (!string_value(value, document_end, config->mqtt_json_event_topic, sizeof(config->mqtt_json_event_topic))) {
+            set_error(error, error_len, "mqtt.topics.jsonEvent must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "mqtt", "topics", "status", &value)) {
+        if (!string_value(value, document_end, config->mqtt_status_topic, sizeof(config->mqtt_status_topic))) {
+            set_error(error, error_len, "mqtt.topics.status must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member3(document, document_end, "mqtt", "topics", "availability", &value)) {
+        if (!string_value(value, document_end, config->mqtt_availability_topic, sizeof(config->mqtt_availability_topic))) {
+            set_error(error, error_len, "mqtt.topics.availability must be a string");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "qos", &value)) {
+        if (!int_range_value(value, document_end, 0, 0, &config->mqtt_qos)) {
+            set_error(error, error_len, "mqtt.qos must be 0");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "keepaliveSeconds", &value)) {
+        if (!int_value(value, document_end, &config->mqtt_keepalive_seconds)) {
+            set_error(error, error_len, "mqtt.keepaliveSeconds must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "reconnectInitialSeconds", &value)) {
+        if (!int_value(value, document_end, &config->mqtt_reconnect_initial_seconds)) {
+            set_error(error, error_len, "mqtt.reconnectInitialSeconds must be positive");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "mqtt", "reconnectMaxSeconds", &value)) {
+        if (!int_value(value, document_end, &config->mqtt_reconnect_max_seconds)) {
+            set_error(error, error_len, "mqtt.reconnectMaxSeconds must be positive");
             free(document);
             return 0;
         }
@@ -1251,6 +1416,40 @@ int c300x_load_config(
             return 0;
         }
     }
+    if (config->mqtt_enabled) {
+        if (config->mqtt_host[0] == '\0') {
+            set_error(error, error_len, "mqtt.host must be set when mqtt.enabled=true");
+            return 0;
+        }
+        if (config->mqtt_client_id[0] == '\0') {
+            set_error(error, error_len, "mqtt.clientId must be set when mqtt.enabled=true");
+            return 0;
+        }
+        if (config->mqtt_command_topic[0] != '\0' && config->mqtt_command_host[0] == '\0') {
+            set_error(error, error_len, "mqtt.commandHost must be set when command topic is enabled");
+            return 0;
+        }
+        if (config->mqtt_command_topic[0] == '\0' && config->mqtt_event_topic[0] == '\0') {
+            set_error(error, error_len, "at least one MQTT command or event topic must be set");
+            return 0;
+        }
+    }
+    if (config->mqtt_qos != 0) {
+        set_error(error, error_len, "mqtt.qos must be 0");
+        return 0;
+    }
+    if (config->mqtt_keepalive_seconds < 10) {
+        set_error(error, error_len, "mqtt.keepaliveSeconds must be >= 10");
+        return 0;
+    }
+    if (config->mqtt_reconnect_initial_seconds < 1) {
+        set_error(error, error_len, "mqtt.reconnectInitialSeconds must be >= 1");
+        return 0;
+    }
+    if (config->mqtt_reconnect_max_seconds < config->mqtt_reconnect_initial_seconds) {
+        set_error(error, error_len, "mqtt.reconnectMaxSeconds must be >= reconnectInitialSeconds");
+        return 0;
+    }
     if (config->video_rtsp_path[0] == '\0' || config->video_rtsp_video_path[0] == '\0') {
         set_error(error, error_len, "video.rtsp.path and video.rtsp.videoPath must be set");
         return 0;
@@ -1319,15 +1518,215 @@ static void write_json_string_field(FILE *file, const char *name, const char *va
     fprintf(file, "%s\n", suffix);
 }
 
-int c300x_save_config(
+static const char *persisted_api_token(const struct c300x_config *config)
+{
+    return config->api_token_from_env ? config->api_file_token : config->api_token;
+}
+
+int c300x_config_persisted_equal(
+    const struct c300x_config *left,
+    const struct c300x_config *right
+)
+{
+#define C300X_EQ_INT(field) (left->field == right->field)
+#define C300X_EQ_STR(field) (strcmp(left->field, right->field) == 0)
+    return C300X_EQ_STR(listen_host)
+        && C300X_EQ_INT(api_port)
+        && C300X_EQ_INT(ui_port)
+        && C300X_EQ_INT(allow_lan)
+        && C300X_EQ_INT(display_bridge_enabled)
+        && C300X_EQ_STR(device_model)
+        && C300X_EQ_STR(device_firmware)
+        && C300X_EQ_STR(home_assistant_webhook_url)
+        && C300X_EQ_STR(home_assistant_shared_secret)
+        && C300X_EQ_INT(home_assistant_request_timeout_ms)
+        && strcmp(persisted_api_token(left), persisted_api_token(right)) == 0
+        && C300X_EQ_INT(api_no_auth)
+        && C300X_EQ_STR(openwebnet_host)
+        && C300X_EQ_INT(openwebnet_port)
+        && C300X_EQ_INT(openwebnet_timeout_ms)
+        && C300X_EQ_STR(stair_light_default_address)
+        && C300X_EQ_STR(lock_name)
+        && C300X_EQ_STR(lock_address)
+        && C300X_EQ_INT(lock_release_delay_ms)
+        && C300X_EQ_INT(maintenance_enabled)
+        && C300X_EQ_INT(maintenance_ssh_start_enabled)
+        && C300X_EQ_INT(maintenance_reboot_enabled)
+        && C300X_EQ_INT(maintenance_reboot_delay_ms)
+        && C300X_EQ_INT(maintenance_agent_remove_enabled)
+        && C300X_EQ_STR(maintenance_agent_remove_script)
+        && C300X_EQ_INT(maintenance_gui_reload_enabled)
+        && C300X_EQ_STR(maintenance_gui_reload_script)
+        && C300X_EQ_INT(maintenance_qml_patch_enabled)
+        && C300X_EQ_STR(maintenance_qml_patch_script)
+        && C300X_EQ_INT(maintenance_firewall_enabled)
+        && C300X_EQ_INT(maintenance_ipv6_firewall_enabled)
+        && C300X_EQ_STR(maintenance_firewall_path)
+        && C300X_EQ_STR(maintenance_firewall_backup_path)
+        && C300X_EQ_STR(maintenance_ipv6_firewall_path)
+        && C300X_EQ_STR(maintenance_ipv6_firewall_backup_path)
+        && C300X_EQ_STR(maintenance_admin_token)
+        && C300X_EQ_INT(maintenance_no_auth_allowed)
+        && C300X_EQ_INT(mdns_enabled)
+        && C300X_EQ_STR(mdns_name)
+        && C300X_EQ_INT(events_enabled)
+        && C300X_EQ_STR(events_group)
+        && C300X_EQ_INT(events_port)
+        && C300X_EQ_STR(subscription_store_path)
+        && C300X_EQ_INT(callback_timeout_ms)
+        && C300X_EQ_INT(mqtt_enabled)
+        && C300X_EQ_STR(mqtt_host)
+        && C300X_EQ_INT(mqtt_port)
+        && C300X_EQ_STR(mqtt_username)
+        && C300X_EQ_STR(mqtt_password)
+        && C300X_EQ_STR(mqtt_client_id)
+        && C300X_EQ_STR(mqtt_command_host)
+        && C300X_EQ_INT(mqtt_command_port)
+        && C300X_EQ_STR(mqtt_command_topic)
+        && C300X_EQ_STR(mqtt_event_topic)
+        && C300X_EQ_STR(mqtt_json_event_topic)
+        && C300X_EQ_STR(mqtt_status_topic)
+        && C300X_EQ_STR(mqtt_availability_topic)
+        && C300X_EQ_INT(mqtt_qos)
+        && C300X_EQ_INT(mqtt_keepalive_seconds)
+        && C300X_EQ_INT(mqtt_reconnect_initial_seconds)
+        && C300X_EQ_INT(mqtt_reconnect_max_seconds)
+        && C300X_EQ_INT(video_enabled)
+        && C300X_EQ_STR(video_av_host)
+        && C300X_EQ_INT(video_av_port)
+        && C300X_EQ_INT(video_av_timeout_ms)
+        && C300X_EQ_INT(video_av_high_resolution)
+        && C300X_EQ_INT(video_rtsp_port)
+        && C300X_EQ_INT(video_rtp_port_start)
+        && C300X_EQ_INT(video_rtp_port_count)
+        && C300X_EQ_INT(video_rtsp_keep_alive_ms)
+        && C300X_EQ_STR(video_rtsp_path)
+        && C300X_EQ_STR(video_rtsp_video_path)
+        && C300X_EQ_STR(video_rtsp_recorder_path)
+        && C300X_EQ_STR(video_rtsp_username)
+        && C300X_EQ_STR(video_rtsp_password)
+        && C300X_EQ_STR(video_sip_from)
+        && C300X_EQ_STR(video_sip_to)
+        && C300X_EQ_STR(video_sip_domain)
+        && C300X_EQ_STR(video_sip_devaddr)
+        && C300X_EQ_STR(video_sip_local_ip)
+        && C300X_EQ_INT(video_sip_local_port)
+        && C300X_EQ_INT(video_sip_use_tcp)
+        && C300X_EQ_INT(video_sip_debug)
+        && C300X_EQ_INT(answering_machine_messages_enabled)
+        && C300X_EQ_STR(answering_machine_messages_root)
+        && C300X_EQ_INT(answering_machine_messages_watch)
+        && C300X_EQ_INT(answering_machine_messages_max)
+        && C300X_EQ_INT(system_metrics_enabled)
+        && C300X_EQ_INT(system_metrics_watch)
+        && C300X_EQ_INT(system_metrics_sample_interval_seconds)
+        && C300X_EQ_INT(system_metrics_heartbeat_seconds)
+        && C300X_EQ_INT(system_metrics_change_percent)
+        && C300X_EQ_INT(memos_enabled)
+        && C300X_EQ_STR(memos_text_root)
+        && C300X_EQ_STR(memos_voice_root)
+        && C300X_EQ_INT(memos_watch)
+        && C300X_EQ_INT(memos_max);
+#undef C300X_EQ_INT
+#undef C300X_EQ_STR
+}
+
+static int files_equal(const char *left_path, const char *right_path)
+{
+    FILE *left = fopen(left_path, "rb");
+    FILE *right = fopen(right_path, "rb");
+    unsigned char left_buffer[4096];
+    unsigned char right_buffer[4096];
+    int equal = 1;
+
+    if (left == NULL || right == NULL) {
+        if (left != NULL) {
+            fclose(left);
+        }
+        if (right != NULL) {
+            fclose(right);
+        }
+        return 0;
+    }
+
+    while (1) {
+        size_t left_read = fread(left_buffer, 1, sizeof(left_buffer), left);
+        size_t right_read = fread(right_buffer, 1, sizeof(right_buffer), right);
+
+        if (left_read != right_read || memcmp(left_buffer, right_buffer, left_read) != 0) {
+            equal = 0;
+            break;
+        }
+        if (left_read < sizeof(left_buffer)) {
+            if (ferror(left) || ferror(right)) {
+                equal = 0;
+            }
+            break;
+        }
+    }
+
+    fclose(left);
+    fclose(right);
+    return equal;
+}
+
+static int read_config_file_mode(const char *path, mode_t *mode)
+{
+#ifdef __arm__
+    struct stat64 status;
+
+    if (syscall(SYS_stat64, path, &status) != 0) {
+        return 0;
+    }
+#else
+    struct stat status;
+
+    if (stat(path, &status) != 0) {
+        return 0;
+    }
+#endif
+    *mode = status.st_mode;
+    return 1;
+}
+
+static int ensure_config_mode(
+    const char *path,
+    char *error,
+    size_t error_len,
+    int *changed
+)
+{
+    mode_t mode;
+
+    if (!read_config_file_mode(path, &mode)) {
+        return 1;
+    }
+    if ((mode & 0777) == 0600) {
+        return 1;
+    }
+    if (chmod(path, 0600) != 0) {
+        set_error(error, error_len, "unable to set config file mode");
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int save_config_internal(
     const struct c300x_config *config,
     char *error,
-    size_t error_len
+    size_t error_len,
+    int *changed
 )
 {
     char temporary_path[C300X_MAX_PATH_LEN + 8];
     FILE *file;
 
+    if (changed != NULL) {
+        *changed = 0;
+    }
     if (config->config_path[0] == '\0') {
         set_error(error, error_len, "config path is not set");
         return 0;
@@ -1411,6 +1810,34 @@ int c300x_save_config(
     fprintf(file, "    \"udp\": {\"enabled\": %s,\"group\": ", config->events_enabled ? "true" : "false");
     write_json_string(file, config->events_group);
     fprintf(file, ",\"port\": %u}\n  },\n", config->events_port);
+    fprintf(file, "  \"mqtt\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->mqtt_enabled ? "true" : "false");
+    write_json_string_field(file, "host", config->mqtt_host, ",");
+    fprintf(file, "    \"port\": %u,\n", config->mqtt_port);
+    write_json_string_field(file, "username", config->mqtt_username, ",");
+    write_json_string_field(file, "password", config->mqtt_password, ",");
+    write_json_string_field(file, "clientId", config->mqtt_client_id, ",");
+    write_json_string_field(file, "commandHost", config->mqtt_command_host, ",");
+    fprintf(file, "    \"commandPort\": %u,\n", config->mqtt_command_port);
+    fprintf(file, "    \"topics\": {\"command\": ");
+    write_json_string(file, config->mqtt_command_topic);
+    fprintf(file, ",\"event\": ");
+    write_json_string(file, config->mqtt_event_topic);
+    fprintf(file, ",\"jsonEvent\": ");
+    write_json_string(file, config->mqtt_json_event_topic);
+    fprintf(file, ",\"status\": ");
+    write_json_string(file, config->mqtt_status_topic);
+    fprintf(file, ",\"availability\": ");
+    write_json_string(file, config->mqtt_availability_topic);
+    fprintf(file, "},\n");
+    fprintf(
+        file,
+        "    \"qos\": %d,\n    \"keepaliveSeconds\": %d,\n    \"reconnectInitialSeconds\": %d,\n    \"reconnectMaxSeconds\": %d\n  },\n",
+        config->mqtt_qos,
+        config->mqtt_keepalive_seconds,
+        config->mqtt_reconnect_initial_seconds,
+        config->mqtt_reconnect_max_seconds
+    );
     fprintf(file, "  \"answeringMachine\": {\n");
     fprintf(file, "    \"messages\": {\"enabled\": %s,\"root\": ", config->answering_machine_messages_enabled ? "true" : "false");
     write_json_string(file, config->answering_machine_messages_root);
@@ -1463,11 +1890,37 @@ int c300x_save_config(
         return 0;
     }
     (void)chmod(temporary_path, 0600);
+    if (files_equal(temporary_path, config->config_path)) {
+        (void)unlink(temporary_path);
+        return ensure_config_mode(config->config_path, error, error_len, changed);
+    }
     if (rename(temporary_path, config->config_path) != 0) {
         (void)unlink(temporary_path);
         set_error(error, error_len, "unable to replace config file");
         return 0;
     }
     (void)chmod(config->config_path, 0600);
+    if (changed != NULL) {
+        *changed = 1;
+    }
     return 1;
+}
+
+int c300x_save_config(
+    const struct c300x_config *config,
+    char *error,
+    size_t error_len
+)
+{
+    return save_config_internal(config, error, error_len, NULL);
+}
+
+int c300x_save_config_if_changed(
+    const struct c300x_config *config,
+    char *error,
+    size_t error_len,
+    int *changed
+)
+{
+    return save_config_internal(config, error, error_len, changed);
 }

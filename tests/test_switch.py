@@ -94,9 +94,11 @@ from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XFirewallPatchSwitch,
     C300XGuiFunctionPatchSwitch,
     C300XIpv6FirewallPatchSwitch,
+    C300XLegacyMqttBridgeSwitch,
     C300XMaintenanceNoAuthSwitch,
     C300XMaintenanceSshSwitch,
     C300XMdnsDiscoverySwitch,
+    C300XNativeMqttBridgeSwitch,
     C300XNoAuthSwitch,
     C300XRingerMuteSwitch,
     C300XSmartphoneForwardingSwitch,
@@ -129,6 +131,12 @@ class _FakeApi:
         self.no_auth_sets: list[tuple[bool, str | None, str | None, bool | None]] = []
         self.maintenance_no_auth_sets: list[bool] = []
         self.mdns_sets: list[bool] = []
+        self.mqtt_status_reads = 0
+        self.mqtt_enabled_sets: list[bool] = []
+        self.mqtt_enabled = False
+        self.legacy_mqtt_status_reads = 0
+        self.legacy_mqtt_enabled_sets: list[bool] = []
+        self.legacy_mqtt_enabled = True
 
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         self.active_smartphone_reads += 1
@@ -349,6 +357,58 @@ class _FakeApi:
             "ipv6_firewall_enabled": enabled,
         }
 
+    async def async_mqtt_status(self) -> dict[str, Any]:
+        self.mqtt_status_reads += 1
+        return {
+            "available": True,
+            "enabled": self.mqtt_enabled,
+            "configured": True,
+            "connected": self.mqtt_enabled,
+            "subscribed": self.mqtt_enabled,
+            "host_configured": True,
+            "username_configured": True,
+            "password_configured": True,
+            "port": 1883,
+            "client_id": "c300x-native-agent",
+            "command_host": "127.0.0.1",
+            "command_port": 30006,
+            "command_topic": "Bticino/rx",
+            "event_topic": "Bticino/tx",
+            "json_event_topic": None,
+            "status_topic": "Bticino/start_date",
+            "availability_topic": "Bticino/LastWillT",
+            "qos": 0,
+            "keepalive_seconds": 120,
+        }
+
+    async def async_set_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.mqtt_enabled_sets.append(enabled)
+        self.mqtt_enabled = enabled
+        if enabled:
+            self.legacy_mqtt_enabled = False
+        return await self.async_mqtt_status()
+
+    async def async_legacy_mqtt_status(self) -> dict[str, Any]:
+        self.legacy_mqtt_status_reads += 1
+        return {
+            "available": True,
+            "enabled": self.legacy_mqtt_enabled,
+            "installed": self.legacy_mqtt_enabled,
+            "running": self.legacy_mqtt_enabled,
+            "backup_available": True,
+            "native_enabled": self.mqtt_enabled,
+            "exclusive": True,
+            "script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh",
+            "init_link": "/etc/rc5.d/S99TcpDump2Mqtt",
+        }
+
+    async def async_set_legacy_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.legacy_mqtt_enabled_sets.append(enabled)
+        self.legacy_mqtt_enabled = enabled
+        if enabled:
+            self.mqtt_enabled = False
+        return await self.async_legacy_mqtt_status()
+
 
 @dataclass
 class _FakeConnectionState:
@@ -536,6 +596,7 @@ def test_firewall_patch_switch_uses_read_only_status() -> None:
     )
     entity = C300XFirewallPatchSwitch(entry)  # type: ignore[arg-type]
 
+    assert entity._attr_entity_registry_enabled_default is False
     asyncio.run(entity.async_update())
 
     assert entry.runtime_data.api.firewall_status_reads == 1
@@ -628,6 +689,7 @@ def test_ipv6_firewall_patch_switch_uses_read_only_status() -> None:
     )
     entity = C300XIpv6FirewallPatchSwitch(entry)  # type: ignore[arg-type]
 
+    assert entity._attr_entity_registry_enabled_default is False
     asyncio.run(entity.async_update())
 
     assert entry.runtime_data.api.ipv6_firewall_status_reads == 1
@@ -709,6 +771,60 @@ def test_ipv6_firewall_patch_switch_recovers_when_maintenance_is_disabled() -> N
     assert entity.is_on is True
 
 
+def test_native_mqtt_bridge_switch_uses_read_only_status_and_toggles() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "mqtt_status": True,
+                    "mqtt_config": True,
+                }
+            },
+        )
+    )
+    entity = C300XNativeMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_turn_on())
+    asyncio.run(entity.async_turn_off())
+
+    assert entry.runtime_data.api.mqtt_status_reads == 3
+    assert entry.runtime_data.api.mqtt_enabled_sets == [True, False]
+    assert entity.is_on is False
+    assert entity.extra_state_attributes["configured"] is True
+    assert entity.extra_state_attributes["connected"] is False
+    assert entity.extra_state_attributes["event_topic"] == "Bticino/tx"
+
+
+def test_legacy_mqtt_bridge_switch_removes_and_restores_patch() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "legacy_mqtt_status": True,
+                    "legacy_mqtt_config": True,
+                }
+            },
+        )
+    )
+    entity = C300XLegacyMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    assert entity._attr_entity_registry_enabled_default is False
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_turn_off())
+    asyncio.run(entity.async_turn_on())
+
+    assert entry.runtime_data.api.legacy_mqtt_status_reads == 3
+    assert entry.runtime_data.api.legacy_mqtt_enabled_sets == [False, True]
+    assert entity.is_on is True
+    assert entity.extra_state_attributes["backup_available"] is True
+    assert entity.extra_state_attributes["script_path"] == (
+        "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
+    )
+
+
 def test_maintenance_switches_are_created_without_capabilities_but_do_not_refresh() -> None:
     entry = _FakeEntry()
     entities: list[Any] = []
@@ -724,9 +840,11 @@ def test_maintenance_switches_are_created_without_capabilities_but_do_not_refres
                 C300XFirewallPatchSwitch,
                 C300XGuiFunctionPatchSwitch,
                 C300XIpv6FirewallPatchSwitch,
+                C300XLegacyMqttBridgeSwitch,
                 C300XMaintenanceNoAuthSwitch,
                 C300XMaintenanceSshSwitch,
                 C300XMdnsDiscoverySwitch,
+                C300XNativeMqttBridgeSwitch,
                 C300XNoAuthSwitch,
             ),
         )
@@ -735,9 +853,11 @@ def test_maintenance_switches_are_created_without_capabilities_but_do_not_refres
         C300XFirewallPatchSwitch,
         C300XGuiFunctionPatchSwitch,
         C300XIpv6FirewallPatchSwitch,
+        C300XLegacyMqttBridgeSwitch,
         C300XMaintenanceNoAuthSwitch,
         C300XMaintenanceSshSwitch,
         C300XMdnsDiscoverySwitch,
+        C300XNativeMqttBridgeSwitch,
         C300XNoAuthSwitch,
     }
     assert all(not entity.available for entity in maintenance_entities.values())
@@ -746,6 +866,8 @@ def test_maintenance_switches_are_created_without_capabilities_but_do_not_refres
     assert entry.runtime_data.api.qml_patch_status_reads == 0
     assert entry.runtime_data.api.firewall_status_reads == 0
     assert entry.runtime_data.api.ipv6_firewall_status_reads == 0
+    assert entry.runtime_data.api.mqtt_status_reads == 0
+    assert entry.runtime_data.api.legacy_mqtt_status_reads == 0
 
 
 def test_no_auth_switch_refreshes_bootstrap_state() -> None:

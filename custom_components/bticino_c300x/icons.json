@@ -65,6 +65,9 @@
       "device_load": {
         "default": "mdi:gauge"
       },
+      "device_memory": {
+        "default": "mdi:memory"
+      },
       "device_temperature": {
         "default": "mdi:thermometer"
       },

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import timedelta
 from hmac import compare_digest
 from typing import Any
@@ -58,6 +59,30 @@ from .video import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+type _DisplayBridgeHandler = Callable[["_DisplayBridgeContext"], Awaitable[dict[str, Any]]]
+type _AgentEventStateHandler = Callable[["_AgentEventContext"], None]
+
+
+@dataclass(slots=True)
+class _DisplayBridgeContext:
+    """Display-bridge command payload context."""
+
+    hass: HomeAssistant
+    entry: ConfigEntry
+    payload: dict[str, Any]
+
+
+@dataclass(slots=True)
+class _AgentEventContext:
+    """Event payload context used by state mutation handlers."""
+
+    hass: HomeAssistant
+    entry: ConfigEntry
+    event_state: C300XEventState
+    event_type: str
+    payload: dict[str, Any]
+    data: dict[str, Any]
+
 
 def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[], None]:
     """Register the per-entry webhook and return an unregister callback."""
@@ -140,42 +165,14 @@ async def _async_handle_webhook(
         return _json_error("invalid_payload", status=400)
 
     message_type = payload.get("type", "status")
+    handler = _DISPLAY_BRIDGE_HANDLERS.get(str(message_type))
+    if handler is None:
+        return _json_error("unsupported_type", status=400)
+
     try:
-        if message_type in {"status", "alarm_status"}:
-            return web.json_response(await async_status(hass, entry))
-        if message_type == "dashboard":
-            return web.json_response(await async_dashboard_payload(hass, entry))
-        if message_type == "action":
-            return web.json_response(
-                await async_execute_action(hass, entry, payload.get("action_id", ""))
-            )
-        if message_type == "dashboard_action":
-            return web.json_response(
-                await async_execute_dashboard_action(
-                    hass,
-                    entry,
-                    str(payload.get("entity_id", "")),
-                )
-            )
-        if message_type == "stair_light":
-            return web.json_response(
-                await async_trigger_stair_light(
-                    hass,
-                    entry,
-                    optional_string(payload.get("address")),
-                )
-            )
-        if message_type == "alarm_command":
-            return web.json_response(
-                await async_execute_alarm_command(
-                    hass,
-                    entry,
-                    str(payload.get("command", "")),
-                    optional_string(payload.get("code")),
-                    force=payload.get("force") is True,
-                    check=payload.get("check") is True,
-                )
-            )
+        return web.json_response(
+            await handler(_DisplayBridgeContext(hass, entry, payload))
+        )
     except KeyError:
         return _json_error("unknown_action", status=404)
     except (ActionValidationError, ValueError) as err:
@@ -184,7 +181,63 @@ async def _async_handle_webhook(
         _LOGGER.warning("C300X webhook command failed: %s", err)
         return _json_error("command_failed", status=500)
 
-    return _json_error("unsupported_type", status=400)
+
+async def _display_bridge_status(context: _DisplayBridgeContext) -> dict[str, Any]:
+    return await async_status(context.hass, context.entry)
+
+
+async def _display_bridge_dashboard(context: _DisplayBridgeContext) -> dict[str, Any]:
+    return await async_dashboard_payload(context.hass, context.entry)
+
+
+async def _display_bridge_action(context: _DisplayBridgeContext) -> dict[str, Any]:
+    return await async_execute_action(
+        context.hass,
+        context.entry,
+        context.payload.get("action_id", ""),
+    )
+
+
+async def _display_bridge_dashboard_action(
+    context: _DisplayBridgeContext,
+) -> dict[str, Any]:
+    return await async_execute_dashboard_action(
+        context.hass,
+        context.entry,
+        str(context.payload.get("entity_id", "")),
+    )
+
+
+async def _display_bridge_stair_light(context: _DisplayBridgeContext) -> dict[str, Any]:
+    return await async_trigger_stair_light(
+        context.hass,
+        context.entry,
+        optional_string(context.payload.get("address")),
+    )
+
+
+async def _display_bridge_alarm_command(
+    context: _DisplayBridgeContext,
+) -> dict[str, Any]:
+    return await async_execute_alarm_command(
+        context.hass,
+        context.entry,
+        str(context.payload.get("command", "")),
+        optional_string(context.payload.get("code")),
+        force=context.payload.get("force") is True,
+        check=context.payload.get("check") is True,
+    )
+
+
+_DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {
+    "status": _display_bridge_status,
+    "alarm_status": _display_bridge_status,
+    "dashboard": _display_bridge_dashboard,
+    "action": _display_bridge_action,
+    "dashboard_action": _display_bridge_dashboard_action,
+    "stair_light": _display_bridge_stair_light,
+    "alarm_command": _display_bridge_alarm_command,
+}
 
 
 async def _async_handle_agent_event(
@@ -223,42 +276,27 @@ async def _async_handle_agent_event(
     event_state.last_event = event_type
     event_state.last_event_time = event_at
     event_state.event_sequence += 1
-    if event_type == "doorbell_pressed":
-        _activate_doorbell_state(hass, entry, event_state, payload, data)
-    elif event_type == "doorbell_view_requested":
-        _activate_video_state(
-            hass,
-            entry,
-            event_state,
-            payload,
-            data,
-            default_available=True,
+    _apply_agent_event_state(
+        _AgentEventContext(
+            hass=hass,
+            entry=entry,
+            event_state=event_state,
+            event_type=event_type,
+            payload=payload,
+            data=data,
         )
-    elif event_type == "doorbell_media_closed":
-        _clear_video_state(event_state)
-    elif event_type in {"door_unlock_started", "door_unlock_ended"}:
-        event_state.door_unlock_state = event_type
-    elif event_type in {"call_started", "call_ended"}:
-        event_state.call_active = event_type == "call_started"
-    elif event_type in {"ringer_muted", "ringer_unmuted"}:
-        event_state.ringer_muted = event_type == "ringer_muted"
-    elif event_type == "smartphone_forwarding_changed":
-        event_state.smartphone_forwarding_mode = _optional_forwarding_mode(
-            data.get("mode")
-        )
-    elif event_type == "answering_machine_messages_changed":
-        _apply_voicemail_event(event_state, data)
-    elif event_type == "memos_changed":
-        _apply_memos_event(event_state, data)
+    )
 
     event_data = _event_data(
-        hass,
-        entry,
-        event_state,
-        event_type,
+        _AgentEventContext(
+            hass=hass,
+            entry=entry,
+            event_state=event_state,
+            event_type=event_type,
+            payload=payload,
+            data=data,
+        ),
         event_at,
-        payload,
-        data,
     )
     event_state.last_event_data = event_data
 
@@ -280,43 +318,97 @@ async def _event_payload(request: web.Request) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _activate_doorbell_state(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    event_state: C300XEventState,
-    payload: dict[str, Any],
-    data: dict[str, Any],
-) -> None:
-    _activate_video_state(
-        hass,
-        entry,
-        event_state,
-        payload,
-        data,
-        default_available=False,
+def _apply_agent_event_state(context: _AgentEventContext) -> None:
+    """Apply state side effects for a normalized device-agent event."""
+
+    handler = _AGENT_EVENT_STATE_HANDLERS.get(context.event_type)
+    if handler is not None:
+        handler(context)
+
+
+def _apply_doorbell_pressed(context: _AgentEventContext) -> None:
+    _activate_doorbell_state(context)
+
+
+def _apply_doorbell_view_requested(context: _AgentEventContext) -> None:
+    _activate_video_state(context, default_available=True)
+
+
+def _apply_doorbell_media_closed(context: _AgentEventContext) -> None:
+    _clear_video_state(context.event_state)
+
+
+def _apply_door_unlock_event(context: _AgentEventContext) -> None:
+    context.event_state.door_unlock_state = context.event_type
+
+
+def _apply_call_event(context: _AgentEventContext) -> None:
+    context.event_state.call_active = context.event_type == "call_started"
+
+
+def _apply_ringer_event(context: _AgentEventContext) -> None:
+    context.event_state.ringer_muted = context.event_type == "ringer_muted"
+
+
+def _apply_smartphone_forwarding_event(context: _AgentEventContext) -> None:
+    context.event_state.smartphone_forwarding_mode = _optional_forwarding_mode(
+        context.data.get("mode")
     )
 
 
+def _apply_voicemail_event_context(context: _AgentEventContext) -> None:
+    _apply_voicemail_event(context.event_state, context.data)
+
+
+def _apply_memos_event_context(context: _AgentEventContext) -> None:
+    _apply_memos_event(context.event_state, context.data)
+
+
+_AGENT_EVENT_STATE_HANDLERS: dict[str, _AgentEventStateHandler] = {
+    "doorbell_pressed": _apply_doorbell_pressed,
+    "doorbell_view_requested": _apply_doorbell_view_requested,
+    "doorbell_media_closed": _apply_doorbell_media_closed,
+    "door_unlock_started": _apply_door_unlock_event,
+    "door_unlock_ended": _apply_door_unlock_event,
+    "call_started": _apply_call_event,
+    "call_ended": _apply_call_event,
+    "ringer_muted": _apply_ringer_event,
+    "ringer_unmuted": _apply_ringer_event,
+    "smartphone_forwarding_changed": _apply_smartphone_forwarding_event,
+    "answering_machine_messages_changed": _apply_voicemail_event_context,
+    "memos_changed": _apply_memos_event_context,
+}
+
+
+def _activate_doorbell_state(context: _AgentEventContext) -> None:
+    _activate_video_state(context, default_available=False)
+
+
 def _activate_video_state(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    event_state: C300XEventState,
-    payload: dict[str, Any],
-    data: dict[str, Any],
+    context: _AgentEventContext,
     *,
     default_available: bool,
 ) -> None:
-    video = data.get("video") if isinstance(data.get("video"), dict) else {}
-    event_state.video_available = bool(video.get("available", default_available))
+    video = (
+        context.data.get("video")
+        if isinstance(context.data.get("video"), dict)
+        else {}
+    )
+    context.event_state.video_available = bool(video.get("available", default_available))
     stream_path = video.get("stream_path") or video.get("rtsp_url")
-    event_state.video_stream_path = str(stream_path) if stream_path else None
-    ttl_seconds = _ttl_seconds(payload.get("ttl_seconds"))
-    event_state.video_active_until = (
+    context.event_state.video_stream_path = str(stream_path) if stream_path else None
+    ttl_seconds = _ttl_seconds(context.payload.get("ttl_seconds"))
+    context.event_state.video_active_until = (
         (dt_util.utcnow() + timedelta(seconds=ttl_seconds)).isoformat()
         if ttl_seconds > 0
         else None
     )
-    _schedule_video_reset(hass, entry, event_state, ttl_seconds)
+    _schedule_video_reset(
+        context.hass,
+        context.entry,
+        context.event_state,
+        ttl_seconds,
+    )
 
 
 def _schedule_video_reset(
@@ -352,56 +444,48 @@ def _clear_video_state(
     event_state.video_stream_path = None
 
 
-def _event_data(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    event_state: C300XEventState,
-    event_type: str,
-    event_at: str,
-    payload: dict[str, Any],
-    data: dict[str, Any],
-) -> dict[str, Any]:
-    label = event_label(event_type, getattr(hass.config, "language", None))
-    label_en = event_label(event_type, "en")
-    label_de = event_label(event_type, "de")
-    label_it = event_label(event_type, "it")
-    event_name = label or label_en or event_type
+def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
+    label = event_label(context.event_type, getattr(context.hass.config, "language", None))
+    label_en = event_label(context.event_type, "en")
+    label_de = event_label(context.event_type, "de")
+    label_it = event_label(context.event_type, "it")
+    event_name = label or label_en or context.event_type
     event_data: dict[str, Any] = {
-        "entry_id": entry.entry_id,
+        "entry_id": context.entry.entry_id,
         "event": event_name,
-        "event_key": event_type,
+        "event_key": context.event_type,
         "event_name": event_name,
-        "event_type": event_type,
+        "event_type": context.event_type,
         "event_value": event_name,
         "event_label": label,
         "event_label_en": label_en,
         "event_label_de": label_de,
         "event_label_it": label_it,
         "event_at": event_at,
-        "data": data,
+        "data": context.data,
     }
-    if event_type in {"doorbell_pressed", "doorbell_view_requested"}:
+    if context.event_type in {"doorbell_pressed", "doorbell_view_requested"}:
         event_data.update(
             _doorbell_event_data(
-                hass,
-                entry,
-                event_state,
-                _ttl_seconds(payload.get("ttl_seconds")),
+                context.hass,
+                context.entry,
+                context.event_state,
+                _ttl_seconds(context.payload.get("ttl_seconds")),
             )
         )
-    elif event_type in {"door_unlock_started", "door_unlock_ended"}:
-        event_data["address"] = data.get("address")
-    elif event_type in {"ringer_muted", "ringer_unmuted"}:
-        event_data["muted"] = event_state.ringer_muted
-    elif event_type == "smartphone_forwarding_changed":
-        event_data["mode"] = event_state.smartphone_forwarding_mode
-    elif event_type == "answering_machine_messages_changed":
-        event_data["voicemail"] = _voicemail_event_data(event_state)
-    elif event_type == "memos_changed":
-        event_data["memos"] = _memos_event_data(event_state)
+    elif context.event_type in {"door_unlock_started", "door_unlock_ended"}:
+        event_data["address"] = context.data.get("address")
+    elif context.event_type in {"ringer_muted", "ringer_unmuted"}:
+        event_data["muted"] = context.event_state.ringer_muted
+    elif context.event_type == "smartphone_forwarding_changed":
+        event_data["mode"] = context.event_state.smartphone_forwarding_mode
+    elif context.event_type == "answering_machine_messages_changed":
+        event_data["voicemail"] = _voicemail_event_data(context.event_state)
+    elif context.event_type == "memos_changed":
+        event_data["memos"] = _memos_event_data(context.event_state)
     return agent_event_display_data(
         event_data,
-        getattr(hass.config, "language", None),
+        getattr(context.hass.config, "language", None),
     )
 
 

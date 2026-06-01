@@ -111,3 +111,4 @@ class BticinoC300XRuntimeData:
     qml_patch_status_updated_at: datetime | None = None
     agent_diagnostics: dict[str, Any] = field(default_factory=dict)
     agent_diagnostics_updated_at: datetime | None = None
+    agent_update_state: Any | None = None

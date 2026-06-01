@@ -5,6 +5,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _c300x_run_loop_body(text: str) -> str:
+    run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
+    return run_body.split("for (;;) {", maxsplit=1)[1].split(
+        "if (poll(poll_fds",
+        maxsplit=1,
+    )[0]
+
+
 def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
@@ -14,6 +22,17 @@ def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
         "system_metrics_changed(config, &runtime->system_metrics_last_dispatched, &sample)"
         in text
     )
+    assert "metric_changed_points(previous->memory_usage_percent" in text
+
+
+def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    sample_body = text.rsplit("static int read_system_metrics_sample", maxsplit=1)[
+        1
+    ].split("static int system_metrics_json", maxsplit=1)[0]
+
+    assert "read_memory_metrics(" in sample_body
+    assert text.count("read_memory_metrics(") == 2
     assert "static int metric_changed_points(" in text
 
 
@@ -38,20 +57,17 @@ def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> No
 
 def test_native_agent_metrics_does_not_wake_for_metrics_without_subscribers() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    poll_body = text.split("for (;;) {", maxsplit=1)[1].split(
-        "if (poll(poll_fds",
-        maxsplit=1,
-    )[0]
+    poll_body = _c300x_run_loop_body(text)
 
-    assert "if (system_metrics_watch_active(config, &runtime))" in poll_body
+    assert "if (system_metrics_watch_active(config, runtime))" in poll_body
 
 
 def test_native_agent_metrics_dispatch_loop_is_subscriber_gated() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
     assert (
-        "if (system_metrics_watch_active(config, &runtime)) {\n"
-        "            system_metrics_dispatch_if_due(config, &runtime, time(NULL));\n"
+        "if (system_metrics_watch_active(config, runtime)) {\n"
+        "            system_metrics_dispatch_if_due(config, runtime, time(NULL));\n"
         "        }"
         in text
     )
@@ -71,7 +87,7 @@ def test_native_agent_metrics_does_not_sample_at_start_without_subscribers() -> 
 
 def test_native_agent_maintenance_requires_token_even_in_no_auth_mode() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    maintenance_body = text.split(
+    maintenance_body = text.rsplit(
         "static int maintenance_authorized",
         maxsplit=1,
     )[1].split("static int maintenance_auth_available", maxsplit=1)[0]
@@ -127,3 +143,23 @@ def test_native_agent_memo_watch_tracks_incomplete_new_directories() -> None:
     assert "voicemail_add_watch(voicemail, entry_dir, 0)" in add_dirs_body
     assert "voicemail_add_entry_dir_watches(voicemail)" in refresh_body
     assert "snapshot.messages[index].dir_path" not in refresh_body
+
+
+def test_native_agent_runtime_diagnostics_are_memory_only_until_requested() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    diagnostics_body = text.rsplit("static void handle_diagnostics_get", maxsplit=1)[
+        1
+    ].split("static void handle_setup_page", maxsplit=1)[0]
+    run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
+
+    assert "char last_wake_reason[64];" in text
+    assert "runtime->loop_iterations++;" in run_body
+    assert "runtime->poll_wakeups++;" in run_body
+    assert "runtime->accepted_clients++;" in run_body
+    assert '"api"' in run_body
+    assert '"ui"' in run_body
+    assert 'runtime_set_wake_reason(runtime, "mqtt")' in run_body
+    assert "count_open_fds()" in diagnostics_body
+    assert text.count("count_open_fds()") == 1
+    assert '\\"open_fd_count\\":%d' in diagnostics_body
+    assert '\\"video_bridge_active_threads\\":%d' in diagnostics_body

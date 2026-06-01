@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from typing import Any
 
 import voluptuous as vol
@@ -35,7 +33,6 @@ from .capabilities import (
 from .const import (
     CONF_MAINTENANCE_TOKEN,
     DOMAIN,
-    LOCK_ID_PATTERN,
     SERVICE_ALARM_COMMAND,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
@@ -50,7 +47,6 @@ from .const import (
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
-    STAIR_LIGHT_ADDRESS_PATTERN,
 )
 from .entity import entry_config_value
 from .exceptions import service_validation_error
@@ -65,7 +61,9 @@ from .memos import (
     latest_voice_memo_audio_id,
     voice_memo_media_source_id,
 )
+from .message_refresh import async_answering_machine_messages, async_memos
 from .qml_patch import async_refresh_qml_patch_status
+from .validation_patterns import LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
 _ATTR_ACTION_ID = "action_id"
@@ -76,8 +74,6 @@ _ATTR_ENTRY_ID = "entry_id"
 _ATTR_FORCE = "force"
 _ATTR_LOCK_ID = "lock_id"
 _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
-_STAIR_LIGHT_ADDRESS_RE = re.compile(STAIR_LIGHT_ADDRESS_PATTERN)
-_LOCK_ID_RE = re.compile(LOCK_ID_PATTERN)
 _BASE_SERVICES_MARKER = "__services_registered"
 _GUI_REQUIRED_SERVICES_MARKER = "__gui_required_services_registered"
 _GUI_REQUIRED_SERVICES_LISTENER_MARKER = "__gui_required_services_listener"
@@ -121,7 +117,7 @@ def _stair_light_address(value: str) -> str:
     """Validate service-level OpenWebNet stair-light address input."""
 
     address = cv.string(value).strip()
-    if not _STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
+    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
         raise vol.Invalid("invalid staircase light address")
     return address
 
@@ -130,7 +126,7 @@ def _lock_id(value: str) -> str:
     """Validate service-level C300X lock id input."""
 
     lock_id = cv.string(value).strip()
-    if not _LOCK_ID_RE.fullmatch(lock_id):
+    if not LOCK_ID_RE.fullmatch(lock_id):
         raise vol.Invalid("invalid lock id")
     return lock_id
 
@@ -172,81 +168,121 @@ async def _raise_agent_command_failed(awaitable: Awaitable[Any]) -> None:
 async def _latest_video_message_id_for_entry(entry: Any) -> str:
     """Return the newest stored video-message id, refreshing once if needed."""
 
-    messages = getattr(entry.runtime_data, "answering_machine_messages", {})
-    message_id = latest_video_message_id(messages) if isinstance(messages, dict) else None
-    if message_id is not None:
-        return message_id
-    try:
-        messages = await entry.runtime_data.api.async_answering_machine_messages()
-    except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
-    entry.runtime_data.answering_machine_messages = messages
-    entry.runtime_data.answering_machine_messages_updated_at = datetime.now(UTC)
-    message_id = latest_video_message_id(messages)
-    if message_id is None:
-        raise service_validation_error("video_message_not_available")
-    return message_id
+    return await _latest_item_id_for_entry(
+        entry,
+        cache_attr="answering_machine_messages",
+        refresh=lambda: async_answering_machine_messages(entry, force_refresh=True),
+        latest=latest_video_message_id,
+        unavailable_error="video_message_not_available",
+    )
 
 
 async def _latest_memo_id_for_entry(entry: Any, kind: str) -> str:
     """Return the newest memo id of one kind, refreshing once if needed."""
 
-    memos = getattr(entry.runtime_data, "memos", {})
-    memo_id = latest_memo_id(memos, kind) if isinstance(memos, dict) else None
-    if memo_id is not None:
-        return memo_id
-    try:
-        memos = await entry.runtime_data.api.async_memos()
-    except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
-    entry.runtime_data.memos = memos
-    entry.runtime_data.memos_updated_at = datetime.now(UTC)
-    memo_id = latest_memo_id(memos, kind)
-    if memo_id is None:
-        raise service_validation_error(f"{kind}_memo_not_available")
-    return memo_id
+    return await _latest_item_id_for_entry(
+        entry,
+        cache_attr="memos",
+        refresh=lambda: async_memos(entry, force_refresh=True),
+        latest=lambda memos: latest_memo_id(memos, kind),
+        unavailable_error=f"{kind}_memo_not_available",
+    )
 
 
 async def _latest_voice_memo_audio_id_for_entry(entry: Any) -> str:
     """Return the newest playable voice memo id, refreshing once if needed."""
 
-    memos = getattr(entry.runtime_data, "memos", {})
-    memo_id = latest_voice_memo_audio_id(memos) if isinstance(memos, dict) else None
-    if memo_id is not None:
-        return memo_id
+    return await _latest_item_id_for_entry(
+        entry,
+        cache_attr="memos",
+        refresh=lambda: async_memos(entry, force_refresh=True),
+        latest=latest_voice_memo_audio_id,
+        unavailable_error="voice_memo_not_available",
+    )
+
+
+async def _latest_item_id_for_entry(
+    entry: Any,
+    *,
+    cache_attr: str,
+    refresh: Callable[[], Awaitable[dict[str, Any]]],
+    latest: Callable[[dict[str, Any]], str | None],
+    unavailable_error: str,
+) -> str:
+    """Return a cached latest id, refreshing once if the cache has none."""
+
+    payload = getattr(entry.runtime_data, cache_attr, {})
+    item_id = latest(payload) if isinstance(payload, dict) else None
+    if item_id is not None:
+        return item_id
     try:
-        memos = await entry.runtime_data.api.async_memos()
+        payload = await refresh()
     except Exception as err:
         raise service_validation_error("agent_command_failed") from err
-    entry.runtime_data.memos = memos
-    entry.runtime_data.memos_updated_at = datetime.now(UTC)
-    memo_id = latest_voice_memo_audio_id(memos)
-    if memo_id is None:
-        raise service_validation_error("voice_memo_not_available")
-    return memo_id
+    item_id = latest(payload)
+    if item_id is None:
+        raise service_validation_error(unavailable_error)
+    return item_id
 
 
-async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register domain services."""
+async def _async_refresh_after_delete(
+    hass: HomeAssistant,
+    entry: Any,
+    *,
+    refresh: Callable[[], Awaitable[dict[str, Any]]],
+    signal: str,
+) -> None:
+    """Refresh a delete-backed cache and notify HA listeners."""
 
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    try:
+        await refresh()
+    except Exception as err:
+        raise service_validation_error("agent_command_failed") from err
+    async_dispatcher_send(hass, signal, entry.entry_id)
+    await async_refresh_agent_diagnostics(hass, entry)
 
-    async def _handle_run_action(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+
+class _C300XServiceHandlers:
+    """Bound service handlers for one Home Assistant instance."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    @property
+    def delete_handlers(self) -> dict[str, _ServiceHandler]:
+        """Return GUI-patch-gated delete handlers."""
+
+        return {
+            SERVICE_DELETE_LATEST_VIDEO_MESSAGE: self.async_delete_latest_video_message,
+            SERVICE_DELETE_LATEST_TEXT_MEMO: self.async_delete_latest_text_memo,
+            SERVICE_DELETE_LATEST_VOICE_MEMO: self.async_delete_latest_voice_memo,
+        }
+
+    async def async_run_action(self, call: ServiceCall) -> None:
+        """Run one allowlisted Home Assistant action."""
+
+        entry = _entry_for_call(self._hass, call)
         try:
-            await async_execute_action(hass, entry, call.data[_ATTR_ACTION_ID])
+            await async_execute_action(
+                self._hass,
+                entry,
+                call.data[_ATTR_ACTION_ID],
+            )
         except ActionValidationError as err:
             raise service_validation_error("invalid_action_id") from err
         except KeyError as err:
             raise service_validation_error(
-                "unknown_action", {"action_id": str(err.args[0])}
+                "unknown_action",
+                {"action_id": str(err.args[0])},
             ) from err
 
-    async def _handle_alarm_command(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_alarm_command(self, call: ServiceCall) -> None:
+        """Forward one alarm command to the configured HA alarm entity."""
+
+        entry = _entry_for_call(self._hass, call)
         try:
             await async_execute_alarm_command(
-                hass,
+                self._hass,
                 entry,
                 call.data[_ATTR_COMMAND],
                 call.data.get(_ATTR_CODE),
@@ -257,192 +293,216 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except ValueError as err:
             raise service_validation_error("alarm_not_configured") from err
 
-    async def _handle_stair_light(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_stair_light(self, call: ServiceCall) -> None:
+        """Trigger the configured stair-light command."""
+
+        entry = _entry_for_call(self._hass, call)
         await _raise_agent_command_failed(
-            async_trigger_stair_light(hass, entry, call.data.get(_ATTR_ADDRESS))
+            async_trigger_stair_light(self._hass, entry, call.data.get(_ATTR_ADDRESS))
         )
 
-    async def _handle_unlock_door(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_unlock_door(self, call: ServiceCall) -> None:
+        """Trigger the configured door-unlock command."""
+
+        entry = _entry_for_call(self._hass, call)
         await _raise_agent_command_failed(
-            async_unlock_door(hass, entry, call.data.get(_ATTR_LOCK_ID, "default"))
+            async_unlock_door(self._hass, entry, call.data.get(_ATTR_LOCK_ID, "default"))
         )
 
-    async def _handle_reboot(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_reboot(self, call: ServiceCall) -> None:
+        """Reboot the C300X through the maintenance API."""
+
+        entry = _entry_for_call(self._hass, call)
         _ensure_maintenance_action(entry, "reboot")
         await _raise_agent_command_failed(entry.runtime_data.api.async_reboot())
 
-    async def _handle_reload_gui(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_reload_gui(self, call: ServiceCall) -> None:
+        """Reload the device GUI through the maintenance API."""
+
+        entry = _entry_for_call(self._hass, call)
         _ensure_maintenance_action(entry, "gui_reload")
         await _raise_agent_command_failed(entry.runtime_data.api.async_reload_gui())
 
-    async def _handle_play_latest_video_message(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_play_latest_video_message(self, call: ServiceCall) -> None:
+        """Play the latest video message on a media player."""
+
+        entry = _entry_for_call(self._hass, call)
         message_id = await _latest_video_message_id_for_entry(entry)
-        await hass.services.async_call(
-            MEDIA_PLAYER_DOMAIN,
-            SERVICE_PLAY_MEDIA,
-            {
-                ATTR_ENTITY_ID: call.data[_ATTR_MEDIA_PLAYER_ENTITY_ID],
-                "media_content_id": video_message_media_source_id(
-                    entry.entry_id,
-                    message_id,
-                ),
-                "media_content_type": MediaType.VIDEO,
-            },
-            blocking=True,
+        await self._async_play_media(
+            call,
+            media_content_id=video_message_media_source_id(entry.entry_id, message_id),
+            media_content_type=MediaType.VIDEO,
         )
 
-    async def _handle_play_latest_voice_memo(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_play_latest_voice_memo(self, call: ServiceCall) -> None:
+        """Play the latest voice memo on a media player."""
+
+        entry = _entry_for_call(self._hass, call)
         memo_id = await _latest_voice_memo_audio_id_for_entry(entry)
-        await hass.services.async_call(
-            MEDIA_PLAYER_DOMAIN,
-            SERVICE_PLAY_MEDIA,
-            {
-                ATTR_ENTITY_ID: call.data[_ATTR_MEDIA_PLAYER_ENTITY_ID],
-                "media_content_id": voice_memo_media_source_id(
-                    entry.entry_id,
-                    memo_id,
-                ),
-                "media_content_type": getattr(MediaType, "MUSIC", "music"),
-            },
-            blocking=True,
+        await self._async_play_media(
+            call,
+            media_content_id=voice_memo_media_source_id(entry.entry_id, memo_id),
+            media_content_type=getattr(MediaType, "MUSIC", "music"),
         )
 
-    async def _handle_delete_latest_video_message(call: ServiceCall) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_delete_latest_video_message(self, call: ServiceCall) -> None:
+        """Delete the newest stored video message."""
+
+        entry = _entry_for_call(self._hass, call)
         await _async_ensure_gui_function_patch(entry)
         message_id = await _latest_video_message_id_for_entry(entry)
         await _raise_agent_command_failed(
             entry.runtime_data.api.async_delete_answering_machine_message(message_id)
         )
-        try:
-            messages = await entry.runtime_data.api.async_answering_machine_messages()
-        except Exception as err:
-            raise service_validation_error("agent_command_failed") from err
-        entry.runtime_data.answering_machine_messages = messages
-        entry.runtime_data.answering_machine_messages_updated_at = datetime.now(UTC)
-        async_dispatcher_send(hass, SIGNAL_VIDEO_MESSAGES_CHANGED, entry.entry_id)
-        await async_refresh_agent_diagnostics(hass, entry)
+        await _async_refresh_after_delete(
+            self._hass,
+            entry,
+            refresh=lambda: async_answering_machine_messages(
+                entry,
+                force_refresh=True,
+            ),
+            signal=SIGNAL_VIDEO_MESSAGES_CHANGED,
+        )
 
-    async def _delete_latest_memo(call: ServiceCall, kind: str) -> None:
-        entry = _entry_for_call(hass, call)
+    async def async_delete_latest_text_memo(self, call: ServiceCall) -> None:
+        """Delete the newest text memo."""
+
+        await self._async_delete_latest_memo(call, "text")
+
+    async def async_delete_latest_voice_memo(self, call: ServiceCall) -> None:
+        """Delete the newest voice memo."""
+
+        await self._async_delete_latest_memo(call, "voice")
+
+    async def _async_delete_latest_memo(self, call: ServiceCall, kind: str) -> None:
+        entry = _entry_for_call(self._hass, call)
         await _async_ensure_gui_function_patch(entry)
         memo_id = await _latest_memo_id_for_entry(entry, kind)
         await _raise_agent_command_failed(entry.runtime_data.api.async_delete_memo(memo_id))
-        try:
-            memos = await entry.runtime_data.api.async_memos()
-        except Exception as err:
-            raise service_validation_error("agent_command_failed") from err
-        entry.runtime_data.memos = memos
-        entry.runtime_data.memos_updated_at = datetime.now(UTC)
-        async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
-        await async_refresh_agent_diagnostics(hass, entry)
+        await _async_refresh_after_delete(
+            self._hass,
+            entry,
+            refresh=lambda: async_memos(entry, force_refresh=True),
+            signal=SIGNAL_MEMOS_CHANGED,
+        )
 
-    async def _handle_delete_latest_text_memo(call: ServiceCall) -> None:
-        await _delete_latest_memo(call, "text")
+    async def _async_play_media(
+        self,
+        call: ServiceCall,
+        *,
+        media_content_id: str,
+        media_content_type: str,
+    ) -> None:
+        await self._hass.services.async_call(
+            MEDIA_PLAYER_DOMAIN,
+            SERVICE_PLAY_MEDIA,
+            {
+                ATTR_ENTITY_ID: call.data[_ATTR_MEDIA_PLAYER_ENTITY_ID],
+                "media_content_id": media_content_id,
+                "media_content_type": media_content_type,
+            },
+            blocking=True,
+        )
 
-    async def _handle_delete_latest_voice_memo(call: ServiceCall) -> None:
-        await _delete_latest_memo(call, "voice")
 
-    delete_handlers = {
-        SERVICE_DELETE_LATEST_VIDEO_MESSAGE: _handle_delete_latest_video_message,
-        SERVICE_DELETE_LATEST_TEXT_MEMO: _handle_delete_latest_text_memo,
-        SERVICE_DELETE_LATEST_VOICE_MEMO: _handle_delete_latest_voice_memo,
-    }
+async def async_setup_services(hass: HomeAssistant) -> None:
+    """Register domain services."""
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    handlers = _C300XServiceHandlers(hass)
+    delete_handlers = handlers.delete_handlers
 
     if domain_data.get(_BASE_SERVICES_MARKER):
         _sync_gui_required_services(hass, delete_handlers)
         _ensure_gui_required_services_listener(hass, delete_handlers)
         return
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_RUN_ACTION,
-        _handle_run_action,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Required(_ATTR_ACTION_ID): cv.string,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_ALARM_COMMAND,
-        _handle_alarm_command,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Required(_ATTR_COMMAND): cv.string,
-                vol.Optional(_ATTR_CODE): cv.string,
-                vol.Optional(_ATTR_FORCE, default=False): _boolean_service_value,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_STAIR_LIGHT,
-        _handle_stair_light,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Optional(_ATTR_ADDRESS): _stair_light_address,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_UNLOCK_DOOR,
-        _handle_unlock_door,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REBOOT,
-        _handle_reboot,
-        schema=vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_RELOAD_GUI,
-        _handle_reload_gui,
-        schema=vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
-        _handle_play_latest_video_message,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Required(_ATTR_MEDIA_PLAYER_ENTITY_ID): cv.entity_id,
-            }
-        ),
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_PLAY_LATEST_VOICE_MEMO,
-        _handle_play_latest_voice_memo,
-        schema=vol.Schema(
-            {
-                vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                vol.Required(_ATTR_MEDIA_PLAYER_ENTITY_ID): cv.entity_id,
-            }
-        ),
-    )
+    _register_base_services(hass, handlers)
     domain_data[_BASE_SERVICES_MARKER] = True
     _sync_gui_required_services(hass, delete_handlers)
     _ensure_gui_required_services_listener(hass, delete_handlers)
+
+
+def _register_base_services(
+    hass: HomeAssistant,
+    handlers: _C300XServiceHandlers,
+) -> None:
+    """Register services that are always part of the integration."""
+
+    for service_name, handler, schema in (
+        (
+            SERVICE_RUN_ACTION,
+            handlers.async_run_action,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Required(_ATTR_ACTION_ID): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_ALARM_COMMAND,
+            handlers.async_alarm_command,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Required(_ATTR_COMMAND): cv.string,
+                    vol.Optional(_ATTR_CODE): cv.string,
+                    vol.Optional(_ATTR_FORCE, default=False): _boolean_service_value,
+                }
+            ),
+        ),
+        (
+            SERVICE_STAIR_LIGHT,
+            handlers.async_stair_light,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_ADDRESS): _stair_light_address,
+                }
+            ),
+        ),
+        (
+            SERVICE_UNLOCK_DOOR,
+            handlers.async_unlock_door,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
+                }
+            ),
+        ),
+        (
+            SERVICE_REBOOT,
+            handlers.async_reboot,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_RELOAD_GUI,
+            handlers.async_reload_gui,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
+            handlers.async_play_latest_video_message,
+            _play_media_schema(),
+        ),
+        (
+            SERVICE_PLAY_LATEST_VOICE_MEMO,
+            handlers.async_play_latest_voice_memo,
+            _play_media_schema(),
+        ),
+    ):
+        hass.services.async_register(DOMAIN, service_name, handler, schema=schema)
+
+
+def _play_media_schema() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(_ATTR_ENTRY_ID): cv.string,
+            vol.Required(_ATTR_MEDIA_PLAYER_ENTITY_ID): cv.entity_id,
+        }
+    )
 
 
 def _ensure_gui_required_services_listener(

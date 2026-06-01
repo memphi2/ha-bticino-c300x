@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,22 +26,13 @@ async def async_apply_qml_patch_and_confirm(
 ) -> dict[str, Any]:
     """Apply the patch and store the confirmed post-action status."""
 
-    previous_status = _qml_patch_status(entry)
-    _store_transient_qml_patch_status(entry, "patching")
-    _notify_status_changed(status_changed)
-    try:
-        action_status = await entry.runtime_data.api.async_apply_qml_patch()
-    except Exception:
-        _store_qml_patch_status(entry, previous_status)
-        _notify_status_changed(status_changed)
-        raise
-    if action_status.get("patched") is not True:
-        _store_qml_patch_status(entry, action_status)
-        _notify_status_changed(status_changed)
-        return action_status
-    status = await async_refresh_qml_patch_status(entry)
-    _notify_status_changed(status_changed)
-    return status
+    return await _async_run_qml_patch_action(
+        entry,
+        status_changed=status_changed,
+        transient_state="patching",
+        expected_patched=True,
+        action=entry.runtime_data.api.async_apply_qml_patch,
+    )
 
 
 async def async_restore_qml_patch_and_confirm(
@@ -50,16 +41,35 @@ async def async_restore_qml_patch_and_confirm(
 ) -> dict[str, Any]:
     """Restore original QML files and store the confirmed post-action status."""
 
+    return await _async_run_qml_patch_action(
+        entry,
+        status_changed=status_changed,
+        transient_state="restoring",
+        expected_patched=False,
+        action=entry.runtime_data.api.async_restore_qml_patch,
+    )
+
+
+async def _async_run_qml_patch_action(
+    entry: ConfigEntry,
+    *,
+    status_changed: _StatusChanged | None,
+    transient_state: str,
+    expected_patched: bool,
+    action: Callable[[], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Run a QML patch mutation and confirm the final reported state."""
+
     previous_status = _qml_patch_status(entry)
-    _store_transient_qml_patch_status(entry, "restoring")
+    _store_transient_qml_patch_status(entry, transient_state)
     _notify_status_changed(status_changed)
     try:
-        action_status = await entry.runtime_data.api.async_restore_qml_patch()
+        action_status = await action()
     except Exception:
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
         raise
-    if action_status.get("patched") is not False:
+    if action_status.get("patched") is not expected_patched:
         _store_qml_patch_status(entry, action_status)
         _notify_status_changed(status_changed)
         return action_status

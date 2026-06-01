@@ -39,11 +39,17 @@ from .capabilities import (
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
+    SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
+)
+from .doorbell_state import (
+    DOORBELL_STATES,
+    normalize_doorbell_state,
+    raw_doorbell_state_value,
 )
 from .entity import C300XEntity
 from .event_payload import agent_event_key
@@ -81,6 +87,7 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = [
         C300XAgentInfoSensor(entry),
+        C300XAgentStatusSensor(entry),
         C300XConnectionStateSensor(entry),
         C300XReconnectCountSensor(entry),
         C300XLastConnectionErrorSensor(entry),
@@ -101,16 +108,21 @@ async def async_setup_entry(
     if metrics.get("load"):
         load_sensor = C300XDeviceLoadSensor(entry)
         entities.append(load_sensor)
+    if metrics.get("memory"):
+        memory_sensor = C300XDeviceMemorySensor(entry)
+        entities.append(memory_sensor)
     if diagnostics_supported(entry.runtime_data.capabilities):
         diagnostics_sensor = C300XAgentWritesSensor(entry)
         entities.append(diagnostics_sensor)
         initial_refresh_entities.append(diagnostics_sensor)
     if answering_machine_messages_supported(entry.runtime_data.capabilities):
+        await _async_refresh_initial_answering_machine_messages(entry)
         message_sensor = C300XVoicemailMessagesSensor(entry)
         unread_sensor = C300XVoicemailUnreadSensor(entry)
         latest_message_sensor = C300XLatestVideoMessageSensor(entry)
         entities.extend([message_sensor, unread_sensor, latest_message_sensor])
     if memos_supported(entry.runtime_data.capabilities):
+        await _async_refresh_initial_memos(entry)
         text_memos_sensor = C300XTextMemosSensor(entry)
         latest_text_memo_sensor = C300XLatestTextMemoSensor(entry)
         voice_memos_sensor = C300XVoiceMemosSensor(entry)
@@ -143,6 +155,18 @@ class C300XAgentInfoSensor(C300XEntity, SensorEntity):
         super().__init__(entry, "agent")
         self._apply_setup(entry.runtime_data.agent_info)
 
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to agent metadata changes."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_AGENT_INFO_CHANGED,
+                self._handle_agent_info_changed,
+            )
+        )
+
     async def async_update(self) -> None:
         """Refresh agent metadata on explicit HA update requests."""
 
@@ -154,7 +178,7 @@ class C300XAgentInfoSensor(C300XEntity, SensorEntity):
         self._entry.runtime_data.agent_info = setup
         self._apply_setup(setup)
 
-    def _apply_setup(self, setup: dict) -> None:
+    def _apply_setup(self, setup: dict, *, write_state: bool = False) -> None:
         version = setup.get("version")
         self._attr_available = version is not None
         self._attr_native_value = version
@@ -169,6 +193,13 @@ class C300XAgentInfoSensor(C300XEntity, SensorEntity):
             )
             if value is not None
         }
+        if write_state:
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_agent_info_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self._apply_setup(self._entry.runtime_data.agent_info, write_state=True)
 
 
 class C300XAgentWritesSensor(C300XEntity, SensorEntity):
@@ -216,10 +247,24 @@ class C300XAgentWritesSensor(C300XEntity, SensorEntity):
 
         diagnostics = self._diagnostics
         return {
+            "last_write_at": diagnostics.get("last_write_at"),
             "last_write_reason": diagnostics.get("last_write_reason"),
             "last_write_class": diagnostics.get("last_write_class"),
             "subscription_store_writes": diagnostics.get("subscription_store_writes"),
             "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
+            "last_wake_reason": diagnostics.get("last_wake_reason"),
+            "loop_iterations": diagnostics.get("loop_iterations"),
+            "poll_wakeups": diagnostics.get("poll_wakeups"),
+            "accepted_clients": diagnostics.get("accepted_clients"),
+            "open_fd_count": diagnostics.get("open_fd_count"),
+            "video_running": diagnostics.get("video_running"),
+            "video_media_starting": diagnostics.get("video_media_starting"),
+            "video_call_active": diagnostics.get("video_call_active"),
+            "video_clients": diagnostics.get("video_clients"),
+            "video_bridge_open_fds": diagnostics.get("video_bridge_open_fds"),
+            "video_bridge_active_threads": diagnostics.get(
+                "video_bridge_active_threads"
+            ),
         }
 
     @property
@@ -271,6 +316,112 @@ class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
 
     @callback
     def _handle_connection_state_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
+
+
+class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
+    """Aggregated device-agent health status."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["ok", "warning", "error"]
+    _attr_translation_key = "agent_status"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "agent_status")
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to connection and diagnostics updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
+                self._handle_diagnostics_changed,
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_AGENT_INFO_CHANGED,
+                self._handle_agent_info_changed,
+            )
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return an operator-friendly agent health state."""
+
+        connection_state = self._connection_state_value()
+        if connection_state == "disconnected":
+            return "error"
+        if connection_state == "reconnecting":
+            return "warning"
+        if self._agent_update_required():
+            return "warning"
+        return "ok"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return safe status context without secrets or callback URLs."""
+
+        state = self._entry.runtime_data.connection_state
+        diagnostics = self._entry.runtime_data.agent_diagnostics
+        update_state = getattr(self._entry.runtime_data, "agent_update_state", None)
+        attrs: dict[str, Any] = {
+            "reason": self._status_reason(),
+            "connection_state": self._connection_state_value(),
+            "last_connection_error": state.last_connection_error,
+            "last_reconnect_reason": state.last_reconnect_reason,
+            "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
+            "reconnect_count": state.reconnect_count,
+            "agent_write_count": diagnostics.get("agent_write_count"),
+            "last_write_at": diagnostics.get("last_write_at"),
+            "last_write_reason": diagnostics.get("last_write_reason"),
+            "last_write_class": diagnostics.get("last_write_class"),
+            "last_wake_reason": diagnostics.get("last_wake_reason"),
+            "poll_wakeups": diagnostics.get("poll_wakeups"),
+            "open_fd_count": diagnostics.get("open_fd_count"),
+        }
+        if update_state is not None:
+            attrs.update(
+                {
+                    "agent_update_state": getattr(update_state, "state", None),
+                    "agent_update_reason": getattr(update_state, "reason", None),
+                    "installed_agent_version": getattr(update_state, "installed_version", None),
+                    "available_agent_version": getattr(update_state, "available_version", None),
+                }
+            )
+        return attrs
+
+    def _connection_state_value(self) -> str:
+        state = self._entry.runtime_data.connection_state
+        if not state.available:
+            return "disconnected"
+        return state.connection_state
+
+    def _agent_update_required(self) -> bool:
+        update_state = getattr(self._entry.runtime_data, "agent_update_state", None)
+        return bool(getattr(update_state, "update_required", False))
+
+    def _status_reason(self) -> str:
+        connection_state = self._connection_state_value()
+        if connection_state == "disconnected":
+            return "agent_disconnected"
+        if connection_state == "reconnecting":
+            return "agent_reconnecting"
+        if self._agent_update_required():
+            return "agent_update_required"
+        return "agent_ok"
+
+    @callback
+    def _handle_diagnostics_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_agent_info_changed(self, entry_id: str) -> None:
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
@@ -388,7 +539,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
     """Doorbell runtime state from the device agent."""
 
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["idle", "ringing", "view_requested"]
+    _attr_options = list(DOORBELL_STATES)
     _attr_should_poll = False
     _attr_translation_key = "doorbell_state"
 
@@ -428,7 +579,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         except C300XAgentApiError:
             self._attr_available = False
             return
-        doorbell = _normalize_doorbell_state(state)
+        doorbell = normalize_doorbell_state(state)
         self._state = doorbell
         self._attr_available = doorbell is not None
 
@@ -437,14 +588,14 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_key = agent_event_key(event.data)
-        if event_key == "doorbell_pressed":
-            self._state = "ringing"
-        elif event_key == "doorbell_view_requested":
-            self._state = "view_requested"
-        elif event_key == "doorbell_media_closed":
-            self._state = "idle"
-        else:
+        state = raw_doorbell_state_value(
+            event.data.get("doorbell")
+            or event.data.get("state")
+            or event_key
+        )
+        if state is None:
             return
+        self._state = state
         self._last_event_at = event.data.get("event_at")
         self._attr_available = True
         self.async_write_ha_state()
@@ -609,6 +760,34 @@ class C300XDeviceLoadSensor(C300XSystemMetricSensor):
             "load_average_15m": self._metrics.get("load_15m"),
             "load_5m_percent": self._metrics.get("load_5m_percent"),
             "load_15m_percent": self._metrics.get("load_15m_percent"),
+        }
+
+
+class C300XDeviceMemorySensor(C300XSystemMetricSensor):
+    """Device-agent host memory usage sensor."""
+
+    _attr_suggested_display_precision = 1
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_translation_key = "device_memory"
+    _metric_key = "memory_usage_percent"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "device_memory")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the latest memory usage percentage."""
+
+        return self._metrics.get("memory_usage_percent")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, int | None]:
+        """Return memory counters in kB from /proc/meminfo."""
+
+        return {
+            "memory_total_kb": self._metrics.get("memory_total_kb"),
+            "memory_available_kb": self._metrics.get("memory_available_kb"),
+            "memory_used_kb": self._metrics.get("memory_used_kb"),
         }
 
 
@@ -1107,18 +1286,6 @@ def _system_metrics_capability(entry: ConfigEntry) -> dict[str, Any]:
     return metrics
 
 
-def _normalize_doorbell_state(state: dict[str, Any]) -> str | None:
-    raw = state.get("doorbell")
-    if raw is None and isinstance(state.get("state"), dict):
-        raw = state["state"].get("doorbell")
-    value = str(raw or "").strip().lower()
-    if value in {"idle", "ringing", "view_requested"}:
-        return value
-    if value in {"pressed", "ring"}:
-        return "ringing"
-    return None
-
-
 def _messages_loaded(entry: ConfigEntry) -> bool:
     return (
         getattr(entry.runtime_data, "answering_machine_messages_updated_at", None)
@@ -1139,6 +1306,34 @@ def _entity_language(entity: object) -> str:
     return str(getattr(getattr(hass, "config", None), "language", "") or "").lower()
 
 
+async def _async_refresh_initial_answering_machine_messages(
+    entry: ConfigEntry,
+) -> None:
+    """Load a one-shot video-message snapshot for startup state."""
+
+    try:
+        await async_answering_machine_messages(entry, force_refresh=True)
+    except C300XAgentApiError:
+        entry.runtime_data.answering_machine_messages = {
+            **entry.runtime_data.answering_machine_messages,
+            "available": False,
+        }
+        entry.runtime_data.answering_machine_messages_updated_at = datetime.now(UTC)
+
+
+async def _async_refresh_initial_memos(entry: ConfigEntry) -> None:
+    """Load a one-shot memo snapshot for startup state."""
+
+    try:
+        await async_memos(entry, force_refresh=True)
+    except C300XAgentApiError:
+        entry.runtime_data.memos = {
+            **entry.runtime_data.memos,
+            "available": False,
+        }
+        entry.runtime_data.memos_updated_at = datetime.now(UTC)
+
+
 async def _async_refresh_initial_states(entities: list[SensorEntity]) -> None:
     """Populate lightweight diagnostic sensors once during setup."""
 
@@ -1149,7 +1344,7 @@ async def _async_refresh_initial_states(entities: list[SensorEntity]) -> None:
             except C300XAgentApiError:
                 entity._attr_available = False
                 continue
-            doorbell = _normalize_doorbell_state(state)
+            doorbell = normalize_doorbell_state(state)
             entity._state = doorbell
             entity._attr_available = doorbell is not None
             continue

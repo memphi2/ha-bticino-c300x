@@ -43,6 +43,7 @@
           "device_ui_enabled": "Applica patch funzioni GUI C300X",
           "alarm_entity_id": "Entità Alarmo",
           "weather_entity_id": "Entità meteo",
+          "dashboard_entities": "Entità dashboard",
           "video_enabled": "Crea entità telecamera campanello",
           "video_port": "Porta RTSP campanello",
           "video_stream_path": "Percorso stream RTSP campanello",
@@ -70,6 +71,7 @@
           "device_ui_enabled": "Applica patch funzioni GUI C300X",
           "alarm_entity_id": "Entità Alarmo",
           "weather_entity_id": "Entità meteo",
+          "dashboard_entities": "Entità dashboard",
           "video_enabled": "Crea entità telecamera campanello",
           "video_port": "Porta RTSP campanello",
           "video_stream_path": "Percorso stream RTSP campanello",
@@ -118,6 +120,7 @@
           "device_ui_enabled": "Applica patch funzioni GUI C300X",
           "alarm_entity_id": "Entità Alarmo",
           "weather_entity_id": "Entità meteo",
+          "dashboard_entities": "Entità dashboard",
           "video_enabled": "Crea entità telecamera campanello",
           "video_port": "Porta RTSP campanello",
           "video_stream_path": "Percorso stream RTSP campanello",
@@ -215,6 +218,14 @@
       "agent": {
         "name": "Agente dispositivo"
       },
+      "agent_status": {
+        "name": "Stato agente dispositivo",
+        "state": {
+          "ok": "OK",
+          "warning": "Avviso",
+          "error": "Errore"
+        }
+      },
       "agent_writes": {
         "name": "Scritture agente dispositivo"
       },
@@ -223,6 +234,9 @@
       },
       "device_load": {
         "name": "Carico dispositivo"
+      },
+      "device_memory": {
+        "name": "Memoria dispositivo"
       },
       "device_temperature": {
         "name": "Temperatura dispositivo"
@@ -261,7 +275,20 @@
         "name": "Ultimo memo vocale"
       },
       "doorbell_state": {
-        "name": "Stato campanello"
+        "name": "Stato campanello",
+        "state": {
+          "idle": "Pronto",
+          "ringing": "Suona",
+          "view_requested": "Vista videocitofono attiva",
+          "view_requeste": "Vista videocitofono attiva",
+          "pressed": "Campanello premuto",
+          "ring": "Suona",
+          "doorbell_pressed": "Campanello premuto",
+          "doorbell_view_requested": "Vista videocitofono attiva",
+          "doorbell_media_closed": "Stream videocitofono terminato",
+          "media_closed": "Stream videocitofono terminato",
+          "closed": "Stream videocitofono terminato"
+        }
       }
     },
     "switch": {
@@ -291,6 +318,12 @@
       },
       "ipv6_firewall_patch": {
         "name": "Firewall IPv6"
+      },
+      "native_mqtt_bridge": {
+        "name": "Bridge MQTT nativo"
+      },
+      "legacy_mqtt_bridge": {
+        "name": "Bridge MQTT legacy"
       },
       "smartphone_forwarding": {
         "name": "Inoltro smartphone"
@@ -342,6 +375,33 @@
     "agent_capability_mismatch": {
       "title": "Mancano le capacità del device agent C300X",
       "description": "Il device agent C300X configurato per {entry_title} ha risposto senza capacità utilizzabili. Aggiorna o riconfigura il device agent locale, poi ricarica l'integrazione."
+    },
+    "device_agent_update_required": {
+      "title": "Aggiornamento del device agent C300X richiesto",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Aggiorna device agent C300X",
+            "description": "Home Assistant carichera il native agent incluso tramite l'API di manutenzione configurata. Non sono necessarie credenziali SSH. Le patch GUI e firewall attive vengono controllate in sola lettura e aggiornate solo se erano gia attive.\n\nInstallato: {installed_version} (API {installed_api_version})\nIncluso: {available_version} (API {available_api_version})\nMotivo: {reason}"
+          },
+          "ssh_install": {
+            "title": "Reinstalla device agent C300X via SSH",
+            "description": "Questo agent installato non puo ancora aggiornarsi da solo. Home Assistant usera queste credenziali SSH una tantum per installare l'agent incluso, poi aggiornera solo le patch GUI e firewall attive. Le credenziali SSH non vengono salvate.\n\nInstallato: {installed_version} (API {installed_api_version})\nIncluso: {available_version} (API {available_api_version})\nMotivo: {reason}",
+            "data": {
+              "bootstrap_ssh_username": "Nome utente SSH",
+              "bootstrap_ssh_password": "Password SSH"
+            }
+          }
+        },
+        "error": {
+          "ssh_install_failed": "Installazione di riparazione SSH non riuscita. Controlla l'accesso SSH e riprova.",
+          "update_failed": "Aggiornamento del device agent non riuscito. Verifica che l'accesso di manutenzione sia attivo e riprova.",
+          "update_verify_failed": "L'aggiornamento è stato inviato, ma l'agent segnala ancora un bundle vecchio o incompatibile."
+        },
+        "abort": {
+          "entry_not_loaded": "La voce BTicino C300X non è caricata."
+        }
+      }
     },
     "invalid_action_map": {
       "title": "Allowlist azioni dashboard C300X non valida",

@@ -39,6 +39,7 @@ helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
 )
+config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
 entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
 
@@ -59,6 +60,7 @@ def _delete_issue(**kwargs: Any) -> None:
 issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
 issue_registry.async_create_issue = _create_issue
 issue_registry.async_delete_issue = _delete_issue
+config_validation.config_entry_only_config_schema = lambda _domain: dict
 
 
 def _async_get_entity_registry(hass: Any) -> Any:
@@ -68,25 +70,37 @@ def _async_get_entity_registry(hass: Any) -> Any:
 entity_registry.async_get = _async_get_entity_registry
 helpers.issue_registry = issue_registry
 helpers.entity_registry = entity_registry
+helpers.config_validation = config_validation
+sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
 sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
+from custom_components.bticino_c300x import repair_issues  # noqa: E402
+from custom_components.bticino_c300x.agent_update import AgentUpdateState  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
 )
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
+    DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     async_sync_entry_repair_issues,
     repair_issue_id,
 )
 
+repair_issues.ir.IssueSeverity = issue_registry.IssueSeverity
+repair_issues.ir.async_create_issue = _create_issue
+repair_issues.ir.async_delete_issue = _delete_issue
+repair_issues.er = entity_registry
+
 
 @dataclass(slots=True)
 class FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=lambda: {"doorbell_events": True})
+    agent_update_state: AgentUpdateState | None = None
+    connection_state: Any | None = None
 
 
 @dataclass(slots=True)
@@ -187,3 +201,84 @@ def test_empty_agent_capabilities_create_repair_issue() -> None:
     ]
     assert issue["severity"] == "error"
     assert issue["translation_key"] == AGENT_CAPABILITY_MISMATCH_ISSUE
+
+
+def test_offline_agent_clears_capability_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            capabilities={},
+            connection_state=types.SimpleNamespace(available=False),
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(AGENT_CAPABILITY_MISMATCH_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert CREATED_ISSUES == {}
+
+
+def test_agent_update_available_creates_fixable_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            agent_update_state=AgentUpdateState(
+                state="update_available",
+                installed_version="0.2.0",
+                available_version="0.3.1",
+                installed_api_version="1",
+                available_api_version="1",
+                self_update_supported=True,
+                reason="version_mismatch",
+            )
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_AGENT_UPDATE_REQUIRED_ISSUE
+    assert issue["translation_placeholders"]["available_version"] == "0.3.1"
+
+
+def test_non_self_update_agent_creates_fixable_ssh_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            agent_update_state=AgentUpdateState(
+                state="incompatible",
+                installed_version="0.2.0",
+                available_version="0.3.1",
+                installed_api_version="1",
+                available_api_version="1",
+                self_update_supported=False,
+                reason="self_update_not_supported",
+            )
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_AGENT_UPDATE_REQUIRED_ISSUE
+
+
+def test_agent_update_up_to_date_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            agent_update_state=AgentUpdateState(
+                state="up_to_date",
+                installed_version="0.3.1",
+                available_version="0.3.1",
+            )
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES

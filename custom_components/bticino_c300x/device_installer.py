@@ -8,6 +8,7 @@ to the in-process SSH client, never through command arguments.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shlex
 import stat
@@ -24,6 +25,7 @@ DEFAULT_REMOTE_DIR = "/home/bticino/cfg/extra/c300x-native-agent"
 REMOTE_AGENT_NAME = "c300x-agent-native"
 REMOTE_CONFIG_NAME = "config.json"
 REMOTE_INIT_ENV_NAME = "c300x-agent.env"
+REMOTE_BOOTSTRAP_FIREWALL_NAME = "bootstrap_firewall.sh"
 REMOTE_INIT_SCRIPT = "/etc/init.d/c300x-native-agent"
 REMOTE_INIT_LINK = "/etc/rc5.d/S40c300x-native-agent"
 REMOTE_FIREWALL_PATH = "/etc/network/if-pre-up.d/iptables"
@@ -64,6 +66,7 @@ class C300XDeviceInstallResult:
 
     remote_dir: str
     installed_files: tuple[str, ...]
+    changed_files: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +94,12 @@ async def async_install_device_agent(
         firewall_enabled=request.apply_firewall_patch,
     ).encode("utf-8")
 
-    await asyncio.to_thread(_install_device_agent_sync, request, bundle, config_bytes)
+    changed_files = await asyncio.to_thread(
+        _install_device_agent_sync,
+        request,
+        bundle,
+        config_bytes,
+    )
 
     return C300XDeviceInstallResult(
         remote_dir=request.remote_dir,
@@ -102,6 +110,7 @@ async def async_install_device_agent(
             REMOTE_INIT_SCRIPT,
             REMOTE_INIT_LINK,
         ),
+        changed_files=changed_files,
     )
 
 
@@ -109,25 +118,30 @@ def _install_device_agent_sync(
     request: C300XDeviceInstallRequest,
     bundle: _ResolvedBundle,
     config_bytes: bytes,
-) -> None:
+) -> tuple[str, ...]:
     """Install the device files through a Python SSH client."""
 
     client = _connect_device_client(request)
+    changed_files: list[str] = []
     try:
         client.run(f"mkdir -p {_quote(request.remote_dir)}")
         client.run(f"mkdir -p {_quote(f'{request.remote_dir}/qml/js')}")
         for payload in bundle.payload_files:
-            client.put_file(payload.source, payload.remote_path, payload.mode)
+            if client.put_file(payload.source, payload.remote_path, payload.mode):
+                changed_files.append(payload.remote_path)
 
-        _write_remote_file_sync(
+        if _write_remote_file_sync(
             client,
             f"{request.remote_dir}/{REMOTE_CONFIG_NAME}",
             config_bytes,
             mode="600",
+        ):
+            changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
+        changed_files.extend(
+            _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
         )
-        _install_startup_script_sync(client, bundle.init_script, request.remote_dir)
         if request.apply_firewall_patch:
-            _apply_firewall_patch_sync(client, request.agent_port)
+            _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
 
         if request.apply_gui_patch:
@@ -137,6 +151,7 @@ def _install_device_agent_sync(
             )
     finally:
         client.close()
+    return tuple(changed_files)
 
 
 def installer_bundle_status() -> dict[str, Any]:
@@ -201,6 +216,11 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
         COMPONENT_DIR / "device_agent" / "scripts" / "remove_agent.sh",
         REPO_ROOT / "native_agent" / "scripts" / "remove_agent.sh",
     )
+    bootstrap_firewall = _first_existing(
+        COMPONENT_DIR / "device_agent" / "scripts" / REMOTE_BOOTSTRAP_FIREWALL_NAME,
+        REPO_ROOT / "native_agent" / "scripts" / REMOTE_BOOTSTRAP_FIREWALL_NAME,
+    )
+    bundle_manifest = _optional_existing(COMPONENT_DIR / "device_agent" / "bundle.json")
 
     qml_sources = {
         "qml/Alarm.qml": _first_existing(
@@ -229,7 +249,14 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
         _PayloadFile(agent_binary, f"{remote_dir}/{REMOTE_AGENT_NAME}", "700"),
         _PayloadFile(qml_patch, f"{remote_dir}/qml_patch.sh", "700"),
         _PayloadFile(remove_agent, f"{remote_dir}/remove_agent.sh", "700"),
+        _PayloadFile(
+            bootstrap_firewall,
+            f"{remote_dir}/{REMOTE_BOOTSTRAP_FIREWALL_NAME}",
+            "700",
+        ),
     ]
+    if bundle_manifest is not None:
+        payloads.append(_PayloadFile(bundle_manifest, f"{remote_dir}/bundle.json", "600"))
     payloads.extend(
         _PayloadFile(source, f"{remote_dir}/{relative_path}")
         for relative_path, source in qml_sources.items()
@@ -242,6 +269,13 @@ def _first_existing(*candidates: Path) -> Path:
         if candidate.exists():
             return candidate
     raise C300XDeviceInstallError("agent_bundle_missing")
+
+
+def _optional_existing(*candidates: Path) -> Path | None:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _device_config_json(
@@ -290,6 +324,27 @@ def _device_config_json(
             "callbackTimeoutMs": 2500,
             "udp": {"enabled": True, "group": "239.255.76.67", "port": 7667},
         },
+        "mqtt": {
+            "enabled": False,
+            "host": "",
+            "port": 1883,
+            "username": "",
+            "password": "",
+            "clientId": "c300x-native-agent",
+            "commandHost": "127.0.0.1",
+            "commandPort": 30006,
+            "topics": {
+                "command": "Bticino/rx",
+                "event": "Bticino/tx",
+                "jsonEvent": "",
+                "status": "Bticino/start_date",
+                "availability": "Bticino/LastWillT",
+            },
+            "qos": 0,
+            "keepaliveSeconds": 120,
+            "reconnectInitialSeconds": 30,
+            "reconnectMaxSeconds": 600,
+        },
         "answeringMachine": {
             "messages": {
                 "enabled": True,
@@ -329,7 +384,7 @@ class _DeviceSshClient:
         source: Path,
         remote_path: str,
         mode: str | None = None,
-    ) -> None:
+    ) -> bool:
         raise NotImplementedError
 
     def close(self) -> None:
@@ -430,8 +485,11 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
         source: Path,
         remote_path: str,
         mode: str | None = None,
-    ) -> None:
+    ) -> bool:
+        content = source.read_bytes()
         file_mode = mode or f"{stat.S_IMODE(source.stat().st_mode):04o}"
+        if _remote_content_matches_sync(self, remote_path, content):
+            return _ensure_remote_mode_sync(self, remote_path, file_mode)
         temp_path = f"{remote_path}.new"
         self.run(
             (
@@ -439,8 +497,9 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
                 f"chmod {file_mode} {_quote(temp_path)} && "
                 f"mv -f {_quote(temp_path)} {_quote(remote_path)}"
             ),
-            source.read_bytes(),
+            content,
         )
+        return True
 
     def close(self) -> None:
         self._client.close()
@@ -450,27 +509,53 @@ def _install_startup_script_sync(
     client: _DeviceSshClient,
     source: Path,
     remote_dir: str,
-) -> None:
+) -> tuple[str, ...]:
+    changed_files: list[str] = []
     temp_path = f"{remote_dir}/.c300x-native-agent-init.new"
     env_path = f"{remote_dir}/{REMOTE_INIT_ENV_NAME}"
-    client.run(
-        f"umask 077 && cat > {_quote(temp_path)} && chmod 700 {_quote(temp_path)}",
-        _render_startup_script(source, remote_dir),
+    init_content = _render_startup_script(source, remote_dir)
+    init_changed = not _remote_content_matches_sync(
+        client,
+        REMOTE_INIT_SCRIPT,
+        init_content,
     )
-    client.run(
-        f"umask 077 && cat > {_quote(env_path)} && chmod 644 {_quote(env_path)}",
+    link_changed = not _remote_symlink_target_matches_sync(
+        client,
+        REMOTE_INIT_LINK,
+        REMOTE_INIT_SCRIPT,
+    )
+    if _write_remote_file_sync(
+        client,
+        env_path,
         _render_startup_defaults(remote_dir),
-    )
-    client.run(
-        (
-            "mount -o remount,rw /; rc=$?; "
-            "if [ $rc -eq 0 ]; then "
+        mode="644",
+    ):
+        changed_files.append(env_path)
+    if init_changed:
+        client.run(
+            f"umask 077 && cat > {_quote(temp_path)} && chmod 700 {_quote(temp_path)}",
+            init_content,
+        )
+    if init_changed or link_changed:
+        install_init = (
             f"chmod 700 {_quote(temp_path)} && "
-            f"mv -f {_quote(temp_path)} {_quote(REMOTE_INIT_SCRIPT)} && "
-            f"ln -sf {_quote(REMOTE_INIT_SCRIPT)} {_quote(REMOTE_INIT_LINK)}; "
-            "rc=$?; mount -o remount,ro /; fi; exit $rc"
-        ),
-    )
+            f"mv -f {_quote(temp_path)} {_quote(REMOTE_INIT_SCRIPT)}; "
+            "rc=$?; "
+        ) if init_changed else "rc=0; "
+        client.run(
+            (
+                "mount -o remount,rw /; rc=$?; "
+                "if [ $rc -eq 0 ]; then "
+                f"{install_init}"
+                f"if [ $rc -eq 0 ]; then ln -sf {_quote(REMOTE_INIT_SCRIPT)} {_quote(REMOTE_INIT_LINK)}; rc=$?; fi; "
+                "mount -o remount,ro /; fi; exit $rc"
+            ),
+        )
+        if init_changed:
+            changed_files.append(REMOTE_INIT_SCRIPT)
+        if link_changed:
+            changed_files.append(REMOTE_INIT_LINK)
+    return tuple(changed_files)
 
 
 def _render_startup_script(source: Path, remote_dir: str) -> bytes:
@@ -492,7 +577,9 @@ def _write_remote_file_sync(
     content: bytes,
     *,
     mode: str,
-) -> None:
+) -> bool:
+    if _remote_content_matches_sync(client, remote_path, content):
+        return _ensure_remote_mode_sync(client, remote_path, mode)
     client.run(
         (
             f"umask 077 && cat > {_quote(f'{remote_path}.new')} && "
@@ -501,73 +588,97 @@ def _write_remote_file_sync(
         ),
         content,
     )
+    return True
 
 
-def _apply_firewall_patch_sync(client: _DeviceSshClient, api_port: int) -> None:
+def _remote_content_matches_sync(
+    client: _DeviceSshClient,
+    remote_path: str,
+    content: bytes,
+) -> bool:
+    """Return true when the remote file already has exactly this content."""
+
+    remote_hash = _remote_sha256_sync(client, remote_path)
+    return remote_hash == hashlib.sha256(content).hexdigest()
+
+
+def _remote_sha256_sync(client: _DeviceSshClient, remote_path: str) -> str | None:
+    script = (
+        "import hashlib, sys\n"
+        "path = sys.argv[1]\n"
+        "h = hashlib.sha256()\n"
+        "with open(path, 'rb') as handle:\n"
+        "    for chunk in iter(lambda: handle.read(65536), b''):\n"
+        "        h.update(chunk)\n"
+        "print(h.hexdigest())\n"
+    )
+    try:
+        output = client.run(f"python - {_quote(remote_path)}", script.encode())
+    except C300XDeviceInstallError:
+        return None
+    remote_hash = output.strip().splitlines()[-1] if output.strip() else ""
+    if len(remote_hash) != 64 or any(char not in "0123456789abcdef" for char in remote_hash):
+        return None
+    return remote_hash
+
+
+def _ensure_remote_mode_sync(
+    client: _DeviceSshClient,
+    remote_path: str,
+    mode: str,
+) -> bool:
+    """Ensure mode on an already-matching remote file."""
+
+    if _remote_mode_matches_sync(client, remote_path, mode):
+        return False
+    client.run(f"chmod {mode} {_quote(remote_path)}")
+    return True
+
+
+def _remote_mode_matches_sync(
+    client: _DeviceSshClient,
+    remote_path: str,
+    mode: str,
+) -> bool:
+    """Return true when the remote file mode already matches."""
+
+    desired = mode.lstrip("0") or "0"
+    try:
+        output = client.run(f"stat -c %a {_quote(remote_path)}")
+    except C300XDeviceInstallError:
+        return False
+    current = output.strip().splitlines()[-1].lstrip("0") if output.strip() else ""
+    return current == desired
+
+
+def _remote_symlink_target_matches_sync(
+    client: _DeviceSshClient,
+    remote_path: str,
+    target_path: str,
+) -> bool:
+    """Return true when the remote symlink already targets the desired path."""
+
+    try:
+        output = client.run(f"readlink {_quote(remote_path)}")
+    except C300XDeviceInstallError:
+        return False
+    return output.strip().splitlines()[-1:] == [target_path]
+
+
+def _apply_firewall_patch_sync(
+    client: _DeviceSshClient,
+    remote_dir: str,
+    api_port: int,
+) -> None:
     """Open the API port during bootstrap so HA can verify the new agent."""
 
-    begin = "# c300x-native-agent firewall begin"
-    end = "# c300x-native-agent firewall end"
     client.run(
-        f"""
-set -eu
-PATH=/sbin:/usr/sbin:/bin:/usr/bin
-IPTABLES={_quote(REMOTE_FIREWALL_PATH)}
-BACKUP={_quote(REMOTE_FIREWALL_BACKUP)}
-BEGIN={_quote(begin)}
-END={_quote(end)}
-PORT={api_port}
-TMP="/tmp/c300x-firewall.$$"
-BASE="/tmp/c300x-firewall-base.$$"
-ORIGINAL="/tmp/c300x-firewall-original.$$"
-cleanup() {{
-    rm -f "$TMP" "$BASE" "$ORIGINAL"
-}}
-trap cleanup EXIT
-[ -f "$IPTABLES" ] || exit 1
-awk -v begin="$BEGIN" -v end="$END" '
-    $0 == begin {{skip = 1; next}}
-    $0 == end {{skip = 0; next}}
-    skip != 1 {{print}}
-' "$IPTABLES" > "$BASE"
-awk '
-    $0 == "# c300x-native-agent firewall begin" {{skip = 1; next}}
-    $0 == "# c300x-native-agent firewall end" {{skip = 0; next}}
-    $0 == "# c300x-native-agent ipv6 firewall begin" {{skip = 1; next}}
-    $0 == "# c300x-native-agent ipv6 firewall end" {{skip = 0; next}}
-    skip != 1 {{print}}
-' "$IPTABLES" > "$ORIGINAL"
-cat "$BASE" > "$TMP"
-if [ -s "$TMP" ] && [ "$(tail -c 1 "$TMP" 2>/dev/null)" != "" ]; then
-    printf '\\n' >> "$TMP"
-fi
-cat >> "$TMP" <<EOF
-{begin}
-# Managed by c300x-native-agent. Opens only the configured API port.
-if command -v iptables >/dev/null 2>&1; then
-    if ! iptables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null; then
-        iptables -A INPUT -p tcp --dport $PORT -j ACCEPT
-    fi
-fi
-{end}
-EOF
-if [ ! -f "$BACKUP" ]; then
-    mkdir -p "$(dirname "$BACKUP")"
-    cp "$ORIGINAL" "$BACKUP"
-    chmod 600 "$BACKUP" >/dev/null 2>&1 || true
-fi
-if ! cmp -s "$IPTABLES" "$TMP"; then
-    mount -o remount,rw /
-    cat "$TMP" > "$IPTABLES"
-    chmod 755 "$IPTABLES" >/dev/null 2>&1 || true
-    mount -o remount,ro /
-fi
-if command -v iptables >/dev/null 2>&1; then
-    if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
-        iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
-    fi
-fi
-""",
+        (
+            f"C300X_IPTABLES={_quote(REMOTE_FIREWALL_PATH)} "
+            f"C300X_IPTABLES_BACKUP={_quote(REMOTE_FIREWALL_BACKUP)} "
+            f"{_quote(f'{remote_dir}/{REMOTE_BOOTSTRAP_FIREWALL_NAME}')} "
+            f"{api_port}"
+        ),
     )
 
 

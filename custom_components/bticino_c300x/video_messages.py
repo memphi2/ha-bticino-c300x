@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .const import DOMAIN
+from .message_metadata import latest_metadata_item, localized_choice
 
 VIDEO_MESSAGE_PLAYBACK_MIME_TYPE = "video/mp4"
 
@@ -23,17 +24,7 @@ def video_message_items(messages: dict[str, Any]) -> list[dict[str, Any]]:
 def latest_video_message(messages: dict[str, Any]) -> dict[str, Any] | None:
     """Return the newest stored answering-machine video message."""
 
-    items = video_message_items(messages)
-    if not items:
-        return None
-    return max(
-        items,
-        key=lambda message: (
-            int(message.get("unix_time") or 0),
-            str(message.get("iso_time") or message.get("date") or ""),
-            str(message.get("id") or ""),
-        ),
-    )
+    return latest_metadata_item(video_message_items(messages), coerce_unix_time=True)
 
 
 def latest_video_message_id(messages: dict[str, Any]) -> str | None:
@@ -124,13 +115,12 @@ def video_message_title(
 ) -> str:
     """Return a stable display title for a stored video message."""
 
-    language_code = str(language or "").lower()
-    if language_code.startswith("de"):
-        label = "Video-Nachricht"
-    elif language_code.startswith("it"):
-        label = "Messaggio video"
-    else:
-        label = "Video message"
+    label = localized_choice(
+        language,
+        de="Video-Nachricht",
+        it="Messaggio video",
+        en="Video message",
+    )
     timestamp = message.get("iso_time") or message.get("date")
     if timestamp:
         return f"{label} {timestamp}"

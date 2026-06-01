@@ -69,6 +69,23 @@ struct c300x_config {
     uint16_t events_port;
     char subscription_store_path[C300X_MAX_PATH_LEN];
     int callback_timeout_ms;
+    int mqtt_enabled;
+    char mqtt_host[C300X_MAX_HOST_LEN];
+    uint16_t mqtt_port;
+    char mqtt_username[C300X_MAX_TOKEN_LEN];
+    char mqtt_password[C300X_MAX_TOKEN_LEN];
+    char mqtt_client_id[C300X_MAX_TOKEN_LEN];
+    char mqtt_command_host[C300X_MAX_HOST_LEN];
+    uint16_t mqtt_command_port;
+    char mqtt_command_topic[C300X_MAX_PATH_LEN];
+    char mqtt_event_topic[C300X_MAX_PATH_LEN];
+    char mqtt_json_event_topic[C300X_MAX_PATH_LEN];
+    char mqtt_status_topic[C300X_MAX_PATH_LEN];
+    char mqtt_availability_topic[C300X_MAX_PATH_LEN];
+    int mqtt_qos;
+    int mqtt_keepalive_seconds;
+    int mqtt_reconnect_initial_seconds;
+    int mqtt_reconnect_max_seconds;
     int video_enabled;
     char video_av_host[C300X_MAX_HOST_LEN];
     uint16_t video_av_port;
@@ -118,6 +135,16 @@ int c300x_save_config(
     const struct c300x_config *config,
     char *error,
     size_t error_len
+);
+int c300x_save_config_if_changed(
+    const struct c300x_config *config,
+    char *error,
+    size_t error_len,
+    int *changed
+);
+int c300x_config_persisted_equal(
+    const struct c300x_config *left,
+    const struct c300x_config *right
 );
 int c300x_run(struct c300x_config *config);
 int c300x_openwebnet_send(

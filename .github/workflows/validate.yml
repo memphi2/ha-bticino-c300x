@@ -15,8 +15,14 @@ jobs:
           python-version: "3.14"
       - name: Install Python validation tools
         run: python -m pip install --upgrade pip -r requirements-dev.txt
+      - name: Install native agent toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
       - name: Repository checks
         run: python scripts/check_repo.py
+      - name: Native agent ARMHF checks
+        run: make -C native_agent armhf-abi-check armhf-stack-check
       - name: Quality scale checks
         run: python scripts/check_quality_scale.py
       - name: Ruff

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -38,6 +37,7 @@ from .const import (
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
+    CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
@@ -57,16 +57,21 @@ from .const import (
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     DOMAIN,
-    STAIR_LIGHT_ADDRESS_PATTERN,
     WEATHER_DOMAIN,
+)
+from .dashboard_entities import (
+    DASHBOARD_ENTITY_DOMAINS,
+    normalize_dashboard_entity_ids,
 )
 from .device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     async_install_device_agent,
 )
+from .entry_config import entry_config_value
+from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
+from .validation_patterns import ENTITY_OBJECT_ID_RE, STAIR_LIGHT_ADDRESS_RE
 
-_STAIR_LIGHT_ADDRESS_RE = re.compile(STAIR_LIGHT_ADDRESS_PATTERN)
 _QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
 _QML_PATCH_STATUS_UNKNOWN = "unknown"
 _QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
@@ -79,6 +84,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_AGENT_TOKEN,
         CONF_AGENT_USE_SSL,
         CONF_ALARM_ENTITY_ID,
+        CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DEVICE_UI_ENABLED,
         CONF_MAINTENANCE_TOKEN,
@@ -95,6 +101,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for BTicino C300X."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         """Initialize transient flow state."""
@@ -216,6 +223,20 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if probe != "reachable":
                     errors["base"] = "device_install_verify_failed"
                 else:
+                    try:
+                        await async_migrate_legacy_mqtt_for_connection(
+                            self.hass,
+                            self._setup_connection,
+                            api_token=api_token,
+                            maintenance_token=maintenance_token,
+                        )
+                    except C300XAgentApiError:
+                        errors["base"] = "device_install_verify_failed"
+                        return self.async_show_form(
+                            step_id="bootstrap_install",
+                            data_schema=_bootstrap_install_schema(),
+                            errors=errors,
+                        )
                     await self._async_adopt_agent_unique_id(api_token=api_token)
                     self._setup_agent_needs_token = False
                     self._setup_device_ui_default = request.apply_gui_patch
@@ -407,6 +428,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         True,
                         str(user_input.get(CONF_ACTIONS_JSON, "")),
                         bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
+                        user_input.get(CONF_DASHBOARD_ENTITIES, []),
                     ),
                     errors=errors,
                 )
@@ -434,6 +456,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         bool(user_input.get(CONF_DEVICE_UI_ENABLED, False)),
                         str(user_input.get(CONF_ACTIONS_JSON, "")),
                         bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
+                        user_input.get(CONF_DASHBOARD_ENTITIES, []),
                     ),
                     errors=errors,
                 )
@@ -466,6 +489,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DASHBOARD_PREVENT_RETURN: feature_data[
                         CONF_DASHBOARD_PREVENT_RETURN
                     ],
+                    CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
                 },
             )
 
@@ -556,6 +580,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         True,
                         _actions_json(feature_defaults[CONF_ACTIONS]),
                         bool(feature_defaults[CONF_DASHBOARD_PREVENT_RETURN]),
+                        feature_defaults[CONF_DASHBOARD_ENTITIES],
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -588,6 +613,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_DASHBOARD_PREVENT_RETURN,
                                 feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
                             )
+                        ),
+                        user_input.get(
+                            CONF_DASHBOARD_ENTITIES,
+                            feature_defaults[CONF_DASHBOARD_ENTITIES],
                         ),
                     ),
                     errors=errors,
@@ -811,7 +840,7 @@ def _reconfigure_unique_id(entry: config_entries.ConfigEntry) -> str:
 def _manual_setup_unique_id(connection: dict[str, Any]) -> str:
     """Return a deterministic unique id for manual setup flows."""
 
-    host = str(connection.get(CONF_AGENT_HOST, "")).strip().lower().rstrip(".")
+    host = _normalize_discovery_host(str(connection.get(CONF_AGENT_HOST, "")))
     port = int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
     return f"{DOMAIN}:{host}:{port}" if host else DOMAIN
 
@@ -883,6 +912,7 @@ def _setup_features_schema(
     default_device_ui_enabled: bool,
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = True,
+    default_dashboard_entities: Any = None,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
 
@@ -898,6 +928,7 @@ def _setup_features_schema(
                 default_device_ui_enabled,
                 default_actions_json,
                 default_dashboard_prevent_return,
+                default_dashboard_entities,
             ),
             vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
             vol.Optional(CONF_VIDEO_PORT, default=default_video_port): int,
@@ -947,6 +978,7 @@ def _reconfigure_features_schema(
     default_device_ui_enabled: bool,
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = True,
+    default_dashboard_entities: Any = None,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
@@ -962,6 +994,7 @@ def _reconfigure_features_schema(
                 default_device_ui_enabled,
                 default_actions_json,
                 default_dashboard_prevent_return,
+                default_dashboard_entities,
             ),
             vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
             vol.Optional(CONF_VIDEO_PORT, default=default_video_port): int,
@@ -977,7 +1010,7 @@ def _stair_light_address(value: Any) -> str:
     """Validate the OpenWebNet address segment used by the stair light command."""
 
     address = str(value or "").strip()
-    if not _STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
+    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
         raise vol.Invalid("invalid staircase light address")
     return address
 
@@ -985,29 +1018,44 @@ def _stair_light_address(value: Any) -> str:
 def _alarm_entity_id(value: Any) -> str:
     """Validate an optional alarm-control-panel entity ID."""
 
-    entity_id = str(value or "").strip().lower()
-    if not entity_id:
-        return ""
-    if not entity_id.startswith(f"{ALARM_DOMAIN}."):
-        raise vol.Invalid("invalid alarm entity")
-    object_id = entity_id.removeprefix(f"{ALARM_DOMAIN}.")
-    if not re.fullmatch(r"[a-z0-9_]+", object_id):
-        raise vol.Invalid("invalid alarm entity")
-    return entity_id
+    return _optional_domain_entity_id(
+        value,
+        domain=ALARM_DOMAIN,
+        error="invalid alarm entity",
+    )
 
 
 def _weather_entity_id(value: Any) -> str:
     """Validate an optional weather entity ID."""
 
+    return _optional_domain_entity_id(
+        value,
+        domain=WEATHER_DOMAIN,
+        error="invalid weather entity",
+    )
+
+
+def _optional_domain_entity_id(value: Any, *, domain: str, error: str) -> str:
+    """Validate an optional HA entity ID for one domain."""
+
     entity_id = str(value or "").strip().lower()
     if not entity_id:
         return ""
-    if not entity_id.startswith(f"{WEATHER_DOMAIN}."):
-        raise vol.Invalid("invalid weather entity")
-    object_id = entity_id.removeprefix(f"{WEATHER_DOMAIN}.")
-    if not re.fullmatch(r"[a-z0-9_]+", object_id):
-        raise vol.Invalid("invalid weather entity")
+    if not entity_id.startswith(f"{domain}."):
+        raise vol.Invalid(error)
+    object_id = entity_id.removeprefix(f"{domain}.")
+    if not ENTITY_OBJECT_ID_RE.fullmatch(object_id):
+        raise vol.Invalid(error)
     return entity_id
+
+
+def _dashboard_entity_ids(value: Any) -> list[str]:
+    """Validate selected entities for the simple C300X dashboard page."""
+
+    try:
+        return list(normalize_dashboard_entity_ids(value, strict=True))
+    except ValueError as err:
+        raise vol.Invalid("invalid dashboard entities") from err
 
 
 def _non_empty_string(value: Any) -> str:
@@ -1133,6 +1181,7 @@ def _feature_input(
     device_ui_enabled = bool(user_input.get(CONF_DEVICE_UI_ENABLED, False))
     alarm_entity_id = ""
     weather_entity_id = ""
+    dashboard_entities: list[str] = []
     actions: dict[str, dict[str, Any]] = {}
     if device_ui_enabled:
         try:
@@ -1149,10 +1198,17 @@ def _feature_input(
             )
         except vol.Invalid:
             errors[CONF_WEATHER_ENTITY_ID] = "invalid_weather_entity"
+        try:
+            dashboard_entities = _dashboard_entity_ids(
+                user_input.get(CONF_DASHBOARD_ENTITIES, [])
+            )
+        except vol.Invalid:
+            errors[CONF_DASHBOARD_ENTITIES] = "invalid_dashboard_entities"
     return (
         {
             CONF_ALARM_ENTITY_ID: alarm_entity_id,
             CONF_WEATHER_ENTITY_ID: weather_entity_id,
+            CONF_DASHBOARD_ENTITIES: dashboard_entities,
             CONF_ACTIONS: actions,
             CONF_DASHBOARD_PREVENT_RETURN: bool(
                 user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)
@@ -1347,6 +1403,7 @@ def _setup_gui_dependent_feature_fields(
     device_ui_enabled: bool,
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = True,
+    default_dashboard_entities: Any = None,
 ) -> dict[Any, Any]:
     """Return setup/reconfigure fields that require the C300X GUI patch."""
 
@@ -1361,6 +1418,10 @@ def _setup_gui_dependent_feature_fields(
             CONF_WEATHER_ENTITY_ID,
             default_weather_entity,
         ): _weather_entity_selector(),
+        _optional_suggested(
+            CONF_DASHBOARD_ENTITIES,
+            _dashboard_entity_ids(default_dashboard_entities or []),
+        ): _dashboard_entity_selector(),
         _optional_suggested(
             CONF_ACTIONS_JSON,
             default_actions_json,
@@ -1389,6 +1450,12 @@ def _options_gui_dependent_feature_fields(
             CONF_WEATHER_ENTITY_ID,
             _config_default(config_entry, CONF_WEATHER_ENTITY_ID, ""),
         ): _weather_entity_selector(),
+        _optional_suggested(
+            CONF_DASHBOARD_ENTITIES,
+            _dashboard_entity_ids(
+                _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
+            ),
+        ): _dashboard_entity_selector(),
         _optional_suggested(
             CONF_ACTIONS_JSON,
             _actions_json(_config_default(config_entry, CONF_ACTIONS, {})),
@@ -1425,6 +1492,7 @@ def _needs_gui_details(
         for field in (
             CONF_ALARM_ENTITY_ID,
             CONF_WEATHER_ENTITY_ID,
+            CONF_DASHBOARD_ENTITIES,
             CONF_ACTIONS_JSON,
             CONF_DASHBOARD_PREVENT_RETURN,
         )
@@ -1469,6 +1537,9 @@ def _current_feature_options(
             config_entry,
             CONF_WEATHER_ENTITY_ID,
             "",
+        ),
+        CONF_DASHBOARD_ENTITIES: _dashboard_entity_ids(
+            _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
         ),
         CONF_VIDEO_ENABLED: bool(
             _config_default(config_entry, CONF_VIDEO_ENABLED, False)
@@ -1522,6 +1593,7 @@ def _reconfigure_features_schema_from_current(
         bool(current[CONF_DEVICE_UI_ENABLED]),
         _actions_json(current[CONF_ACTIONS]),
         bool(current[CONF_DASHBOARD_PREVENT_RETURN]),
+        current[CONF_DASHBOARD_ENTITIES],
     )
 
 
@@ -1536,6 +1608,7 @@ def _feature_input_defaults(
         return data
     data.setdefault(CONF_ALARM_ENTITY_ID, defaults[CONF_ALARM_ENTITY_ID])
     data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
+    data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
     data.setdefault(CONF_ACTIONS_JSON, _actions_json(defaults[CONF_ACTIONS]))
     data.setdefault(
         CONF_DASHBOARD_PREVENT_RETURN,
@@ -1570,14 +1643,7 @@ def _config_default(
 ) -> Any:
     """Return an option override when present, otherwise setup data."""
 
-    if key in config_entry.options:
-        value = config_entry.options[key]
-        if value in (None, ""):
-            return default
-        if isinstance(value, str) and not value.strip():
-            return default
-        return value
-    return config_entry.data.get(key, default)
+    return entry_config_value(config_entry, key, default)
 
 
 async def _async_qml_patch_description_placeholders(
@@ -1672,6 +1738,19 @@ def _weather_entity_selector() -> Any:
         return str
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=WEATHER_DOMAIN),
+    )
+
+
+def _dashboard_entity_selector() -> Any:
+    """Return a multi-entity selector for the simple C300X dashboard."""
+
+    if selector is None:
+        return list
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=list(DASHBOARD_ENTITY_DOMAINS),
+            multiple=True,
+        ),
     )
 
 

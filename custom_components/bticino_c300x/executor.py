@@ -46,6 +46,7 @@ from .const import (
     ALARM_DOMAIN,
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_STAIR_LIGHT_ADDRESS,
     CONF_WEATHER_ENTITY_ID,
@@ -56,6 +57,10 @@ from .const import (
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DOMAIN,
     EVENT_ACTION_RECEIVED,
+)
+from .dashboard_entities import (
+    DASHBOARD_ENTITY_DOMAIN_SET,
+    normalize_dashboard_entity_ids,
 )
 from .entity import entry_config_value
 
@@ -108,8 +113,14 @@ _DASHBOARD_ACTION_PAGE = "Home Assistant"
 _ALARM_STATE_CHANGE_TIMEOUT_SECONDS = 5.0
 _ALARM_STATE_CHANGE_INTERVAL_SECONDS = 0.2
 _MAX_ALARM_BLOCKING_SENSORS = 8
-_DASHBOARD_SWITCH_DOMAINS = {"input_boolean", "light", "switch"}
+_DASHBOARD_SWITCH_DOMAINS = {"fan", "input_boolean", "light", "switch"}
 _DASHBOARD_SWITCH_SERVICES = {"toggle"}
+_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"fan", "input_boolean", "light", "switch"}
+_DASHBOARD_BUTTON_ENTITY_DOMAINS = {"button", "input_button", "scene", "script"}
+_DASHBOARD_SLIDER_ENTITY_DOMAINS = {"input_number", "number"}
+_DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
+_DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET
+_DASHBOARD_SLIDER_ACTIONS = {"decrement", "increment"}
 _DASHBOARD_ON_STATES = {
     "armed_away",
     "armed_custom_bypass",
@@ -186,10 +197,22 @@ def configured_actions(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
         return {}
 
 
+def configured_dashboard_entities(entry: ConfigEntry) -> tuple[str, ...]:
+    """Return selected standard HA entities for the C300X dashboard."""
+
+    return _dashboard_entity_ids(entry_config_value(entry, CONF_DASHBOARD_ENTITIES, []))
+
+
 def configured_dashboard_prevent_return(entry: ConfigEntry) -> bool:
     """Return whether the dashboard should prevent returning to the homepage."""
 
     return bool(entry_config_value(entry, CONF_DASHBOARD_PREVENT_RETURN, True))
+
+
+def _dashboard_entity_ids(value: Any) -> tuple[str, ...]:
+    """Normalize selected dashboard entity IDs without importing the config flow."""
+
+    return normalize_dashboard_entity_ids(value)
 
 
 async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
@@ -197,6 +220,7 @@ async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
 
     device_ui_enabled = bool(entry_device_ui_enabled_or_patch_active(entry))
     actions = configured_actions(entry)
+    dashboard_entities = configured_dashboard_entities(entry)
     alarm_entity_id = configured_alarm_entity_id(entry)
     alarm: dict[str, Any] | None = None
     if device_ui_enabled and alarm_entity_id:
@@ -219,7 +243,11 @@ async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
         "alarm": alarm,
         "alarm_configured": alarm is not None,
         "dashboard_available": device_ui_enabled
-        and (bool(actions) or configured_weather_entity_id(entry) is not None),
+        and (
+            bool(actions)
+            or bool(dashboard_entities)
+            or configured_weather_entity_id(entry) is not None
+        ),
         "device_ui_enabled": device_ui_enabled,
         "actions": sorted(actions.keys()) if device_ui_enabled else [],
     }
@@ -307,22 +335,6 @@ async def async_execute_alarm_command(
             ),
         }
 
-    if (
-        not force
-        and (
-            preflight := _alarmo_command_preflight(
-                hass,
-                alarm_entity_id,
-                alarm_state,
-                command,
-                for_command=True,
-            )
-        )
-        is not None
-        and preflight["ready"] is False
-    ):
-        return _alarm_not_ready_response(command, alarm_entity_id, current_state, preflight)
-
     if force and command in _ALARMO_FORCE_ARM_MODES:
         domain = _ALARMO_DOMAIN
         service = "arm"
@@ -340,12 +352,35 @@ async def async_execute_alarm_command(
         if code:
             service_data["code"] = code
 
-    await hass.services.async_call(
-        domain,
-        service,
-        service_data,
-        blocking=True,
-    )
+    try:
+        await hass.services.async_call(
+            domain,
+            service,
+            service_data,
+            blocking=True,
+        )
+    except Exception as err:
+        if (
+            preflight := _alarmo_command_preflight(
+                hass,
+                alarm_entity_id,
+                hass.states.get(alarm_entity_id),
+                command,
+                for_command=True,
+            )
+        ) is not None and preflight["ready"] is False:
+            return _alarm_not_ready_response(
+                command,
+                alarm_entity_id,
+                _current_alarm_state(hass, alarm_entity_id),
+                preflight,
+            )
+        return _alarm_service_error_response(
+            command,
+            alarm_entity_id,
+            _current_alarm_state(hass, alarm_entity_id),
+            err,
+        )
     target_states = _target_alarm_states(command)
     if (
         current_state is not None
@@ -371,6 +406,7 @@ async def async_execute_alarm_command(
             command,
             alarm_entity_id,
             _current_alarm_state(hass, alarm_entity_id),
+            code=code,
         )
     return {
         "ok": True,
@@ -459,6 +495,14 @@ async def async_dashboard_payload(
         main_page["weather"] = weather
 
     main_page["badges"] = badges
+    for index, entity_id in enumerate(configured_dashboard_entities(entry), start=1):
+        dashboard_item = _dashboard_item_for_entity(hass, entity_id, index * 10)
+        if dashboard_item is None:
+            continue
+        page = _dashboard_page(pages, dashboard_item.pop("_page"))
+        kind = dashboard_item.pop("_kind")
+        page[_dashboard_collection_key(kind)].append(dashboard_item)
+
     for action_id, action in configured_actions(entry).items():
         dashboard_item = _dashboard_item_for_action(hass, action_id, action)
         if dashboard_item is None:
@@ -502,6 +546,14 @@ async def async_execute_dashboard_action(
             "action_id": DASHBOARD_ENTITY_ANSWERING_MACHINE,
             "enabled": result.get("enabled"),
         }
+    selected_entity_id, selected_action = _dashboard_selected_entity_action(entity_id)
+    if selected_entity_id in configured_dashboard_entities(entry):
+        return await _async_execute_dashboard_entity(
+            hass,
+            entry,
+            selected_entity_id,
+            selected_action,
+        )
     return await async_execute_action(hass, entry, entity_id)
 
 
@@ -627,10 +679,53 @@ def _dashboard_page(
             "badges": [],
             "buttons": [],
             "switches": [],
+            "entities": [],
+            "sliders": [],
             "images": [],
             "weather": None,
         }
     return pages[page_title]
+
+
+def _dashboard_item_for_entity(
+    hass: HomeAssistant,
+    entity_id: str,
+    order: int,
+) -> dict[str, Any] | None:
+    """Return a dashboard item for one directly selected HA entity."""
+
+    domain = entity_id.split(".", 1)[0]
+    if domain not in _DASHBOARD_SUPPORTED_ENTITY_DOMAINS:
+        return None
+
+    state = hass.states.get(entity_id)
+    name = _entity_name(entity_id, state)
+    item: dict[str, Any] = {
+        "domain": DASHBOARD_ACTION_DOMAIN,
+        "entity_id": entity_id,
+        "name": name,
+        "state_label": _entity_state_label(state),
+        "_page": _DASHBOARD_ACTION_PAGE,
+        "_order": order,
+    }
+    if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
+        item["_kind"] = "switch"
+        item["state"] = _dashboard_state_is_on(state.state if state else None)
+        return item
+    if domain in _DASHBOARD_BUTTON_ENTITY_DOMAINS:
+        item["_kind"] = "button"
+        if state is None or str(state.state or "").lower() in {"unknown", "unavailable"}:
+            item["state_label"] = "Ausfuehren"
+        else:
+            item["state_label"] = _entity_state_label(state, fallback="Ausfuehren")
+        return item
+    if domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
+        item["_kind"] = "slider"
+        item.update(_dashboard_slider_payload(state))
+        return item
+    item["_kind"] = "entity"
+    item["state"] = _dashboard_state_is_on(state.state if state else None)
+    return item
 
 
 def _dashboard_item_for_action(
@@ -707,10 +802,126 @@ def _dashboard_kind(action: dict[str, Any], dashboard: dict[str, Any]) -> str:
     return "button"
 
 
+async def _async_execute_dashboard_entity(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entity_id: str,
+    action: str | None,
+) -> dict[str, Any]:
+    """Execute the default action for a directly selected dashboard entity."""
+
+    domain = entity_id.split(".", 1)[0]
+    if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
+        await hass.services.async_call(
+            domain,
+            "toggle",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
+    elif domain in {"button", "input_button"}:
+        await hass.services.async_call(
+            domain,
+            "press",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
+    elif domain in {"scene", "script"}:
+        await hass.services.async_call(
+            domain,
+            "turn_on",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
+    elif domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
+        await _async_adjust_dashboard_slider(hass, entity_id, action)
+    else:
+        raise ValueError("read_only_dashboard_entity")
+
+    hass.bus.async_fire(
+        EVENT_ACTION_RECEIVED,
+        {"entry_id": entry.entry_id, "action_id": entity_id},
+    )
+    return {"ok": True, "action_id": entity_id}
+
+
+async def _async_adjust_dashboard_slider(
+    hass: HomeAssistant,
+    entity_id: str,
+    action: str | None,
+) -> None:
+    """Increment or decrement a selected number/input_number entity."""
+
+    if action not in _DASHBOARD_SLIDER_ACTIONS:
+        raise ValueError("invalid_dashboard_slider_action")
+    state = hass.states.get(entity_id)
+    if state is None:
+        raise ValueError("dashboard_entity_unavailable")
+    attributes = getattr(state, "attributes", None)
+    if not isinstance(attributes, dict):
+        attributes = {}
+    current = _dashboard_float(state.state, None)
+    if current is None:
+        raise ValueError("invalid_dashboard_slider_state")
+    step = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "step",
+            "native_step",
+            "native_step_value",
+        ),
+        1.0,
+    )
+    if step is None or step <= 0:
+        step = 1.0
+    next_value = current + (step if action == "increment" else -step)
+    minimum = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "min",
+            "native_min",
+            "native_min_value",
+        ),
+        None,
+    )
+    maximum = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "max",
+            "native_max",
+            "native_max_value",
+        ),
+        None,
+    )
+    if minimum is not None:
+        next_value = max(next_value, minimum)
+    if maximum is not None:
+        next_value = min(next_value, maximum)
+    await hass.services.async_call(
+        entity_id.split(".", 1)[0],
+        "set_value",
+        {"entity_id": entity_id, "value": next_value},
+        blocking=True,
+    )
+
+
+def _dashboard_selected_entity_action(action_id: str) -> tuple[str, str | None]:
+    """Split a selected entity action such as `input_number.temp:increment`."""
+
+    raw = str(action_id or "").strip().lower()
+    if ":" not in raw:
+        return raw, None
+    entity_id, action = raw.rsplit(":", 1)
+    if action in _DASHBOARD_SLIDER_ACTIONS:
+        return entity_id, action
+    return raw, None
+
+
 def _dashboard_collection_key(kind: str) -> str:
     return {
         "button": "buttons",
+        "entity": "entities",
         "image": "images",
+        "slider": "sliders",
         "switch": "switches",
     }[kind]
 
@@ -778,6 +989,88 @@ def _dashboard_state_label(value: Any) -> str:
     return _DASHBOARD_STATE_LABELS.get(raw, str(value or "unknown"))
 
 
+def _entity_name(entity_id: str, state: Any | None) -> str:
+    attributes = getattr(state, "attributes", None)
+    if isinstance(attributes, dict):
+        name = attributes.get("friendly_name")
+        if isinstance(name, str) and name.strip():
+            return _dashboard_text(name, entity_id, 80)
+    object_id = entity_id.split(".", 1)[-1].replace("_", " ")
+    return _dashboard_text(object_id.title(), entity_id, 80)
+
+
+def _entity_state_label(state: Any | None, *, fallback: str = "Unbekannt") -> str:
+    if state is None:
+        return "Offline"
+    attributes = getattr(state, "attributes", None)
+    if not isinstance(attributes, dict):
+        attributes = {}
+    state_value = str(state.state or "unknown")
+    label = _dashboard_state_label(state_value)
+    unit = attributes.get("unit_of_measurement")
+    if unit and state_value.lower() not in _DASHBOARD_STATE_LABELS:
+        label = f"{state_value} {unit}"
+    if label == "unknown" and fallback:
+        return fallback
+    return _dashboard_text(label, fallback, 60)
+
+
+def _dashboard_slider_payload(state: Any | None) -> dict[str, Any]:
+    attributes = getattr(state, "attributes", None)
+    if not isinstance(attributes, dict):
+        attributes = {}
+    value = _dashboard_float(getattr(state, "state", None), 0.0) or 0.0
+    minimum = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "min",
+            "native_min",
+            "native_min_value",
+        ),
+        0.0,
+    )
+    maximum = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "max",
+            "native_max",
+            "native_max_value",
+        ),
+        100.0,
+    )
+    step = _dashboard_float(
+        _dashboard_first_attribute(
+            attributes,
+            "step",
+            "native_step",
+            "native_step_value",
+        ),
+        1.0,
+    )
+    return {
+        "value": value,
+        "min": 0.0 if minimum is None else minimum,
+        "max": 100.0 if maximum is None else maximum,
+        "step": 1.0 if step is None or step <= 0 else step,
+    }
+
+
+def _dashboard_float(value: Any, fallback: float | None) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _dashboard_first_attribute(attributes: dict[str, Any], *names: str) -> Any | None:
+    """Return the first present slider attribute while preserving zero values."""
+
+    for name in names:
+        if name in attributes and attributes[name] not in (None, ""):
+            return attributes[name]
+    return None
+
+
 def _dashboard_text(value: Any, fallback: str, max_length: int) -> str:
     if isinstance(value, str):
         text = " ".join(value.split())
@@ -799,7 +1092,9 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         "title": page.get("title") or _DASHBOARD_ACTION_PAGE,
         "badges": list(page.get("badges") or []),
         "buttons": _finalize_dashboard_items(page.get("buttons")),
+        "entities": _finalize_dashboard_items(page.get("entities")),
         "switches": _finalize_dashboard_items(page.get("switches")),
+        "sliders": _finalize_dashboard_items(page.get("sliders")),
         "images": _finalize_dashboard_items(page.get("images")),
     }
     if isinstance(page.get("weather"), dict):
@@ -833,7 +1128,16 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
 def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
     return any(
         bool(page.get(key))
-        for key in ("badges", "buttons", "switches", "images", "weather", "flow")
+        for key in (
+            "badges",
+            "buttons",
+            "entities",
+            "switches",
+            "sliders",
+            "images",
+            "weather",
+            "flow",
+        )
     )
 
 
@@ -934,9 +1238,9 @@ def _alarmo_command_preflight(
 ) -> dict[str, Any] | None:
     """Return Alarmo readiness details for one arm command.
 
-    Alarmo's own frontend shows ready/not-ready from the sensor validator, not
-    from a delayed failed service call. Mirroring that here prevents the C300X
-    UI from sending arm commands that Alarmo already knows will be blocked.
+    Alarmo's own frontend shows ready/not-ready from the sensor validator. The
+    C300X UI uses this for display and preflight checks, while real commands
+    still go through Home Assistant so Alarmo can run its normal command path.
     """
 
     target_state = _ALARM_COMMAND_TARGET_STATES.get(command)
@@ -999,9 +1303,19 @@ def _alarm_state_unchanged_response(
     command: str,
     entity_id: str,
     current_state: str | None,
+    *,
+    code: str | None = None,
 ) -> dict[str, Any]:
     """Return a structured alarm command failure without surfacing a HTTP error."""
 
+    if code:
+        return {
+            "ok": False,
+            "error": "invalid_code",
+            "command": command,
+            "entity_id": entity_id,
+            "state": current_state,
+        }
     return {
         "ok": False,
         "error": "alarm_state_unchanged",
@@ -1009,6 +1323,38 @@ def _alarm_state_unchanged_response(
         "entity_id": entity_id,
         "state": current_state,
     }
+
+
+def _alarm_service_error_response(
+    command: str,
+    entity_id: str,
+    current_state: str | None,
+    err: Exception,
+) -> dict[str, Any]:
+    """Return a structured alarm service error for the C300X UI."""
+
+    message = str(err).strip()
+    error = "invalid_code" if _looks_like_invalid_code_error(message) else "alarm_command_rejected"
+    response: dict[str, Any] = {
+        "ok": False,
+        "error": error,
+        "command": command,
+        "entity_id": entity_id,
+        "state": current_state,
+    }
+    if message:
+        response["message"] = message[:160]
+    return response
+
+
+def _looks_like_invalid_code_error(message: str) -> bool:
+    """Return true when a service error is most likely a bad alarm code."""
+
+    normalized = message.lower()
+    return "code" in normalized and any(
+        token in normalized
+        for token in ("invalid", "incorrect", "wrong", "bad", "falsch", "ungueltig")
+    )
 
 
 def _alarmo_context(

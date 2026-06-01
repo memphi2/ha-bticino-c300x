@@ -356,6 +356,24 @@ def run_smoke(
             )
             expected_agent_writes += 1
             assert_json_field(auth_status, "noAuth", True)
+            assert_json_field(
+                maintenance_post(
+                    api_port,
+                    "/api/v1/maintenance/auth",
+                    {"noAuth": True},
+                ),
+                "noAuth",
+                True,
+            )
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_wake_reason", "api")
+            assert_int_field_at_least(diagnostics, "loop_iterations", 1)
+            assert_int_field_at_least(diagnostics, "poll_wakeups", 1)
+            assert_int_field_at_least(diagnostics, "accepted_clients", 1)
+            assert_int_field_at_least(diagnostics, "open_fd_count", 1)
+            assert_int_field_at_least(diagnostics, "video_bridge_open_fds", 0)
+            assert_int_field_at_least(diagnostics, "video_bridge_active_threads", 0)
             setup_page = api_text(api_port, "/setup", authorized=False)
             if "C300X Agent Setup" not in setup_page:
                 raise AssertionError("setup page was not served")
@@ -371,7 +389,7 @@ def run_smoke(
                 "Saving this option does not change firewall rules",
                 "Allows temporary setup without Bearer auth",
                 "Media starts only when requested",
-                "Publishes CPU, load, and temperature only when HA subscribes",
+                "Publishes CPU, memory, load, and temperature only when HA subscribes",
                 "Internal UI port",
                 "127.0.0.1 only",
                 "GET /api/v1/maintenance/auth",
@@ -427,6 +445,17 @@ def run_smoke(
             )
             expected_agent_writes += 1
             assert_json_field(auth_status, "noAuth", False)
+            assert_json_field(
+                maintenance_post(
+                    api_port,
+                    "/api/v1/maintenance/auth",
+                    {"noAuth": False},
+                ),
+                "noAuth",
+                False,
+            )
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             disabled_setup = api_request(
                 api_port,
                 "GET",
@@ -491,6 +520,7 @@ def run_smoke(
             assert_json_field(capabilities["capabilities"]["display_bridge"], "supported", True)
             assert_json_field(capabilities["capabilities"]["display_bridge"], "configurable", True)
             assert_json_field(capabilities["capabilities"]["diagnostics"], "supported", True)
+            assert_json_field(capabilities["capabilities"]["diagnostics"], "runtime", True)
             assert_json_field(capabilities["capabilities"]["auth"], "configurable", True)
             remove_agent_result = api_request(
                 api_port,
@@ -800,6 +830,13 @@ def run_smoke(
                 value = metrics.get(key)
                 if not isinstance(value, (int, float)) or value < 0:
                     raise AssertionError(f"system metrics {key} is not usable")
+            memory_usage = metrics.get("memory_usage_percent")
+            if memory_usage is not None and (
+                not isinstance(memory_usage, (int, float)) or memory_usage < 0
+            ):
+                raise AssertionError("system metrics memory_usage_percent is not usable")
+            if memory_usage is not None and int(metrics.get("memory_total_kb") or 0) <= 0:
+                raise AssertionError("system metrics memory_total_kb is not usable")
             voicemail = api_get(api_port, "/api/v1/answering-machine/messages")
             assert_json_field(voicemail, "available", False)
             assert_json_field(voicemail, "total", 0)
@@ -903,8 +940,9 @@ def run_smoke(
             metrics_payload = metrics_event["body"].get("data", {}).get("system_metrics")
             if not isinstance(metrics_payload, dict):
                 raise AssertionError("system metrics event payload missing")
-            if "cpu_usage_percent" not in metrics_payload:
-                raise AssertionError("system metrics event did not include cpu_usage_percent")
+            for key in ("cpu_usage_percent", "memory_usage_percent"):
+                if key not in metrics_payload:
+                    raise AssertionError(f"system metrics event did not include {key}")
             callback_seen = len(callback.requests)
             send_udp_event(udp_port, "*8*21*10##")
             callback_event = wait_for_callback_type(
@@ -1375,6 +1413,12 @@ def api_request(
 def assert_json_field(payload: dict[str, Any], field: str, expected: Any) -> None:
     if payload.get(field) != expected:
         raise AssertionError(f"{field}={payload.get(field)!r}, expected {expected!r}")
+
+
+def assert_int_field_at_least(payload: dict[str, Any], field: str, minimum: int) -> None:
+    value = payload.get(field)
+    if not isinstance(value, int) or value < minimum:
+        raise AssertionError(f"{field}={value!r}, expected integer >= {minimum}")
 
 
 def assert_absent(payload: dict[str, Any], field: str) -> None:

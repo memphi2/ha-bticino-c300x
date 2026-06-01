@@ -19,6 +19,7 @@ deployment requires TLS.
 make -C native_agent
 make -C native_agent check
 make -C native_agent armhf armhf-abi-check
+make -C native_agent armhf-stack-check
 ```
 
 ## Run locally

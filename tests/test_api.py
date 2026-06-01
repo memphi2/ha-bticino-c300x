@@ -16,9 +16,11 @@ from custom_components.bticino_c300x.api import (
     normalize_auth_config_status,
     normalize_doorbell_video,
     normalize_firewall_status,
+    normalize_legacy_mqtt_status,
     normalize_lock_id,
     normalize_memo_id,
     normalize_memos,
+    normalize_mqtt_status,
     normalize_qml_patch_status,
     normalize_ringer,
     normalize_smartphone_forwarding,
@@ -212,6 +214,187 @@ def test_display_bridge_callback_fingerprint_is_stable() -> None:
     assert display_bridge_callback_fingerprint(False, "ignored", "ignored") == (
         "fnv1a64:48f6eb502600b569"
     )
+
+
+def test_mqtt_status_uses_maintenance_endpoint_and_hides_broker_secret() -> None:
+    session = _FakeSession(
+        '{"ok": true, "enabled": true, "configured": true, "connected": false, '
+        '"subscribed": false, "host_configured": true, '
+        '"username_configured": true, "password_configured": true, '
+        '"port": 1883, "client_id": "c300x-native-agent", '
+        '"command_host": "127.0.0.1", "command_port": 30006, '
+        '"topics": {"command": "Bticino/rx", "event": "Bticino/tx", '
+        '"json_event": "", "status": "Bticino/start_date", '
+        '"availability": "Bticino/LastWillT"}, "qos": 0, '
+        '"legacy_installed": true, "legacy_enabled": false, '
+        '"legacy_running": false, "exclusive": true}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(api.async_mqtt_status())
+
+    assert status["enabled"] is True
+    assert status["host_configured"] is True
+    assert status["password_configured"] is True
+    assert status["event_topic"] == "Bticino/tx"
+    assert status["legacy_installed"] is True
+    assert status["legacy_enabled"] is False
+    assert status["exclusive"] is True
+    assert "host" not in status
+    assert "password" not in status
+    request = session.requests[0]
+    assert request["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/maintenance/mqtt",
+    )
+    assert request["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
+    }
+
+
+def test_set_mqtt_enabled_posts_only_enabled_flag() -> None:
+    session = _FakeSession('{"ok": true, "enabled": false, "configured": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(api.async_set_mqtt_enabled(False))
+
+    assert status["enabled"] is False
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/mqtt",
+    )
+    assert session.requests[0]["kwargs"]["json"] == {"enabled": False}
+
+
+def test_migrate_legacy_mqtt_posts_explicit_confirmation() -> None:
+    session = _FakeSession(
+        '{"ok": true, "migrated": true, "legacy_removed": true, '
+        '"native_enabled": true}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    result = asyncio.run(api.async_migrate_legacy_mqtt_to_native())
+
+    assert result["native_enabled"] is True
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/mqtt/actions/migrate-legacy",
+    )
+    assert session.requests[0]["kwargs"]["json"] == {
+        "confirm": "migrate_legacy_mqtt"
+    }
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
+    }
+
+
+def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
+    session = _FakeSession(
+        '{"ok": true, "enabled": true, "installed": true, "running": false, '
+        '"backup_available": true, "native_enabled": false, "exclusive": true, '
+        '"script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh", '
+        '"init_link": "/etc/rc5.d/S99TcpDump2Mqtt"}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(api.async_legacy_mqtt_status())
+
+    assert status["enabled"] is True
+    assert status["installed"] is True
+    assert status["backup_available"] is True
+    assert status["native_enabled"] is False
+    assert status["script_path"] == "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/maintenance/legacy-mqtt",
+    )
+
+
+def test_set_legacy_mqtt_enabled_posts_only_enabled_flag() -> None:
+    session = _FakeSession('{"ok": true, "enabled": false, "installed": false}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(api.async_set_legacy_mqtt_enabled(False))
+
+    assert status["enabled"] is False
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/legacy-mqtt",
+    )
+    assert session.requests[0]["kwargs"]["json"] == {"enabled": False}
+
+
+def test_normalize_legacy_mqtt_status_accepts_minimal_payload() -> None:
+    assert normalize_legacy_mqtt_status({"enabled": False}) == {
+        "available": True,
+        "enabled": False,
+        "installed": None,
+        "running": None,
+        "backup_available": None,
+        "native_enabled": None,
+        "exclusive": False,
+        "script_path": None,
+        "init_link": None,
+        "raw": {"enabled": False},
+    }
+
+
+def test_normalize_mqtt_status_accepts_minimal_payload() -> None:
+    assert normalize_mqtt_status({"enabled": False}) == {
+        "available": True,
+        "enabled": False,
+        "configured": None,
+        "connected": None,
+        "subscribed": None,
+        "host_configured": None,
+        "username_configured": None,
+        "password_configured": None,
+        "port": None,
+        "client_id": None,
+        "command_host": None,
+        "command_port": None,
+        "command_topic": None,
+        "event_topic": None,
+        "json_event_topic": None,
+        "status_topic": None,
+        "availability_topic": None,
+        "qos": None,
+        "keepalive_seconds": None,
+        "reconnect_initial_seconds": None,
+        "reconnect_max_seconds": None,
+        "legacy_installed": None,
+        "legacy_enabled": None,
+        "legacy_running": None,
+        "exclusive": False,
+        "raw": {"enabled": False},
+    }
 
 
 def test_list_event_subscriptions_requests_authenticated_endpoint() -> None:
@@ -424,6 +607,73 @@ def test_set_maintenance_no_auth_sends_maintenance_update() -> None:
     assert session.requests[0]["kwargs"]["json"] == {
         "maintenanceEnabled": True,
         "maintenanceNoAuthAllowed": True,
+    }
+
+
+def test_agent_update_methods_use_maintenance_endpoints() -> None:
+    session = _FakeSession('{"ok": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    asyncio.run(
+        api.async_prepare_agent_update(
+            bundle_hash="sha256:bundle",
+            agent_version="0.3.0",
+        )
+    )
+    asyncio.run(
+        api.async_upload_agent_update_chunk(
+            path="device_agent/scripts/qml_patch.sh",
+            sha256="abc",
+            mode="700",
+            offset=0,
+            data=b"payload",
+            final=True,
+        )
+    )
+    asyncio.run(api.async_apply_agent_update(bundle_hash="sha256:bundle"))
+    asyncio.run(api.async_normalize_agent_config())
+
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/update/prepare",
+    )
+    assert session.requests[0]["kwargs"]["json"] == {
+        "bundle_hash": "sha256:bundle",
+        "agent_version": "0.3.0",
+    }
+    assert session.requests[1]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/update/file",
+    )
+    assert session.requests[1]["kwargs"]["json"] == {
+        "path": "device_agent/scripts/qml_patch.sh",
+        "sha256": "abc",
+        "mode": "700",
+        "offset": 0,
+        "data": "cGF5bG9hZA==",
+        "final": True,
+    }
+    assert session.requests[2]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/update/apply",
+    )
+    assert session.requests[2]["kwargs"]["json"] == {
+        "bundle_hash": "sha256:bundle",
+        "confirm": "update_agent",
+    }
+    assert session.requests[3]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/config/actions/normalize",
+    )
+    assert session.requests[3]["kwargs"]["json"] == {"confirm": "normalize_config"}
+    assert session.requests[3]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
     }
 
 
@@ -718,6 +968,8 @@ def test_system_metrics_requests_authenticated_metrics_endpoint() -> None:
         '"load_1m": 0.12, "load_5m": 0.34, '
         '"load_15m": 0.56, "load_1m_percent": 6.0, '
         '"load_5m_percent": 17.0, "load_15m_percent": 28.0, '
+        '"memory_total_kb": 262144, "memory_available_kb": 196608, '
+        '"memory_used_kb": 65536, "memory_usage_percent": 25.0, '
         '"temperature_c": 41.2}'
     )
     api = C300XAgentApi(
@@ -739,7 +991,8 @@ def test_system_metrics_requests_authenticated_metrics_endpoint() -> None:
 def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
     session = _FakeSession(
         '{"ok": true, "agent_write_count": 2, "last_write_class": "subscription", '
-        '"last_write_reason": "updated", "subscription_store_writes": 1}'
+        '"last_write_reason": "updated", "subscription_store_writes": 1, '
+        '"last_wake_reason": "api", "open_fd_count": 7}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1108,6 +1361,10 @@ def test_normalize_system_metrics_accepts_missing_temperature() -> None:
             "load_1m_percent": "5.0",
             "load_5m_percent": 10.0,
             "load_15m_percent": 15.0,
+            "memory_total_kb": "262144",
+            "memory_available_kb": 196608,
+            "memory_used_kb": 65536,
+            "memory_usage_percent": "25.0",
             "temperature_c": None,
         }
     ) == {
@@ -1119,6 +1376,10 @@ def test_normalize_system_metrics_accepts_missing_temperature() -> None:
         "load_1m_percent": 5.0,
         "load_5m_percent": 10.0,
         "load_15m_percent": 15.0,
+        "memory_total_kb": 262144,
+        "memory_available_kb": 196608,
+        "memory_used_kb": 65536,
+        "memory_usage_percent": 25.0,
         "temperature_c": None,
         "temperature_source": None,
         "raw": {
@@ -1130,6 +1391,10 @@ def test_normalize_system_metrics_accepts_missing_temperature() -> None:
             "load_1m_percent": "5.0",
             "load_5m_percent": 10.0,
             "load_15m_percent": 15.0,
+            "memory_total_kb": "262144",
+            "memory_available_kb": 196608,
+            "memory_used_kb": 65536,
+            "memory_usage_percent": "25.0",
             "temperature_c": None,
         },
     }
@@ -1144,18 +1409,46 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     normalized = normalize_agent_diagnostics(
         {
             "agent_write_count": "2",
+            "last_write_at": "1770000000",
             "last_write_reason": " updated ",
             "last_write_class": "subscription",
             "subscription_store_writes": 1,
             "qml_patch_last_action": "",
+            "loop_iterations": "10",
+            "poll_wakeups": "4",
+            "accepted_clients": "3",
+            "last_wake_reason": " api ",
+            "last_poll_timeout_ms": "5000",
+            "last_poll_count": "6",
+            "open_fd_count": "9",
+            "video_running": True,
+            "video_media_starting": False,
+            "video_call_active": True,
+            "video_clients": "1",
+            "video_bridge_open_fds": "5",
+            "video_bridge_active_threads": "2",
         }
     )
 
     assert normalized["agent_write_count"] == 2
+    assert normalized["last_write_at"] == 1770000000
     assert normalized["last_write_reason"] == "updated"
     assert normalized["last_write_class"] == "subscription"
     assert normalized["subscription_store_writes"] == 1
     assert normalized["qml_patch_last_action"] is None
+    assert normalized["loop_iterations"] == 10
+    assert normalized["poll_wakeups"] == 4
+    assert normalized["accepted_clients"] == 3
+    assert normalized["last_wake_reason"] == "api"
+    assert normalized["last_poll_timeout_ms"] == 5000
+    assert normalized["last_poll_count"] == 6
+    assert normalized["open_fd_count"] == 9
+    assert normalized["video_running"] is True
+    assert normalized["video_media_starting"] is False
+    assert normalized["video_call_active"] is True
+    assert normalized["video_clients"] == 1
+    assert normalized["video_bridge_open_fds"] == 5
+    assert normalized["video_bridge_active_threads"] == 2
 
 
 def test_normalize_smartphone_forwarding() -> None:

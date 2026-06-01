@@ -85,6 +85,8 @@ function dashboard(statusItem, pageItem) {
         pageItem.dashboardPages = []
         pageItem.badges = []
         pageItem.switches = []
+        pageItem.entities = []
+        pageItem.sliders = []
         pageItem.buttons = []
         pageItem.images = []
         pageItem.flowItems = []
@@ -153,6 +155,24 @@ function dashboardAction(item, statusItem, pageItem) {
     })
 }
 
+function dashboardSliderAction(item, direction, statusItem, pageItem) {
+    if (!item || !item.entity_id || !direction) {
+        statusItem.text = uiText(pageItem, "invalid_action")
+        statusItem.color = "#ff6b6b"
+        return
+    }
+    var path = "/homeassistant?domain=c300x&service=toggle&entities="
+        + encodeURIComponent(item.entity_id + ":" + direction)
+    getJson(path, function(data) {
+        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
+        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
+        dashboard(statusItem, pageItem)
+    }, function(error) {
+        statusItem.text = error
+        statusItem.color = "#ff6b6b"
+    })
+}
+
 function stairLight(statusItem, pageItem) {
     getJson("/ui/stair-light", function(data) {
         statusItem.text = data.ok ? uiText(pageItem, "stair_light_sent") : uiText(pageItem, "stair_light_error")
@@ -164,15 +184,6 @@ function stairLight(statusItem, pageItem) {
 }
 
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
-    if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {
-        if (pageItem.setCommandFeedback) {
-            pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-        } else {
-            statusItem.text = alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem)
-            statusItem.color = "#ff6b6b"
-        }
-        return
-    }
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command)
     if (code && code.length > 0) {
         path += "&code=" + encodeURIComponent(code)
@@ -248,23 +259,36 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
     if (!data || data.ok !== false) {
         return false
     }
-    if (data.error !== "not_ready_to_arm") {
-        return false
+    if (data.error === "not_ready_to_arm") {
+        mergeAlarmCommandDetail(pageItem, command, data)
+        pageItem.bypassOffered = true
+        if (pageItem.refreshCommandReadiness) {
+            pageItem.refreshCommandReadiness()
+        }
+        if (pageItem.clearCommandFeedback) {
+            pageItem.clearCommandFeedback()
+        }
+        statusItem.text = ""
+        statusItem.color = "#ff6b6b"
+        if (pageItem.setCommandFeedback && !pageItem.bypassVisible()) {
+            pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
+        }
+        return true
     }
-    mergeAlarmCommandDetail(pageItem, command, data)
-    pageItem.bypassOffered = true
-    if (pageItem.refreshCommandReadiness) {
-        pageItem.refreshCommandReadiness()
+    if (data.error === "invalid_code") {
+        if (pageItem.setCommandFeedback) {
+            pageItem.setCommandFeedback("invalid_code", command, "#ff6b6b")
+        } else {
+            statusItem.text = uiText(pageItem, "invalid_code")
+            statusItem.color = "#ff6b6b"
+        }
+        return true
     }
-    if (pageItem.clearCommandFeedback) {
-        pageItem.clearCommandFeedback()
+    if (data.error === "alarm_state_unchanged" || data.error === "alarm_command_rejected") {
+        setErrorFeedback(command, statusItem, pageItem)
+        return true
     }
-    statusItem.text = ""
-    statusItem.color = "#ff6b6b"
-    if (pageItem.setCommandFeedback && !pageItem.bypassVisible()) {
-        pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
-    }
-    return true
+    return false
 }
 
 function setErrorFeedback(command, statusItem, pageItem) {
@@ -396,7 +420,7 @@ function alarmBlockingText(details, command, pageItem) {
         return uiText(pageItem, "not_ready_to_arm")
     }
     var names = []
-    var maxNames = sensors.length > 3 ? 3 : sensors.length
+    var maxNames = sensors.length
     for (var i = 0; i < maxNames; i++) {
         names.push(sensors[i].name || sensors[i].entity_id || uiText(pageItem, "unknown"))
     }
@@ -411,7 +435,7 @@ function alarmOpenSensorsText(pageItem) {
         return ""
     }
     var names = []
-    var maxNames = sensors.length > 3 ? 3 : sensors.length
+    var maxNames = sensors.length
     for (var i = 0; i < maxNames; i++) {
         names.push(sensors[i].name || sensors[i].entity_id || uiText(pageItem, "unknown"))
     }
@@ -465,6 +489,8 @@ function loadDashboardPage(statusItem, pageItem) {
     var flowLines = listOrEmpty(flow.lines)
     pageItem.badges = listOrEmpty(pageData.badges)
     pageItem.switches = dashboardItems(pageData.switches, "switch")
+    pageItem.entities = dashboardItems(pageData.entities, "entity")
+    pageItem.sliders = dashboardSliders(pageData.sliders)
     pageItem.buttons = dashboardItems(pageData.buttons, "button")
     pageItem.images = dashboardImages(pageData.images)
     applyWeather(pageItem, pageData.weather)
@@ -541,6 +567,29 @@ function dashboardItems(source, kind) {
             "name": source[i].name || source[i].entity_id,
             "state": source[i].state === true,
             "state_label": source[i].state_label || source[i].label || ""
+        })
+    }
+    return target
+}
+
+function dashboardSliders(source) {
+    source = listOrEmpty(source)
+    var target = []
+    for (var i = 0; i < source.length; i++) {
+        if (!source[i].entity_id) {
+            continue
+        }
+        target.push({
+            "kind": "slider",
+            "domain": source[i].domain || "c300x",
+            "entity_id": source[i].entity_id,
+            "name": source[i].name || source[i].entity_id,
+            "state": false,
+            "state_label": source[i].state_label || source[i].label || "",
+            "value": Number(source[i].value || 0),
+            "min": Number(source[i].min || 0),
+            "max": Number(source[i].max || 100),
+            "step": Number(source[i].step || 1)
         })
     }
     return target

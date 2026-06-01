@@ -25,6 +25,7 @@ from .const import (
     CONF_MAINTENANCE_TOKEN,
     EVENT_AGENT_EVENT_RECEIVED,
     SIGNAL_AUTH_CONFIG_CHANGED,
+    SIGNAL_MQTT_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .entity import C300XEntity, entry_config_value, supports_capability
@@ -60,6 +61,8 @@ async def async_setup_entry(
     entities.append(C300XGuiFunctionPatchSwitch(entry))
     entities.append(C300XFirewallPatchSwitch(entry))
     entities.append(C300XIpv6FirewallPatchSwitch(entry))
+    entities.append(C300XNativeMqttBridgeSwitch(entry))
+    entities.append(C300XLegacyMqttBridgeSwitch(entry))
     if entities:
         await _async_refresh_initial_states(entities)
         async_add_entities(entities)
@@ -470,6 +473,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
     """Apply or restore the persistent IPv4 API firewall patch."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "firewall_patch"
 
@@ -584,6 +588,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
     """Apply or restore the persistent IPv6 API firewall patch."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "ipv6_firewall_patch"
 
@@ -696,6 +701,229 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
         self._attr_available = bool(status.get("available", True))
 
 
+class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
+    """Enable or disable the native MQTT bridge."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+    _attr_translation_key = "native_mqtt_bridge"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        # Preserve the pre-split unique ID. Older builds mislabeled the native
+        # bridge as "legacy_mqtt_bridge"; reusing that unique ID keeps existing
+        # HA entity customizations attached to the native bridge.
+        super().__init__(entry, "legacy_mqtt_bridge")
+        self._enabled: bool | None = None
+        self._status: dict[str, object] = {}
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the native MQTT bridge is enabled."""
+
+        return self._enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return non-sensitive MQTT bridge metadata."""
+
+        return {
+            "configured": self._status.get("configured"),
+            "connected": self._status.get("connected"),
+            "subscribed": self._status.get("subscribed"),
+            "host_configured": self._status.get("host_configured"),
+            "username_configured": self._status.get("username_configured"),
+            "password_configured": self._status.get("password_configured"),
+            "port": self._status.get("port"),
+            "client_id": self._status.get("client_id"),
+            "command_host": self._status.get("command_host"),
+            "command_port": self._status.get("command_port"),
+            "command_topic": self._status.get("command_topic"),
+            "event_topic": self._status.get("event_topic"),
+            "json_event_topic": self._status.get("json_event_topic"),
+            "status_topic": self._status.get("status_topic"),
+            "availability_topic": self._status.get("availability_topic"),
+            "qos": self._status.get("qos"),
+            "keepalive_seconds": self._status.get("keepalive_seconds"),
+            "reconnect_initial_seconds": self._status.get(
+                "reconnect_initial_seconds"
+            ),
+            "reconnect_max_seconds": self._status.get("reconnect_max_seconds"),
+            "legacy_installed": self._status.get("legacy_installed"),
+            "legacy_enabled": self._status.get("legacy_enabled"),
+            "legacy_running": self._status.get("legacy_running"),
+            "exclusive": self._status.get("exclusive"),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return true when native MQTT maintenance endpoints are advertised."""
+
+        return super().available and _supports_native_mqtt_bridge_switch(self._entry)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable the native MQTT bridge."""
+
+        await self._set_enabled(True)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+        _dispatch_mqtt_status_changed(self, self._status)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable the native MQTT bridge."""
+
+        await self._set_enabled(False)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+        _dispatch_mqtt_status_changed(self, self._status)
+
+    async def async_update(self) -> None:
+        """Refresh MQTT bridge state through the maintenance API."""
+
+        if not _supports_native_mqtt_bridge_switch(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_mqtt_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_mqtt_enabled(enabled)
+        self._apply_status(status)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to MQTT bridge state changes from the companion switch."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_MQTT_CHANGED,
+                self._handle_mqtt_status,
+            )
+        )
+
+    @callback
+    def _handle_mqtt_status(self, entry_id: str, status: dict) -> None:
+        if entry_id != self._entry.entry_id:
+            return
+        native_enabled = status.get("native_enabled")
+        if native_enabled is not None:
+            self._enabled = native_enabled
+            self._status = {**self._status, **status}
+            self.async_write_ha_state()
+
+    def _apply_status(self, status: dict) -> None:
+        self._status = status
+        self._enabled = status.get("enabled")
+        self._attr_available = bool(status.get("available", True))
+
+
+class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
+    """Remove or restore the legacy TcpDump2Mqtt bridge."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
+    _attr_should_poll = False
+    _attr_translation_key = "legacy_mqtt_bridge"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "legacy_tcpdump2mqtt_bridge")
+        self._enabled: bool | None = None
+        self._status: dict[str, object] = {}
+        self._attr_available = True
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether the legacy TcpDump2Mqtt patch is installed and enabled."""
+
+        return self._enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return non-sensitive legacy MQTT patch metadata."""
+
+        return {
+            "installed": self._status.get("installed"),
+            "running": self._status.get("running"),
+            "backup_available": self._status.get("backup_available"),
+            "native_enabled": self._status.get("native_enabled"),
+            "exclusive": self._status.get("exclusive"),
+            "script_path": self._status.get("script_path"),
+            "init_link": self._status.get("init_link"),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return true when legacy MQTT maintenance endpoints are advertised."""
+
+        return super().available and _supports_legacy_mqtt_bridge_switch(self._entry)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Restore the legacy TcpDump2Mqtt patch from backup."""
+
+        await self._set_enabled(True)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+        _dispatch_mqtt_status_changed(self, self._status)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Remove the legacy TcpDump2Mqtt patch after taking a backup."""
+
+        await self._set_enabled(False)
+        await _async_refresh_agent_diagnostics_if_possible(self)
+        self.async_write_ha_state()
+        _dispatch_mqtt_status_changed(self, self._status)
+
+    async def async_update(self) -> None:
+        """Refresh legacy MQTT patch state through the maintenance API."""
+
+        if not _supports_legacy_mqtt_bridge_switch(self._entry):
+            return
+        try:
+            status = await self._entry.runtime_data.api.async_legacy_mqtt_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        status = await self._entry.runtime_data.api.async_set_legacy_mqtt_enabled(
+            enabled
+        )
+        self._apply_status(status)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to MQTT bridge state changes from the companion switch."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_MQTT_CHANGED,
+                self._handle_mqtt_status,
+            )
+        )
+
+    @callback
+    def _handle_mqtt_status(self, entry_id: str, status: dict) -> None:
+        if entry_id != self._entry.entry_id:
+            return
+        legacy_enabled = status.get("legacy_enabled")
+        legacy_installed = status.get("legacy_installed")
+        if legacy_enabled is not None or legacy_installed is not None:
+            self._enabled = bool(legacy_enabled and legacy_installed)
+            self._status = {**self._status, **status}
+            self.async_write_ha_state()
+
+    def _apply_status(self, status: dict) -> None:
+        self._status = status
+        self._enabled = bool(status.get("enabled") and status.get("installed"))
+        self._attr_available = bool(status.get("available", True))
+
+
 class _AuthConfigStatusEntity(C300XEntity):
     """Mixin for switches backed by the shared agent auth-config endpoint."""
 
@@ -731,6 +959,17 @@ def _dispatch_auth_config_status(entity: C300XEntity, status: dict) -> None:
         async_dispatcher_send(
             hass,
             SIGNAL_AUTH_CONFIG_CHANGED,
+            entity._entry.entry_id,
+            status,
+        )
+
+
+def _dispatch_mqtt_status_changed(entity: C300XEntity, status: dict) -> None:
+    hass = getattr(entity, "hass", None)
+    if hass is not None:
+        async_dispatcher_send(
+            hass,
+            SIGNAL_MQTT_CHANGED,
             entity._entry.entry_id,
             status,
         )
@@ -988,6 +1227,18 @@ def _supports_ipv6_firewall_switch(entry: ConfigEntry) -> bool:
         "ipv6_firewall_apply",
         "ipv6_firewall_restore",
     ) or _supports_auth_config(entry)
+
+
+def _supports_native_mqtt_bridge_switch(entry: ConfigEntry) -> bool:
+    return _supports_maintenance_actions(entry, "mqtt_status", "mqtt_config")
+
+
+def _supports_legacy_mqtt_bridge_switch(entry: ConfigEntry) -> bool:
+    return _supports_maintenance_actions(
+        entry,
+        "legacy_mqtt_status",
+        "legacy_mqtt_config",
+    )
 
 
 def _supports_auth_config(entry: ConfigEntry) -> bool:

@@ -124,7 +124,7 @@
       "host": "127.0.0.1",
       "port": 30007,
       "timeoutMs": 5000,
-      "highResolution": false
+      "highResolution": true
     },
     "sip": {
       "from": "webrtc@127.0.0.1",

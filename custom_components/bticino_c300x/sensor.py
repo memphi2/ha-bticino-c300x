@@ -383,6 +383,12 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_wake_reason": diagnostics.get("last_wake_reason"),
             "poll_wakeups": diagnostics.get("poll_wakeups"),
             "open_fd_count": diagnostics.get("open_fd_count"),
+            "flexisip_backup_available": diagnostics.get(
+                "flexisip_backup_available"
+            ),
+            "flexisip_restart_marker": diagnostics.get("flexisip_restart_marker"),
+            "flexisip_backup_marker": diagnostics.get("flexisip_backup_marker"),
+            "flexisip_reference_state": diagnostics.get("flexisip_reference_state"),
         }
         if update_state is not None:
             attrs.update(

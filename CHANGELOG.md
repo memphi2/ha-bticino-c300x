@@ -1,33 +1,40 @@
 # Changelog
 
-## v0.3.2 - 2026-06-02
-
-### Changed
-
-- Doorbell video startup now performs the native SIP/Flexisip and BT-AV media
-  warmup during the explicit camera activation call, so RTSP clients receive
-  packets after setup instead of racing the device registration.
-- Flexisip is stopped again after the media session when the agent started it,
-  keeping the idle path quiet after on-demand viewing.
-
-## v0.3.1 - 2026-06-02
+## v0.3.3 - 2026-06-02
 
 ### Added
 
-- Home Assistant Repairs can update a mismatched native C300X agent without
-  asking for SSH credentials again when the installed agent supports self-update.
-- Guarded Legacy MQTT migration controls can disable or remove the old
-  `TcpDump2Mqtt` runtime and enable the native MQTT bridge with preserved broker
-  settings.
-- Agent diagnostics now expose safe runtime health details such as write
-  counters, wake reason, open file descriptors, and video-bridge state.
+- Home Assistant Repairs can update a mismatched native C300X agent through the
+  maintenance API when the installed agent supports self-update.
+- First-install and fallback repair flows can still install the packaged agent
+  over SSH when no self-update-capable agent is available.
+- Native MQTT bridge support mirrors the legacy C300X topics while keeping the
+  broker settings in the agent configuration.
+- Guarded legacy MQTT controls can disable the old `TcpDump2Mqtt` autostart
+  path without rewriting Flexisip.
+- Agent diagnostics expose safe runtime health details such as write counters,
+  wake reason, open file descriptors, video-bridge state, and Flexisip reference
+  state.
 
 ### Changed
 
-- Device-agent bundles use deterministic file hashes so unchanged payloads are
-  skipped instead of rewritten.
-- Native-agent status/update buffers were moved off the stack and the ARMHF
-  stack budget is now enforced in CI.
+- Device-agent bundles use deterministic file hashes so unchanged payloads,
+  scripts, GUI files and firewall patches are skipped instead of rewritten.
+- Update and maintenance paths refresh only patches that are already active.
+- The doorbell camera path stays on the native on-demand video bridge and
+  remains independent from the legacy MQTT runtime.
+- Native-agent runtime buffers and MQTT status handling are sized for the C300X
+  environment, and the ARMHF stack budget is enforced in CI.
+
+### Security and Privacy
+
+- Maintenance actions stay token-protected and explicit.
+- SSH credentials are used only for bootstrap/fallback install flows and are not
+  stored.
+- Diagnostics avoid token values, broker passwords, private callback URLs and
+  user-specific device details.
+- Repository hygiene checks continue to reject firmware/APK payloads, copied
+  stock QML pages, foreign runtime directories, and third-party controller code.
 
 ## v0.2.0 - 2026-05-31
 

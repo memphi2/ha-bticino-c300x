@@ -822,7 +822,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
 
 
 class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
-    """Remove or restore the legacy TcpDump2Mqtt bridge."""
+    """Enable or disable the legacy TcpDump2Mqtt autostart."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_entity_registry_enabled_default = False
@@ -837,7 +837,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return whether the legacy TcpDump2Mqtt patch is installed and enabled."""
+        """Return whether the legacy TcpDump2Mqtt autostart is enabled."""
 
         return self._enabled
 
@@ -853,6 +853,13 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
             "exclusive": self._status.get("exclusive"),
             "script_path": self._status.get("script_path"),
             "init_link": self._status.get("init_link"),
+            "flexisip_backup_available": self._status.get(
+                "flexisip_backup_available"
+            ),
+            "flexisip_restart_marker": self._status.get("flexisip_restart_marker"),
+            "flexisip_reference_state": self._status.get(
+                "flexisip_reference_state"
+            ),
         }
 
     @property
@@ -862,7 +869,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         return super().available and _supports_legacy_mqtt_bridge_switch(self._entry)
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Restore the legacy TcpDump2Mqtt patch from backup."""
+        """Enable the legacy TcpDump2Mqtt autostart."""
 
         await self._set_enabled(True)
         await _async_refresh_agent_diagnostics_if_possible(self)
@@ -870,7 +877,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         _dispatch_mqtt_status_changed(self, self._status)
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Remove the legacy TcpDump2Mqtt patch after taking a backup."""
+        """Disable the legacy TcpDump2Mqtt autostart and stop MQTT helpers."""
 
         await self._set_enabled(False)
         await _async_refresh_agent_diagnostics_if_possible(self)

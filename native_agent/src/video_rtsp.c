@@ -121,7 +121,7 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     pthread_mutex_unlock(&video->mutex);
-    return c300x_media_session_warmup(video) ? 1 : 0;
+    return 1;
 }
 
 void c300x_video_stop(struct c300x_video *video)

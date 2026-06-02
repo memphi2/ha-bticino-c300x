@@ -379,6 +379,10 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
                 "last_wake_reason": "api",
                 "poll_wakeups": 4,
                 "open_fd_count": 9,
+                "flexisip_backup_available": True,
+                "flexisip_restart_marker": True,
+                "flexisip_backup_marker": False,
+                "flexisip_reference_state": "legacy_mqtt_patch",
             },
         )
     )
@@ -400,6 +404,10 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
             "last_wake_reason": "api",
             "poll_wakeups": 4,
             "open_fd_count": 9,
+            "flexisip_backup_available": True,
+            "flexisip_restart_marker": True,
+            "flexisip_backup_marker": False,
+            "flexisip_reference_state": "legacy_mqtt_patch",
         }
 
 

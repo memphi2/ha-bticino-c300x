@@ -129,7 +129,7 @@ void c300x_default_config(struct c300x_config *config)
     safe_copy(config->video_av_host, sizeof(config->video_av_host), "127.0.0.1");
     config->video_av_port = 30007;
     config->video_av_timeout_ms = 5000;
-    config->video_av_high_resolution = 0;
+    config->video_av_high_resolution = 1;
     config->video_rtsp_port = 6554;
     config->video_rtp_port_start = 10000;
     config->video_rtp_port_count = 100;

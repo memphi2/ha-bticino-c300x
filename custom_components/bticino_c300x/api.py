@@ -252,6 +252,7 @@ class C300XAgentApi:
             "POST",
             "/api/v1/video/doorbell/actions/activate",
             json_data={"audio": bool(audio)},
+            request_timeout=max(self._timeout, 120.0),
         )
         return _ok_response(data)
 

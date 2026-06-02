@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v0.3.1-0366d6?style=flat-square)](.github/release-notes/v0.3.1.md)
+[![Release](https://img.shields.io/badge/release-v0.3.2-0366d6?style=flat-square)](.github/release-notes/v0.3.2.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.3.1`
+- Current release line: `0.3.2`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`

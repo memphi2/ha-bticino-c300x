@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.2 - 2026-06-02
+
+### Changed
+
+- Doorbell video startup now performs the native SIP/Flexisip and BT-AV media
+  warmup during the explicit camera activation call, so RTSP clients receive
+  packets after setup instead of racing the device registration.
+- Flexisip is stopped again after the media session when the agent started it,
+  keeping the idle path quiet after on-demand viewing.
+
 ## v0.3.1 - 2026-06-02
 
 ### Added

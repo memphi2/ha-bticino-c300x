@@ -72,3 +72,87 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
     assert client_body.index("if (busy)") < client_body.index(
         "c300x_video_bridge_client_connected"
     )
+
+
+def test_native_agent_video_stream_requires_sip_setup_before_av_media() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    start = media_bridge.index("static bool start_media_session")
+    session_body = media_bridge[start : media_bridge.index("static void stop_media_session", start)]
+
+    assert "sip_ready = send_sip_setup(bridge);" in session_body
+    assert 'c300x_video_bridge_set_error(bridge->video, "sip_setup_failed");' in session_body
+    assert 'return false;' in session_body[
+        session_body.index('c300x_video_bridge_set_error(bridge->video, "sip_setup_failed");') :
+        session_body.index("if (wants_audio && sip_ready && !start_talkback_proxy(bridge))")
+    ]
+    assert "if (wants_audio && sip_ready && !start_talkback_proxy(bridge))" in session_body
+    assert session_body.index("sip_ready = send_sip_setup(bridge);") < session_body.index(
+        "if (!start_bt_av_media(bridge))"
+    )
+    assert "c300x_video_bridge_media_started(bridge->video, wants_audio);" in session_body
+
+
+def test_native_agent_starts_local_flexisip_only_for_media_sessions() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+
+    assert '#define FLEXISIP_INIT_SCRIPT "/etc/init.d/flexisipsh"' in media_bridge
+    assert 'execl(FLEXISIP_INIT_SCRIPT, "flexisipsh", action, bind_ip' in media_bridge
+    assert "FLEXISIP_PASSPHRASE_FIFO" not in media_bridge
+    assert "ensure_local_sip_proxy(bridge)" in media_bridge
+    assert "bool sip_proxy_started_by_agent;" in media_bridge
+    assert 'run_flexisip_script("start", "127.0.0.1")' in media_bridge
+    assert 'bridge->sip_proxy_started_by_agent = true;' in media_bridge
+    assert "stop_sip_proxy = g_bridge.sip_proxy_started_by_agent;" in media_bridge
+    assert "g_bridge.sip_proxy_started_by_agent = false;" in media_bridge
+    assert 'run_flexisip_script("start", bridge->config->video_sip_local_ip)' not in media_bridge
+    assert media_bridge.count("for (int attempt = 0; attempt < 45; attempt++)") >= 2
+    assert "for (int attempt = 0; attempt < 20; attempt++)" not in media_bridge
+    assert "goto retry_sip_setup;" in media_bridge
+    assert "video_sip_local_ip" not in media_bridge
+    bridge_start_body = media_bridge[
+        media_bridge.index("bool c300x_media_bridge_start") :
+        media_bridge.index("void c300x_media_bridge_stop")
+    ]
+    describe_body = media_bridge[
+        media_bridge.index('} else if (strcmp(method, "DESCRIBE") == 0)') :
+        media_bridge.index('} else if (strcmp(method, "SETUP") == 0)')
+    ]
+    stop_body = media_bridge[
+        media_bridge.index("static void stop_media_session") :
+        media_bridge.index("void c300x_media_session_stop")
+    ]
+    assert "start_media_session_async(&g_bridge);" in describe_body
+    assert "ensure_local_sip_proxy" not in bridge_start_body
+    assert "run_flexisip_script" not in bridge_start_body
+    assert 'run_flexisip_script("stop", NULL)' in stop_body
+
+    video_rtsp = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
+        encoding="utf-8"
+    )
+    activate_body = video_rtsp[
+        video_rtsp.index("int c300x_video_activate") :
+        video_rtsp.index("void c300x_video_stop")
+    ]
+    assert "return c300x_media_session_warmup(video) ? 1 : 0;" in activate_body
+
+
+def test_native_agent_av_media_uses_safe_resolution_default_and_fallback() -> None:
+    config = (ROOT / "native_agent" / "src" / "config.c").read_text(encoding="utf-8")
+    example = (ROOT / "native_agent" / "config.example.json").read_text(
+        encoding="utf-8"
+    )
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    start = media_bridge.index("static bool start_bt_av_media")
+    body = media_bridge[start : media_bridge.index("static void send_bt_av_media_stop", start)]
+
+    assert "config->video_av_high_resolution = 0;" in config
+    assert '"highResolution": false' in example
+    assert "for (int attempt = 0; attempt < 2 && !started; attempt++)" in body
+    assert "attempt == 0 ? quality : (quality == 0 ? 1 : 0)" in body
+    assert "started = send_bt_av_media_command(command, reply, sizeof(reply));" in body

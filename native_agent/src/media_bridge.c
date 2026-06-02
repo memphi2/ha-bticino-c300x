@@ -14,6 +14,7 @@
 #include <strings.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -22,6 +23,7 @@
 #define RTSP_BUFFER_SIZE 8192
 #define SIP_BUFFER_SIZE 8192
 #define SIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
+#define FLEXISIP_INIT_SCRIPT "/etc/init.d/flexisipsh"
 #define SIP_PORT 5060
 #define BT_AV_MEDIA_PORT 30007
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
@@ -79,6 +81,7 @@ typedef struct {
     bool relay_stop;
     bool sip_stop;
     bool talkback_stop;
+    bool sip_proxy_started_by_agent;
     bool media_active;
     bool media_starting;
     bool stop_in_progress;
@@ -151,6 +154,57 @@ static int connect_local_tcp(int port) {
         return -1;
     }
     return fd;
+}
+
+static bool run_flexisip_script(const char *action, const char *bind_ip) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        return false;
+    }
+    if (pid == 0) {
+        if (bind_ip != NULL) {
+            execl(FLEXISIP_INIT_SCRIPT, "flexisipsh", action, bind_ip, (char *)NULL);
+        } else {
+            execl(FLEXISIP_INIT_SCRIPT, "flexisipsh", action, (char *)NULL);
+        }
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return false;
+    }
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static bool ensure_local_sip_proxy(media_bridge_t *bridge) {
+    int fd = connect_local_tcp(SIP_PORT);
+    if (fd >= 0) {
+        close(fd);
+        return true;
+    }
+
+    if (!run_flexisip_script("start", "127.0.0.1")) {
+        return false;
+    }
+
+    for (int attempt = 0; attempt < 45; attempt++) {
+        fd = connect_local_tcp(SIP_PORT);
+        if (fd >= 0) {
+            close(fd);
+            pthread_mutex_lock(&bridge->mutex);
+            bridge->sip_proxy_started_by_agent = true;
+            pthread_mutex_unlock(&bridge->mutex);
+            struct timespec ready_delay = {2, 0};
+            (void)nanosleep(&ready_delay, NULL);
+            return true;
+        }
+        struct timespec delay = {0, 100000000L};
+        (void)nanosleep(&delay, NULL);
+    }
+
+    (void)run_flexisip_script("stop", NULL);
+    return false;
 }
 
 static void header_value(const char *message, const char *name, char *out, size_t out_len) {
@@ -456,50 +510,14 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         return false;
     }
 
-    int fd = connect_local_tcp(SIP_PORT);
-    if (fd < 0) {
+    if (!ensure_local_sip_proxy(bridge)) {
         return false;
     }
-
-    long unique_id = (long)time(NULL) ^ (long)getpid();
+    int fd = -1;
     char call_id[128];
     char from_tag[64];
-    snprintf(call_id, sizeof(call_id), "c300x%ld@127.0.0.1", unique_id);
-    snprintf(from_tag, sizeof(from_tag), "agent%ld", unique_id);
-
     char request[4096];
     char response[SIP_BUFFER_SIZE];
-    snprintf(
-        request,
-        sizeof(request),
-        "REGISTER sip:%s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKreg%ld;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "To: <sip:webrtc@%s>\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: 20 REGISTER\r\n"
-        "Supported: replaces, outbound, gruu\r\n"
-        "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
-        "Contact: <sip:webrtc@127.0.0.1;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:19609c0e-f27b-7595-e9c8269557c4240b>\"\r\n"
-        "Expires: 300\r\n"
-        "Content-Length: 0\r\n\r\n",
-        domain,
-        unique_id,
-        domain,
-        domain,
-        from_tag,
-        call_id
-    );
-    if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) < 0) {
-        close(fd);
-        return false;
-    }
-    if (sip_status_code(response) >= 300) {
-        close(fd);
-        return false;
-    }
-
     char sdp[1024];
     snprintf(
         sdp,
@@ -521,47 +539,98 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         doorbell_devaddr(bridge->config)
     );
 
-    snprintf(
-        request,
-        sizeof(request),
-        "INVITE sip:c300x@%s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKinv%ld;rport\r\n"
-        "Max-Forwards: 70\r\n"
-        "To: <sip:c300x@%s>\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
-        "Call-ID: %s\r\n"
-        "CSeq: 21 INVITE\r\n"
-        "Supported: replaces, outbound, gruu\r\n"
-        "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
-        "Contact: <sip:webrtc@127.0.0.1;transport=TCP>\r\n"
-        "Content-Type: application/sdp\r\n"
-        "Content-Length: %zu\r\n\r\n%s",
-        domain,
-        unique_id,
-        domain,
-        domain,
-        from_tag,
-        call_id,
-        strlen(sdp),
-        sdp
-    );
-    if (send_all(fd, request, strlen(request)) <= 0) {
-        close(fd);
-        return false;
-    }
-
     int status = 0;
-    for (int i = 0; i < 8; i++) {
-        if (read_message(fd, response, sizeof(response), 5) < 0) {
-            break;
+    for (int attempt = 0; attempt < 45; attempt++) {
+        fd = connect_local_tcp(SIP_PORT);
+        if (fd < 0) {
+            goto retry_sip_setup;
         }
-        status = sip_status_code(response);
-        if (status >= 200) {
-            break;
+
+        long unique_id = ((long)time(NULL) ^ (long)getpid() ^ (long)attempt);
+        snprintf(call_id, sizeof(call_id), "c300x%ld@127.0.0.1", unique_id);
+        snprintf(from_tag, sizeof(from_tag), "agent%ld", unique_id);
+        snprintf(
+            request,
+            sizeof(request),
+            "REGISTER sip:%s SIP/2.0\r\n"
+            "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKreg%ld;rport\r\n"
+            "Max-Forwards: 70\r\n"
+            "To: <sip:webrtc@%s>\r\n"
+            "From: <sip:webrtc@%s>;tag=%s\r\n"
+            "Call-ID: %s\r\n"
+            "CSeq: 20 REGISTER\r\n"
+            "Supported: replaces, outbound, gruu\r\n"
+            "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
+            "Contact: <sip:webrtc@127.0.0.1;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:19609c0e-f27b-7595-e9c8269557c4240b>\"\r\n"
+            "Expires: 300\r\n"
+            "Content-Length: 0\r\n\r\n",
+            domain,
+            unique_id,
+            domain,
+            domain,
+            from_tag,
+            call_id
+        );
+        if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) < 0) {
+            goto retry_sip_setup;
+        }
+        if (sip_status_code(response) < 300) {
+            snprintf(
+                request,
+                sizeof(request),
+                "INVITE sip:c300x@%s SIP/2.0\r\n"
+                "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKinv%ld;rport\r\n"
+                "Max-Forwards: 70\r\n"
+                "To: <sip:c300x@%s>\r\n"
+                "From: <sip:webrtc@%s>;tag=%s\r\n"
+                "Call-ID: %s\r\n"
+                "CSeq: 21 INVITE\r\n"
+                "Supported: replaces, outbound, gruu\r\n"
+                "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
+                "Contact: <sip:webrtc@127.0.0.1;transport=TCP>\r\n"
+                "Content-Type: application/sdp\r\n"
+                "Content-Length: %zu\r\n\r\n%s",
+                domain,
+                unique_id,
+                domain,
+                domain,
+                from_tag,
+                call_id,
+                strlen(sdp),
+                sdp
+            );
+            if (send_all(fd, request, strlen(request)) <= 0) {
+                goto retry_sip_setup;
+            }
+            status = 0;
+            for (int i = 0; i < 8; i++) {
+                if (read_message(fd, response, sizeof(response), 5) < 0) {
+                    break;
+                }
+                status = sip_status_code(response);
+                if (status >= 200) {
+                    break;
+                }
+            }
+            if (status >= 200 && status < 300) {
+                break;
+            }
+        }
+
+retry_sip_setup:
+        if (fd >= 0 && (status < 200 || status >= 300)) {
+            close(fd);
+            fd = -1;
+        }
+        if (attempt + 1 < 45) {
+            struct timespec delay = {2, 0};
+            (void)nanosleep(&delay, NULL);
         }
     }
-    if (status < 200 || status >= 300) {
-        close(fd);
+    if (fd < 0 || status < 200 || status >= 300) {
+        if (fd >= 0) {
+            close(fd);
+        }
         return false;
     }
 
@@ -622,14 +691,19 @@ static bool start_bt_av_media(media_bridge_t *bridge) {
     char command[128];
     char reply[128] = {0};
     int quality = bridge->config->video_av_high_resolution ? 0 : 1;
-    snprintf(
-        command,
-        sizeof(command),
-        "*7*300#127#0#0#1#%d#%d*##",
-        video_rtp_port(bridge->config),
-        quality
-    );
-    if (!send_bt_av_media_command(command, reply, sizeof(reply))) {
+    bool started = false;
+    for (int attempt = 0; attempt < 2 && !started; attempt++) {
+        int attempt_quality = attempt == 0 ? quality : (quality == 0 ? 1 : 0);
+        snprintf(
+            command,
+            sizeof(command),
+            "*7*300#127#0#0#1#%d#%d*##",
+            video_rtp_port(bridge->config),
+            attempt_quality
+        );
+        started = send_bt_av_media_command(command, reply, sizeof(reply));
+    }
+    if (!started) {
         return false;
     }
 
@@ -890,11 +964,15 @@ static bool create_rtp_socket(media_bridge_t *bridge) {
 static void stop_media_session(bool close_client);
 
 static bool start_media_session(media_bridge_t *bridge) {
+    bool sip_ready = false;
+    bool wants_audio = false;
+
     pthread_mutex_lock(&bridge->mutex);
     if (bridge->media_active || bridge->media_starting) {
         pthread_mutex_unlock(&bridge->mutex);
         return true;
     }
+    wants_audio = bridge->rtsp_audio_enabled;
     bridge->media_starting = true;
     bridge->relay_stop = false;
     if (!create_rtp_socket(bridge)) {
@@ -906,13 +984,16 @@ static bool start_media_session(media_bridge_t *bridge) {
     }
     pthread_mutex_unlock(&bridge->mutex);
 
-    if (sip_video_call_enabled() && !send_sip_setup(bridge)) {
-        c300x_video_bridge_set_error(bridge->video, "sip_setup_failed");
-        stop_media_session(false);
-        c300x_video_bridge_media_stopped(bridge->video);
-        return false;
+    if (sip_video_call_enabled()) {
+        sip_ready = send_sip_setup(bridge);
+        if (!sip_ready) {
+            c300x_video_bridge_set_error(bridge->video, "sip_setup_failed");
+            stop_media_session(false);
+            c300x_video_bridge_media_stopped(bridge->video);
+            return false;
+        }
     }
-    if (!start_talkback_proxy(bridge)) {
+    if (wants_audio && sip_ready && !start_talkback_proxy(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "talkback_start_failed");
         stop_media_session(false);
         c300x_video_bridge_media_stopped(bridge->video);
@@ -938,8 +1019,20 @@ static bool start_media_session(media_bridge_t *bridge) {
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
-    c300x_video_bridge_media_started(bridge->video, true);
+    c300x_video_bridge_media_started(bridge->video, wants_audio);
     return true;
+}
+
+static void *start_media_session_thread(void *arg) {
+    (void)start_media_session((media_bridge_t *)arg);
+    return NULL;
+}
+
+static void start_media_session_async(media_bridge_t *bridge) {
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, start_media_session_thread, bridge) == 0) {
+        pthread_detach(thread);
+    }
 }
 
 static void stop_media_session(bool close_client) {
@@ -953,6 +1046,7 @@ static void stop_media_session(bool close_client) {
     bool sip_monitor_started = false;
     bool talkback_started = false;
     bool send_media_stop = false;
+    bool stop_sip_proxy = false;
     pthread_t sip_thread;
     pthread_t talkback_thread;
 
@@ -981,6 +1075,7 @@ static void stop_media_session(bool close_client) {
         && g_bridge.audio_rtp_fd < 0
         && g_bridge.sip_fd < 0
         && g_bridge.talkback_fd < 0
+        && !g_bridge.sip_proxy_started_by_agent
     ) {
         pthread_mutex_unlock(&g_bridge.mutex);
         if (close_client && client_fd >= 0) {
@@ -996,10 +1091,12 @@ static void stop_media_session(bool close_client) {
     relay_started = g_bridge.relay_started;
     sip_monitor_started = g_bridge.sip_monitor_started;
     talkback_started = g_bridge.talkback_started;
+    stop_sip_proxy = g_bridge.sip_proxy_started_by_agent;
     sip_thread = g_bridge.sip_thread;
     talkback_thread = g_bridge.talkback_thread;
     g_bridge.relay_started = false;
     g_bridge.talkback_started = false;
+    g_bridge.sip_proxy_started_by_agent = false;
     sip_fd = g_bridge.sip_fd;
     snprintf(domain, sizeof(domain), "%s", g_bridge.domain);
     snprintf(call_id, sizeof(call_id), "%s", g_bridge.call_id);
@@ -1034,6 +1131,9 @@ static void stop_media_session(bool close_client) {
     }
     if (sip_fd >= 0) {
         close(sip_fd);
+    }
+    if (stop_sip_proxy) {
+        (void)run_flexisip_script("stop", NULL);
     }
 
     pthread_mutex_lock(&g_bridge.mutex);
@@ -1265,6 +1365,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             const char *sdp = wants_audio ? sdp_audio_video : sdp_video;
             char headers[512];
             snprintf(headers, sizeof(headers), "Content-Type: application/sdp\r\nContent-Base: %s/\r\n", uri);
+            start_media_session_async(&g_bridge);
             send_rtsp_response(fd, 200, cseq, headers, sdp);
         } else if (strcmp(method, "SETUP") == 0) {
             bool tcp = strstr(transport, "RTP/AVP/TCP") != NULL;

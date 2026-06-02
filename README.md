@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v0.3.1-0366d6?style=flat-square)](.github/release-notes/v0.3.1.md)
+[![Release](https://img.shields.io/badge/release-v0.3.3-0366d6?style=flat-square)](.github/release-notes/v0.3.3.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.3.1`
+- Current release line: `0.3.3`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -320,6 +320,29 @@ The integration is designed for low idle cost:
 
 Optional system metrics are disabled by default and should be enabled only when
 you actually want device diagnostics.
+
+### Legacy MQTT and Flexisip Diagnostics
+
+The legacy TcpDump2Mqtt bridge and the C300X Flexisip startup script are treated
+as separate device areas. Disabling legacy MQTT only disables the
+`S99TcpDump2Mqtt` autostart link and stops TcpDump2Mqtt helper processes; it
+does not restore or rewrite Flexisip.
+
+The `sensor.bticino_c300x_device_agent_status` attributes include a
+`flexisip_reference_state` value:
+
+- `legacy_mqtt_patch`: expected state for a device with the legacy
+  TcpDump2Mqtt firmware patch. The active Flexisip startup script contains the
+  restart marker and the backup does not.
+- `stock_or_unpatched`: expected state when no legacy MQTT Flexisip marker is
+  present.
+- `backup_without_active_marker`: a previous cleanup likely restored the
+  Flexisip backup while legacy MQTT files still exist. If video or the old
+  TcpDump2Mqtt watchdog behaves differently than before, restore the Flexisip
+  marker from a known-good device backup or reapply the legacy MQTT firmware
+  patch.
+- `unexpected_backup_marker`, `marker_without_backup` or `missing`: inspect the
+  device before changing MQTT state; these are not normal reference states.
 
 ## Maintenance and Removal
 

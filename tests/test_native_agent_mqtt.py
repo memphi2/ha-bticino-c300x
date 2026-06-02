@@ -40,7 +40,8 @@ def test_legacy_mqtt_patch_has_separate_maintenance_path() -> None:
 
     assert '"/api/v1/maintenance/legacy-mqtt"' in http
     assert '"/api/v1/maintenance/mqtt/actions/migrate-legacy"' in http
-    assert "legacy_mqtt_remove_patch" in http
+    assert "legacy_mqtt_disable_patch" in http
+    assert "legacy_mqtt_enable_patch" in http
     assert "legacy_mqtt_restore_from_backup" in http
     assert "legacy_mqtt_import_config" in http
     assert "MQTT_HOST" in http
@@ -48,6 +49,25 @@ def test_legacy_mqtt_patch_has_separate_maintenance_path() -> None:
     assert "mqtt_disabled_for_legacy" in http
     assert "/usr/bin/jq" not in http
     assert "/usr/bin/evtest" not in http
+
+
+def test_legacy_mqtt_disable_does_not_touch_flexisip_or_delete_patch_files() -> None:
+    http = _read("native_agent/src/http.c")
+    disable = http[
+        http.rindex("static int legacy_mqtt_disable_patch") :
+        http.rindex("static void handle_legacy_mqtt_status")
+    ]
+    migrate = http[
+        http.rindex("static void handle_mqtt_migrate_legacy_post") :
+        http.rindex("static int maybe_json_mqtt_string")
+    ]
+
+    assert "flexisip" not in disable.lower()
+    assert "flexisip" not in migrate.lower()
+    assert "unlink(C300X_LEGACY_MQTT_INIT_LINK)" in disable
+    assert "remove_tree" not in disable
+    assert 'unlink("/home/root/filter.py")' not in disable
+    assert 'rm -rf /etc/tcpdump2mqtt' not in disable
 
 
 def test_native_mqtt_default_config_is_disabled_with_legacy_topics() -> None:
@@ -129,7 +149,7 @@ def test_native_mqtt_status_response_checks_for_truncation() -> None:
     assert "mqtt_status_too_large" in status
 
 
-def test_native_mqtt_config_is_saved_before_legacy_bridge_removal() -> None:
+def test_native_mqtt_config_is_saved_before_legacy_bridge_disable() -> None:
     http = _read("native_agent/src/http.c")
     handler = http[
         http.rindex("static void handle_mqtt_post") :
@@ -137,11 +157,11 @@ def test_native_mqtt_config_is_saved_before_legacy_bridge_removal() -> None:
     ]
 
     assert handler.index("c300x_save_config_if_changed") < handler.index(
-        "legacy_mqtt_remove_patch"
+        "legacy_mqtt_disable_patch"
     )
 
 
-def test_native_mqtt_migration_saves_config_before_legacy_bridge_removal() -> None:
+def test_native_mqtt_migration_saves_config_before_legacy_bridge_disable() -> None:
     http = _read("native_agent/src/http.c")
     handler = http[
         http.rindex("static void handle_mqtt_migrate_legacy_post") :
@@ -149,5 +169,5 @@ def test_native_mqtt_migration_saves_config_before_legacy_bridge_removal() -> No
     ]
 
     assert handler.index("c300x_save_config_if_changed") < handler.index(
-        "legacy_mqtt_remove_patch"
+        "legacy_mqtt_disable_patch"
     )

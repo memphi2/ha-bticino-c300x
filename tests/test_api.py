@@ -279,7 +279,8 @@ def test_set_mqtt_enabled_posts_only_enabled_flag() -> None:
 
 def test_migrate_legacy_mqtt_posts_explicit_confirmation() -> None:
     session = _FakeSession(
-        '{"ok": true, "migrated": true, "legacy_removed": true, '
+        '{"ok": true, "migrated": true, "legacy_removed": false, '
+        '"legacy_disabled": true, '
         '"native_enabled": true}'
     )
     api = C300XAgentApi(
@@ -310,7 +311,10 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
         '{"ok": true, "enabled": true, "installed": true, "running": false, '
         '"backup_available": true, "native_enabled": false, "exclusive": true, '
         '"script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh", '
-        '"init_link": "/etc/rc5.d/S99TcpDump2Mqtt"}'
+        '"init_link": "/etc/rc5.d/S99TcpDump2Mqtt", '
+        '"flexisip_backup_available": true, '
+        '"flexisip_restart_marker": true, '
+        '"flexisip_reference_state": "legacy_mqtt_patch"}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -326,6 +330,9 @@ def test_legacy_mqtt_status_uses_separate_maintenance_endpoint() -> None:
     assert status["backup_available"] is True
     assert status["native_enabled"] is False
     assert status["script_path"] == "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
+    assert status["flexisip_backup_available"] is True
+    assert status["flexisip_restart_marker"] is True
+    assert status["flexisip_reference_state"] == "legacy_mqtt_patch"
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/maintenance/legacy-mqtt",
@@ -362,6 +369,9 @@ def test_normalize_legacy_mqtt_status_accepts_minimal_payload() -> None:
         "exclusive": False,
         "script_path": None,
         "init_link": None,
+        "flexisip_backup_available": None,
+        "flexisip_restart_marker": None,
+        "flexisip_reference_state": None,
         "raw": {"enabled": False},
     }
 

@@ -473,7 +473,7 @@ class C300XAgentApi:
         return normalize_mqtt_status(data)
 
     async def async_migrate_legacy_mqtt_to_native(self) -> dict[str, Any]:
-        """Remove a legacy TcpDump2Mqtt install and enable native MQTT when needed."""
+        """Disable legacy TcpDump2Mqtt and enable native MQTT when needed."""
 
         data = await self._request_json(
             "POST",
@@ -484,7 +484,7 @@ class C300XAgentApi:
         return _ok_response(data)
 
     async def async_legacy_mqtt_status(self) -> dict[str, Any]:
-        """Return legacy TcpDump2Mqtt patch status."""
+        """Return legacy TcpDump2Mqtt autostart status."""
 
         data = await self._request_json(
             "GET",
@@ -494,7 +494,7 @@ class C300XAgentApi:
         return normalize_legacy_mqtt_status(data)
 
     async def async_set_legacy_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
-        """Restore or remove the legacy TcpDump2Mqtt patch."""
+        """Enable or disable the legacy TcpDump2Mqtt autostart."""
 
         data = await self._request_json(
             "POST",
@@ -1181,6 +1181,13 @@ def normalize_legacy_mqtt_status(data: Any) -> dict[str, Any]:
         "exclusive": data.get("exclusive") is True,
         "script_path": _optional_string(data.get("script_path")),
         "init_link": _optional_string(data.get("init_link")),
+        "flexisip_backup_available": _optional_bool(
+            data.get("flexisip_backup_available")
+        ),
+        "flexisip_restart_marker": _optional_bool(data.get("flexisip_restart_marker")),
+        "flexisip_reference_state": _optional_string(
+            data.get("flexisip_reference_state")
+        ),
         "raw": data,
     }
 

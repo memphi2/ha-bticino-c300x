@@ -73,6 +73,9 @@
 #define C300X_LEGACY_MQTT_INIT_TARGET "../tcpdump2mqtt/TcpDump2Mqtt.sh"
 #define C300X_LEGACY_MQTT_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt"
 #define C300X_LEGACY_MQTT_BACKUP_MARKER "/home/bticino/cfg/extra/c300x-device-file-backups/legacy-mqtt/.complete"
+#define C300X_FLEXISIP_INIT_SCRIPT "/etc/init.d/flexisipsh"
+#define C300X_FLEXISIP_INIT_BACKUP "/etc/init.d/flexisipsh_bak"
+#define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
 
 enum listener_kind {
@@ -320,6 +323,9 @@ static void handle_display_bridge_event_post(
     const struct request *request
 );
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime);
+static int flexisip_restart_marker_present(void);
+static int flexisip_backup_marker_present(void);
+static const char *flexisip_reference_state(void);
 static void handle_setup_page(int client_fd);
 static void handle_auth_config_get(int client_fd, const struct c300x_config *config);
 static void handle_auth_config_post(
@@ -3977,6 +3983,9 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
     char qml_patch_last_action[C300X_JSON_QUOTED_LEN(sizeof(runtime->qml_patch_last_action))];
     struct c300x_video_status video_status;
     int open_fd_count = count_open_fds();
+    int flexisip_backup_available = path_exists(C300X_FLEXISIP_INIT_BACKUP);
+    int flexisip_restart_marker = flexisip_restart_marker_present();
+    int flexisip_backup_marker = flexisip_backup_marker_present();
     char body[2048];
 
     json_string(runtime->last_write_class, last_write_class, sizeof(last_write_class));
@@ -4008,7 +4017,11 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"video_call_active\":%s,"
             "\"video_clients\":%d,"
             "\"video_bridge_open_fds\":%d,"
-            "\"video_bridge_active_threads\":%d"
+            "\"video_bridge_active_threads\":%d,"
+            "\"flexisip_backup_available\":%s,"
+            "\"flexisip_restart_marker\":%s,"
+            "\"flexisip_backup_marker\":%s,"
+            "\"flexisip_reference_state\":\"%s\""
             "}\n",
             runtime->agent_write_count,
             (long)runtime->last_write_at,
@@ -4028,7 +4041,11 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             video_status.call_active ? "true" : "false",
             video_status.clients,
             video_status.bridge_open_fds,
-            video_status.bridge_active_threads
+            video_status.bridge_active_threads,
+            flexisip_backup_available ? "true" : "false",
+            flexisip_restart_marker ? "true" : "false",
+            flexisip_backup_marker ? "true" : "false",
+            flexisip_reference_state()
         ) >= (int)sizeof(body)
     ) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
@@ -4642,8 +4659,7 @@ static int legacy_mqtt_installed(void)
     return path_exists(C300X_LEGACY_MQTT_SCRIPT)
         || path_exists(C300X_LEGACY_MQTT_DIR)
         || path_exists(C300X_LEGACY_MQTT_INIT_LINK)
-        || path_exists("/home/root/filter.py")
-        || path_exists("/etc/init.d/flexisipsh_bak");
+        || path_exists("/home/root/filter.py");
 }
 
 static int legacy_mqtt_startup_enabled(void)
@@ -4663,6 +4679,55 @@ static int legacy_mqtt_running(void)
         || process_cmdline_contains("StartMqttReceive")
         || process_cmdline_contains("mosquitto_sub")
         || process_cmdline_contains("mosquitto_pub");
+}
+
+static int file_contains_literal(const char *path, const char *needle)
+{
+    char buffer[8192];
+    int truncated = 0;
+
+    if (path == NULL || needle == NULL || needle[0] == '\0') {
+        return 0;
+    }
+    if (!read_bounded_text_file(path, buffer, sizeof(buffer), &truncated)) {
+        return 0;
+    }
+    return strstr(buffer, needle) != NULL;
+}
+
+static int flexisip_restart_marker_present(void)
+{
+    return file_contains_literal(C300X_FLEXISIP_INIT_SCRIPT, C300X_FLEXISIP_RESTART_MARKER);
+}
+
+static int flexisip_backup_marker_present(void)
+{
+    return file_contains_literal(C300X_FLEXISIP_INIT_BACKUP, C300X_FLEXISIP_RESTART_MARKER);
+}
+
+static const char *flexisip_reference_state(void)
+{
+    int has_script = path_exists(C300X_FLEXISIP_INIT_SCRIPT);
+    int has_backup = path_exists(C300X_FLEXISIP_INIT_BACKUP);
+    int active_marker = flexisip_restart_marker_present();
+    int backup_marker = flexisip_backup_marker_present();
+
+    if (!has_script) {
+        return "missing";
+    }
+    if (has_backup && active_marker && !backup_marker) {
+        return "legacy_mqtt_patch";
+    }
+    if (!has_backup && !active_marker) {
+        return "stock_or_unpatched";
+    }
+    if (has_backup && !active_marker && !backup_marker) {
+        return "backup_without_active_marker";
+    }
+    if (backup_marker) {
+        return "unexpected_backup_marker";
+    }
+    return "marker_without_backup";
 }
 
 static void legacy_mqtt_stop_processes(void)
@@ -4848,64 +4913,6 @@ static int legacy_mqtt_import_config(struct c300x_config *updated, int *imported
     return 1;
 }
 
-static int legacy_mqtt_backup_if_needed(int *changed)
-{
-    if (changed != NULL) {
-        *changed = 0;
-    }
-    if (legacy_mqtt_backup_available()) {
-        return 1;
-    }
-    if (!legacy_mqtt_installed() && !path_exists("/etc/init.d/flexisipsh_bak")) {
-        return 1;
-    }
-    if (!run_fixed_shell_command(
-        "mkdir -p " C300X_LEGACY_MQTT_BACKUP_DIR "/etc "
-        C300X_LEGACY_MQTT_BACKUP_DIR "/home/root "
-        C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d"
-    )) {
-        return 0;
-    }
-    if (path_exists(C300X_LEGACY_MQTT_DIR)
-        && !run_fixed_shell_command(
-            "rm -rf " C300X_LEGACY_MQTT_BACKUP_DIR "/etc/tcpdump2mqtt "
-            "&& cp -a /etc/tcpdump2mqtt " C300X_LEGACY_MQTT_BACKUP_DIR "/etc/"
-        )) {
-        return 0;
-    }
-    if (path_exists("/home/root/filter.py")
-        && !copy_binary_file(
-            "/home/root/filter.py",
-            C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py",
-            0700
-        )) {
-        return 0;
-    }
-    if (path_exists("/etc/init.d/flexisipsh")
-        && !copy_binary_file(
-            "/etc/init.d/flexisipsh",
-            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh",
-            0700
-        )) {
-        return 0;
-    }
-    if (path_exists("/etc/init.d/flexisipsh_bak")
-        && !copy_binary_file(
-            "/etc/init.d/flexisipsh_bak",
-            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak",
-            0700
-        )) {
-        return 0;
-    }
-    if (!copy_binary_file("/dev/null", C300X_LEGACY_MQTT_BACKUP_MARKER, 0600)) {
-        return 0;
-    }
-    if (changed != NULL) {
-        *changed = 1;
-    }
-    return 1;
-}
-
 static int legacy_mqtt_restore_from_backup(int *changed)
 {
     char current[256];
@@ -4928,22 +4935,6 @@ static int legacy_mqtt_restore_from_backup(int *changed)
         && !copy_binary_file(
             C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py",
             "/home/root/filter.py",
-            0700
-        )) {
-        return 0;
-    }
-    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh")
-        && !copy_binary_file(
-            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh",
-            "/etc/init.d/flexisipsh",
-            0700
-        )) {
-        return 0;
-    }
-    if (path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak")
-        && !copy_binary_file(
-            C300X_LEGACY_MQTT_BACKUP_DIR "/etc/init.d/flexisipsh_bak",
-            "/etc/init.d/flexisipsh_bak",
             0700
         )) {
         return 0;
@@ -4972,45 +4963,52 @@ static int legacy_mqtt_restore_from_backup(int *changed)
     return 1;
 }
 
-static int legacy_mqtt_remove_patch(int *changed)
+static int legacy_mqtt_enable_patch(int *changed)
 {
-    int had_legacy_patch = legacy_mqtt_installed();
-    int had_tcpdump2mqtt = path_exists(C300X_LEGACY_MQTT_DIR);
+    char current[256];
+    ssize_t len;
 
     if (changed != NULL) {
         *changed = 0;
     }
-    if (!legacy_mqtt_backup_if_needed(changed)) {
+    if (!path_exists(C300X_LEGACY_MQTT_SCRIPT)) {
+        return legacy_mqtt_restore_from_backup(changed);
+    }
+    len = readlink(C300X_LEGACY_MQTT_INIT_LINK, current, sizeof(current) - 1);
+    if (len >= 0) {
+        current[len] = '\0';
+        if (strcmp(current, C300X_LEGACY_MQTT_INIT_TARGET) == 0) {
+            return 1;
+        }
+        if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+            return 0;
+        }
+    } else if (errno != ENOENT) {
         return 0;
     }
-    if (!had_legacy_patch) {
+    if (symlink(C300X_LEGACY_MQTT_INIT_TARGET, C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+        return 0;
+    }
+    if (changed != NULL) {
+        *changed = 1;
+    }
+    return 1;
+}
+
+static int legacy_mqtt_disable_patch(int *changed)
+{
+    int was_enabled = legacy_mqtt_startup_enabled();
+
+    if (changed != NULL) {
+        *changed = 0;
+    }
+    if (!was_enabled) {
         return 1;
     }
     if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0 && errno != ENOENT) {
         return 0;
     }
-    if (path_exists("/etc/init.d/flexisipsh_bak")
-        && !copy_binary_file("/etc/init.d/flexisipsh_bak", "/etc/init.d/flexisipsh", 0700)) {
-        return 0;
-    } else if (!path_exists("/etc/init.d/flexisipsh_bak")
-        && path_exists("/etc/init.d/flexisipsh")
-        && !run_fixed_shell_command(
-            "sed '/\\/tmp\\/flexisip_restarted/d' /etc/init.d/flexisipsh >/tmp/c300x-flexisipsh "
-            "&& cp /tmp/c300x-flexisipsh /etc/init.d/flexisipsh "
-            "&& chmod 700 /etc/init.d/flexisipsh "
-            "&& rm -f /tmp/c300x-flexisipsh"
-        )) {
-        return 0;
-    }
-    (void)unlink("/etc/init.d/flexisipsh_bak");
-    if (!remove_tree(C300X_LEGACY_MQTT_DIR)) {
-        return 0;
-    }
-    if ((had_tcpdump2mqtt || path_exists(C300X_LEGACY_MQTT_BACKUP_DIR "/home/root/filter.py"))
-        && unlink("/home/root/filter.py") != 0 && errno != ENOENT) {
-        return 0;
-    }
-    if (changed != NULL && had_legacy_patch) {
+    if (changed != NULL) {
         *changed = 1;
     }
     return 1;
@@ -5021,19 +5019,24 @@ static void handle_legacy_mqtt_status(
     const struct c300x_config *config
 )
 {
-    char body[512];
+    char body[1024];
+    int flexisip_backup_available = path_exists(C300X_FLEXISIP_INIT_BACKUP);
+    int flexisip_restart_marker = flexisip_restart_marker_present();
 
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\"}\n",
+        "{\"ok\":true,\"available\":true,\"installed\":%s,\"enabled\":%s,\"running\":%s,\"backup_available\":%s,\"native_enabled\":%s,\"exclusive\":true,\"script_path\":\"%s\",\"init_link\":\"%s\",\"flexisip_backup_available\":%s,\"flexisip_restart_marker\":%s,\"flexisip_reference_state\":\"%s\"}\n",
         legacy_mqtt_installed() ? "true" : "false",
         legacy_mqtt_startup_enabled() ? "true" : "false",
         legacy_mqtt_running() ? "true" : "false",
         legacy_mqtt_backup_available() ? "true" : "false",
         (config != NULL && config->mqtt_enabled) ? "true" : "false",
         C300X_LEGACY_MQTT_SCRIPT,
-        C300X_LEGACY_MQTT_INIT_LINK
+        C300X_LEGACY_MQTT_INIT_LINK,
+        flexisip_backup_available ? "true" : "false",
+        flexisip_restart_marker ? "true" : "false",
+        flexisip_reference_state()
     );
     send_json(client_fd, 200, "OK", body);
 }
@@ -5060,7 +5063,7 @@ static void handle_legacy_mqtt_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"enabled_required\"}\n");
         return;
     }
-    if (enabled && !legacy_mqtt_backup_available()) {
+    if (enabled && !path_exists(C300X_LEGACY_MQTT_SCRIPT) && !legacy_mqtt_backup_available()) {
         send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"legacy_mqtt_backup_missing\"}\n");
         return;
     }
@@ -5085,16 +5088,16 @@ static void handle_legacy_mqtt_post(
     }
     firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
     if (enabled) {
-        if (!legacy_mqtt_restore_from_backup(&changed)) {
+        if (!legacy_mqtt_enable_patch(&changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_restore_failed\"}\n");
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_enable_failed\"}\n");
             return;
         }
         should_start_legacy = 1;
     } else {
-        if (!legacy_mqtt_remove_patch(&changed)) {
+        if (!legacy_mqtt_disable_patch(&changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
             return;
         }
         should_stop_legacy = 1;
@@ -5107,7 +5110,7 @@ static void handle_legacy_mqtt_post(
         (void)run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
     }
     if (changed) {
-        record_agent_write(config, runtime, "legacy_mqtt", enabled ? "restore" : "remove");
+        record_agent_write(config, runtime, "legacy_mqtt", enabled ? "enable" : "disable");
     }
     handle_legacy_mqtt_status(client_fd, config);
 }
@@ -5189,9 +5192,9 @@ static void handle_mqtt_migrate_legacy_post(
 
     if (legacy_was_installed && legacy_was_active) {
         firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-        if (!legacy_mqtt_remove_patch(&legacy_changed)) {
+        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
             free(updated);
             return;
         }
@@ -5200,7 +5203,7 @@ static void handle_mqtt_migrate_legacy_post(
     }
 
     if (legacy_changed) {
-        record_agent_write(config, runtime, "legacy_mqtt", "migrate_remove");
+        record_agent_write(config, runtime, "legacy_mqtt", "migrate_disable");
     }
     if (config_changed) {
         record_agent_write(config, runtime, "config", "mqtt_migrated_from_legacy");
@@ -5216,7 +5219,8 @@ static void handle_mqtt_migrate_legacy_post(
         "\"legacy_was_installed\":%s,"
         "\"legacy_was_enabled\":%s,"
         "\"legacy_was_running\":%s,"
-        "\"legacy_removed\":%s,"
+        "\"legacy_removed\":false,"
+        "\"legacy_disabled\":%s,"
         "\"legacy_backup_available\":%s,"
         "\"imported_config\":%s,"
         "\"native_enabled\":%s,"
@@ -5226,7 +5230,7 @@ static void handle_mqtt_migrate_legacy_post(
         legacy_was_installed ? "true" : "false",
         legacy_was_enabled ? "true" : "false",
         legacy_was_running ? "true" : "false",
-        !legacy_mqtt_installed() ? "true" : "false",
+        (legacy_changed || (legacy_was_active && !legacy_mqtt_startup_enabled())) ? "true" : "false",
         legacy_mqtt_backup_available() ? "true" : "false",
         imported_config ? "true" : "false",
         config->mqtt_enabled ? "true" : "false",
@@ -5371,15 +5375,15 @@ static void handle_mqtt_post(
     }
     if (updated.mqtt_enabled && legacy_mqtt_installed()) {
         firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-        if (!legacy_mqtt_remove_patch(&legacy_changed)) {
+        if (!legacy_mqtt_disable_patch(&legacy_changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_remove_failed\"}\n");
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
             return;
         }
         firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
         legacy_mqtt_stop_processes();
         if (legacy_changed) {
-            record_agent_write(config, runtime, "legacy_mqtt", "remove_for_native");
+            record_agent_write(config, runtime, "legacy_mqtt", "disable_for_native");
         }
     }
     handle_mqtt_status(client_fd, config, runtime);

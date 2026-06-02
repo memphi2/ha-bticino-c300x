@@ -400,6 +400,9 @@ class _FakeApi:
             "exclusive": True,
             "script_path": "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh",
             "init_link": "/etc/rc5.d/S99TcpDump2Mqtt",
+            "flexisip_backup_available": True,
+            "flexisip_restart_marker": True,
+            "flexisip_reference_state": "legacy_mqtt_patch",
         }
 
     async def async_set_legacy_mqtt_enabled(self, enabled: bool) -> dict[str, Any]:
@@ -797,7 +800,7 @@ def test_native_mqtt_bridge_switch_uses_read_only_status_and_toggles() -> None:
     assert entity.extra_state_attributes["event_topic"] == "Bticino/tx"
 
 
-def test_legacy_mqtt_bridge_switch_removes_and_restores_patch() -> None:
+def test_legacy_mqtt_bridge_switch_disables_and_enables_autostart() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
             capabilities={
@@ -822,6 +825,9 @@ def test_legacy_mqtt_bridge_switch_removes_and_restores_patch() -> None:
     assert entity.extra_state_attributes["backup_available"] is True
     assert entity.extra_state_attributes["script_path"] == (
         "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
+    )
+    assert entity.extra_state_attributes["flexisip_reference_state"] == (
+        "legacy_mqtt_patch"
     )
 
 

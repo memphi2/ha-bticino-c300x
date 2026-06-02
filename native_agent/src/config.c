@@ -139,8 +139,8 @@ void c300x_default_config(struct c300x_config *config)
     safe_copy(config->video_rtsp_recorder_path, sizeof(config->video_rtsp_recorder_path), "/doorbell-recorder");
     safe_copy(config->video_rtsp_username, sizeof(config->video_rtsp_username), "");
     safe_copy(config->video_rtsp_password, sizeof(config->video_rtsp_password), "");
-    safe_copy(config->video_sip_from, sizeof(config->video_sip_from), "webrtc@127.0.0.1");
-    safe_copy(config->video_sip_to, sizeof(config->video_sip_to), "c300x@127.0.0.1");
+    safe_copy(config->video_sip_from, sizeof(config->video_sip_from), "webrtc");
+    safe_copy(config->video_sip_to, sizeof(config->video_sip_to), "c300x");
     safe_copy(config->video_sip_domain, sizeof(config->video_sip_domain), "");
     safe_copy(config->video_sip_devaddr, sizeof(config->video_sip_devaddr), "20");
     safe_copy(config->video_sip_local_ip, sizeof(config->video_sip_local_ip), "127.0.0.1");
@@ -1670,7 +1670,12 @@ static int files_equal(const char *left_path, const char *right_path)
     return equal;
 }
 
-static int read_config_file_mode(const char *path, mode_t *mode)
+static int read_config_file_metadata(
+    const char *path,
+    mode_t *mode,
+    uid_t *uid,
+    gid_t *gid
+)
 {
 #ifdef __arm__
     struct stat64 status;
@@ -1685,7 +1690,15 @@ static int read_config_file_mode(const char *path, mode_t *mode)
         return 0;
     }
 #endif
-    *mode = status.st_mode;
+    if (mode != NULL) {
+        *mode = status.st_mode;
+    }
+    if (uid != NULL) {
+        *uid = status.st_uid;
+    }
+    if (gid != NULL) {
+        *gid = status.st_gid;
+    }
     return 1;
 }
 
@@ -1698,7 +1711,7 @@ static int ensure_config_mode(
 {
     mode_t mode;
 
-    if (!read_config_file_mode(path, &mode)) {
+    if (!read_config_file_metadata(path, &mode, NULL, NULL)) {
         return 1;
     }
     if ((mode & 0777) == 0600) {
@@ -1723,6 +1736,9 @@ static int save_config_internal(
 {
     char temporary_path[C300X_MAX_PATH_LEN + 8];
     FILE *file;
+    uid_t owner_uid = 0;
+    gid_t owner_gid = 0;
+    int have_owner = 0;
 
     if (changed != NULL) {
         *changed = 0;
@@ -1735,6 +1751,12 @@ static int save_config_internal(
         set_error(error, error_len, "config path is too long");
         return 0;
     }
+    have_owner = read_config_file_metadata(
+        config->config_path,
+        NULL,
+        &owner_uid,
+        &owner_gid
+    );
     file = fopen(temporary_path, "w");
     if (file == NULL) {
         set_error(error, error_len, "unable to open temporary config file");
@@ -1890,6 +1912,11 @@ static int save_config_internal(
         return 0;
     }
     (void)chmod(temporary_path, 0600);
+    if (have_owner && chown(temporary_path, owner_uid, owner_gid) != 0 && errno != EPERM) {
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to preserve config file owner");
+        return 0;
+    }
     if (files_equal(temporary_path, config->config_path)) {
         (void)unlink(temporary_path);
         return ensure_config_mode(config->config_path, error, error_len, changed);

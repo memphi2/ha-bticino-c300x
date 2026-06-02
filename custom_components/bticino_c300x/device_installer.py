@@ -143,6 +143,7 @@ def _install_device_agent_sync(
         if request.apply_firewall_patch:
             _apply_firewall_patch_sync(client, request.remote_dir, request.agent_port)
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
+        _verify_startup_sync(client)
 
         if request.apply_gui_patch:
             client.run(
@@ -663,6 +664,21 @@ def _remote_symlink_target_matches_sync(
     except C300XDeviceInstallError:
         return False
     return output.strip().splitlines()[-1:] == [target_path]
+
+
+def _verify_startup_sync(client: _DeviceSshClient) -> None:
+    """Verify that the freshly installed agent is running and boot-persistent."""
+
+    try:
+        link_target = client.run(f"readlink {_quote(REMOTE_INIT_LINK)}")
+    except C300XDeviceInstallError as err:
+        raise C300XDeviceInstallError("device_install_verify_failed") from err
+    if link_target.strip().splitlines()[-1:] != [REMOTE_INIT_SCRIPT]:
+        raise C300XDeviceInstallError("device_install_verify_failed")
+    try:
+        client.run(f"{_quote(REMOTE_INIT_SCRIPT)} status")
+    except C300XDeviceInstallError as err:
+        raise C300XDeviceInstallError("device_install_verify_failed") from err
 
 
 def _apply_firewall_patch_sync(

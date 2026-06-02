@@ -20,6 +20,13 @@ def test_services_yaml_places_stair_light_address_on_stair_light_service() -> No
     assert "\n    address:\n" not in sections["unlock_door"]
 
 
+def test_services_yaml_exposes_doorbell_video_activation() -> None:
+    sections = _services_yaml_sections()
+
+    assert "activate_doorbell_video" in sections
+    assert "\n    audio:\n" in sections["activate_doorbell_video"]
+
+
 def test_services_yaml_exposes_latest_video_message_play_and_delete() -> None:
     sections = _services_yaml_sections()
 

@@ -13,17 +13,20 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stub
 
 from .action import ActionValidationError, validate_action_map
 from .const import CONF_ACTIONS, CONF_ALARM_ENTITY_ID, DOMAIN
+from .data import callback_target_is_clean_local_http
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
+UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
         MISSING_ALARM_ENTITY_ISSUE,
         AGENT_CAPABILITY_MISMATCH_ISSUE,
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+        UNSUPPORTED_CALLBACK_URL_ISSUE,
     }
 )
 
@@ -45,6 +48,7 @@ def async_sync_entry_repair_issues(
     _sync_missing_alarm_entity_issue(hass, entry)
     _sync_agent_capability_issue(hass, entry)
     _sync_device_agent_update_issue(hass, entry)
+    _sync_unsupported_callback_url_issue(hass, entry)
 
 
 @callback
@@ -145,6 +149,56 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> 
         is_fixable=getattr(update_state, "repair_fixable", False),
         placeholders=update_state.repair_placeholders,
     )
+
+
+def _sync_unsupported_callback_url_issue(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    callback_problem = _callback_problem(entry)
+    if callback_problem is None:
+        async_delete_repair_issue(hass, entry.entry_id, UNSUPPORTED_CALLBACK_URL_ISSUE)
+        return
+    _create_issue(
+        hass,
+        entry,
+        UNSUPPORTED_CALLBACK_URL_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        placeholders=callback_problem,
+    )
+
+
+def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return None
+    checks = (
+        (
+            "event subscription",
+            getattr(runtime_data, "connection_state", None),
+            "event_subscription_callback_scheme",
+            "event_subscription_callback_host_type",
+        ),
+        (
+            "display bridge",
+            getattr(runtime_data, "display_bridge_diagnostics", None),
+            "callback_scheme",
+            "callback_host_type",
+        ),
+    )
+    for source, holder, scheme_attr, host_type_attr in checks:
+        if holder is None:
+            continue
+        scheme = getattr(holder, scheme_attr, None)
+        host_type = getattr(holder, host_type_attr, None)
+        clean = callback_target_is_clean_local_http(scheme, host_type)
+        if clean is False:
+            return {
+                "source": source,
+                "scheme": str(scheme or "missing"),
+                "host_type": str(host_type or "unknown"),
+            }
+    return None
 
 
 def _create_issue(

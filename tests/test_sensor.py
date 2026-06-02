@@ -293,6 +293,7 @@ class _FakeConnectionState:
     available: bool = True
     connection_state: str = "connected"
     reconnect_count: int = 0
+    last_connection_stage: str | None = None
     last_reconnect_reason: str | None = None
     last_connection_error: str | None = None
     next_reconnect_delay_seconds: int | None = None
@@ -393,6 +394,7 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
     assert entity.extra_state_attributes == {
         "reason": "agent_ok",
         "connection_state": "connected",
+        "last_connection_stage": None,
         "last_connection_error": None,
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
@@ -418,6 +420,7 @@ def test_agent_status_sensor_reports_connection_errors() -> None:
                 available=False,
                 connection_state="disconnected",
                 reconnect_count=3,
+                last_connection_stage="agent_api",
                 last_reconnect_reason="ClientConnectorError",
                 last_connection_error="ClientConnectorError: connection refused",
                 next_reconnect_delay_seconds=300,
@@ -429,10 +432,36 @@ def test_agent_status_sensor_reports_connection_errors() -> None:
     assert entity.available is True
     assert entity.native_value == "error"
     assert entity.extra_state_attributes["reason"] == "agent_disconnected"
+    assert entity.extra_state_attributes["last_connection_stage"] == "agent_api"
     assert entity.extra_state_attributes["last_connection_error"] == (
         "ClientConnectorError: connection refused"
     )
     assert entity.extra_state_attributes["next_reconnect_delay_seconds"] == 300
+
+
+def test_agent_status_sensor_reports_event_subscription_errors() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            connection_state=_FakeConnectionState(
+                available=True,
+                connection_state="reconnecting",
+                last_connection_stage="event_subscription",
+                last_reconnect_reason="event_subscription_registration",
+                last_connection_error="device agent returned HTTP 404",
+                next_reconnect_delay_seconds=30,
+            )
+        )
+    )
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "warning"
+    assert entity.extra_state_attributes["reason"] == "agent_reconnecting"
+    assert entity.extra_state_attributes["last_connection_stage"] == (
+        "event_subscription"
+    )
+    assert entity.extra_state_attributes["last_reconnect_reason"] == (
+        "event_subscription_registration"
+    )
 
 
 def test_agent_status_sensor_warns_for_pending_update() -> None:

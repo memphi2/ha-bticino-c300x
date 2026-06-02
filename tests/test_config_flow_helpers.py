@@ -79,6 +79,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _agent_auth_input,
     _agent_auth_schema,
     _async_qml_patch_description_placeholders,
+    _async_probe_agent,
     _bootstrap_install_schema,
     _clear_reconfigured_option_overrides,
     _connection_input,
@@ -103,6 +104,8 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _stair_light_address,
     _weather_entity_id,
 )
+from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
+from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
@@ -127,6 +130,55 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     DEFAULT_VIDEO_STREAM_PATH,
 )
 from homeassistant.const import CONF_NAME  # noqa: E402
+
+
+def test_probe_agent_requires_event_subscription_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    aiohttp_client = sys.modules.setdefault(
+        "homeassistant.helpers.aiohttp_client",
+        types.ModuleType("homeassistant.helpers.aiohttp_client"),
+    )
+    aiohttp_client.async_get_clientsession = lambda _hass: object()
+
+    class FakeApi:
+        def __init__(
+            self,
+            _session: object,
+            base_url: str,
+            token: str,
+        ) -> None:
+            calls.append(f"api:{base_url}:{token}")
+
+        async def async_validate_setup(self) -> dict[str, object]:
+            calls.append("capabilities")
+            return {"device_id": "c300x-test"}
+
+        async def async_list_event_subscriptions(self) -> dict[str, object]:
+            calls.append("subscriptions")
+            raise C300XAgentApiConnectionError("device agent returned HTTP 404")
+
+    monkeypatch.setattr(config_flow_module, "C300XAgentApi", FakeApi)
+
+    result = asyncio.run(
+        _async_probe_agent(
+            SimpleNamespace(),
+            {
+                CONF_AGENT_HOST: "c300x.local",
+                CONF_AGENT_PORT: 8091,
+                CONF_AGENT_USE_SSL: False,
+            },
+            api_token="agent-token",
+        )
+    )
+
+    assert result == "missing"
+    assert calls == [
+        "api:http://c300x.local:8091:agent-token",
+        "capabilities",
+        "subscriptions",
+    ]
 
 
 def test_stair_light_address_accepts_firmware_default() -> None:

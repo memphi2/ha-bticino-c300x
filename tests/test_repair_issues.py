@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import types
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 if "homeassistant.core" not in sys.modules:
@@ -81,11 +82,16 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
 )
+from custom_components.bticino_c300x.data import (  # noqa: E402
+    C300XCallbackDiagnostics,
+    C300XConnectionState,
+)
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
+    UNSUPPORTED_CALLBACK_URL_ISSUE,
     async_sync_entry_repair_issues,
     repair_issue_id,
 )
@@ -101,6 +107,7 @@ class FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=lambda: {"doorbell_events": True})
     agent_update_state: AgentUpdateState | None = None
     connection_state: Any | None = None
+    display_bridge_diagnostics: Any | None = None
 
 
 @dataclass(slots=True)
@@ -282,3 +289,43 @@ def test_agent_update_up_to_date_clears_repair_issue() -> None:
     async_sync_entry_repair_issues(FakeHass(), entry)
 
     assert repair_issue_id(DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+
+
+def test_unsupported_callback_url_creates_repair_issue() -> None:
+    connection_state = C300XConnectionState()
+    connection_state.mark_event_subscription_attempt(
+        "https://homeassistant.local:8123/api/webhook/private",
+        1,
+        datetime(2026, 6, 2, tzinfo=UTC),
+    )
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(connection_state=connection_state),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["translation_key"] == UNSUPPORTED_CALLBACK_URL_ISSUE
+    assert issue["translation_placeholders"]["scheme"] == "https"
+    assert issue["translation_placeholders"]["host_type"] == "mdns"
+
+
+def test_clean_callback_url_clears_repair_issue() -> None:
+    display_bridge = C300XCallbackDiagnostics()
+    display_bridge.mark_callback_attempt(
+        "http://192.0.2.10:8123/api/webhook/private",
+        datetime(2026, 6, 2, tzinfo=UTC),
+    )
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(display_bridge_diagnostics=display_bridge),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )

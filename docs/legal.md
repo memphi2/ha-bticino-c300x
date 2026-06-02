@@ -50,6 +50,19 @@ Third-party project references belong in documentation, tests, or issue
 discussion. Runtime code should stay project-owned and should not embed copied
 controller implementation files.
 
+## Media codecs and patents
+
+The C300X media bridge transports the device-provided RTP/RTSP media stream.
+The project does not ship codec binaries, FFmpeg binaries, OpenH264/x264
+binaries, or copied codec implementation source code.
+
+Doorbell video is exposed as the device-provided H.264/AVC stream and decoded by
+the user's Home Assistant runtime/browser media stack. Talkback audio uses
+Speex/8000 RTP toward the device. The Apache-2.0 license for this repository
+does not grant any third-party codec patent licenses. Users and distributors are
+responsible for codec availability and any jurisdiction-specific patent or
+licensing requirements.
+
 ## Repository gate
 
 `scripts/check_repo.py` is the local and CI gate for this policy. It rejects

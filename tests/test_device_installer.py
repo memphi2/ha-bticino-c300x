@@ -128,6 +128,8 @@ def test_bootstrap_install_uses_python_ssh_client(
 
         def run(self, command: str, input_data: bytes | None = None) -> str:
             self.commands.append((command, input_data))
+            if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
+                return f"{device_installer.REMOTE_INIT_SCRIPT}\n"
             return ""
 
         def put_file(
@@ -237,6 +239,8 @@ def test_bootstrap_install_uses_python_ssh_client(
     )
     assert f"{remote_dir}/config.json.new" in config_write[0]
     assert any(command[0] == "/etc/init.d/c300x-native-agent restart" for command in fake_client.commands)
+    assert any(command[0] == f"readlink {device_installer.REMOTE_INIT_LINK}" for command in fake_client.commands)
+    assert any(command[0] == f"{device_installer.REMOTE_INIT_SCRIPT} status" for command in fake_client.commands)
     assert any(
         command[0]
         == (
@@ -252,6 +256,67 @@ def test_bootstrap_install_uses_python_ssh_client(
     assert f"{remote_dir}/c300x-agent.env" in result.installed_files
     assert f"{remote_dir}/config.json" in result.changed_files
     assert device_installer.REMOTE_INIT_SCRIPT in result.changed_files
+
+
+def test_bootstrap_install_fails_when_startup_link_is_missing(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    remote_dir = "/home/bticino/cfg/extra/custom-agent"
+
+    class FakeSshClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            if command == f"readlink {device_installer.REMOTE_INIT_LINK}":
+                return ""
+            return ""
+
+        def put_file(
+            self,
+            source: Path,
+            remote_path: str,
+            mode: str | None = None,
+        ) -> bool:
+            return True
+
+        def close(self) -> None:
+            pass
+
+    payload = tmp_path / "payload"
+    payload.write_text("payload", encoding="utf-8")
+    init_script = tmp_path / "c300x-native-agent"
+    init_script.write_text(
+        '#!/bin/sh\n'
+        f'DEFAULT_AGENT_DIR="{DEFAULT_REMOTE_DIR}"\n',
+        encoding="utf-8",
+    )
+    bundle = device_installer._ResolvedBundle(
+        (device_installer._PayloadFile(payload, f"{remote_dir}/c300x-agent-native", "700"),),
+        init_script,
+    )
+    monkeypatch.setattr(device_installer, "_resolve_bundle", lambda _remote_dir: bundle)
+    monkeypatch.setattr(
+        device_installer,
+        "_connect_device_client",
+        lambda _request: FakeSshClient(),
+    )
+
+    try:
+        asyncio.run(
+            async_install_device_agent(
+                C300XDeviceInstallRequest(
+                    host="c300x.local",
+                    ssh_username="root",
+                    ssh_password="secret",
+                    remote_dir=remote_dir,
+                ),
+                api_token="api-token",
+                maintenance_token="maintenance-token",
+            )
+        )
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_verify_failed"
+    else:
+        raise AssertionError("Expected device_install_verify_failed")
 
 
 def test_write_remote_file_skips_identical_content() -> None:

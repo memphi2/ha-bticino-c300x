@@ -72,3 +72,23 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
     assert client_body.index("if (busy)") < client_body.index(
         "c300x_video_bridge_client_connected"
     )
+
+
+def test_native_agent_sip_uses_configured_flexisip_endpoint_and_identities() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    setup_body = media_bridge[
+        media_bridge.index("static bool send_sip_setup") :
+        media_bridge.index("static bool send_bt_av_media_command")
+    ]
+
+    assert "sip_domain_from_config(bridge->config" in setup_body
+    assert "bridge->config->video_sip_from" in setup_body
+    assert "bridge->config->video_sip_to" in setup_body
+    assert "sip_local_endpoint_from_config(bridge->config" in setup_body
+    assert "connect_sip_socket(bridge->config)" in setup_body
+    assert '"Via: SIP/2.0/%s %s:%u' in setup_body
+    assert '"Contact: <sip:%s@%s;transport=%s>' in setup_body
+    assert '"sip:webrtc@' not in media_bridge
+    assert '"sip:c300x@127.0.0.1"' not in media_bridge

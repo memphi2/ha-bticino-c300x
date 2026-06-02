@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from asyncio import Task
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -124,6 +125,11 @@ class _AgentEventRegistration:
             self._entry,
             self._capabilities,
         )
+        self._connection_state.mark_event_subscription_attempt(
+            base_url,
+            len(registration_events),
+            datetime.now(UTC),
+        )
         if registration_events:
             self._subscription_id = await _ensure_subscription(
                 self._api,
@@ -134,17 +140,25 @@ class _AgentEventRegistration:
         else:
             await _remove_inactive_subscriptions(self._api, callback_url=base_url)
             self._subscription_id = None
+        self._connection_state.mark_event_subscription_success(
+            self._subscription_id,
+            len(registration_events),
+            base_url,
+            datetime.now(UTC),
+        )
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._send_connection_state_changed()
         await async_refresh_agent_diagnostics(self._hass, self._entry)
 
     def _handle_registration_failure(self, err: Exception) -> None:
-        _LOGGER.debug("C300X event registration failed: %s", err)
+        error = compact_error_text(err)
+        _LOGGER.warning("C300X event registration failed: %s", error)
+        self._connection_state.mark_event_subscription_failure(datetime.now(UTC), error)
         self._connection_state.mark_reconnecting(
-            type(err).__name__,
+            "event_subscription_registration",
             self._retry_delay_seconds,
-            compact_error_text(err),
+            error,
         )
         _schedule_unavailable_expiry(
             self._hass,
@@ -187,11 +201,11 @@ class _AgentEventRegistration:
             self._registry_refresh_cancel = None
 
     def _send_connection_state_changed(self) -> None:
-        async_dispatcher_send(
+        _send_connection_state_changed(
             self._hass,
-            SIGNAL_CONNECTION_STATE_CHANGED,
             self._entry.entry_id,
         )
+        _sync_repair_issues(self._hass, self._entry)
 
 
 def _async_listen_entity_registry_updates(
@@ -411,13 +425,41 @@ def _schedule_unavailable_expiry(
     def _expire(now: Any = None) -> None:
         connection_state.expire_unavailable = None
         connection_state.mark_unavailable()
-        async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
+        _send_connection_state_changed(hass, entry.entry_id)
+        _sync_repair_issues(hass, entry)
 
     connection_state.expire_unavailable = async_call_later(
         hass,
         DEFAULT_RECONNECT_GRACE_SECONDS,
         _expire,
     )
+
+
+def _send_connection_state_changed(hass: HomeAssistant, entry_id: str) -> None:
+    """Notify HA entities even when called from a scheduler thread."""
+
+    add_job = getattr(hass, "add_job", None)
+    if callable(add_job):
+        add_job(
+            async_dispatcher_send,
+            hass,
+            SIGNAL_CONNECTION_STATE_CHANGED,
+            entry_id,
+        )
+        return
+    async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry_id)
+
+
+def _sync_repair_issues(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Refresh repair issues after callback diagnostics change."""
+
+    if not hasattr(entry, "runtime_data"):
+        return
+    try:
+        from .repair_issues import async_sync_entry_repair_issues
+    except ImportError:
+        return
+    async_sync_entry_repair_issues(hass, entry)
 
 
 def _subscription_id(response: dict[str, Any]) -> str | None:

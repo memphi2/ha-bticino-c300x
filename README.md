@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v0.3.3-0366d6?style=flat-square)](.github/release-notes/v0.3.3.md)
+[![Release](https://img.shields.io/badge/release-v0.4.0-0366d6?style=flat-square)](.github/release-notes/v0.4.0.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.3.3`
+- Current release line: `0.4.0`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -39,6 +39,8 @@ no fake Home Assistant entities.
 - Doorbell ring events and on-demand doorbell camera.
 - WebRTC-facing Home Assistant camera path, with the native RTSP bridge started
   only when video is needed.
+- Two-way audio/talkback through the Home Assistant WebRTC camera path, when the
+  browser or mobile app has microphone access.
 - Door unlock and stair-light actions.
 - Ringer mute, smartphone forwarding, answering machine and message support.
 - Video-message playback/delete, voice-memo playback/delete and text-memo
@@ -119,7 +121,8 @@ Exact entities depend on the capabilities reported by your installed agent.
 
 The integration also registers services for door unlock, stair light, Alarmo
 commands, dashboard actions, latest video-message playback/delete, latest
-voice-memo playback/delete and latest text-memo delete.
+voice-memo playback/delete, latest text-memo delete and explicit doorbell-video
+activation for automations.
 
 ## Recommended Installation
 
@@ -236,6 +239,45 @@ renders the target files, compares byte-for-byte, writes only changed files,
 remounts the root filesystem writable only for the final copy, and returns it to
 read-only immediately afterwards.
 
+## Doorbell Video and Talkback Automation
+
+The `bticino_c300x.activate_doorbell_video` service starts or renews the C300X
+doorbell video session without waiting for the camera entity to be opened. Use
+it in ring automations to pre-warm video before sending a notification or
+opening a dashboard view.
+
+Example:
+
+```yaml
+alias: C300X ring video prewarm
+mode: restart
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+action:
+  - service: bticino_c300x.activate_doorbell_video
+    data:
+      audio: true
+  - service: notify.mobile_app_phone
+    data:
+      title: Doorbell
+      message: Someone is at the door.
+      data:
+        entity_id: camera.bticino_c300x_doorbell_camera
+```
+
+Two-way audio uses the camera WebRTC path. Requirements:
+
+- Doorbell camera/video enabled in the integration options.
+- Native agent reports `doorbell_video` and talkback support.
+- The user opens the camera through Home Assistant WebRTC.
+- Browser or mobile app has microphone permission.
+- For browser microphone access, use HTTPS, Home Assistant Cloud, or another
+  secure Home Assistant frontend URL. Plain HTTP frontends generally cannot
+  grant microphone access except for browser-specific localhost exceptions.
+
 ### MQTT Migration
 
 Some rooted Classe 300X devices already have an older community MQTT patch
@@ -283,6 +325,19 @@ link-local callback URLs such as addresses that require an interface suffix.
 The IPv6 firewall patch should only be enabled when the device and your network
 are actually configured for IPv6, and the agent must still remain on a trusted
 local network.
+
+## Callback and Video Addressing
+
+Do not configure Home Assistant callbacks or C300X media paths through
+`homeassistant.local`, other `.local` names, or link-local addresses. They can
+resolve differently for Home Assistant, the C300X, browsers and HA Cloud, which
+can leave event subscriptions registered to an address the device cannot call
+back or make video/talkback unstable.
+
+Use a stable local IPv4 address or a stable ULA/global IPv6 address for the Home
+Assistant URL used by this integration. The diagnostics page reports the
+callback host type and whether the subscription callback looks like a clean
+local HTTP address.
 
 ## Security Model
 
@@ -373,8 +428,8 @@ possible, and leaves SSH available so the device remains reachable.
   a capability through `/api/v1/capabilities`, Home Assistant will not create the
   matching entity.
 - Camera issues: keep video enabled in the integration options and avoid
-  link-local callback/stream URLs, especially with HA Cloud or mixed IPv4/IPv6
-  networks.
+  `.local`, mDNS or link-local callback/stream URLs, especially with HA Cloud or
+  mixed IPv4/IPv6 networks.
 - Memo/message issues: updates are event-driven. Check the subscription state
   and the agent capabilities; there should be no periodic memo scan.
 
@@ -399,6 +454,11 @@ This repository is an independent community project.
   attribution, or descriptive reference and belong to their respective owners.
 - This repository does not include vendor firmware, extracted firmware, APKs,
   third-party controller source trees, local device backups, or secrets.
+- This repository does not ship codec binaries or codec implementation source
+  code. Doorbell media uses the device-provided H.264/AVC stream and the user's
+  Home Assistant/browser media stack; users and distributors are responsible for
+  codec availability and any jurisdiction-specific patent or licensing
+  requirements.
 - License: Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 See [docs/legal.md](docs/legal.md) for the full legal and asset-hygiene notes.

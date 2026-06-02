@@ -5053,6 +5053,7 @@ static void handle_legacy_mqtt_post(
     int native_config_changed = 0;
     int should_start_legacy = 0;
     int should_stop_legacy = 0;
+    int was_running = 0;
     char error[C300X_MAX_ERROR_LEN];
 
     if (!maintenance_authorized(config, request)) {
@@ -5086,6 +5087,7 @@ static void handle_legacy_mqtt_post(
             record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
         }
     }
+    was_running = legacy_mqtt_running();
     firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
     if (enabled) {
         if (!legacy_mqtt_enable_patch(&changed)) {
@@ -5093,7 +5095,7 @@ static void handle_legacy_mqtt_post(
             send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_enable_failed\"}\n");
             return;
         }
-        should_start_legacy = 1;
+        should_start_legacy = !was_running;
     } else {
         if (!legacy_mqtt_disable_patch(&changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);

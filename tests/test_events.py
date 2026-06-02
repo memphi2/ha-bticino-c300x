@@ -187,6 +187,11 @@ class _FakeConnectionState:
     available: bool = True
     connection_state: str = "connected"
     reconnect_count: int = 0
+    event_subscription_event_count: int | None = None
+    event_subscription_last_attempt_at: Any = None
+    event_subscription_last_success_at: Any = None
+    event_subscription_last_failure_at: Any = None
+    event_subscription_last_error: str | None = None
     last_connection_error: str | None = None
     last_reconnect_reason: str | None = None
     next_reconnect_delay_seconds: int | None = None
@@ -213,16 +218,53 @@ class _FakeConnectionState:
         if self.connection_state == "reconnecting":
             self.available = False
 
+    def mark_event_subscription_attempt(
+        self,
+        _callback_url: str,
+        event_count: int,
+        now: Any,
+    ) -> None:
+        self.event_subscription_event_count = event_count
+        self.event_subscription_last_attempt_at = now
+
+    def mark_event_subscription_success(
+        self,
+        _subscription_id: str | None,
+        event_count: int,
+        _callback_url: str,
+        now: Any,
+    ) -> None:
+        self.event_subscription_event_count = event_count
+        self.event_subscription_last_success_at = now
+
+    def mark_event_subscription_failure(
+        self,
+        now: Any,
+        error: str | None = None,
+    ) -> None:
+        self.event_subscription_last_failure_at = now
+        self.event_subscription_last_error = error
+
 
 class _FakeHass(HomeAssistant):
     def __init__(self) -> None:
         self.async_tasks: list[asyncio.Task[Any]] = []
         self.bus = _FakeBus()
+        self.entity_registry = None
 
     def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
         task = asyncio.create_task(coro)
         self.async_tasks.append(task)
         return task
+
+
+class _ThreadSafeFakeHass(_FakeHass):
+    def __init__(self) -> None:
+        super().__init__()
+        self.jobs: list[tuple[Any, tuple[Any, ...]]] = []
+
+    def add_job(self, func: Any, *args: Any) -> None:
+        self.jobs.append((func, args))
 
 
 class _FakeBus:
@@ -318,6 +360,30 @@ def test_async_start_agent_event_registration_reuses_persisted_subscription() ->
         )
     ]
     assert fake_scheduler.calls == []
+
+
+def test_unavailable_expiry_schedules_dispatcher_thread_safely() -> None:
+    hass = _ThreadSafeFakeHass()
+    entry = _FakeEntry()
+    state = _FakeConnectionState(connection_state="reconnecting")
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+
+    events_module._schedule_unavailable_expiry(  # noqa: SLF001
+        hass,  # type: ignore[arg-type]
+        entry,  # type: ignore[arg-type]
+        state,  # type: ignore[arg-type]
+    )
+    fake_scheduler.calls[0].callback()
+
+    assert state.available is False
+    assert fake_dispatcher.signals == []
+    assert len(hass.jobs) == 1
+    func, args = hass.jobs[0]
+    func(*args)
+    assert fake_dispatcher.signals == [
+        ("bticino_c300x_connection_state_changed", "entry-1")
+    ]
 
 
 def test_async_start_agent_event_registration_replaces_duplicate_subscriptions() -> None:
@@ -600,6 +666,8 @@ def test_async_start_agent_event_registration_reconnects_with_backoff() -> None:
 
     asyncio.run(start())
     assert connection_state.connection_state == "reconnecting"
+    assert connection_state.last_reconnect_reason == "event_subscription_registration"
+    assert connection_state.last_connection_error == "RuntimeError: down"
     assert connection_state.next_reconnect_delay_seconds == 30
     assert len(fake_scheduler.calls) == 2
     assert sorted(call.delay for call in fake_scheduler.calls) == [15, 30]

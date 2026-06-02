@@ -340,6 +340,9 @@
     "gui_function_patch_required": {
       "message": "Diese Aktion benoetigt den C300X-GUI-Funktionspatch. Aktiviere und wende den GUI-Patch zuerst in den Integrationsoptionen an."
     },
+    "doorbell_video_not_available": {
+      "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstuetzt."
+    },
     "entry_id_required": {
       "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Eintraege existieren."
     },
@@ -410,6 +413,10 @@
     "missing_alarm_entity": {
       "title": "Konfigurierte C300X Alarm-Entitaet fehlt",
       "description": "{entry_title} verweist auf {entity_id}, aber Home Assistant kennt diese Entitaet nicht. Waehle in den Integrationsoptionen eine vorhandene Alarm-Control-Panel-Entitaet oder leere die Alarm-Einstellung."
+    },
+    "unsupported_callback_url": {
+      "title": "C300X Callback-URL ist fuer den Device-Agent nicht nutzbar",
+      "description": "{entry_title} hat fuer {source} ein nicht unterstuetztes Callback-Ziel erzeugt. Der native Device-Agent braucht eine lokale HTTP-Callback-URL. Aktuelles Callback-Schema: {scheme}; Host-Typ: {host_type}. Konfiguriere Home Assistant mit einer lokalen HTTP-URL, die vom C300X erreichbar ist, und vermeide HTTPS, .local, Loopback und Link-Local-Callback-Adressen."
     }
   }
 }

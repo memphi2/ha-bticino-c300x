@@ -22,7 +22,7 @@
 #define RTSP_BUFFER_SIZE 8192
 #define SIP_BUFFER_SIZE 8192
 #define SIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
-#define SIP_PORT 5060
+#define DEFAULT_SIP_PORT 5060
 #define BT_AV_MEDIA_PORT 30007
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
 #define TALKBACK_TARGET_PORT 4000
@@ -30,6 +30,8 @@
 static bool sip_video_call_enabled(void) {
     return true;
 }
+
+static bool read_sip_domain(char *domain, size_t domain_len);
 
 static bool rtsp_peer_ipv4_address(
     const struct sockaddr_storage *peer,
@@ -95,10 +97,15 @@ typedef struct {
     struct sockaddr_in udp_client;
     char session_id[32];
     char domain[128];
+    char from_aor[256];
+    char to_aor[256];
+    char sip_local_ip[64];
+    char sip_transport[4];
+    uint16_t sip_local_port;
     char call_id[128];
     char from_tag[64];
     char to_header[512];
-    char contact_uri[256];
+    char contact_uri[512];
     int invite_cseq;
     const struct c300x_config *config;
     struct c300x_video *video;
@@ -146,6 +153,152 @@ static int connect_local_tcp(int port) {
         return -1;
     }
 
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static bool copy_checked(char *out, size_t out_len, const char *value) {
+    if (out == NULL || out_len == 0 || value == NULL) {
+        return false;
+    }
+    if (snprintf(out, out_len, "%s", value) >= (int)out_len) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+static bool sip_string_is_safe(const char *value) {
+    if (value == NULL || value[0] == '\0') {
+        return false;
+    }
+    for (const char *ptr = value; *ptr != '\0'; ptr++) {
+        if (*ptr == ' ' || *ptr == '\t' || *ptr == '\r' || *ptr == '\n' || *ptr == '<' || *ptr == '>') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool sip_domain_from_config(
+    const struct c300x_config *config,
+    char *domain,
+    size_t domain_len
+) {
+    if (config != NULL && config->video_sip_domain[0] != '\0') {
+        return copy_checked(domain, domain_len, config->video_sip_domain) && sip_string_is_safe(domain);
+    }
+    return read_sip_domain(domain, domain_len);
+}
+
+static bool sip_local_endpoint_from_config(
+    const struct c300x_config *config,
+    char *local_ip,
+    size_t local_ip_len,
+    uint16_t *local_port,
+    const char **transport
+) {
+    const char *configured_ip = "127.0.0.1";
+    uint16_t configured_port = DEFAULT_SIP_PORT;
+
+    if (config != NULL && config->video_sip_local_ip[0] != '\0') {
+        configured_ip = config->video_sip_local_ip;
+    }
+    if (strcmp(configured_ip, "localhost") == 0) {
+        configured_ip = "127.0.0.1";
+    }
+    if (!copy_checked(local_ip, local_ip_len, configured_ip)) {
+        return false;
+    }
+    if (config != NULL && config->video_sip_local_port != 0) {
+        configured_port = config->video_sip_local_port;
+    }
+    if (local_port != NULL) {
+        *local_port = configured_port;
+    }
+    if (transport != NULL) {
+        *transport = (config == NULL || config->video_sip_use_tcp) ? "TCP" : "UDP";
+    }
+    return true;
+}
+
+static bool sip_identity_from_config(
+    const char *configured,
+    const char *domain,
+    const char *fallback_user,
+    char *user,
+    size_t user_len,
+    char *aor,
+    size_t aor_len
+) {
+    char identity[256];
+    char host[128];
+    const char *value = (configured != NULL && configured[0] != '\0') ? configured : fallback_user;
+    const char *body = value;
+    const char *at;
+    size_t value_len;
+    size_t host_len;
+
+    if (strncasecmp(body, "sip:", 4) == 0) {
+        body += 4;
+    }
+    if (!copy_checked(identity, sizeof(identity), body) || !sip_string_is_safe(identity)) {
+        return false;
+    }
+    at = strchr(identity, '@');
+    if (at == NULL) {
+        if (!copy_checked(user, user_len, identity) || !copy_checked(host, sizeof(host), domain)) {
+            return false;
+        }
+    } else {
+        value_len = (size_t)(at - identity);
+        if (value_len == 0 || value_len >= user_len) {
+            return false;
+        }
+        memcpy(user, identity, value_len);
+        user[value_len] = '\0';
+        host_len = strlen(at + 1);
+        if (host_len == 0 || strcmp(at + 1, "127.0.0.1") == 0 || strcmp(at + 1, "localhost") == 0) {
+            if (!copy_checked(host, sizeof(host), domain)) {
+                return false;
+            }
+        } else if (!copy_checked(host, sizeof(host), at + 1)) {
+            return false;
+        }
+    }
+    if (!sip_string_is_safe(user) || !sip_string_is_safe(host)) {
+        return false;
+    }
+    return snprintf(aor, aor_len, "%s@%s", user, host) < (int)aor_len;
+}
+
+static int connect_sip_socket(const struct c300x_config *config) {
+    char local_ip[64];
+    uint16_t local_port;
+    const char *transport;
+    int type;
+    int fd;
+    struct sockaddr_in addr;
+
+    if (!sip_local_endpoint_from_config(config, local_ip, sizeof(local_ip), &local_port, &transport)) {
+        return -1;
+    }
+    type = strcmp(transport, "TCP") == 0 ? SOCK_STREAM : SOCK_DGRAM;
+    fd = socket(AF_INET, type, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(local_port);
+    if (inet_pton(AF_INET, local_ip, &addr.sin_addr) != 1) {
+        close(fd);
+        return -1;
+    }
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         close(fd);
         return -1;
@@ -315,33 +468,55 @@ static void cseq_method_value(const char *message, char *out, size_t out_len) {
 
 static void send_sip_ack(
     int fd,
-    const char *domain,
+    const char *from_aor,
+    const char *to_aor,
+    const char *local_ip,
+    uint16_t local_port,
+    const char *transport,
     const char *to_header,
     const char *from_tag,
     const char *call_id,
     const char *contact_uri,
     int cseq
 ) {
-    if (fd < 0 || domain[0] == '\0' || to_header[0] == '\0' || from_tag[0] == '\0' || call_id[0] == '\0') {
+    if (
+        fd < 0
+        || from_aor[0] == '\0'
+        || to_aor[0] == '\0'
+        || local_ip[0] == '\0'
+        || transport[0] == '\0'
+        || to_header[0] == '\0'
+        || from_tag[0] == '\0'
+        || call_id[0] == '\0'
+    ) {
         return;
     }
-    const char *request_uri = (contact_uri != NULL && contact_uri[0] != '\0') ? contact_uri : "sip:c300x@127.0.0.1";
+    char fallback_uri[512];
+    const char *request_uri = contact_uri != NULL && contact_uri[0] != '\0' ? contact_uri : fallback_uri;
+    if (contact_uri == NULL || contact_uri[0] == '\0') {
+        if (snprintf(fallback_uri, sizeof(fallback_uri), "sip:%s", to_aor) >= (int)sizeof(fallback_uri)) {
+            return;
+        }
+    }
     char request[1024];
     snprintf(
         request,
         sizeof(request),
         "ACK %s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKack%ld;rport\r\n"
+        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKack%ld;rport\r\n"
         "Max-Forwards: 70\r\n"
         "To: %s\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
+        "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: %d ACK\r\n"
         "Content-Length: 0\r\n\r\n",
         request_uri,
+        transport,
+        local_ip,
+        local_port,
         (long)time(NULL),
         to_header,
-        domain,
+        from_aor,
         from_tag,
         call_id,
         cseq
@@ -392,17 +567,25 @@ static void *sip_monitor_thread(void *arg) {
     while (true) {
         int fd;
         bool stop;
-        char domain[128];
+        char from_aor[256];
+        char to_aor[256];
+        char local_ip[64];
+        char transport[4];
+        uint16_t local_port;
         char call_id[128];
         char from_tag[64];
         char to_header[512];
-        char contact_uri[256];
+        char contact_uri[512];
         int invite_cseq;
 
         pthread_mutex_lock(&bridge->mutex);
         fd = bridge->sip_fd;
         stop = bridge->sip_stop;
-        snprintf(domain, sizeof(domain), "%s", bridge->domain);
+        snprintf(from_aor, sizeof(from_aor), "%s", bridge->from_aor);
+        snprintf(to_aor, sizeof(to_aor), "%s", bridge->to_aor);
+        snprintf(local_ip, sizeof(local_ip), "%s", bridge->sip_local_ip);
+        snprintf(transport, sizeof(transport), "%s", bridge->sip_transport);
+        local_port = bridge->sip_local_port;
         snprintf(call_id, sizeof(call_id), "%s", bridge->call_id);
         snprintf(from_tag, sizeof(from_tag), "%s", bridge->from_tag);
         snprintf(to_header, sizeof(to_header), "%s", bridge->to_header);
@@ -425,7 +608,7 @@ static void *sip_monitor_thread(void *arg) {
         char cseq_method[16];
         cseq_method_value(message, cseq_method, sizeof(cseq_method));
         if (sip_status_code(message) == 200 && strcmp(cseq_method, "INVITE") == 0) {
-            send_sip_ack(fd, domain, to_header, from_tag, call_id, contact_uri, invite_cseq);
+            send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, invite_cseq);
             continue;
         }
 
@@ -452,11 +635,28 @@ static void *sip_monitor_thread(void *arg) {
 
 static bool send_sip_setup(media_bridge_t *bridge) {
     char domain[128];
-    if (!read_sip_domain(domain, sizeof(domain))) {
+    char from_user[128];
+    char from_aor[256];
+    char to_user[128];
+    char to_aor[256];
+    char local_ip[64];
+    uint16_t local_port;
+    const char *transport;
+
+    if (!sip_domain_from_config(bridge->config, domain, sizeof(domain))) {
+        return false;
+    }
+    if (!sip_identity_from_config(bridge->config->video_sip_from, domain, "webrtc", from_user, sizeof(from_user), from_aor, sizeof(from_aor))) {
+        return false;
+    }
+    if (!sip_identity_from_config(bridge->config->video_sip_to, domain, "c300x", to_user, sizeof(to_user), to_aor, sizeof(to_aor))) {
+        return false;
+    }
+    if (!sip_local_endpoint_from_config(bridge->config, local_ip, sizeof(local_ip), &local_port, &transport)) {
         return false;
     }
 
-    int fd = connect_local_tcp(SIP_PORT);
+    int fd = connect_sip_socket(bridge->config);
     if (fd < 0) {
         return false;
     }
@@ -464,7 +664,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     long unique_id = (long)time(NULL) ^ (long)getpid();
     char call_id[128];
     char from_tag[64];
-    snprintf(call_id, sizeof(call_id), "c300x%ld@127.0.0.1", unique_id);
+    snprintf(call_id, sizeof(call_id), "c300x%ld@%s", unique_id, local_ip);
     snprintf(from_tag, sizeof(from_tag), "agent%ld", unique_id);
 
     char request[4096];
@@ -473,23 +673,29 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         request,
         sizeof(request),
         "REGISTER sip:%s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKreg%ld;rport\r\n"
+        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKreg%ld;rport\r\n"
         "Max-Forwards: 70\r\n"
-        "To: <sip:webrtc@%s>\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
+        "To: <sip:%s>\r\n"
+        "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 20 REGISTER\r\n"
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
-        "Contact: <sip:webrtc@127.0.0.1;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:19609c0e-f27b-7595-e9c8269557c4240b>\"\r\n"
+        "Contact: <sip:%s@%s;transport=%s>;expires=300;+sip.instance=\"<urn:uuid:19609c0e-f27b-7595-e9c8269557c4240b>\"\r\n"
         "Expires: 300\r\n"
         "Content-Length: 0\r\n\r\n",
         domain,
+        transport,
+        local_ip,
+        local_port,
         unique_id,
-        domain,
-        domain,
+        from_aor,
+        from_aor,
         from_tag,
-        call_id
+        call_id,
+        from_user,
+        local_ip,
+        transport
     );
     if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) < 0) {
         close(fd);
@@ -505,9 +711,9 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         sdp,
         sizeof(sdp),
         "v=0\r\n"
-        "o=webrtc 3747 461 IN IP4 127.0.0.1\r\n"
+        "o=%s 3747 461 IN IP4 %s\r\n"
         "s=C300XAgent\r\n"
-        "c=IN IP4 127.0.0.1\r\n"
+        "c=IN IP4 %s\r\n"
         "t=0 0\r\n"
         "a=DEVADDR:%d\r\n"
         "m=audio 65000 RTP/SAVP 110\r\n"
@@ -518,30 +724,39 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         "a=fmtp:96 profile-level-id=42801F\r\n"
         "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:dummykey\r\n"
         "a=recvonly\r\n",
+        from_user,
+        local_ip,
+        local_ip,
         doorbell_devaddr(bridge->config)
     );
 
     snprintf(
         request,
         sizeof(request),
-        "INVITE sip:c300x@%s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKinv%ld;rport\r\n"
+        "INVITE sip:%s SIP/2.0\r\n"
+        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKinv%ld;rport\r\n"
         "Max-Forwards: 70\r\n"
-        "To: <sip:c300x@%s>\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
+        "To: <sip:%s>\r\n"
+        "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 21 INVITE\r\n"
         "Supported: replaces, outbound, gruu\r\n"
         "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO, UPDATE\r\n"
-        "Contact: <sip:webrtc@127.0.0.1;transport=TCP>\r\n"
+        "Contact: <sip:%s@%s;transport=%s>\r\n"
         "Content-Type: application/sdp\r\n"
         "Content-Length: %zu\r\n\r\n%s",
-        domain,
+        to_aor,
+        transport,
+        local_ip,
+        local_port,
         unique_id,
-        domain,
-        domain,
+        to_aor,
+        from_aor,
         from_tag,
         call_id,
+        from_user,
+        local_ip,
+        transport,
         strlen(sdp),
         sdp
     );
@@ -567,23 +782,28 @@ static bool send_sip_setup(media_bridge_t *bridge) {
 
     char to_header[512];
     char contact_header[512];
-    char contact_uri[256];
+    char contact_uri[512];
     header_value(response, "To:", to_header, sizeof(to_header));
     if (to_header[0] == '\0') {
-        snprintf(to_header, sizeof(to_header), "<sip:c300x@%s>", domain);
+        snprintf(to_header, sizeof(to_header), "<sip:%s>", to_aor);
     }
     header_value(response, "Contact:", contact_header, sizeof(contact_header));
     sip_uri_from_header(contact_header, contact_uri, sizeof(contact_uri));
     if (contact_uri[0] == '\0') {
-        snprintf(contact_uri, sizeof(contact_uri), "sip:c300x@%s", domain);
+        snprintf(contact_uri, sizeof(contact_uri), "sip:%s", to_aor);
     }
 
-    send_sip_ack(fd, domain, to_header, from_tag, call_id, contact_uri, 21);
+    send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, 21);
 
     pthread_mutex_lock(&bridge->mutex);
     bridge->sip_fd = fd;
     bridge->sip_stop = false;
     snprintf(bridge->domain, sizeof(bridge->domain), "%s", domain);
+    snprintf(bridge->from_aor, sizeof(bridge->from_aor), "%s", from_aor);
+    snprintf(bridge->to_aor, sizeof(bridge->to_aor), "%s", to_aor);
+    snprintf(bridge->sip_local_ip, sizeof(bridge->sip_local_ip), "%s", local_ip);
+    snprintf(bridge->sip_transport, sizeof(bridge->sip_transport), "%s", transport);
+    bridge->sip_local_port = local_port;
     snprintf(bridge->call_id, sizeof(bridge->call_id), "%s", call_id);
     snprintf(bridge->from_tag, sizeof(bridge->from_tag), "%s", from_tag);
     snprintf(bridge->to_header, sizeof(bridge->to_header), "%s", to_header);
@@ -652,32 +872,54 @@ static void send_bt_av_media_stop(void) {
 
 static void send_sip_bye(
     int fd,
-    const char *domain,
+    const char *from_aor,
+    const char *to_aor,
+    const char *local_ip,
+    uint16_t local_port,
+    const char *transport,
     const char *to_header,
     const char *from_tag,
     const char *call_id,
     const char *contact_uri
 ) {
-    if (fd < 0 || domain[0] == '\0' || to_header[0] == '\0' || from_tag[0] == '\0' || call_id[0] == '\0') {
+    if (
+        fd < 0
+        || from_aor[0] == '\0'
+        || to_aor[0] == '\0'
+        || local_ip[0] == '\0'
+        || transport[0] == '\0'
+        || to_header[0] == '\0'
+        || from_tag[0] == '\0'
+        || call_id[0] == '\0'
+    ) {
         return;
     }
-    const char *request_uri = (contact_uri != NULL && contact_uri[0] != '\0') ? contact_uri : "sip:c300x@127.0.0.1";
+    char fallback_uri[512];
+    const char *request_uri = contact_uri != NULL && contact_uri[0] != '\0' ? contact_uri : fallback_uri;
+    if (contact_uri == NULL || contact_uri[0] == '\0') {
+        if (snprintf(fallback_uri, sizeof(fallback_uri), "sip:%s", to_aor) >= (int)sizeof(fallback_uri)) {
+            return;
+        }
+    }
     char request[1024];
     snprintf(
         request,
         sizeof(request),
         "BYE %s SIP/2.0\r\n"
-        "Via: SIP/2.0/TCP 127.0.0.1:5060;branch=z9hG4bKbye%ld;rport\r\n"
+        "Via: SIP/2.0/%s %s:%u;branch=z9hG4bKbye%ld;rport\r\n"
         "Max-Forwards: 70\r\n"
         "To: %s\r\n"
-        "From: <sip:webrtc@%s>;tag=%s\r\n"
+        "From: <sip:%s>;tag=%s\r\n"
         "Call-ID: %s\r\n"
         "CSeq: 22 BYE\r\n"
         "Content-Length: 0\r\n\r\n",
         request_uri,
+        transport,
+        local_ip,
+        local_port,
         (long)time(NULL),
         to_header,
-        domain,
+        from_aor,
         from_tag,
         call_id
     );
@@ -944,11 +1186,15 @@ static bool start_media_session(media_bridge_t *bridge) {
 
 static void stop_media_session(bool close_client) {
     int sip_fd = -1;
-    char domain[128];
+    char from_aor[256];
+    char to_aor[256];
+    char local_ip[64];
+    char transport[4];
+    uint16_t local_port = DEFAULT_SIP_PORT;
     char call_id[128];
     char from_tag[64];
     char to_header[512];
-    char contact_uri[256];
+    char contact_uri[512];
     bool relay_started = false;
     bool sip_monitor_started = false;
     bool talkback_started = false;
@@ -956,7 +1202,10 @@ static void stop_media_session(bool close_client) {
     pthread_t sip_thread;
     pthread_t talkback_thread;
 
-    domain[0] = '\0';
+    from_aor[0] = '\0';
+    to_aor[0] = '\0';
+    local_ip[0] = '\0';
+    transport[0] = '\0';
     call_id[0] = '\0';
     from_tag[0] = '\0';
     to_header[0] = '\0';
@@ -1001,7 +1250,11 @@ static void stop_media_session(bool close_client) {
     g_bridge.relay_started = false;
     g_bridge.talkback_started = false;
     sip_fd = g_bridge.sip_fd;
-    snprintf(domain, sizeof(domain), "%s", g_bridge.domain);
+    snprintf(from_aor, sizeof(from_aor), "%s", g_bridge.from_aor);
+    snprintf(to_aor, sizeof(to_aor), "%s", g_bridge.to_aor);
+    snprintf(local_ip, sizeof(local_ip), "%s", g_bridge.sip_local_ip);
+    snprintf(transport, sizeof(transport), "%s", g_bridge.sip_transport);
+    local_port = g_bridge.sip_local_port;
     snprintf(call_id, sizeof(call_id), "%s", g_bridge.call_id);
     snprintf(from_tag, sizeof(from_tag), "%s", g_bridge.from_tag);
     snprintf(to_header, sizeof(to_header), "%s", g_bridge.to_header);
@@ -1024,7 +1277,7 @@ static void stop_media_session(bool close_client) {
         send_bt_av_media_stop();
     }
     if (sip_fd >= 0) {
-        send_sip_bye(sip_fd, domain, to_header, from_tag, call_id, contact_uri);
+        send_sip_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
     }
     if (sip_fd >= 0) {
         shutdown(sip_fd, SHUT_RDWR);
@@ -1055,6 +1308,11 @@ static void stop_media_session(bool close_client) {
         g_bridge.talkback_fd = -1;
     }
     g_bridge.domain[0] = '\0';
+    g_bridge.from_aor[0] = '\0';
+    g_bridge.to_aor[0] = '\0';
+    g_bridge.sip_local_ip[0] = '\0';
+    g_bridge.sip_transport[0] = '\0';
+    g_bridge.sip_local_port = 0;
     g_bridge.call_id[0] = '\0';
     g_bridge.from_tag[0] = '\0';
     g_bridge.to_header[0] = '\0';

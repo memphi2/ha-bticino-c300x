@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import config_validation as cv
@@ -400,11 +401,16 @@ async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
     from .qml_patch import async_refresh_qml_patch_status
 
     capabilities = getattr(entry.runtime_data, "capabilities", {})
+    diagnostics = entry.runtime_data.qml_patch_diagnostics
     try:
         if maintenance_action_is_advertised(capabilities, "qml_status"):
+            diagnostics.mark_attempt(datetime.now(UTC))
             await async_refresh_qml_patch_status(entry)
-    except C300XAgentApiError:
-        _LOGGER.warning("C300X device UI patch status refresh failed", exc_info=True)
+            diagnostics.mark_success(datetime.now(UTC))
+    except C300XAgentApiError as err:
+        error = compact_error_text(err)
+        diagnostics.mark_failure(error, datetime.now(UTC))
+        _LOGGER.warning("C300X device UI patch status refresh failed: %s", error)
         return
 
 
@@ -428,6 +434,13 @@ async def _async_configure_display_bridge(
         else ""
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
+    diagnostics = entry.runtime_data.display_bridge_diagnostics
+    if enabled:
+        diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))
+    else:
+        diagnostics.callback_scheme = None
+        diagnostics.callback_host_type = None
+        diagnostics.mark_attempt(datetime.now(UTC))
     try:
         status = await api.async_display_bridge_status()
         expected_hash = display_bridge_callback_fingerprint(
@@ -440,18 +453,26 @@ async def _async_configure_display_bridge(
             and bool(status.get("configured")) == enabled
             and status.get("callback_hash") == expected_hash
         ):
+            diagnostics.mark_success(datetime.now(UTC))
             return
         await api.async_configure_display_bridge(
             enabled=enabled,
             webhook_url=webhook_url,
             shared_secret=shared_secret,
         )
+        diagnostics.mark_success(datetime.now(UTC))
     except C300XAgentApiUnsupportedError:
+        diagnostics.mark_failure(
+            "device-agent endpoint is not available",
+            datetime.now(UTC),
+        )
         if enabled:
             _LOGGER.debug("C300X device agent does not support display bridge registration")
-    except C300XAgentApiError:
+    except C300XAgentApiError as err:
+        error = compact_error_text(err)
+        diagnostics.mark_failure(error, datetime.now(UTC))
         if enabled:
-            _LOGGER.warning("C300X display bridge registration failed", exc_info=True)
+            _LOGGER.warning("C300X display bridge registration failed: %s", error)
 
 
 def _async_track_display_bridge_updates(

@@ -95,7 +95,7 @@ REQUIRED_PATHS = [
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",
-    ".github/release-notes/v0.3.3.md",
+    ".github/release-notes/v0.4.0.md",
     ".github/workflows/release.yml",
     ".github/workflows/validate.yml",
 ]
@@ -346,6 +346,7 @@ def check_legal_hygiene() -> list[str]:
     required_legal_phrases = (
         "No firmware or APK payloads",
         "No vendored third-party controller code",
+        "Media codecs and patents",
         "Trademark notice",
         "Apache License, Version 2.0",
     )
@@ -366,8 +367,8 @@ def check_release_metadata() -> list[str]:
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         failures.append("manifest version must be a stable semver release")
         return failures
-    if version != "0.3.3":
-        failures.append(f"release metadata must stay on 0.3.3, got {version}")
+    if version != "0.4.0":
+        failures.append(f"release metadata must stay on 0.4.0, got {version}")
     release_tag = f"v{version}"
     release_note = ROOT / ".github" / "release-notes" / f"{release_tag}.md"
     required_mentions = {

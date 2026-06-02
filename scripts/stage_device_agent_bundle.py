@@ -135,6 +135,9 @@ def stage_bundle(
     runtime_files.append(
         _copy(AGENT_BINARY, component_dir / "device_agent/armhf/c300x-agent-native")
     )
+    _set_file_modes(qml_files, 0o644)
+    _set_file_modes(script_files, 0o700)
+    _set_file_modes(runtime_files, 0o700)
     staged_files.extend(_unique_paths(runtime_files + script_files + qml_files))
     file_entries = _file_entries(component_dir, staged_files)
     group_hashes = {
@@ -155,7 +158,8 @@ def stage_bundle(
         files=file_entries,
         group_hashes=group_hashes,
     )
-    (component_dir / "device_agent/bundle.json").write_text(
+    manifest_path = component_dir / "device_agent/bundle.json"
+    manifest_path.write_text(
         json.dumps(
             {
                 "version": native_version,
@@ -175,6 +179,7 @@ def stage_bundle(
         + "\n",
         encoding="utf-8",
     )
+    manifest_path.chmod(0o600)
 
 
 def _copy(source: Path, target: Path) -> Path:
@@ -185,6 +190,13 @@ def _copy(source: Path, target: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
     return target
+
+
+def _set_file_modes(paths: list[Path], mode: int) -> None:
+    """Apply deterministic device bundle modes before hashing the manifest."""
+
+    for path in paths:
+        path.chmod(mode)
 
 
 def _unique_paths(paths: list[Path]) -> list[Path]:

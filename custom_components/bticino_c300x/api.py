@@ -797,11 +797,15 @@ class C300XAgentApi:
                 text = await response.text()
                 if response.status == 404:
                     raise C300XAgentApiUnsupportedError(
-                        f"device-agent endpoint is not available: {path}"
+                        _http_error_text(
+                            response.status,
+                            text,
+                            fallback=f"device-agent endpoint is not available: {path}",
+                        )
                     )
                 if response.status < 200 or response.status >= 300:
                     raise C300XAgentApiConnectionError(
-                        f"device agent returned HTTP {response.status}"
+                        _http_error_text(response.status, text)
                     )
         except TimeoutError as err:
             raise C300XAgentApiConnectionError("device-agent request timed out") from err
@@ -831,12 +835,18 @@ class C300XAgentApi:
                 timeout=self._timeout,
             ) as response:
                 if response.status == 404:
+                    text = await response.text()
                     raise C300XAgentApiUnsupportedError(
-                        f"device-agent endpoint is not available: {path}"
+                        _http_error_text(
+                            response.status,
+                            text,
+                            fallback=f"device-agent endpoint is not available: {path}",
+                        )
                     )
                 if response.status < 200 or response.status >= 300:
+                    text = await response.text()
                     raise C300XAgentApiConnectionError(
-                        f"device agent returned HTTP {response.status}"
+                        _http_error_text(response.status, text)
                     )
                 content = await response.read()
                 content_type = response.headers.get(
@@ -872,6 +882,41 @@ def encode_endpoint_url(url: str) -> str:
     """Return a base64-encoded endpoint URL."""
 
     return b64encode(url.encode("utf-8")).decode("ascii")
+
+
+def _http_error_text(status: int, text: str, *, fallback: str | None = None) -> str:
+    """Return a compact, safe HTTP error text from an agent response."""
+
+    base = fallback or f"device agent returned HTTP {status}"
+    detail = _agent_error_detail(text)
+    if detail:
+        return f"{base}: {detail}"
+    return base
+
+
+def _agent_error_detail(text: str) -> str | None:
+    """Extract a short non-secret agent error from a JSON response body."""
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    for key in ("error", "message"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return _compact_agent_error_value(value)
+    return None
+
+
+def _compact_agent_error_value(value: str, *, max_length: int = 120) -> str:
+    """Return one safe line from an agent error string."""
+
+    compacted = " ".join(value.strip().split())
+    if len(compacted) > max_length:
+        return f"{compacted[: max_length - 3]}..."
+    return compacted
 
 
 def display_bridge_callback_fingerprint(

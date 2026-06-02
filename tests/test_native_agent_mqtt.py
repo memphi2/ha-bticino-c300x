@@ -70,6 +70,18 @@ def test_legacy_mqtt_disable_does_not_touch_flexisip_or_delete_patch_files() -> 
     assert 'rm -rf /etc/tcpdump2mqtt' not in disable
 
 
+def test_legacy_mqtt_enable_does_not_start_duplicate_processes() -> None:
+    http = _read("native_agent/src/http.c")
+    handler = http[
+        http.index("static void handle_legacy_mqtt_post") :
+        http.index("static void handle_mqtt_migrate_legacy_post")
+    ]
+
+    assert "was_running = legacy_mqtt_running();" in handler
+    assert "should_start_legacy = !was_running;" in handler
+    assert "should_start_legacy = 1;" not in handler
+
+
 def test_native_mqtt_default_config_is_disabled_with_legacy_topics() -> None:
     config = json.loads(_read("native_agent/config.example.json"))
 

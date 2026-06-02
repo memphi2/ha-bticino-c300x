@@ -127,7 +127,9 @@ class _NativeWebRTCSession:
         self.player: Any | None = None
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
+        self.talkback_requested = False
         self.talkback_active = False
+        self.talkback_packets_sent = 0
 
 
 def _new_restarting_rtsp_tracks(
@@ -421,6 +423,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._rtsp_ready_lock = asyncio.Lock()
         self._rtsp_unavailable_until = 0.0
         self._last_rtsp_error: str | None = None
+        self._talkback_last_error: str | None = None
         self._webrtc_sessions: dict[str, _NativeWebRTCSession] = {}
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
@@ -489,13 +492,23 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             "video_active_until": self._video_active_until
             or event_state.video_active_until,
             "talkback_supported": talkback_supported,
+            "talkback_requires_https": talkback_supported,
+            "talkback_requested": any(
+                session.talkback_requested
+                for session in self._webrtc_sessions.values()
+            ),
             "talkback_active": any(
                 session.talkback_active for session in self._webrtc_sessions.values()
+            ),
+            "talkback_packets_sent": sum(
+                session.talkback_packets_sent
+                for session in self._webrtc_sessions.values()
             ),
             "talkback_proxy_running": bool(self._bridge_status.get("talkback_running")),
             "talkback_codec": self._bridge_status.get("talkback_codec")
             or (TALKBACK_CODEC if talkback_supported else None),
             "talkback_payload_type": talkback_payload_type,
+            "talkback_last_error": self._talkback_last_error,
             "bridge": self._bridge_status,
         }
 
@@ -586,6 +599,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         try:
             has_audio_media = self._offer_has_audio(offer_sdp)
+            session.talkback_requested = self._offer_can_send_microphone(offer_sdp)
             wants_audio = (
                 has_audio_media and self._offer_accepts_incoming_audio(offer_sdp)
             )
@@ -844,12 +858,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         section = self._offer_audio_section(offer_sdp)
         if section is None:
             return False
-        directions = {
+        directions = self._offer_audio_directions(section)
+        return "a=inactive" not in directions and "a=sendonly" not in directions
+
+    def _offer_can_send_microphone(self, offer_sdp: str) -> bool:
+        """Return whether the browser offer can send microphone audio to HA."""
+
+        section = self._offer_audio_section(offer_sdp)
+        if section is None:
+            return False
+        directions = self._offer_audio_directions(section)
+        return "a=inactive" not in directions and "a=recvonly" not in directions
+
+    def _offer_audio_directions(self, audio_section: str) -> set[str]:
+        """Return SDP direction attributes from an audio media section."""
+
+        return {
             line.strip()
-            for line in section.splitlines()
+            for line in audio_section.splitlines()
             if line.strip() in {"a=sendonly", "a=recvonly", "a=sendrecv", "a=inactive"}
         }
-        return "a=inactive" not in directions and "a=sendonly" not in directions
 
     def _offer_audio_section(self, offer_sdp: str) -> str | None:
         """Return the SDP audio media section from a WebRTC offer."""
@@ -874,6 +902,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         loop = asyncio.get_running_loop()
         host = self._agent_host_for_socket()
         if not host:
+            self._set_talkback_error("agent_host_missing")
             return
 
         sock: socket.socket | None = None
@@ -893,6 +922,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             family, socktype, proto, _canonname, target = infos[0]
             sock = socket.socket(family, socktype, proto)
             sock.setblocking(False)
+            self._set_talkback_error(None)
             self._set_talkback_active(session_id, True)
 
             encoder = aiortc_modules.av.CodecContext.create("libspeex", "w")
@@ -924,6 +954,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                             marker,
                         )
                         await loop.sock_sendto(sock, rtp, target)
+                        self._increment_talkback_packets(session_id)
                         sequence = (sequence + 1) & 0xFFFF
                         timestamp = (
                             timestamp
@@ -932,7 +963,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         marker = False
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as err:
+            media_stream_error = getattr(aiortc_modules, "MediaStreamError", None)
+            if media_stream_error is None or not isinstance(err, media_stream_error):
+                self._set_talkback_error(type(err).__name__)
             return
         finally:
             if encoder is not None and sock is not None and target is not None:
@@ -965,6 +999,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
         session.talkback_active = active
         self._async_write_ha_state_if_ready()
+
+    def _set_talkback_error(self, error: str | None) -> None:
+        if self._talkback_last_error == error:
+            return
+        self._talkback_last_error = error
+        self._async_write_ha_state_if_ready()
+
+    def _increment_talkback_packets(self, session_id: str) -> None:
+        session = self._webrtc_sessions.get(session_id)
+        if session is None:
+            return
+        session.talkback_packets_sent += 1
+        if session.talkback_packets_sent == 1:
+            self._async_write_ha_state_if_ready()
 
     def _build_talkback_rtp_packet(
         self,

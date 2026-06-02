@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.4.0 - 2026-06-02
+
+### Added
+
+- Configurable native SIP/Flexisip identities and endpoint settings for the
+  C300X media bridge.
+- WebRTC talkback state reporting for Home Assistant, including HTTPS
+  requirement, requested/active state, packet count, and last error.
+- Optional local Home Assistant frontend HTTPS helper for browser microphone
+  testing; the native C300X agent itself remains HTTP-only on the local LAN.
+
+### Changed
+
+- Doorbell WebRTC audio handling now distinguishes door-station audio playback
+  from browser microphone talkback direction.
+- Legal notes explicitly document codec-binary and codec-patent boundaries for
+  the device-provided H.264/AVC stream and Speex talkback audio.
+
 ## v0.3.3 - 2026-06-02
 
 ### Added

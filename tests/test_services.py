@@ -94,7 +94,9 @@ sys.modules["homeassistant.helpers.entity"] = entity
 from custom_components.bticino_c300x import services as service_module  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
+    CONF_VIDEO_ENABLED,
     DOMAIN,
+    SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
@@ -109,6 +111,7 @@ from custom_components.bticino_c300x.services import async_setup_services  # noq
 class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
+    api: Any = None
 
 
 @dataclass
@@ -132,12 +135,16 @@ class _FakeConfigEntries:
 class _FakeServices:
     def __init__(self) -> None:
         self.registered: set[tuple[str, str]] = set()
+        self.handlers: dict[tuple[str, str], Any] = {}
 
-    def async_register(self, domain: str, service: str, *_args: Any, **_kwargs: Any) -> None:
+    def async_register(self, domain: str, service: str, *args: Any, **_kwargs: Any) -> None:
         self.registered.add((domain, service))
+        if args:
+            self.handlers[(domain, service)] = args[0]
 
     def async_remove(self, domain: str, service: str) -> None:
         self.registered.discard((domain, service))
+        self.handlers.pop((domain, service), None)
 
 
 class _FakeHass:
@@ -145,6 +152,15 @@ class _FakeHass:
         self.data: dict[str, Any] = {}
         self.config_entries = _FakeConfigEntries(entries)
         self.services = _FakeServices()
+
+
+class _FakeApi:
+    def __init__(self) -> None:
+        self.activate_video_calls: list[bool] = []
+
+    async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
+        self.activate_video_calls.append(audio)
+        return {"ok": True, "audio": audio}
 
 
 def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
@@ -168,6 +184,7 @@ def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
 
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
+        assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) in hass.services.registered
@@ -197,6 +214,7 @@ def test_delete_services_require_enabled_device_ui_option() -> None:
 
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
+        assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) not in hass.services.registered
@@ -349,8 +367,30 @@ def test_service_setup_tolerates_not_loaded_entries_without_runtime_data() -> No
 
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
+        assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) not in hass.services.registered
+
+    asyncio.run(_run())
+
+
+def test_activate_doorbell_video_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO)]
+        await handler(types.SimpleNamespace(data={"audio": False}))
+
+        assert api.activate_video_calls == [False]
 
     asyncio.run(_run())

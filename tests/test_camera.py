@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 import struct
 import sys
 import types
@@ -81,6 +82,7 @@ try:
 except ImportError:  # pragma: no cover - only used by the lightweight stub fallback
     ha_async_get_image = None
 
+from custom_components.bticino_c300x import camera as camera_module
 from custom_components.bticino_c300x.camera import (
     STILL_IMAGE_BYTES,
     STILL_IMAGE_CONTENT_TYPE,
@@ -291,9 +293,11 @@ def test_doorbell_camera_exposes_safe_audio_paths_from_bridge_status() -> None:
     assert attrs["audio_stream_path"] == "/doorbell"
     assert attrs["recorder_stream_path"] == "/doorbell-recorder"
     assert attrs["talkback_supported"] is True
+    assert attrs["talkback_requires_https"] is True
     assert attrs["talkback_proxy_running"] is True
     assert attrs["talkback_payload_type"] == TALKBACK_RTP_PAYLOAD_TYPE
     assert attrs["talkback_codec"] == TALKBACK_CODEC
+    assert attrs["talkback_last_error"] is None
 
 
 def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
@@ -311,17 +315,23 @@ def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
     assert attrs["talkback_proxy_running"] is True
 
 
-def test_doorbell_camera_reports_active_talkback_session() -> None:
+def test_doorbell_camera_reports_talkback_session_state() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
     camera._bridge_status = {"audio_codec": TALKBACK_CODEC}
     session = _NativeWebRTCSession(SimpleNamespace())
+    session.talkback_requested = True
     session.talkback_active = True
+    session.talkback_packets_sent = 2
     camera._webrtc_sessions["session-1"] = session
+    camera._set_talkback_error("CodecUnavailable")
 
     attrs = camera.extra_state_attributes
 
     assert attrs["talkback_supported"] is True
+    assert attrs["talkback_requested"] is True
     assert attrs["talkback_active"] is True
+    assert attrs["talkback_packets_sent"] == 2
+    assert attrs["talkback_last_error"] == "CodecUnavailable"
 
 
 def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -> None:
@@ -405,6 +415,22 @@ def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
     )
     assert not camera._offer_has_audio("v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n")
 
+    assert camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
+    )
+    assert camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
+    )
+    assert camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
+    )
+    assert not camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
+    )
+    assert not camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
+    )
+
 
 def test_doorbell_camera_builds_speex_talkback_rtp_packet() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
@@ -427,6 +453,121 @@ def test_doorbell_camera_builds_speex_talkback_rtp_packet() -> None:
     assert timestamp == 8000
     assert ssrc == 1234
     assert packet[12:] == b"speex-payload"
+
+
+def test_doorbell_camera_forwards_browser_audio_as_talkback_rtp(monkeypatch) -> None:  # noqa: ANN001
+    class _MediaStreamError(Exception):
+        pass
+
+    class _FakeFrame:
+        samples = 160
+
+    class _FakeTrack:
+        def __init__(self) -> None:
+            self._sent = False
+
+        async def recv(self) -> _FakeFrame:
+            if self._sent:
+                raise _MediaStreamError
+            self._sent = True
+            return _FakeFrame()
+
+    class _FakePacket:
+        duration = 160
+
+        def __bytes__(self) -> bytes:
+            return b"speex-payload"
+
+    class _FakeEncoder:
+        sample_rate = 0
+        layout = ""
+        format = ""
+        time_base = None
+        bit_rate = 0
+
+        def open(self) -> None:
+            pass
+
+        def encode(self, frame: Any) -> list[_FakePacket]:
+            if frame is None:
+                return []
+            return [_FakePacket()]
+
+    class _FakeCodecContext:
+        @staticmethod
+        def create(codec: str, mode: str) -> _FakeEncoder:
+            assert codec == "libspeex"
+            assert mode == "w"
+            return _FakeEncoder()
+
+    class _FakeResampler:
+        def __init__(self, *, format: str, layout: str, rate: int) -> None:
+            assert format == "s16"
+            assert layout == "mono"
+            assert rate == 8000
+
+        def resample(self, frame: Any) -> list[Any]:
+            return [frame]
+
+    async def _run() -> tuple[bytes, dict[str, Any]]:
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp.bind(("127.0.0.1", 0))
+        udp.setblocking(False)
+        monkeypatch.setattr(camera_module, "TALKBACK_RTP_PORT", udp.getsockname()[1])
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1"})
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera._bridge_status = {"talkback_supported": True}
+        camera._webrtc_sessions["session-1"] = _NativeWebRTCSession(SimpleNamespace())
+        aiortc_modules = SimpleNamespace(
+            av=SimpleNamespace(CodecContext=_FakeCodecContext),
+            AudioResampler=_FakeResampler,
+            MediaStreamError=_MediaStreamError,
+        )
+        loop = asyncio.get_running_loop()
+        try:
+            task = asyncio.create_task(
+                camera._async_forward_talkback_audio(
+                    _FakeTrack(),
+                    aiortc_modules,
+                    "session-1",
+                )
+            )
+            packet, _addr = await asyncio.wait_for(loop.sock_recvfrom(udp, 2048), 1)
+            await asyncio.wait_for(task, 1)
+            return packet, camera.extra_state_attributes
+        finally:
+            udp.close()
+
+    packet, attrs = asyncio.run(_run())
+    version, marker_payload, sequence, _timestamp, _ssrc = struct.unpack(
+        "!BBHII",
+        packet[:12],
+    )
+
+    assert version == 0x80
+    assert marker_payload == 0x80 | TALKBACK_RTP_PAYLOAD_TYPE
+    assert sequence >= 0
+    assert packet[12:] == b"speex-payload"
+    assert attrs["talkback_packets_sent"] == 1
+    assert attrs["talkback_active"] is False
+    assert attrs["talkback_last_error"] is None
+
+
+def test_doorbell_camera_reports_talkback_host_errors() -> None:
+    async def _run() -> dict[str, Any]:
+        entry = _FakeEntry(data={"agent_host": ""})
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera._webrtc_sessions["session-1"] = _NativeWebRTCSession(SimpleNamespace())
+        await camera._async_forward_talkback_audio(
+            SimpleNamespace(),
+            SimpleNamespace(),
+            "session-1",
+        )
+        return camera.extra_state_attributes
+
+    attrs = asyncio.run(_run())
+
+    assert attrs["talkback_last_error"] == "agent_host_missing"
 
 
 def test_restarting_rtsp_tracks_share_one_audio_video_reader() -> None:

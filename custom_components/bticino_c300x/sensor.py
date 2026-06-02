@@ -372,6 +372,7 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         attrs: dict[str, Any] = {
             "reason": self._status_reason(),
             "connection_state": self._connection_state_value(),
+            "last_connection_stage": state.last_connection_stage,
             "last_connection_error": state.last_connection_error,
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
@@ -457,6 +458,7 @@ class C300XConnectionStateSensor(C300XConnectionDiagnosticSensor):
 
         state = self._entry.runtime_data.connection_state
         return {
+            "last_connection_stage": state.last_connection_stage,
             "last_connection_error": state.last_connection_error,
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
@@ -503,6 +505,7 @@ class C300XLastConnectionErrorSensor(C300XConnectionDiagnosticSensor):
         state = self._entry.runtime_data.connection_state
         return {
             "connection_state": state.connection_state,
+            "last_connection_stage": state.last_connection_stage,
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
         }
@@ -537,6 +540,7 @@ class C300XNextReconnectDelaySensor(C300XConnectionDiagnosticSensor):
         state = self._entry.runtime_data.connection_state
         return {
             "connection_state": state.connection_state,
+            "last_connection_stage": state.last_connection_stage,
             "last_reconnect_reason": state.last_reconnect_reason,
         }
 

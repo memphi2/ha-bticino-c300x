@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.bticino_c300x.api import (
     C300XAgentApi,
+    C300XAgentApiConnectionError,
     C300XAgentApiResponseError,
     build_agent_base_url,
     display_bridge_callback_fingerprint,
@@ -64,17 +65,20 @@ class _FakeSession:
         self,
         response_text: str = '{"ok": true}',
         *,
+        response_status: int = 200,
         response_body: bytes | None = None,
         content_type: str = "application/json",
     ) -> None:
         self.requests: list[dict[str, object]] = []
         self._response_text = response_text
+        self._response_status = response_status
         self._response_body = response_body
         self._content_type = content_type
 
     def request(self, *args: object, **kwargs: object) -> _FakeResponse:
         self.requests.append({"args": args, "kwargs": kwargs})
         return _FakeResponse(
+            status=self._response_status,
             text=self._response_text,
             body=self._response_body,
             content_type=self._content_type,
@@ -214,6 +218,30 @@ def test_display_bridge_callback_fingerprint_is_stable() -> None:
     assert display_bridge_callback_fingerprint(False, "ignored", "ignored") == (
         "fnv1a64:48f6eb502600b569"
     )
+
+
+def test_agent_http_error_includes_safe_error_name() -> None:
+    session = _FakeSession(
+        '{"ok": false, "error": "unsupported_webhook_url"}',
+        response_status=400,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(
+        C300XAgentApiConnectionError,
+        match="device agent returned HTTP 400: unsupported_webhook_url",
+    ):
+        asyncio.run(
+            api.async_configure_display_bridge(
+                enabled=True,
+                webhook_url="https://ha.local/api/webhook/display",
+                shared_secret="shared-secret",
+            )
+        )
 
 
 def test_mqtt_status_uses_maintenance_endpoint_and_hides_broker_secret() -> None:

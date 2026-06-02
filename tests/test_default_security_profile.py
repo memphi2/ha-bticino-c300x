@@ -35,6 +35,9 @@ def test_sample_config_is_bootstrap_only_and_does_not_enable_heavy_paths() -> No
     assert config["maintenance"]["firewall"]["enabled"] is False
     assert config["maintenance"]["ipv6Firewall"]["enabled"] is False
     assert config["video"]["enabled"] is False
+    assert config["video"]["sip"]["from"] == "webrtc"
+    assert config["video"]["sip"]["to"] == "c300x"
+    assert config["video"]["sip"]["domain"] == ""
     assert config["displayBridge"]["enabled"] is True
     assert config["displayBridge"]["homeAssistant"]["webhookUrl"].startswith(
         "http://homeassistant.local:"
@@ -150,3 +153,19 @@ def test_config_mutation_writes_are_semantic_and_idempotent() -> None:
     assert "memcmp(&baseline" not in auth_body
     assert "memcmp(config, &updated" not in mqtt_body
     assert "return config->api_token_from_env ? config->api_file_token : config->api_token" in config_text
+
+
+def test_native_agent_config_save_preserves_existing_owner() -> None:
+    config_text = (ROOT / "native_agent" / "src" / "config.c").read_text(
+        encoding="utf-8"
+    )
+    save_body = config_text.rsplit("static int save_config_internal", maxsplit=1)[
+        1
+    ].split("int c300x_save_config", maxsplit=1)[0]
+
+    assert "read_config_file_metadata(" in save_body
+    assert "owner_uid" in save_body
+    assert "owner_gid" in save_body
+    assert "chown(temporary_path, owner_uid, owner_gid)" in save_body
+    assert "errno != EPERM" in save_body
+    assert save_body.index("chown(temporary_path") < save_body.index("rename(")

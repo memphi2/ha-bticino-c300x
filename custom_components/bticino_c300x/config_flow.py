@@ -1238,7 +1238,7 @@ async def _async_probe_agent(
     """Return reachable, auth_required, or missing for the setup agent probe."""
 
     try:
-        await _async_agent_setup_data(hass, connection, api_token=api_token)
+        await _async_agent_ready_for_setup(hass, connection, api_token=api_token)
     except C300XAgentApiConnectionError as err:
         message = str(err)
         if "HTTP 401" in message or "HTTP 403" in message:
@@ -1285,6 +1285,27 @@ async def _async_agent_setup_data(
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
     return await api.async_validate_setup()
+
+
+async def _async_agent_ready_for_setup(
+    hass: Any,
+    connection: dict[str, Any],
+    *,
+    api_token: str = "",
+) -> dict[str, Any]:
+    """Validate the agent endpoints required for a usable config entry."""
+
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    base_url = build_agent_base_url(
+        str(connection.get(CONF_AGENT_HOST, "")),
+        int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+        bool(connection.get(CONF_AGENT_USE_SSL, False)),
+    )
+    api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
+    setup_data = await api.async_validate_setup()
+    await api.async_list_event_subscriptions()
+    return setup_data
 
 
 def _stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:

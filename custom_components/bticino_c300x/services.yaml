@@ -86,6 +86,24 @@ unlock_door:
       selector:
         text:
 
+activate_doorbell_video:
+  name: Activate C300X doorbell video
+  description: Start or renew the C300X doorbell video session through the local device agent. Use this from automations to pre-warm the camera when the doorbell rings.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    audio:
+      name: Enable audio
+      description: Request the C300X audio path together with video. Required for WebRTC talkback.
+      required: false
+      default: true
+      selector:
+        boolean:
+
 reboot:
   name: Reboot C300X
   description: Schedule a C300X reboot through the local device-agent maintenance API.

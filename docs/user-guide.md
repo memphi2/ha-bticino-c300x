@@ -27,6 +27,8 @@ https://github.com/fquinto/bticinoClasse300x
 - Stair light action/button with configurable OpenWebNet address.
 - Doorbell ring event and device-agent event stream.
 - On-demand doorbell camera through Home Assistant WebRTC handling.
+- Two-way audio/talkback through the Home Assistant WebRTC camera path when the
+  frontend has microphone access.
 - Ringer mute state/control.
 - Smartphone forwarding state/control.
 - Answering machine state and stored video-message counters/playback/delete.
@@ -118,6 +120,7 @@ The integration can register these services, depending on capabilities:
 - `bticino_c300x.alarm_command` for the Alarmo display workflow
 - `bticino_c300x.unlock_door`
 - `bticino_c300x.stair_light`
+- `bticino_c300x.activate_doorbell_video`
 - `bticino_c300x.reboot`
 - `bticino_c300x.reload_gui`
 - `bticino_c300x.play_latest_video_message`
@@ -128,6 +131,30 @@ The integration can register these services, depending on capabilities:
 
 The `Remove device agent` maintenance button restores supported GUI/firewall
 patches first, removes agent-owned files and backups, and leaves SSH running.
+
+## Doorbell video automation
+
+Use `bticino_c300x.activate_doorbell_video` in a ring automation to pre-warm the
+C300X video session before a dashboard or notification opens the camera.
+
+```yaml
+alias: C300X ring video prewarm
+mode: restart
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+action:
+  - service: bticino_c300x.activate_doorbell_video
+    data:
+      audio: true
+```
+
+Talkback requires the camera WebRTC path, a native agent that reports talkback
+support, and browser/mobile microphone permission. Browser microphone access
+requires HTTPS, Home Assistant Cloud, or another secure Home Assistant frontend
+URL.
 
 ## IPv6
 
@@ -140,6 +167,11 @@ unreliable fallbacks through link-local names or IPv4-only routing.
 Do not use link-local callback URLs unless you intentionally include and manage
 the interface scope. Keep the C300X agent local-only, and enable the IPv6
 firewall patch only when the network and device are configured for IPv6.
+
+Do not use `homeassistant.local`, other `.local` names, or link-local addresses
+for the Home Assistant callback URL used by this integration. Use a stable local
+IPv4 address or a stable ULA/global IPv6 address so event subscriptions, camera
+streams and talkback all use a predictable route.
 
 ## Troubleshooting
 
@@ -167,7 +199,8 @@ Missing capabilities mean missing entities by design.
 - Enable video in the integration options.
 - Ensure the installed native agent has video enabled.
 - Check that Home Assistant can reach the media port.
-- Prefer stable IPv4 or ULA/global IPv6 addresses over link-local names.
+- Prefer stable IPv4 or ULA/global IPv6 addresses over `.local`, mDNS or
+  link-local names.
 
 ### Messages or memos do not update
 

@@ -127,8 +127,8 @@
       "highResolution": true
     },
     "sip": {
-      "from": "webrtc@127.0.0.1",
-      "to": "c300x@127.0.0.1",
+      "from": "webrtc",
+      "to": "c300x",
       "domain": "",
       "devaddr": "20",
       "localIp": "127.0.0.1",

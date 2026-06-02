@@ -25,6 +25,7 @@ from .action import ActionValidationError
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .capabilities import (
     answering_machine_message_delete_supported,
+    capability_is_supported,
     entry_device_ui_enabled,
     entry_gui_function_patch_active,
     maintenance_action_is_supported,
@@ -33,6 +34,7 @@ from .capabilities import (
 from .const import (
     CONF_MAINTENANCE_TOKEN,
     DOMAIN,
+    SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_ALARM_COMMAND,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
@@ -48,7 +50,7 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
-from .entity import entry_config_value
+from .entity import entry_config_value, entry_video_enabled
 from .exceptions import service_validation_error
 from .executor import (
     async_execute_action,
@@ -68,6 +70,7 @@ from .video_messages import latest_video_message_id, video_message_media_source_
 
 _ATTR_ACTION_ID = "action_id"
 _ATTR_ADDRESS = "address"
+_ATTR_AUDIO = "audio"
 _ATTR_CODE = "code"
 _ATTR_COMMAND = "command"
 _ATTR_ENTRY_ID = "entry_id"
@@ -141,6 +144,18 @@ def _ensure_maintenance_action(entry, action: str) -> None:
         entry_config_value(entry, CONF_MAINTENANCE_TOKEN, ""),
     ):
         raise service_validation_error("maintenance_action_not_supported")
+
+
+def _ensure_doorbell_video_supported(entry: Any) -> None:
+    """Reject video activation unless HA and the agent expose doorbell video."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not (
+        entry_video_enabled(entry)
+        and capability_is_supported(capabilities, "doorbell_video")
+    ):
+        raise service_validation_error("doorbell_video_not_available")
 
 
 async def _async_ensure_gui_function_patch(entry) -> None:
@@ -309,6 +324,17 @@ class _C300XServiceHandlers:
             async_unlock_door(self._hass, entry, call.data.get(_ATTR_LOCK_ID, "default"))
         )
 
+    async def async_activate_doorbell_video(self, call: ServiceCall) -> None:
+        """Activate or renew the C300X doorbell video session."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_video_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_activate_doorbell_video(
+                audio=bool(call.data.get(_ATTR_AUDIO, True))
+            )
+        )
+
     async def async_reboot(self, call: ServiceCall) -> None:
         """Reboot the C300X through the maintenance API."""
 
@@ -469,6 +495,16 @@ def _register_base_services(
                 {
                     vol.Optional(_ATTR_ENTRY_ID): cv.string,
                     vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
+                }
+            ),
+        ),
+        (
+            SERVICE_ACTIVATE_DOORBELL_VIDEO,
+            handlers.async_activate_doorbell_video,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_AUDIO, default=True): _boolean_service_value,
                 }
             ),
         ),

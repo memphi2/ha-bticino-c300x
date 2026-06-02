@@ -92,6 +92,16 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert "device_agent/scripts/qml_patch.sh" in paths
     assert "device_agent/scripts/remove_agent.sh" in paths
     assert "device_agent/scripts/bootstrap_firewall.sh" in paths
+    modes = {entry["path"]: entry["mode"] for entry in bundle["files"]}
+    assert modes["device_agent/armhf/c300x-agent-native"] == "700"
+    assert modes["device_agent/scripts/qml_patch.sh"] == "700"
+    assert modes["device_agent/scripts/remove_agent.sh"] == "700"
+    assert modes["device_agent/scripts/bootstrap_firewall.sh"] == "700"
+    assert modes["device_agent/qml/Alarm.qml"] == "644"
+    assert modes["device_agent/qml/HomeAssistant.qml"] == "644"
+    assert modes["device_agent/qml/js/c300x_ha.js"] == "644"
+    assert modes["device_agent/qml/js/c300x_i18n.js"] == "644"
+    assert modes["device_agent/qml/js/c300x_memos.js"] == "644"
 
 
 def test_native_self_update_apply_matches_staged_manifest_files() -> None:

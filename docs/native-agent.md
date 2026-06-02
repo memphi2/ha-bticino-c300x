@@ -73,12 +73,16 @@ Key sections:
 - `displayBridge`: optional dashboard proxy for QML
 
 Callback URLs for event subscriptions and the display bridge must use a local
-Home Assistant HTTP URL. The native agent intentionally has no TLS client stack;
-HTTPS termination belongs on the Home Assistant side or a local reverse proxy.
-The same applies to the agent API: Home Assistant may connect through HTTPS if a
-local reverse proxy terminates TLS, but the shipped native binary itself stays
-plain HTTP to avoid TLS library dependencies and idle CPU/memory cost on the
-C300X.
+Home Assistant HTTP URL with a stable local IPv4 address or stable ULA/global
+IPv6 address. Do not use `homeassistant.local`, other `.local` names, or
+link-local addresses for callbacks or media routing; those names can resolve to
+different paths for Home Assistant, the C300X, browsers and HA Cloud.
+
+The native agent intentionally has no TLS client stack; HTTPS termination
+belongs on the Home Assistant side or a local reverse proxy. The same applies
+to the agent API: Home Assistant may connect through HTTPS if a local reverse
+proxy terminates TLS, but the shipped native binary itself stays plain HTTP to
+avoid TLS library dependencies and idle CPU/memory cost on the C300X.
 
 ## API surface
 

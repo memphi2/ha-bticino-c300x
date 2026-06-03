@@ -116,7 +116,7 @@ class _FakeApi:
         return {
             "available": True,
             "window_available": True,
-            "active_until": "2026-05-26T12:00:30+00:00",
+            "active_until": "2099-05-26T12:00:30+00:00",
             "stream_path": "/doorbell-video",
             "audio_stream_path": "/doorbell",
             "recorder_stream_path": "/doorbell-recorder",
@@ -323,7 +323,7 @@ def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
 
     assert attrs["video_available"] is True
     assert attrs["video_window_available"] is True
-    assert attrs["video_active_until"] == "2026-05-26T12:00:30+00:00"
+    assert attrs["video_active_until"] == "2099-05-26T12:00:30+00:00"
     assert attrs["audio_stream_path"] == "/doorbell"
     assert attrs["recorder_stream_path"] == "/doorbell-recorder"
     assert attrs["talkback_supported"] is True
@@ -767,7 +767,7 @@ def test_doorbell_camera_updates_state_on_doorbell_view_event() -> None:
             "event_key": "doorbell_view_requested",
             "video_window_available": True,
             "video_available": True,
-            "video_active_until": "2026-05-27T12:00:00+00:00",
+            "video_active_until": "2099-05-27T12:00:00+00:00",
             "stream_path": "/doorbell-video",
         }
     )
@@ -777,14 +777,14 @@ def test_doorbell_camera_updates_state_on_doorbell_view_event() -> None:
     attrs = camera.extra_state_attributes
     assert attrs["video_available"] is True
     assert attrs["video_window_available"] is True
-    assert attrs["video_active_until"] == "2026-05-27T12:00:00+00:00"
+    assert attrs["video_active_until"] == "2099-05-27T12:00:00+00:00"
 
 
 def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera._video_window_available = True
-    camera._video_active_until = "2026-05-27T12:00:00+00:00"
+    camera._video_active_until = "2099-05-27T12:00:00+00:00"
     camera._bridge_available = True
 
     event = SimpleNamespace(
@@ -794,6 +794,23 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
 
     attrs = camera.extra_state_attributes
     assert attrs["video_available"] is False
+    assert attrs["video_window_available"] is False
+    assert attrs["video_active_until"] is None
+
+
+def test_doorbell_camera_ignores_expired_runtime_video_window() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            event_state=_FakeEventState(
+                video_available=True,
+                video_active_until="2020-01-01T00:00:00+00:00",
+            )
+        )
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    attrs = camera.extra_state_attributes
+
     assert attrs["video_window_available"] is False
     assert attrs["video_active_until"] is None
 

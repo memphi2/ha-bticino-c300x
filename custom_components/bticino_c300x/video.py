@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from base64 import b64decode
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -90,6 +91,21 @@ def event_active_seconds(data: Mapping[str, Any]) -> int:
         return max(int(data.get("active_seconds", DEFAULT_ACTIVE_SECONDS)), 0)
     except (TypeError, ValueError):
         return DEFAULT_ACTIVE_SECONDS
+
+
+def active_until_is_active(value: Any, *, now: datetime | None = None) -> bool:
+    """Return true when an ISO timestamp still points into the future."""
+
+    text = optional_string(value)
+    if text is None:
+        return False
+    try:
+        active_until = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if active_until.tzinfo is None:
+        active_until = active_until.replace(tzinfo=UTC)
+    return active_until > (now or datetime.now(UTC))
 
 
 def call_later(

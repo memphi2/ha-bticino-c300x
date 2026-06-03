@@ -10219,7 +10219,7 @@ static int ensure_agent_init_link(void)
 
     if (len >= 0) {
         current[len] = '\0';
-        if (strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0) {
+        if (agent_init_link_matches()) {
             return 1;
         }
         (void)unlink(C300X_AGENT_INIT_LINK);
@@ -10230,13 +10230,20 @@ static int ensure_agent_init_link(void)
 static int agent_init_link_matches(void)
 {
     char current[C300X_MAX_PATH_LEN];
+    char resolved[PATH_MAX];
     ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
 
     if (len < 0) {
         return 0;
     }
     current[len] = '\0';
-    return strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0;
+    if (strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0) {
+        return 1;
+    }
+    if (realpath(C300X_AGENT_INIT_LINK, resolved) == NULL) {
+        return 0;
+    }
+    return strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0;
 }
 
 static int apply_agent_update_init_script(

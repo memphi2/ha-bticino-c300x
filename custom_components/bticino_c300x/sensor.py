@@ -41,12 +41,14 @@ from .const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
+    SIGNAL_EVENT_STATE_CHANGED,
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .doorbell_state import (
+    DOORBELL_STATE_IDLE,
     DOORBELL_STATES,
     normalize_doorbell_state,
     raw_doorbell_state_value,
@@ -68,6 +70,7 @@ from .message_refresh import (
     schedule_answering_machine_messages_refresh,
     schedule_memos_refresh,
 )
+from .video import call_later, event_active_seconds
 from .video_messages import (
     latest_video_message,
     latest_video_message_attributes,
@@ -76,6 +79,18 @@ from .video_messages import (
 
 PARALLEL_UPDATES = 1
 _METRICS_CACHE_SECONDS = 10
+_DOORBELL_TRANSIENT_STATES = frozenset(
+    {
+        "ringing",
+        "view_requested",
+        "view_requeste",
+        "pressed",
+        "ring",
+        "doorbell_pressed",
+        "doorbell_view_requested",
+    }
+)
+_DOORBELL_CLOSED_STATES = frozenset({"doorbell_media_closed", "media_closed", "closed"})
 
 
 async def async_setup_entry(
@@ -587,6 +602,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         super().__init__(entry, "doorbell_state")
         self._state: str | None = None
         self._last_event_at: str | None = None
+        self._reset = None
 
     @property
     def native_value(self) -> str | None:
@@ -610,6 +626,21 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_EVENT_STATE_CHANGED,
+                self._handle_event_state_changed,
+            )
+        )
+
+    @callback
+    def _handle_event_state_changed(self, entry_id: str) -> None:
+        """Refresh state when the runtime doorbell video window is cleared."""
+
+        if entry_id == self._entry.entry_id and self._state in _DOORBELL_TRANSIENT_STATES:
+            self._state = DOORBELL_STATE_IDLE
+            self.async_write_ha_state()
 
     async def async_update(self) -> None:
         """Refresh the current doorbell state once from the agent."""
@@ -635,10 +666,44 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         )
         if state is None:
             return
+        if state in _DOORBELL_CLOSED_STATES:
+            self._clear_transient_state()
+            self._state = DOORBELL_STATE_IDLE
+            self._last_event_at = event.data.get("event_at")
+            self._attr_available = True
+            self.async_write_ha_state()
+            return
         self._state = state
         self._last_event_at = event.data.get("event_at")
         self._attr_available = True
+        if state in _DOORBELL_TRANSIENT_STATES:
+            self._schedule_transient_reset(event.data)
+        else:
+            self._clear_transient_state()
         self.async_write_ha_state()
+
+    def _schedule_transient_reset(self, event_data: dict[str, Any]) -> None:
+        """Return transient doorbell states to idle after the event window."""
+
+        self._clear_transient_state()
+        active_seconds = event_active_seconds(event_data)
+        if active_seconds <= 0:
+            return
+
+        def _reset(now: Any = None) -> None:
+            self._reset = None
+            self._state = DOORBELL_STATE_IDLE
+            self._attr_available = True
+            self.async_write_ha_state()
+
+        self._reset = call_later(self.hass, active_seconds, _reset)
+
+    def _clear_transient_state(self) -> None:
+        """Cancel any pending transient doorbell state reset."""
+
+        if self._reset:
+            self._reset()
+        self._reset = None
 
 
 class C300XSystemMetricSensor(C300XEntity, SensorEntity):

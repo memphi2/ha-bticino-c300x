@@ -27,6 +27,7 @@ from homeassistant.components.stream import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
@@ -37,10 +38,12 @@ from .const import (
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_EVENT_STATE_CHANGED,
 )
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .event_payload import agent_event_key
 from .video import (
+    active_until_is_active,
     call_later,
     doorbell_camera_unique_id,
     event_active_seconds,
@@ -493,10 +496,19 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ),
             "video_available": self._bridge_available,
             "video_window_available": (
-                self._video_window_available or event_state.video_available
+                _video_window_is_active(
+                    self._video_window_available,
+                    self._video_active_until,
+                )
+                or _video_window_is_active(
+                    bool(event_state.video_available),
+                    event_state.video_active_until,
+                )
             ),
-            "video_active_until": self._video_active_until
-            or event_state.video_active_until,
+            "video_active_until": _active_until_attribute(
+                self._video_active_until,
+                event_state.video_active_until,
+            ),
             "video_owner": self._video_owner,
             "external_media_active": self._external_media_active,
             "external_owner": self._external_owner,
@@ -1182,6 +1194,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_EVENT_STATE_CHANGED,
+                self._handle_event_state_changed,
+            )
+        )
+
+    @callback
+    def _handle_event_state_changed(self, entry_id: str) -> None:
+        """Refresh attributes when runtime video state is cleared centrally."""
+
+        if entry_id == self._entry.entry_id:
+            self._async_write_ha_state_if_ready()
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1231,6 +1257,23 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     def _async_write_ha_state_if_ready(self) -> None:
         if hasattr(self, "async_write_ha_state"):
             self.async_write_ha_state()
+
+
+def _video_window_is_active(available: bool, active_until: str | None) -> bool:
+    """Return true when a video window is currently usable by HA."""
+
+    if not available:
+        return False
+    return active_until_is_active(active_until) if active_until else True
+
+
+def _active_until_attribute(*values: str | None) -> str | None:
+    """Return the first non-expired active-until timestamp."""
+
+    for value in values:
+        if value and active_until_is_active(value):
+            return value
+    return None
 
 
 def _filter_link_local_sdp_candidates(sdp: str) -> str:

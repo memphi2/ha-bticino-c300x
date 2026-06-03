@@ -5,12 +5,13 @@ from __future__ import annotations
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import EVENT_AGENT_EVENT_RECEIVED
+from .const import EVENT_AGENT_EVENT_RECEIVED, SIGNAL_EVENT_STATE_CHANGED
 from .entity import C300XEntity, supports_capability
 from .event_payload import agent_event_key
-from .video import call_later, event_active_seconds
+from .video import active_until_is_active, call_later, event_active_seconds
 
 PARALLEL_UPDATES = 0
 VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
@@ -47,8 +48,13 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return true while a recent doorbell video window is active."""
 
-        return self._available or bool(
-            self._entry.runtime_data.event_state.video_available
+        event_state = self._entry.runtime_data.event_state
+        return _video_window_is_active(
+            self._available,
+            self._active_until,
+        ) or _video_window_is_active(
+            bool(event_state.video_available),
+            event_state.video_active_until,
         )
 
     @property
@@ -57,9 +63,13 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
 
         event_state = self._entry.runtime_data.event_state
         attributes = {}
-        active_until = self._active_until or event_state.video_active_until
+        active_until = (
+            self._active_until
+            if _video_window_is_active(self._available, self._active_until)
+            else event_state.video_active_until
+        )
         stream_path = self._stream_path or event_state.video_stream_path
-        if active_until:
+        if active_until and active_until_is_active(active_until):
             attributes["active_until"] = active_until
         if stream_path:
             attributes["stream_path"] = stream_path
@@ -75,6 +85,20 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_EVENT_STATE_CHANGED,
+                self._handle_event_state_changed,
+            )
+        )
+
+    @callback
+    def _handle_event_state_changed(self, entry_id: str) -> None:
+        """Refresh HA state when runtime video state is cleared centrally."""
+
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
 
     @callback
     def _handle_agent_event(self, event) -> None:
@@ -111,3 +135,11 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
         self._available = False
         self._active_until = None
         self._stream_path = None
+
+
+def _video_window_is_active(available: bool, active_until: str | None) -> bool:
+    """Return true when a video window is currently usable by HA."""
+
+    if not available:
+        return False
+    return active_until_is_active(active_until) if active_until else True

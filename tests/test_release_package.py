@@ -163,3 +163,21 @@ def test_native_self_update_apply_repairs_existing_startup_link() -> None:
     assert "agent_init_link_matches()" in repair
     assert "access(C300X_AGENT_INIT_SCRIPT, X_OK)" in repair
     assert "ensure_agent_init_link()" in repair
+
+
+def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
+    """Stock rc links are usually relative but still point to the same init script."""
+
+    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
+    link_check = native_http.split(
+        "static int agent_init_link_matches(void)\n{",
+        1,
+    )[1].split("static int apply_agent_update_init_script", 1)[0]
+    ensure_link = native_http.split(
+        "static int ensure_agent_init_link",
+        1,
+    )[1].split("static int agent_init_link_matches", 1)[0]
+
+    assert "realpath(C300X_AGENT_INIT_LINK, resolved)" in link_check
+    assert "strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0" in link_check
+    assert "agent_init_link_matches()" in ensure_link

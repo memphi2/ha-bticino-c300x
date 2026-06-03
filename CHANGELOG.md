@@ -2,6 +2,13 @@
 
 ## v0.5.0 - 2026-06-03
 
+### Update note
+
+- During an update, handle the **device agent update** Repair first. Other
+  C300X Repairs can appear temporarily while Home Assistant and the device
+  agent are not on the same bundle yet; ignore those until the agent update
+  Repair has completed and the integration has reloaded.
+
 ### Added
 
 - Dedicated local callback base URL override for reverse-proxy and HTTPS

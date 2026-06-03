@@ -129,6 +129,7 @@ if "homeassistant.components.sensor" not in sys.modules:
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import agent_diagnostics
+from custom_components.bticino_c300x import sensor as sensor_module
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
 )
@@ -765,6 +766,7 @@ def test_memory_metric_sensor_uses_pushed_memory_percent() -> None:
 def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
     entry = _FakeEntry()
     entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
     event = types.SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
@@ -792,6 +794,66 @@ def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
     assert entity.extra_state_attributes == {
         "last_event_at": "2026-06-01T10:00:00Z"
     }
+    assert entity.wrote_state is True
+
+
+def test_doorbell_state_sensor_returns_transient_view_to_idle(monkeypatch) -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
+    scheduled: list[tuple[int, Any]] = []
+
+    def _call_later(_hass: Any, seconds: int, action: Any) -> Any:
+        scheduled.append((seconds, action))
+        return lambda: None
+
+    monkeypatch.setattr(sensor_module, "call_later", _call_later)
+    event = types.SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_view_requested",
+            "event_at": "2026-06-01T10:00:00Z",
+            "active_seconds": 5,
+        }
+    )
+
+    entity._handle_agent_event(event)
+    assert entity.native_value == "doorbell_view_requested"
+    assert scheduled[0][0] == 5
+
+    scheduled[0][1](None)
+
+    assert entity.native_value == "idle"
+    assert entity.available is True
+
+
+def test_doorbell_state_sensor_clears_on_media_closed() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    canceled = False
+
+    def _cancel() -> None:
+        nonlocal canceled
+        canceled = True
+
+    entity._state = "doorbell_view_requested"
+    entity._reset = _cancel
+    event = types.SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_media_closed",
+            "event_at": "2026-06-01T10:00:30Z",
+        }
+    )
+
+    entity._handle_agent_event(event)
+
+    assert entity.native_value == "idle"
+    assert entity.extra_state_attributes == {
+        "last_event_at": "2026-06-01T10:00:30Z"
+    }
+    assert entity.available is True
+    assert canceled is True
     assert entity.wrote_state is True
 
 

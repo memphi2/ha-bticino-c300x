@@ -34,7 +34,7 @@ def test_sample_config_is_bootstrap_only_and_does_not_enable_heavy_paths() -> No
     assert config["maintenance"]["qmlPatch"]["enabled"] is False
     assert config["maintenance"]["firewall"]["enabled"] is False
     assert config["maintenance"]["ipv6Firewall"]["enabled"] is False
-    assert config["activations"]["enabled"] is False
+    assert config["activations"]["enabled"] is True
     assert config["activations"]["autoDiscover"] is True
     assert config["activations"]["discoveryRoots"] == [
         "/home/bticino/cfg/extra/47",
@@ -80,7 +80,7 @@ def test_installer_config_closes_noauth_and_enables_runtime_defaults() -> None:
         "enabled": True,
         "script": f"{DEFAULT_REMOTE_DIR}/remove_agent.sh",
     }
-    assert config["activations"]["enabled"] is False
+    assert config["activations"]["enabled"] is True
     assert config["activations"]["autoDiscover"] is True
     assert config["activations"]["discoveryRoots"] == [
         "/home/bticino/cfg/extra/47",

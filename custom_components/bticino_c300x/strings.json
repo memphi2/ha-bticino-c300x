@@ -425,6 +425,24 @@
       "title": "C300X device agent does not start after reboot",
       "description": "{entry_title} can reach the C300X device agent now, but the device startup link is missing or invalid. The agent will stop working again after the next C300X reboot. Run the device-agent repair/update action or reinstall the agent over SSH to recreate the startup link."
     },
+    "device_core_qml_hook_required": {
+      "title": "C300X core media hook is missing",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Apply C300X core media hook",
+            "description": "Home Assistant will apply only the minimal EventManager QML hook required to detect when the C300X display or app closes a media session. This is separate from the optional dashboard GUI patch.\n\nCurrent core hook state: {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "Applying the core media hook failed. Check maintenance access and retry.",
+          "core_patch_verify_failed": "The core media hook action ran, but the agent did not confirm the patched state."
+        },
+        "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "C300X dashboard action allowlist is invalid",
       "description": "The action allowlist for {entry_title} cannot be parsed: {error}. Fix the configured action map, then reload the integration."
@@ -435,7 +453,6 @@
     },
     "unsupported_callback_url": {
       "title": "C300X callback URL is not usable by the device agent",
-      "description": "{entry_title} generated an unsupported callback target for {source}. The native device agent needs a local HTTP callback URL. Current callback scheme: {scheme}; host type: {host_type}. Configure Home Assistant with a local HTTP URL reachable from the C300X and avoid HTTPS, .local, loopback and link-local callback addresses.",
       "fix_flow": {
         "step": {
           "configure": {

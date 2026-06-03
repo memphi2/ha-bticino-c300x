@@ -425,6 +425,24 @@
       "title": "C300X Device-Agent startet nach Reboot nicht",
       "description": "{entry_title} erreicht den C300X Device-Agent aktuell, aber der Geraete-Autostart-Link fehlt oder ist ungueltig. Nach dem naechsten C300X-Reboot faellt der Agent wieder aus. Fuehre die Device-Agent-Reparatur/Aktualisierung aus oder installiere den Agent per SSH neu, um den Autostart-Link wieder anzulegen."
     },
+    "device_core_qml_hook_required": {
+      "title": "C300X Core-Media-Hook fehlt",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X Core-Media-Hook anwenden",
+            "description": "Home Assistant wendet nur den minimalen EventManager-QML-Hook an, der erkennt, wenn das C300X-Display oder die App eine Media-Session schliesst. Das ist getrennt vom optionalen Dashboard-GUI-Patch.\n\nAktueller Core-Hook-Status: {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "Der Core-Media-Hook konnte nicht angewendet werden. Pruefe den Maintenance-Zugriff und versuche es erneut.",
+          "core_patch_verify_failed": "Die Core-Media-Hook-Aktion wurde ausgefuehrt, aber der Agent hat den gepatchten Zustand nicht bestaetigt."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "C300X Dashboard-Action-Allowlist ist ungueltig",
       "description": "Die Action-Allowlist fuer {entry_title} kann nicht gelesen werden: {error}. Korrigiere die konfigurierte Action-Map und lade danach die Integration neu."
@@ -435,7 +453,6 @@
     },
     "unsupported_callback_url": {
       "title": "C300X Callback-URL ist fuer den Device-Agent nicht nutzbar",
-      "description": "{entry_title} hat fuer {source} ein nicht unterstuetztes Callback-Ziel erzeugt. Der native Device-Agent braucht eine lokale HTTP-Callback-URL. Aktuelles Callback-Schema: {scheme}; Host-Typ: {host_type}. Konfiguriere Home Assistant mit einer lokalen HTTP-URL, die vom C300X erreichbar ist, und vermeide HTTPS, .local, Loopback und Link-Local-Callback-Adressen.",
       "fix_flow": {
         "step": {
           "configure": {

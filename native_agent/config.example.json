@@ -20,7 +20,7 @@
     "timeoutMs": 3000
   },
   "activations": {
-    "enabled": false,
+    "enabled": true,
     "autoDiscover": true,
     "discoveryRoots": [
       "/home/bticino/cfg/extra/47",

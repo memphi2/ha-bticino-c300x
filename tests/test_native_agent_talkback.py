@@ -61,10 +61,12 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
     assert "external_media_active_locked(video)" in activate_body
-    assert "C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS 90" in video
+    assert "C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 10" in video
+    assert "static int external_media_guard_ttl_seconds(int ttl_seconds)" in video
+    assert "ttl_seconds > C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS" in video
     assert "(void)ttl_seconds;" not in event_body
     assert "video->external_active_until = now + bounded_ttl;" in video
-    assert "if (video->external_active_until > 0 && now >= video->external_active_until)" in video
+    assert "if (video->external_active_until <= 0 || now >= video->external_active_until)" in video
     assert "video->media_starting = 1;" in video
     assert "video->media_starting = 0;" in video
     assert video.index("video->media_starting = 1;") < video.index(
@@ -78,10 +80,13 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert '"external_session_active"' in activate_body
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_body
     assert 'strcmp(event_type, "doorbell.view_requested") == 0' in event_body
-    assert 'set_external_media_active_locked(video, "device_display", ttl_seconds)' in event_body
+    assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in event_body
     assert 'clear_external_media_active_locked(video)' in event_body
     assert "c300x_video_note_event(runtime->video, event_type, ttl_seconds)" in http
     assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
+    assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
+    assert 'c300x_video_note_event(runtime->video, "media.closed", 0)' in http
+    assert 'ui_event_notify(runtime, "media.closed")' in http
 
 
 def test_native_agent_reports_media_ownership_and_external_block_state() -> None:

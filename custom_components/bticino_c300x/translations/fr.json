@@ -425,6 +425,24 @@
       "title": "L'agent C300X ne demarre pas apres redemarrage",
       "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de demarrage du peripherique est manquant ou invalide. Apres le prochain redemarrage du C300X, l'agent cessera de fonctionner a nouveau. Lancez la reparation/mise a jour de l'agent ou reinstallez l'agent via SSH pour recreer le lien de demarrage."
     },
+    "device_core_qml_hook_required": {
+      "title": "Hook media core C300X manquant",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Appliquer le hook media core C300X",
+            "description": "Home Assistant appliquera uniquement le hook QML EventManager minimal necessaire pour detecter la fermeture d'une session media par l'ecran C300X ou l'app. C'est separe du patch GUI dashboard optionnel.\n\nEtat actuel du hook core : {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "L'application du hook media core a echoue. Verifiez l'acces maintenance et reessayez.",
+          "core_patch_verify_failed": "L'action du hook media core a ete executee, mais l'agent n'a pas confirme l'etat patche."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "La liste d'actions dashboard C300X est invalide",
       "description": "La liste d'actions de {entry_title} ne peut pas etre analysee : {error}. Corrigez la carte d'actions configuree, puis rechargez l'integration."
@@ -435,7 +453,6 @@
     },
     "unsupported_callback_url": {
       "title": "L'URL callback C300X n'est pas utilisable par l'agent appareil",
-      "description": "{entry_title} a genere une cible callback non prise en charge pour {source}. L'agent natif a besoin d'une URL callback HTTP locale. Schema actuel : {scheme}; type d'hote : {host_type}. Configurez Home Assistant avec une URL HTTP locale joignable par le C300X et evitez HTTPS, .local, loopback et link-local.",
       "fix_flow": {
         "step": {
           "configure": {

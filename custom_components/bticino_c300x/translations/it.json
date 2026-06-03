@@ -425,6 +425,24 @@
       "title": "Il device agent C300X non parte dopo il riavvio",
       "description": "{entry_title} raggiunge ora il device agent C300X, ma il link di avvio del dispositivo manca o non e valido. Dopo il prossimo riavvio del C300X l'agent smettera di funzionare di nuovo. Esegui la riparazione/aggiornamento del device agent oppure reinstalla l'agent via SSH per ricreare il link di avvio."
     },
+    "device_core_qml_hook_required": {
+      "title": "Hook media core C300X mancante",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Applica hook media core C300X",
+            "description": "Home Assistant applichera solo l'hook QML EventManager minimo necessario per rilevare quando il display C300X o l'app chiude una sessione media. E separato dalla patch GUI dashboard opzionale.\n\nStato hook core attuale: {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "Applicazione hook media core non riuscita. Controlla l'accesso manutenzione e riprova.",
+          "core_patch_verify_failed": "L'azione hook media core e stata eseguita, ma l'agent non ha confermato lo stato patchato."
+        },
+        "abort": {
+          "entry_not_loaded": "La voce BTicino C300X non è caricata."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "Allowlist azioni dashboard C300X non valida",
       "description": "L'allowlist delle azioni per {entry_title} non può essere letta: {error}. Correggi la mappa azioni configurata, poi ricarica l'integrazione."
@@ -435,7 +453,6 @@
     },
     "unsupported_callback_url": {
       "title": "URL callback C300X non utilizzabile dal device agent",
-      "description": "{entry_title} ha generato un target callback non supportato per {source}. Il device agent nativo richiede un URL callback HTTP locale. Schema callback attuale: {scheme}; tipo host: {host_type}. Configura Home Assistant con un URL HTTP locale raggiungibile dal C300X ed evita callback HTTPS, .local, loopback e link-local.",
       "fix_flow": {
         "step": {
           "configure": {

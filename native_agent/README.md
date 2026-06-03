@@ -137,16 +137,22 @@ filesystem writable only for the final write when needed, and remount it
 read-only immediately afterwards. The endpoint never accepts arbitrary iptables
 or ip6tables rules or shell commands.
 
-The device UI maintenance endpoints only run the configured fixed local helper
-with `status`, `apply`, `restore`, or `reload`; they do not accept arbitrary commands. The
-provided script applies the complete GUI function patch: MainApp navigation,
+The device UI maintenance endpoints only run the configured fixed local helper;
+they do not accept arbitrary commands. `core-apply` installs the small
+EventManager media-close hook required for reliable doorbell video ownership
+tracking, independently from the optional device dashboard patch. `apply`
+installs that core hook plus the complete GUI function patch: MainApp navigation,
 HomePage unread memo/video-message badges, MemoPage external-delete refresh,
-Alarmo/Home Assistant pages, and the local QML JavaScript bridge. It backs up original GUI files under
+Alarmo/Home Assistant pages, and the local QML JavaScript bridge. `restore`
+removes only the optional GUI function patch and keeps the core media hook;
+`restore-all` is reserved for agent removal and restores the core hook too. The
+script backs up original GUI files under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original` and does not back
 up generated agent files on the device. Apply/restore first render the desired
 tree into a temporary staging directory, compare target files byte-for-byte, and
 only remount the root filesystem writable for the final copy when at least one
-file differs. The `status` action is read-only.
+file differs. The `status` action is read-only and reports both the optional GUI
+patch state and the core media-hook state.
 
 `/api/v1/diagnostics` exposes non-secret write counters (`agent_write_count`,
 `last_write_class`, `last_write_reason`, `subscription_store_writes`, and

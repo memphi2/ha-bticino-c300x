@@ -26,6 +26,8 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -35,6 +37,9 @@ from .const import (
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
     DEFAULT_RECONNECT_GRACE_SECONDS,
+    DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEVICE_ACTIVATION_MODE_AUTO,
+    DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
@@ -222,6 +227,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         _async_track_display_bridge_updates(hass, entry)
     )
     if connection_state.available:
+        await _async_configure_device_activations(entry, api)
         await _async_configure_display_bridge(hass, entry, api)
         await _async_sync_device_ui_patch(entry)
     _async_remove_stale_gui_dependent_entities(hass, entry)
@@ -410,6 +416,64 @@ async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
         diagnostics.mark_failure(error, datetime.now(UTC))
         _LOGGER.warning("C300X device UI patch status refresh failed: %s", error)
         return
+
+
+async def _async_configure_device_activations(
+    entry: BticinoC300XConfigEntry,
+    api: C300XAgentApi,
+) -> None:
+    """Synchronize configured C300X activation discovery with the native agent."""
+
+    enabled, auto_discover, stair_light_address = _entry_activation_config(entry)
+    try:
+        status = await api.async_auth_config_status()
+        if (
+            status.get("activations_enabled") is None
+            and status.get("activations_auto_discover") is None
+        ):
+            return
+        if (
+            status.get("activations_enabled") is enabled
+            and status.get("activations_auto_discover") is auto_discover
+            and (
+                auto_discover
+                or status.get("activation_stair_light_address") == stair_light_address
+            )
+        ):
+            return
+        await api.async_configure_device_activations(
+            enabled=enabled,
+            auto_discover=auto_discover,
+            stair_light_address=stair_light_address,
+        )
+    except C300XAgentApiUnsupportedError:
+        _LOGGER.debug("C300X device agent does not support activation configuration")
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X activation configuration sync failed: %s",
+            compact_error_text(err),
+        )
+
+
+def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool, str]:
+    """Return the desired native-agent activation configuration."""
+
+    mode = str(
+        _entry_config_value(
+            entry,
+            CONF_DEVICE_ACTIVATION_MODE,
+            DEVICE_ACTIVATION_MODE_AUTO,
+        )
+    ).strip()
+    auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
+    address = str(
+        _entry_config_value(
+            entry,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+            DEFAULT_STAIR_LIGHT_ADDRESS,
+        )
+    ).strip() or DEFAULT_STAIR_LIGHT_ADDRESS
+    return True, auto_discover, address
 
 
 async def _async_configure_display_bridge(

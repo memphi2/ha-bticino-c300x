@@ -514,7 +514,9 @@ def test_auth_config_status_uses_maintenance_endpoint() -> None:
         '{"ok": true, "noAuth": true, "api_token_configured": false, '
         '"maintenance_token_configured": true, "restart_required": true, '
         '"maintenance_no_auth_allowed": false, "mdns_enabled": true, '
-        '"firewall_enabled": false, "ipv6_firewall_enabled": true}'
+        '"firewall_enabled": false, "ipv6_firewall_enabled": true, '
+        '"activations_enabled": true, "activations_auto_discover": false, '
+        '"activation_stair_light_address": "10"}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -533,6 +535,9 @@ def test_auth_config_status_uses_maintenance_endpoint() -> None:
     assert status["mdns_enabled"] is True
     assert status["firewall_enabled"] is False
     assert status["ipv6_firewall_enabled"] is True
+    assert status["activations_enabled"] is True
+    assert status["activations_auto_discover"] is False
+    assert status["activation_stair_light_address"] == "10"
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/maintenance/auth",
@@ -595,6 +600,45 @@ def test_set_mdns_discovery_sends_maintenance_update() -> None:
         HEADER_MAINTENANCE_TOKEN: "maintenance-token",
     }
     assert session.requests[0]["kwargs"]["json"] == {"mdnsEnabled": False}
+
+
+def test_configure_device_activations_sends_maintenance_update() -> None:
+    session = _FakeSession(
+        '{"ok": true, "activations_enabled": true, '
+        '"activations_auto_discover": false, '
+        '"activation_stair_light_address": "10"}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(
+        api.async_configure_device_activations(
+            enabled=True,
+            auto_discover=False,
+            stair_light_address="10",
+        )
+    )
+
+    assert status["activations_enabled"] is True
+    assert status["activations_auto_discover"] is False
+    assert status["activation_stair_light_address"] == "10"
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/auth",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {
+        "activationsEnabled": True,
+        "activationsAutoDiscover": False,
+        "activationStairLightAddress": "10",
+    }
 
 
 def test_set_ipv6_firewall_enabled_sends_maintenance_update() -> None:
@@ -1009,6 +1053,26 @@ def test_apply_qml_patch_sends_maintenance_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "apply_qml_patch"}
 
 
+def test_apply_qml_core_patch_sends_maintenance_confirmation() -> None:
+    session = _FakeSession(
+        '{"ok": true, "state": "original", "core_state": "patched", "core_patched": true}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    assert asyncio.run(api.async_apply_qml_core_patch())["core_patched"] is True
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/qml-patch/actions/apply-core",
+    )
+    assert request["kwargs"]["json"] == {"confirm": "apply_qml_core_patch"}
+
+
 def test_restore_qml_patch_sends_maintenance_confirmation() -> None:
     session = _FakeSession('{"ok": true, "state": "original"}')
     api = C300XAgentApi(
@@ -1148,7 +1212,10 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "available": True,
         "patched": True,
         "state": "patched",
+        "core_patched": None,
+        "core_state": None,
         "backup_available": None,
+        "core_backup_available": None,
         "gui_running": None,
         "raw": {"patched": True},
     }

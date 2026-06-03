@@ -90,6 +90,7 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+    DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
@@ -110,6 +111,7 @@ class FakeRuntimeData:
     connection_state: Any | None = None
     display_bridge_diagnostics: Any | None = None
     agent_diagnostics: dict[str, Any] | None = None
+    qml_patch_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -331,6 +333,51 @@ def test_agent_startup_link_ok_clears_repair_issue() -> None:
 
     assert (
         repair_issue_id(DEVICE_AGENT_STARTUP_DISABLED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
+def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": False,
+                "core_state": "original",
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE
+    assert issue["translation_placeholders"]["core_state"] == "original"
+
+
+def test_present_core_qml_hook_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": True,
+                "core_state": "patched",
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
         in DELETED_ISSUES
     )
 

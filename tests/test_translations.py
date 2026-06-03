@@ -90,6 +90,29 @@ def test_fixable_callback_url_repair_uses_ha_issue_fix_flow_schema() -> None:
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]
 
 
+def test_fixable_core_qml_hook_repair_uses_ha_issue_fix_flow_schema() -> None:
+    """Validate HA can render the core QML hook repair flow."""
+
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        data = _load_json(path)
+        fix_flow = _path_value(
+            data,
+            "issues",
+            "device_core_qml_hook_required",
+            "fix_flow",
+        )
+        assert _path_value(fix_flow, "step", "confirm")["description"]
+        assert _path_value(fix_flow, "error")["core_patch_failed"]
+        assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
+        assert _path_value(fix_flow, "abort")["entry_not_loaded"]
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 

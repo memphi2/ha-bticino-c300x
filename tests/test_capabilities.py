@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 from custom_components.bticino_c300x import (
+    _async_configure_device_activations,
     _entry_config_value,
     _entry_platforms,
     async_migrate_entry,
@@ -19,12 +20,15 @@ from custom_components.bticino_c300x.capabilities import (
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
+    DEVICE_ACTIVATION_MODE_MANUAL,
 )
 
 
@@ -286,3 +290,58 @@ def test_entry_platforms_only_include_camera_if_capability_supported() -> None:
     )
 
     assert "camera" not in _entry_platforms(entry, {"doorbell_video": {"supported": False}})
+
+
+def test_configure_device_activations_writes_only_on_mismatch() -> None:
+    api = _FakeActivationConfigApi(
+        {
+            "activations_enabled": True,
+            "activations_auto_discover": True,
+            "activation_stair_light_address": "",
+        }
+    )
+    entry = SimpleNamespace(
+        data={
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "12",
+        },
+        options={},
+    )
+
+    asyncio.run(_async_configure_device_activations(entry, api))  # type: ignore[arg-type]
+    asyncio.run(_async_configure_device_activations(entry, api))  # type: ignore[arg-type]
+
+    assert api.calls == [
+        ("status",),
+        ("configure", True, False, "12"),
+        ("status",),
+    ]
+
+
+class _FakeActivationConfigApi:
+    def __init__(self, status: dict[str, object]) -> None:
+        self.status = dict(status)
+        self.calls: list[tuple[object, ...]] = []
+
+    async def async_auth_config_status(self) -> dict[str, object]:
+        self.calls.append(("status",))
+        return dict(self.status)
+
+    async def async_configure_device_activations(
+        self,
+        *,
+        enabled: bool,
+        auto_discover: bool,
+        stair_light_address: str,
+    ) -> dict[str, object]:
+        self.calls.append(("configure", enabled, auto_discover, stair_light_address))
+        self.status.update(
+            {
+                "activations_enabled": enabled,
+                "activations_auto_discover": auto_discover,
+                "activation_stair_light_address": (
+                    "" if auto_discover else stair_light_address
+                ),
+            }
+        )
+        return dict(self.status)

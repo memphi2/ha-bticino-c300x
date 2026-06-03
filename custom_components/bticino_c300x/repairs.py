@@ -31,11 +31,16 @@ from .const import (
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DEFAULT_AGENT_PORT,
+    DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEVICE_ACTIVATION_MODE_AUTO,
     DOMAIN,
     SIGNAL_AGENT_INFO_CHANGED,
+    SIGNAL_QML_PATCH_CHANGED,
 )
 from .device_installer import (
     C300XDeviceInstallRequest,
@@ -43,9 +48,13 @@ from .device_installer import (
 )
 from .entry_config import entry_config_value
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
-from .qml_patch import async_apply_qml_patch_and_confirm
+from .qml_patch import (
+    async_apply_qml_core_patch_and_confirm,
+    async_apply_qml_patch_and_confirm,
+)
 from .repair_issues import (
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+    DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
@@ -72,6 +81,12 @@ async def async_create_fix_flow(
         and isinstance(data.get("entry_id"), str)
     ):
         return CallbackUrlRepairFlow(hass, str(data["entry_id"]))
+    if (
+        data is not None
+        and data.get("issue_type") == DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE
+        and isinstance(data.get("entry_id"), str)
+    ):
+        return DeviceCoreQmlHookRepairFlow(hass, str(data["entry_id"]))
     raise ValueError(f"unknown repair issue: {issue_id}")
 
 
@@ -141,6 +156,78 @@ class CallbackUrlRepairFlow(RepairsFlow):
                 "suggested_callback_base_url": suggested or "http://HA_LOCAL_IP:8123",
             },
         )
+
+
+class DeviceCoreQmlHookRepairFlow(RepairsFlow):
+    """Repair flow for the core media QML hook used by video session tracking."""
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        """Initialize the repair flow."""
+
+        self.hass = hass
+        self._entry_id = entry_id
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Start the repair flow."""
+
+        return await self.async_step_confirm(user_input)
+
+    async def async_step_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Apply the minimal core QML hook after explicit confirmation."""
+
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is None or not hasattr(entry, "runtime_data"):
+            return self.async_abort(reason="entry_not_loaded")
+        if user_input is None:
+            return self.async_show_form(
+                step_id="confirm",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "qml_patch_status": _runtime_qml_patch_status(entry),
+                },
+            )
+        try:
+            status = await async_apply_qml_core_patch_and_confirm(
+                entry,
+                lambda: async_dispatcher_send(
+                    self.hass,
+                    SIGNAL_QML_PATCH_CHANGED,
+                    entry.entry_id,
+                ),
+            )
+        except C300XAgentApiError:
+            return self.async_show_form(
+                step_id="confirm",
+                data_schema=vol.Schema({}),
+                errors={"base": "core_patch_failed"},
+                description_placeholders={
+                    "qml_patch_status": _runtime_qml_patch_status(entry),
+                },
+            )
+        if status.get("core_patched") is not True:
+            return self.async_show_form(
+                step_id="confirm",
+                data_schema=vol.Schema({}),
+                errors={"base": "core_patch_verify_failed"},
+                description_placeholders={
+                    "qml_patch_status": _runtime_qml_patch_status(entry),
+                },
+            )
+        ir.async_delete_issue(
+            hass=self.hass,
+            domain=DOMAIN,
+            issue_id=repair_issue_id(
+                DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+                self._entry_id,
+            ),
+        )
+        return self.async_create_entry(data={})
 
 
 class DeviceAgentUpdateRepairFlow(RepairsFlow):
@@ -261,6 +348,20 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                         or not patch_state.firewall_status_known
                     ),
                     apply_gui_patch=False,
+                    device_activation_mode=str(
+                        entry_config_value(
+                            entry,
+                            CONF_DEVICE_ACTIVATION_MODE,
+                            DEVICE_ACTIVATION_MODE_AUTO,
+                        )
+                    ),
+                    device_activation_stair_light_address=str(
+                        entry_config_value(
+                            entry,
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                            DEFAULT_STAIR_LIGHT_ADDRESS,
+                        )
+                    ),
                 ),
                 api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),
                 maintenance_token=str(
@@ -490,8 +591,10 @@ async def _async_restore_external_patch_state(
         with suppress(C300XAgentApiError):
             await api.async_set_ipv6_firewall_enabled(True)
         await api.async_apply_ipv6_firewall()
-    if patch_state.qml_patch_required and changed.qml_patch_changed:
-        await async_apply_qml_patch_and_confirm(entry)
+    if changed.qml_patch_changed:
+        entry.runtime_data.qml_patch_status = await api.async_apply_qml_core_patch()
+        if patch_state.qml_patch_required:
+            await async_apply_qml_patch_and_confirm(entry)
 
 
 def _ssh_install_schema() -> vol.Schema:
@@ -516,3 +619,15 @@ def _validated_callback_base_url(
     except ValueError:
         errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
         return ""
+
+
+def _runtime_qml_patch_status(entry: Any) -> str:
+    status = getattr(getattr(entry, "runtime_data", None), "qml_patch_status", {})
+    if isinstance(status, dict):
+        core_state = str(status.get("core_state") or "").strip()
+        if core_state:
+            return core_state
+        state = str(status.get("state") or "").strip()
+        if state:
+            return state
+    return "unknown"

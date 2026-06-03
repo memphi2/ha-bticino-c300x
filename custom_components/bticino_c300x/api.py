@@ -458,6 +458,31 @@ class C300XAgentApi:
         )
         return normalize_auth_config_status(data)
 
+    async def async_configure_device_activations(
+        self,
+        *,
+        enabled: bool,
+        auto_discover: bool,
+        stair_light_address: str,
+    ) -> dict[str, Any]:
+        """Configure native-agent C300X activation discovery."""
+
+        payload: dict[str, Any] = {
+            "activationsEnabled": bool(enabled),
+            "activationsAutoDiscover": bool(auto_discover),
+        }
+        if not auto_discover:
+            payload["activationStairLightAddress"] = normalize_stair_light_address(
+                stair_light_address
+            )
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/auth",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
     async def async_set_ipv6_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
         """Enable or disable the IPv6 firewall maintenance endpoint."""
 
@@ -794,6 +819,17 @@ class C300XAgentApi:
             "POST",
             "/api/v1/maintenance/qml-patch/actions/apply",
             json_data={"confirm": "apply_qml_patch"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_qml_patch_status(data)
+
+    async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+        """Apply the core media QML hook through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/qml-patch/actions/apply-core",
+            json_data={"confirm": "apply_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
         )
         return normalize_qml_patch_status(data)
@@ -1215,6 +1251,13 @@ def normalize_auth_config_status(data: Any) -> dict[str, Any]:
         "mdns_enabled": _optional_bool(data.get("mdns_enabled")),
         "firewall_enabled": _optional_bool(data.get("firewall_enabled")),
         "ipv6_firewall_enabled": _optional_bool(data.get("ipv6_firewall_enabled")),
+        "activations_enabled": _optional_bool(data.get("activations_enabled")),
+        "activations_auto_discover": _optional_bool(
+            data.get("activations_auto_discover")
+        ),
+        "activation_stair_light_address": _optional_string(
+            data.get("activation_stair_light_address")
+        ),
         "raw": data,
     }
 
@@ -1267,7 +1310,10 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
         "available": bool(data.get("available", True)),
         "patched": patched,
         "state": state,
+        "core_patched": _optional_bool(data.get("core_patched")),
+        "core_state": _optional_string(data.get("core_state")),
         "backup_available": _optional_bool(data.get("backup_available")),
+        "core_backup_available": _optional_bool(data.get("core_backup_available")),
         "gui_running": _optional_bool(data.get("gui_running")),
         "raw": data.get("raw", data),
     }

@@ -11,7 +11,7 @@
 
 #include "pthread_compat.h"
 
-#define C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS 90
+#define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 10
 
 struct c300x_video;
 static void clear_external_media_active_locked(struct c300x_video *video);
@@ -50,6 +50,14 @@ static void utc_now(char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
 }
 
+static int external_media_guard_ttl_seconds(int ttl_seconds)
+{
+    if (ttl_seconds <= 0 || ttl_seconds > C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS) {
+        return C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS;
+    }
+    return ttl_seconds;
+}
+
 static void set_last_error(struct c300x_video *video, const char *message)
 {
     pthread_mutex_lock(&video->mutex);
@@ -65,7 +73,7 @@ static int external_media_active_locked(struct c300x_video *video)
         return 0;
     }
     now = time(NULL);
-    if (video->external_active_until > 0 && now >= video->external_active_until) {
+    if (video->external_active_until <= 0 || now >= video->external_active_until) {
         clear_external_media_active_locked(video);
         return 0;
     }
@@ -78,9 +86,7 @@ static void set_external_media_active_locked(
     int ttl_seconds
 ) {
     time_t now = time(NULL);
-    int bounded_ttl = ttl_seconds > 0
-        ? ttl_seconds
-        : C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS;
+    int bounded_ttl = external_media_guard_ttl_seconds(ttl_seconds);
 
     video->external_event_active = 1;
     video->external_active_until = now + bounded_ttl;
@@ -364,7 +370,7 @@ void c300x_video_note_event(struct c300x_video *video, const char *event_type, i
         || strcmp(event_type, "doorbell.view_requested") == 0
     ) {
         if (!video->call_active) {
-            set_external_media_active_locked(video, "device_display", ttl_seconds);
+            set_external_media_active_locked(video, "external_media", ttl_seconds);
         }
     } else if (
         strcmp(event_type, "doorbell.media.closed") == 0

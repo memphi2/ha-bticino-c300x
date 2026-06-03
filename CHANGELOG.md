@@ -8,9 +8,14 @@
   callbacks.
 - Buffers early WebRTC ICE candidates until the peer connection has a remote
   description, avoiding noisy `addIceCandidate` race warnings.
+- Gives Alarmo arm-mode buttons on the C300X display immediate visual feedback:
+  yellow while checking/sending, green when accepted, and red when blocked or
+  rejected.
 
 ### Notes
 
+- Includes the full `0.5.0` feature set: callback URL override, French
+  localization, event replay cleanup, and doorbell video recovery improvements.
 - The native C300X device agent is unchanged from `0.5.0`; this is a Home
   Assistant integration hotfix.
 

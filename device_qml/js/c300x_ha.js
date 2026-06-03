@@ -277,6 +277,9 @@ function applyAlarmCommandResult(data, command, statusItem, pageItem) {
         if (pageItem.clearCommandFeedback) {
             pageItem.clearCommandFeedback()
         }
+        if (pageItem.flashCommandButton) {
+            pageItem.flashCommandButton(command, "#ff6b6b")
+        }
         statusItem.text = ""
         statusItem.color = "#ff6b6b"
         if (pageItem.setCommandFeedback && !pageItem.bypassVisible()) {

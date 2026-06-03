@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.5.1 - 2026-06-04
+
+### Changed
+
+- Fixes Home Assistant 2026.6 thread-safety warnings from doorbell video TTL
+  callbacks.
+- Buffers early WebRTC ICE candidates until the peer connection has a remote
+  description, avoiding noisy `addIceCandidate` race warnings.
+
+### Notes
+
+- The native C300X device agent is unchanged from `0.5.0`; this is a Home
+  Assistant integration hotfix.
+
 ## v0.5.0 - 2026-06-03
 
 ### Update note

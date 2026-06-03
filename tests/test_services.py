@@ -102,6 +102,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_DELETE_LATEST_VOICE_MEMO,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
+    SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
 from custom_components.bticino_c300x.services import async_setup_services  # noqa: E402
@@ -112,6 +114,8 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     api: Any = None
+    memos: dict[str, Any] = field(default_factory=dict)
+    memos_updated_at: Any = None
 
 
 @dataclass
@@ -157,10 +161,39 @@ class _FakeHass:
 class _FakeApi:
     def __init__(self) -> None:
         self.activate_video_calls: list[bool] = []
+        self.activation_calls: list[str] = []
+        self.text_memo_calls: list[dict[str, Any]] = []
 
     async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
         self.activate_video_calls.append(audio)
         return {"ok": True, "audio": audio}
+
+    async def async_run_device_activation(
+        self,
+        activation_id: str,
+    ) -> dict[str, Any]:
+        self.activation_calls.append(activation_id)
+        return {"ok": True, "id": activation_id}
+
+    async def async_create_text_memo(self, text: str, *, read: bool = False) -> dict[str, Any]:
+        self.text_memo_calls.append({"text": text, "read": read})
+        return {"ok": True, "id": "text/memo_1"}
+
+    async def async_memos(self) -> dict[str, Any]:
+        return {
+            "available": True,
+            "total": 1,
+            "text_total": 1,
+            "voice_total": 0,
+            "memos": [
+                {
+                    "id": "text/memo_1",
+                    "kind": "text",
+                    "read": False,
+                    "text": "new memo",
+                }
+            ],
+        }
 
 
 def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
@@ -184,7 +217,9 @@ def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
 
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
+        assert (DOMAIN, SERVICE_WRITE_TEXT_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) in hass.services.registered
@@ -215,6 +250,7 @@ def test_delete_services_require_enabled_device_ui_option() -> None:
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) not in hass.services.registered
@@ -368,6 +404,7 @@ def test_service_setup_tolerates_not_loaded_entries_without_runtime_data() -> No
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) not in hass.services.registered
@@ -392,5 +429,42 @@ def test_activate_doorbell_video_service_calls_agent_api() -> None:
         await handler(types.SimpleNamespace(data={"audio": False}))
 
         assert api.activate_video_calls == [False]
+
+    asyncio.run(_run())
+
+
+def test_run_device_activation_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(_FakeRuntimeData(api=api))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION)]
+        await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+
+        assert api.activation_calls == ["scene_1"]
+
+    asyncio.run(_run())
+
+
+def test_write_text_memo_service_calls_agent_api_and_refreshes_memos() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=api,
+                capabilities={"memos": {"supported": True, "write_text": True}},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_WRITE_TEXT_MEMO)]
+        await handler(types.SimpleNamespace(data={"text": "new memo", "read": True}))
+
+        assert api.text_memo_calls == [{"text": "new memo", "read": True}]
+        assert entry.runtime_data.memos["text_total"] == 1
+        assert entry.runtime_data.memos_updated_at is not None
 
     asyncio.run(_run())

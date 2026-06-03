@@ -47,6 +47,58 @@ static int address_is_valid(const char *value)
     return 1;
 }
 
+static int activation_id_is_valid(const char *value)
+{
+    size_t len = strlen(value);
+    if (len == 0 || len >= C300X_MAX_ACTIVATION_ID_LEN) {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        unsigned char ch = (unsigned char)value[index];
+        if (!isalnum(ch) && ch != '_' && ch != '-') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int activation_type_is_valid(const char *value)
+{
+    return strcmp(value, "lock") == 0
+        || strcmp(value, "light") == 0
+        || strcmp(value, "stair_light") == 0
+        || strcmp(value, "generic") == 0
+        || strcmp(value, "scenario") == 0
+        || strcmp(value, "unknown") == 0;
+}
+
+static int activation_address_mode_is_valid(const char *value)
+{
+    return strcmp(value, "manual") == 0 || strcmp(value, "auto") == 0;
+}
+
+static int openwebnet_command_is_valid(const char *value)
+{
+    size_t len = strlen(value);
+    if (len == 0) {
+        return 1;
+    }
+    if (len < 3 || len >= C300X_MAX_FRAME_LEN || value[0] != '*') {
+        return 0;
+    }
+    if (value[len - 1] != '#' || value[len - 2] != '#') {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        if (!isdigit((unsigned char)value[index])
+            && value[index] != '*'
+            && value[index] != '#') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 void c300x_default_config(struct c300x_config *config)
 {
     memset(config, 0, sizeof(*config));
@@ -70,6 +122,23 @@ void c300x_default_config(struct c300x_config *config)
     safe_copy(config->lock_name, sizeof(config->lock_name), "Main door");
     safe_copy(config->lock_address, sizeof(config->lock_address), "20");
     config->lock_release_delay_ms = 2000;
+    config->activations_auto_discover = 1;
+    config->activation_discovery_root_count = 3;
+    safe_copy(
+        config->activation_discovery_roots[0],
+        sizeof(config->activation_discovery_roots[0]),
+        "/home/bticino/cfg/extra/47"
+    );
+    safe_copy(
+        config->activation_discovery_roots[1],
+        sizeof(config->activation_discovery_roots[1]),
+        "/home/bticino/cfg/extra"
+    );
+    safe_copy(
+        config->activation_discovery_roots[2],
+        sizeof(config->activation_discovery_roots[2]),
+        "/home/bticino/cfg"
+    );
     config->maintenance_reboot_delay_ms = 500;
     config->maintenance_agent_remove_script[0] = '\0';
     config->maintenance_gui_reload_script[0] = '\0';
@@ -366,6 +435,22 @@ static int object_bounds(const char *value, const char *document_end, const char
     return 1;
 }
 
+static int array_bounds(const char *value, const char *document_end, const char **end)
+{
+    const char *after;
+
+    value = skip_ws(value, document_end);
+    if (value >= document_end || *value != '[') {
+        return 0;
+    }
+    after = skip_json_value(value, document_end);
+    if (after == NULL) {
+        return 0;
+    }
+    *end = after;
+    return 1;
+}
+
 static int nested_member(
     const char *document,
     const char *document_end,
@@ -526,6 +611,153 @@ static int bool_value(const char *value, const char *document_end, int *out)
     return 0;
 }
 
+static const char *next_array_value(
+    const char *ptr,
+    const char *array_end,
+    const char **value,
+    const char **value_end
+)
+{
+    const char *after;
+
+    ptr = skip_ws(ptr, array_end);
+    if (ptr >= array_end || *ptr == ']') {
+        return NULL;
+    }
+    after = skip_json_value(ptr, array_end);
+    if (after == NULL || after <= ptr) {
+        return NULL;
+    }
+    *value = ptr;
+    *value_end = after;
+    after = skip_ws(after, array_end);
+    if (after < array_end && *after == ',') {
+        after++;
+    } else if (after < array_end && *after != ']') {
+        return NULL;
+    }
+    return after;
+}
+
+static int parse_activation_item(
+    const char *item,
+    const char *document_end,
+    struct c300x_activation *activation,
+    char *error,
+    size_t error_len
+)
+{
+    const char *item_end;
+    const char *value;
+    char activation_id[C300X_MAX_ACTIVATION_ID_LEN + 1];
+
+    memset(activation, 0, sizeof(*activation));
+    safe_copy(activation->type, sizeof(activation->type), "unknown");
+    safe_copy(activation->address_mode, sizeof(activation->address_mode), "manual");
+    if (!object_bounds(item, document_end, &item_end)) {
+        set_error(error, error_len, "activations.items entries must be objects");
+        return 0;
+    }
+    if (!find_member(item, item_end, "id", &value)
+        || !string_value(value, document_end, activation_id, sizeof(activation_id))
+        || !activation_id_is_valid(activation_id)) {
+        set_error(error, error_len, "activations item id must be a safe string");
+        return 0;
+    }
+    safe_copy(activation->id, sizeof(activation->id), activation_id);
+    if (!find_member(item, item_end, "name", &value)
+        || !string_value(value, document_end, activation->name, sizeof(activation->name))
+        || activation->name[0] == '\0') {
+        set_error(error, error_len, "activations item name must be a string");
+        return 0;
+    }
+    if (find_member(item, item_end, "type", &value)) {
+        if (!string_value(value, document_end, activation->type, sizeof(activation->type))
+            || !activation_type_is_valid(activation->type)) {
+            set_error(error, error_len, "activations item type is invalid");
+            return 0;
+        }
+    }
+    if (find_member(item, item_end, "addressMode", &value)) {
+        if (!string_value(value, document_end, activation->address_mode, sizeof(activation->address_mode))
+            || !activation_address_mode_is_valid(activation->address_mode)) {
+            set_error(error, error_len, "activations item addressMode is invalid");
+            return 0;
+        }
+    }
+    if (find_member(item, item_end, "address", &value)) {
+        if (!string_value(value, document_end, activation->address, sizeof(activation->address))
+            || !address_is_valid(activation->address)) {
+            set_error(error, error_len, "activations item address is invalid");
+            return 0;
+        }
+    }
+    if (find_member(item, item_end, "pressCommand", &value)) {
+        if (!string_value(value, document_end, activation->press_command, sizeof(activation->press_command))
+            || !openwebnet_command_is_valid(activation->press_command)) {
+            set_error(error, error_len, "activations item pressCommand is invalid");
+            return 0;
+        }
+    }
+    if (find_member(item, item_end, "releaseCommand", &value)) {
+        if (!string_value(value, document_end, activation->release_command, sizeof(activation->release_command))
+            || !openwebnet_command_is_valid(activation->release_command)) {
+            set_error(error, error_len, "activations item releaseCommand is invalid");
+            return 0;
+        }
+    }
+    if (find_member(item, item_end, "holdMs", &value)
+        && !int_range_value(value, document_end, 0, 60000, &activation->hold_ms)) {
+        set_error(error, error_len, "activations item holdMs is invalid");
+        return 0;
+    }
+    return 1;
+}
+
+static int parse_activation_discovery_roots(
+    const char *value,
+    const char *document_end,
+    struct c300x_config *config,
+    char *error,
+    size_t error_len
+)
+{
+    const char *array_end;
+    const char *ptr;
+    const char *item;
+    const char *item_end;
+
+    if (!array_bounds(value, document_end, &array_end)) {
+        set_error(error, error_len, "activations.discoveryRoots must be an array");
+        return 0;
+    }
+    config->activation_discovery_root_count = 0;
+    ptr = skip_ws(value, array_end);
+    if (ptr < array_end && *ptr == '[') {
+        ptr++;
+    }
+    while ((ptr = next_array_value(ptr, array_end, &item, &item_end)) != NULL) {
+        char root[C300X_MAX_PATH_LEN];
+
+        (void)item_end;
+        if (config->activation_discovery_root_count >= C300X_MAX_ACTIVATION_DISCOVERY_ROOTS) {
+            set_error(error, error_len, "too many activation discovery roots configured");
+            return 0;
+        }
+        if (!string_value(item, document_end, root, sizeof(root)) || root[0] == '\0') {
+            set_error(error, error_len, "activations.discoveryRoots entries must be strings");
+            return 0;
+        }
+        safe_copy(
+            config->activation_discovery_roots[config->activation_discovery_root_count],
+            sizeof(config->activation_discovery_roots[config->activation_discovery_root_count]),
+            root
+        );
+        config->activation_discovery_root_count++;
+    }
+    return 1;
+}
+
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
@@ -667,6 +899,62 @@ int c300x_load_config(
             set_error(error, error_len, "openwebnet.timeoutMs must be positive");
             free(document);
             return 0;
+        }
+    }
+    if (nested_member(document, document_end, "activations", "enabled", &value)) {
+        if (!bool_value(value, document_end, &config->activations_enabled)) {
+            set_error(error, error_len, "activations.enabled must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "activations", "autoDiscover", &value)) {
+        if (!bool_value(value, document_end, &config->activations_auto_discover)) {
+            set_error(error, error_len, "activations.autoDiscover must be a boolean");
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "activations", "discoveryRoots", &value)) {
+        if (!parse_activation_discovery_roots(value, document_end, config, error, error_len)) {
+            free(document);
+            return 0;
+        }
+    }
+    if (nested_member(document, document_end, "activations", "items", &value)) {
+        const char *array_end;
+        const char *ptr;
+        const char *item;
+        const char *item_end;
+
+        if (!array_bounds(value, document_end, &array_end)) {
+            set_error(error, error_len, "activations.items must be an array");
+            free(document);
+            return 0;
+        }
+        config->activations_count = 0;
+        ptr = skip_ws(value, array_end);
+        if (ptr < array_end && *ptr == '[') {
+            ptr++;
+        }
+        while ((ptr = next_array_value(ptr, array_end, &item, &item_end)) != NULL) {
+            (void)item_end;
+            if (config->activations_count >= C300X_MAX_ACTIVATIONS) {
+                set_error(error, error_len, "too many activations configured");
+                free(document);
+                return 0;
+            }
+            if (!parse_activation_item(
+                item,
+                document_end,
+                &config->activations[config->activations_count],
+                error,
+                error_len
+            )) {
+                free(document);
+                return 0;
+            }
+            config->activations_count++;
         }
     }
     if (nested_member(document, document_end, "locks", "releaseDelayMs", &value)) {
@@ -1450,6 +1738,56 @@ int c300x_load_config(
         set_error(error, error_len, "mqtt.reconnectMaxSeconds must be >= reconnectInitialSeconds");
         return 0;
     }
+    if (config->activations_count < 0 || config->activations_count > C300X_MAX_ACTIVATIONS) {
+        set_error(error, error_len, "activations.items exceeds native limit");
+        return 0;
+    }
+    if (config->activation_discovery_root_count < 0
+        || config->activation_discovery_root_count > C300X_MAX_ACTIVATION_DISCOVERY_ROOTS) {
+        set_error(error, error_len, "activations.discoveryRoots exceeds native limit");
+        return 0;
+    }
+    if (config->activations_auto_discover) {
+        for (int index = 0; index < config->activation_discovery_root_count; index++) {
+            if (config->activation_discovery_roots[index][0] != '/') {
+                set_error(error, error_len, "activations.discoveryRoots entries must be absolute paths");
+                return 0;
+            }
+        }
+    }
+    for (int index = 0; index < config->activations_count; index++) {
+        const struct c300x_activation *activation = &config->activations[index];
+        int has_command = activation->press_command[0] != '\0';
+        int has_address = activation->address[0] != '\0';
+        int auto_address = strcmp(activation->address_mode, "auto") == 0;
+
+        for (int other = index + 1; other < config->activations_count; other++) {
+            if (strcmp(activation->id, config->activations[other].id) == 0) {
+                set_error(error, error_len, "activations item ids must be unique");
+                return 0;
+            }
+        }
+        if (strcmp(activation->type, "unknown") == 0) {
+            continue;
+        }
+        if (strcmp(activation->type, "lock") == 0 && !has_address && !has_command && !auto_address) {
+            set_error(error, error_len, "lock activations need address, addressMode=auto or pressCommand");
+            return 0;
+        }
+        if ((strcmp(activation->type, "light") == 0 || strcmp(activation->type, "stair_light") == 0)
+            && !has_address
+            && !has_command
+            && !auto_address) {
+            set_error(error, error_len, "light activations need address, addressMode=auto or pressCommand");
+            return 0;
+        }
+        if ((strcmp(activation->type, "generic") == 0 || strcmp(activation->type, "scenario") == 0)
+            && !has_command
+            && !auto_address) {
+            set_error(error, error_len, "generic activations need addressMode=auto or pressCommand");
+            return 0;
+        }
+    }
     if (config->video_rtsp_path[0] == '\0' || config->video_rtsp_video_path[0] == '\0') {
         set_error(error, error_len, "video.rtsp.path and video.rtsp.videoPath must be set");
         return 0;
@@ -1518,9 +1856,81 @@ static void write_json_string_field(FILE *file, const char *name, const char *va
     fprintf(file, "%s\n", suffix);
 }
 
+static void write_activation_item(
+    FILE *file,
+    const struct c300x_activation *activation,
+    const char *suffix
+)
+{
+    fprintf(file, "      {\"id\": ");
+    write_json_string(file, activation->id);
+    fprintf(file, ",\"name\": ");
+    write_json_string(file, activation->name);
+    fprintf(file, ",\"type\": ");
+    write_json_string(file, activation->type);
+    fprintf(file, ",\"addressMode\": ");
+    write_json_string(file, activation->address_mode);
+    fprintf(file, ",\"address\": ");
+    write_json_string(file, activation->address);
+    fprintf(file, ",\"pressCommand\": ");
+    write_json_string(file, activation->press_command);
+    fprintf(file, ",\"releaseCommand\": ");
+    write_json_string(file, activation->release_command);
+    fprintf(file, ",\"holdMs\": %d}%s\n", activation->hold_ms, suffix);
+}
+
 static const char *persisted_api_token(const struct c300x_config *config)
 {
     return config->api_token_from_env ? config->api_file_token : config->api_token;
+}
+
+static int activations_equal(
+    const struct c300x_activation *left,
+    const struct c300x_activation *right
+)
+{
+    return strcmp(left->id, right->id) == 0
+        && strcmp(left->name, right->name) == 0
+        && strcmp(left->type, right->type) == 0
+        && strcmp(left->address_mode, right->address_mode) == 0
+        && strcmp(left->address, right->address) == 0
+        && strcmp(left->press_command, right->press_command) == 0
+        && strcmp(left->release_command, right->release_command) == 0
+        && left->hold_ms == right->hold_ms;
+}
+
+static int activation_lists_equal(
+    const struct c300x_config *left,
+    const struct c300x_config *right
+)
+{
+    if (left->activations_enabled != right->activations_enabled
+        || left->activations_count != right->activations_count) {
+        return 0;
+    }
+    for (int index = 0; index < left->activations_count; index++) {
+        if (!activations_equal(&left->activations[index], &right->activations[index])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int activation_discovery_roots_equal(
+    const struct c300x_config *left,
+    const struct c300x_config *right
+)
+{
+    if (left->activations_auto_discover != right->activations_auto_discover
+        || left->activation_discovery_root_count != right->activation_discovery_root_count) {
+        return 0;
+    }
+    for (int index = 0; index < left->activation_discovery_root_count; index++) {
+        if (strcmp(left->activation_discovery_roots[index], right->activation_discovery_roots[index]) != 0) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 int c300x_config_persisted_equal(
@@ -1549,6 +1959,8 @@ int c300x_config_persisted_equal(
         && C300X_EQ_STR(lock_name)
         && C300X_EQ_STR(lock_address)
         && C300X_EQ_INT(lock_release_delay_ms)
+        && activation_lists_equal(left, right)
+        && activation_discovery_roots_equal(left, right)
         && C300X_EQ_INT(maintenance_enabled)
         && C300X_EQ_INT(maintenance_ssh_start_enabled)
         && C300X_EQ_INT(maintenance_reboot_enabled)
@@ -1788,6 +2200,25 @@ static int save_config_internal(
     write_json_string_field(file, "host", config->openwebnet_host, ",");
     fprintf(file, "    \"port\": %u,\n", config->openwebnet_port);
     fprintf(file, "    \"timeoutMs\": %d\n", config->openwebnet_timeout_ms);
+    fprintf(file, "  },\n");
+    fprintf(file, "  \"activations\": {\n");
+    fprintf(file, "    \"enabled\": %s,\n", config->activations_enabled ? "true" : "false");
+    fprintf(file, "    \"autoDiscover\": %s,\n", config->activations_auto_discover ? "true" : "false");
+    fprintf(file, "    \"discoveryRoots\": [");
+    for (int index = 0; index < config->activation_discovery_root_count; index++) {
+        fprintf(file, "%s", index == 0 ? "" : ",");
+        write_json_string(file, config->activation_discovery_roots[index]);
+    }
+    fprintf(file, "],\n");
+    fprintf(file, "    \"items\": [\n");
+    for (int index = 0; index < config->activations_count; index++) {
+        write_activation_item(
+            file,
+            &config->activations[index],
+            index + 1 < config->activations_count ? "," : ""
+        );
+    }
+    fprintf(file, "    ]\n");
     fprintf(file, "  },\n");
     fprintf(file, "  \"locks\": {\n");
     fprintf(file, "    \"releaseDelayMs\": %d,\n", config->lock_release_delay_ms);

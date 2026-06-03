@@ -24,6 +24,7 @@ if "homeassistant.components.camera" not in sys.modules:
     dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
     entity = types.ModuleType("homeassistant.helpers.entity")
     entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+    event = types.ModuleType("homeassistant.helpers.event")
 
     class Camera:  # pragma: no cover - import-time stub only
         pass
@@ -58,10 +59,12 @@ if "homeassistant.components.camera" not in sys.modules:
     entity.DeviceInfo = DeviceInfo
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
     entity_registry.async_get = lambda hass: None
+    event.async_call_later = lambda *args, **kwargs: (lambda: None)
     entity_platform.AddEntitiesCallback = object
     stream.CONF_RTSP_TRANSPORT = "rtsp_transport"
     stream.CONF_USE_WALLCLOCK_AS_TIMESTAMPS = "use_wallclock_as_timestamps"
     helpers.config_validation = config_validation
+    helpers.event = event
     helpers.entity_registry = entity_registry
     sys.modules.setdefault("homeassistant", homeassistant)
     sys.modules["homeassistant.components"] = components
@@ -75,6 +78,7 @@ if "homeassistant.components.camera" not in sys.modules:
     sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
     sys.modules["homeassistant.helpers.entity"] = entity
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
+    sys.modules["homeassistant.helpers.event"] = event
     sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
 
 try:
@@ -93,6 +97,7 @@ from custom_components.bticino_c300x.camera import (
     _NativeWebRTCSession,
     _new_restarting_rtsp_tracks,
 )
+from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 
 @dataclass
@@ -111,7 +116,7 @@ class _FakeApi:
         return {
             "available": True,
             "window_available": True,
-            "active_until": "2026-05-26T12:00:30+00:00",
+            "active_until": "2099-05-26T12:00:30+00:00",
             "stream_path": "/doorbell-video",
             "audio_stream_path": "/doorbell",
             "recorder_stream_path": "/doorbell-recorder",
@@ -136,6 +141,16 @@ class _FakeRuntimeData:
     api: Any = field(default_factory=_FakeApi)
     connection_state: Any = field(
         default_factory=lambda: SimpleNamespace(available=True),
+    )
+
+
+def test_resolve_doorbell_camera_entity_id_handles_missing_registry() -> None:
+    assert (
+        resolve_doorbell_camera_entity_id(
+            SimpleNamespace(),
+            SimpleNamespace(entry_id="entry-1"),
+        )
+        is None
     )
 
 
@@ -308,7 +323,7 @@ def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
 
     assert attrs["video_available"] is True
     assert attrs["video_window_available"] is True
-    assert attrs["video_active_until"] == "2026-05-26T12:00:30+00:00"
+    assert attrs["video_active_until"] == "2099-05-26T12:00:30+00:00"
     assert attrs["audio_stream_path"] == "/doorbell"
     assert attrs["recorder_stream_path"] == "/doorbell-recorder"
     assert attrs["talkback_supported"] is True
@@ -392,6 +407,58 @@ def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:
     assert source.startswith("rtsp://127.0.0.1:")
     assert source.endswith("/doorbell")
     assert entry.runtime_data.api.activate_calls == [True]
+
+
+def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
+    class _DelayedApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active_activate_calls = 0
+            self.max_active_activate_calls = 0
+
+        async def async_activate_doorbell_video(
+            self,
+            audio: bool = True,
+        ) -> dict[str, Any]:
+            self.active_activate_calls += 1
+            self.max_active_activate_calls = max(
+                self.max_active_activate_calls,
+                self.active_activate_calls,
+            )
+            try:
+                await asyncio.sleep(0.02)
+                return await super().async_activate_doorbell_video(audio=audio)
+            finally:
+                self.active_activate_calls -= 1
+
+    api = _DelayedApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    async def _run() -> None:
+        server = await asyncio.start_server(
+            _rtsp_options_server,
+            "127.0.0.1",
+            0,
+        )
+        port = server.sockets[0].getsockname()[1]
+        entry.data["video_port"] = port
+        try:
+            await asyncio.gather(
+                camera._async_prepare_rtsp_stream(audio=True),
+                camera._async_prepare_rtsp_stream(audio=True),
+            )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    asyncio.run(_run())
+
+    assert api.activate_calls == [True, True]
+    assert api.max_active_activate_calls == 1
 
 
 def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
@@ -700,7 +767,7 @@ def test_doorbell_camera_updates_state_on_doorbell_view_event() -> None:
             "event_key": "doorbell_view_requested",
             "video_window_available": True,
             "video_available": True,
-            "video_active_until": "2026-05-27T12:00:00+00:00",
+            "video_active_until": "2099-05-27T12:00:00+00:00",
             "stream_path": "/doorbell-video",
         }
     )
@@ -710,14 +777,14 @@ def test_doorbell_camera_updates_state_on_doorbell_view_event() -> None:
     attrs = camera.extra_state_attributes
     assert attrs["video_available"] is True
     assert attrs["video_window_available"] is True
-    assert attrs["video_active_until"] == "2026-05-27T12:00:00+00:00"
+    assert attrs["video_active_until"] == "2099-05-27T12:00:00+00:00"
 
 
 def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera._video_window_available = True
-    camera._video_active_until = "2026-05-27T12:00:00+00:00"
+    camera._video_active_until = "2099-05-27T12:00:00+00:00"
     camera._bridge_available = True
 
     event = SimpleNamespace(
@@ -727,6 +794,23 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
 
     attrs = camera.extra_state_attributes
     assert attrs["video_available"] is False
+    assert attrs["video_window_available"] is False
+    assert attrs["video_active_until"] is None
+
+
+def test_doorbell_camera_ignores_expired_runtime_video_window() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            event_state=_FakeEventState(
+                video_available=True,
+                video_active_until="2020-01-01T00:00:00+00:00",
+            )
+        )
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    attrs = camera.extra_state_attributes
+
     assert attrs["video_window_available"] is False
     assert attrs["video_active_until"] is None
 

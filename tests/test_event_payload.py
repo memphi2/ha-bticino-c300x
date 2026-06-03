@@ -58,6 +58,20 @@ def test_agent_event_display_data_translates_technical_event_value() -> None:
     assert data["event"] == "Türöffner gestartet"
 
 
+def test_agent_event_display_data_translates_technical_event_value_to_french() -> None:
+    data = agent_event_display_data(
+        {
+            "event_key": "door_unlock_started",
+            "event_value": "door_unlock_started",
+        },
+        "fr",
+    )
+
+    assert data["event_key"] == "door_unlock_started"
+    assert data["event_value"] == "Ouverture porte demarree"
+    assert data["event"] == "Ouverture porte demarree"
+
+
 def test_agent_event_key_converts_dot_notation() -> None:
     data = {
         "event_type": "door_unlock.started",

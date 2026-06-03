@@ -14,7 +14,7 @@ TRANSLATIONS = INTEGRATION / "translations"
 def test_localized_translation_files_match_english_keys() -> None:
     english = _load_json(TRANSLATIONS / "en.json")
 
-    for language in ("de", "it"):
+    for language in ("de", "it", "fr"):
         localized = _load_json(TRANSLATIONS / f"{language}.json")
         assert _leaf_paths(localized) == _leaf_paths(english)
 
@@ -25,6 +25,7 @@ def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
         TRANSLATIONS / "en.json",
         TRANSLATIONS / "de.json",
         TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
     ):
         translated_states = _path_value(
             _load_json(path),
@@ -44,6 +45,7 @@ def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
         TRANSLATIONS / "en.json",
         TRANSLATIONS / "de.json",
         TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
     ):
         data = _load_json(path)
         assert "repairs" not in data
@@ -61,6 +63,53 @@ def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
             "bootstrap_ssh_password",
         }
         assert _path_value(fix_flow, "error")["ssh_install_failed"]
+        assert _path_value(fix_flow, "abort")["entry_not_loaded"]
+
+
+def test_fixable_callback_url_repair_uses_ha_issue_fix_flow_schema() -> None:
+    """Validate HA can render the callback URL repair flow."""
+
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        data = _load_json(path)
+        fix_flow = _path_value(
+            data,
+            "issues",
+            "unsupported_callback_url",
+            "fix_flow",
+        )
+        configure = _path_value(fix_flow, "step", "configure")
+        assert configure["description"]
+        assert set(_path_value(configure, "data")) == {"callback_base_url"}
+        assert _path_value(fix_flow, "error")["invalid_callback_base_url"]
+        assert _path_value(fix_flow, "abort")["entry_not_loaded"]
+
+
+def test_fixable_core_qml_hook_repair_uses_ha_issue_fix_flow_schema() -> None:
+    """Validate HA can render the core QML hook repair flow."""
+
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        data = _load_json(path)
+        fix_flow = _path_value(
+            data,
+            "issues",
+            "device_core_qml_hook_required",
+            "fix_flow",
+        )
+        assert _path_value(fix_flow, "step", "confirm")["description"]
+        assert _path_value(fix_flow, "error")["core_patch_failed"]
+        assert _path_value(fix_flow, "error")["core_patch_verify_failed"]
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]
 
 

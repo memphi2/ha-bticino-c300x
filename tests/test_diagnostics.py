@@ -61,11 +61,12 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
-    CONF_STAIR_LIGHT_ADDRESS,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
@@ -198,7 +199,8 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
             CONF_WEBHOOK_ID: "private-webhook-id",
             CONF_EVENT_WEBHOOK_ID: "private-event-webhook-id",
             CONF_SHARED_SECRET: "private-shared-secret",
-            CONF_STAIR_LIGHT_ADDRESS: "77",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "77",
             CONF_VIDEO_ENABLED: True,
             CONF_VIDEO_PORT: 6554,
             CONF_VIDEO_STREAM_PATH: "/private-stream",
@@ -225,6 +227,12 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
     )
 
     assert diagnostics["network"]["same_lan_prefix_guess"] is True
+    assert diagnostics["network"]["callback_base_url_override"] == {
+        "configured": True,
+        "scheme": "http",
+        "host_type": "ipv4",
+        "is_clean_local_http": True,
+    }
     assert diagnostics["runtime"]["connection"]["last_connection_error"] == {
         "type": "ClientConnectorError",
         "message": "<url> failed",
@@ -285,6 +293,34 @@ def test_config_entry_diagnostics_describe_unloaded_installation() -> None:
     assert diagnostics["network"]["agent_endpoint"]["host_configured"] is False
     assert diagnostics["installation"]["runtime_loaded"] is False
     assert diagnostics["installation"]["agent_reachable"] is None
+    assert diagnostics["network"]["callback_base_url_override"] == {
+        "configured": False,
+        "scheme": None,
+        "host_type": None,
+        "is_clean_local_http": None,
+    }
+
+
+def test_config_entry_diagnostics_reject_localhost_callback_override() -> None:
+    entry = _FakeEntry(
+        data={
+            CONF_AGENT_HOST: "c300x.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_CALLBACK_BASE_URL: "http://localhost:8123",
+        },
+        runtime_data=None,
+    )
+
+    diagnostics = asyncio.run(
+        async_get_config_entry_diagnostics(_FakeHass(), entry)  # type: ignore[arg-type]
+    )
+
+    assert diagnostics["network"]["callback_base_url_override"] == {
+        "configured": True,
+        "scheme": "http",
+        "host_type": "loopback",
+        "is_clean_local_http": False,
+    }
 
 
 def test_config_entry_diagnostics_flag_unclean_subscription_callback() -> None:

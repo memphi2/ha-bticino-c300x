@@ -12,7 +12,6 @@ from .api import (
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
-    CONF_AGENT_USE_SSL,
     DEFAULT_AGENT_PORT,
 )
 
@@ -40,7 +39,6 @@ async def async_migrate_legacy_mqtt_for_connection(
     base_url = build_agent_base_url(
         str(connection.get(CONF_AGENT_HOST, "")),
         int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        bool(connection.get(CONF_AGENT_USE_SSL, False)),
     )
     api = C300XAgentApi(
         async_get_clientsession(hass),

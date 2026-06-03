@@ -6,6 +6,7 @@ from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
 from .event_types import (
+    ACTIVATION_EVENTS,
     ALWAYS_REGISTERED_EVENTS,
     ANSWERING_MACHINE_EVENTS,
     CALL_EVENTS,
@@ -33,6 +34,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "door_unlock_started": "Door unlock started",
         "door_unlock_ended": "Door unlock ended",
         "stair_light_activated": "Stair light activated",
+        "activation_executed": "Device activation executed",
         "call_started": "Call started",
         "call_ended": "Call ended",
         "ringer_muted": "Ringer muted",
@@ -51,6 +53,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "door_unlock_started": "Türöffner gestartet",
         "door_unlock_ended": "Türöffner beendet",
         "stair_light_activated": "Treppenlicht aktiviert",
+        "activation_executed": "Geräteaktion ausgeführt",
         "call_started": "Anruf gestartet",
         "call_ended": "Anruf beendet",
         "ringer_muted": "Klingelton stummgeschaltet",
@@ -69,6 +72,7 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "door_unlock_started": "Apertura porta avviata",
         "door_unlock_ended": "Apertura porta terminata",
         "stair_light_activated": "Luce scale attivata",
+        "activation_executed": "Attivazione dispositivo eseguita",
         "call_started": "Chiamata avviata",
         "call_ended": "Chiamata terminata",
         "ringer_muted": "Suoneria disattivata",
@@ -80,12 +84,32 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "agent_diagnostics_changed": "Diagnostica scritture agent aggiornata",
         "agent_restarted": "Device-Agent riavviato",
     },
+    "fr": {
+        "doorbell_pressed": "Sonnette appuyee",
+        "doorbell_view_requested": "Vue camera de sonnette demandee",
+        "doorbell_media_closed": "Flux camera de sonnette termine",
+        "door_unlock_started": "Ouverture porte demarree",
+        "door_unlock_ended": "Ouverture porte terminee",
+        "stair_light_activated": "Lumiere d'escalier activee",
+        "activation_executed": "Activation appareil executee",
+        "call_started": "Appel demarre",
+        "call_ended": "Appel termine",
+        "ringer_muted": "Sonnerie coupee",
+        "ringer_unmuted": "Sonnerie activee",
+        "smartphone_forwarding_changed": "Renvoi smartphone modifie",
+        "answering_machine_messages_changed": "Messages video mis a jour",
+        "memos_changed": "Memos mis a jour",
+        "system_metrics_changed": "Metriques systeme mises a jour",
+        "agent_diagnostics_changed": "Diagnostics ecritures agent mis a jour",
+        "agent_restarted": "Device-Agent redemarre",
+    },
 }
 _CAPABILITY_EVENT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("doorbell_events", DOORBELL_EVENTS),
     ("doorbell_video", DOORBELL_VIDEO_EVENTS),
     ("locks", DOOR_UNLOCK_EVENTS),
     ("stair_light", STAIR_LIGHT_EVENTS),
+    ("activations", ACTIVATION_EVENTS),
     ("call_events", CALL_EVENTS),
     ("ringer", RINGER_EVENTS),
     ("smartphone_forwarding", SMARTPHONE_FORWARDING_EVENTS),
@@ -109,6 +133,8 @@ def _event_label_language(language: str | None) -> str:
         return "de"
     if language_code.startswith("it"):
         return "it"
+    if language_code.startswith("fr"):
+        return "fr"
     return "en"
 
 
@@ -348,3 +374,12 @@ def memo_delete_supported(capabilities: dict[str, Any]) -> bool:
     if not isinstance(value, dict):
         return False
     return bool(value.get("supported") and value.get("delete"))
+
+
+def memo_text_write_supported(capabilities: dict[str, Any]) -> bool:
+    """Return true when the agent can create manual text memos."""
+
+    value = capabilities.get("memos") if isinstance(capabilities, dict) else None
+    if not isinstance(value, dict):
+        return False
+    return bool(value.get("supported") and value.get("write_text"))

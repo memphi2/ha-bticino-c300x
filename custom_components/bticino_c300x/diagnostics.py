@@ -13,24 +13,29 @@ from urllib.parse import urlsplit
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .callback_target import (
+    callback_address_type,
+    callback_host_type,
+    callback_target_is_clean_local_http,
+    clean_callback_host,
+)
 from .const import (
     CONF_ACTIONS,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_AGENT_USE_SSL,
     CONF_ALARM_ENTITY_ID,
+    CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
-    CONF_STAIR_LIGHT_ADDRESS,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
 )
-from .data import callback_target_is_clean_local_http
 from .device_installer import installer_bundle_status
 from .entity import entry_config_value, entry_video_enabled
 from .fingerprint import fnv1a64_fingerprint
@@ -61,12 +66,26 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "last_poll_timeout_ms",
     "last_poll_count",
     "open_fd_count",
+    "agent_init_script_present",
+    "agent_init_link_ok",
+    "subscription_count",
+    "recent_event_count",
+    "recent_event_capacity",
+    "display_bridge_registered",
+    "display_bridge_disabled",
+    "home_assistant_connected_this_run",
+    "home_assistant_last_seen_at",
+    "ui_event_revision",
     "video_running",
     "video_media_starting",
     "video_call_active",
     "video_clients",
     "video_bridge_open_fds",
     "video_bridge_active_threads",
+    "flexisip_backup_available",
+    "flexisip_restart_marker",
+    "flexisip_backup_marker",
+    "flexisip_reference_state",
 )
 
 
@@ -102,7 +121,7 @@ async def async_get_config_entry_diagnostics(
                 entry_config_value(entry, CONF_VIDEO_STREAM_PATH, "")
             ),
             "stair_light_configured": bool(
-                entry_config_value(entry, CONF_STAIR_LIGHT_ADDRESS, "")
+                entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS, "")
             ),
             "alarm_entity_configured": bool(_configured_alarm_entity(entry)),
             "weather_entity_configured": bool(_configured_weather_entity(entry)),
@@ -247,14 +266,18 @@ async def _async_network_diagnostics(
         port = DEFAULT_AGENT_PORT
     endpoint = {
         "host_configured": bool(host),
-        "host_type": _host_type(host),
+        "host_type": callback_host_type(host),
         "host_is_private_address": _host_private_address(host),
         "port": port,
-        "use_ssl": bool(entry_config_value(entry, CONF_AGENT_USE_SSL, False)),
     }
+    callback_base_url = str(
+        entry_config_value(entry, CONF_CALLBACK_BASE_URL, "") or ""
+    ).strip()
+    callback_override = _callback_base_url_diagnostics(callback_base_url)
     if not host:
         return {
             "agent_endpoint": endpoint,
+            "callback_base_url_override": callback_override,
             "route": None,
             "same_lan_prefix_guess": None,
             "subscription_callback_expected": "http_local_reachable",
@@ -266,11 +289,29 @@ async def _async_network_diagnostics(
         route = _route_diagnostics(host, port)
     return {
         "agent_endpoint": endpoint,
+        "callback_base_url_override": callback_override,
         "route": route,
         "same_lan_prefix_guess": route.get("same_lan_prefix_guess")
         if isinstance(route, dict)
         else None,
         "subscription_callback_expected": "http_local_reachable",
+    }
+
+
+def _callback_base_url_diagnostics(value: str) -> dict[str, Any]:
+    parts = urlsplit(value)
+    scheme = parts.scheme.strip().lower() or None
+    host_type = callback_host_type(parts.hostname)
+    return {
+        "configured": bool(value),
+        "scheme": scheme,
+        "host_type": host_type,
+        "is_clean_local_http": callback_target_is_clean_local_http(
+            scheme,
+            host_type,
+        )
+        if value
+        else None,
     }
 
 
@@ -298,8 +339,8 @@ def _route_diagnostics(host: str, port: int) -> dict[str, Any]:
                 continue
         source_ip = _ip_address(source)
         target_ip = _ip_address(target)
-        result["selected_source_type"] = _ip_type(source_ip)
-        result["selected_target_type"] = _ip_type(target_ip)
+        result["selected_source_type"] = callback_address_type(source_ip)
+        result["selected_target_type"] = callback_address_type(target_ip)
         result["same_lan_prefix_guess"] = _same_lan_prefix_guess(source_ip, target_ip)
         return result
     result["error"] = "no_usable_route"
@@ -597,30 +638,9 @@ def _subscription_callback_is_clean(state: Any) -> bool | None:
     return callback_target_is_clean_local_http(scheme, host_type)
 
 
-def _host_type(host: str) -> str | None:
-    clean = _clean_host(host)
-    if not clean:
-        return None
-    if clean.endswith(".local"):
-        return "mdns"
-    address = _ip_address(clean)
-    if address is not None:
-        return _ip_type(address)
-    return "hostname"
-
-
 def _host_private_address(host: str) -> bool | None:
-    address = _ip_address(_clean_host(host))
+    address = _ip_address(clean_callback_host(host))
     return address.is_private if address is not None else None
-
-
-def _clean_host(host: str) -> str:
-    value = host.strip()
-    if value.startswith("[") and "]" in value:
-        value = value[1 : value.index("]")]
-    if "://" in value:
-        value = urlsplit(value).hostname or value
-    return value.split("%", 1)[0].lower()
 
 
 def _ip_address(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
@@ -628,16 +648,6 @@ def _ip_address(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | N
         return ipaddress.ip_address(value)
     except ValueError:
         return None
-
-
-def _ip_type(address: ipaddress.IPv4Address | ipaddress.IPv6Address | None) -> str | None:
-    if address is None:
-        return None
-    if address.is_loopback:
-        return "loopback"
-    if address.is_link_local:
-        return "link_local_ipv6" if address.version == 6 else "link_local_ipv4"
-    return "ipv6" if address.version == 6 else "ipv4"
 
 
 def _same_lan_prefix_guess(

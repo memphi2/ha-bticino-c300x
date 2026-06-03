@@ -58,7 +58,7 @@ HA service/action
 
 The native agent publishes canonical dotted event names such as
 `doorbell.pressed`, `door_unlock.started`, `stair_light.activated`,
-`answering_machine.messages_changed`, and `memos.changed`. Home Assistant maps
+`activation.executed`, `answering_machine.messages_changed`, and `memos.changed`. Home Assistant maps
 these to its stable event entity values. Old controller aliases are intentionally
 not part of the current contract.
 

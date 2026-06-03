@@ -34,6 +34,14 @@ def test_sample_config_is_bootstrap_only_and_does_not_enable_heavy_paths() -> No
     assert config["maintenance"]["qmlPatch"]["enabled"] is False
     assert config["maintenance"]["firewall"]["enabled"] is False
     assert config["maintenance"]["ipv6Firewall"]["enabled"] is False
+    assert config["activations"]["enabled"] is True
+    assert config["activations"]["autoDiscover"] is True
+    assert config["activations"]["discoveryRoots"] == [
+        "/home/bticino/cfg/extra/47",
+        "/home/bticino/cfg/extra",
+        "/home/bticino/cfg",
+    ]
+    assert config["activations"]["items"] == []
     assert config["video"]["enabled"] is False
     assert config["video"]["sip"]["from"] == "webrtc"
     assert config["video"]["sip"]["to"] == "c300x"
@@ -72,6 +80,14 @@ def test_installer_config_closes_noauth_and_enables_runtime_defaults() -> None:
         "enabled": True,
         "script": f"{DEFAULT_REMOTE_DIR}/remove_agent.sh",
     }
+    assert config["activations"]["enabled"] is True
+    assert config["activations"]["autoDiscover"] is True
+    assert config["activations"]["discoveryRoots"] == [
+        "/home/bticino/cfg/extra/47",
+        "/home/bticino/cfg/extra",
+        "/home/bticino/cfg",
+    ]
+    assert config["activations"]["items"] == []
     assert config["video"]["enabled"] is True
     assert config["displayBridge"]["enabled"] is False
 
@@ -84,11 +100,11 @@ def test_agent_setup_completion_closes_noauth_without_disabling_token_auth() -> 
     )[0]
 
     assert 'json_bool_field(request->body, "setupComplete", &value)' in body
-    assert "if (setup_complete && updated.api_token[0] != '\\0')" in body
-    assert "updated.api_no_auth = 0" in body
-    assert "updated.maintenance_no_auth_allowed = 0" in body
-    assert "updated.api_token[0] = '\\0'" not in body
-    assert "updated.maintenance_admin_token[0] = '\\0'" not in body
+    assert "if (setup_complete && updated->api_token[0] != '\\0')" in body
+    assert "updated->api_no_auth = 0" in body
+    assert "updated->maintenance_no_auth_allowed = 0" in body
+    assert "updated->api_token[0] = '\\0'" not in body
+    assert "updated->maintenance_admin_token[0] = '\\0'" not in body
 
 
 def test_video_default_is_webrtc_on_demand_with_idle_rtsp_closed() -> None:
@@ -144,14 +160,14 @@ def test_config_mutation_writes_are_semantic_and_idempotent() -> None:
         maxsplit=1,
     )[1].split("static void handle_api_request", maxsplit=1)[0]
 
-    assert "c300x_config_persisted_equal(&baseline, &updated)" in auth_body
-    assert "c300x_config_persisted_equal(config, &updated)" in mqtt_body
-    assert "c300x_save_config_if_changed(&updated" in auth_body
-    assert "c300x_save_config_if_changed(&updated" in mqtt_body
+    assert "c300x_config_persisted_equal(baseline, updated)" in auth_body
+    assert "c300x_config_persisted_equal(config, updated)" in mqtt_body
+    assert "c300x_save_config_if_changed(updated" in auth_body
+    assert "c300x_save_config_if_changed(updated" in mqtt_body
     assert "c300x_save_config_if_changed(config" in normalize_body
     assert "if (changed)" in normalize_body
     assert "memcmp(&baseline" not in auth_body
-    assert "memcmp(config, &updated" not in mqtt_body
+    assert "memcmp(config, updated" not in mqtt_body
     assert "return config->api_token_from_env ? config->api_file_token : config->api_token" in config_text
 
 

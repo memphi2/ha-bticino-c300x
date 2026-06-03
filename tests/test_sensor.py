@@ -39,6 +39,8 @@ if "homeassistant.components.sensor" not in sys.modules:
     config_validation = types.ModuleType("homeassistant.helpers.config_validation")
     dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
     event_helper = types.ModuleType("homeassistant.helpers.event")
+    issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
     entity = sys.modules.setdefault(
         "homeassistant.helpers.entity",
         types.ModuleType("homeassistant.helpers.entity"),
@@ -87,6 +89,12 @@ if "homeassistant.components.sensor" not in sys.modules:
 
     const.PERCENTAGE = "%"
     config_validation.config_entry_only_config_schema = lambda _domain: dict
+    issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
+    issue_registry.async_create_issue = lambda **kwargs: None
+    issue_registry.async_delete_issue = lambda **kwargs: None
+    entity_registry.async_get = lambda hass: types.SimpleNamespace(
+        async_get=lambda entity_id: None
+    )
     sensor.SensorEntity = SensorEntity
     sensor.SensorDeviceClass = SensorDeviceClass
     sensor.SensorStateClass = SensorStateClass
@@ -107,6 +115,8 @@ if "homeassistant.components.sensor" not in sys.modules:
     helpers.dispatcher = dispatcher
     helpers.config_validation = config_validation
     helpers.event = event_helper
+    helpers.issue_registry = issue_registry
+    helpers.entity_registry = entity_registry
     helpers.entity = entity
     helpers.entity_platform = entity_platform
     components.sensor = sensor
@@ -115,8 +125,11 @@ if "homeassistant.components.sensor" not in sys.modules:
     sys.modules["homeassistant.helpers.config_validation"] = config_validation
     sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
     sys.modules["homeassistant.helpers.event"] = event_helper
+    sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
+    sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import agent_diagnostics
+from custom_components.bticino_c300x import sensor as sensor_module
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
 )
@@ -254,6 +267,16 @@ class _FakeApi:
             "last_poll_timeout_ms": 5000,
             "last_poll_count": 6,
             "open_fd_count": 9,
+            "agent_init_script_present": True,
+            "agent_init_link_ok": True,
+            "subscription_count": 1,
+            "recent_event_count": 4,
+            "recent_event_capacity": 16,
+            "display_bridge_registered": True,
+            "display_bridge_disabled": False,
+            "home_assistant_connected_this_run": True,
+            "home_assistant_last_seen_at": 1770000010,
+            "ui_event_revision": 7,
             "video_running": False,
             "video_media_starting": False,
             "video_call_active": False,
@@ -331,6 +354,8 @@ class _FakeRuntimeData:
 class _FakeEntry:
     entry_id: str = "entry-1"
     title: str = "C300X"
+    data: dict[str, Any] = field(default_factory=dict)
+    options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
 
@@ -380,6 +405,16 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
                 "last_wake_reason": "api",
                 "poll_wakeups": 4,
                 "open_fd_count": 9,
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "recent_event_count": 4,
+                "recent_event_capacity": 16,
+                "display_bridge_registered": True,
+                "display_bridge_disabled": False,
+                "home_assistant_connected_this_run": True,
+                "home_assistant_last_seen_at": 1770000010,
+                "ui_event_revision": 7,
                 "flexisip_backup_available": True,
                 "flexisip_restart_marker": True,
                 "flexisip_backup_marker": False,
@@ -398,19 +433,29 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "last_connection_error": None,
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
-            "reconnect_count": 0,
-            "agent_write_count": 2,
-            "last_write_at": 1770000000,
-            "last_write_reason": "updated",
-            "last_write_class": "subscription",
-            "last_wake_reason": "api",
-            "poll_wakeups": 4,
-            "open_fd_count": 9,
-            "flexisip_backup_available": True,
-            "flexisip_restart_marker": True,
-            "flexisip_backup_marker": False,
-            "flexisip_reference_state": "legacy_mqtt_patch",
-        }
+        "reconnect_count": 0,
+        "agent_write_count": 2,
+        "last_write_at": 1770000000,
+        "last_write_reason": "updated",
+        "last_write_class": "subscription",
+        "last_wake_reason": "api",
+        "poll_wakeups": 4,
+        "open_fd_count": 9,
+        "agent_init_script_present": True,
+        "agent_init_link_ok": True,
+        "subscription_count": 1,
+        "recent_event_count": 4,
+        "recent_event_capacity": 16,
+        "display_bridge_registered": True,
+        "display_bridge_disabled": False,
+        "home_assistant_connected_this_run": True,
+        "home_assistant_last_seen_at": 1770000010,
+        "ui_event_revision": 7,
+        "flexisip_backup_available": True,
+        "flexisip_restart_marker": True,
+        "flexisip_backup_marker": False,
+        "flexisip_reference_state": "legacy_mqtt_patch",
+    }
 
 
 def test_agent_status_sensor_reports_connection_errors() -> None:
@@ -512,6 +557,16 @@ def test_agent_writes_sensor_exposes_safe_write_diagnostics() -> None:
             "poll_wakeups": 4,
             "accepted_clients": 3,
             "open_fd_count": 9,
+            "agent_init_script_present": True,
+            "agent_init_link_ok": True,
+            "subscription_count": 1,
+            "recent_event_count": 4,
+            "recent_event_capacity": 16,
+            "display_bridge_registered": True,
+            "display_bridge_disabled": False,
+            "home_assistant_connected_this_run": True,
+            "home_assistant_last_seen_at": 1770000010,
+            "ui_event_revision": 7,
             "video_running": False,
             "video_media_starting": False,
             "video_call_active": False,
@@ -711,6 +766,7 @@ def test_memory_metric_sensor_uses_pushed_memory_percent() -> None:
 def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
     entry = _FakeEntry()
     entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
     event = types.SimpleNamespace(
         data={
             "entry_id": entry.entry_id,
@@ -738,6 +794,66 @@ def test_doorbell_state_sensor_keeps_raw_agent_state_for_translation() -> None:
     assert entity.extra_state_attributes == {
         "last_event_at": "2026-06-01T10:00:00Z"
     }
+    assert entity.wrote_state is True
+
+
+def test_doorbell_state_sensor_returns_transient_view_to_idle(monkeypatch) -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
+    scheduled: list[tuple[int, Any]] = []
+
+    def _call_later(_hass: Any, seconds: int, action: Any) -> Any:
+        scheduled.append((seconds, action))
+        return lambda: None
+
+    monkeypatch.setattr(sensor_module, "call_later", _call_later)
+    event = types.SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_view_requested",
+            "event_at": "2026-06-01T10:00:00Z",
+            "active_seconds": 5,
+        }
+    )
+
+    entity._handle_agent_event(event)
+    assert entity.native_value == "doorbell_view_requested"
+    assert scheduled[0][0] == 5
+
+    scheduled[0][1](None)
+
+    assert entity.native_value == "idle"
+    assert entity.available is True
+
+
+def test_doorbell_state_sensor_clears_on_media_closed() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    canceled = False
+
+    def _cancel() -> None:
+        nonlocal canceled
+        canceled = True
+
+    entity._state = "doorbell_view_requested"
+    entity._reset = _cancel
+    event = types.SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_media_closed",
+            "event_at": "2026-06-01T10:00:30Z",
+        }
+    )
+
+    entity._handle_agent_event(event)
+
+    assert entity.native_value == "idle"
+    assert entity.extra_state_attributes == {
+        "last_event_at": "2026-06-01T10:00:30Z"
+    }
+    assert entity.available is True
+    assert canceled is True
     assert entity.wrote_state is True
 
 

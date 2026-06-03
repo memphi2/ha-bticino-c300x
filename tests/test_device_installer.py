@@ -4,13 +4,26 @@ import asyncio
 import hashlib
 import json
 import sys
+import types
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+custom_components = sys.modules.setdefault(
+    "custom_components",
+    types.ModuleType("custom_components"),
+)
+custom_components.__path__ = [str(ROOT / "custom_components")]
+bticino_package = types.ModuleType("custom_components.bticino_c300x")
+bticino_package.__path__ = [str(ROOT / "custom_components" / "bticino_c300x")]
+sys.modules.setdefault("custom_components.bticino_c300x", bticino_package)
+
 import custom_components.bticino_c300x.device_installer as device_installer  # noqa: E402
+from custom_components.bticino_c300x.const import (  # noqa: E402
+    DEVICE_ACTIVATION_MODE_MANUAL,
+)
 from custom_components.bticino_c300x.device_installer import (  # noqa: E402
     DEFAULT_REMOTE_DIR,
     C300XDeviceInstallRequest,
@@ -50,6 +63,9 @@ def test_bootstrap_device_config_generates_token_auth_without_noauth() -> None:
         "script": f"{DEFAULT_REMOTE_DIR}/qml_patch.sh",
     }
     assert config["maintenance"]["firewall"] == {"enabled": True}
+    assert config["activations"]["enabled"] is True
+    assert config["activations"]["autoDiscover"] is True
+    assert config["activations"]["items"] == []
     assert config["mqtt"] == {
         "enabled": False,
         "host": "",
@@ -103,6 +119,30 @@ def test_bootstrap_paths_follow_configured_device_agent_dir() -> None:
     assert config["events"]["subscriptionStorePath"] == f"{remote_dir}/subscriptions.json"
     assert config["maintenance"]["qmlPatch"]["script"] == f"{remote_dir}/qml_patch.sh"
     assert config["maintenance"]["agentRemove"]["script"] == f"{remote_dir}/remove_agent.sh"
+
+
+def test_bootstrap_device_config_supports_manual_stair_light_activation() -> None:
+    config = json.loads(
+        _device_config_json(
+            api_token="api-token",
+            maintenance_token="maintenance-token",
+            agent_port=8091,
+            device_activation_mode=DEVICE_ACTIVATION_MODE_MANUAL,
+            device_activation_stair_light_address="12",
+        )
+    )
+
+    assert config["activations"]["enabled"] is True
+    assert config["activations"]["autoDiscover"] is False
+    assert config["activations"]["items"] == [
+        {
+            "address": "12",
+            "addressMode": "manual",
+            "id": "stair_light",
+            "name": "Stair light",
+            "type": "stair_light",
+        }
+    ]
 
 
 def test_startup_defaults_use_configured_device_agent_dir() -> None:
@@ -244,6 +284,14 @@ def test_bootstrap_install_uses_python_ssh_client(
     assert any(
         command[0]
         == (
+            f"C300X_QML_SOURCE_DIR={remote_dir}/qml "
+            f"{remote_dir}/qml_patch.sh core-apply"
+        )
+        for command in fake_client.commands
+    )
+    assert any(
+        command[0]
+        == (
             "C300X_IPTABLES=/etc/network/if-pre-up.d/iptables "
             "C300X_IPTABLES_BACKUP=/home/bticino/cfg/extra/c300x-device-file-backups/original"
             "/etc/network/if-pre-up.d/iptables "
@@ -251,7 +299,14 @@ def test_bootstrap_install_uses_python_ssh_client(
         )
         for command in fake_client.commands
     )
-    assert any(f"{remote_dir}/qml_patch.sh" in command[0] for command in fake_client.commands)
+    assert any(
+        command[0]
+        == (
+            f"C300X_QML_SOURCE_DIR={remote_dir}/qml "
+            f"{remote_dir}/qml_patch.sh apply"
+        )
+        for command in fake_client.commands
+    )
     assert f"{remote_dir}/config.json" in result.installed_files
     assert f"{remote_dir}/c300x-agent.env" in result.installed_files
     assert f"{remote_dir}/config.json" in result.changed_files

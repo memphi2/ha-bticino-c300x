@@ -21,7 +21,12 @@ from .agent_diagnostics import (
     apply_agent_diagnostics_event,
     async_refresh_agent_diagnostics,
 )
-from .api import C300XAgentApiResponseError, normalize_system_metrics
+from .api import (
+    C300XAgentApiResponseError,
+    normalize_answering_machine_messages,
+    normalize_memos,
+    normalize_system_metrics,
+)
 from .capabilities import event_label
 from .const import (
     CONF_EVENT_WEBHOOK_ID,
@@ -36,7 +41,9 @@ from .const import (
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
     SIGNAL_EVENT_STATE_CHANGED,
+    SIGNAL_MEMOS_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
+    SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .data import C300XEventState
 from .entity import entry_config_value
@@ -264,6 +271,7 @@ async def _async_handle_agent_event(
         return _json_error("unsupported_event", status=400)
 
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    snapshot = _is_snapshot_payload(payload)
     if event_type == "system_metrics_changed":
         _apply_system_metrics_event(hass, entry, data)
         return web.json_response({"ok": True})
@@ -273,9 +281,6 @@ async def _async_handle_agent_event(
         return web.json_response({"ok": True})
 
     event_at = dt_util.utcnow().isoformat()
-    event_state.last_event = event_type
-    event_state.last_event_time = event_at
-    event_state.event_sequence += 1
     _apply_agent_event_state(
         _AgentEventContext(
             hass=hass,
@@ -298,13 +303,19 @@ async def _async_handle_agent_event(
         ),
         event_at,
     )
-    event_state.last_event_data = event_data
 
-    hass.bus.async_fire(
-        EVENT_AGENT_EVENT_RECEIVED,
-        event_data,
-    )
-    async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
+    if snapshot:
+        _apply_snapshot_entity_refresh(hass, entry, event_type)
+    else:
+        event_state.last_event = event_type
+        event_state.last_event_time = event_at
+        event_state.event_sequence += 1
+        event_state.last_event_data = event_data
+        hass.bus.async_fire(
+            EVENT_AGENT_EVENT_RECEIVED,
+            event_data,
+        )
+        async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
     return web.json_response({"ok": True})
 
 
@@ -358,10 +369,14 @@ def _apply_smartphone_forwarding_event(context: _AgentEventContext) -> None:
 
 def _apply_voicemail_event_context(context: _AgentEventContext) -> None:
     _apply_voicemail_event(context.event_state, context.data)
+    if _is_snapshot_payload(context.payload):
+        _cache_voicemail_snapshot(context.entry, context.event_state)
 
 
 def _apply_memos_event_context(context: _AgentEventContext) -> None:
     _apply_memos_event(context.event_state, context.data)
+    if _is_snapshot_payload(context.payload):
+        _cache_memos_snapshot(context.entry, context.event_state)
 
 
 _AGENT_EVENT_STATE_HANDLERS: dict[str, _AgentEventStateHandler] = {
@@ -449,6 +464,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
     label_en = event_label(context.event_type, "en")
     label_de = event_label(context.event_type, "de")
     label_it = event_label(context.event_type, "it")
+    label_fr = event_label(context.event_type, "fr")
     event_name = label or label_en or context.event_type
     event_data: dict[str, Any] = {
         "entry_id": context.entry.entry_id,
@@ -461,6 +477,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         "event_label_en": label_en,
         "event_label_de": label_de,
         "event_label_it": label_it,
+        "event_label_fr": label_fr,
         "event_at": event_at,
         "data": context.data,
     }
@@ -529,6 +546,41 @@ def _memos_event_data(event_state: C300XEventState) -> dict[str, Any]:
         "read": event_state.memos_read,
         "newest_at": event_state.memos_newest_at,
     }
+
+
+def _apply_snapshot_entity_refresh(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    event_type: str,
+) -> None:
+    """Refresh stateful entities for subscription snapshots without firing events."""
+
+    if event_type == "answering_machine_messages_changed":
+        async_dispatcher_send(hass, SIGNAL_VIDEO_MESSAGES_CHANGED, entry.entry_id)
+    elif event_type == "memos_changed":
+        async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
+
+
+def _cache_voicemail_snapshot(entry: ConfigEntry, event_state: C300XEventState) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return
+    current = getattr(runtime_data, "answering_machine_messages", {})
+    messages = current.get("messages", []) if isinstance(current, dict) else []
+    runtime_data.answering_machine_messages = normalize_answering_machine_messages(
+        {**_voicemail_event_data(event_state), "messages": messages}
+    )
+    runtime_data.answering_machine_messages_updated_at = dt_util.utcnow()
+
+
+def _cache_memos_snapshot(entry: ConfigEntry, event_state: C300XEventState) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return
+    current = getattr(runtime_data, "memos", {})
+    memos = current.get("memos", []) if isinstance(current, dict) else []
+    runtime_data.memos = normalize_memos({**_memos_event_data(event_state), "memos": memos})
+    runtime_data.memos_updated_at = dt_util.utcnow()
 
 
 def _apply_system_metrics_event(
@@ -625,6 +677,19 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _is_snapshot_payload(payload: dict[str, Any]) -> bool:
+    """Return true when the agent explicitly marks a callback as a snapshot."""
+
+    for key in ("snapshot", "replay"):
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str) and value.strip().lower() == "true":
+            return True
+    source = payload.get("source")
+    return isinstance(source, str) and source.strip().lower() == "snapshot"
 
 
 def _json_error(error: str, status: int) -> web.Response:

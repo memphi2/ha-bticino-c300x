@@ -88,7 +88,9 @@ from custom_components.bticino_c300x.data import (  # noqa: E402
 )
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
+    DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+    DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
@@ -108,6 +110,8 @@ class FakeRuntimeData:
     agent_update_state: AgentUpdateState | None = None
     connection_state: Any | None = None
     display_bridge_diagnostics: Any | None = None
+    agent_diagnostics: dict[str, Any] | None = None
+    qml_patch_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -233,6 +237,8 @@ def test_agent_update_available_creates_fixable_repair_issue() -> None:
                 available_version="0.3.1",
                 installed_api_version="1",
                 available_api_version="1",
+                installed_bundle_hash="sha256:old-bundle",
+                available_bundle_hash="sha256:new-bundle",
                 self_update_supported=True,
                 reason="version_mismatch",
             )
@@ -248,6 +254,9 @@ def test_agent_update_available_creates_fixable_repair_issue() -> None:
     assert issue["is_fixable"] is True
     assert issue["translation_key"] == DEVICE_AGENT_UPDATE_REQUIRED_ISSUE
     assert issue["translation_placeholders"]["available_version"] == "0.3.1"
+    assert issue["translation_placeholders"]["available_bundle_hash"] == "sha256:new-b"
+    assert issue["translation_placeholders"]["update_path"] == "self-update"
+    assert issue["translation_placeholders"]["qml_patch_status"] == "unknown"
 
 
 def test_non_self_update_agent_creates_fixable_ssh_repair_issue() -> None:
@@ -291,6 +300,88 @@ def test_agent_update_up_to_date_clears_repair_issue() -> None:
     assert repair_issue_id(DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
 
 
+def test_missing_agent_startup_link_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": False,
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_STARTUP_DISABLED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["translation_key"] == DEVICE_AGENT_STARTUP_DISABLED_ISSUE
+
+
+def test_agent_startup_link_ok_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(DEVICE_AGENT_STARTUP_DISABLED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
+def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": False,
+                "core_state": "original",
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE
+    assert issue["translation_placeholders"]["core_state"] == "original"
+
+
+def test_present_core_qml_hook_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": True,
+                "core_state": "patched",
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
 def test_unsupported_callback_url_creates_repair_issue() -> None:
     connection_state = C300XConnectionState()
     connection_state.mark_event_subscription_attempt(
@@ -308,6 +399,7 @@ def test_unsupported_callback_url_creates_repair_issue() -> None:
         repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, entry.entry_id)
     ]
     assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
     assert issue["translation_key"] == UNSUPPORTED_CALLBACK_URL_ISSUE
     assert issue["translation_placeholders"]["scheme"] == "https"
     assert issue["translation_placeholders"]["host_type"] == "mdns"

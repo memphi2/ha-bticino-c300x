@@ -12,21 +12,26 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stub
     er = None
 
 from .action import ActionValidationError, validate_action_map
+from .agent_update import agent_update_repair_placeholders
+from .callback_target import callback_target_is_clean_local_http
 from .const import CONF_ACTIONS, CONF_ALARM_ENTITY_ID, DOMAIN
-from .data import callback_target_is_clean_local_http
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
+DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
+DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
         MISSING_ALARM_ENTITY_ISSUE,
         AGENT_CAPABILITY_MISMATCH_ISSUE,
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+        DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
+        DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     }
 )
 
@@ -48,7 +53,9 @@ def async_sync_entry_repair_issues(
     _sync_missing_alarm_entity_issue(hass, entry)
     _sync_agent_capability_issue(hass, entry)
     _sync_device_agent_update_issue(hass, entry)
+    _sync_device_agent_startup_issue(hass, entry)
     _sync_unsupported_callback_url_issue(hass, entry)
+    _sync_device_core_qml_hook_issue(hass, entry)
 
 
 @callback
@@ -147,7 +154,32 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> 
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
         severity=ir.IssueSeverity.WARNING,
         is_fixable=getattr(update_state, "repair_fixable", False),
-        placeholders=update_state.repair_placeholders,
+        placeholders=agent_update_repair_placeholders(update_state, entry.runtime_data),
+    )
+
+
+def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    diagnostics = getattr(runtime_data, "agent_diagnostics", None)
+    if not isinstance(diagnostics, dict):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
+        )
+        return
+    if diagnostics.get("agent_init_link_ok") is not False:
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
+        )
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
     )
 
 
@@ -164,7 +196,46 @@ def _sync_unsupported_callback_url_issue(
         entry,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         severity=ir.IssueSeverity.WARNING,
+        is_fixable=True,
         placeholders=callback_problem,
+    )
+
+
+def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    if connection_state is not None and not getattr(connection_state, "available", True):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        )
+        return
+    status = getattr(runtime_data, "qml_patch_status", None)
+    if not isinstance(status, dict):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        )
+        return
+    core_patched = status.get("core_patched")
+    core_state = str(status.get("core_state") or "").strip().lower()
+    missing = core_patched is False or core_state in {"original", "partial"}
+    if not missing:
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        )
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        is_fixable=True,
+        placeholders={"core_state": core_state or "unknown"},
     )
 
 

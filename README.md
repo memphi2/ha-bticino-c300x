@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v0.4.0-0366d6?style=flat-square)](.github/release-notes/v0.4.0.md)
+[![Release](https://img.shields.io/badge/release-v0.5.0-0366d6?style=flat-square)](.github/release-notes/v0.5.0.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.4.0`
+- Current release line: `0.5.0`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -28,6 +28,24 @@ no fake Home Assistant entities.
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home
   Assistant Core integration
+
+## Is this for you?
+
+Use this integration when you want your Classe 300X to behave like a local Home
+Assistant device: doorbell events, camera, talkback, door unlock, stair light,
+ringer/forwarding controls, messages and optional display pages, all without a
+polling controller or a Node.js runtime on the C300X.
+
+Before you start, check these requirements:
+
+- Your C300X must already be rooted or SSH-enabled.
+- Home Assistant must be able to reach the C300X on your local network.
+- You should be comfortable installing a local device agent on the C300X.
+- You should keep the agent API on a trusted LAN only. Do not expose it to the
+  internet.
+
+If your device is still completely stock and you do not have SSH/root access
+yet, do that first. Rooting and firmware patching are outside this repository.
 
 ## Highlights
 
@@ -46,10 +64,13 @@ no fake Home Assistant entities.
 - Video-message playback/delete, voice-memo playback/delete and text-memo
   visibility/delete.
 - Optional C300X display pages for Alarmo and a dynamic Home Assistant board.
-- Multilingual C300X display labels with German, Italian and English text.
+- Multilingual C300X display labels with German, French, Italian and English
+  text.
 - Optional mDNS bootstrap discovery for Home Assistant Zeroconf.
 - Low-noise diagnostics for connection state, write counters and device
   metrics.
+- Original C300X Quick Actions can be exposed as Home Assistant buttons when the
+  installed agent has a safe address or command for them.
 
 ## Screenshots
 
@@ -106,6 +127,9 @@ Use that kind of workflow at your own risk and only where it is legal for your
 device and jurisdiction. After SSH/root access is available, this integration
 can install and manage the native agent.
 
+The integration installer can copy the bundled native agent to an already
+rooted/SSH-enabled device. It cannot root a stock device for you.
+
 ## What You Get in Home Assistant
 
 Exact entities depend on the capabilities reported by your installed agent.
@@ -124,7 +148,7 @@ commands, dashboard actions, latest video-message playback/delete, latest
 voice-memo playback/delete, latest text-memo delete and explicit doorbell-video
 activation for automations.
 
-## Recommended Installation
+## Installation
 
 ### 1. Install the Home Assistant integration
 
@@ -152,9 +176,10 @@ cp -a custom_components/bticino_c300x /config/custom_components/
 
 Then restart Home Assistant.
 
-The HACS release asset is `ha-bticino-c300x.zip`. It contains the Home Assistant
-integration and the matching ARMHF native-agent bundle. Normal users should not
-need Node.js, npm, a cross compiler, or SSH helper tools inside Home Assistant.
+The HACS release asset is `ha-bticino-c300x.zip`. It contains both the Home
+Assistant integration and the matching ARMHF native-agent bundle. Normal users
+should not need Node.js, npm, a cross compiler, or SSH helper tools inside Home
+Assistant.
 
 ### 2. Add the integration
 
@@ -164,7 +189,8 @@ In Home Assistant:
 Settings -> Devices & services -> Add integration -> BTicino C300X
 ```
 
-The setup flow first asks for the C300X address and local agent API port.
+The setup flow first asks for the C300X address and local agent API port. In
+most installations the API port is `8091`.
 
 - If the native agent is already reachable, setup continues with token and
   feature configuration.
@@ -175,7 +201,22 @@ The installer uses the SSH username/password only for that install step. The
 credentials are not stored in the Home Assistant config entry, options,
 diagnostics, or logs.
 
-### 3. Token Storage and Recovery
+Recommended first-run choices:
+
+- Enable the GUI patch only if you want the C300X display pages.
+- Enable the doorbell camera if you want video/talkback in Home Assistant.
+- Select an Alarmo entity only when you use Alarmo.
+- Select a weather entity only when you want it on the C300X display page.
+- Leave destructive maintenance functions disabled until you need them.
+- Keep the generated API and maintenance tokens; they are required for later
+  reconfiguration and maintenance.
+
+Feature choices are reversible from the integration options. Device-changing
+maintenance actions are still explicit: the integration should not patch the
+GUI, change firewall scripts, reboot the device, or remove the agent just
+because Home Assistant starts.
+
+### 3. Tokens and Recovery
 
 During installer-based setup, Home Assistant generates two random tokens:
 
@@ -200,11 +241,11 @@ Home Assistant stores its own copy in the integration config entry/options and
 uses it automatically. Do not copy these values into issues, logs, screenshots,
 commits or documentation.
 
-If you need the exact token later, prefer the Home Assistant reconfigure/options
-flow when you still know it. For recovery, read the device config over SSH from
-the path above, or set new tokens through the agent `/setup` page while noAuth
-bootstrap access is still enabled. The `/setup` page shows only whether tokens
-are configured and their fingerprints; it does not reveal existing token values.
+If you need the exact token later, read it from the device config path above
+over SSH. The agent `/setup` page shows whether tokens are configured and their
+fingerprints, but it does not reveal existing token values. If noAuth bootstrap
+access is still enabled, `/setup` can set new tokens. After setup, turn noAuth
+off.
 
 ### 4. What the installer puts on the device
 
@@ -238,6 +279,18 @@ device UI. When enabled, the patch process backs up original QML files once,
 renders the target files, compares byte-for-byte, writes only changed files,
 remounts the root filesystem writable only for the final copy, and returns it to
 read-only immediately afterwards.
+
+### 6. After setup
+
+After setup, verify these basics:
+
+- `sensor.bticino_c300x_device_connection_state` should show connected.
+- The device-agent version should match the integration release or show an
+  update Repair.
+- `camera.bticino_c300x_doorbell_camera` should be present when video is
+  enabled.
+- Maintenance entities that can change the device should stay disabled until
+  actively needed.
 
 ## Doorbell Video and Talkback Automation
 
@@ -339,6 +392,35 @@ Assistant URL used by this integration. The diagnostics page reports the
 callback host type and whether the subscription callback looks like a clean
 local HTTP address.
 
+If Home Assistant generates a poor callback address for your network, set the
+`Local Home Assistant callback base URL` option during setup or reconfigure. Use
+only the local HTTP base, for example `http://192.0.2.10:8123`. The integration
+keeps the generated webhook path and token intact and replaces only the callback
+scheme, host and port sent to the device agent. Do not put HTTPS, `.local`,
+loopback, link-local, usernames, passwords or paths into this field.
+
+Use the override only when Home Assistant generates a callback URL the C300X
+cannot reach, for example `homeassistant.local` or a link-local IPv6 address.
+Most single-LAN IPv4 setups do not need this option.
+
+## Device Quick Actions
+
+The C300X can store original Quick Actions such as locks, stair lights,
+automation actions, cameras or intercom shortcuts. The integration exposes only
+actions the native agent can represent safely.
+
+Address handling has two modes:
+
+- `manual`: the action JSON contains the OpenWebNet `address`/`where` value.
+- `auto`: the agent is expected to discover the address from the device-side
+  model. Automatic discovery is deliberately conservative: unknown OpenWebNet
+  frames are not exposed as runnable Home Assistant buttons.
+
+The star/favorites button on the C300X display is not a separate Home Assistant
+action. It only marks an existing C300X object as a homepage quick action. The
+linked object may become a Home Assistant button if it is executable and safely
+identified.
+
 ## Security Model
 
 Use this only on a trusted local network.
@@ -421,17 +503,60 @@ possible, and leaves SSH available so the device remains reachable.
 
 ## Troubleshooting
 
-- Connection issues: verify the agent host, port, API token, firewall patch, and
-  that `http://<agent-host>:8091/api/v1/health` is reachable from Home
-  Assistant.
-- Missing entities: entities are capability-gated. If the agent does not report
-  a capability through `/api/v1/capabilities`, Home Assistant will not create the
-  matching entity.
-- Camera issues: keep video enabled in the integration options and avoid
-  `.local`, mDNS or link-local callback/stream URLs, especially with HA Cloud or
-  mixed IPv4/IPv6 networks.
-- Memo/message issues: updates are event-driven. Check the subscription state
-  and the agent capabilities; there should be no periodic memo scan.
+### The integration cannot connect
+
+Check these in order:
+
+1. The C300X is online and reachable from Home Assistant.
+2. `http://<agent-host>:8091/api/v1/health` opens from the Home Assistant
+   network.
+3. The API token in Home Assistant matches `api.token` in the device config.
+4. The firewall patch is enabled only if your device needs it for the selected
+   ports.
+5. The callback URL is a reachable local HTTP address, not `.local`, loopback,
+   unspecified, or link-local.
+
+### Entities are missing
+
+This is usually capability-gating, not a bug. The integration creates entities
+only for features the installed agent reports through `/api/v1/capabilities`.
+If a feature is missing:
+
+- make sure it is enabled in the integration options,
+- make sure the installed agent is current,
+- check for an agent update Repair,
+- check the diagnostics download before opening an issue.
+
+### Camera or talkback is unstable
+
+- Keep video enabled in the integration options.
+- Avoid `homeassistant.local`, mDNS and link-local callback/media addresses.
+- Prefer a stable local IPv4 address or stable ULA/global IPv6 address.
+- For microphone/talkback in browsers, access Home Assistant through HTTPS,
+  Home Assistant Cloud, or another secure frontend URL.
+
+### Messages or memos do not update
+
+Message and memo updates are event-driven. There should be no periodic scan.
+Check the event subscription status, memo/message capabilities and diagnostics.
+If you delete a message from Home Assistant, the GUI should refresh through the
+device UI path, not through a device reboot.
+
+### Before opening an issue
+
+Please include:
+
+- integration version,
+- native agent version,
+- C300X firmware version when known,
+- whether the device is on IPv4, IPv6 or both,
+- whether the C300X display GUI patch is enabled,
+- which optional features are enabled,
+- a Home Assistant diagnostics download for this integration.
+
+Do not include passwords, tokens, local usernames, private hostnames, public IP
+addresses, private backups, firmware files or packet captures with private
+data.
 
 ## Project Background and Attribution
 

@@ -8,7 +8,10 @@
           "name": "Name",
           "agent_host": "Device-Agent-Host",
           "agent_port": "Device-Agent-HTTP-Port",
-          "agent_use_ssl": "HTTPS fuer Device-Agent-API nutzen"
+          "callback_base_url": "Callback-Basis-URL Override (optional)"
+        },
+        "data_description": {
+          "callback_base_url": "Fuer normale Setups leer lassen. Nur setzen, wenn Home Assistant eine vom C300X nicht erreichbare Callback-URL erzeugt, z. B. bei HTTPS-Frontend/Reverse Proxy, homeassistant.local oder Link-Local IPv6. Muss eine lokale HTTP-URL sein, z. B. http://HA_LOKALE_IP:8123."
         }
       },
       "agent_missing": {
@@ -32,8 +35,7 @@
         "description": "Gib die Token fuer den erreichbaren nativen Agent ein. Lasse den API-Token nur leer, solange der Agent noch im noAuth-Bootstrap-Modus laeuft.",
         "data": {
           "agent_token": "Device-Agent-API-Token",
-          "maintenance_token": "Device-Agent-Maintenance-Token",
-          "stair_light_address": "Treppenlicht-Adresse"
+          "maintenance_token": "Device-Agent-Maintenance-Token"
         }
       },
       "user_features": {
@@ -47,21 +49,25 @@
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
-        "description": "Aktualisiert Device-Agent-Verbindung, Maintenance-Token, Treppenlicht-Adresse oder rotiert Webhook-Zugangsdaten.",
+        "description": "Aktualisiert Device-Agent-Verbindung, Maintenance-Token oder rotiert Webhook-Zugangsdaten.",
         "data": {
           "agent_host": "Device-Agent-Host",
           "agent_port": "Device-Agent-HTTP-Port",
-          "agent_use_ssl": "HTTPS fuer Device-Agent-API nutzen",
           "agent_token": "Device-Agent-API-Token",
           "maintenance_token": "Device-Agent-Maintenance-Token",
-          "stair_light_address": "Treppenlicht-Adresse",
+          "callback_base_url": "Callback-Basis-URL Override (optional)",
           "rotate_shared_secret": "Shared Secret rotieren"
+        },
+        "data_description": {
+          "callback_base_url": "Fuer normale Setups leer lassen. Nur setzen, wenn Home Assistant eine vom C300X nicht erreichbare Callback-URL erzeugt, z. B. bei HTTPS-Frontend/Reverse Proxy, homeassistant.local oder Link-Local IPv6. Muss eine lokale HTTP-URL sein, z. B. http://HA_LOKALE_IP:8123."
         }
       },
       "reconfigure_features": {
@@ -75,6 +81,8 @@
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
@@ -90,6 +98,7 @@
       "device_install_verify_failed": "Die Installation ist fertig, aber der native Agent antwortet nicht mit dem generierten Token.",
       "invalid_agent_port": "Gib einen gueltigen Device-Agent-Port ein.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
+      "invalid_callback_base_url": "Gib eine lokale HTTP-Callback-URL von Home Assistant ein, die der C300X erreichen kann, oder lasse das Feld leer.",
       "invalid_device_host": "Gib die C300X-Adresse ein.",
       "installer_dependency_missing": "Die Python-SSH-Abhaengigkeit von Home Assistant ist noch nicht geladen. Starte Home Assistant nach Installation oder Update der Integration neu.",
       "invalid_ssh_password": "Gib das C300X-SSH-Passwort ein.",
@@ -107,10 +116,12 @@
         "data": {
           "agent_host": "Device-Agent-Host",
           "agent_port": "Device-Agent-HTTP-Port",
-          "agent_use_ssl": "HTTPS fuer Device-Agent-API nutzen",
           "agent_token": "Device-Agent-API-Token",
           "maintenance_token": "Device-Agent-Maintenance-Token",
-          "stair_light_address": "Treppenlicht-Adresse"
+          "callback_base_url": "Callback-Basis-URL Override (optional)"
+        },
+        "data_description": {
+          "callback_base_url": "Fuer normale Setups leer lassen. Nur setzen, wenn Home Assistant eine vom C300X nicht erreichbare Callback-URL erzeugt, z. B. bei HTTPS-Frontend/Reverse Proxy, homeassistant.local oder Link-Local IPv6. Muss eine lokale HTTP-URL sein, z. B. http://HA_LOKALE_IP:8123."
         }
       },
       "features": {
@@ -124,6 +135,8 @@
           "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
           "video_port": "Doorbell-RTSP-Port",
           "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
@@ -133,6 +146,7 @@
       "invalid_action_map": "Die Action-Allowlist ist kein gueltiges JSON.",
       "invalid_actions": "Die Action-Allowlist ist kein gueltiges JSON.",
       "invalid_agent_host": "Gib den Device-Agent-Host ein.",
+      "invalid_callback_base_url": "Gib eine lokale HTTP-Callback-URL von Home Assistant ein, die der C300X erreichen kann, oder lasse das Feld leer.",
       "invalid_alarm_entity": "Waehle eine Alarmo-Alarm-Control-Panel-Entitaet oder lasse das Feld leer.",
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer."
     }
@@ -197,7 +211,8 @@
           "ringer_muted": "Klingelton stummgeschaltet",
           "ringer_unmuted": "Klingelton aktiviert",
           "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
-          "stair_light_activated": "Treppenlicht aktiviert"
+          "stair_light_activated": "Treppenlicht aktiviert",
+          "activation_executed": "Geräteaktion ausgeführt"
         }
       }
     },
@@ -385,11 +400,11 @@
         "step": {
           "confirm": {
             "title": "C300X Device-Agent aktualisieren",
-            "description": "Home Assistant laedt den paketierten nativen Agent ueber die aktuell konfigurierte Maintenance-API hoch. SSH-Zugangsdaten werden nicht benoetigt. Aktive GUI- und Firewall-Patches werden vorher read-only geprueft und nur erneuert, wenn sie bereits aktiv waren.\n\nInstalliert: {installed_version} (API {installed_api_version})\nPaketiert: {available_version} (API {available_api_version})\nGrund: {reason}"
+            "description": "Home Assistant laedt den paketierten nativen Agent ueber die aktuell konfigurierte Maintenance-API hoch. SSH-Zugangsdaten werden nicht benoetigt. Aktive GUI- und Firewall-Patches werden vorher read-only geprueft und nur erneuert, wenn sie bereits aktiv waren und sich die paketierte Patch-Quelle geaendert hat.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nGUI-Patch-Status: {qml_patch_status}\nGrund: {reason}"
           },
           "ssh_install": {
             "title": "C300X Device-Agent per SSH neu installieren",
-            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant nutzt diese einmaligen SSH-Zugangsdaten, installiert den paketierten Agent und erneuert danach nur aktive GUI- und Firewall-Patches. Die SSH-Zugangsdaten werden nicht gespeichert.\n\nInstalliert: {installed_version} (API {installed_api_version})\nPaketiert: {available_version} (API {available_api_version})\nGrund: {reason}",
+            "description": "Der installierte Agent kann sich noch nicht selbst aktualisieren. Home Assistant nutzt diese einmaligen SSH-Zugangsdaten, installiert den paketierten Agent und erneuert danach nur aktive GUI- und Firewall-Patches, wenn sich die paketierte Patch-Quelle geaendert hat. Die SSH-Zugangsdaten werden nicht gespeichert.\n\nInstalliert: {installed_version} (API {installed_api_version}, Bundle {installed_bundle_hash})\nPaketiert: {available_version} (API {available_api_version}, Bundle {available_bundle_hash})\nUpdate-Pfad: {update_path}\nGUI-Patch-Status: {qml_patch_status}\nGrund: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH-Benutzername",
               "bootstrap_ssh_password": "SSH-Passwort"
@@ -406,6 +421,28 @@
         }
       }
     },
+    "device_agent_startup_disabled": {
+      "title": "C300X Device-Agent startet nach Reboot nicht",
+      "description": "{entry_title} erreicht den C300X Device-Agent aktuell, aber der Geraete-Autostart-Link fehlt oder ist ungueltig. Nach dem naechsten C300X-Reboot faellt der Agent wieder aus. Fuehre die Device-Agent-Reparatur/Aktualisierung aus oder installiere den Agent per SSH neu, um den Autostart-Link wieder anzulegen."
+    },
+    "device_core_qml_hook_required": {
+      "title": "C300X Core-Media-Hook fehlt",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X Core-Media-Hook anwenden",
+            "description": "Home Assistant wendet nur den minimalen EventManager-QML-Hook an, der erkennt, wenn das C300X-Display oder die App eine Media-Session schliesst. Das ist getrennt vom optionalen Dashboard-GUI-Patch.\n\nAktueller Core-Hook-Status: {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "Der Core-Media-Hook konnte nicht angewendet werden. Pruefe den Maintenance-Zugriff und versuche es erneut.",
+          "core_patch_verify_failed": "Die Core-Media-Hook-Aktion wurde ausgefuehrt, aber der Agent hat den gepatchten Zustand nicht bestaetigt."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "C300X Dashboard-Action-Allowlist ist ungueltig",
       "description": "Die Action-Allowlist fuer {entry_title} kann nicht gelesen werden: {error}. Korrigiere die konfigurierte Action-Map und lade danach die Integration neu."
@@ -416,7 +453,23 @@
     },
     "unsupported_callback_url": {
       "title": "C300X Callback-URL ist fuer den Device-Agent nicht nutzbar",
-      "description": "{entry_title} hat fuer {source} ein nicht unterstuetztes Callback-Ziel erzeugt. Der native Device-Agent braucht eine lokale HTTP-Callback-URL. Aktuelles Callback-Schema: {scheme}; Host-Typ: {host_type}. Konfiguriere Home Assistant mit einer lokalen HTTP-URL, die vom C300X erreichbar ist, und vermeide HTTPS, .local, Loopback und Link-Local-Callback-Adressen."
+      "fix_flow": {
+        "step": {
+          "configure": {
+            "title": "Lokale Callback-URL konfigurieren",
+            "description": "Gib eine lokale HTTP-Basis-URL von Home Assistant ein, die der C300X direkt erreichen kann. Nutze das nur, wenn Home Assistant eine nicht erreichbare Callback-URL erzeugt hat, z. B. HTTPS, homeassistant.local, Loopback oder Link-Local IPv6.\n\nVorschlag: {suggested_callback_base_url}",
+            "data": {
+              "callback_base_url": "Lokale HTTP-Callback-Basis-URL"
+            }
+          }
+        },
+        "error": {
+          "invalid_callback_base_url": "Gib eine lokale HTTP-URL ein, die vom C300X erreichbar ist, z. B. http://HA_LOKALE_IP:8123."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
     }
   }
 }

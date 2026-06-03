@@ -11,14 +11,19 @@ GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"
 GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
-PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+CORE_PATCH_FILES="EventManager.qml"
+FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
+PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
 
 json_status() {
     changed_files="${1:-}"
     state=original
     patched=false
+    core_state=original
+    core_patched=false
     backup_available=false
+    core_backup_available=false
     gui_running=false
     if full_patch_present; then
         state=patched
@@ -27,29 +32,43 @@ json_status() {
         state=partial
         patched=null
     fi
+    if core_patch_present; then
+        core_state=patched
+        core_patched=true
+    elif core_partial_patch_present; then
+        core_state=partial
+        core_patched=null
+    fi
     if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
         backup_available=true
+    fi
+    if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
+        core_backup_available=true
     fi
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
     if [ -n "$changed_files" ]; then
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$backup_available" "$gui_running" "$changed_files"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"backup_available":%s,"core_backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$backup_available" "$core_backup_available" "$gui_running" "$changed_files"
     else
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$backup_available" "$gui_running"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"backup_available":%s,"core_backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$backup_available" "$core_backup_available" "$gui_running"
     fi
 }
 
 json_reload_failed() {
     backup_available=false
+    core_backup_available=false
     gui_running=false
     if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
         backup_available=true
     fi
+    if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
+        core_backup_available=true
+    fi
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
-    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"backup_available":%s,"gui_running":%s}\n' "$backup_available" "$gui_running"
+    printf '{"ok":false,"available":true,"state":"reload_failed","patched":null,"core_state":"unknown","core_patched":null,"backup_available":%s,"core_backup_available":%s,"gui_running":%s}\n' "$backup_available" "$core_backup_available" "$gui_running"
 }
 
 file_contains() {
@@ -87,6 +106,18 @@ partial_patch_present() {
         || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
         || [ -f "$GUI_DIR/js/c300x_i18n.js" ] \
         || [ -f "$GUI_DIR/js/c300x_memos.js" ]
+}
+
+core_patch_present() {
+    file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
+        && file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
+}
+
+core_partial_patch_present() {
+    file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
+        || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
+        || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
 }
 
 reload_gui() {
@@ -159,6 +190,12 @@ backup_file() {
     case "$backup_rel" in
         HomePage.qml|MemoPage.qml)
             require_clean_original_page "$backup_src" "$backup_rel"
+            ;;
+        EventManager.qml)
+            if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
+                printf 'Refusing to back up an already patched EventManager.qml\n' >&2
+                return 1
+            fi
             ;;
         MainApp.qml)
             if grep -F -q 'sourceUrl: "Alarm.qml"' "$backup_src" \
@@ -280,7 +317,7 @@ patch_home_page() {
             print "                        pressedIcon: \"images/keylock_icon-small_p.svg\""
             print "                        defaultIcon: \"images/keylock_icon-small.svg\""
             print "                        defaultImage: \"images/function_btn.svg\""
-            print "                        description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : \"Alarm\")"
+            print "                        description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))"
             print "                    }"
             print "                    onTouched: tabView.activateTab(alarmPage)"
             print "                }"
@@ -455,6 +492,49 @@ patch_memo_page() {
     mv "$temp_file" "$memo_page"
 }
 
+patch_event_manager() {
+    output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
+    event_manager="$output_dir/EventManager.qml"
+    source_event_manager="$BACKUP_DIR/EventManager.qml"
+    temp_file="$output_dir/EventManager.qml.tmp.$$"
+    backup_file "EventManager.qml"
+    if [ ! -f "$source_event_manager" ]; then
+        printf 'Missing original EventManager.qml backup\n' >&2
+        return 1
+    fi
+    mkdir -p "$output_dir"
+    if grep -F -q 'function c300xNotifyMediaClosed()' "$source_event_manager"; then
+        printf 'Refusing to patch EventManager.qml from an already patched source\n' >&2
+        return 1
+    fi
+    awk '
+        $0 == "Item {" {
+            print
+            print ""
+            print "    function c300xNotifyMediaClosed() {"
+            print "        var request = new XMLHttpRequest()"
+            print "        request.open(\"GET\", \"http://127.0.0.1:8092/ui/media-closed\", true)"
+            print "        request.send()"
+            print "    }"
+            next
+        }
+        $0 == "        onCallEnded: {" {
+            print
+            print "            c300xNotifyMediaClosed()"
+            next
+        }
+        { print }
+    ' "$source_event_manager" > "$temp_file"
+    verify_generated_page \
+        "$temp_file" \
+        "EventManager.qml" \
+        'function c300xNotifyMediaClosed()' \
+        'request.open("GET", "http://127.0.0.1:8092/ui/media-closed", true)' \
+        'c300xNotifyMediaClosed()' \
+        'onCallEnded:'
+    mv "$temp_file" "$event_manager"
+}
+
 remove_obsolete_stock_source_files() {
     rm -f "$SOURCE_DIR/HomePage.qml" "$SOURCE_DIR/MemoPage.qml"
 }
@@ -491,7 +571,16 @@ cleanup_staging() {
     rm -rf "$STAGING_DIR"
 }
 
-generate_patch_stage() {
+generate_core_patch_stage() {
+    cleanup_staging
+    mkdir -p "$STAGING_DIR"
+    PATCH_OUTPUT_DIR="$STAGING_DIR"
+    export PATCH_OUTPUT_DIR
+    patch_event_manager
+    unset PATCH_OUTPUT_DIR
+}
+
+generate_feature_patch_stage() {
     cleanup_staging
     mkdir -p "$STAGING_DIR/js"
     PATCH_OUTPUT_DIR="$STAGING_DIR"
@@ -507,9 +596,26 @@ generate_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+generate_full_patch_stage() {
+    cleanup_staging
+    mkdir -p "$STAGING_DIR/js"
+    PATCH_OUTPUT_DIR="$STAGING_DIR"
+    export PATCH_OUTPUT_DIR
+    patch_event_manager
+    patch_home_page
+    patch_memo_page
+    copy_generated_file "Alarm.qml"
+    copy_generated_file "HomeAssistant.qml"
+    copy_generated_file "js/c300x_ha.js"
+    copy_generated_file "js/c300x_i18n.js"
+    copy_generated_file "js/c300x_memos.js"
+    patch_main_app
+    unset PATCH_OUTPUT_DIR
+}
+
 apply_stage_changed_count() {
     changed=0
-    for rel in $PATCH_FILES; do
+    for rel do
         if [ ! -f "$STAGING_DIR/$rel" ]; then
             printf 'Missing generated patch file: %s\n' "$rel" >&2
             return 1
@@ -518,6 +624,21 @@ apply_stage_changed_count() {
             changed=$((changed + 1))
         fi
     done
+    printf '%s\n' "$changed"
+}
+
+apply_feature_stage_changed_count() {
+    changed="$(apply_stage_changed_count $FEATURE_PATCH_FILES)"
+    for rel in $OBSOLETE_GUI_FILES; do
+        if [ -e "$GUI_DIR/$rel" ]; then
+            changed=$((changed + 1))
+        fi
+    done
+    printf '%s\n' "$changed"
+}
+
+apply_full_stage_changed_count() {
+    changed="$(apply_stage_changed_count $PATCH_FILES)"
     for rel in $OBSOLETE_GUI_FILES; do
         if [ -e "$GUI_DIR/$rel" ]; then
             changed=$((changed + 1))
@@ -527,19 +648,33 @@ apply_stage_changed_count() {
 }
 
 copy_changed_patch_files() {
-    for rel in $PATCH_FILES; do
+    for rel do
         if [ ! -f "$GUI_DIR/$rel" ] || ! cmp -s "$STAGING_DIR/$rel" "$GUI_DIR/$rel"; then
             mkdir -p "$(dirname "$GUI_DIR/$rel")"
             cp -p "$STAGING_DIR/$rel" "$GUI_DIR/$rel"
         fi
     done
+}
+
+copy_changed_feature_patch_files() {
+    copy_changed_patch_files $FEATURE_PATCH_FILES
     remove_obsolete_gui_files
+}
+
+copy_changed_full_patch_files() {
+    copy_changed_patch_files $PATCH_FILES
+    remove_obsolete_gui_files
+}
+
+copy_changed_core_patch_files() {
+    copy_changed_patch_files $CORE_PATCH_FILES
 }
 
 apply_generated_patch_if_changed() {
     changed_count="$1"
+    shift
     if [ "$changed_count" -gt 0 ]; then
-        run_write_action copy_changed_patch_files
+        run_write_action "$@"
     fi
 }
 
@@ -601,10 +736,26 @@ patch_main_app() {
     rm -f "$temp_file"
 }
 
+apply_core_patch_files() {
+    generate_core_patch_stage
+    changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
+    apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
+    cleanup_staging
+    printf '%s\n' "$changed_count"
+}
+
+apply_feature_patch_files() {
+    generate_feature_patch_stage
+    changed_count="$(apply_feature_stage_changed_count)"
+    apply_generated_patch_if_changed "$changed_count" copy_changed_feature_patch_files
+    cleanup_staging
+    printf '%s\n' "$changed_count"
+}
+
 apply_patch_files() {
-    generate_patch_stage
-    changed_count="$(apply_stage_changed_count)"
-    apply_generated_patch_if_changed "$changed_count"
+    generate_full_patch_stage
+    changed_count="$(apply_full_stage_changed_count)"
+    apply_generated_patch_if_changed "$changed_count" copy_changed_full_patch_files
     cleanup_staging
     printf '%s\n' "$changed_count"
 }
@@ -633,8 +784,11 @@ restore_changed_count() {
         restore_original="$BACKUP_DIR/$rel"
         restore_dest="$GUI_DIR/$rel"
         if [ ! -e "$restore_original" ]; then
-            printf 'No original backup available for %s; refusing to remove stock GUI file\n' "$rel" >&2
-            return 1
+            if partial_patch_present; then
+                printf 'No original backup available for %s; refusing to remove stock GUI file\n' "$rel" >&2
+                return 1
+            fi
+            continue
         fi
         if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
             changed=$((changed + 1))
@@ -653,6 +807,24 @@ restore_changed_count() {
     printf '%s\n' "$changed"
 }
 
+restore_core_changed_count() {
+    restore_original="$BACKUP_DIR/EventManager.qml"
+    restore_dest="$GUI_DIR/EventManager.qml"
+    if [ ! -e "$restore_original" ]; then
+        if core_partial_patch_present; then
+            printf 'No original backup available for EventManager.qml; refusing to remove core media hook\n' >&2
+            return 1
+        fi
+        printf '0\n'
+        return 0
+    fi
+    if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
+        printf '1\n'
+    else
+        printf '0\n'
+    fi
+}
+
 is_generated_patch_file() {
     case "$1" in
         Alarm.qml|HomeAssistant.qml|js/c300x_ha.js|js/c300x_i18n.js|js/c300x_memos.js)
@@ -664,10 +836,17 @@ is_generated_patch_file() {
     esac
 }
 
+restore_feature_stock_file() {
+    restore_rel="$1"
+    if [ -e "$BACKUP_DIR/$restore_rel" ] || partial_patch_present; then
+        restore_file "$restore_rel"
+    fi
+}
+
 restore_patch_files() {
-    restore_file "MainApp.qml"
-    restore_file "HomePage.qml"
-    restore_file "MemoPage.qml"
+    restore_feature_stock_file "MainApp.qml"
+    restore_feature_stock_file "HomePage.qml"
+    restore_feature_stock_file "MemoPage.qml"
     restore_file "Alarm.qml"
     restore_file "HomeAssistant.qml"
     restore_file "js/c300x_ha.js"
@@ -675,6 +854,21 @@ restore_patch_files() {
     restore_file "js/c300x_memos.js"
     remove_obsolete_gui_files
     rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
+}
+
+restore_core_patch_files() {
+    restore_file "EventManager.qml"
+}
+
+restore_all_changed_count() {
+    feature_changed_count="$(restore_changed_count)"
+    core_changed_count="$(restore_core_changed_count)"
+    printf '%s\n' "$((feature_changed_count + core_changed_count))"
+}
+
+restore_all_patch_files() {
+    restore_patch_files
+    restore_core_patch_files
 }
 
 case "$ACTION" in
@@ -689,10 +883,40 @@ case "$ACTION" in
         fi
         json_status "$changed_count"
         ;;
+    core-apply)
+        changed_count="$(apply_core_patch_files)"
+        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
+            json_reload_failed
+            exit 0
+        fi
+        json_status "$changed_count"
+        ;;
     restore)
         changed_count="$(restore_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_patch_files
+        fi
+        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
+            json_reload_failed
+            exit 0
+        fi
+        json_status "$changed_count"
+        ;;
+    core-restore)
+        changed_count="$(restore_core_changed_count)"
+        if [ "$changed_count" -gt 0 ]; then
+            run_write_action restore_core_patch_files
+        fi
+        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
+            json_reload_failed
+            exit 0
+        fi
+        json_status "$changed_count"
+        ;;
+    restore-all)
+        changed_count="$(restore_all_changed_count)"
+        if [ "$changed_count" -gt 0 ]; then
+            run_write_action restore_all_patch_files
         fi
         if [ "$changed_count" -gt 0 ] && ! reload_gui; then
             json_reload_failed

@@ -64,7 +64,11 @@ def test_legacy_mqtt_disable_does_not_touch_flexisip_or_delete_patch_files() -> 
 
     assert "flexisip" not in disable.lower()
     assert "flexisip" not in migrate.lower()
-    assert "unlink(C300X_LEGACY_MQTT_INIT_LINK)" in disable
+    assert "mosquitto" not in http.lower()
+    assert "unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK" in disable
+    assert "C300X_LEGACY_MQTT_BROKER" not in http
+    assert "legacy_mqtt_start_broker_if_needed" not in http
+    assert "legacy_mqtt_broker_running" not in http
     assert "remove_tree" not in disable
     assert 'unlink("/home/root/filter.py")' not in disable
     assert 'rm -rf /etc/tcpdump2mqtt' not in disable
@@ -77,9 +81,10 @@ def test_legacy_mqtt_enable_does_not_start_duplicate_processes() -> None:
         http.index("static void handle_mqtt_migrate_legacy_post")
     ]
 
-    assert "was_running = legacy_mqtt_running();" in handler
-    assert "should_start_legacy = !was_running;" in handler
-    assert "should_start_legacy = 1;" not in handler
+    assert "bridge_was_running = legacy_mqtt_bridge_running();" in handler
+    assert "should_start_bridge = !bridge_was_running;" in handler
+    assert "should_start_bridge = 1;" not in handler
+    assert "legacy_mqtt_start_broker_if_needed" not in handler
 
 
 def test_native_mqtt_default_config_is_disabled_with_legacy_topics() -> None:
@@ -101,7 +106,7 @@ def test_native_mqtt_default_config_is_disabled_with_legacy_topics() -> None:
 
 def test_native_mqtt_events_do_not_depend_on_ha_webhook_subscriptions() -> None:
     http = _read("native_agent/src/http.c")
-    start = http.rindex("static void dispatch_event")
+    start = http.rindex("static void dispatch_event_internal")
     dispatch = http[start : http.index("static int has_matching_subscription", start)]
 
     assert dispatch.index("c300x_mqtt_publish_event") < dispatch.index(

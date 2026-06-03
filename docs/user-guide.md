@@ -7,11 +7,17 @@ locally on the BTicino Classe 300X / C300X. Home Assistant owns the entities,
 services, automations and media routing. The native agent performs the local
 device work and pushes events back to Home Assistant.
 
-## Supported device scope
+The normal user experience should be simple: install the Home Assistant custom
+integration, install or update the native agent through the setup/Repair flow,
+choose the features you want, and then use the C300X as a local push-based Home
+Assistant device.
+
+## Before you start
 
 - BTicino Classe 300X / C300X.
 - Tested against the `1.7.x` firmware family.
 - Requires a rooted or SSH-enabled C300X for native-agent installation.
+- Requires a trusted local network path from Home Assistant to the C300X.
 
 Stock, unrooted devices are not install targets for this integration by
 themselves. Rooting/SSH enablement is outside this repository. One commonly
@@ -20,6 +26,9 @@ referenced community firmware-patching project is:
 ```text
 https://github.com/fquinto/bticinoClasse300x
 ```
+
+The integration installer can install the native agent on an already
+rooted/SSH-enabled device. It cannot root a stock device.
 
 ## Supported functions
 
@@ -42,7 +51,7 @@ https://github.com/fquinto/bticinoClasse300x
 Entities are capability-gated. If the installed agent does not advertise a
 function, Home Assistant does not create that entity.
 
-## Installation flow
+## Setup flow
 
 1. Install the Home Assistant custom integration through HACS or manually.
 2. Restart Home Assistant.
@@ -55,7 +64,18 @@ function, Home Assistant does not create that entity.
 The installer uses SSH credentials only for the installation step. They are not
 stored in the config entry, options, diagnostics or logs.
 
-## Token Storage
+Recommended first setup:
+
+- Enable doorbell camera/video when you want video or talkback in Home
+  Assistant.
+- Enable the display GUI patch only when you want Alarmo or Home Assistant pages
+  on the physical C300X display.
+- Select an Alarmo entity only when you actually use Alarmo.
+- Select a weather entity only when you want weather on the C300X display page.
+- Leave destructive maintenance options disabled until needed.
+- Keep noAuth bootstrap access temporary. Turn it off after tokens are set.
+
+## Tokens
 
 Installer-based setup generates a device-agent API bearer token and a separate
 maintenance token. The C300X stores them in:
@@ -70,11 +90,10 @@ Home Assistant stores its own copy in the integration config entry/options and
 uses it automatically. Do not paste token values into logs, issues,
 screenshots, commits or documentation.
 
-If the exact value is needed later, use the Home Assistant reconfigure/options
-flow when possible. For recovery, read the device config over SSH or set new
-tokens through `/setup` while noAuth bootstrap access is still enabled. `/setup`
-shows token state and fingerprints only; it does not reveal existing token
-values.
+If the exact value is needed later, read it from the device config over SSH. The
+agent `/setup` page shows token state and fingerprints only; it does not reveal
+existing token values. If noAuth bootstrap access is still enabled, `/setup` can
+set new tokens.
 
 ## Feature options
 
@@ -87,10 +106,42 @@ Common options:
 - Weather entity for the C300X display page.
 - Dynamic Home Assistant dashboard JSON.
 - Keep dashboard open after a display-side action.
+- Native MQTT bridge migration.
+- Optional mDNS bootstrap discovery.
+- Optional maintenance actions.
 
 The GUI patch is explicit. It is not applied by normal Home Assistant startup.
 The patch writes only changed QML files, keeps one original backup, and restores
 the root filesystem to read-only after the final copy.
+
+Keep these options disabled unless you need them:
+
+- GUI patching, when you do not use the C300X display pages.
+- IPv4/IPv6 firewall patching, unless the device firewall blocks the selected
+  ports.
+- SSH maintenance, except during recovery or manual work.
+- Remove device agent, except when uninstalling the device-side runtime.
+- Native MQTT bridge, unless you intentionally migrate away from an older
+  device-side MQTT patch.
+
+## Everyday use
+
+After setup, typical interaction happens through Home Assistant entities:
+
+- Open the doorbell camera from Home Assistant when you need video.
+- Use the camera WebRTC/talkback control when the frontend has microphone
+  access.
+- Use the door unlock and stair-light buttons/services for direct actions.
+- Toggle ringer mute, smartphone forwarding and answering machine through their
+  switches.
+- View, play or delete stored video messages and voice/text memos when the agent
+  reports those capabilities.
+- Use the optional display pages on the C300X when the GUI patch and display
+  bridge are enabled.
+
+Maintenance entities are intentionally separate from everyday controls. Keep
+SSH, reboot, firewall patching, GUI patching and remove-agent disabled unless
+you are actively using them.
 
 ## Alarmo Display Page
 
@@ -117,6 +168,7 @@ Home Assistant alarm integration this display page is designed around.
 The integration can register these services, depending on capabilities:
 
 - `bticino_c300x.run_action`
+- `bticino_c300x.run_device_activation`
 - `bticino_c300x.alarm_command` for the Alarmo display workflow
 - `bticino_c300x.unlock_door`
 - `bticino_c300x.stair_light`
@@ -131,6 +183,28 @@ The integration can register these services, depending on capabilities:
 
 The `Remove device agent` maintenance button restores supported GUI/firewall
 patches first, removes agent-owned files and backups, and leaves SSH running.
+
+## Device activations
+
+The native agent can expose configured original C300X Quick Actions as Home
+Assistant buttons and as `bticino_c300x.run_device_activation`. These are read
+from the agent configuration and only appear when the agent advertises the
+`activations` capability. Automatic discovery is deliberately conservative:
+unknown OpenWebNet frames are not imported as runnable Home Assistant buttons.
+Manually configured actions may still use explicit allowlisted commands.
+
+Activation addresses support two modes:
+
+- `manual`: the JSON item contains the OpenWebNet `address`/`where` value.
+- `auto`: the address is expected to come from device-side discovery. Until the
+  agent has discovered a concrete address or explicit command, the item is
+  reported but not exposed as a runnable Home Assistant button.
+
+The star/favorites button on the C300X display is not a separate action. It
+adds an existing C300X object to the display homepage. If that linked object is
+a safe lock or stair-light action, the integration can expose
+the object itself as a Home Assistant button. The favorite marker is only
+metadata.
 
 ## Doorbell video automation
 
@@ -173,26 +247,39 @@ for the Home Assistant callback URL used by this integration. Use a stable local
 IPv4 address or a stable ULA/global IPv6 address so event subscriptions, camera
 streams and talkback all use a predictable route.
 
+If the generated callback URL is still wrong for your topology, set `Local Home
+Assistant callback base URL` in setup, reconfigure or options. Enter only the
+local HTTP base such as `http://192.0.2.10:8123`; Home Assistant keeps the
+generated webhook path and token. HTTPS, `.local`, loopback, link-local,
+credentials and paths are rejected.
+
 ## Troubleshooting
 
 ### Integration cannot connect
 
-- Check the agent host and port.
-- Check the API token.
-- Open `http://<agent-host>:8091/api/v1/health`.
-- Check firewall/VLAN routing.
-- If IPv6 is enabled, avoid link-local Home Assistant callback URLs for media
-  paths unless that is intentional.
+Check these in order:
+
+1. The C300X is powered on, connected to Wi-Fi and reachable from Home
+   Assistant.
+2. `http://<agent-host>:8091/api/v1/health` opens from the Home Assistant
+   network.
+3. The API token in Home Assistant matches `api.token` on the device.
+4. The firewall patch is enabled only if your C300X needs it for the configured
+   API/media ports.
+5. The Home Assistant callback URL is a stable local HTTP URL. Do not use
+   `.local`, loopback, unspecified, or link-local callback addresses.
 
 ### Entities are missing
 
-Check:
+Entities are capability-gated. First check:
 
 ```text
 GET /api/v1/capabilities
 ```
 
-Missing capabilities mean missing entities by design.
+Missing capabilities mean missing entities by design. If a capability should be
+there, check that the feature is enabled in options, the agent is current, and
+there is no pending Home Assistant Repair for an agent update.
 
 ### Camera does not start
 
@@ -201,11 +288,16 @@ Missing capabilities mean missing entities by design.
 - Check that Home Assistant can reach the media port.
 - Prefer stable IPv4 or ULA/global IPv6 addresses over `.local`, mDNS or
   link-local names.
+- For browser talkback/microphone access, open Home Assistant through HTTPS,
+  Home Assistant Cloud, or another secure frontend URL.
 
 ### Messages or memos do not update
 
 Check the event subscription status and relevant message/memo capabilities. The
-agent should push changes; it should not need periodic scans.
+agent should push changes; it should not need periodic scans. If the C300X
+display still shows an old unread counter after a delete, open diagnostics and
+check whether the GUI patch is active and whether the memo/message event was
+delivered.
 
 ## Removal
 
@@ -213,3 +305,19 @@ agent should push changes; it should not need periodic scans.
 2. Confirm that GUI/firewall patches are restored and SSH remains reachable.
 3. Remove the Home Assistant integration entry.
 4. For manual HA installs, remove `/config/custom_components/bticino_c300x/`.
+
+## Support Checklist
+
+When asking for help, include:
+
+- integration version,
+- native agent version,
+- C300X firmware version when known,
+- whether video, GUI patch, MQTT bridge and IPv6 are enabled,
+- whether the problem happens on Home Assistant startup, device reboot, doorbell
+  ring, camera open, or manual button press,
+- a Home Assistant diagnostics download for this integration.
+
+Do not include passwords, tokens, usernames, private hostnames, private IP
+addresses when they are not needed, local backups, firmware files or packet
+captures with private data.

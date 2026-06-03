@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from base64 import b64decode
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_call_later
 
 from .const import DEFAULT_VIDEO_STREAM_PATH, DOMAIN
 
@@ -43,6 +45,8 @@ def resolve_doorbell_camera_entity_id(
     """Resolve the current doorbell camera entity ID from the entity registry."""
 
     registry = er.async_get(hass)
+    if registry is None or not hasattr(registry, "async_get_entity_id"):
+        return None
     entity_id = registry.async_get_entity_id(
         CAMERA_DOMAIN,
         DOMAIN,
@@ -89,6 +93,21 @@ def event_active_seconds(data: Mapping[str, Any]) -> int:
         return DEFAULT_ACTIVE_SECONDS
 
 
+def active_until_is_active(value: Any, *, now: datetime | None = None) -> bool:
+    """Return true when an ISO timestamp still points into the future."""
+
+    text = optional_string(value)
+    if text is None:
+        return False
+    try:
+        active_until = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if active_until.tzinfo is None:
+        active_until = active_until.replace(tzinfo=UTC)
+    return active_until > (now or datetime.now(UTC))
+
+
 def call_later(
     hass: HomeAssistant,
     delay: int,
@@ -96,9 +115,4 @@ def call_later(
 ) -> Callable[[], None]:
     """Schedule a cancellable callback on the HA loop."""
 
-    handle = hass.loop.call_later(delay, action, None)
-
-    def _cancel() -> None:
-        handle.cancel()
-
-    return _cancel
+    return async_call_later(hass, delay, action)

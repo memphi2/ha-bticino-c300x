@@ -11,6 +11,11 @@
 
 #include "pthread_compat.h"
 
+#define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 10
+
+struct c300x_video;
+static void clear_external_media_active_locked(struct c300x_video *video);
+
 struct c300x_video {
     const struct c300x_config *config;
     pthread_mutex_t mutex;
@@ -20,6 +25,12 @@ struct c300x_video {
     int clients;
     int media_starting;
     int stream_audio;
+    int external_event_active;
+    time_t external_active_until;
+    char external_owner[32];
+    char last_block_reason[64];
+    unsigned long long bt_media_start_attempts;
+    unsigned long long bt_media_stop_attempts;
     unsigned long long rtp_packets;
     char last_rtp_at[40];
     char last_media_started_at[40];
@@ -39,11 +50,59 @@ static void utc_now(char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
 }
 
+static int external_media_guard_ttl_seconds(int ttl_seconds)
+{
+    if (ttl_seconds <= 0 || ttl_seconds > C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS) {
+        return C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS;
+    }
+    return ttl_seconds;
+}
+
 static void set_last_error(struct c300x_video *video, const char *message)
 {
     pthread_mutex_lock(&video->mutex);
     snprintf(video->last_error, sizeof(video->last_error), "%s", message != NULL ? message : "error");
     pthread_mutex_unlock(&video->mutex);
+}
+
+static int external_media_active_locked(struct c300x_video *video)
+{
+    time_t now;
+
+    if (!video->external_event_active) {
+        return 0;
+    }
+    now = time(NULL);
+    if (video->external_active_until <= 0 || now >= video->external_active_until) {
+        clear_external_media_active_locked(video);
+        return 0;
+    }
+    return video->call_active == 0 && video->external_event_active;
+}
+
+static void set_external_media_active_locked(
+    struct c300x_video *video,
+    const char *owner,
+    int ttl_seconds
+) {
+    time_t now = time(NULL);
+    int bounded_ttl = external_media_guard_ttl_seconds(ttl_seconds);
+
+    video->external_event_active = 1;
+    video->external_active_until = now + bounded_ttl;
+    snprintf(
+        video->external_owner,
+        sizeof(video->external_owner),
+        "%s",
+        owner != NULL && owner[0] != '\0' ? owner : "external"
+    );
+}
+
+static void clear_external_media_active_locked(struct c300x_video *video)
+{
+    video->external_event_active = 0;
+    video->external_active_until = 0;
+    video->external_owner[0] = '\0';
 }
 
 static int c300x_video_ensure_running(struct c300x_video *video)
@@ -53,19 +112,24 @@ static int c300x_video_ensure_running(struct c300x_video *video)
     }
 
     pthread_mutex_lock(&video->mutex);
-    int running = video->running;
-    pthread_mutex_unlock(&video->mutex);
-    if (running) {
+    if (video->running || video->media_starting) {
+        pthread_mutex_unlock(&video->mutex);
         return 1;
     }
+    video->media_starting = 1;
+    pthread_mutex_unlock(&video->mutex);
 
     if (!c300x_media_bridge_start(video->config, video)) {
+        pthread_mutex_lock(&video->mutex);
+        video->media_starting = 0;
+        pthread_mutex_unlock(&video->mutex);
         set_last_error(video, "media_bridge_start_failed");
         return 0;
     }
 
     pthread_mutex_lock(&video->mutex);
     video->running = 1;
+    video->media_starting = 0;
     video->last_error[0] = '\0';
     pthread_mutex_unlock(&video->mutex);
     return 1;
@@ -111,6 +175,14 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
     if (video == NULL || !video->enabled) {
         return 0;
     }
+    pthread_mutex_lock(&video->mutex);
+    if (external_media_active_locked(video)) {
+        snprintf(video->last_error, sizeof(video->last_error), "%s", "external_session_active");
+        snprintf(video->last_block_reason, sizeof(video->last_block_reason), "%s", "external_session_active");
+        pthread_mutex_unlock(&video->mutex);
+        return 0;
+    }
+    pthread_mutex_unlock(&video->mutex);
     if (!c300x_video_ensure_running(video)) {
         return 0;
     }
@@ -120,6 +192,7 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
     pthread_mutex_lock(&video->mutex);
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
+    video->last_block_reason[0] = '\0';
     pthread_mutex_unlock(&video->mutex);
     return 1;
 }
@@ -163,14 +236,14 @@ int c300x_video_poll_timeout_ms(const struct c300x_video *video)
     return -1;
 }
 
-void c300x_video_status(const struct c300x_video *video, struct c300x_video_status *status)
+void c300x_video_status(struct c300x_video *video, struct c300x_video_status *status)
 {
     memset(status, 0, sizeof(*status));
     if (video == NULL) {
         return;
     }
     int talkback_running = c300x_media_talkback_running(video) ? 1 : 0;
-    pthread_mutex_lock((pthread_mutex_t *)&video->mutex);
+    pthread_mutex_lock(&video->mutex);
     status->enabled = video->enabled;
     status->running = video->running;
     status->call_active = video->call_active;
@@ -178,6 +251,12 @@ void c300x_video_status(const struct c300x_video *video, struct c300x_video_stat
     status->media_starting = video->media_starting;
     status->stream_audio = video->stream_audio;
     status->talkback_running = talkback_running;
+    status->external_media_active = external_media_active_locked(video);
+    status->external_active_until = video->external_active_until;
+    snprintf(status->external_owner, sizeof(status->external_owner), "%s", video->external_owner);
+    snprintf(status->last_block_reason, sizeof(status->last_block_reason), "%s", video->last_block_reason);
+    status->bt_media_start_attempts = video->bt_media_start_attempts;
+    status->bt_media_stop_attempts = video->bt_media_stop_attempts;
     status->rtp_packets = video->rtp_packets;
     snprintf(status->last_rtp_at, sizeof(status->last_rtp_at), "%s", video->last_rtp_at);
     snprintf(
@@ -189,6 +268,18 @@ void c300x_video_status(const struct c300x_video *video, struct c300x_video_stat
     snprintf(status->last_error, sizeof(status->last_error), "%s", video->last_error);
     pthread_mutex_unlock((pthread_mutex_t *)&video->mutex);
     c300x_media_bridge_status(video, status);
+    if (status->bridge_media_active || status->call_active) {
+        snprintf(status->media_owner, sizeof(status->media_owner), "%s", "agent");
+    } else if (status->external_media_active) {
+        snprintf(
+            status->media_owner,
+            sizeof(status->media_owner),
+            "%s",
+            status->external_owner[0] != '\0' ? status->external_owner : "external"
+        );
+    } else {
+        snprintf(status->media_owner, sizeof(status->media_owner), "%s", "idle");
+    }
 }
 
 void c300x_video_bridge_client_connected(struct c300x_video *video)
@@ -219,10 +310,15 @@ void c300x_video_bridge_media_started(struct c300x_video *video, int include_aud
         return;
     }
     pthread_mutex_lock(&video->mutex);
+    if (!video->call_active) {
+        video->bt_media_start_attempts++;
+    }
     video->call_active = 1;
     video->media_starting = 0;
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
+    video->last_block_reason[0] = '\0';
+    clear_external_media_active_locked(video);
     utc_now(video->last_media_started_at, sizeof(video->last_media_started_at));
     pthread_mutex_unlock(&video->mutex);
 }
@@ -233,6 +329,9 @@ void c300x_video_bridge_media_stopped(struct c300x_video *video)
         return;
     }
     pthread_mutex_lock(&video->mutex);
+    if (video->call_active) {
+        video->bt_media_stop_attempts++;
+    }
     video->call_active = 0;
     video->media_starting = 0;
     video->stream_audio = 0;
@@ -257,5 +356,27 @@ void c300x_video_bridge_set_error(struct c300x_video *video, const char *message
     }
     pthread_mutex_lock(&video->mutex);
     snprintf(video->last_error, sizeof(video->last_error), "%s", message != NULL ? message : "error");
+    pthread_mutex_unlock(&video->mutex);
+}
+
+void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds)
+{
+    if (video == NULL || event_type == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&video->mutex);
+    if (
+        strcmp(event_type, "doorbell.pressed") == 0
+        || strcmp(event_type, "doorbell.view_requested") == 0
+    ) {
+        if (!video->call_active) {
+            set_external_media_active_locked(video, "external_media", ttl_seconds);
+        }
+    } else if (
+        strcmp(event_type, "doorbell.media.closed") == 0
+        || strcmp(event_type, "media.closed") == 0
+    ) {
+        clear_external_media_active_locked(video);
+    }
     pthread_mutex_unlock(&video->mutex);
 }

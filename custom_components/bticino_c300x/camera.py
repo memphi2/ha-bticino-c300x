@@ -27,6 +27,7 @@ from homeassistant.components.stream import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
@@ -37,10 +38,12 @@ from .const import (
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_EVENT_STATE_CHANGED,
 )
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .event_payload import agent_event_key
 from .video import (
+    active_until_is_active,
     call_later,
     doorbell_camera_unique_id,
     event_active_seconds,
@@ -419,7 +422,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._recorder_stream_path: str | None = None
         self._bridge_available = False
         self._bridge_status: dict[str, Any] = {}
+        self._video_owner = "unknown"
+        self._external_media_active = False
+        self._external_owner: str | None = None
+        self._external_active_until: int | None = None
+        self._last_video_block_reason: str | None = None
         self._reset = None
+        self._rtsp_prepare_lock = asyncio.Lock()
         self._rtsp_ready_lock = asyncio.Lock()
         self._rtsp_unavailable_until = 0.0
         self._last_rtsp_error: str | None = None
@@ -487,10 +496,24 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ),
             "video_available": self._bridge_available,
             "video_window_available": (
-                self._video_window_available or event_state.video_available
+                _video_window_is_active(
+                    self._video_window_available,
+                    self._video_active_until,
+                )
+                or _video_window_is_active(
+                    bool(event_state.video_available),
+                    event_state.video_active_until,
+                )
             ),
-            "video_active_until": self._video_active_until
-            or event_state.video_active_until,
+            "video_active_until": _active_until_attribute(
+                self._video_active_until,
+                event_state.video_active_until,
+            ),
+            "video_owner": self._video_owner,
+            "external_media_active": self._external_media_active,
+            "external_owner": self._external_owner,
+            "external_active_until": self._external_active_until,
+            "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": talkback_supported,
             "talkback_requires_https": talkback_supported,
             "talkback_requested": any(
@@ -735,25 +758,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_warmup_video(self) -> None:
         """Mark the video window and refresh bridge metadata before RTSP opens."""
 
-        await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        try:
+            await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        except Exception:  # noqa: BLE001 - refresh status before re-raising API failure
+            with suppress(Exception):
+                status = await self._entry.runtime_data.api.async_doorbell_video_status()
+                self._apply_status(status)
+                self._async_write_ha_state_if_ready()
+            raise
         with suppress(Exception):
             status = await self._entry.runtime_data.api.async_doorbell_video_status()
             self._apply_status(status)
 
     async def _async_restart_video_reader(self, *, audio: bool = False) -> None:
-        await self._entry.runtime_data.api.async_stop_doorbell_video()
-        await asyncio.sleep(1.0)
-        await self._async_warmup_video()
-        await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+        async with self._rtsp_prepare_lock:
+            await self._entry.runtime_data.api.async_stop_doorbell_video()
+            await asyncio.sleep(1.0)
+            await self._async_warmup_video()
+            await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
 
     async def _async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 
-        self._raise_if_rtsp_cooling_down()
-        await self._async_warmup_video()
-        stream_url = self._build_stream_url(audio=audio)
-        await self._async_wait_for_rtsp_ready(stream_url)
-        return stream_url
+        async with self._rtsp_prepare_lock:
+            self._raise_if_rtsp_cooling_down()
+            await self._async_warmup_video()
+            stream_url = self._build_stream_url(audio=audio)
+            await self._async_wait_for_rtsp_ready(stream_url)
+            return stream_url
 
     async def _async_wait_for_rtsp_ready(self, stream_url: str) -> None:
         """Wait briefly for the native RTSP bridge to accept RTSP requests."""
@@ -1142,6 +1174,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._bridge_status = status.get("bridge") or {}
         self._video_window_available = bool(status.get("window_available"))
         self._video_active_until = status.get("active_until")
+        self._video_owner = str(status.get("media_owner") or "unknown")
+        self._external_media_active = bool(status.get("external_media_active"))
+        self._external_owner = optional_string(status.get("external_owner"))
+        self._external_active_until = status.get("external_active_until")
+        self._last_video_block_reason = optional_string(status.get("last_block_reason"))
         if status.get("stream_path"):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))
@@ -1157,6 +1194,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_EVENT_STATE_CHANGED,
+                self._handle_event_state_changed,
+            )
+        )
+
+    @callback
+    def _handle_event_state_changed(self, entry_id: str) -> None:
+        """Refresh attributes when runtime video state is cleared centrally."""
+
+        if entry_id == self._entry.entry_id:
+            self._async_write_ha_state_if_ready()
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1206,6 +1257,23 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     def _async_write_ha_state_if_ready(self) -> None:
         if hasattr(self, "async_write_ha_state"):
             self.async_write_ha_state()
+
+
+def _video_window_is_active(available: bool, active_until: str | None) -> bool:
+    """Return true when a video window is currently usable by HA."""
+
+    if not available:
+        return False
+    return active_until_is_active(active_until) if active_until else True
+
+
+def _active_until_attribute(*values: str | None) -> str | None:
+    """Return the first non-expired active-until timestamp."""
+
+    for value in values:
+        if value and active_until_is_active(value):
+            return value
+    return None
 
 
 def _filter_link_local_sdp_candidates(sdp: str) -> str:

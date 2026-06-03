@@ -34,6 +34,9 @@ async def async_refresh_agent_diagnostics(
     runtime_data.agent_diagnostics = diagnostics
     runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
     async_dispatcher_send(hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, entry.entry_id)
+    from .repair_issues import async_sync_entry_repair_issues
+
+    async_sync_entry_repair_issues(hass, entry)
     return diagnostics
 
 
@@ -54,4 +57,7 @@ def apply_agent_diagnostics_event(
     runtime_data.agent_diagnostics = diagnostics
     runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
     async_dispatcher_send(hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, entry.entry_id)
+    from .repair_issues import async_sync_entry_repair_issues
+
+    async_sync_entry_repair_issues(hass, entry)
     return diagnostics

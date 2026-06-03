@@ -74,8 +74,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ALARM_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
-    CONF_STAIR_LIGHT_ADDRESS,
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
 )
@@ -579,7 +579,7 @@ def test_async_execute_alarm_command_forces_alarmo_open_sensors() -> None:
     ]
 
 
-def test_async_execute_alarm_command_returns_alarmo_blockers_after_service_call() -> None:
+def test_async_execute_alarm_command_returns_alarmo_blockers_before_service_call() -> None:
     alarmo_entity = types.SimpleNamespace(
         entity_id="alarm_control_panel.alarmo",
         area_id="area-1",
@@ -634,14 +634,7 @@ def test_async_execute_alarm_command_returns_alarmo_blockers_after_service_call(
         ],
         "blocking_sensor_count": 1,
     }
-    assert hass.services.calls == [
-        (
-            "alarm_control_panel",
-            "alarm_arm_away",
-            {"entity_id": "alarm_control_panel.alarmo"},
-            True,
-        ),
-    ]
+    assert hass.services.calls == []
 
 
 def test_async_execute_alarm_command_returns_invalid_code_error() -> None:
@@ -1288,7 +1281,7 @@ def test_async_trigger_stair_light_calls_agent_api() -> None:
 
 def test_async_trigger_stair_light_uses_configured_address() -> None:
     hass = FakeHass()
-    entry = FakeEntry(data={CONF_STAIR_LIGHT_ADDRESS: "20#1"})
+    entry = FakeEntry(data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"})
 
     result = run(async_trigger_stair_light(hass, entry))
 
@@ -1299,8 +1292,8 @@ def test_async_trigger_stair_light_uses_configured_address() -> None:
 def test_async_trigger_stair_light_uses_option_address() -> None:
     hass = FakeHass()
     entry = FakeEntry(
-        data={CONF_STAIR_LIGHT_ADDRESS: "20#1"},
-        options={CONF_STAIR_LIGHT_ADDRESS: "30#1"},
+        data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"},
+        options={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "30#1"},
     )
 
     result = run(async_trigger_stair_light(hass, entry))
@@ -1311,7 +1304,7 @@ def test_async_trigger_stair_light_uses_option_address() -> None:
 
 def test_async_trigger_stair_light_accepts_override_address() -> None:
     hass = FakeHass()
-    entry = FakeEntry(data={CONF_STAIR_LIGHT_ADDRESS: "20#1"})
+    entry = FakeEntry(data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"})
 
     result = run(async_trigger_stair_light(hass, entry, "31"))
 

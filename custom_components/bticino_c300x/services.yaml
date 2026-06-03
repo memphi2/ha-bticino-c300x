@@ -15,6 +15,23 @@ run_action:
       selector:
         text:
 
+run_device_activation:
+  name: Run C300X device activation
+  description: Run one configured original C300X Quick Action or activation through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    activation_id:
+      name: Activation ID
+      description: Configured C300X activation id reported by the device agent.
+      required: true
+      selector:
+        text:
+
 alarm_command:
   name: Send C300X alarm command
   description: Send an alarm command to the configured alarm control panel entity.
@@ -161,6 +178,31 @@ play_latest_voice_memo:
       selector:
         entity:
           domain: media_player
+
+write_text_memo:
+  name: Write C300X text memo
+  description: Create a local manual text memo on the C300X. The memo is written only when this service is called.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    text:
+      name: Text
+      description: Memo text to store on the C300X. Maximum 512 UTF-8 bytes.
+      required: true
+      selector:
+        text:
+          multiline: true
+    read:
+      name: Mark as read
+      description: Store the memo as already read. Leave disabled for a normal unread memo.
+      required: false
+      default: false
+      selector:
+        boolean:
 
 delete_latest_video_message:
   name: Delete latest C300X video message

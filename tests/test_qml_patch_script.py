@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -132,6 +133,40 @@ ORIGINAL_MEMO_PAGE = "\n".join(
         "",
     ]
 )
+ORIGINAL_EVENT_MANAGER = "\n".join(
+    [
+        "import QtQuick 1.1",
+        "",
+        "Item {",
+        "",
+        "    Connections {",
+        "        id: vctConnection",
+        "        target: vctModel.binder.getObject(0)",
+        "        onCallEnded: {",
+        "            privateProps.switchingState = 0",
+        "            global.audioState.disableState(AudioState.ScsVideoCall)",
+        "            privateProps.callEnded()",
+        "        }",
+        "    }",
+        "",
+        "    Connections {",
+        "        id: intercomConnection",
+        "        target: intercomModel.binder.getObject(0)",
+        "        onCallEnded: {",
+        "            if (intercomModel.isIntercomCall) {",
+        "                global.audioState.disableState(AudioState.ScsIntercomCall)",
+        "            }",
+        "            else if (intercomModel.isSipIntercomCall) {",
+        "                global.audioState.disableState(AudioState.SipIntercomCall)",
+        "            }",
+        "",
+        "            privateProps.callEnded()",
+        "        }",
+        "    }",
+        "}",
+        "",
+    ]
+)
 SOURCE_INSTALLED_FILES = (
     "Alarm.qml",
     "HomeAssistant.qml",
@@ -141,12 +176,13 @@ SOURCE_INSTALLED_FILES = (
 )
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
-    "HomePage.qml": "6c6e03acf7047a0b95d084523e3c46736d5f88ea6b0ca4af14e364692d3825b6",
+    "HomePage.qml": "d17f8121d4455d0c0ca1e26c8f3a33bfca919310fef50903621eab7ee0ced5ac",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
-    "Alarm.qml": "7740fb70f0c62866883f6797dc1c688e61c73155e4f7c7c539cc097b1754c80d",
+    "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
+    "Alarm.qml": "81a2c9e99a3f8f0278707ebccad372ddcce5b57fb9505a9fe042013e23efa310",
     "HomeAssistant.qml": "842486e0562db7879426ac5da025c4a08ee91fd146eb87048f3e151a47dbd830",
-    "js/c300x_ha.js": "ee430d21dad6ddf9ad089624b60ef897de7f30a05aa8117d5a07725e103f3725",
-    "js/c300x_i18n.js": "d8292ea03d31840afc6537b733ddacef252f2306ea1bbc1a34eb666a193c5f67",
+    "js/c300x_ha.js": "8be4260aa0f0253572798291dd0137f4d41e632cd3c04d12dd5cfa1115521f98",
+    "js/c300x_i18n.js": "d29a2e15c8f1f0f1fb164701229cd19971465630609ab675070783b47a3d488f",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
 }
 
@@ -170,6 +206,7 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
     assert (backup_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (backup_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (backup_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert (backup_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
     assert not (backup_dir / "Alarm.qml").exists()
     assert not (backup_dir / "HomeAssistant.qml").exists()
     assert not (backup_dir / "js/c300x_ha.js").exists()
@@ -178,13 +215,21 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
 
     restored_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore")
     assert restored_status["state"] == "original"
+    assert restored_status["core_state"] == "patched"
     assert restored_status["changed_files"] > 0
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert "c300xNotifyMediaClosed()" in (gui_dir / "EventManager.qml").read_text()
     assert not (gui_dir / "Alarm.qml").exists()
     assert not (gui_dir / "HomeAssistant.qml").exists()
     assert not (gui_dir / "js").exists()
+
+    core_restored_status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-restore")
+    assert core_restored_status["state"] == "original"
+    assert core_restored_status["core_state"] == "original"
+    assert core_restored_status["changed_files"] == 1
+    assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
 
 def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> None:
@@ -197,7 +242,64 @@ def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> Non
 
     assert status["state"] == "patched"
     assert status["patched"] is True
+    assert status["core_state"] == "patched"
+    assert status["core_patched"] is True
     _assert_complete_gui_patch(gui_dir)
+
+
+def test_qml_core_apply_installs_only_media_hook(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
+
+    assert status["state"] == "original"
+    assert status["patched"] is False
+    assert status["core_state"] == "patched"
+    assert status["core_patched"] is True
+    assert status["changed_files"] == 1
+    assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
+    assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+    assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert "c300xNotifyMediaClosed()" in (gui_dir / "EventManager.qml").read_text()
+    assert not (gui_dir / "Alarm.qml").exists()
+
+
+def test_qml_restore_all_removes_feature_and_core_patches(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")
+
+    assert status["state"] == "original"
+    assert status["patched"] is False
+    assert status["core_state"] == "original"
+    assert status["core_patched"] is False
+    assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
+    assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
+    assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
+
+
+def test_qml_restore_all_handles_core_only_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")
+
+    assert status["state"] == "original"
+    assert status["core_state"] == "original"
+    assert status["changed_files"] == 1
+    assert not (backup_dir / "MainApp.qml").exists()
+    assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
 
 def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
@@ -213,6 +315,20 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256
     } == PATCH_OUTPUT_SHA256
+
+
+def test_qml_i18n_catalogs_have_identical_key_sets() -> None:
+    i18n_source = (SOURCE_DIR / "js/c300x_i18n.js").read_text(encoding="utf-8")
+
+    text_keys = _js_object_keys(i18n_source, "EN")
+    assert _js_object_keys(i18n_source, "DE") == text_keys
+    assert _js_object_keys(i18n_source, "IT") == text_keys
+    assert _js_object_keys(i18n_source, "FR") == text_keys
+
+    weather_keys = _js_object_keys(i18n_source, "WEATHER_EN")
+    assert _js_object_keys(i18n_source, "WEATHER_DE") == weather_keys
+    assert _js_object_keys(i18n_source, "WEATHER_IT") == weather_keys
+    assert _js_object_keys(i18n_source, "WEATHER_FR") == weather_keys
 
 
 def test_qml_patch_apply_reports_reload_failure_without_patched_state(
@@ -451,6 +567,7 @@ def _write_original_gui(gui_dir: Path) -> None:
     (gui_dir / "MainApp.qml").write_text(ORIGINAL_MAIN_APP)
     (gui_dir / "HomePage.qml").write_text(ORIGINAL_HOME_PAGE)
     (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)
+    (gui_dir / "EventManager.qml").write_text(ORIGINAL_EVENT_MANAGER)
 
 
 def _copy_source_tree(source_dir: Path) -> None:
@@ -502,6 +619,7 @@ def _assert_complete_gui_patch(
     assert 'defaultIcon: "images/call/icon_call-home.svg"' in home_page
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
+    assert 'trsl.language === "fr" ? "Alarme"' in home_page
     assert "buttonHolder.buttonCount() === 5" in home_page
     assert "console.log(" not in home_page
 
@@ -510,6 +628,17 @@ def _assert_complete_gui_patch(
     assert 'import "js/c300x_memos.js" as MemoSync' in memo_page
     assert "function aboutToShow()" in memo_page
     assert "MemoSync.syncMemoModel(page, AnsweringMessage.TextMemo)" in memo_page
+
+    event_manager = (gui_dir / "EventManager.qml").read_text()
+    assert "function c300xNotifyMediaClosed()" in event_manager
+    assert 'request.open("GET", "http://127.0.0.1:8092/ui/media-closed", true)' in event_manager
+    assert event_manager.count("c300xNotifyMediaClosed()") == 3
+    assert event_manager.index("c300xNotifyMediaClosed()") < event_manager.index(
+        "privateProps.switchingState = 0"
+    )
+    assert event_manager.rindex("c300xNotifyMediaClosed()") < event_manager.index(
+        "global.audioState.disableState(AudioState.ScsIntercomCall)"
+    )
 
     main_app = (gui_dir / "MainApp.qml").read_text()
     assert (
@@ -553,3 +682,13 @@ def _fake_mount_env(tmp_path: Path, mount_log: Path) -> dict[str, str]:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _js_object_keys(source: str, object_name: str) -> set[str]:
+    match = re.search(
+        rf"^var {re.escape(object_name)} = \{{\n(?P<body>.*?)^\}}$",
+        source,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match is not None, object_name
+    return set(re.findall(r'^\s+"([^"]+)":', match.group("body"), re.MULTILINE))

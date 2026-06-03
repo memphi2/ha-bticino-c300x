@@ -25,3 +25,13 @@ def test_display_bridge_alarm_notify_uses_thread_safe_scheduling() -> None:
         "hass.async_create_task(_async_notify_display_bridge_alarm(entry))"
         not in text
     )
+
+
+def test_video_ttl_uses_home_assistant_scheduler() -> None:
+    text = (
+        ROOT / "custom_components" / "bticino_c300x" / "video.py"
+    ).read_text(encoding="utf-8")
+    call_later_body = text.split("def call_later", maxsplit=1)[1]
+
+    assert "async_call_later(hass, delay, action)" in call_later_body
+    assert "hass.loop.call_later" not in call_later_body

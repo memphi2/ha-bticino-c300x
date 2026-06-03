@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .const import DEFAULT_AGENT_PORT, DEFAULT_STAIR_LIGHT_ADDRESS
+from .const import (
+    DEFAULT_AGENT_PORT,
+    DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEVICE_ACTIVATION_MODE_AUTO,
+    DEVICE_ACTIVATION_MODE_MANUAL,
+)
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = COMPONENT_DIR.parents[1]
@@ -58,6 +63,8 @@ class C300XDeviceInstallRequest:
     remote_dir: str = DEFAULT_REMOTE_DIR
     apply_firewall_patch: bool = True
     apply_gui_patch: bool = False
+    device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO
+    device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +99,10 @@ async def async_install_device_agent(
         agent_port=request.agent_port,
         remote_dir=request.remote_dir,
         firewall_enabled=request.apply_firewall_patch,
+        device_activation_mode=request.device_activation_mode,
+        device_activation_stair_light_address=(
+            request.device_activation_stair_light_address
+        ),
     ).encode("utf-8")
 
     changed_files = await asyncio.to_thread(
@@ -145,6 +156,10 @@ def _install_device_agent_sync(
         client.run(f"{_quote(REMOTE_INIT_SCRIPT)} restart")
         _verify_startup_sync(client)
 
+        client.run(
+            f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
+            f"{_quote(f'{request.remote_dir}/qml_patch.sh')} core-apply"
+        )
         if request.apply_gui_patch:
             client.run(
                 f"C300X_QML_SOURCE_DIR={_quote(f'{request.remote_dir}/qml')} "
@@ -286,9 +301,15 @@ def _device_config_json(
     agent_port: int,
     remote_dir: str = DEFAULT_REMOTE_DIR,
     firewall_enabled: bool = True,
+    device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
+    device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
 ) -> str:
     qml_patch_script = f"{remote_dir}/qml_patch.sh"
     remove_agent_script = f"{remote_dir}/remove_agent.sh"
+    activations = _device_activation_config(
+        mode=device_activation_mode,
+        stair_light_address=device_activation_stair_light_address,
+    )
     config = {
         "listen": {
             "host": "0.0.0.0",
@@ -305,6 +326,7 @@ def _device_config_json(
             "firmware": "",
             "stairLightDefaultAddress": DEFAULT_STAIR_LIGHT_ADDRESS,
         },
+        "activations": activations,
         "maintenance": {
             "enabled": True,
             "adminToken": maintenance_token,
@@ -372,6 +394,37 @@ def _device_config_json(
         "displayBridge": {"enabled": False},
     }
     return json.dumps(config, indent=2, sort_keys=True) + "\n"
+
+
+def _device_activation_config(
+    *,
+    mode: str,
+    stair_light_address: str,
+) -> dict[str, Any]:
+    """Return the native-agent activation config for a bootstrap install."""
+
+    auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
+    items: list[dict[str, Any]] = []
+    if not auto_discover:
+        items.append(
+            {
+                "id": "stair_light",
+                "name": "Stair light",
+                "type": "stair_light",
+                "addressMode": "manual",
+                "address": stair_light_address,
+            }
+        )
+    return {
+        "enabled": True,
+        "autoDiscover": auto_discover,
+        "discoveryRoots": [
+            "/home/bticino/cfg/extra/47",
+            "/home/bticino/cfg/extra",
+            "/home/bticino/cfg",
+        ],
+        "items": items,
+    }
 
 
 class _DeviceSshClient:

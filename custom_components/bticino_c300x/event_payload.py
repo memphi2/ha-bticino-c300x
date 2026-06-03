@@ -93,6 +93,8 @@ def _localized_label(data: Mapping[str, Any], language: str | None) -> str | Non
         key = "event_label_de"
     elif language_code.startswith("it"):
         key = "event_label_it"
+    elif language_code.startswith("fr"):
+        key = "event_label_fr"
     else:
         key = "event_label_en"
     value = data.get(key)

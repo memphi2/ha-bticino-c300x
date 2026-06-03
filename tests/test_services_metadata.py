@@ -27,6 +27,13 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
     assert "\n    audio:\n" in sections["activate_doorbell_video"]
 
 
+def test_services_yaml_exposes_device_activation_runner() -> None:
+    sections = _services_yaml_sections()
+
+    assert "run_device_activation" in sections
+    assert "\n    activation_id:\n" in sections["run_device_activation"]
+
+
 def test_services_yaml_exposes_latest_video_message_play_and_delete() -> None:
     sections = _services_yaml_sections()
 
@@ -44,6 +51,14 @@ def test_services_yaml_exposes_latest_text_memo_delete() -> None:
 
     assert "delete_latest_text_memo" in sections
     assert "entry_id" in sections["delete_latest_text_memo"]
+
+
+def test_services_yaml_exposes_text_memo_writer() -> None:
+    sections = _services_yaml_sections()
+
+    assert "write_text_memo" in sections
+    assert "\n    text:\n" in sections["write_text_memo"]
+    assert "multiline: true" in sections["write_text_memo"]
 
 
 def test_services_yaml_exposes_latest_voice_memo_delete() -> None:

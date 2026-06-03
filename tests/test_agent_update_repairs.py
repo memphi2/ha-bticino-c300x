@@ -57,10 +57,15 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
 
-from custom_components.bticino_c300x.const import CONF_DEVICE_UI_ENABLED  # noqa: E402
+from custom_components.bticino_c300x.const import (  # noqa: E402
+    CONF_CALLBACK_BASE_URL,
+    CONF_DEVICE_UI_ENABLED,
+)
 from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
+    CallbackUrlRepairFlow,
     DeviceAgentUpdateRepairFlow,
+    DeviceCoreQmlHookRepairFlow,
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
     _async_reload_entry_after_agent_update,
@@ -93,6 +98,16 @@ class FakePatchApi:
     async def async_apply_qml_patch(self) -> dict[str, Any]:
         self.calls.append("apply_qml")
         return {"available": True, "patched": True, "state": "patched"}
+
+    async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+        self.calls.append("apply_qml_core")
+        return {
+            "available": True,
+            "patched": False,
+            "state": "original",
+            "core_patched": True,
+            "core_state": "patched",
+        }
 
     async def async_firewall_status(self) -> dict[str, Any]:
         self.calls.append("firewall_status")
@@ -162,6 +177,10 @@ class FakeConfigEntries:
         self.reloads.append(entry_id)
         return True
 
+    def async_update_entry(self, entry: Any, **kwargs: Any) -> None:
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+
 
 class FakeHass:
     def __init__(self, entry: Any) -> None:
@@ -204,6 +223,79 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
     assert result["step_id"] == "ssh_install"
     assert result.get("errors") is None
     assert entry.runtime_data.api.calls == []
+
+
+def test_callback_url_repair_flow_stores_valid_override_and_reloads() -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.data = {"agent_host": "192.0.2.60", "agent_port": 8091}
+    hass = FakeHass(entry)
+    flow = CallbackUrlRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    def create_entry(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+
+    invalid = asyncio.run(
+        flow.async_step_configure({CONF_CALLBACK_BASE_URL: "https://ha.local:8123"})
+    )
+    assert invalid["type"] == "form"
+    assert invalid["errors"] == {
+        CONF_CALLBACK_BASE_URL: "invalid_callback_base_url",
+    }
+
+    result = asyncio.run(
+        flow.async_step_configure({CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123"})
+    )
+
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
+    assert hass.config_entries.reloads == ["entry-1"]
+
+
+def test_core_qml_hook_repair_flow_applies_only_core_patch() -> None:
+    api = FakePatchApi()
+    api.qml_status = {
+        "available": True,
+        "patched": False,
+        "state": "original",
+        "core_patched": True,
+        "core_state": "patched",
+    }
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            api,
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": False,
+                "core_state": "original",
+            },
+        )
+    )
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    def create_entry(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+
+    form = asyncio.run(flow.async_step_init())
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert form["type"] == "form"
+    assert result["type"] == "create_entry"
+    assert api.calls == ["apply_qml_core", "qml_status"]
+    assert entry.runtime_data.qml_patch_status["core_state"] == "patched"
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:
@@ -356,6 +448,7 @@ def test_restore_external_patch_state_applies_only_changed_active_patches() -> N
 
     assert api.calls == [
         "apply_firewall",
+        "apply_qml_core",
         "apply_qml",
         "qml_status",
     ]
@@ -435,4 +528,4 @@ def test_restore_external_patch_state_skips_inactive_changed_patches() -> None:
         )
     )
 
-    assert api.calls == []
+    assert api.calls == ["apply_qml_core"]

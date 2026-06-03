@@ -99,6 +99,28 @@ def test_auth_config_read_never_returns_configured_tokens() -> None:
     assert "fnv1a64_fingerprint(\n            config->maintenance_admin_token" in get_body
 
 
+def test_auth_config_exposes_and_updates_activation_settings() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    get_body = text.rsplit("static void handle_auth_config_get", maxsplit=1)[1].split(
+        "static int json_optional_port",
+        maxsplit=1,
+    )[0]
+    post_body = text.rsplit("static void handle_auth_config_post", maxsplit=1)[
+        1
+    ].split("static int legacy_mqtt_installed", maxsplit=1)[0]
+
+    assert '"\\"activations_enabled\\":%s,"' in get_body
+    assert '"\\"activations_auto_discover\\":%s,"' in get_body
+    assert '"\\"activation_stair_light_address\\":%s"' in get_body
+    assert 'json_bool_field(request->body, "activationsEnabled", &value)' in post_body
+    assert (
+        'json_bool_field(request->body, "activationsAutoDiscover", &value)'
+        in post_body
+    )
+    assert '"activationStairLightAddress"' in post_body
+    assert "configure_stair_light_activation(updated, activation_stair_address)" in post_body
+
+
 def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     post_body = text.rsplit("static void handle_auth_config_post", maxsplit=1)[
@@ -107,9 +129,9 @@ def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
 
     assert 'json_bool_field(request->body, "setupComplete", &value)' in post_body
     assert "setup_complete = value" in post_body
-    assert "if (setup_complete && updated.api_token[0] != '\\0')" in post_body
-    assert "updated.api_no_auth = 0" in post_body
-    assert "updated.maintenance_no_auth_allowed = 0" in post_body
+    assert "if (setup_complete && updated->api_token[0] != '\\0')" in post_body
+    assert "updated->api_no_auth = 0" in post_body
+    assert "updated->maintenance_no_auth_allowed = 0" in post_body
 
 
 def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:

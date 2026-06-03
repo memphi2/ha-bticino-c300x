@@ -104,6 +104,32 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert modes["device_agent/qml/js/c300x_memos.js"] == "644"
 
 
+def test_stage_bundle_strips_elf_agent_binary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stager = _load_bundle_stager()
+    component_dir = tmp_path / "bticino_c300x"
+    agent_binary = tmp_path / "c300x-agent-native"
+    version_file = tmp_path / "VERSION"
+    strip_calls: list[list[str]] = []
+    agent_binary.write_bytes(b"\x7fELFagent")
+    version_file.write_text("0.3.1\n", encoding="utf-8")
+    monkeypatch.setattr(stager, "AGENT_BINARY", agent_binary)
+    monkeypatch.setattr(stager, "AGENT_VERSION_FILE", version_file)
+    monkeypatch.setattr(stager, "_run", strip_calls.append)
+
+    stager.stage_bundle(component_dir, version="0.3.1", skip_build=True)
+
+    assert strip_calls == [
+        [
+            "arm-linux-gnueabihf-strip",
+            "--strip-unneeded",
+            str(component_dir / "device_agent/armhf/c300x-agent-native"),
+        ]
+    ]
+
+
 def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     """The native apply list must cover every staged self-update file."""
 
@@ -118,3 +144,40 @@ def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     assert '"device_agent/scripts/remove_agent.sh"' in apply_files
     assert '"device_agent/scripts/bootstrap_firewall.sh"' in apply_files
     assert '"device_agent/init/c300x-native-agent"' not in apply_files
+
+
+def test_native_self_update_apply_repairs_existing_startup_link() -> None:
+    """Self-update keeps legacy bundles compatible but still repairs rc startup."""
+
+    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
+    apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
+        "static void handle_agent_update_apply",
+        1,
+    )[0]
+    repair = native_http.split(
+        "static int repair_agent_init_link_after_update",
+        1,
+    )[1].split("static int apply_agent_update_files", 1)[0]
+
+    assert "repair_agent_init_link_after_update(summary)" in apply_files
+    assert "agent_init_link_matches()" in repair
+    assert "access(C300X_AGENT_INIT_SCRIPT, X_OK)" in repair
+    assert "ensure_agent_init_link()" in repair
+
+
+def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
+    """Stock rc links are usually relative but still point to the same init script."""
+
+    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
+    link_check = native_http.split(
+        "static int agent_init_link_matches(void)\n{",
+        1,
+    )[1].split("static int apply_agent_update_init_script", 1)[0]
+    ensure_link = native_http.split(
+        "static int ensure_agent_init_link",
+        1,
+    )[1].split("static int agent_init_link_matches", 1)[0]
+
+    assert "realpath(C300X_AGENT_INIT_LINK, resolved)" in link_check
+    assert "strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0" in link_check
+    assert "agent_init_link_matches()" in ensure_link

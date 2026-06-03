@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -46,6 +49,7 @@ from .video_messages import (
 )
 
 PARALLEL_UPDATES = 1
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -67,6 +71,10 @@ async def async_setup_entry(
                 lock_name=lock["name"],
             )
         )
+    if supports_capability(entry, "activations"):
+        for activation in await _async_activation_items(entry):
+            if activation.get("executable") is True:
+                entities.append(C300XDeviceActivationButton(entry, activation))
     entities.append(C300XRebootButton(entry))
     entities.append(C300XRemoveAgentButton(entry))
     entities.append(C300XReloadGuiButton(entry))
@@ -124,6 +132,50 @@ class C300XDoorUnlockButton(C300XEntity, ButtonEntity):
             ) from err
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X device-agent command failed") from err
+
+
+class C300XDeviceActivationButton(C300XEntity, ButtonEntity):
+    """Button that runs one configured C300X device activation."""
+
+    def __init__(self, entry: ConfigEntry, activation: dict[str, Any]) -> None:
+        activation_id = str(activation["id"])
+        super().__init__(entry, f"device_activation_{activation_id}")
+        self._activation = activation
+        self._activation_id = activation_id
+        self._attr_name = str(activation.get("name") or activation_id)
+        self._attr_icon = _activation_icon(str(activation.get("type") or "unknown"))
+
+    @property
+    def available(self) -> bool:
+        """Return true when the activation can be executed."""
+
+        return super().available and self._activation.get("executable") is True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Return non-secret activation metadata."""
+
+        return {
+            "activation_id": self._activation_id,
+            "activation_type": self._activation.get("type"),
+            "address_mode": self._activation.get("address_mode"),
+            "address": self._activation.get("address"),
+            "source": self._activation.get("source"),
+        }
+
+    async def async_press(self) -> None:
+        """Run this configured C300X activation."""
+
+        try:
+            await self._entry.runtime_data.api.async_run_device_activation(
+                self._activation_id
+            )
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support activations"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X device activation failed") from err
 
 
 class C300XMaintenanceButton(C300XEntity, ButtonEntity):
@@ -490,6 +542,33 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
 def _supports_maintenance_action(entry: ConfigEntry, action: str) -> bool:
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     return maintenance_action_is_advertised(capabilities, action)
+
+
+async def _async_activation_items(entry: ConfigEntry) -> list[dict[str, Any]]:
+    """Return executable activation discovery items without failing setup."""
+
+    try:
+        activations = await entry.runtime_data.api.async_activations()
+    except C300XAgentApiUnsupportedError:
+        activations = {"available": False, "supported": False, "items": []}
+    except C300XAgentApiError as err:
+        _LOGGER.debug("C300X activation discovery failed: %s", err)
+        activations = {"available": False, "supported": False, "items": []}
+    entry.runtime_data.activations = activations
+    items = activations.get("items") if isinstance(activations, dict) else []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _activation_icon(activation_type: str) -> str:
+    """Return an icon matching a C300X activation type."""
+
+    if activation_type == "lock":
+        return "mdi:lock-open-variant"
+    if activation_type in {"light", "stair_light"}:
+        return "mdi:lightbulb-on"
+    if activation_type == "scenario":
+        return "mdi:play-box"
+    return "mdi:gesture-tap-button"
 
 
 def _connection_available(entry: ConfigEntry) -> bool:

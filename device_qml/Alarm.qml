@@ -34,8 +34,17 @@ Page {
     property bool bypassOffered: false
     property string commandFeedback: ""
     property string commandFeedbackColor: "#c7d0d9"
+    property string activeFeedbackCommand: ""
+
+    Timer {
+        id: modeFeedbackTimer
+        interval: 1000
+        repeat: false
+        onTriggered: activeFeedbackCommand = ""
+    }
 
     function aboutToShow() {
+        activeFeedbackCommand = ""
         clearCommandFeedback()
         Api.status(status, page, alarmState, activeSince)
         startStatusWatch()
@@ -55,6 +64,7 @@ Page {
 
     function handleStatusEvent(event) {
         if (event && (event.topic === "alarm" || event.topic === "display_bridge.state")) {
+            activeFeedbackCommand = ""
             clearCommandFeedback()
             Api.status(status, page, alarmState, activeSince)
         }
@@ -76,8 +86,18 @@ Page {
             commandFeedback = commandFeedback + ": " + commandLabel(command)
         }
         commandFeedbackColor = color
+        flashCommandButton(command, color)
         status.text = commandFeedback
         status.color = color
+    }
+
+    function flashCommandButton(command, color) {
+        if (!command || command.length === 0) {
+            return
+        }
+        activeFeedbackCommand = command
+        commandFeedbackColor = color
+        modeFeedbackTimer.restart()
     }
 
     function clearCommandFeedback() {
@@ -143,6 +163,7 @@ Page {
             bypassOffered = false
         }
         selectedCommand = command
+        flashCommandButton(command, "#f1c40f")
         refreshCommandReadiness()
         if (!selectedCommandReady) {
             if (command.indexOf("arm_") === 0) {
@@ -192,6 +213,7 @@ Page {
         var code = needsPin ? pinCode : ""
         pinCode = ""
         selectedCommand = command
+        flashCommandButton(command, "#f1c40f")
         if (force) {
             bypassOffered = false
         }
@@ -209,6 +231,26 @@ Page {
 
     function modeReadyIndicatorVisible(command) {
         return isArmCommand(command) && commandTargetState(command) !== alarmRawState
+    }
+
+    function modeFeedbackVisible(command) {
+        return activeFeedbackCommand === command
+    }
+
+    function modeFeedbackColor(command) {
+        if (!modeFeedbackVisible(command)) {
+            return "transparent"
+        }
+        if (commandFeedbackColor === "#f1c40f") {
+            return "#f1c40f"
+        }
+        if (commandFeedbackColor === "#58d68d") {
+            return "#58d68d"
+        }
+        if (commandFeedbackColor === "#ff6b6b" || !Api.alarmCommandReady(alarmCommandDetails, command)) {
+            return "#ff6b6b"
+        }
+        return "#58d68d"
     }
 
     function refreshCommandReadiness() {
@@ -373,6 +415,15 @@ Page {
                         anchors.fill: parent
                         source: modeBackground(modelData)
                         fillMode: Image.Stretch
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 3
+                        radius: 4
+                        visible: modeFeedbackVisible(modelData)
+                        color: modeFeedbackColor(modelData)
+                        opacity: 0.55
                     }
 
                     UbuntuLightText {

@@ -14,6 +14,10 @@ def test_alarm_qml_contains_alarmo_card_feedback_hooks() -> None:
 
     assert "modeReadyColor(modelData)" in alarm_qml
     assert "modeReadyIndicatorVisible(modelData)" in alarm_qml
+    assert "modeFeedbackColor(modelData)" in alarm_qml
+    assert "modeFeedbackVisible(modelData)" in alarm_qml
+    assert "flashCommandButton(command, color)" in alarm_qml
+    assert "modeFeedbackTimer.restart()" in alarm_qml
     assert "selectedCommandBlockedBySensors" in alarm_qml
     assert "bypassVisible()" in alarm_qml
     assert "executeCommand(selectedCommand, true)" in alarm_qml
@@ -136,6 +140,8 @@ function createPage() {{
       bypassOffered: false,
       commandFeedback: "",
       commandFeedbackColor: "#c7d0d9",
+      activeFeedbackCommand: "",
+      feedbackTimerRestarts: 0,
       refreshSoonCalls: 0,
     uiText(key) {{
       return I18n.text(this.uiLanguage, key);
@@ -194,8 +200,18 @@ function createPage() {{
         this.commandFeedback = this.commandFeedback + ": " + this.commandLabel(command);
       }}
       this.commandFeedbackColor = color;
+      this.flashCommandButton(command, color);
       statusItem.text = this.commandFeedback;
       statusItem.color = color;
+    }},
+    flashCommandButton(command, color) {{
+      if (!command || command.length === 0) return;
+      this.activeFeedbackCommand = command;
+      this.commandFeedbackColor = color;
+      this.feedbackTimerRestarts += 1;
+    }},
+    expireCommandFlash() {{
+      this.activeFeedbackCommand = "";
     }},
     clearCommandFeedback() {{
       this.commandFeedback = "";
@@ -208,6 +224,7 @@ function createPage() {{
         this.bypassOffered = false;
       }}
       this.selectedCommand = command;
+      this.flashCommandButton(command, "#f1c40f");
       this.refreshCommandReadiness();
       if (!this.selectedCommandReady) {{
         if (command.indexOf("arm_") === 0) {{
@@ -254,6 +271,7 @@ function createPage() {{
         const code = needsPin ? this.pinCode : "";
         this.pinCode = "";
         this.selectedCommand = command;
+        this.flashCommandButton(command, "#f1c40f");
         if (force) {{
           this.bypassOffered = false;
         }}
@@ -265,6 +283,16 @@ function createPage() {{
     }},
     modeReadyIndicatorVisible(command) {{
       return this.isArmCommand(command) && this.commandTargetState(command) !== this.alarmRawState;
+    }},
+    modeFeedbackVisible(command) {{
+      return this.activeFeedbackCommand === command;
+    }},
+    modeFeedbackColor(command) {{
+      if (!this.modeFeedbackVisible(command)) return "transparent";
+      if (this.commandFeedbackColor === "#f1c40f") return "#f1c40f";
+      if (this.commandFeedbackColor === "#58d68d") return "#58d68d";
+      if (this.commandFeedbackColor === "#ff6b6b" || !Api.alarmCommandReady(this.alarmCommandDetails, command)) return "#ff6b6b";
+      return "#58d68d";
     }},
     refreshCommandReadiness() {{
       this.selectedCommandReady = Api.alarmCommandReady(this.alarmCommandDetails, this.selectedCommand);
@@ -357,6 +385,8 @@ function assertBlockedModesLookLikeAlarmoCard() {{
     assert.strictEqual(page.modeReadyColor("arm_vacation"), "#58d68d");
     assert.strictEqual(page.modeReadyIndicatorVisible("arm_away"), true);
     assert.strictEqual(page.modeReadyIndicatorVisible("disarm"), false);
+    assert.strictEqual(page.modeFeedbackVisible("arm_away"), false);
+    assert.strictEqual(page.modeFeedbackColor("arm_away"), "transparent");
     assert.strictEqual(page.selectedCommand, "arm_away");
     assert.strictEqual(page.selectedCommandReady, false);
     assert.strictEqual(page.bypassVisible(), false);
@@ -379,6 +409,11 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   assert.strictEqual(page.bypassVisible(), true);
   assert.strictEqual(page.feedbackTitle(), "Nicht bereit");
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Haustuer");
+  assert.strictEqual(page.modeFeedbackVisible("arm_away"), true);
+  assert.strictEqual(page.modeFeedbackColor("arm_away"), "#ff6b6b");
+  assert(page.feedbackTimerRestarts >= 3);
+  page.expireCommandFlash();
+  assert.strictEqual(page.modeFeedbackVisible("arm_away"), false);
 
   routes["/ui/alarm/command?command=arm_night&check=true"] = {{
     ok: false,
@@ -395,6 +430,8 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   assert.strictEqual(page.selectedCommandReady, false);
   assert.strictEqual(page.bypassVisible(), true);
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Kueche");
+  assert.strictEqual(page.modeFeedbackVisible("arm_night"), true);
+  assert.strictEqual(page.modeFeedbackColor("arm_night"), "#ff6b6b");
 
   routes["/ui/alarm/command?command=arm_away&force=true"] = {{
     ok: true,
@@ -403,6 +440,8 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   }};
   page.executeCommand("arm_away", true);
   assert(calls.includes("/ui/alarm/command?command=arm_away&force=true"));
+  assert.strictEqual(page.modeFeedbackVisible("arm_away"), true);
+  assert.strictEqual(page.modeFeedbackColor("arm_away"), "#58d68d");
 }}
 
 function assertReadyModeExecutesWithoutPin() {{
@@ -415,10 +454,13 @@ function assertReadyModeExecutesWithoutPin() {{
     command: "arm_vacation",
     state: "armed_vacation"
   }};
+  assert.strictEqual(page.modeFeedbackColor("arm_vacation"), "transparent");
   page.selectCommand("arm_vacation");
   assert(calls.includes("/ui/alarm/command?command=arm_vacation"));
   assert.strictEqual(statusItem.text, "Alarmbefehl gesendet: Urlaub");
   assert.strictEqual(statusItem.color, "#58d68d");
+  assert.strictEqual(page.modeFeedbackVisible("arm_vacation"), true);
+  assert.strictEqual(page.modeFeedbackColor("arm_vacation"), "#58d68d");
   assert.strictEqual(page.refreshSoonCalls, 1);
 }}
 

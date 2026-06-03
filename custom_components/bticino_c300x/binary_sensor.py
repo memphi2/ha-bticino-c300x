@@ -120,6 +120,7 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
             self._reset()
         active_seconds = event_active_seconds(event.data)
 
+        @callback
         def _reset(now=None) -> None:
             self._reset = None
             self._clear(cancel_timer=False)

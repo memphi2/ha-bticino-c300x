@@ -35,3 +35,13 @@ def test_video_ttl_uses_home_assistant_scheduler() -> None:
 
     assert "async_call_later(hass, delay, action)" in call_later_body
     assert "hass.loop.call_later" not in call_later_body
+
+
+def test_video_ttl_callbacks_stay_on_event_loop() -> None:
+    """Guard against HA running state-writing TTL callbacks in the executor."""
+
+    for filename in ("webhook.py", "binary_sensor.py", "camera.py", "sensor.py"):
+        text = (
+            ROOT / "custom_components" / "bticino_c300x" / filename
+        ).read_text(encoding="utf-8")
+        assert "@callback\n" in text.split("def _reset", maxsplit=1)[0][-80:]

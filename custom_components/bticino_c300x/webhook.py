@@ -12,7 +12,7 @@ from typing import Any
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
@@ -438,6 +438,7 @@ def _schedule_video_reset(
     if ttl_seconds <= 0:
         return
 
+    @callback
     def _reset_video(now=None) -> None:
         event_state.reset_video = None
         _clear_video_state(event_state, cancel_timer=False)

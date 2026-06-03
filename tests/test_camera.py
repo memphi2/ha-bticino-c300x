@@ -349,6 +349,52 @@ def test_doorbell_camera_reports_talkback_session_state() -> None:
     assert attrs["talkback_last_error"] == "CodecUnavailable"
 
 
+def test_webrtc_candidate_waits_for_remote_description() -> None:
+    class _FakePeer:
+        def __init__(self) -> None:
+            self.candidates: list[Any] = []
+
+        async def addIceCandidate(self, candidate: Any) -> None:
+            self.candidates.append(candidate)
+
+    class _Candidate:
+        def to_dict(self) -> dict[str, Any]:
+            return {
+                "candidate": "candidate:1 1 udp 2130706431 192.0.2.10 5000 typ host",
+                "sdpMid": "0",
+                "sdpMLineIndex": 0,
+            }
+
+    async def _run() -> tuple[_NativeWebRTCSession, _FakePeer]:
+        camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+        peer = _FakePeer()
+        session = _NativeWebRTCSession(peer)
+        camera._webrtc_sessions["session-1"] = session
+        aiortc_modules = SimpleNamespace(
+            candidate_from_sdp=lambda candidate: SimpleNamespace(candidate=candidate)
+        )
+
+        async def _load_aiortc_modules() -> SimpleNamespace:
+            return aiortc_modules
+
+        camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+        await camera.async_on_webrtc_candidate("session-1", _Candidate())
+
+        assert peer.candidates == []
+        assert len(session.pending_candidates) == 1
+
+        session.remote_description_ready = True
+        await camera._async_flush_webrtc_candidates(session, aiortc_modules)
+        return session, peer
+
+    session, peer = asyncio.run(_run())
+
+    assert session.pending_candidates == []
+    assert len(peer.candidates) == 1
+    assert peer.candidates[0].sdpMid == "0"
+    assert peer.candidates[0].sdpMLineIndex == 0
+
+
 def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]

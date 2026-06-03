@@ -690,6 +690,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         if active_seconds <= 0:
             return
 
+        @callback
         def _reset(now: Any = None) -> None:
             self._reset = None
             self._state = DOORBELL_STATE_IDLE

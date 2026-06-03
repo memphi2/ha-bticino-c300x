@@ -239,12 +239,22 @@ def _active_events_for_capabilities(
     except ImportError:
         return events
     registry = er.async_get(hass)
+    if registry is None:
+        registry = getattr(hass, "entity_registry", None)
     if registry is None or not hasattr(registry, "async_get_entity_id"):
         return events
     return _filter_events_for_active_entities(events, entry.entry_id, registry)
 
 
 _EVENT_ENTITY_CONSUMER = ("event", "agent_event")
+_DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
+    {
+        ("sensor", "device_cpu"),
+        ("sensor", "device_load"),
+        ("sensor", "device_memory"),
+        ("sensor", "device_temperature"),
+    }
+)
 _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     "agent.diagnostics_changed": (("sensor", "agent_writes"),),
     "system.metrics_changed": (
@@ -308,11 +318,28 @@ def _filter_events_for_active_entities(
             active_events.append(event)
             continue
         if any(
-            _registry_entity_active(registry, entry_id, domain, key)
+            _consumer_active(registry, entry_id, domain, key)
             for domain, key in _EVENT_CONSUMERS.get(event, ())
         ):
             active_events.append(event)
     return active_events
+
+
+def _consumer_active(
+    registry: Any,
+    entry_id: str,
+    domain: str,
+    key: str,
+) -> bool:
+    """Return true when an event consumer is enabled in the entity registry."""
+
+    return _registry_entity_active(
+        registry,
+        entry_id,
+        domain,
+        key,
+        missing_active=(domain, key) not in _DEFAULT_DISABLED_EVENT_CONSUMERS,
+    )
 
 
 def _registry_entity_active(
@@ -320,11 +347,13 @@ def _registry_entity_active(
     entry_id: str,
     domain: str,
     key: str,
+    *,
+    missing_active: bool = True,
 ) -> bool:
     unique_id = f"{entry_id}_{key}"
     entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
     if entity_id is None:
-        return True
+        return missing_active
     entity = registry.async_get(entity_id)
     return entity is None or getattr(entity, "disabled_by", None) is None
 

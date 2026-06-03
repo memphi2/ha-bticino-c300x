@@ -280,7 +280,7 @@ patch_home_page() {
             print "                        pressedIcon: \"images/keylock_icon-small_p.svg\""
             print "                        defaultIcon: \"images/keylock_icon-small.svg\""
             print "                        defaultImage: \"images/function_btn.svg\""
-            print "                        description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : \"Alarm\")"
+            print "                        description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))"
             print "                    }"
             print "                    onTouched: tabView.activateTab(alarmPage)"
             print "                }"

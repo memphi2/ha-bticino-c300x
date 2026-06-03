@@ -98,6 +98,7 @@ from custom_components.bticino_c300x.button import (
     C300XDeleteLatestTextMemoButton,  # noqa: E402
     C300XDeleteLatestVideoMessageButton,
     C300XDeleteLatestVoiceMemoButton,
+    C300XDeviceActivationButton,
     C300XRebootButton,
     C300XReloadGuiButton,
     C300XRemoveAgentButton,
@@ -140,6 +141,7 @@ class _FakeMemoApi:
         self.video_delete_calls: list[str] = []
         self.qml_patch_actions: list[str] = []
         self.firewall_actions: list[str] = []
+        self.activation_calls: list[str] = []
         self.remove_agent_calls = 0
         self.reload_gui_calls = 0
         self.memos_calls = 0
@@ -162,6 +164,37 @@ class _FakeMemoApi:
     ) -> dict[str, Any]:
         self.video_delete_calls.append(message_id)
         return {"ok": True, "deleted": True, "id": message_id}
+
+    async def async_activations(self) -> dict[str, Any]:
+        return {
+            "available": True,
+            "supported": True,
+            "items": [
+                {
+                    "id": "front_lock",
+                    "name": "Front lock",
+                    "type": "lock",
+                    "address_mode": "manual",
+                    "address": "20",
+                    "source": "config",
+                    "executable": True,
+                },
+                {
+                    "id": "unknown",
+                    "name": "Unknown",
+                    "type": "unknown",
+                    "source": "config",
+                    "executable": False,
+                },
+            ],
+        }
+
+    async def async_run_device_activation(
+        self,
+        activation_id: str,
+    ) -> dict[str, Any]:
+        self.activation_calls.append(activation_id)
+        return {"ok": True, "id": activation_id}
 
     async def async_answering_machine_messages(self) -> dict[str, Any]:
         self.video_messages_calls += 1
@@ -387,6 +420,47 @@ def test_remove_agent_button_is_created_without_agent_capabilities() -> None:
         )
         assert remove_agent._attr_entity_registry_enabled_default is False
         assert remove_agent.available is False
+
+    asyncio.run(_run())
+
+
+def test_activation_buttons_are_created_from_agent_discovery() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi()
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                capabilities={"activations": {"supported": True}},
+                api=api,
+            )
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        activation_buttons = [
+            entity
+            for entity in entities
+            if isinstance(entity, C300XDeviceActivationButton)
+        ]
+        assert len(activation_buttons) == 1
+        button = activation_buttons[0]
+        assert button._attr_name == "Front lock"
+        assert button._attr_icon == "mdi:lock-open-variant"
+        assert button.extra_state_attributes == {
+            "activation_id": "front_lock",
+            "activation_type": "lock",
+            "address_mode": "manual",
+            "address": "20",
+            "source": "config",
+        }
+
+        await button.async_press()
+
+        assert api.activation_calls == ["front_lock"]
 
     asyncio.run(_run())
 

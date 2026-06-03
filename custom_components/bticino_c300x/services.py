@@ -23,6 +23,7 @@ from homeassistant.helpers.dispatcher import (
 
 from .action import ActionValidationError
 from .agent_diagnostics import async_refresh_agent_diagnostics
+from .api import C300XAgentApiResponseError, normalize_text_memo_text
 from .capabilities import (
     answering_machine_message_delete_supported,
     capability_is_supported,
@@ -30,6 +31,7 @@ from .capabilities import (
     entry_gui_function_patch_active,
     maintenance_action_is_supported,
     memo_delete_supported,
+    memo_text_write_supported,
 )
 from .const import (
     CONF_MAINTENANCE_TOKEN,
@@ -44,8 +46,10 @@ from .const import (
     SERVICE_REBOOT,
     SERVICE_RELOAD_GUI,
     SERVICE_RUN_ACTION,
+    SERVICE_RUN_DEVICE_ACTIVATION,
     SERVICE_STAIR_LIGHT,
     SERVICE_UNLOCK_DOOR,
+    SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
@@ -65,10 +69,11 @@ from .memos import (
 )
 from .message_refresh import async_answering_machine_messages, async_memos
 from .qml_patch import async_refresh_qml_patch_status
-from .validation_patterns import LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
+from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
 _ATTR_ACTION_ID = "action_id"
+_ATTR_ACTIVATION_ID = "activation_id"
 _ATTR_ADDRESS = "address"
 _ATTR_AUDIO = "audio"
 _ATTR_CODE = "code"
@@ -77,6 +82,8 @@ _ATTR_ENTRY_ID = "entry_id"
 _ATTR_FORCE = "force"
 _ATTR_LOCK_ID = "lock_id"
 _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
+_ATTR_READ = "read"
+_ATTR_TEXT = "text"
 _BASE_SERVICES_MARKER = "__services_registered"
 _GUI_REQUIRED_SERVICES_MARKER = "__gui_required_services_registered"
 _GUI_REQUIRED_SERVICES_LISTENER_MARKER = "__gui_required_services_listener"
@@ -134,6 +141,15 @@ def _lock_id(value: str) -> str:
     return lock_id
 
 
+def _activation_id(value: str) -> str:
+    """Validate service-level C300X activation id input."""
+
+    activation_id = cv.string(value).strip()
+    if not ACTIVATION_ID_RE.fullmatch(activation_id):
+        raise vol.Invalid("invalid activation id")
+    return activation_id
+
+
 def _ensure_maintenance_action(entry, action: str) -> None:
     """Reject maintenance services unless the agent advertises and authorizes them."""
 
@@ -156,6 +172,24 @@ def _ensure_doorbell_video_supported(entry: Any) -> None:
         and capability_is_supported(capabilities, "doorbell_video")
     ):
         raise service_validation_error("doorbell_video_not_available")
+
+
+def _ensure_text_memo_write_supported(entry: Any) -> None:
+    """Reject text-memo creation unless the agent exposes it."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not memo_text_write_supported(capabilities):
+        raise service_validation_error("text_memo_write_not_supported")
+
+
+def _text_memo_text(value: Any) -> str:
+    """Validate service-level text memo content."""
+
+    try:
+        return normalize_text_memo_text(value)
+    except C300XAgentApiResponseError as err:
+        raise vol.Invalid(str(err)) from err
 
 
 async def _async_ensure_gui_function_patch(entry) -> None:
@@ -240,14 +274,14 @@ async def _latest_item_id_for_entry(
     return item_id
 
 
-async def _async_refresh_after_delete(
+async def _async_refresh_after_message_mutation(
     hass: HomeAssistant,
     entry: Any,
     *,
     refresh: Callable[[], Awaitable[dict[str, Any]]],
     signal: str,
 ) -> None:
-    """Refresh a delete-backed cache and notify HA listeners."""
+    """Refresh a message-backed cache and notify HA listeners."""
 
     try:
         await refresh()
@@ -290,6 +324,16 @@ class _C300XServiceHandlers:
                 "unknown_action",
                 {"action_id": str(err.args[0])},
             ) from err
+
+    async def async_run_device_activation(self, call: ServiceCall) -> None:
+        """Run one configured C300X device activation."""
+
+        entry = _entry_for_call(self._hass, call)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_run_device_activation(
+                call.data[_ATTR_ACTIVATION_ID]
+            )
+        )
 
     async def async_alarm_command(self, call: ServiceCall) -> None:
         """Forward one alarm command to the configured HA alarm entity."""
@@ -371,6 +415,24 @@ class _C300XServiceHandlers:
             media_content_type=getattr(MediaType, "MUSIC", "music"),
         )
 
+    async def async_write_text_memo(self, call: ServiceCall) -> None:
+        """Create a local text memo on the C300X."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_text_memo_write_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_create_text_memo(
+                call.data[_ATTR_TEXT],
+                read=bool(call.data.get(_ATTR_READ, False)),
+            )
+        )
+        await _async_refresh_after_message_mutation(
+            self._hass,
+            entry,
+            refresh=lambda: async_memos(entry, force_refresh=True),
+            signal=SIGNAL_MEMOS_CHANGED,
+        )
+
     async def async_delete_latest_video_message(self, call: ServiceCall) -> None:
         """Delete the newest stored video message."""
 
@@ -380,7 +442,7 @@ class _C300XServiceHandlers:
         await _raise_agent_command_failed(
             entry.runtime_data.api.async_delete_answering_machine_message(message_id)
         )
-        await _async_refresh_after_delete(
+        await _async_refresh_after_message_mutation(
             self._hass,
             entry,
             refresh=lambda: async_answering_machine_messages(
@@ -405,7 +467,7 @@ class _C300XServiceHandlers:
         await _async_ensure_gui_function_patch(entry)
         memo_id = await _latest_memo_id_for_entry(entry, kind)
         await _raise_agent_command_failed(entry.runtime_data.api.async_delete_memo(memo_id))
-        await _async_refresh_after_delete(
+        await _async_refresh_after_message_mutation(
             self._hass,
             entry,
             refresh=lambda: async_memos(entry, force_refresh=True),
@@ -463,6 +525,16 @@ def _register_base_services(
                 {
                     vol.Optional(_ATTR_ENTRY_ID): cv.string,
                     vol.Required(_ATTR_ACTION_ID): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_RUN_DEVICE_ACTIVATION,
+            handlers.async_run_device_activation,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Required(_ATTR_ACTIVATION_ID): _activation_id,
                 }
             ),
         ),
@@ -527,6 +599,17 @@ def _register_base_services(
             SERVICE_PLAY_LATEST_VOICE_MEMO,
             handlers.async_play_latest_voice_memo,
             _play_media_schema(),
+        ),
+        (
+            SERVICE_WRITE_TEXT_MEMO,
+            handlers.async_write_text_memo,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Required(_ATTR_TEXT): _text_memo_text,
+                    vol.Optional(_ATTR_READ, default=False): _boolean_service_value,
+                }
+            ),
         ),
     ):
         hass.services.async_register(DOMAIN, service_name, handler, schema=schema)

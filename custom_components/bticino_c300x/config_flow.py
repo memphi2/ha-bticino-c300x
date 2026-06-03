@@ -24,6 +24,7 @@ from .api import (
     C300XAgentApiError,
     build_agent_base_url,
 )
+from .callback_url import normalize_callback_base_url
 from .const import (
     ALARM_DOMAIN,
     CONF_ACTIONS,
@@ -31,21 +32,22 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_AGENT_USE_SSL,
     CONF_ALARM_ENTITY_ID,
     CONF_BOOTSTRAP_APPLY_GUI_PATCH,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
+    CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
-    CONF_STAIR_LIGHT_ADDRESS,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
@@ -56,6 +58,8 @@ from .const import (
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEVICE_ACTIVATION_MODE_AUTO,
+    DEVICE_ACTIVATION_MODES,
     DOMAIN,
     WEATHER_DOMAIN,
 )
@@ -82,13 +86,14 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_AGENT_HOST,
         CONF_AGENT_PORT,
         CONF_AGENT_TOKEN,
-        CONF_AGENT_USE_SSL,
+        CONF_CALLBACK_BASE_URL,
         CONF_ALARM_ENTITY_ID,
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_DEVICE_ACTIVATION_MODE,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         CONF_DEVICE_UI_ENABLED,
         CONF_MAINTENANCE_TOKEN,
-        CONF_STAIR_LIGHT_ADDRESS,
         CONF_VIDEO_ENABLED,
         CONF_VIDEO_PORT,
         CONF_VIDEO_STREAM_PATH,
@@ -134,6 +139,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         user_input.get(CONF_NAME, DEFAULT_NAME),
                         user_input.get(CONF_AGENT_HOST, ""),
                         int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
+                        str(user_input.get(CONF_CALLBACK_BASE_URL, "")),
                     ),
                     errors=errors,
                 )
@@ -212,9 +218,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self._setup_connection[CONF_AGENT_TOKEN] = api_token
                 self._setup_connection[CONF_MAINTENANCE_TOKEN] = maintenance_token
-                self._setup_connection[CONF_STAIR_LIGHT_ADDRESS] = (
-                    DEFAULT_STAIR_LIGHT_ADDRESS
-                )
                 probe = await _async_probe_agent(
                     self.hass,
                     self._setup_connection,
@@ -351,7 +354,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_NAME: display_name,
             CONF_AGENT_HOST: connection[CONF_AGENT_HOST],
             CONF_AGENT_PORT: connection[CONF_AGENT_PORT],
-            CONF_AGENT_USE_SSL: False,
         }
         probe = await _async_probe_agent(self.hass, self._setup_connection)
         self._setup_agent_needs_token = probe == "auth_required"
@@ -429,6 +431,16 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         str(user_input.get(CONF_ACTIONS_JSON, "")),
                         bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
                         user_input.get(CONF_DASHBOARD_ENTITIES, []),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_MODE,
+                            DEVICE_ACTIVATION_MODE_AUTO,
+                        ),
+                        str(
+                            user_input.get(
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                                DEFAULT_STAIR_LIGHT_ADDRESS,
+                            )
+                        ),
                     ),
                     errors=errors,
                 )
@@ -457,6 +469,16 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         str(user_input.get(CONF_ACTIONS_JSON, "")),
                         bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
                         user_input.get(CONF_DASHBOARD_ENTITIES, []),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_MODE,
+                            DEVICE_ACTIVATION_MODE_AUTO,
+                        ),
+                        str(
+                            user_input.get(
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                                DEFAULT_STAIR_LIGHT_ADDRESS,
+                            )
+                        ),
                     ),
                     errors=errors,
                 )
@@ -502,6 +524,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 DEFAULT_VIDEO_PORT,
                 DEFAULT_VIDEO_STREAM_PATH,
                 self._setup_device_ui_default,
+                default_device_activation_mode=DEVICE_ACTIVATION_MODE_AUTO,
+                default_device_activation_stair_light_address=DEFAULT_STAIR_LIGHT_ADDRESS,
             ),
             errors=errors,
         )
@@ -526,13 +550,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data_schema=_reconfigure_connection_schema(
                         user_input.get(CONF_AGENT_HOST, ""),
                         int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-                        bool(user_input.get(CONF_AGENT_USE_SSL, False)),
                         str(user_input.get(CONF_AGENT_TOKEN, "")),
                         str(user_input.get(CONF_MAINTENANCE_TOKEN, "")),
-                        str(user_input.get(
-                            CONF_STAIR_LIGHT_ADDRESS,
-                            DEFAULT_STAIR_LIGHT_ADDRESS,
-                        )),
+                        str(user_input.get(CONF_CALLBACK_BASE_URL, "")),
                     ),
                     errors=errors,
                 )
@@ -581,6 +601,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         _actions_json(feature_defaults[CONF_ACTIONS]),
                         bool(feature_defaults[CONF_DASHBOARD_PREVENT_RETURN]),
                         feature_defaults[CONF_DASHBOARD_ENTITIES],
+                        feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
+                        feature_defaults[
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS
+                        ],
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -617,6 +641,18 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         user_input.get(
                             CONF_DASHBOARD_ENTITIES,
                             feature_defaults[CONF_DASHBOARD_ENTITIES],
+                        ),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_MODE,
+                            feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
+                        ),
+                        str(
+                            user_input.get(
+                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                                feature_defaults[
+                                    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS
+                                ],
+                            )
                         ),
                     ),
                     errors=errors,
@@ -777,6 +813,7 @@ def _setup_connection_schema(
     default_name: str,
     default_agent_host: str,
     default_agent_port: int,
+    default_callback_base_url: str = "",
 ) -> vol.Schema:
     """Return the initial setup schema before auth and feature choices."""
 
@@ -785,6 +822,10 @@ def _setup_connection_schema(
             vol.Required(CONF_NAME, default=default_name): str,
             vol.Required(CONF_AGENT_HOST, default=default_agent_host): str,
             vol.Optional(CONF_AGENT_PORT, default=default_agent_port): int,
+            _optional_suggested(
+                CONF_CALLBACK_BASE_URL,
+                default_callback_base_url,
+            ): str,
         }
     )
 
@@ -812,7 +853,7 @@ def _bootstrap_install_schema() -> vol.Schema:
 
 
 def _agent_auth_schema(require_agent_token: bool) -> vol.Schema:
-    """Return the agent token and device command defaults schema."""
+    """Return the agent token schema."""
 
     token_key = (
         vol.Required(CONF_AGENT_TOKEN, default="")
@@ -823,10 +864,6 @@ def _agent_auth_schema(require_agent_token: bool) -> vol.Schema:
         {
             token_key: str,
             vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): str,
-            vol.Optional(
-                CONF_STAIR_LIGHT_ADDRESS,
-                default=DEFAULT_STAIR_LIGHT_ADDRESS,
-            ): str,
         }
     )
 
@@ -868,7 +905,6 @@ async def _async_discovery_targets_configured_entry(
     probe_connection = {
         CONF_AGENT_HOST: connection[CONF_AGENT_HOST],
         CONF_AGENT_PORT: connection[CONF_AGENT_PORT],
-        CONF_AGENT_USE_SSL: False,
     }
     return (
         await _async_probe_agent(
@@ -913,6 +949,8 @@ def _setup_features_schema(
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = True,
     default_dashboard_entities: Any = None,
+    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
+    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
 
@@ -936,6 +974,14 @@ def _setup_features_schema(
                 CONF_VIDEO_STREAM_PATH,
                 default=default_video_stream_path,
             ): str,
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_MODE,
+                default=default_device_activation_mode,
+            ): vol.In(DEVICE_ACTIVATION_MODES),
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                default=default_device_activation_stair_light_address,
+            ): str,
         }
     )
 
@@ -943,10 +989,9 @@ def _setup_features_schema(
 def _reconfigure_connection_schema(
     default_agent_host: str,
     default_agent_port: int,
-    default_agent_use_ssl: bool,
     default_agent_token: str,
     default_maintenance_token: str,
-    default_stair_light_address: str,
+    default_callback_base_url: str,
 ) -> vol.Schema:
     """Return the reconfigure connection schema."""
 
@@ -954,15 +999,14 @@ def _reconfigure_connection_schema(
         {
             vol.Required(CONF_AGENT_HOST, default=default_agent_host): str,
             vol.Optional(CONF_AGENT_PORT, default=default_agent_port): int,
-            vol.Optional(CONF_AGENT_USE_SSL, default=default_agent_use_ssl): bool,
             vol.Required(CONF_AGENT_TOKEN, default=default_agent_token): str,
             vol.Optional(
                 CONF_MAINTENANCE_TOKEN,
                 default=default_maintenance_token,
             ): str,
-            vol.Optional(
-                CONF_STAIR_LIGHT_ADDRESS,
-                default=default_stair_light_address,
+            _optional_suggested(
+                CONF_CALLBACK_BASE_URL,
+                default_callback_base_url,
             ): str,
             vol.Optional(CONF_ROTATE_SHARED_SECRET, default=False): bool,
         }
@@ -979,6 +1023,8 @@ def _reconfigure_features_schema(
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = True,
     default_dashboard_entities: Any = None,
+    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
+    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
@@ -1002,6 +1048,14 @@ def _reconfigure_features_schema(
                 CONF_VIDEO_STREAM_PATH,
                 default=default_video_stream_path,
             ): str,
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_MODE,
+                default=default_device_activation_mode,
+            ): vol.In(DEVICE_ACTIVATION_MODES),
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                default=default_device_activation_stair_light_address,
+            ): str,
         }
     )
 
@@ -1013,6 +1067,15 @@ def _stair_light_address(value: Any) -> str:
     if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
         raise vol.Invalid("invalid staircase light address")
     return address
+
+
+def _device_activation_mode(value: Any) -> str:
+    """Validate the configured C300X device activation address mode."""
+
+    mode = str(value or DEVICE_ACTIVATION_MODE_AUTO).strip()
+    if mode not in DEVICE_ACTIVATION_MODES:
+        raise vol.Invalid("invalid device activation mode")
+    return mode
 
 
 def _alarm_entity_id(value: Any) -> str:
@@ -1076,6 +1139,19 @@ def _agent_host(value: Any) -> str:
     return host
 
 
+def _validated_callback_base_url(
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+) -> str:
+    """Validate the optional local HA callback base URL override."""
+
+    try:
+        return normalize_callback_base_url(user_input.get(CONF_CALLBACK_BASE_URL, ""))
+    except ValueError:
+        errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
+        return ""
+
+
 def _initial_connection_input(
     user_input: dict[str, Any],
     *,
@@ -1089,11 +1165,12 @@ def _initial_connection_input(
     except vol.Invalid:
         errors[CONF_AGENT_HOST] = "invalid_agent_host"
         agent_host = ""
+    callback_base_url = _validated_callback_base_url(user_input, errors)
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
         CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        CONF_AGENT_USE_SSL: False,
+        CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
         data[CONF_NAME] = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip()
@@ -1111,20 +1188,12 @@ def _agent_auth_input(
     agent_token = str(user_input.get(CONF_AGENT_TOKEN, "")).strip()
     if require_agent_token and not agent_token:
         errors[CONF_AGENT_TOKEN] = "required"
-    try:
-        stair_light_address = _stair_light_address(
-            user_input.get(CONF_STAIR_LIGHT_ADDRESS, DEFAULT_STAIR_LIGHT_ADDRESS)
-        )
-    except vol.Invalid:
-        errors[CONF_STAIR_LIGHT_ADDRESS] = "invalid_stair_light_address"
-        stair_light_address = DEFAULT_STAIR_LIGHT_ADDRESS
     return (
         {
             CONF_AGENT_TOKEN: agent_token,
             CONF_MAINTENANCE_TOKEN: str(
                 user_input.get(CONF_MAINTENANCE_TOKEN, "")
             ).strip(),
-            CONF_STAIR_LIGHT_ADDRESS: stair_light_address,
         },
         errors,
     )
@@ -1145,21 +1214,14 @@ def _connection_input(
         errors[CONF_AGENT_HOST] = "invalid_agent_host"
         agent_host = ""
     agent_token = str(user_input.get(CONF_AGENT_TOKEN, "")).strip()
-    try:
-        stair_light_address = _stair_light_address(
-            user_input.get(CONF_STAIR_LIGHT_ADDRESS, DEFAULT_STAIR_LIGHT_ADDRESS)
-        )
-    except vol.Invalid:
-        errors[CONF_STAIR_LIGHT_ADDRESS] = "invalid_stair_light_address"
-        stair_light_address = DEFAULT_STAIR_LIGHT_ADDRESS
+    callback_base_url = _validated_callback_base_url(user_input, errors)
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
         CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        CONF_AGENT_USE_SSL: bool(user_input.get(CONF_AGENT_USE_SSL, False)),
         CONF_AGENT_TOKEN: agent_token,
         CONF_MAINTENANCE_TOKEN: user_input.get(CONF_MAINTENANCE_TOKEN, "").strip(),
-        CONF_STAIR_LIGHT_ADDRESS: stair_light_address,
+        CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
         data[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME).strip()
@@ -1183,6 +1245,25 @@ def _feature_input(
     weather_entity_id = ""
     dashboard_entities: list[str] = []
     actions: dict[str, dict[str, Any]] = {}
+    try:
+        device_activation_mode = _device_activation_mode(
+            user_input.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO)
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_MODE] = "invalid_device_activation_mode"
+        device_activation_mode = DEVICE_ACTIVATION_MODE_AUTO
+    try:
+        device_activation_stair_light_address = _stair_light_address(
+            user_input.get(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                DEFAULT_STAIR_LIGHT_ADDRESS,
+            )
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] = (
+            "invalid_stair_light_address"
+        )
+        device_activation_stair_light_address = DEFAULT_STAIR_LIGHT_ADDRESS
     if device_ui_enabled:
         try:
             actions = parse_actions_json(user_input.get(CONF_ACTIONS_JSON, ""))
@@ -1214,6 +1295,10 @@ def _feature_input(
                 user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)
                 if device_ui_enabled
                 else True
+            ),
+            CONF_DEVICE_ACTIVATION_MODE: device_activation_mode,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: (
+                device_activation_stair_light_address
             ),
             CONF_VIDEO_ENABLED: bool(
                 user_input.get(CONF_VIDEO_ENABLED, default_video_enabled)
@@ -1281,7 +1366,6 @@ async def _async_agent_setup_data(
     base_url = build_agent_base_url(
         str(connection.get(CONF_AGENT_HOST, "")),
         int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        bool(connection.get(CONF_AGENT_USE_SSL, False)),
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
     return await api.async_validate_setup()
@@ -1300,7 +1384,6 @@ async def _async_agent_ready_for_setup(
     base_url = build_agent_base_url(
         str(connection.get(CONF_AGENT_HOST, "")),
         int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        bool(connection.get(CONF_AGENT_USE_SSL, False)),
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
     setup_data = await api.async_validate_setup()
@@ -1334,10 +1417,6 @@ def _options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.
                     DEFAULT_AGENT_PORT,
                 ),
             ): int,
-            vol.Optional(
-                CONF_AGENT_USE_SSL,
-                default=_config_default(config_entry, CONF_AGENT_USE_SSL, False),
-            ): bool,
             vol.Required(
                 CONF_AGENT_TOKEN,
                 default=_config_default(config_entry, CONF_AGENT_TOKEN, ""),
@@ -1346,13 +1425,9 @@ def _options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.
                 CONF_MAINTENANCE_TOKEN,
                 default=_config_default(config_entry, CONF_MAINTENANCE_TOKEN, ""),
             ): str,
-            vol.Optional(
-                CONF_STAIR_LIGHT_ADDRESS,
-                default=_config_default(
-                    config_entry,
-                    CONF_STAIR_LIGHT_ADDRESS,
-                    DEFAULT_STAIR_LIGHT_ADDRESS,
-                ),
+            _optional_suggested(
+                CONF_CALLBACK_BASE_URL,
+                _config_default(config_entry, CONF_CALLBACK_BASE_URL, ""),
             ): str,
         }
     )
@@ -1392,6 +1467,16 @@ def _options_features_schema(
         if video_stream_path is None
         else video_stream_path
     )
+    default_device_activation_mode = _config_default(
+        config_entry,
+        CONF_DEVICE_ACTIVATION_MODE,
+        DEVICE_ACTIVATION_MODE_AUTO,
+    )
+    default_device_activation_stair_light_address = _config_default(
+        config_entry,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+        DEFAULT_STAIR_LIGHT_ADDRESS,
+    )
     return vol.Schema(
         {
             vol.Optional(
@@ -1413,6 +1498,14 @@ def _options_features_schema(
             vol.Optional(
                 CONF_VIDEO_STREAM_PATH,
                 default=default_video_stream_path,
+            ): str,
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_MODE,
+                default=default_device_activation_mode,
+            ): vol.In(DEVICE_ACTIVATION_MODES),
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+                default=default_device_activation_stair_light_address,
             ): str,
         }
     )
@@ -1530,19 +1623,16 @@ def _current_connection_options(
         CONF_AGENT_PORT: int(
             _config_default(config_entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
         ),
-        CONF_AGENT_USE_SSL: bool(
-            _config_default(config_entry, CONF_AGENT_USE_SSL, False)
-        ),
         CONF_AGENT_TOKEN: _config_default(config_entry, CONF_AGENT_TOKEN, ""),
         CONF_MAINTENANCE_TOKEN: _config_default(
             config_entry,
             CONF_MAINTENANCE_TOKEN,
             "",
         ),
-        CONF_STAIR_LIGHT_ADDRESS: _config_default(
+        CONF_CALLBACK_BASE_URL: _config_default(
             config_entry,
-            CONF_STAIR_LIGHT_ADDRESS,
-            DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_CALLBACK_BASE_URL,
+            "",
         ),
     }
 
@@ -1580,6 +1670,16 @@ def _current_feature_options(
         CONF_DASHBOARD_PREVENT_RETURN: bool(
             _config_default(config_entry, CONF_DASHBOARD_PREVENT_RETURN, True)
         ),
+        CONF_DEVICE_ACTIVATION_MODE: _config_default(
+            config_entry,
+            CONF_DEVICE_ACTIVATION_MODE,
+            DEVICE_ACTIVATION_MODE_AUTO,
+        ),
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: _config_default(
+            config_entry,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+            DEFAULT_STAIR_LIGHT_ADDRESS,
+        ),
     }
 
 
@@ -1592,10 +1692,9 @@ def _reconfigure_connection_schema_from_current(
     return _reconfigure_connection_schema(
         current[CONF_AGENT_HOST],
         int(current[CONF_AGENT_PORT]),
-        bool(current[CONF_AGENT_USE_SSL]),
         current[CONF_AGENT_TOKEN],
         current[CONF_MAINTENANCE_TOKEN],
-        current[CONF_STAIR_LIGHT_ADDRESS],
+        current[CONF_CALLBACK_BASE_URL],
     )
 
 
@@ -1615,6 +1714,8 @@ def _reconfigure_features_schema_from_current(
         _actions_json(current[CONF_ACTIONS]),
         bool(current[CONF_DASHBOARD_PREVENT_RETURN]),
         current[CONF_DASHBOARD_ENTITIES],
+        current[CONF_DEVICE_ACTIVATION_MODE],
+        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS],
     )
 
 
@@ -1625,6 +1726,17 @@ def _feature_input_defaults(
     """Return feature input with hidden GUI fields preserved when absent."""
 
     data = dict(user_input)
+    data.setdefault(
+        CONF_DEVICE_ACTIVATION_MODE,
+        defaults.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO),
+    )
+    data.setdefault(
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+        defaults.get(
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+            DEFAULT_STAIR_LIGHT_ADDRESS,
+        ),
+    )
     if not bool(data.get(CONF_DEVICE_UI_ENABLED, False)):
         return data
     data.setdefault(CONF_ALARM_ENTITY_ID, defaults[CONF_ALARM_ENTITY_ID])

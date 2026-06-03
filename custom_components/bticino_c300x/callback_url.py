@@ -9,10 +9,21 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_AGENT_HOST, CONF_AGENT_PORT, DEFAULT_AGENT_PORT
-from .entity import entry_config_value
+from .callback_target import (
+    callback_host_needs_rewrite,
+    callback_host_type,
+    callback_target_is_clean_local_http,
+)
+from .const import (
+    CONF_AGENT_HOST,
+    CONF_AGENT_PORT,
+    CONF_CALLBACK_BASE_URL,
+    DEFAULT_AGENT_PORT,
+)
+from .entry_config import entry_config_value
 
 _SOURCE_CONNECT_TIMEOUT_SECONDS = 0.35
+_DEFAULT_CALLBACK_PORT = 8123
 
 
 async def async_generate_agent_callback_url(
@@ -41,7 +52,83 @@ async def async_generate_agent_callback_url(
         )
     except TypeError:
         callback_url = webhook.async_generate_url(hass, webhook_id)
+    callback_url = apply_callback_base_url(
+        callback_url,
+        str(entry_config_value(entry, CONF_CALLBACK_BASE_URL, "") or ""),
+    )
     return await async_rewrite_link_local_callback_url(hass, entry, callback_url)
+
+
+async def async_suggest_callback_base_url(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> str:
+    """Suggest a local HTTP callback base URL without mutating the entry."""
+
+    try:
+        configured = normalize_callback_base_url(
+            entry_config_value(entry, CONF_CALLBACK_BASE_URL, "") or ""
+        )
+    except ValueError:
+        configured = ""
+    if configured:
+        return configured
+
+    agent_host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
+    if not agent_host:
+        return ""
+    try:
+        agent_port = int(entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT))
+    except (TypeError, ValueError):
+        agent_port = DEFAULT_AGENT_PORT
+    source_ip = await hass.async_add_executor_job(
+        _select_non_link_local_source_ip,
+        agent_host,
+        agent_port,
+    )
+    if source_ip is None:
+        return ""
+    return urlunsplit(
+        ("http", f"{_format_url_host(source_ip)}:{_DEFAULT_CALLBACK_PORT}", "", "", "")
+    )
+
+
+def normalize_callback_base_url(value: object) -> str:
+    """Validate and normalize a local HTTP callback base URL.
+
+    Empty values disable the override. Non-empty values must be a plain HTTP
+    endpoint that the embedded native agent can call directly on the local LAN.
+    """
+
+    text = str(value or "").strip().rstrip("/")
+    if not text:
+        return ""
+    parts = urlsplit(text)
+    _valid_callback_port(parts)
+    host_type = callback_host_type(parts.hostname)
+    if (
+        parts.scheme.lower() != "http"
+        or not parts.hostname
+        or parts.username
+        or parts.password
+        or parts.query
+        or parts.fragment
+        or parts.path not in {"", "/"}
+        or callback_target_is_clean_local_http(parts.scheme, host_type) is not True
+    ):
+        raise ValueError("callback base URL must be a reachable local HTTP URL")
+    return urlunsplit(("http", parts.netloc, "", "", ""))
+
+
+def apply_callback_base_url(callback_url: str, callback_base_url: str) -> str:
+    """Return a callback URL using an optional configured base endpoint."""
+
+    base_url = normalize_callback_base_url(callback_base_url)
+    if not base_url:
+        return callback_url
+    callback = urlsplit(callback_url)
+    base = urlsplit(base_url)
+    return urlunsplit((base.scheme, base.netloc, callback.path, callback.query, ""))
 
 
 async def async_rewrite_link_local_callback_url(
@@ -52,7 +139,7 @@ async def async_rewrite_link_local_callback_url(
     """Replace mDNS/link-local callback hosts with a routable HA source address."""
 
     parts = urlsplit(callback_url)
-    if not _callback_host_needs_rewrite(parts.hostname):
+    if not callback_host_needs_rewrite(parts.hostname):
         return callback_url
 
     agent_host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
@@ -73,17 +160,16 @@ async def async_rewrite_link_local_callback_url(
     return _replace_url_host(parts, source_ip)
 
 
-def _callback_host_needs_rewrite(host: str | None) -> bool:
-    if not host:
-        return False
-    host = host.strip("[]").split("%", 1)[0].lower()
-    if host.endswith(".local") or host in {"localhost", "localhost.localdomain"}:
-        return True
+def _valid_callback_port(parts: SplitResult) -> int | None:
+    """Return a valid explicit callback port or reject malformed ports."""
+
     try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return address.is_link_local or address.is_loopback
+        port = parts.port
+    except ValueError as err:
+        raise ValueError("callback base URL port is invalid") from err
+    if port == 0 or parts.netloc.endswith(":"):
+        raise ValueError("callback base URL port is invalid")
+    return port
 
 
 def _select_non_link_local_source_ip(agent_host: str, agent_port: int) -> str | None:

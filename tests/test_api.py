@@ -11,6 +11,8 @@ from custom_components.bticino_c300x.api import (
     build_agent_base_url,
     display_bridge_callback_fingerprint,
     encode_endpoint_url,
+    normalize_activation_id,
+    normalize_activations,
     normalize_agent_diagnostics,
     normalize_answering_machine,
     normalize_answering_machine_messages,
@@ -29,6 +31,7 @@ from custom_components.bticino_c300x.api import (
     normalize_ssh_status,
     normalize_stair_light_address,
     normalize_system_metrics,
+    normalize_text_memo_text,
     normalize_video_message_id,
 )
 from custom_components.bticino_c300x.const import HEADER_MAINTENANCE_TOKEN
@@ -86,13 +89,13 @@ class _FakeSession:
 
 
 def test_build_agent_base_url_defaults_to_http() -> None:
-    assert build_agent_base_url("agent.local", 8080, False) == (
+    assert build_agent_base_url("agent.local", 8080) == (
         "http://agent.local:8080"
     )
 
 
 def test_build_agent_base_url_handles_ipv6() -> None:
-    assert build_agent_base_url("fd00::1", 8080, False) == "http://[fd00::1]:8080"
+    assert build_agent_base_url("fd00::1", 8080) == "http://[fd00::1]:8080"
 
 
 def test_encode_endpoint_url_uses_base64() -> None:
@@ -215,6 +218,30 @@ def test_display_bridge_callback_fingerprint_is_stable() -> None:
         "http://ha.local/api/webhook/display",
         "shared-secret",
     ) == "fnv1a64:36c9cd1dc3a06b34"
+
+
+def test_normalize_doorbell_video_exposes_external_media_owner() -> None:
+    status = normalize_doorbell_video(
+        {
+            "ok": True,
+            "available": True,
+            "window_available": False,
+            "stream_path": "/doorbell-video",
+            "bridge": {
+                "media_owner": "device_display",
+                "external_media_active": True,
+                "external_owner": "device_display",
+                "external_active_until": 1780500000,
+                "last_block_reason": "external_session_active",
+            },
+        }
+    )
+
+    assert status["media_owner"] == "device_display"
+    assert status["external_media_active"] is True
+    assert status["external_owner"] == "device_display"
+    assert status["external_active_until"] == 1780500000
+    assert status["last_block_reason"] == "external_session_active"
     assert display_bridge_callback_fingerprint(False, "ignored", "ignored") == (
         "fnv1a64:48f6eb502600b569"
     )
@@ -1263,6 +1290,98 @@ def test_delete_memo_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["json"] == {"id": "text/memo_1"}
 
 
+def test_create_text_memo_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true, "created": true, "id": "text/memo_2"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_create_text_memo("Grüße\r\nTest", read=True))[
+        "id"
+    ] == "text/memo_2"
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/memos/text/actions/create",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {
+        "text_b64": "R3LDvMOfZQpUZXN0",
+        "read": True,
+    }
+
+
+def test_normalize_text_memo_text_validates_content() -> None:
+    assert normalize_text_memo_text(" a\r\nb ") == " a\nb "
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_text_memo_text("   ")
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_text_memo_text("a" * 513)
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_text_memo_text("bad\x00text")
+
+
+def test_activations_requests_authenticated_endpoint() -> None:
+    session = _FakeSession(
+        '{"ok": true, "supported": true, "count": 2, "items": ['
+        '{"id": "front_lock", "name": "Front lock", "type": "lock", '
+        '"address": "20", "source": "config", "executable": true},'
+        '{"id": "unsafe/path", "name": "Unsafe", "executable": true}'
+        "]}"
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    activations = asyncio.run(api.async_activations())
+
+    assert activations["supported"] is True
+    assert activations["count"] == 2
+    assert activations["items"] == [
+        {
+            "id": "front_lock",
+            "name": "Front lock",
+            "type": "lock",
+            "address_mode": "manual",
+            "address": "20",
+            "source": "config",
+            "executable": True,
+        }
+    ]
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/activations",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+
+
+def test_run_device_activation_uses_safe_post_path() -> None:
+    session = _FakeSession('{"ok": true, "id": "front_lock"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_run_device_activation(" front_lock "))["id"] == (
+        "front_lock"
+    )
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/activations/front_lock/actions/run",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+
+
 def test_memo_audio_requests_authenticated_endpoint() -> None:
     session = _FakeSession(response_body=b"RIFF....WAVE", content_type="audio/wav")
     api = C300XAgentApi(
@@ -1341,6 +1460,58 @@ def test_normalize_lock_id_rejects_paths_or_raw_commands() -> None:
         normalize_lock_id("*8*19*20##")
 
 
+def test_normalize_activation_id_rejects_paths_or_raw_commands() -> None:
+    assert normalize_activation_id("scene_1") == "scene_1"
+    for value in ("", "../scene", "scene/1", "*8*21*10##"):
+        with pytest.raises(C300XAgentApiResponseError):
+            normalize_activation_id(value)
+
+
+def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
+    assert normalize_activations(
+        {
+            "supported": True,
+            "items": [
+                {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
+                {"id": "broken/path", "name": "Broken", "executable": True},
+                {"id": "unknown", "name": "Unknown", "type": "bad"},
+            ],
+        }
+    ) == {
+        "available": True,
+        "supported": True,
+        "count": 2,
+        "items": [
+            {
+                "id": "scene_1",
+                "name": "Scene 1",
+                "type": "scenario",
+                "address_mode": "manual",
+                "address": None,
+                "source": "agent",
+                "executable": True,
+            },
+            {
+                "id": "unknown",
+                "name": "Unknown",
+                "type": "unknown",
+                "address_mode": "manual",
+                "address": None,
+                "source": "agent",
+                "executable": False,
+            },
+        ],
+        "raw": {
+            "supported": True,
+            "items": [
+                {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
+                {"id": "broken/path", "name": "Broken", "executable": True},
+                {"id": "unknown", "name": "Unknown", "type": "bad"},
+            ],
+        },
+    }
+
+
 def test_normalize_doorbell_video_from_agent_bridge() -> None:
     assert normalize_doorbell_video(
         {
@@ -1364,6 +1535,11 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
         "stream_path": "/doorbell-video",
         "audio_stream_path": "/doorbell",
         "recorder_stream_path": "/doorbell-recorder",
+        "media_owner": "unknown",
+        "external_media_active": False,
+        "external_owner": None,
+        "external_active_until": None,
+        "last_block_reason": None,
         "bridge": {
             "enabled": True,
             "running": True,
@@ -1459,12 +1635,26 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "last_poll_timeout_ms": "5000",
             "last_poll_count": "6",
             "open_fd_count": "9",
+            "agent_init_script_present": True,
+            "agent_init_link_ok": False,
+            "subscription_count": "1",
+            "recent_event_count": "4",
+            "recent_event_capacity": "16",
+            "display_bridge_registered": True,
+            "display_bridge_disabled": False,
+            "home_assistant_connected_this_run": True,
+            "home_assistant_last_seen_at": "1770000010",
+            "ui_event_revision": "7",
             "video_running": True,
             "video_media_starting": False,
             "video_call_active": True,
             "video_clients": "1",
             "video_bridge_open_fds": "5",
             "video_bridge_active_threads": "2",
+            "flexisip_backup_available": True,
+            "flexisip_restart_marker": False,
+            "flexisip_backup_marker": True,
+            "flexisip_reference_state": "original",
         }
     )
 
@@ -1481,12 +1671,26 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["last_poll_timeout_ms"] == 5000
     assert normalized["last_poll_count"] == 6
     assert normalized["open_fd_count"] == 9
+    assert normalized["agent_init_script_present"] is True
+    assert normalized["agent_init_link_ok"] is False
+    assert normalized["subscription_count"] == 1
+    assert normalized["recent_event_count"] == 4
+    assert normalized["recent_event_capacity"] == 16
+    assert normalized["display_bridge_registered"] is True
+    assert normalized["display_bridge_disabled"] is False
+    assert normalized["home_assistant_connected_this_run"] is True
+    assert normalized["home_assistant_last_seen_at"] == 1770000010
+    assert normalized["ui_event_revision"] == 7
     assert normalized["video_running"] is True
     assert normalized["video_media_starting"] is False
     assert normalized["video_call_active"] is True
     assert normalized["video_clients"] == 1
     assert normalized["video_bridge_open_fds"] == 5
     assert normalized["video_bridge_active_threads"] == 2
+    assert normalized["flexisip_backup_available"] is True
+    assert normalized["flexisip_restart_marker"] is False
+    assert normalized["flexisip_backup_marker"] is True
+    assert normalized["flexisip_reference_state"] == "original"
 
 
 def test_normalize_smartphone_forwarding() -> None:

@@ -257,6 +257,20 @@ class C300XAgentWritesSensor(C300XEntity, SensorEntity):
             "poll_wakeups": diagnostics.get("poll_wakeups"),
             "accepted_clients": diagnostics.get("accepted_clients"),
             "open_fd_count": diagnostics.get("open_fd_count"),
+            "agent_init_script_present": diagnostics.get("agent_init_script_present"),
+            "agent_init_link_ok": diagnostics.get("agent_init_link_ok"),
+            "subscription_count": diagnostics.get("subscription_count"),
+            "recent_event_count": diagnostics.get("recent_event_count"),
+            "recent_event_capacity": diagnostics.get("recent_event_capacity"),
+            "display_bridge_registered": diagnostics.get("display_bridge_registered"),
+            "display_bridge_disabled": diagnostics.get("display_bridge_disabled"),
+            "home_assistant_connected_this_run": diagnostics.get(
+                "home_assistant_connected_this_run"
+            ),
+            "home_assistant_last_seen_at": diagnostics.get(
+                "home_assistant_last_seen_at"
+            ),
+            "ui_event_revision": diagnostics.get("ui_event_revision"),
             "video_running": diagnostics.get("video_running"),
             "video_media_starting": diagnostics.get("video_media_starting"),
             "video_call_active": diagnostics.get("video_call_active"),
@@ -384,6 +398,20 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_wake_reason": diagnostics.get("last_wake_reason"),
             "poll_wakeups": diagnostics.get("poll_wakeups"),
             "open_fd_count": diagnostics.get("open_fd_count"),
+            "agent_init_script_present": diagnostics.get("agent_init_script_present"),
+            "agent_init_link_ok": diagnostics.get("agent_init_link_ok"),
+            "subscription_count": diagnostics.get("subscription_count"),
+            "recent_event_count": diagnostics.get("recent_event_count"),
+            "recent_event_capacity": diagnostics.get("recent_event_capacity"),
+            "display_bridge_registered": diagnostics.get("display_bridge_registered"),
+            "display_bridge_disabled": diagnostics.get("display_bridge_disabled"),
+            "home_assistant_connected_this_run": diagnostics.get(
+                "home_assistant_connected_this_run"
+            ),
+            "home_assistant_last_seen_at": diagnostics.get(
+                "home_assistant_last_seen_at"
+            ),
+            "ui_event_revision": diagnostics.get("ui_event_revision"),
             "flexisip_backup_available": diagnostics.get(
                 "flexisip_backup_available"
             ),
@@ -514,6 +542,8 @@ class C300XLastConnectionErrorSensor(C300XConnectionDiagnosticSensor):
         language = str(getattr(self.hass.config, "language", "") or "").lower()
         if language.startswith("de"):
             return "Kein Verbindungsfehler"
+        if language.startswith("fr"):
+            return "Aucune erreur de connexion"
         return "No connection error"
 
 
@@ -1045,6 +1075,8 @@ class C300XLatestVideoMessageSensor(C300XVoicemailSensor):
             return "Keine Video-Nachrichten"
         if language.startswith("it"):
             return "Nessun messaggio video"
+        if language.startswith("fr"):
+            return "Aucun message video"
         return "No video message"
 
 

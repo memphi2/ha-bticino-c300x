@@ -18,6 +18,7 @@ UPDATE_STATE_UP_TO_DATE = "up_to_date"
 UPDATE_STATE_UPDATE_AVAILABLE = "update_available"
 UPDATE_STATE_INCOMPATIBLE = "incompatible"
 UPDATE_STATE_UNKNOWN = "unknown"
+_UNKNOWN_REPAIR_VALUE = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,11 +62,14 @@ class AgentUpdateState:
         """Return safe Repairs placeholders without private connection details."""
 
         return {
-            "installed_version": self.installed_version or "unknown",
-            "available_version": self.available_version or "unknown",
-            "installed_api_version": self.installed_api_version or "unknown",
-            "available_api_version": self.available_api_version or "unknown",
+            "installed_version": self.installed_version or _UNKNOWN_REPAIR_VALUE,
+            "available_version": self.available_version or _UNKNOWN_REPAIR_VALUE,
+            "installed_api_version": self.installed_api_version or _UNKNOWN_REPAIR_VALUE,
+            "available_api_version": self.available_api_version or _UNKNOWN_REPAIR_VALUE,
+            "installed_bundle_hash": _short_hash(self.installed_bundle_hash),
+            "available_bundle_hash": _short_hash(self.available_bundle_hash),
             "reason": self.reason or self.state,
+            "update_path": _update_path_label(self),
         }
 
 
@@ -162,6 +166,29 @@ def compare_agent_bundle(
     return AgentUpdateState(state=UPDATE_STATE_UP_TO_DATE, reason=DOMAIN, **common)
 
 
+def agent_update_repair_placeholders(
+    update_state: AgentUpdateState | None,
+    runtime_data: Any | None = None,
+) -> dict[str, str]:
+    """Return repair placeholders with safe runtime context."""
+
+    if update_state is None:
+        placeholders = {
+            "installed_version": _UNKNOWN_REPAIR_VALUE,
+            "available_version": _UNKNOWN_REPAIR_VALUE,
+            "installed_api_version": _UNKNOWN_REPAIR_VALUE,
+            "available_api_version": _UNKNOWN_REPAIR_VALUE,
+            "installed_bundle_hash": _UNKNOWN_REPAIR_VALUE,
+            "available_bundle_hash": _UNKNOWN_REPAIR_VALUE,
+            "reason": _UNKNOWN_REPAIR_VALUE,
+            "update_path": _UNKNOWN_REPAIR_VALUE,
+        }
+    else:
+        placeholders = update_state.repair_placeholders
+    placeholders["qml_patch_status"] = _runtime_qml_patch_status(runtime_data)
+    return placeholders
+
+
 async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, Any]:
     """Upload and apply the packaged native-agent bundle through maintenance API."""
 
@@ -237,3 +264,32 @@ async def _async_read_file_bytes(hass: Any, path: Path) -> bytes:
     """Read a packaged file outside the event loop."""
 
     return await hass.async_add_executor_job(path.read_bytes)
+
+
+def _short_hash(value: str | None) -> str:
+    if not value:
+        return _UNKNOWN_REPAIR_VALUE
+    return value[:12]
+
+
+def _update_path_label(update_state: AgentUpdateState) -> str:
+    if not update_state.update_required:
+        return "none"
+    if update_state.self_update_repair_supported:
+        return "self-update"
+    return "SSH reinstall"
+
+
+def _runtime_qml_patch_status(runtime_data: Any | None) -> str:
+    status = getattr(runtime_data, "qml_patch_status", None)
+    if not isinstance(status, dict):
+        return _UNKNOWN_REPAIR_VALUE
+    state = status.get("state")
+    if isinstance(state, str) and state:
+        return state
+    patched = status.get("patched")
+    if patched is True:
+        return "patched"
+    if patched is False:
+        return "original"
+    return _UNKNOWN_REPAIR_VALUE

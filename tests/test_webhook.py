@@ -113,7 +113,9 @@ sys.modules["homeassistant.util.dt"] = util_dt
 from custom_components.bticino_c300x import webhook as webhook_module  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_EVENT_WEBHOOK_TOKEN,
+    EVENT_AGENT_EVENT_RECEIVED,
     HEADER_EVENT_TOKEN,
+    SIGNAL_MEMOS_CHANGED,
 )
 from custom_components.bticino_c300x.data import C300XEventState  # noqa: E402
 from custom_components.bticino_c300x.webhook import (  # noqa: E402
@@ -185,14 +187,19 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
     )
     request = _FakeRequest("event-token", {"event": "doorbell.media.closed"})
 
-    response = asyncio.run(
-        _async_handle_agent_event(
-            hass,  # type: ignore[arg-type]
-            entry,  # type: ignore[arg-type]
-            event_state,
-            request,  # type: ignore[arg-type]
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = lambda _hass, _entry: None
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
         )
-    )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
 
     assert response.status == 200
     assert canceled is True
@@ -202,6 +209,148 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
     assert event_state.reset_video is None
     assert event_state.last_event_data["event_key"] == "doorbell_media_closed"
     assert hass.bus.events[-1][1]["event_key"] == "doorbell_media_closed"
+
+
+def test_real_doorbell_event_fires_public_event() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {"event": "doorbell.pressed", "ttl_seconds": 0},
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = lambda _hass, _entry: None
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert hass.bus.events == [
+        (
+            EVENT_AGENT_EVENT_RECEIVED,
+            event_state.last_event_data,
+        )
+    ]
+
+
+def test_snapshot_doorbell_event_updates_state_without_public_event() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {"event": "doorbell.pressed", "snapshot": True, "ttl_seconds": 0},
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = lambda _hass, _entry: None
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert event_state.last_event is None
+    assert event_state.last_event_time is None
+    assert event_state.event_sequence == 0
+    assert event_state.last_event_data == {}
+    assert hass.bus.events == []
+
+
+def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    runtime_data = SimpleNamespace(
+        event_state=event_state,
+        memos={
+            "available": True,
+            "total": 0,
+            "memos": [{"id": "memo-1", "kind": "text"}],
+        },
+        memos_updated_at=None,
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=runtime_data,
+    )
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "memos.changed",
+            "snapshot": True,
+            "data": {
+                "memos": {
+                    "available": True,
+                    "total": 1,
+                    "text_total": 1,
+                    "voice_total": 0,
+                    "unread": 1,
+                    "read": 0,
+                    "newest_at": "2026-06-02T10:00:00Z",
+                }
+            },
+        },
+    )
+    signals: list[tuple[str, str]] = []
+    original_dispatcher = webhook_module.async_dispatcher_send
+    webhook_module.async_dispatcher_send = lambda _hass, signal, entry_id: signals.append(
+        (signal, entry_id)
+    )
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.async_dispatcher_send = original_dispatcher
+
+    assert response.status == 200
+    assert hass.bus.events == []
+    assert event_state.last_event is None
+    assert event_state.last_event_time is None
+    assert event_state.event_sequence == 0
+    assert event_state.last_event_data == {}
+    assert runtime_data.memos["total"] == 1
+    assert runtime_data.memos["memos"][0]["id"] == "memo-1"
+    assert runtime_data.memos["memos"][0]["kind"] == "text"
+    assert runtime_data.memos_updated_at is not None
+    assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
 
 
 def test_system_metrics_event_updates_cache_without_public_event() -> None:

@@ -24,6 +24,7 @@ if "homeassistant.components.camera" not in sys.modules:
     dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
     entity = types.ModuleType("homeassistant.helpers.entity")
     entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+    event = types.ModuleType("homeassistant.helpers.event")
 
     class Camera:  # pragma: no cover - import-time stub only
         pass
@@ -58,10 +59,12 @@ if "homeassistant.components.camera" not in sys.modules:
     entity.DeviceInfo = DeviceInfo
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
     entity_registry.async_get = lambda hass: None
+    event.async_call_later = lambda *args, **kwargs: (lambda: None)
     entity_platform.AddEntitiesCallback = object
     stream.CONF_RTSP_TRANSPORT = "rtsp_transport"
     stream.CONF_USE_WALLCLOCK_AS_TIMESTAMPS = "use_wallclock_as_timestamps"
     helpers.config_validation = config_validation
+    helpers.event = event
     helpers.entity_registry = entity_registry
     sys.modules.setdefault("homeassistant", homeassistant)
     sys.modules["homeassistant.components"] = components
@@ -75,6 +78,7 @@ if "homeassistant.components.camera" not in sys.modules:
     sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
     sys.modules["homeassistant.helpers.entity"] = entity
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
+    sys.modules["homeassistant.helpers.event"] = event
     sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
 
 try:
@@ -93,6 +97,7 @@ from custom_components.bticino_c300x.camera import (
     _NativeWebRTCSession,
     _new_restarting_rtsp_tracks,
 )
+from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 
 @dataclass
@@ -136,6 +141,16 @@ class _FakeRuntimeData:
     api: Any = field(default_factory=_FakeApi)
     connection_state: Any = field(
         default_factory=lambda: SimpleNamespace(available=True),
+    )
+
+
+def test_resolve_doorbell_camera_entity_id_handles_missing_registry() -> None:
+    assert (
+        resolve_doorbell_camera_entity_id(
+            SimpleNamespace(),
+            SimpleNamespace(entry_id="entry-1"),
+        )
+        is None
     )
 
 
@@ -392,6 +407,58 @@ def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:
     assert source.startswith("rtsp://127.0.0.1:")
     assert source.endswith("/doorbell")
     assert entry.runtime_data.api.activate_calls == [True]
+
+
+def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
+    class _DelayedApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active_activate_calls = 0
+            self.max_active_activate_calls = 0
+
+        async def async_activate_doorbell_video(
+            self,
+            audio: bool = True,
+        ) -> dict[str, Any]:
+            self.active_activate_calls += 1
+            self.max_active_activate_calls = max(
+                self.max_active_activate_calls,
+                self.active_activate_calls,
+            )
+            try:
+                await asyncio.sleep(0.02)
+                return await super().async_activate_doorbell_video(audio=audio)
+            finally:
+                self.active_activate_calls -= 1
+
+    api = _DelayedApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    async def _run() -> None:
+        server = await asyncio.start_server(
+            _rtsp_options_server,
+            "127.0.0.1",
+            0,
+        )
+        port = server.sockets[0].getsockname()[1]
+        entry.data["video_port"] = port
+        try:
+            await asyncio.gather(
+                camera._async_prepare_rtsp_stream(audio=True),
+                camera._async_prepare_rtsp_stream(audio=True),
+            )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    asyncio.run(_run())
+
+    assert api.activate_calls == [True, True]
+    assert api.max_active_activate_calls == 1
 
 
 def test_doorbell_camera_detects_audio_webrtc_offer() -> None:

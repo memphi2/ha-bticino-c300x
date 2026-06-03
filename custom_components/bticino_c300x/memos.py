@@ -112,12 +112,14 @@ def memo_kind_label(kind: str, language: str | None = None) -> str:
             language,
             de="Sprach-Memo",
             it="Memo vocale",
+            fr="Memo vocal",
             en="Voice memo",
         )
     return localized_choice(
         language,
         de="Text-Memo",
         it="Memo testuale",
+        fr="Memo texte",
         en="Text memo",
     )
 
@@ -130,12 +132,14 @@ def no_memo_label(kind: str, language: str | None = None) -> str:
             language,
             de="Keine Sprach-Memos",
             it="Nessun memo vocale",
+            fr="Aucun memo vocal",
             en="No voice memo",
         )
     return localized_choice(
         language,
         de="Keine Text-Memos",
         it="Nessun memo testuale",
+        fr="Aucun memo texte",
         en="No text memo",
     )
 

@@ -50,13 +50,16 @@ def localized_choice(
     *,
     de: str,
     it: str,
+    fr: str,
     en: str,
 ) -> str:
-    """Return a simple de/it/en localized text for device metadata."""
+    """Return a simple de/it/fr/en localized text for device metadata."""
 
     language_code = str(language or "").lower()
     if language_code.startswith("de"):
         return de
     if language_code.startswith("it"):
         return it
+    if language_code.startswith("fr"):
+        return fr
     return en

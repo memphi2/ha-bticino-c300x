@@ -19,6 +19,16 @@
     "port": 20000,
     "timeoutMs": 3000
   },
+  "activations": {
+    "enabled": false,
+    "autoDiscover": true,
+    "discoveryRoots": [
+      "/home/bticino/cfg/extra/47",
+      "/home/bticino/cfg/extra",
+      "/home/bticino/cfg"
+    ],
+    "items": []
+  },
   "locks": {
     "releaseDelayMs": 2000,
     "items": {

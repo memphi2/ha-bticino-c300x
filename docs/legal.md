@@ -22,6 +22,22 @@ This project is not affiliated with, endorsed by, sponsored by, or certified by
 BTicino, Legrand, Home Assistant, Nabu Casa, HACS, OpenAI, or the referenced
 community projects.
 
+## Project-owned assets
+
+The integration brand images under
+`custom_components/bticino_c300x/brand/` are project-owned generic artwork. They
+use a simple house, display, and network-node motif to describe the integration
+concept. They are not BTicino, Legrand, Home Assistant, HACS, Nabu Casa, or
+third-party logos, and they are not copied from firmware, APKs, product images,
+or controller repositories.
+
+`icon.png` and `logo.png` currently contain the same 256x256 PNG artwork. Their
+SHA-256 hash is:
+
+```text
+cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
+```
+
 ## No firmware or APK payloads
 
 The repository must not contain:

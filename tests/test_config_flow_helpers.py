@@ -112,22 +112,25 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_AGENT_TOKEN,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
-    CONF_AGENT_USE_SSL,
     CONF_ALARM_ENTITY_ID,
     CONF_BOOTSTRAP_APPLY_GUI_PATCH,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
+    CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
     CONF_MAINTENANCE_TOKEN,
-    CONF_STAIR_LIGHT_ADDRESS,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEVICE_ACTIVATION_MODE_AUTO,
+    DEVICE_ACTIVATION_MODE_MANUAL,
 )
 from homeassistant.const import CONF_NAME  # noqa: E402
 
@@ -167,7 +170,6 @@ def test_probe_agent_requires_event_subscription_endpoint(
             {
                 CONF_AGENT_HOST: "c300x.local",
                 CONF_AGENT_PORT: 8091,
-                CONF_AGENT_USE_SSL: False,
             },
             api_token="agent-token",
         )
@@ -229,16 +231,54 @@ def test_connection_input_allows_blank_agent_token_for_no_auth_entries() -> None
         {
             CONF_AGENT_HOST: " c300x-agent.local ",
             CONF_AGENT_PORT: 8091,
-            CONF_AGENT_USE_SSL: False,
             CONF_AGENT_TOKEN: "   ",
             CONF_MAINTENANCE_TOKEN: "",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
         }
     )
 
     assert errors == {}
     assert data[CONF_AGENT_HOST] == "c300x-agent.local"
     assert data[CONF_AGENT_TOKEN] == ""
+    assert data[CONF_CALLBACK_BASE_URL] == ""
+
+
+def test_connection_input_accepts_callback_base_url_override() -> None:
+    data, errors = _connection_input(
+        {
+            CONF_AGENT_HOST: "c300x-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: " http://192.0.2.10:8123/ ",
+        }
+    )
+
+    assert errors == {}
+    assert data[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://192.0.2.10:8123",
+        "http://homeassistant.local:8123",
+        "http://127.0.0.1:8123",
+        "http://[fe80::1]:8123",
+    ],
+)
+def test_connection_input_rejects_unsafe_callback_base_url(value: str) -> None:
+    data, errors = _connection_input(
+        {
+            CONF_AGENT_HOST: "c300x-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: value,
+        }
+    )
+
+    assert errors == {CONF_CALLBACK_BASE_URL: "invalid_callback_base_url"}
+    assert data[CONF_CALLBACK_BASE_URL] == ""
 
 
 def test_initial_connection_input_collects_no_tokens_or_feature_fields() -> None:
@@ -247,7 +287,6 @@ def test_initial_connection_input_collects_no_tokens_or_feature_fields() -> None
             CONF_NAME: "BTicino C300X",
             CONF_AGENT_HOST: " c300x-agent.local ",
             CONF_AGENT_PORT: 8091,
-            CONF_AGENT_USE_SSL: False,
         },
         include_name=True,
     )
@@ -257,28 +296,41 @@ def test_initial_connection_input_collects_no_tokens_or_feature_fields() -> None
         CONF_NAME: "BTicino C300X",
         CONF_AGENT_HOST: "c300x-agent.local",
         CONF_AGENT_PORT: 8091,
-        CONF_AGENT_USE_SSL: False,
+        CONF_CALLBACK_BASE_URL: "",
     }
+
+
+def test_initial_connection_input_collects_callback_base_url() -> None:
+    data, errors = _initial_connection_input(
+        {
+            CONF_NAME: "BTicino C300X",
+            CONF_AGENT_HOST: "c300x-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+        },
+        include_name=True,
+    )
+
+    assert errors == {}
+    assert data[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
 
 
 def test_agent_auth_requires_token_only_after_auth_challenge() -> None:
     data, errors = _agent_auth_input(
         {
             CONF_AGENT_TOKEN: "",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
         },
         require_agent_token=True,
     )
     optional_data, optional_errors = _agent_auth_input(
         {
             CONF_AGENT_TOKEN: "",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
         },
         require_agent_token=False,
     )
 
     assert errors == {CONF_AGENT_TOKEN: "required"}
-    assert data[CONF_STAIR_LIGHT_ADDRESS] == DEFAULT_STAIR_LIGHT_ADDRESS
+    assert data == {CONF_AGENT_TOKEN: "", CONF_MAINTENANCE_TOKEN: ""}
     assert optional_errors == {}
     assert optional_data[CONF_AGENT_TOKEN] == ""
 
@@ -351,12 +403,14 @@ def test_setup_schema_defers_agent_tokens_to_auth_page() -> None:
             CONF_NAME: "Door panel",
             CONF_AGENT_HOST: "c300x-agent.local",
             CONF_AGENT_PORT: 8091,
+            CONF_CALLBACK_BASE_URL: "",
         }
     )
 
     assert CONF_AGENT_TOKEN not in result
-    assert CONF_AGENT_USE_SSL not in result
-    assert CONF_STAIR_LIGHT_ADDRESS not in result
+    assert CONF_DEVICE_ACTIVATION_MODE not in result
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in result
+    assert result[CONF_CALLBACK_BASE_URL] == ""
 
 
 def test_agent_auth_schema_keeps_tokens_on_second_setup_page() -> None:
@@ -366,12 +420,11 @@ def test_agent_auth_schema_keeps_tokens_on_second_setup_page() -> None:
         {
             CONF_AGENT_TOKEN: "",
             CONF_MAINTENANCE_TOKEN: "",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
         }
     )
 
     assert result[CONF_AGENT_TOKEN] == ""
-    assert result[CONF_STAIR_LIGHT_ADDRESS] == DEFAULT_STAIR_LIGHT_ADDRESS
+    assert result[CONF_MAINTENANCE_TOKEN] == ""
 
 
 def test_bootstrap_install_schema_collects_only_ephemeral_ssh_fields() -> None:
@@ -400,10 +453,9 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     connection_schema = _reconfigure_connection_schema(
         "c300x-agent.local",
         8091,
-        False,
         "token",
         "",
-        "20#1",
+        "http://192.0.2.10:8123",
     )
     feature_schema = _reconfigure_features_schema(
         "alarm_control_panel.home",
@@ -419,11 +471,13 @@ def test_reconfigure_schema_preserves_defaults() -> None:
             CONF_AGENT_HOST: "c300x-agent.local",
             CONF_AGENT_PORT: 8091,
             CONF_AGENT_TOKEN: "token",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
         }
     )
     features = feature_schema({})
 
-    assert connection[CONF_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in connection
+    assert connection[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
@@ -448,6 +502,11 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert result[CONF_VIDEO_STREAM_PATH] == "/doorbell-video"
     assert result[CONF_DEVICE_UI_ENABLED] is True
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert result[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
+    assert (
+        result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS]
+        == DEFAULT_STAIR_LIGHT_ADDRESS
+    )
 
 
 def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
@@ -571,7 +630,6 @@ def test_manual_setup_duplicate_aborts_before_agent_probe(monkeypatch: pytest.Mo
                     CONF_NAME: "C300X",
                     CONF_AGENT_HOST: "c300x.local",
                     CONF_AGENT_PORT: 8091,
-                    CONF_AGENT_USE_SSL: False,
                 }
             )
         )
@@ -589,7 +647,6 @@ def test_bootstrap_duplicate_aborts_before_device_install(
         CONF_NAME: "C300X",
         CONF_AGENT_HOST: "c300x.local",
         CONF_AGENT_PORT: 8091,
-        CONF_AGENT_USE_SSL: False,
     }
 
     async def async_set_unique_id(unique_id: str, **_kwargs: object) -> None:
@@ -827,7 +884,6 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
         CONF_NAME: "BTicino C300X",
         CONF_AGENT_HOST: "c300x.local",
         CONF_AGENT_PORT: 8091,
-        CONF_AGENT_USE_SSL: False,
         CONF_AGENT_TOKEN: "known-token",
     }
     flow.hass = SimpleNamespace(
@@ -948,16 +1004,14 @@ def test_options_connection_schema_keeps_connection_on_first_page() -> None:
         data={
             CONF_AGENT_HOST: "old-agent.local",
             CONF_AGENT_PORT: 8091,
-            CONF_AGENT_USE_SSL: False,
             CONF_AGENT_TOKEN: "agent-token",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
         },
         options={
             CONF_AGENT_HOST: "agent.local",
             CONF_AGENT_PORT: 8092,
-            CONF_AGENT_USE_SSL: True,
             CONF_MAINTENANCE_TOKEN: "maintenance-token",
-            CONF_STAIR_LIGHT_ADDRESS: "20#1",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.11:8123",
         },
     )
 
@@ -965,16 +1019,18 @@ def test_options_connection_schema_keeps_connection_on_first_page() -> None:
         {
             CONF_AGENT_HOST: "agent.local",
             CONF_AGENT_PORT: 8092,
-            CONF_AGENT_USE_SSL: True,
             CONF_AGENT_TOKEN: "agent-token",
             CONF_MAINTENANCE_TOKEN: "maintenance-token",
-            CONF_STAIR_LIGHT_ADDRESS: "20#1",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.11:8123",
         }
     )
 
     assert result[CONF_AGENT_HOST] == "agent.local"
     assert result[CONF_MAINTENANCE_TOKEN] == "maintenance-token"
-    assert _current_connection_options(entry)[CONF_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert result[CONF_CALLBACK_BASE_URL] == "http://192.0.2.11:8123"
+    assert _current_connection_options(entry)[CONF_CALLBACK_BASE_URL] == (
+        "http://192.0.2.11:8123"
+    )
 
 
 def test_reconfigure_schema_uses_effective_option_overrides() -> None:
@@ -982,10 +1038,9 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
         data={
             CONF_AGENT_HOST: "old-agent.local",
             CONF_AGENT_PORT: 8091,
-            CONF_AGENT_USE_SSL: False,
             CONF_AGENT_TOKEN: "old-token",
             CONF_MAINTENANCE_TOKEN: "old-maintenance",
-            CONF_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.old",
             CONF_WEATHER_ENTITY_ID: "weather.old",
             CONF_DASHBOARD_ENTITIES: ["switch.old"],
@@ -997,10 +1052,9 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
         options={
             CONF_AGENT_HOST: "agent.local",
             CONF_AGENT_PORT: 8092,
-            CONF_AGENT_USE_SSL: True,
             CONF_AGENT_TOKEN: "option-token",
             CONF_MAINTENANCE_TOKEN: "",
-            CONF_STAIR_LIGHT_ADDRESS: "20#1",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.11:8123",
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
@@ -1012,18 +1066,26 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
                 "standby": {"domain": "button", "service": "press"},
             },
             CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1",
         },
     )
 
-    connection = _reconfigure_connection_schema_from_current(entry)({})
+    connection_schema = _reconfigure_connection_schema_from_current(entry)
+    connection = connection_schema({})
+    connection_with_callback = connection_schema(
+        {CONF_CALLBACK_BASE_URL: "http://192.0.2.11:8123"}
+    )
     features = _reconfigure_features_schema_from_current(entry)({})
 
     assert connection[CONF_AGENT_HOST] == "agent.local"
     assert connection[CONF_AGENT_PORT] == 8092
-    assert connection[CONF_AGENT_USE_SSL] is True
     assert connection[CONF_AGENT_TOKEN] == "option-token"
     assert connection[CONF_MAINTENANCE_TOKEN] == ""
-    assert connection[CONF_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert connection_with_callback[CONF_CALLBACK_BASE_URL] == (
+        "http://192.0.2.11:8123"
+    )
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in connection
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
@@ -1031,6 +1093,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert features[CONF_VIDEO_STREAM_PATH] == "/custom-video"
     assert features[CONF_DEVICE_UI_ENABLED] is True
     assert features[CONF_DASHBOARD_PREVENT_RETURN] is False
+    assert features[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
+    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "20#1"
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]

@@ -90,6 +90,7 @@ def test_metadata_sort_key_can_preserve_video_time_coercion() -> None:
 
 
 def test_localized_choice_supports_de_it_and_default_en() -> None:
-    assert localized_choice("de-DE", de="de", it="it", en="en") == "de"
-    assert localized_choice("it-IT", de="de", it="it", en="en") == "it"
-    assert localized_choice("fr-FR", de="de", it="it", en="en") == "en"
+    assert localized_choice("de-DE", de="de", it="it", fr="fr", en="en") == "de"
+    assert localized_choice("it-IT", de="de", it="it", fr="fr", en="en") == "it"
+    assert localized_choice("fr-FR", de="de", it="it", fr="fr", en="en") == "fr"
+    assert localized_choice("es-ES", de="de", it="it", fr="fr", en="en") == "en"

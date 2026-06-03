@@ -12,6 +12,8 @@ from custom_components.bticino_c300x.agent_update import (
     UPDATE_STATE_UNKNOWN,
     UPDATE_STATE_UP_TO_DATE,
     UPDATE_STATE_UPDATE_AVAILABLE,
+    AgentUpdateState,
+    agent_update_repair_placeholders,
     async_apply_packaged_agent_update,
     compare_agent_bundle,
 )
@@ -118,6 +120,28 @@ def test_compare_agent_bundle_repairs_missing_installed_manifest() -> None:
     assert state.repair_fixable
     assert state.self_update_repair_supported
     assert state.reason == "installed_bundle_manifest_missing"
+
+
+def test_agent_update_repair_placeholders_include_hashes_path_and_patch_status() -> None:
+    placeholders = agent_update_repair_placeholders(
+        AgentUpdateState(
+            state=UPDATE_STATE_UPDATE_AVAILABLE,
+            installed_version="0.4.0",
+            available_version="0.5.0",
+            installed_api_version="1",
+            available_api_version="1",
+            installed_bundle_hash="sha256:installed-bundle",
+            available_bundle_hash="sha256:available-bundle",
+            self_update_supported=True,
+            reason="bundle_hash_mismatch",
+        ),
+        type("Runtime", (), {"qml_patch_status": {"state": "patched"}})(),
+    )
+
+    assert placeholders["installed_bundle_hash"] == "sha256:insta"
+    assert placeholders["available_bundle_hash"] == "sha256:avail"
+    assert placeholders["update_path"] == "self-update"
+    assert placeholders["qml_patch_status"] == "patched"
 
 
 class FakeUpdateApi:

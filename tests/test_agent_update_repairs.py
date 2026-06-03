@@ -57,9 +57,13 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
 
-from custom_components.bticino_c300x.const import CONF_DEVICE_UI_ENABLED  # noqa: E402
+from custom_components.bticino_c300x.const import (  # noqa: E402
+    CONF_CALLBACK_BASE_URL,
+    CONF_DEVICE_UI_ENABLED,
+)
 from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
+    CallbackUrlRepairFlow,
     DeviceAgentUpdateRepairFlow,
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
@@ -162,6 +166,10 @@ class FakeConfigEntries:
         self.reloads.append(entry_id)
         return True
 
+    def async_update_entry(self, entry: Any, **kwargs: Any) -> None:
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+
 
 class FakeHass:
     def __init__(self, entry: Any) -> None:
@@ -204,6 +212,38 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
     assert result["step_id"] == "ssh_install"
     assert result.get("errors") is None
     assert entry.runtime_data.api.calls == []
+
+
+def test_callback_url_repair_flow_stores_valid_override_and_reloads() -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.data = {"agent_host": "192.0.2.60", "agent_port": 8091}
+    hass = FakeHass(entry)
+    flow = CallbackUrlRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    def create_entry(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+
+    invalid = asyncio.run(
+        flow.async_step_configure({CONF_CALLBACK_BASE_URL: "https://ha.local:8123"})
+    )
+    assert invalid["type"] == "form"
+    assert invalid["errors"] == {
+        CONF_CALLBACK_BASE_URL: "invalid_callback_base_url",
+    }
+
+    result = asyncio.run(
+        flow.async_step_configure({CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123"})
+    )
+
+    assert result["type"] == "create_entry"
+    assert entry.options[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
+    assert hass.config_entries.reloads == ["entry-1"]
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:

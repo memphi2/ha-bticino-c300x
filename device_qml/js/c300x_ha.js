@@ -184,6 +184,15 @@ function stairLight(statusItem, pageItem) {
 }
 
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
+    if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {
+        if (pageItem.setCommandFeedback) {
+            pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
+        } else {
+            statusItem.text = alarmBlockingText(pageItem.alarmCommandDetails, command, pageItem)
+            statusItem.color = "#ff6b6b"
+        }
+        return
+    }
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command)
     if (code && code.length > 0) {
         path += "&code=" + encodeURIComponent(code)

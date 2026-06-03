@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0 - 2026-06-03
+
+### Added
+
+- Dedicated local callback base URL override for reverse-proxy and HTTPS
+  frontend setups where the C300X agent must call Home Assistant over local
+  HTTP.
+- French Home Assistant translations and French C300X display labels.
+
+### Changed
+
+- Replayed event snapshots no longer re-trigger doorbell notifications after a
+  Home Assistant restart.
+- Doorbell video activation recovers automatically when a device display or app
+  video-close callback is missed.
+- Callback setup now rejects unsuitable targets such as HTTPS, `.local`,
+  loopback, link-local and malformed port URLs before they break device events
+  or display actions.
+
 ## v0.4.0 - 2026-06-02
 
 ### Added

@@ -1,0 +1,26 @@
+#ifndef C300X_HTTP_UTIL_H
+#define C300X_HTTP_UTIL_H
+
+#include <stddef.h>
+
+int parse_http_url(
+    const char *url,
+    char *host,
+    size_t host_len,
+    char *port,
+    size_t port_len,
+    char *path,
+    size_t path_len
+);
+void http_host_header_value(
+    const char *host,
+    const char *port,
+    char *out,
+    size_t out_len
+);
+void set_socket_timeout(int fd, int timeout_ms);
+void set_fd_nonblocking(int fd);
+void set_fd_cloexec(int fd);
+void allow_socket_reuse(int fd);
+
+#endif

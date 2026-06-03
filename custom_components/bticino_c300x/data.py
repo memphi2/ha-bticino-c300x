@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-import ipaddress
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlsplit
+
+from .callback_target import (
+    callback_url_host_type,
+    callback_url_scheme,
+)
 
 
 @dataclass(slots=True)
@@ -48,8 +51,8 @@ class C300XCallbackDiagnostics(C300XOperationDiagnostics):
         """Record a callback operation attempt without storing the URL."""
 
         self.mark_attempt(now)
-        self.callback_scheme = _callback_scheme(callback_url)
-        self.callback_host_type = _callback_host_type(callback_url)
+        self.callback_scheme = callback_url_scheme(callback_url)
+        self.callback_host_type = callback_url_host_type(callback_url)
 
 
 @dataclass(slots=True)
@@ -117,8 +120,8 @@ class C300XConnectionState:
         """Record a safe event-subscription registration attempt."""
 
         self.event_subscription_event_count = max(0, event_count)
-        self.event_subscription_callback_scheme = _callback_scheme(callback_url)
-        self.event_subscription_callback_host_type = _callback_host_type(callback_url)
+        self.event_subscription_callback_scheme = callback_url_scheme(callback_url)
+        self.event_subscription_callback_host_type = callback_url_host_type(callback_url)
         self.event_subscription_last_attempt_at = now
 
     def mark_event_subscription_success(
@@ -154,48 +157,6 @@ def _connection_stage_from_reason(reason: str) -> str:
     if reason.endswith("Error") or reason.endswith("Timeout"):
         return "agent_api"
     return reason or "unknown"
-
-
-def _callback_scheme(callback_url: str) -> str | None:
-    scheme = urlsplit(callback_url).scheme.strip().lower()
-    return scheme or None
-
-
-def _callback_host_type(callback_url: str) -> str | None:
-    host = urlsplit(callback_url).hostname
-    if not host:
-        return None
-    clean_host = host.strip("[]").split("%", 1)[0].lower()
-    if clean_host.endswith(".local"):
-        return "mdns"
-    if clean_host in {"localhost", "localhost.localdomain"}:
-        return "loopback"
-    try:
-        address = ipaddress.ip_address(clean_host)
-    except ValueError:
-        return "hostname"
-    if address.is_loopback:
-        return "loopback"
-    if address.is_link_local:
-        return "link_local_ipv6" if address.version == 6 else "link_local_ipv4"
-    return "ipv6" if address.version == 6 else "ipv4"
-
-
-def callback_target_is_clean_local_http(
-    scheme: str | None,
-    host_type: str | None,
-) -> bool | None:
-    """Return whether a callback target can be used by the native C agent."""
-
-    if scheme is None and host_type is None:
-        return None
-    return scheme == "http" and host_type not in {
-        None,
-        "loopback",
-        "mdns",
-        "link_local_ipv4",
-        "link_local_ipv6",
-    }
 
 
 @dataclass(slots=True)
@@ -250,6 +211,7 @@ class BticinoC300XRuntimeData:
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: datetime | None = None
     memos_refresh_task: Any | None = None
+    activations: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: datetime | None = None
     display_bridge_diagnostics: C300XCallbackDiagnostics = field(

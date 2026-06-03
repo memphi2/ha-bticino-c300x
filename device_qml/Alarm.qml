@@ -144,6 +144,15 @@ Page {
         }
         selectedCommand = command
         refreshCommandReadiness()
+        if (!selectedCommandReady) {
+            if (command.indexOf("arm_") === 0) {
+                setCommandFeedback("checking", command, "#f1c40f")
+                Api.alarmCheck(command, status, page)
+            } else {
+                setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
+            }
+            return
+        }
         if (!commandRequiresPin(command)) {
             executeCommand(command, false)
         } else {
@@ -171,6 +180,10 @@ Page {
             return
         }
         refreshCommandReadiness()
+        if (!force && !selectedCommandReady) {
+            setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
+            return
+        }
         var needsPin = commandRequiresPin(command)
         if (needsPin && pinCode.length === 0) {
             setCommandFeedback("pin_required", command, "#f1c40f")

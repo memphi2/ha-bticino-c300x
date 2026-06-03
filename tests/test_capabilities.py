@@ -14,6 +14,7 @@ from custom_components.bticino_c300x.capabilities import (
     events_for_capabilities,
     gate_capabilities,
     ha_event_types_for_capabilities,
+    memo_text_write_supported,
 )
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
@@ -103,6 +104,23 @@ def test_events_for_capabilities_registers_internal_diagnostics_push() -> None:
     assert ha_event_types_for_capabilities(capabilities) == ["agent_restarted"]
 
 
+def test_events_for_capabilities_registers_device_activations() -> None:
+    assert events_for_capabilities({"activations": {"supported": True}}) == [
+        "activation.executed",
+        "agent.restarted",
+    ]
+    assert ha_event_types_for_capabilities({"activations": {"supported": True}}) == [
+        "activation_executed",
+        "agent_restarted",
+    ]
+
+
+def test_memo_text_write_support_requires_agent_capability() -> None:
+    assert memo_text_write_supported({"memos": {"supported": True, "write_text": True}})
+    assert not memo_text_write_supported({"memos": {"supported": True}})
+    assert not memo_text_write_supported({"memos": False})
+
+
 def test_entry_config_value_honors_blank_option_override() -> None:
     entry = SimpleNamespace(
         data={CONF_MAINTENANCE_TOKEN: "old-token"},
@@ -166,6 +184,7 @@ def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:
             "ringer": True,
             "smartphone_forwarding": True,
             "stair_light": True,
+            "activations": True,
             "memos": True,
             "system_metrics": True,
             "diagnostics": True,
@@ -177,6 +196,7 @@ def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:
         "door_unlock_started",
         "door_unlock_ended",
         "stair_light_activated",
+        "activation_executed",
         "call_started",
         "call_ended",
         "ringer_muted",
@@ -193,6 +213,7 @@ def test_event_label_returns_localized_event_names() -> None:
     assert event_label("door_unlock_started", "de") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it") == "Apertura porta avviata"
     assert event_label("stair_light_activated", "de") == "Treppenlicht aktiviert"
+    assert event_label("activation_executed", "de") == "Geräteaktion ausgeführt"
     assert event_label("ringer_unmuted", "de") == "Klingelton aktiviert"
     assert event_label("smartphone_forwarding_changed", "it") == (
         "Inoltro smartphone modificato"
@@ -204,7 +225,7 @@ def test_event_label_returns_localized_event_names() -> None:
     )
     assert event_label("door_unlock_started", "de-DE") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it-IT") == "Apertura porta avviata"
-    assert event_label("door_unlock_started", "fr") == "Door unlock started"
+    assert event_label("door_unlock_started", "fr") == "Ouverture porte demarree"
 
 
 def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> None:

@@ -24,6 +24,7 @@ from .forwarding import (
     forwarding_state_from_value,
 )
 from .validation_patterns import (
+    ACTIVATION_ID_RE,
     LOCK_ID_RE,
     MEMO_ID_RE,
     STAIR_LIGHT_ADDRESS_RE,
@@ -31,6 +32,7 @@ from .validation_patterns import (
 )
 
 _SETUP_TIMEOUT = 2.0
+MAX_TEXT_MEMO_BYTES = 512
 
 
 class C300XAgentApiError(Exception):
@@ -154,6 +156,25 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
+    async def async_activations(self) -> dict[str, Any]:
+        """Return configured C300X device activations."""
+
+        data = await self._request_json("GET", "/api/v1/activations")
+        return normalize_activations(data)
+
+    async def async_run_device_activation(self, activation_id: str) -> dict[str, Any]:
+        """Run one configured C300X device activation."""
+
+        normalized_activation_id = normalize_activation_id(activation_id)
+        data = await self._request_json(
+            "POST",
+            (
+                "/api/v1/activations/"
+                f"{quote(normalized_activation_id, safe='')}/actions/run"
+            ),
+        )
+        return _ok_response(data)
+
     async def async_ringer_status(self) -> dict[str, Any]:
         """Return ringer mute status."""
 
@@ -212,6 +233,20 @@ class C300XAgentApi:
 
         data = await self._request_json("GET", "/api/v1/memos")
         return normalize_memos(data)
+
+    async def async_create_text_memo(self, text: str, *, read: bool = False) -> dict[str, Any]:
+        """Create a local manual text memo on the C300X."""
+
+        normalized_text = normalize_text_memo_text(text)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/memos/text/actions/create",
+            json_data={
+                "text_b64": b64encode(normalized_text.encode()).decode("ascii"),
+                "read": bool(read),
+            },
+        )
+        return _ok_response(data)
 
     async def async_memo_audio(self, memo_id: str) -> tuple[bytes, str]:
         """Return a stored manual voice memo audio file."""
@@ -867,15 +902,14 @@ class C300XAgentApi:
         return {HEADER_MAINTENANCE_TOKEN: self._maintenance_token}
 
 
-def build_agent_base_url(host: str, port: int, use_ssl: bool) -> str:
-    """Build the device-agent base URL from config entry data."""
+def build_agent_base_url(host: str, port: int) -> str:
+    """Build the HTTP device-agent base URL from config entry data."""
 
-    scheme = "https" if use_ssl else "http"
     normalized_host = host.strip().strip("/")
     normalized_port = port if port > 0 else DEFAULT_AGENT_PORT
     if ":" in normalized_host and not normalized_host.startswith("["):
         normalized_host = f"[{normalized_host}]"
-    return f"{scheme}://{normalized_host}:{normalized_port}"
+    return f"http://{normalized_host}:{normalized_port}"
 
 
 def encode_endpoint_url(url: str) -> str:
@@ -952,10 +986,35 @@ def normalize_lock_id(lock_id: Any) -> str:
     return _normalize_pattern_value(lock_id, LOCK_ID_RE, default="default", error="invalid lock id")
 
 
+def normalize_activation_id(activation_id: Any) -> str:
+    """Validate and normalize a configured C300X activation id."""
+
+    return _normalize_pattern_value(
+        activation_id,
+        ACTIVATION_ID_RE,
+        error="invalid activation id",
+    )
+
+
 def normalize_memo_id(memo_id: Any) -> str:
     """Validate and normalize a manual memo id."""
 
     return _normalize_pattern_value(memo_id, MEMO_ID_RE, error="invalid memo id")
+
+
+def normalize_text_memo_text(text: Any) -> str:
+    """Normalize text-memo content before sending it to the device agent."""
+
+    if not isinstance(text, str):
+        raise C300XAgentApiResponseError("text memo content must be a string")
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if "\x00" in normalized:
+        raise C300XAgentApiResponseError("text memo content contains a NUL byte")
+    if not normalized.strip():
+        raise C300XAgentApiResponseError("text memo content must not be empty")
+    if len(normalized.encode()) > MAX_TEXT_MEMO_BYTES:
+        raise C300XAgentApiResponseError("text memo content is too long")
+    return normalized
 
 
 def normalize_video_message_id(message_id: Any) -> str:
@@ -997,6 +1056,11 @@ def normalize_doorbell_video(data: Any) -> dict[str, Any]:
             "stream_path": state.get("video_stream_path"),
             "audio_stream_path": None,
             "recorder_stream_path": None,
+            "media_owner": "unknown",
+            "external_media_active": False,
+            "external_owner": None,
+            "external_active_until": None,
+            "last_block_reason": None,
             "bridge": {},
             "raw": data,
         }
@@ -1008,7 +1072,33 @@ def normalize_doorbell_video(data: Any) -> dict[str, Any]:
         "stream_path": data.get("stream_path"),
         "audio_stream_path": data.get("audio_stream_path"),
         "recorder_stream_path": data.get("recorder_stream_path"),
+        "media_owner": _optional_string(bridge.get("media_owner")) or "unknown",
+        "external_media_active": _optional_bool(bridge.get("external_media_active"))
+        is True,
+        "external_owner": _optional_string(bridge.get("external_owner")),
+        "external_active_until": _optional_int(bridge.get("external_active_until")),
+        "last_block_reason": _optional_string(bridge.get("last_block_reason")),
         "bridge": bridge,
+        "raw": data,
+    }
+
+
+def normalize_activations(data: Any) -> dict[str, Any]:
+    """Normalize configured C300X activation discovery responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("activations returned non-object JSON")
+    items = data.get("items") if isinstance(data.get("items"), list) else []
+    normalized_items = [
+        activation
+        for activation in (_normalize_activation(item) for item in items)
+        if activation is not None
+    ]
+    return {
+        "available": bool(data.get("available", True)),
+        "supported": bool(data.get("supported", bool(normalized_items))),
+        "count": _optional_int(data.get("count"), len(normalized_items)),
+        "items": normalized_items,
         "raw": data,
     }
 
@@ -1059,13 +1149,47 @@ def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
         "last_poll_timeout_ms": _optional_int(data.get("last_poll_timeout_ms")),
         "last_poll_count": _optional_int(data.get("last_poll_count")),
         "open_fd_count": _optional_int(data.get("open_fd_count")),
+        "agent_init_script_present": _optional_bool(
+            data.get("agent_init_script_present")
+        ),
+        "agent_init_link_ok": _optional_bool(data.get("agent_init_link_ok")),
+        "subscription_count": _optional_int(data.get("subscription_count")),
+        "recent_event_count": _optional_int(data.get("recent_event_count")),
+        "recent_event_capacity": _optional_int(data.get("recent_event_capacity")),
+        "display_bridge_registered": _optional_bool(
+            data.get("display_bridge_registered")
+        ),
+        "display_bridge_disabled": _optional_bool(data.get("display_bridge_disabled")),
+        "home_assistant_connected_this_run": _optional_bool(
+            data.get("home_assistant_connected_this_run")
+        ),
+        "home_assistant_last_seen_at": _optional_int(
+            data.get("home_assistant_last_seen_at")
+        ),
+        "ui_event_revision": _optional_int(data.get("ui_event_revision")),
         "video_running": _optional_bool(data.get("video_running")),
         "video_media_starting": _optional_bool(data.get("video_media_starting")),
         "video_call_active": _optional_bool(data.get("video_call_active")),
         "video_clients": _optional_int(data.get("video_clients")),
+        "video_media_owner": _optional_string(data.get("video_media_owner")),
+        "video_external_media_active": _optional_bool(
+            data.get("video_external_media_active")
+        ),
+        "video_external_owner": _optional_string(data.get("video_external_owner")),
+        "video_last_block_reason": _optional_string(
+            data.get("video_last_block_reason")
+        ),
         "video_bridge_open_fds": _optional_int(data.get("video_bridge_open_fds")),
         "video_bridge_active_threads": _optional_int(
             data.get("video_bridge_active_threads")
+        ),
+        "flexisip_backup_available": _optional_bool(
+            data.get("flexisip_backup_available")
+        ),
+        "flexisip_restart_marker": _optional_bool(data.get("flexisip_restart_marker")),
+        "flexisip_backup_marker": _optional_bool(data.get("flexisip_backup_marker")),
+        "flexisip_reference_state": _optional_string(
+            data.get("flexisip_reference_state")
         ),
         "raw": data,
     }
@@ -1451,6 +1575,42 @@ def _normalize_memo(data: Any) -> dict[str, Any] | None:
         "audio_size": _optional_int(data.get("audio_size")),
         "text": text if isinstance(text, str) else None,
         "text_truncated": bool(data.get("text_truncated")),
+    }
+
+
+def _normalize_activation(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    activation_id = str(data.get("id") or "").strip()
+    if not ACTIVATION_ID_RE.fullmatch(activation_id):
+        return None
+    name = str(data.get("name") or "").strip()
+    if not name:
+        name = activation_id.replace("_", " ").replace("-", " ").title()
+    activation_type = str(data.get("type") or "unknown").strip().lower()
+    if activation_type not in {
+        "lock",
+        "light",
+        "stair_light",
+        "generic",
+        "scenario",
+        "unknown",
+    }:
+        activation_type = "unknown"
+    address_mode = str(
+        data.get("addressMode") or data.get("address_mode") or "manual"
+    ).strip().lower()
+    if address_mode not in {"manual", "auto"}:
+        address_mode = "manual"
+    source = str(data.get("source") or "agent").strip().lower() or "agent"
+    return {
+        "id": activation_id,
+        "name": name,
+        "type": activation_type,
+        "address_mode": address_mode,
+        "address": _optional_string(data.get("address")),
+        "source": source,
+        "executable": _optional_bool(data.get("executable")) is True,
     }
 
 

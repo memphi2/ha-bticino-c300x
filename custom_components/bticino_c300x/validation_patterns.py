@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 
-from .const import LOCK_ID_PATTERN, STAIR_LIGHT_ADDRESS_PATTERN
+from .const import ACTIVATION_ID_PATTERN, LOCK_ID_PATTERN, STAIR_LIGHT_ADDRESS_PATTERN
 
+ACTIVATION_ID_RE = re.compile(ACTIVATION_ID_PATTERN)
 ENTITY_OBJECT_ID_RE = re.compile(r"[a-z0-9_]+")
 HA_ACTION_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 HA_DOMAIN_RE = re.compile(r"^[a-z0-9_]+$")

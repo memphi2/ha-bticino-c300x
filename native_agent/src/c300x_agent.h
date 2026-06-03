@@ -14,10 +14,31 @@
 #define C300X_MAX_VERSION_LEN 64
 #define C300X_MAX_LOCK_ID_LEN 32
 #define C300X_MAX_LOCK_NAME_LEN 64
+#define C300X_ACTIVATION_ID_MAX_CHARS 32
+#define C300X_MAX_ACTIVATION_ID_LEN (C300X_ACTIVATION_ID_MAX_CHARS + 1)
+#define C300X_MAX_ACTIVATION_NAME_LEN 64
+#define C300X_MAX_ACTIVATION_TYPE_LEN 24
+#define C300X_MAX_ACTIVATION_ADDRESS_MODE_LEN 8
+#define C300X_MAX_ACTIVATIONS 16
+#define C300X_MAX_ACTIVATION_DISCOVERY_ROOTS 4
+#define C300X_MAX_DISCOVERED_ACTIVATIONS 16
 #define C300X_MAX_FRAME_LEN 256
 #define C300X_MAX_ERROR_LEN 256
 #define C300X_MAX_PATH_LEN 256
+#define C300X_MAX_VOICEMAIL_ID_LEN 65
 #define C300X_MAX_VOICEMAIL_MESSAGES 64
+#define C300X_MAX_MEMO_TEXT_LEN 512
+
+struct c300x_activation {
+    char id[C300X_MAX_ACTIVATION_ID_LEN];
+    char name[C300X_MAX_ACTIVATION_NAME_LEN];
+    char type[C300X_MAX_ACTIVATION_TYPE_LEN];
+    char address_mode[C300X_MAX_ACTIVATION_ADDRESS_MODE_LEN];
+    char address[C300X_MAX_ADDRESS_LEN];
+    char press_command[C300X_MAX_FRAME_LEN];
+    char release_command[C300X_MAX_FRAME_LEN];
+    int hold_ms;
+};
 
 struct c300x_config {
     char listen_host[C300X_MAX_HOST_LEN];
@@ -44,6 +65,12 @@ struct c300x_config {
     char lock_name[C300X_MAX_LOCK_NAME_LEN];
     char lock_address[C300X_MAX_ADDRESS_LEN];
     int lock_release_delay_ms;
+    int activations_enabled;
+    int activations_auto_discover;
+    int activation_discovery_root_count;
+    char activation_discovery_roots[C300X_MAX_ACTIVATION_DISCOVERY_ROOTS][C300X_MAX_PATH_LEN];
+    int activations_count;
+    struct c300x_activation activations[C300X_MAX_ACTIVATIONS];
     int maintenance_enabled;
     int maintenance_ssh_start_enabled;
     int maintenance_reboot_enabled;

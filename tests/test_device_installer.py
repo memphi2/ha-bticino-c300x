@@ -4,11 +4,21 @@ import asyncio
 import hashlib
 import json
 import sys
+import types
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+custom_components = sys.modules.setdefault(
+    "custom_components",
+    types.ModuleType("custom_components"),
+)
+custom_components.__path__ = [str(ROOT / "custom_components")]
+bticino_package = types.ModuleType("custom_components.bticino_c300x")
+bticino_package.__path__ = [str(ROOT / "custom_components" / "bticino_c300x")]
+sys.modules.setdefault("custom_components.bticino_c300x", bticino_package)
 
 import custom_components.bticino_c300x.device_installer as device_installer  # noqa: E402
 from custom_components.bticino_c300x.device_installer import (  # noqa: E402

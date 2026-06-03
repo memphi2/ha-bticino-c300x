@@ -305,6 +305,16 @@ def _device_config_json(
             "firmware": "",
             "stairLightDefaultAddress": DEFAULT_STAIR_LIGHT_ADDRESS,
         },
+        "activations": {
+            "enabled": False,
+            "autoDiscover": True,
+            "discoveryRoots": [
+                "/home/bticino/cfg/extra/47",
+                "/home/bticino/cfg/extra",
+                "/home/bticino/cfg",
+            ],
+            "items": [],
+        },
         "maintenance": {
             "enabled": True,
             "adminToken": maintenance_token,

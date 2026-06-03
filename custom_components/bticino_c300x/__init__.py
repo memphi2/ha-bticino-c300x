@@ -25,7 +25,6 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
-    CONF_AGENT_USE_SSL,
     CONF_ALARM_ENTITY_ID,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
@@ -147,7 +146,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
     base_url = build_agent_base_url(
         agent_host,
         int(_entry_config_value(entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
-        bool(_entry_config_value(entry, CONF_AGENT_USE_SSL, False)),
     )
     api = C300XAgentApi(
         async_get_clientsession(hass),

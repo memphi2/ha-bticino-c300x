@@ -300,8 +300,14 @@ class _FakeEntry:
 
 
 class _FakeEntityRegistry:
-    def __init__(self, *, disabled: set[tuple[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        disabled: set[tuple[str, str]] | None = None,
+        missing: set[tuple[str, str]] | None = None,
+    ) -> None:
         self.disabled = disabled or set()
+        self.missing = missing or set()
 
     def async_get_entity_id(
         self,
@@ -309,6 +315,9 @@ class _FakeEntityRegistry:
         platform: str,
         unique_id: str,
     ) -> str | None:
+        suffix = unique_id.split("_", 1)[1]
+        if (domain, suffix) in self.missing:
+            return None
         return f"{domain}.{unique_id}"
 
     def async_get(self, entity_id: str) -> Any:
@@ -453,6 +462,50 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_
     ) == ["system.metrics_changed"]
 
 
+def test_filter_events_for_active_entities_skips_metric_event_when_sensors_disabled() -> None:
+    assert (
+        _filter_events_for_active_entities(
+            ["system.metrics_changed"],
+            "entry-1",
+            _FakeEntityRegistry(
+                disabled={
+                    ("sensor", "device_cpu"),
+                    ("sensor", "device_load"),
+                    ("sensor", "device_memory"),
+                    ("sensor", "device_temperature"),
+                }
+            ),
+        )
+        == []
+    )
+
+
+def test_filter_events_for_active_entities_skips_missing_default_disabled_metrics() -> None:
+    assert (
+        _filter_events_for_active_entities(
+            ["system.metrics_changed"],
+            "entry-1",
+            _FakeEntityRegistry(
+                missing={
+                    ("sensor", "device_cpu"),
+                    ("sensor", "device_load"),
+                    ("sensor", "device_memory"),
+                    ("sensor", "device_temperature"),
+                }
+            ),
+        )
+        == []
+    )
+
+
+def test_filter_events_for_active_entities_keeps_missing_default_enabled_consumer() -> None:
+    assert _filter_events_for_active_entities(
+        ["agent.diagnostics_changed"],
+        "entry-1",
+        _FakeEntityRegistry(missing={("sensor", "agent_writes")}),
+    ) == ["agent.diagnostics_changed"]
+
+
 def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity() -> None:
     assert _filter_events_for_active_entities(
         ["door_unlock.started"],
@@ -514,6 +567,36 @@ def test_async_start_agent_event_registration_updates_event_set_mismatch() -> No
     ]
     assert api.delete_calls == []
     assert connection_state.connection_state == "connected"
+
+
+def test_metric_subscription_is_skipped_until_metric_entity_is_enabled() -> None:
+    api = _FakeApi([], subscriptions=[])
+    hass = _FakeHass()
+    hass.entity_registry = _FakeEntityRegistry(
+        disabled={("event", "agent_event")},
+        missing={
+            ("sensor", "device_cpu"),
+            ("sensor", "device_load"),
+            ("sensor", "device_memory"),
+            ("sensor", "device_temperature"),
+        }
+    )
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+
+    asyncio.run(
+        async_start_agent_event_registration(
+            hass,
+            _FakeEntry(),  # type: ignore[arg-type]
+            api,
+            {"system_metrics": {"supported": True}},
+            _FakeConnectionState(),
+        )
+    )
+
+    assert api.list_calls == 1
+    assert api.subscription_calls == []
+    assert api.delete_calls == []
 
 
 def test_event_registration_removes_stale_subscriptions_when_no_events_are_active() -> None:

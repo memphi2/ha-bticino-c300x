@@ -78,6 +78,11 @@ IPv6 address. Do not use `homeassistant.local`, other `.local` names, or
 link-local addresses for callbacks or media routing; those names can resolve to
 different paths for Home Assistant, the C300X, browsers and HA Cloud.
 
+The Home Assistant integration can override only the callback base URL sent to
+the agent. This is a Home Assistant-side setting; the agent still receives the
+normal generated webhook path and shared secret. The override must be plain
+local HTTP and must not use `.local`, loopback or link-local addresses.
+
 The native agent intentionally has no TLS client stack; HTTPS termination
 belongs on the Home Assistant side or a local reverse proxy. The same applies
 to the agent API: Home Assistant may connect through HTTPS if a local reverse
@@ -105,6 +110,8 @@ Authenticated with bearer token:
 - `DELETE /api/v1/events/subscriptions/{id}`
 - `POST /api/v1/locks/{id}/actions/unlock`
 - `POST /api/v1/stair-light/actions/activate`
+- `GET /api/v1/activations`
+- `POST /api/v1/activations/{id}/actions/run`
 - `GET/POST /api/v1/ringer`
 - `GET/POST /api/v1/smartphone-forwarding`
 - `GET/POST /api/v1/answering-machine`
@@ -125,6 +132,11 @@ Authenticated with bearer token:
 - `GET /api/v1/maintenance/qml-patch`
 - `POST /api/v1/maintenance/qml-patch/actions/apply`
 - `POST /api/v1/maintenance/qml-patch/actions/restore`
+
+Activation items use `addressMode: "manual"` when the configured `address`
+contains the OpenWebNet `where` value. `addressMode: "auto"` is reserved for
+read-only device discovery; auto items without a discovered address or explicit
+command are returned as non-executable.
 
 Maintenance capabilities are only advertised when explicitly enabled. During
 first setup, the example allows noAuth access to the auth/config maintenance

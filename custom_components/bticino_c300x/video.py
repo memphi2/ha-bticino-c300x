@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_call_later
 
 from .const import DEFAULT_VIDEO_STREAM_PATH, DOMAIN
 
@@ -43,6 +44,8 @@ def resolve_doorbell_camera_entity_id(
     """Resolve the current doorbell camera entity ID from the entity registry."""
 
     registry = er.async_get(hass)
+    if registry is None or not hasattr(registry, "async_get_entity_id"):
+        return None
     entity_id = registry.async_get_entity_id(
         CAMERA_DOMAIN,
         DOMAIN,
@@ -96,9 +99,4 @@ def call_later(
 ) -> Callable[[], None]:
     """Schedule a cancellable callback on the HA loop."""
 
-    handle = hass.loop.call_later(delay, action, None)
-
-    def _cancel() -> None:
-        handle.cancel()
-
-    return _cancel
+    return async_call_later(hass, delay, action)

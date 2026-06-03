@@ -72,6 +72,8 @@ Authenticated (bearer token):
 - `GET /api/v1/diagnostics`
 - `POST /api/v1/locks/{id}/actions/unlock`
 - `POST /api/v1/stair-light/actions/activate`
+- `GET /api/v1/activations`
+- `POST /api/v1/activations/{id}/actions/run`
 - `GET/POST /api/v1/ringer`
 - `GET/POST /api/v1/smartphone-forwarding`
 - `GET/POST /api/v1/answering-machine`
@@ -101,6 +103,11 @@ Authenticated (bearer token):
 - `GET /api/v1/maintenance/qml-patch`
 - `POST /api/v1/maintenance/qml-patch/actions/apply`
 - `POST /api/v1/maintenance/qml-patch/actions/restore`
+
+Activation items use `addressMode: "manual"` when the configured `address`
+contains the OpenWebNet `where` value. `addressMode: "auto"` is reserved for
+read-only device discovery; auto items without a discovered address or explicit
+command are returned as non-executable.
 
 Maintenance endpoints (`ssh`, `reboot`, `agentRemove`, `guiReload`, `firewall`,
 `qmlPatch`) stay unavailable unless each command is explicitly enabled in

@@ -22,6 +22,7 @@ COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
+ARMHF_STRIP = "arm-linux-gnueabihf-strip"
 FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v1-api-port"
 IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v1-api-port"
 CONFIG_SCHEMA_MATERIAL = "c300x-native-agent-config-schema-v1"
@@ -133,7 +134,7 @@ def stage_bundle(
     )
     script_files.append(bootstrap_firewall_script)
     runtime_files.append(
-        _copy(AGENT_BINARY, component_dir / "device_agent/armhf/c300x-agent-native")
+        _copy_agent_binary(AGENT_BINARY, component_dir / "device_agent/armhf/c300x-agent-native")
     )
     _set_file_modes(qml_files, 0o644)
     _set_file_modes(script_files, 0o700)
@@ -190,6 +191,15 @@ def _copy(source: Path, target: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
     return target
+
+
+def _copy_agent_binary(source: Path, target: Path) -> Path:
+    """Copy the ARMHF agent into the release bundle and strip release symbols."""
+
+    copied = _copy(source, target)
+    if copied.read_bytes()[:4] == b"\x7fELF":
+        _run([ARMHF_STRIP, "--strip-unneeded", str(copied)])
+    return copied
 
 
 def _set_file_modes(paths: list[Path], mode: int) -> None:

@@ -419,7 +419,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._recorder_stream_path: str | None = None
         self._bridge_available = False
         self._bridge_status: dict[str, Any] = {}
+        self._video_owner = "unknown"
+        self._external_media_active = False
+        self._external_owner: str | None = None
+        self._external_active_until: int | None = None
+        self._last_video_block_reason: str | None = None
         self._reset = None
+        self._rtsp_prepare_lock = asyncio.Lock()
         self._rtsp_ready_lock = asyncio.Lock()
         self._rtsp_unavailable_until = 0.0
         self._last_rtsp_error: str | None = None
@@ -491,6 +497,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ),
             "video_active_until": self._video_active_until
             or event_state.video_active_until,
+            "video_owner": self._video_owner,
+            "external_media_active": self._external_media_active,
+            "external_owner": self._external_owner,
+            "external_active_until": self._external_active_until,
+            "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": talkback_supported,
             "talkback_requires_https": talkback_supported,
             "talkback_requested": any(
@@ -735,25 +746,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_warmup_video(self) -> None:
         """Mark the video window and refresh bridge metadata before RTSP opens."""
 
-        await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        try:
+            await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        except Exception:  # noqa: BLE001 - refresh status before re-raising API failure
+            with suppress(Exception):
+                status = await self._entry.runtime_data.api.async_doorbell_video_status()
+                self._apply_status(status)
+                self._async_write_ha_state_if_ready()
+            raise
         with suppress(Exception):
             status = await self._entry.runtime_data.api.async_doorbell_video_status()
             self._apply_status(status)
 
     async def _async_restart_video_reader(self, *, audio: bool = False) -> None:
-        await self._entry.runtime_data.api.async_stop_doorbell_video()
-        await asyncio.sleep(1.0)
-        await self._async_warmup_video()
-        await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+        async with self._rtsp_prepare_lock:
+            await self._entry.runtime_data.api.async_stop_doorbell_video()
+            await asyncio.sleep(1.0)
+            await self._async_warmup_video()
+            await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
 
     async def _async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 
-        self._raise_if_rtsp_cooling_down()
-        await self._async_warmup_video()
-        stream_url = self._build_stream_url(audio=audio)
-        await self._async_wait_for_rtsp_ready(stream_url)
-        return stream_url
+        async with self._rtsp_prepare_lock:
+            self._raise_if_rtsp_cooling_down()
+            await self._async_warmup_video()
+            stream_url = self._build_stream_url(audio=audio)
+            await self._async_wait_for_rtsp_ready(stream_url)
+            return stream_url
 
     async def _async_wait_for_rtsp_ready(self, stream_url: str) -> None:
         """Wait briefly for the native RTSP bridge to accept RTSP requests."""
@@ -1142,6 +1162,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._bridge_status = status.get("bridge") or {}
         self._video_window_available = bool(status.get("window_available"))
         self._video_active_until = status.get("active_until")
+        self._video_owner = str(status.get("media_owner") or "unknown")
+        self._external_media_active = bool(status.get("external_media_active"))
+        self._external_owner = optional_string(status.get("external_owner"))
+        self._external_active_until = status.get("external_active_until")
+        self._last_video_block_reason = optional_string(status.get("last_block_reason"))
         if status.get("stream_path"):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))

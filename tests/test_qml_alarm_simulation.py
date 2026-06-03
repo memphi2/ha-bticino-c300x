@@ -60,6 +60,12 @@ function loadLibrary(path) {{
 const Api = loadLibrary(apiPath);
 const I18n = loadLibrary(i18nPath);
 
+assert.strictEqual(I18n.language("fr-FR"), "fr");
+assert.strictEqual(I18n.text("fr-FR", "alarm"), "Alarme");
+assert.strictEqual(I18n.text("fr-FR", "armed_away"), "Absent");
+assert.strictEqual(I18n.weather("fr-FR", "rainy", ""), "Pluie");
+assert.strictEqual(I18n.weather("fr-FR", "unknown", ""), "Inconnu");
+
 let routes = {{}};
 let calls = [];
 
@@ -203,6 +209,15 @@ function createPage() {{
       }}
       this.selectedCommand = command;
       this.refreshCommandReadiness();
+      if (!this.selectedCommandReady) {{
+        if (command.indexOf("arm_") === 0) {{
+          this.setCommandFeedback("checking", command, "#f1c40f");
+          Api.alarmCheck(command, statusItem, this);
+        }} else {{
+          this.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b");
+        }}
+        return;
+      }}
       if (!this.commandRequiresPin(command)) {{
         this.executeCommand(command, false);
       }} else {{
@@ -227,6 +242,10 @@ function createPage() {{
         return;
       }}
       this.refreshCommandReadiness();
+      if (!force && !this.selectedCommandReady) {{
+        this.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b");
+        return;
+      }}
       const needsPin = this.commandRequiresPin(command);
       if (needsPin && this.pinCode.length === 0) {{
         this.setCommandFeedback("pin_required", command, "#f1c40f");
@@ -346,7 +365,7 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   assert.strictEqual(page.modeColumnCount(), 3);
   assert.strictEqual(page.modeRowCount(), 1);
 
-  routes["/ui/alarm/command?command=arm_away"] = {{
+  routes["/ui/alarm/command?command=arm_away&check=true"] = {{
     ok: false,
     error: "not_ready_to_arm",
     command: "arm_away",
@@ -355,12 +374,13 @@ function assertBlockedModesLookLikeAlarmoCard() {{
     blocking_sensor_count: 1
   }};
   page.selectCommand("arm_away");
-  assert(calls.includes("/ui/alarm/command?command=arm_away"));
+  assert(calls.includes("/ui/alarm/command?command=arm_away&check=true"));
+  assert(!calls.includes("/ui/alarm/command?command=arm_away"));
   assert.strictEqual(page.bypassVisible(), true);
   assert.strictEqual(page.feedbackTitle(), "Nicht bereit");
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Haustuer");
 
-  routes["/ui/alarm/command?command=arm_night"] = {{
+  routes["/ui/alarm/command?command=arm_night&check=true"] = {{
     ok: false,
     error: "not_ready_to_arm",
     command: "arm_night",
@@ -369,7 +389,8 @@ function assertBlockedModesLookLikeAlarmoCard() {{
     blocking_sensor_count: 1
   }};
   page.selectCommand("arm_night");
-  assert(calls.includes("/ui/alarm/command?command=arm_night"));
+  assert(calls.includes("/ui/alarm/command?command=arm_night&check=true"));
+  assert(!calls.includes("/ui/alarm/command?command=arm_night"));
   assert.strictEqual(page.selectedCommand, "arm_night");
   assert.strictEqual(page.selectedCommandReady, false);
   assert.strictEqual(page.bypassVisible(), true);
@@ -481,7 +502,7 @@ function assertAllOpenSensorsAreShown() {{
       blocking_sensor_count: 4
     }})
   ]));
-  routes["/ui/alarm/command?command=arm_away"] = {{
+  routes["/ui/alarm/command?command=arm_away&check=true"] = {{
     ok: false,
     error: "not_ready_to_arm",
     command: "arm_away",
@@ -490,6 +511,8 @@ function assertAllOpenSensorsAreShown() {{
     blocking_sensor_count: 4
   }};
   page.selectCommand("arm_away");
+  assert(calls.includes("/ui/alarm/command?command=arm_away&check=true"));
+  assert(!calls.includes("/ui/alarm/command?command=arm_away"));
   assert.strictEqual(page.feedbackDetail(), "Sensor offen: Haustuer, Fenster, Garage, Kueche");
 }}
 

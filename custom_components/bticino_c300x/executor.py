@@ -48,7 +48,7 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
-    CONF_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_ANSWERING_MACHINE,
@@ -335,6 +335,22 @@ async def async_execute_alarm_command(
             ),
         }
 
+    if (
+        not force
+        and (
+            preflight := _alarmo_command_preflight(
+                hass,
+                alarm_entity_id,
+                alarm_state,
+                command,
+                for_command=True,
+            )
+        )
+        is not None
+        and preflight["ready"] is False
+    ):
+        return _alarm_not_ready_response(command, alarm_entity_id, current_state, preflight)
+
     if force and command in _ALARMO_FORCE_ARM_MODES:
         domain = _ALARMO_DOMAIN
         service = "arm"
@@ -425,7 +441,7 @@ async def async_trigger_stair_light(
 
     target_address = address or entry_config_value(
         entry,
-        CONF_STAIR_LIGHT_ADDRESS,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         DEFAULT_STAIR_LIGHT_ADDRESS,
     )
     await entry.runtime_data.api.async_stair_light(target_address)
@@ -564,12 +580,8 @@ def _dashboard_alarm_state(state: Any) -> str:
 def _dashboard_datetime_label() -> str:
     """Return the compact date/time badge for the device dashboard."""
 
-    if dt_util is not None:
-        now = dt_util.now()
-    else:
-        from datetime import datetime
-
-        now = datetime.now()
+    now_func = getattr(dt_util, "now", None) if dt_util is not None else None
+    now = now_func() if callable(now_func) else datetime.now()
     return now.strftime("%d.%m.\n%H:%M")
 
 
@@ -651,7 +663,8 @@ def _weather_updated_label(state: Any) -> str:
     last_changed = getattr(state, "last_changed", None)
     if last_changed is None:
         return ""
-    display_time = dt_util.as_local(last_changed) if dt_util is not None else last_changed
+    as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
+    display_time = as_local(last_changed) if callable(as_local) else last_changed
     if hasattr(display_time, "strftime"):
         return display_time.strftime("%H:%M")
     return ""
@@ -1882,7 +1895,8 @@ def _state_active_since(state: Any) -> tuple[str | None, str | None]:
     last_changed = getattr(state, "last_changed", None)
     if last_changed is None:
         return None, None
-    display_time = dt_util.as_local(last_changed) if dt_util is not None else last_changed
+    as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
+    display_time = as_local(last_changed) if callable(as_local) else last_changed
     active_since = (
         display_time.isoformat()
         if hasattr(display_time, "isoformat")

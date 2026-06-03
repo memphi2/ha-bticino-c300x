@@ -73,6 +73,27 @@ def test_native_agent_metrics_dispatch_loop_is_subscriber_gated() -> None:
     )
 
 
+def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    post_body = text.split("static void handle_subscriptions_post", maxsplit=1)[1].split(
+        "static void handle_display_bridge_status",
+        maxsplit=1,
+    )[0]
+    dispatch_now_body = text.rsplit(
+        "static void system_metrics_dispatch_now",
+        maxsplit=1,
+    )[1].split("static void system_metrics_dispatch_if_due", maxsplit=1)[0]
+
+    assert "read_system_metrics_sample(" not in post_body
+    assert (
+        'if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed"))'
+        in post_body
+    )
+    assert dispatch_now_body.index("system_metrics_watch_active") < dispatch_now_body.index(
+        "read_system_metrics_sample"
+    )
+
+
 def test_native_agent_metrics_does_not_sample_at_start_without_subscribers() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     init_body = text.split("static void system_metrics_init", maxsplit=1)[1].split(
@@ -163,3 +184,26 @@ def test_native_agent_runtime_diagnostics_are_memory_only_until_requested() -> N
     assert text.count("count_open_fds()") == 1
     assert '\\"open_fd_count\\":%d' in diagnostics_body
     assert '\\"video_bridge_active_threads\\":%d' in diagnostics_body
+
+
+def test_native_agent_recent_event_diagnostics_are_heap_backed() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    recent_events_header = (ROOT / "native_agent" / "src" / "recent_events.h").read_text(
+        encoding="utf-8"
+    )
+    recent_events_source = (ROOT / "native_agent" / "src" / "recent_events.c").read_text(
+        encoding="utf-8"
+    )
+    runtime_struct = text.split("struct agent_runtime {", maxsplit=1)[1].split(
+        "};",
+        maxsplit=1,
+    )[0]
+    cleanup_body = text.rsplit("cleanup:", maxsplit=1)[1]
+
+    assert "#include \"recent_events.h\"" in text
+    assert "struct c300x_recent_events recent_events;" in runtime_struct
+    assert "C300X_MAX_RECENT_EVENTS][C300X_RECENT_EVENT_LEN]" not in runtime_struct
+    assert "char *items[C300X_RECENT_EVENTS_CAPACITY];" in recent_events_header
+    assert "recent_event_copy(event_json)" in recent_events_source
+    assert "free(events->items[0]);" in recent_events_source
+    assert "c300x_recent_events_clear(&runtime->recent_events);" in cleanup_body

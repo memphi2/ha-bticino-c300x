@@ -168,6 +168,62 @@ var IT = {
     "weather": "Meteo"
 }
 
+var FR = {
+    "action": "Action",
+    "action_error": "Action echouee",
+    "action_sent": "Action envoyee",
+    "alarm": "Alarme",
+    "alarm_command_error": "Commande alarme echouee",
+    "alarm_command_sent": "Commande alarme envoyee",
+    "alarm_not_configured": "Alarme non configuree",
+    "alarm_triggered": "Alarme declenchee",
+    "armed_away": "Absent",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "Present",
+    "armed_night": "Nuit",
+    "armed_vacation": "Vacances",
+    "arming": "Armement",
+    "board_loaded": "Tableau charge",
+    "bypass_open_sensors": "Ignorer ouverts",
+    "checking": "Verification",
+    "dashboard_empty": "Aucun element",
+    "delay_active": "Delai",
+    "disarmed": "Desarme",
+    "enter_pin": "Entrer PIN",
+    "execute": "Executer",
+    "ha_connected": "HA connecte",
+    "home_assistant": "Home Assistant",
+    "humidity": "Humidite",
+    "invalid_action": "Action invalide",
+    "invalid_code": "PIN invalide",
+    "mode": "Mode",
+    "no_dashboard_pages": "Aucune page dashboard",
+    "no_mode_available": "Aucun mode disponible",
+    "not_configured": "Non configure",
+    "not_ready_to_arm": "Pas pret",
+    "off": "Arret",
+    "offline": "Hors ligne",
+    "on": "Marche",
+    "open_sensors": "Ouverts",
+    "page": "Page",
+    "pending": "En attente",
+    "pin_required": "PIN requis",
+    "ready_to_arm": "Pret",
+    "sensor_open": "Capteur ouvert",
+    "sending": "Envoi",
+    "seconds_short": "s",
+    "since": "Depuis",
+    "stair_light": "Lumiere escalier",
+    "stair_light_error": "Lumiere echouee",
+    "stair_light_sent": "Lumiere envoyee",
+    "status_loaded": "charge",
+    "triggered": "Alarme",
+    "unknown": "Inconnu",
+    "updated": "Maj",
+    "wind": "Vent",
+    "weather": "Meteo"
+}
+
 var WEATHER_DE = {
     "clear-night": "Klar",
     "cloudy": "Bewoelkt",
@@ -228,6 +284,26 @@ var WEATHER_IT = {
     "unknown": "Sconosciuto"
 }
 
+var WEATHER_FR = {
+    "clear-night": "Clair",
+    "cloudy": "Nuageux",
+    "exceptional": "Exceptionnel",
+    "fog": "Brouillard",
+    "hail": "Grele",
+    "lightning": "Orage",
+    "lightning-rainy": "Orage",
+    "partlycloudy": "Peu nuageux",
+    "pouring": "Forte pluie",
+    "rainy": "Pluie",
+    "snowy": "Neige",
+    "snowy-rainy": "Neige fondue",
+    "sunny": "Soleil",
+    "windy": "Venteux",
+    "windy-variant": "Venteux",
+    "unavailable": "Hors ligne",
+    "unknown": "Inconnu"
+}
+
 function language(languageCode) {
     var raw = String(languageCode || "en").toLowerCase()
     if (raw.indexOf("de") === 0) {
@@ -235,6 +311,9 @@ function language(languageCode) {
     }
     if (raw.indexOf("it") === 0) {
         return "it"
+    }
+    if (raw.indexOf("fr") === 0) {
+        return "fr"
     }
     return "en"
 }
@@ -247,6 +326,9 @@ function catalog(languageCode) {
     if (lang === "it") {
         return IT
     }
+    if (lang === "fr") {
+        return FR
+    }
     return EN
 }
 
@@ -257,6 +339,9 @@ function weatherCatalog(languageCode) {
     }
     if (lang === "it") {
         return WEATHER_IT
+    }
+    if (lang === "fr") {
+        return WEATHER_FR
     }
     return WEATHER_EN
 }

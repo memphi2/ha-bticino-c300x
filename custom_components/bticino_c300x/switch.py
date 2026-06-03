@@ -721,6 +721,8 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return whether the native MQTT bridge is enabled."""
 
+        if not self.available:
+            return False
         return self._enabled
 
     @property
@@ -785,6 +787,8 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         try:
             status = await self._entry.runtime_data.api.async_mqtt_status()
         except C300XAgentApiError:
+            self._status = {}
+            self._enabled = False
             self._attr_available = False
             return
         self._apply_status(status)
@@ -839,6 +843,8 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return whether the legacy TcpDump2Mqtt autostart is enabled."""
 
+        if not self.available:
+            return False
         return self._enabled
 
     @property
@@ -892,6 +898,8 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         try:
             status = await self._entry.runtime_data.api.async_legacy_mqtt_status()
         except C300XAgentApiError:
+            self._status = {}
+            self._enabled = False
             self._attr_available = False
             return
         self._apply_status(status)
@@ -920,14 +928,24 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
             return
         legacy_enabled = status.get("legacy_enabled")
         legacy_installed = status.get("legacy_installed")
+        native_enabled = bool(status.get("enabled") or status.get("native_enabled"))
+        exclusive = bool(status.get("exclusive", True))
         if legacy_enabled is not None or legacy_installed is not None:
-            self._enabled = bool(legacy_enabled and legacy_installed)
+            self._enabled = bool(
+                legacy_enabled and legacy_installed and not (exclusive and native_enabled)
+            )
             self._status = {**self._status, **status}
             self.async_write_ha_state()
 
     def _apply_status(self, status: dict) -> None:
         self._status = status
-        self._enabled = bool(status.get("enabled") and status.get("installed"))
+        native_enabled = bool(status.get("native_enabled"))
+        exclusive = bool(status.get("exclusive", True))
+        self._enabled = bool(
+            status.get("enabled")
+            and status.get("installed")
+            and not (exclusive and native_enabled)
+        )
         self._attr_available = bool(status.get("available", True))
 
 

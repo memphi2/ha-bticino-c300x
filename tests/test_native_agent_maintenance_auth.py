@@ -107,9 +107,9 @@ def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
 
     assert 'json_bool_field(request->body, "setupComplete", &value)' in post_body
     assert "setup_complete = value" in post_body
-    assert "if (setup_complete && updated.api_token[0] != '\\0')" in post_body
-    assert "updated.api_no_auth = 0" in post_body
-    assert "updated.maintenance_no_auth_allowed = 0" in post_body
+    assert "if (setup_complete && updated->api_token[0] != '\\0')" in post_body
+    assert "updated->api_no_auth = 0" in post_body
+    assert "updated->maintenance_no_auth_allowed = 0" in post_body
 
 
 def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:

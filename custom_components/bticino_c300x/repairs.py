@@ -12,8 +12,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .agent_update import async_apply_packaged_agent_update, compare_agent_bundle
+from .agent_update import (
+    agent_update_repair_placeholders,
+    async_apply_packaged_agent_update,
+    compare_agent_bundle,
+)
 from .api import C300XAgentApiError
+from .callback_url import async_suggest_callback_base_url, normalize_callback_base_url
 from .capabilities import (
     entry_device_ui_enabled,
     gate_capabilities,
@@ -25,6 +30,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
+    CONF_CALLBACK_BASE_URL,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DEFAULT_AGENT_PORT,
@@ -38,7 +44,11 @@ from .device_installer import (
 from .entry_config import entry_config_value
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import async_apply_qml_patch_and_confirm
-from .repair_issues import DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, repair_issue_id
+from .repair_issues import (
+    DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+    UNSUPPORTED_CALLBACK_URL_ISSUE,
+    repair_issue_id,
+)
 
 _AGENT_UPDATE_RESTART_SETTLE_SECONDS = 1.0
 
@@ -56,7 +66,81 @@ async def async_create_fix_flow(
         and isinstance(data.get("entry_id"), str)
     ):
         return DeviceAgentUpdateRepairFlow(hass, str(data["entry_id"]))
+    if (
+        data is not None
+        and data.get("issue_type") == UNSUPPORTED_CALLBACK_URL_ISSUE
+        and isinstance(data.get("entry_id"), str)
+    ):
+        return CallbackUrlRepairFlow(hass, str(data["entry_id"]))
     raise ValueError(f"unknown repair issue: {issue_id}")
+
+
+class CallbackUrlRepairFlow(RepairsFlow):
+    """Repair flow for callback targets the C300X cannot reach."""
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        """Initialize the repair flow."""
+
+        self.hass = hass
+        self._entry_id = entry_id
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Start the callback URL repair flow."""
+
+        return await self.async_step_configure(user_input)
+
+    async def async_step_configure(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Store a local HTTP callback base URL override."""
+
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is None:
+            return self.async_abort(reason="entry_not_loaded")
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            callback_base_url = _validated_callback_base_url(user_input, errors)
+            if callback_base_url:
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    options={
+                        **dict(entry.options),
+                        CONF_CALLBACK_BASE_URL: callback_base_url,
+                    },
+                )
+                ir.async_delete_issue(
+                    hass=self.hass,
+                    domain=DOMAIN,
+                    issue_id=repair_issue_id(
+                        UNSUPPORTED_CALLBACK_URL_ISSUE,
+                        self._entry_id,
+                    ),
+                )
+                await _async_reload_entry_after_agent_update(self.hass, self._entry_id)
+                return self.async_create_entry(data={})
+            errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
+
+        suggested = await async_suggest_callback_base_url(self.hass, entry)
+        return self.async_show_form(
+            step_id="configure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_CALLBACK_BASE_URL,
+                        default=suggested,
+                    ): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "suggested_callback_base_url": suggested or "http://HA_LOCAL_IP:8123",
+            },
+        )
 
 
 class DeviceAgentUpdateRepairFlow(RepairsFlow):
@@ -86,17 +170,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
-        placeholders = (
-            update_state.repair_placeholders
-            if update_state is not None
-            else {
-                "installed_version": "unknown",
-                "available_version": "unknown",
-                "installed_api_version": "unknown",
-                "available_api_version": "unknown",
-                "reason": "unknown",
-            }
-        )
+        placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
         if not getattr(update_state, "self_update_repair_supported", False):
             return await self.async_step_ssh_install(user_input)
         if user_input is None:
@@ -139,7 +213,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 step_id="confirm",
                 data_schema=vol.Schema({}),
                 errors={"base": "update_verify_failed"},
-                description_placeholders=entry.runtime_data.agent_update_state.repair_placeholders,
+                description_placeholders=agent_update_repair_placeholders(
+                    entry.runtime_data.agent_update_state,
+                    entry.runtime_data,
+                ),
             )
         ir.async_delete_issue(
             hass=self.hass,
@@ -159,11 +236,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
         if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         update_state = getattr(entry.runtime_data, "agent_update_state", None)
-        placeholders = (
-            update_state.repair_placeholders
-            if update_state is not None
-            else _unknown_update_placeholders()
-        )
+        placeholders = agent_update_repair_placeholders(update_state, entry.runtime_data)
         if user_input is None:
             return self.async_show_form(
                 step_id="ssh_install",
@@ -216,7 +289,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 step_id="ssh_install",
                 data_schema=_ssh_install_schema(),
                 errors={"base": "update_verify_failed"},
-                description_placeholders=entry.runtime_data.agent_update_state.repair_placeholders,
+                description_placeholders=agent_update_repair_placeholders(
+                    entry.runtime_data.agent_update_state,
+                    entry.runtime_data,
+                ),
             )
         ir.async_delete_issue(
             hass=self.hass,
@@ -429,11 +505,14 @@ def _ssh_install_schema() -> vol.Schema:
     )
 
 
-def _unknown_update_placeholders() -> dict[str, str]:
-    return {
-        "installed_version": "unknown",
-        "available_version": "unknown",
-        "installed_api_version": "unknown",
-        "available_api_version": "unknown",
-        "reason": "unknown",
-    }
+def _validated_callback_base_url(
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+) -> str:
+    """Validate a required local callback base URL for the repair flow."""
+
+    try:
+        return normalize_callback_base_url(user_input.get(CONF_CALLBACK_BASE_URL, ""))
+    except ValueError:
+        errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
+        return ""

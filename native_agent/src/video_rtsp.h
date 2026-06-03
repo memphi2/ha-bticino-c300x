@@ -3,6 +3,7 @@
 
 #include <poll.h>
 #include <stddef.h>
+#include <time.h>
 
 #include "c300x_agent.h"
 
@@ -24,6 +25,13 @@ struct c300x_video_status {
     int bridge_stop_in_progress;
     int bridge_open_fds;
     int bridge_active_threads;
+    int external_media_active;
+    time_t external_active_until;
+    char media_owner[32];
+    char external_owner[32];
+    char last_block_reason[64];
+    unsigned long long bt_media_start_attempts;
+    unsigned long long bt_media_stop_attempts;
     unsigned long long rtp_packets;
     char last_rtp_at[40];
     char last_media_started_at[40];
@@ -43,12 +51,13 @@ void c300x_video_stop(struct c300x_video *video);
 int c300x_video_pollfds(struct c300x_video *video, struct pollfd *fds, int max_fds);
 void c300x_video_handle_pollfds(struct c300x_video *video, struct pollfd *fds, int count);
 int c300x_video_poll_timeout_ms(const struct c300x_video *video);
-void c300x_video_status(const struct c300x_video *video, struct c300x_video_status *status);
+void c300x_video_status(struct c300x_video *video, struct c300x_video_status *status);
 void c300x_video_bridge_client_connected(struct c300x_video *video);
 void c300x_video_bridge_client_disconnected(struct c300x_video *video);
 void c300x_video_bridge_media_started(struct c300x_video *video, int include_audio);
 void c300x_video_bridge_media_stopped(struct c300x_video *video);
 void c300x_video_bridge_rtp_packet(struct c300x_video *video);
 void c300x_video_bridge_set_error(struct c300x_video *video, const char *message);
+void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds);
 
 #endif

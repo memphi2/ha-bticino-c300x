@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -141,12 +142,12 @@ SOURCE_INSTALLED_FILES = (
 )
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
-    "HomePage.qml": "6c6e03acf7047a0b95d084523e3c46736d5f88ea6b0ca4af14e364692d3825b6",
+    "HomePage.qml": "d17f8121d4455d0c0ca1e26c8f3a33bfca919310fef50903621eab7ee0ced5ac",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
-    "Alarm.qml": "7740fb70f0c62866883f6797dc1c688e61c73155e4f7c7c539cc097b1754c80d",
+    "Alarm.qml": "81a2c9e99a3f8f0278707ebccad372ddcce5b57fb9505a9fe042013e23efa310",
     "HomeAssistant.qml": "842486e0562db7879426ac5da025c4a08ee91fd146eb87048f3e151a47dbd830",
-    "js/c300x_ha.js": "ee430d21dad6ddf9ad089624b60ef897de7f30a05aa8117d5a07725e103f3725",
-    "js/c300x_i18n.js": "d8292ea03d31840afc6537b733ddacef252f2306ea1bbc1a34eb666a193c5f67",
+    "js/c300x_ha.js": "8be4260aa0f0253572798291dd0137f4d41e632cd3c04d12dd5cfa1115521f98",
+    "js/c300x_i18n.js": "d29a2e15c8f1f0f1fb164701229cd19971465630609ab675070783b47a3d488f",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
 }
 
@@ -213,6 +214,20 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256
     } == PATCH_OUTPUT_SHA256
+
+
+def test_qml_i18n_catalogs_have_identical_key_sets() -> None:
+    i18n_source = (SOURCE_DIR / "js/c300x_i18n.js").read_text(encoding="utf-8")
+
+    text_keys = _js_object_keys(i18n_source, "EN")
+    assert _js_object_keys(i18n_source, "DE") == text_keys
+    assert _js_object_keys(i18n_source, "IT") == text_keys
+    assert _js_object_keys(i18n_source, "FR") == text_keys
+
+    weather_keys = _js_object_keys(i18n_source, "WEATHER_EN")
+    assert _js_object_keys(i18n_source, "WEATHER_DE") == weather_keys
+    assert _js_object_keys(i18n_source, "WEATHER_IT") == weather_keys
+    assert _js_object_keys(i18n_source, "WEATHER_FR") == weather_keys
 
 
 def test_qml_patch_apply_reports_reload_failure_without_patched_state(
@@ -502,6 +517,7 @@ def _assert_complete_gui_patch(
     assert 'defaultIcon: "images/call/icon_call-home.svg"' in home_page
     assert 'trsl.language === "de" ? "Alarmanlage"' in home_page
     assert 'trsl.language === "it" ? "Allarme"' in home_page
+    assert 'trsl.language === "fr" ? "Alarme"' in home_page
     assert "buttonHolder.buttonCount() === 5" in home_page
     assert "console.log(" not in home_page
 
@@ -553,3 +569,13 @@ def _fake_mount_env(tmp_path: Path, mount_log: Path) -> dict[str, str]:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _js_object_keys(source: str, object_name: str) -> set[str]:
+    match = re.search(
+        rf"^var {re.escape(object_name)} = \{{\n(?P<body>.*?)^\}}$",
+        source,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match is not None, object_name
+    return set(re.findall(r'^\s+"([^"]+)":', match.group("body"), re.MULTILINE))

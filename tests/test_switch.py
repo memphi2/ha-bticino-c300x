@@ -134,9 +134,11 @@ class _FakeApi:
         self.mqtt_status_reads = 0
         self.mqtt_enabled_sets: list[bool] = []
         self.mqtt_enabled = False
+        self.mqtt_status_error = False
         self.legacy_mqtt_status_reads = 0
         self.legacy_mqtt_enabled_sets: list[bool] = []
         self.legacy_mqtt_enabled = True
+        self.legacy_mqtt_status_error = False
 
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         self.active_smartphone_reads += 1
@@ -359,6 +361,8 @@ class _FakeApi:
 
     async def async_mqtt_status(self) -> dict[str, Any]:
         self.mqtt_status_reads += 1
+        if self.mqtt_status_error:
+            raise C300XAgentApiConnectionError("offline")
         return {
             "available": True,
             "enabled": self.mqtt_enabled,
@@ -390,6 +394,8 @@ class _FakeApi:
 
     async def async_legacy_mqtt_status(self) -> dict[str, Any]:
         self.legacy_mqtt_status_reads += 1
+        if self.legacy_mqtt_status_error:
+            raise C300XAgentApiConnectionError("offline")
         return {
             "available": True,
             "enabled": self.legacy_mqtt_enabled,
@@ -800,6 +806,33 @@ def test_native_mqtt_bridge_switch_uses_read_only_status_and_toggles() -> None:
     assert entity.extra_state_attributes["event_topic"] == "Bticino/tx"
 
 
+def test_native_mqtt_bridge_switch_clears_stale_on_state_when_offline() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "mqtt_status": True,
+                    "mqtt_config": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.mqtt_enabled = True
+    entity = C300XNativeMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    assert entity.available is True
+    assert entity.is_on is True
+
+    entry.runtime_data.api.mqtt_status_error = True
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.is_on is False
+    assert entity.extra_state_attributes["connected"] is None
+
+
 def test_legacy_mqtt_bridge_switch_disables_and_enables_autostart() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -829,6 +862,56 @@ def test_legacy_mqtt_bridge_switch_disables_and_enables_autostart() -> None:
     assert entity.extra_state_attributes["flexisip_reference_state"] == (
         "legacy_mqtt_patch"
     )
+
+
+def test_legacy_mqtt_bridge_switch_is_off_when_native_bridge_is_exclusive() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "legacy_mqtt_status": True,
+                    "legacy_mqtt_config": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.mqtt_enabled = True
+    entry.runtime_data.api.legacy_mqtt_enabled = True
+    entity = C300XLegacyMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.is_on is False
+    assert entity.extra_state_attributes["native_enabled"] is True
+    assert entity.extra_state_attributes["running"] is True
+
+
+def test_legacy_mqtt_bridge_switch_clears_stale_on_state_when_offline() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "legacy_mqtt_status": True,
+                    "legacy_mqtt_config": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.legacy_mqtt_enabled = True
+    entity = C300XLegacyMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    assert entity.available is True
+    assert entity.is_on is True
+
+    entry.runtime_data.api.legacy_mqtt_status_error = True
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.is_on is False
+    assert entity.extra_state_attributes["running"] is None
 
 
 def test_maintenance_switches_are_created_without_capabilities_but_do_not_refresh() -> None:

@@ -1,6 +1,11 @@
+#include "activations.h"
+#include "activation_discovery.h"
 #include "c300x_agent.h"
+#include "http_util.h"
+#include "memo_store.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
+#include "recent_events.h"
 #include "sha256.h"
 #include "video_rtsp.h"
 
@@ -22,7 +27,6 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/inotify.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -33,18 +37,14 @@
 #define REQUEST_BUFFER_SIZE 8192
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 16
-#define C300X_MAX_RECENT_EVENTS 16
-#define C300X_RECENT_EVENT_LEN 2048
 #define C300X_MAX_URL_LEN 512
 #define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
 #define C300X_DASHBOARD_DOMAIN "c300x"
 #define C300X_DASHBOARD_STAIR_LIGHT_ENTITY "stair_light"
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
-#define C300X_MAX_VOICEMAIL_ID_LEN 65
 #define C300X_MAX_VOICEMAIL_DATE_LEN 64
 #define C300X_MAX_VOICEMAIL_REASON_LEN 48
-#define C300X_MAX_MEMO_TEXT_LEN 512
 #define C300X_MAX_MEMO_TEXT_JSON_LEN ((C300X_MAX_MEMO_TEXT_LEN * 6) + 1)
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
 #define C300X_JSON_QUOTED_LEN(value_len) (((value_len) * 6) + 3)
@@ -220,8 +220,7 @@ struct agent_runtime {
     char last_write_class[32];
     char last_wake_reason[64];
     char qml_patch_last_action[32];
-    char recent_events[C300X_MAX_RECENT_EVENTS][C300X_RECENT_EVENT_LEN];
-    int recent_count;
+    struct c300x_recent_events recent_events;
     struct c300x_video *video;
     struct voicemail_runtime voicemail;
     struct voicemail_runtime text_memos;
@@ -243,6 +242,8 @@ struct agent_runtime {
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
+    int activation_discovery_loaded;
+    struct c300x_activation_discovery activation_discovery;
 };
 
 struct firewall_workspace {
@@ -326,6 +327,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
+static int agent_init_link_matches(void);
 static void handle_setup_page(int client_fd);
 static void handle_auth_config_get(int client_fd, const struct c300x_config *config);
 static void handle_auth_config_post(
@@ -345,12 +347,14 @@ static void handle_mqtt_post(
     struct agent_runtime *runtime,
     const struct request *request
 );
-static int parse_http_url(const char *url, char *host, size_t host_len, char *port, size_t port_len, char *path, size_t path_len);
-static void http_host_header_value(const char *host, const char *port, char *out, size_t out_len);
-static void set_socket_timeout(int fd, int timeout_ms);
-static void set_fd_nonblocking(int fd);
-static void set_fd_cloexec(int fd);
 static void dispatch_event(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *event_type,
+    const char *data_json,
+    int ttl_seconds
+);
+static void dispatch_event_snapshot(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *event_type,
@@ -416,10 +420,27 @@ static void handle_memos_delete(
     struct agent_runtime *runtime,
     const struct request *request
 );
+static void handle_text_memo_create(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
 static void handle_memo_audio_get(
     int client_fd,
     const struct agent_runtime *runtime,
     const char *memo_entry_name
+);
+static void handle_activations_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+);
+static void handle_activation_run(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *activation_id
 );
 static int find_memo_audio(
     const struct voicemail_runtime *memos,
@@ -1380,33 +1401,6 @@ static void sleep_ms(int delay_ms)
     }
 }
 
-static void set_socket_timeout(int fd, int timeout_ms)
-{
-    struct timeval timeout;
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
-    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-}
-
-static void set_fd_nonblocking(int fd)
-{
-    int enabled = 1;
-
-    (void)ioctl(fd, FIONBIO, &enabled);
-}
-
-static void set_fd_cloexec(int fd)
-{
-    (void)ioctl(fd, FIOCLEX);
-}
-
-static void allow_socket_reuse(int fd)
-{
-    int enabled = 1;
-    (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled));
-}
-
 static int client_is_loopback(int client_fd)
 {
     struct sockaddr_storage address;
@@ -1779,6 +1773,35 @@ static int file_content_matches(const char *source, const char *target)
         return 0;
     }
     return constant_time_equal(source_sha, strlen(source_sha), target_sha);
+}
+
+static int file_content_equals_buffer(const char *path, const char *content, size_t content_len)
+{
+    unsigned char buffer[512];
+    FILE *file;
+    size_t offset = 0;
+    size_t read_len;
+
+    if (path == NULL || path[0] == '\0' || content == NULL) {
+        return 0;
+    }
+    file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+    while ((read_len = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (offset + read_len > content_len || memcmp(content + offset, buffer, read_len) != 0) {
+            fclose(file);
+            return 0;
+        }
+        offset += read_len;
+    }
+    if (ferror(file)) {
+        fclose(file);
+        return 0;
+    }
+    fclose(file);
+    return offset == content_len;
 }
 
 static int copy_binary_file_if_changed(
@@ -3013,7 +3036,11 @@ static void voicemail_event_dispatch_snapshot(
     );
     free(snapshot);
     ui_event_notify(runtime, "answering_machine.messages");
-    dispatch_event(config, runtime, "answering_machine.messages_changed", data, 30);
+    if (force) {
+        dispatch_event_snapshot(config, runtime, "answering_machine.messages_changed", data, 30);
+    } else {
+        dispatch_event(config, runtime, "answering_machine.messages_changed", data, 30);
+    }
 }
 
 static void voicemail_event_dispatch_if_changed(
@@ -3088,7 +3115,11 @@ static void memos_event_dispatch_snapshot(
     free(text);
     free(voice);
     ui_event_notify(runtime, "memos");
-    dispatch_event(config, runtime, "memos.changed", data, 30);
+    if (force) {
+        dispatch_event_snapshot(config, runtime, "memos.changed", data, 30);
+    } else {
+        dispatch_event(config, runtime, "memos.changed", data, 30);
+    }
 }
 
 static void memos_event_dispatch_if_changed(
@@ -3409,17 +3440,21 @@ static void save_subscriptions(
 )
 {
     char temporary_path[C300X_MAX_PATH_LEN + 8];
+    char *body;
     FILE *file;
+    size_t used = 0;
 
     if (store_path[0] == '\0') {
         return;
     }
-    snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", store_path);
-    file = fopen(temporary_path, "w");
-    if (file == NULL) {
+    body = calloc(1, C300X_LARGE_RESPONSE_SIZE);
+    if (body == NULL) {
         return;
     }
-    fprintf(file, "{\n  \"subscriptions\": [\n");
+    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "{\n  \"subscriptions\": [\n")) {
+        free(body);
+        return;
+    }
     for (int index = 0; index < runtime->subscription_count; index++) {
         const struct subscription *subscription = &runtime->subscriptions[index];
         char id[C300X_JSON_QUOTED_LEN(sizeof(subscription->id))];
@@ -3433,154 +3468,80 @@ static void save_subscriptions(
         json_string(subscription->token, token, sizeof(token));
         json_string(subscription->last_event_type, last_event_type, sizeof(last_event_type));
         json_string(subscription->last_delivered_at, last_delivered_at, sizeof(last_delivered_at));
-        fprintf(
-            file,
+        if (!appendf(
+            body,
+            C300X_LARGE_RESPONSE_SIZE,
+            &used,
             "    {\"id\":%s,\"callback_url\":%s,\"token\":%s,\"events\":[",
             id,
             callback_url,
             token
-        );
+        )) {
+            free(body);
+            return;
+        }
         for (int event_index = 0; event_index < subscription->event_count; event_index++) {
             char event_type[C300X_JSON_QUOTED_LEN(sizeof(subscription->events[0]))];
             json_string(subscription->events[event_index], event_type, sizeof(event_type));
-            fprintf(file, "%s%s", event_index == 0 ? "" : ",", event_type);
+            if (!appendf(
+                body,
+                C300X_LARGE_RESPONSE_SIZE,
+                &used,
+                "%s%s",
+                event_index == 0 ? "" : ",",
+                event_type
+            )) {
+                free(body);
+                return;
+            }
         }
-        fprintf(
-            file,
+        if (!appendf(
+            body,
+            C300X_LARGE_RESPONSE_SIZE,
+            &used,
             "],\"created_at\":\"\",\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s}}%s\n",
             subscription->last_ok ? "true" : "false",
             last_event_type,
             last_delivered_at,
             index + 1 == runtime->subscription_count ? "" : ","
-        );
+        )) {
+            free(body);
+            return;
+        }
     }
-    fprintf(file, "  ]\n}\n");
-    fclose(file);
+    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "  ]\n}\n")) {
+        free(body);
+        return;
+    }
+    if (file_content_equals_buffer(store_path, body, used)) {
+        (void)chmod(store_path, 0600);
+        free(body);
+        return;
+    }
+    snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", store_path);
+    file = fopen(temporary_path, "w");
+    if (file == NULL) {
+        free(body);
+        return;
+    }
+    if (fwrite(body, 1, used, file) != used) {
+        (void)fclose(file);
+        (void)unlink(temporary_path);
+        free(body);
+        return;
+    }
+    if (fclose(file) != 0) {
+        (void)unlink(temporary_path);
+        free(body);
+        return;
+    }
+    free(body);
     (void)chmod(temporary_path, 0600);
     if (rename(temporary_path, store_path) == 0) {
         (void)chmod(store_path, 0600);
         record_agent_write(config, runtime, "subscription", reason);
     } else {
         (void)unlink(temporary_path);
-    }
-}
-
-static void record_recent_event(struct agent_runtime *runtime, const char *event_json)
-{
-    size_t event_len = strlen(event_json);
-
-    if (runtime->recent_count < C300X_MAX_RECENT_EVENTS) {
-        if (event_len < sizeof(runtime->recent_events[0])) {
-            memcpy(runtime->recent_events[runtime->recent_count], event_json, event_len + 1);
-        } else {
-            snprintf(
-                runtime->recent_events[runtime->recent_count],
-                sizeof(runtime->recent_events[0]),
-                "{\"type\":\"diagnostic.recent_event_truncated\",\"data\":{\"size\":%zu}}",
-                event_len
-            );
-        }
-        runtime->recent_count++;
-        return;
-    }
-    for (int index = 1; index < C300X_MAX_RECENT_EVENTS; index++) {
-        memcpy(runtime->recent_events[index - 1], runtime->recent_events[index], sizeof(runtime->recent_events[0]));
-    }
-    if (event_len < sizeof(runtime->recent_events[0])) {
-        memcpy(runtime->recent_events[C300X_MAX_RECENT_EVENTS - 1], event_json, event_len + 1);
-    } else {
-        snprintf(
-            runtime->recent_events[C300X_MAX_RECENT_EVENTS - 1],
-            sizeof(runtime->recent_events[0]),
-            "{\"type\":\"diagnostic.recent_event_truncated\",\"data\":{\"size\":%zu}}",
-            event_len
-        );
-    }
-}
-
-static int parse_http_url(const char *url, char *host, size_t host_len, char *port, size_t port_len, char *path, size_t path_len)
-{
-    const char *ptr;
-    const char *host_start;
-    const char *host_end;
-    const char *path_start;
-    const char *colon;
-    const char *bracket_end;
-
-    if (strncmp(url, "http://", 7) != 0) {
-        return 0;
-    }
-    host_start = url + 7;
-    path_start = strchr(host_start, '/');
-    if (path_start == NULL) {
-        path_start = url + strlen(url);
-    }
-    colon = NULL;
-    if (*host_start == '[') {
-        bracket_end = memchr(host_start, ']', (size_t)(path_start - host_start));
-        if (bracket_end == NULL || bracket_end == host_start + 1) {
-            return 0;
-        }
-        if (bracket_end + 1 < path_start) {
-            if (bracket_end[1] != ':') {
-                return 0;
-            }
-            colon = bracket_end + 1;
-        }
-        host_start++;
-        host_end = bracket_end;
-    } else {
-        for (ptr = host_start; ptr < path_start; ptr++) {
-            if (*ptr == ':') {
-                colon = ptr;
-                break;
-            }
-        }
-        host_end = colon != NULL ? colon : path_start;
-    }
-    if (host_end == host_start || (size_t)(host_end - host_start) >= host_len) {
-        return 0;
-    }
-    memcpy(host, host_start, (size_t)(host_end - host_start));
-    host[host_end - host_start] = '\0';
-    if (colon != NULL) {
-        size_t len = (size_t)(path_start - colon - 1);
-        if (len == 0 || len >= port_len) {
-            return 0;
-        }
-        memcpy(port, colon + 1, len);
-        port[len] = '\0';
-    } else {
-        snprintf(port, port_len, "80");
-    }
-    if (*path_start == '\0') {
-        snprintf(path, path_len, "/");
-    } else {
-        snprintf(path, path_len, "%s", path_start);
-    }
-    return 1;
-}
-
-static void http_host_header_value(
-    const char *host,
-    const char *port,
-    char *out,
-    size_t out_len
-)
-{
-    int is_ipv6_literal = strchr(host, ':') != NULL;
-    int default_port = strcmp(port, "80") == 0;
-
-    if (is_ipv6_literal) {
-        if (default_port) {
-            snprintf(out, out_len, "[%s]", host);
-        } else {
-            snprintf(out, out_len, "[%s]:%s", host, port);
-        }
-    } else if (default_port) {
-        snprintf(out, out_len, "%s", host);
-    } else {
-        snprintf(out, out_len, "%s:%s", host, port);
     }
 }
 
@@ -3741,14 +3702,23 @@ static void handle_recent_events_get(int client_fd, const struct agent_runtime *
         free(body);
         return;
     }
-    for (int index = 0; index < runtime->recent_count; index++) {
+    for (
+        int index = 0, emitted = 0;
+        index < c300x_recent_events_count(&runtime->recent_events);
+        index++
+    ) {
+        const char *event = c300x_recent_events_at(&runtime->recent_events, index);
+
+        if (event == NULL) {
+            continue;
+        }
         if (!appendf(
             body,
             C300X_LARGE_RESPONSE_SIZE,
             &used,
             "%s%s",
-            index == 0 ? "" : ",",
-            runtime->recent_events[index]
+            emitted++ == 0 ? "" : ",",
+            event
         )) {
             send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
             free(body);
@@ -3981,18 +3951,26 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
     char last_write_reason[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_reason))];
     char last_wake_reason[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_wake_reason))];
     char qml_patch_last_action[C300X_JSON_QUOTED_LEN(sizeof(runtime->qml_patch_last_action))];
+    char video_media_owner[C300X_JSON_QUOTED_LEN(32)];
+    char video_external_owner[C300X_JSON_QUOTED_LEN(32)];
+    char video_last_block_reason[C300X_JSON_QUOTED_LEN(64)];
     struct c300x_video_status video_status;
     int open_fd_count = count_open_fds();
     int flexisip_backup_available = path_exists(C300X_FLEXISIP_INIT_BACKUP);
     int flexisip_restart_marker = flexisip_restart_marker_present();
     int flexisip_backup_marker = flexisip_backup_marker_present();
-    char body[2048];
+    int agent_init_script_present = access(C300X_AGENT_INIT_SCRIPT, X_OK) == 0;
+    int agent_init_link_ok = agent_init_link_matches();
+    char body[3584];
 
     json_string(runtime->last_write_class, last_write_class, sizeof(last_write_class));
     json_string(runtime->last_write_reason, last_write_reason, sizeof(last_write_reason));
     json_string(runtime->last_wake_reason, last_wake_reason, sizeof(last_wake_reason));
     json_string(runtime->qml_patch_last_action, qml_patch_last_action, sizeof(qml_patch_last_action));
     c300x_video_status(runtime->video, &video_status);
+    json_string(video_status.media_owner, video_media_owner, sizeof(video_media_owner));
+    json_string(video_status.external_owner, video_external_owner, sizeof(video_external_owner));
+    json_string(video_status.last_block_reason, video_last_block_reason, sizeof(video_last_block_reason));
     if (
         snprintf(
             body,
@@ -4012,10 +3990,24 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"last_poll_timeout_ms\":%d,"
             "\"last_poll_count\":%d,"
             "\"open_fd_count\":%d,"
+            "\"agent_init_script_present\":%s,"
+            "\"agent_init_link_ok\":%s,"
+            "\"subscription_count\":%d,"
+            "\"recent_event_count\":%d,"
+            "\"recent_event_capacity\":%d,"
+            "\"display_bridge_registered\":%s,"
+            "\"display_bridge_disabled\":%s,"
+            "\"home_assistant_connected_this_run\":%s,"
+            "\"home_assistant_last_seen_at\":%ld,"
+            "\"ui_event_revision\":%lu,"
             "\"video_running\":%s,"
             "\"video_media_starting\":%s,"
             "\"video_call_active\":%s,"
             "\"video_clients\":%d,"
+            "\"video_media_owner\":%s,"
+            "\"video_external_media_active\":%s,"
+            "\"video_external_owner\":%s,"
+            "\"video_last_block_reason\":%s,"
             "\"video_bridge_open_fds\":%d,"
             "\"video_bridge_active_threads\":%d,"
             "\"flexisip_backup_available\":%s,"
@@ -4036,10 +4028,24 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             runtime->last_poll_timeout_ms,
             runtime->last_poll_count,
             open_fd_count,
+            agent_init_script_present ? "true" : "false",
+            agent_init_link_ok ? "true" : "false",
+            runtime->subscription_count,
+            c300x_recent_events_count(&runtime->recent_events),
+            C300X_RECENT_EVENTS_CAPACITY,
+            runtime->display_bridge_registered ? "true" : "false",
+            runtime->display_bridge_disabled ? "true" : "false",
+            runtime->home_assistant_connected_this_run ? "true" : "false",
+            (long)runtime->home_assistant_last_seen_at,
+            runtime->ui_event_revision,
             video_status.running ? "true" : "false",
             video_status.media_starting ? "true" : "false",
             video_status.call_active ? "true" : "false",
             video_status.clients,
+            video_media_owner,
+            video_status.external_media_active ? "true" : "false",
+            video_external_owner,
+            video_last_block_reason,
             video_status.bridge_open_fds,
             video_status.bridge_active_threads,
             flexisip_backup_available ? "true" : "false",
@@ -4293,8 +4299,8 @@ static void handle_auth_config_post(
     const struct request *request
 )
 {
-    struct c300x_config baseline = *config;
-    struct c300x_config updated = *config;
+    struct c300x_config *baseline = NULL;
+    struct c300x_config *updated = NULL;
     char api_token[C300X_MAX_TOKEN_LEN];
     char maintenance_token[C300X_MAX_TOKEN_LEN];
     char listen_host[C300X_MAX_HOST_LEN];
@@ -4304,26 +4310,41 @@ static void handle_auth_config_post(
     int port_result = 0;
     int setup_complete = 0;
 
+#define AUTH_CONFIG_POST_RETURN() \
+    do { \
+        free(baseline); \
+        free(updated); \
+        return; \
+    } while (0)
+
     if (!config_admin_authorized(config, request)) {
         send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
         return;
     }
+    baseline = calloc(1, sizeof(*baseline));
+    updated = calloc(1, sizeof(*updated));
+    if (baseline == NULL || updated == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        AUTH_CONFIG_POST_RETURN();
+    }
+    *baseline = *config;
+    *updated = *config;
     if (config->restart_required && config->config_path[0] != '\0') {
-        if (c300x_load_config(config->config_path, &baseline, error, sizeof(error))) {
-            updated = baseline;
+        if (c300x_load_config(config->config_path, baseline, error, sizeof(error))) {
+            *updated = *baseline;
         } else {
-            baseline = *config;
+            *baseline = *config;
         }
     }
 
     if (json_bool_field(request->body, "noAuth", &value) || json_bool_field(request->body, "no_auth", &value)) {
-        updated.api_no_auth = value;
+        updated->api_no_auth = value;
     }
     maybe_json_string_field(request->body, "apiToken", "api_token", api_token, sizeof(api_token));
     if (api_token[0] != '\0') {
-        snprintf(updated.api_token, sizeof(updated.api_token), "%s", api_token);
-        snprintf(updated.api_file_token, sizeof(updated.api_file_token), "%s", api_token);
-        updated.api_token_from_env = 0;
+        snprintf(updated->api_token, sizeof(updated->api_token), "%s", api_token);
+        snprintf(updated->api_file_token, sizeof(updated->api_file_token), "%s", api_token);
+        updated->api_token_from_env = 0;
     }
     maybe_json_string_field(
         request->body,
@@ -4333,11 +4354,11 @@ static void handle_auth_config_post(
         sizeof(maintenance_token)
     );
     if (maintenance_token[0] != '\0') {
-        snprintf(updated.maintenance_admin_token, sizeof(updated.maintenance_admin_token), "%s", maintenance_token);
+        snprintf(updated->maintenance_admin_token, sizeof(updated->maintenance_admin_token), "%s", maintenance_token);
     }
     maybe_json_string_field(request->body, "listenHost", "listen_host", listen_host, sizeof(listen_host));
     if (listen_host[0] != '\0') {
-        snprintf(updated.listen_host, sizeof(updated.listen_host), "%s", listen_host);
+        snprintf(updated->listen_host, sizeof(updated->listen_host), "%s", listen_host);
     }
     maybe_json_string_field(
         request->body,
@@ -4349,122 +4370,124 @@ static void handle_auth_config_post(
     if (stair_address[0] != '\0') {
         if (!address_is_valid(stair_address)) {
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
-            return;
+            AUTH_CONFIG_POST_RETURN();
         }
-        snprintf(updated.stair_light_default_address, sizeof(updated.stair_light_default_address), "%s", stair_address);
+        snprintf(updated->stair_light_default_address, sizeof(updated->stair_light_default_address), "%s", stair_address);
     }
-    port_result = json_optional_port(request->body, "apiPort", &updated.api_port);
+    port_result = json_optional_port(request->body, "apiPort", &updated->api_port);
     if (port_result == 0) {
-        port_result = json_optional_port(request->body, "api_port", &updated.api_port);
+        port_result = json_optional_port(request->body, "api_port", &updated->api_port);
     }
     if (port_result < 0) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_api_port\"}\n");
-        return;
+        AUTH_CONFIG_POST_RETURN();
     }
-    port_result = json_optional_port(request->body, "uiPort", &updated.ui_port);
+    port_result = json_optional_port(request->body, "uiPort", &updated->ui_port);
     if (port_result == 0) {
-        port_result = json_optional_port(request->body, "ui_port", &updated.ui_port);
+        port_result = json_optional_port(request->body, "ui_port", &updated->ui_port);
     }
     if (port_result < 0) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ui_port\"}\n");
-        return;
+        AUTH_CONFIG_POST_RETURN();
     }
     if (json_bool_field(request->body, "allowLan", &value) || json_bool_field(request->body, "allow_lan", &value)) {
-        updated.allow_lan = value;
+        updated->allow_lan = value;
     }
     if (json_bool_field(request->body, "videoEnabled", &value) || json_bool_field(request->body, "video_enabled", &value)) {
-        updated.video_enabled = value;
+        updated->video_enabled = value;
     }
     if (json_bool_field(request->body, "displayBridgeEnabled", &value) || json_bool_field(request->body, "display_bridge_enabled", &value)) {
-        updated.display_bridge_enabled = value;
+        updated->display_bridge_enabled = value;
     }
     if (json_bool_field(request->body, "eventsEnabled", &value) || json_bool_field(request->body, "events_enabled", &value)) {
-        updated.events_enabled = value;
+        updated->events_enabled = value;
     }
     if (json_bool_field(request->body, "memosEnabled", &value) || json_bool_field(request->body, "memos_enabled", &value)) {
-        updated.memos_enabled = value;
+        updated->memos_enabled = value;
     }
     if (json_bool_field(request->body, "videoMessagesEnabled", &value) || json_bool_field(request->body, "video_messages_enabled", &value)) {
-        updated.answering_machine_messages_enabled = value;
+        updated->answering_machine_messages_enabled = value;
     }
     if (json_bool_field(request->body, "systemMetricsEnabled", &value) || json_bool_field(request->body, "system_metrics_enabled", &value)) {
-        updated.system_metrics_enabled = value;
+        updated->system_metrics_enabled = value;
     }
     if (json_bool_field(request->body, "maintenanceEnabled", &value) || json_bool_field(request->body, "maintenance_enabled", &value)) {
-        updated.maintenance_enabled = value;
+        updated->maintenance_enabled = value;
     }
     if (
         json_bool_field(request->body, "maintenanceNoAuthAllowed", &value)
         || json_bool_field(request->body, "maintenance_no_auth_allowed", &value)
     ) {
-        updated.maintenance_no_auth_allowed = value;
+        updated->maintenance_no_auth_allowed = value;
     }
     if (json_bool_field(request->body, "mdnsEnabled", &value) || json_bool_field(request->body, "mdns_enabled", &value)) {
-        updated.mdns_enabled = value;
+        updated->mdns_enabled = value;
     }
     if (json_bool_field(request->body, "firewallEnabled", &value) || json_bool_field(request->body, "firewall_enabled", &value)) {
-        updated.maintenance_firewall_enabled = value;
+        updated->maintenance_firewall_enabled = value;
     }
     if (
         json_bool_field(request->body, "ipv6FirewallEnabled", &value)
         || json_bool_field(request->body, "ipv6_firewall_enabled", &value)
     ) {
-        updated.maintenance_ipv6_firewall_enabled = value;
+        updated->maintenance_ipv6_firewall_enabled = value;
     }
     if (json_bool_field(request->body, "setupComplete", &value) || json_bool_field(request->body, "setup_complete", &value)) {
         setup_complete = value;
     }
-    if (setup_complete && updated.api_token[0] != '\0') {
-        updated.api_no_auth = 0;
-        updated.maintenance_no_auth_allowed = 0;
+    if (setup_complete && updated->api_token[0] != '\0') {
+        updated->api_no_auth = 0;
+        updated->maintenance_no_auth_allowed = 0;
     }
 
-    if (strcmp(updated.listen_host, "127.0.0.1") != 0 && !updated.allow_lan) {
+    if (strcmp(updated->listen_host, "127.0.0.1") != 0 && !updated->allow_lan) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"lan_binding_requires_allow_lan\"}\n");
-        return;
+        AUTH_CONFIG_POST_RETURN();
     }
-    if (!updated.api_no_auth && updated.api_token[0] == '\0') {
+    if (!updated->api_no_auth && updated->api_token[0] == '\0') {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"api_token_required\"}\n");
-        return;
+        AUTH_CONFIG_POST_RETURN();
     }
     if (
-        updated.maintenance_enabled
+        updated->maintenance_enabled
         && (
-            updated.maintenance_ssh_start_enabled
-            || updated.maintenance_reboot_enabled
-            || updated.maintenance_gui_reload_enabled
-            || updated.maintenance_qml_patch_enabled
-            || updated.maintenance_firewall_enabled
+            updated->maintenance_ssh_start_enabled
+            || updated->maintenance_reboot_enabled
+            || updated->maintenance_gui_reload_enabled
+            || updated->maintenance_qml_patch_enabled
+            || updated->maintenance_firewall_enabled
         )
-        && updated.maintenance_admin_token[0] == '\0'
-        && !(updated.api_no_auth && updated.maintenance_no_auth_allowed)
+        && updated->maintenance_admin_token[0] == '\0'
+        && !(updated->api_no_auth && updated->maintenance_no_auth_allowed)
     ) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_token_required\"}\n");
-        return;
+        AUTH_CONFIG_POST_RETURN();
     }
 
-    if (!c300x_config_persisted_equal(&baseline, &updated)) {
+    if (!c300x_config_persisted_equal(baseline, updated)) {
         int restart_required = config->restart_required
-            || auth_config_requires_restart(config, &updated);
+            || auth_config_requires_restart(config, updated);
         int changed = 0;
-        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &changed)) {
+        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             char body[384];
             json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
-            return;
+            AUTH_CONFIG_POST_RETURN();
         }
         if (restart_required) {
-            copy_live_auth_config(config, &updated, restart_required);
+            copy_live_auth_config(config, updated, restart_required);
         } else {
-            *config = updated;
+            *config = *updated;
         }
         if (changed) {
             record_agent_write(config, runtime, "config", "auth_config");
         }
     }
     handle_auth_config_get(client_fd, config);
+    AUTH_CONFIG_POST_RETURN();
+#undef AUTH_CONFIG_POST_RETURN
 }
 
 static int legacy_mqtt_installed(void);
@@ -4672,13 +4695,16 @@ static int legacy_mqtt_backup_available(void)
     return path_exists(C300X_LEGACY_MQTT_BACKUP_MARKER);
 }
 
-static int legacy_mqtt_running(void)
+static int legacy_mqtt_bridge_running(void)
 {
     return process_cmdline_contains("TcpDump2Mqtt")
         || process_cmdline_contains("StartMqttSend")
-        || process_cmdline_contains("StartMqttReceive")
-        || process_cmdline_contains("mosquitto_sub")
-        || process_cmdline_contains("mosquitto_pub");
+        || process_cmdline_contains("StartMqttReceive");
+}
+
+static int legacy_mqtt_running(void)
+{
+    return legacy_mqtt_bridge_running();
 }
 
 static int file_contains_literal(const char *path, const char *needle)
@@ -4739,10 +4765,6 @@ static void legacy_mqtt_stop_processes(void)
     status = system("pkill -f StartMqttReceive >/dev/null 2>&1");
     (void)status;
     status = system("pkill -f TcpDump2Mqtt >/dev/null 2>&1");
-    (void)status;
-    status = system("pkill -f 'mosquitto_sub.*Bticino/rx' >/dev/null 2>&1");
-    (void)status;
-    status = system("pkill -f 'mosquitto_pub.*Bticino/tx' >/dev/null 2>&1");
     (void)status;
 }
 
@@ -4963,30 +4985,24 @@ static int legacy_mqtt_restore_from_backup(int *changed)
     return 1;
 }
 
-static int legacy_mqtt_enable_patch(int *changed)
+static int ensure_symlink_target(const char *link_path, const char *target, int *changed)
 {
     char current[256];
     ssize_t len;
 
-    if (changed != NULL) {
-        *changed = 0;
-    }
-    if (!path_exists(C300X_LEGACY_MQTT_SCRIPT)) {
-        return legacy_mqtt_restore_from_backup(changed);
-    }
-    len = readlink(C300X_LEGACY_MQTT_INIT_LINK, current, sizeof(current) - 1);
+    len = readlink(link_path, current, sizeof(current) - 1);
     if (len >= 0) {
         current[len] = '\0';
-        if (strcmp(current, C300X_LEGACY_MQTT_INIT_TARGET) == 0) {
+        if (strcmp(current, target) == 0) {
             return 1;
         }
-        if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+        if (unlink(link_path) != 0) {
             return 0;
         }
     } else if (errno != ENOENT) {
         return 0;
     }
-    if (symlink(C300X_LEGACY_MQTT_INIT_TARGET, C300X_LEGACY_MQTT_INIT_LINK) != 0) {
+    if (symlink(target, link_path) != 0) {
         return 0;
     }
     if (changed != NULL) {
@@ -4995,21 +5011,37 @@ static int legacy_mqtt_enable_patch(int *changed)
     return 1;
 }
 
-static int legacy_mqtt_disable_patch(int *changed)
+static int unlink_if_exists(const char *path, int *changed)
 {
-    int was_enabled = legacy_mqtt_startup_enabled();
+    if (unlink(path) == 0) {
+        if (changed != NULL) {
+            *changed = 1;
+        }
+        return 1;
+    }
+    return errno == ENOENT;
+}
 
+static int legacy_mqtt_enable_patch(int *changed)
+{
     if (changed != NULL) {
         *changed = 0;
     }
-    if (!was_enabled) {
-        return 1;
+    if (!path_exists(C300X_LEGACY_MQTT_SCRIPT)) {
+        if (!legacy_mqtt_restore_from_backup(changed)) {
+            return 0;
+        }
     }
-    if (unlink(C300X_LEGACY_MQTT_INIT_LINK) != 0 && errno != ENOENT) {
-        return 0;
-    }
+    return ensure_symlink_target(C300X_LEGACY_MQTT_INIT_LINK, C300X_LEGACY_MQTT_INIT_TARGET, changed);
+}
+
+static int legacy_mqtt_disable_patch(int *changed)
+{
     if (changed != NULL) {
-        *changed = 1;
+        *changed = 0;
+    }
+    if (!unlink_if_exists(C300X_LEGACY_MQTT_INIT_LINK, changed)) {
+        return 0;
     }
     return 1;
 }
@@ -5048,12 +5080,13 @@ static void handle_legacy_mqtt_post(
     const struct request *request
 )
 {
+    struct c300x_config *updated = NULL;
     int enabled = 0;
     int changed = 0;
     int native_config_changed = 0;
-    int should_start_legacy = 0;
+    int should_start_bridge = 0;
     int should_stop_legacy = 0;
-    int was_running = 0;
+    int bridge_was_running = 0;
     char error[C300X_MAX_ERROR_LEN];
 
     if (!maintenance_authorized(config, request)) {
@@ -5069,17 +5102,24 @@ static void handle_legacy_mqtt_post(
         return;
     }
     if (enabled && config->mqtt_enabled) {
-        struct c300x_config updated = *config;
-        updated.mqtt_enabled = 0;
-        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &native_config_changed)) {
+        updated = calloc(1, sizeof(*updated));
+        if (updated == NULL) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+            return;
+        }
+        *updated = *config;
+        updated->mqtt_enabled = 0;
+        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &native_config_changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             char body[256];
             json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
+            free(updated);
             return;
         }
-        *config = updated;
+        *config = *updated;
+        free(updated);
         if (runtime != NULL) {
             c300x_mqtt_close(&runtime->mqtt);
         }
@@ -5087,7 +5127,7 @@ static void handle_legacy_mqtt_post(
             record_agent_write(config, runtime, "config", "mqtt_disabled_for_legacy");
         }
     }
-    was_running = legacy_mqtt_running();
+    bridge_was_running = legacy_mqtt_bridge_running();
     firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
     if (enabled) {
         if (!legacy_mqtt_enable_patch(&changed)) {
@@ -5095,7 +5135,7 @@ static void handle_legacy_mqtt_post(
             send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_enable_failed\"}\n");
             return;
         }
-        should_start_legacy = !was_running;
+        should_start_bridge = !bridge_was_running;
     } else {
         if (!legacy_mqtt_disable_patch(&changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
@@ -5108,7 +5148,7 @@ static void handle_legacy_mqtt_post(
     if (should_stop_legacy) {
         legacy_mqtt_stop_processes();
     }
-    if (should_start_legacy) {
+    if (should_start_bridge) {
         (void)run_detached_command(C300X_LEGACY_MQTT_SCRIPT, NULL, 0);
     }
     if (changed) {
@@ -5298,7 +5338,7 @@ static void handle_mqtt_post(
     const struct request *request
 )
 {
-    struct c300x_config updated = *config;
+    struct c300x_config *updated = NULL;
     char error[C300X_MAX_ERROR_LEN];
     const char *validation_error = NULL;
     char validation_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
@@ -5307,80 +5347,92 @@ static void handle_mqtt_post(
     int port_result;
     int legacy_changed = 0;
 
+#define MQTT_POST_RETURN() \
+    do { \
+        free(updated); \
+        return; \
+    } while (0)
+
     if (!maintenance_authorized(config, request)) {
         send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
         return;
     }
+    updated = calloc(1, sizeof(*updated));
+    if (updated == NULL) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
+        MQTT_POST_RETURN();
+    }
+    *updated = *config;
     if (json_bool_field(request->body, "enabled", &value) || json_bool_field(request->body, "mqttEnabled", &value) || json_bool_field(request->body, "mqtt_enabled", &value)) {
-        updated.mqtt_enabled = value;
+        updated->mqtt_enabled = value;
     }
     if (
-        maybe_json_mqtt_string(request->body, "host", updated.mqtt_host, sizeof(updated.mqtt_host)) < 0
-        || maybe_json_mqtt_string(request->body, "username", updated.mqtt_username, sizeof(updated.mqtt_username)) < 0
-        || maybe_json_mqtt_string(request->body, "password", updated.mqtt_password, sizeof(updated.mqtt_password)) < 0
-        || maybe_json_mqtt_string(request->body, "clientId", updated.mqtt_client_id, sizeof(updated.mqtt_client_id)) < 0
-        || maybe_json_mqtt_string(request->body, "client_id", updated.mqtt_client_id, sizeof(updated.mqtt_client_id)) < 0
-        || maybe_json_mqtt_string(request->body, "commandHost", updated.mqtt_command_host, sizeof(updated.mqtt_command_host)) < 0
-        || maybe_json_mqtt_string(request->body, "command_host", updated.mqtt_command_host, sizeof(updated.mqtt_command_host)) < 0
-        || maybe_json_mqtt_string(request->body, "commandTopic", updated.mqtt_command_topic, sizeof(updated.mqtt_command_topic)) < 0
-        || maybe_json_mqtt_string(request->body, "eventTopic", updated.mqtt_event_topic, sizeof(updated.mqtt_event_topic)) < 0
-        || maybe_json_mqtt_string(request->body, "jsonEventTopic", updated.mqtt_json_event_topic, sizeof(updated.mqtt_json_event_topic)) < 0
-        || maybe_json_mqtt_string(request->body, "statusTopic", updated.mqtt_status_topic, sizeof(updated.mqtt_status_topic)) < 0
-        || maybe_json_mqtt_string(request->body, "availabilityTopic", updated.mqtt_availability_topic, sizeof(updated.mqtt_availability_topic)) < 0
+        maybe_json_mqtt_string(request->body, "host", updated->mqtt_host, sizeof(updated->mqtt_host)) < 0
+        || maybe_json_mqtt_string(request->body, "username", updated->mqtt_username, sizeof(updated->mqtt_username)) < 0
+        || maybe_json_mqtt_string(request->body, "password", updated->mqtt_password, sizeof(updated->mqtt_password)) < 0
+        || maybe_json_mqtt_string(request->body, "clientId", updated->mqtt_client_id, sizeof(updated->mqtt_client_id)) < 0
+        || maybe_json_mqtt_string(request->body, "client_id", updated->mqtt_client_id, sizeof(updated->mqtt_client_id)) < 0
+        || maybe_json_mqtt_string(request->body, "commandHost", updated->mqtt_command_host, sizeof(updated->mqtt_command_host)) < 0
+        || maybe_json_mqtt_string(request->body, "command_host", updated->mqtt_command_host, sizeof(updated->mqtt_command_host)) < 0
+        || maybe_json_mqtt_string(request->body, "commandTopic", updated->mqtt_command_topic, sizeof(updated->mqtt_command_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "eventTopic", updated->mqtt_event_topic, sizeof(updated->mqtt_event_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "jsonEventTopic", updated->mqtt_json_event_topic, sizeof(updated->mqtt_json_event_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "statusTopic", updated->mqtt_status_topic, sizeof(updated->mqtt_status_topic)) < 0
+        || maybe_json_mqtt_string(request->body, "availabilityTopic", updated->mqtt_availability_topic, sizeof(updated->mqtt_availability_topic)) < 0
     ) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_string\"}\n");
-        return;
+        MQTT_POST_RETURN();
     }
-    port_result = json_optional_port(request->body, "port", &updated.mqtt_port);
+    port_result = json_optional_port(request->body, "port", &updated->mqtt_port);
     if (port_result < 0) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_port\"}\n");
-        return;
+        MQTT_POST_RETURN();
     }
-    port_result = json_optional_port(request->body, "commandPort", &updated.mqtt_command_port);
+    port_result = json_optional_port(request->body, "commandPort", &updated->mqtt_command_port);
     if (port_result == 0) {
-        port_result = json_optional_port(request->body, "command_port", &updated.mqtt_command_port);
+        port_result = json_optional_port(request->body, "command_port", &updated->mqtt_command_port);
     }
     if (port_result < 0) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_mqtt_command_port\"}\n");
-        return;
+        MQTT_POST_RETURN();
     }
     if (json_int_field(request->body, "keepaliveSeconds", &value) || json_int_field(request->body, "keepalive_seconds", &value)) {
-        updated.mqtt_keepalive_seconds = value;
+        updated->mqtt_keepalive_seconds = value;
     }
     if (json_int_field(request->body, "reconnectInitialSeconds", &value) || json_int_field(request->body, "reconnect_initial_seconds", &value)) {
-        updated.mqtt_reconnect_initial_seconds = value;
+        updated->mqtt_reconnect_initial_seconds = value;
     }
     if (json_int_field(request->body, "reconnectMaxSeconds", &value) || json_int_field(request->body, "reconnect_max_seconds", &value)) {
-        updated.mqtt_reconnect_max_seconds = value;
+        updated->mqtt_reconnect_max_seconds = value;
     }
-    if (!mqtt_runtime_config_is_valid(&updated, &validation_error)) {
+    if (!mqtt_runtime_config_is_valid(updated, &validation_error)) {
         json_string(validation_error, validation_error_json, sizeof(validation_error_json));
         snprintf(body, sizeof(body), "{\"ok\":false,\"error\":%s}\n", validation_error_json);
         send_json(client_fd, 400, "Bad Request", body);
-        return;
+        MQTT_POST_RETURN();
     }
-    if (!c300x_config_persisted_equal(config, &updated)) {
+    if (!c300x_config_persisted_equal(config, updated)) {
         int changed = 0;
-        if (!c300x_save_config_if_changed(&updated, error, sizeof(error), &changed)) {
+        if (!c300x_save_config_if_changed(updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
             json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
-            return;
+            MQTT_POST_RETURN();
         }
-        *config = updated;
+        *config = *updated;
         c300x_mqtt_close(&runtime->mqtt);
         c300x_mqtt_reset_retry(&runtime->mqtt);
         if (changed) {
             record_agent_write(config, runtime, "config", "mqtt");
         }
     }
-    if (updated.mqtt_enabled && legacy_mqtt_installed()) {
+    if (updated->mqtt_enabled && legacy_mqtt_installed()) {
         firewall_remount_rw_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
         if (!legacy_mqtt_disable_patch(&legacy_changed)) {
             firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
             send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"legacy_mqtt_disable_failed\"}\n");
-            return;
+            MQTT_POST_RETURN();
         }
         firewall_remount_ro_if_needed(C300X_LEGACY_MQTT_INIT_LINK);
         legacy_mqtt_stop_processes();
@@ -5388,7 +5440,9 @@ static void handle_mqtt_post(
             record_agent_write(config, runtime, "legacy_mqtt", "disable_for_native");
         }
     }
+    free(updated);
     handle_mqtt_status(client_fd, config, runtime);
+#undef MQTT_POST_RETURN
 }
 
 static void handle_subscription_delete(
@@ -5413,12 +5467,13 @@ static void handle_subscription_delete(
     send_json(client_fd, 404, "Not Found", "{\"ok\":false}\n");
 }
 
-static void dispatch_event(
+static void dispatch_event_internal(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *event_type,
     const char *data_json,
-    int ttl_seconds
+    int ttl_seconds,
+    int snapshot
 )
 {
     char occurred_at[40];
@@ -5431,22 +5486,26 @@ static void dispatch_event(
     written = snprintf(
         event_json,
         sizeof(event_json),
-        "{\"event_id\":\"native-%ld-%d\",\"type\":%s,\"occurred_at\":\"%s\",\"ttl_seconds\":%d,\"data\":%s}",
+        "{\"event_id\":\"native-%ld-%d\",\"type\":%s,\"occurred_at\":\"%s\",\"ttl_seconds\":%d,\"snapshot\":%s,\"data\":%s}",
         (long)time(NULL),
-        runtime->recent_count,
+        c300x_recent_events_count(&runtime->recent_events),
         event_type_json,
         occurred_at,
         ttl_seconds,
+        snapshot ? "true" : "false",
         data_json
     );
     if (written < 0 || (size_t)written >= sizeof(event_json)) {
         return;
     }
+    if (runtime->video != NULL) {
+        c300x_video_note_event(runtime->video, event_type, ttl_seconds);
+    }
     c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, data_json);
     if (!has_matching_subscription(runtime, event_type)) {
         return;
     }
-    record_recent_event(runtime, event_json);
+    c300x_recent_events_record(&runtime->recent_events, event_json);
     if (!runtime_network_online(runtime, time(NULL))) {
         for (int index = 0; index < runtime->subscription_count; index++) {
             struct subscription *subscription = &runtime->subscriptions[index];
@@ -5475,6 +5534,28 @@ static void dispatch_event(
             system_metrics_dispatch_now(config, runtime, time(NULL));
         }
     }
+}
+
+static void dispatch_event(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *event_type,
+    const char *data_json,
+    int ttl_seconds
+)
+{
+    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0);
+}
+
+static void dispatch_event_snapshot(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *event_type,
+    const char *data_json,
+    int ttl_seconds
+)
+{
+    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 1);
 }
 
 static int has_matching_subscription(
@@ -6315,7 +6396,40 @@ static int receive_http_request(int client_fd, char *buffer, size_t buffer_len, 
     return 0;
 }
 
-static void api_capabilities(int client_fd, const struct c300x_config *config)
+static const struct c300x_activation_discovery *runtime_activation_discovery(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    if (runtime == NULL) {
+        return NULL;
+    }
+    if (!runtime->activation_discovery_loaded) {
+        c300x_activation_discover(config, &runtime->activation_discovery);
+        runtime->activation_discovery_loaded = 1;
+    }
+    return &runtime->activation_discovery;
+}
+
+static int activation_total_count(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    const struct c300x_activation_discovery *discovery;
+
+    if (!config->activations_enabled) {
+        return 0;
+    }
+    discovery = runtime_activation_discovery(config, runtime);
+    return config->activations_count + (discovery != NULL ? discovery->count : 0);
+}
+
+static void api_capabilities(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
 {
     char body[8192];
     char video_path[C300X_MAX_PATH_JSON_LEN];
@@ -6333,6 +6447,7 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
     char bundle_agent_version[C300X_MAX_VERSION_LEN];
     char bundle_api_version[16];
     int maintenance_supported = maintenance_auth_available(config);
+    int activations_count = activation_total_count(config, runtime);
 
     c300x_mdns_device_id(device_id, sizeof(device_id));
     (void)read_agent_bundle_metadata(
@@ -6366,11 +6481,12 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
         "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
+        "\"activations\":{\"supported\":%s,\"count\":%d},"
         "\"call_events\":false,"
         "\"ringer\":true,"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"in-house-only\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
-        "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s},"
+        "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s,\"write_text\":%s},"
         "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"memory\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
         "\"mqtt\":{\"supported\":true,\"enabled\":%s,\"configured\":%s},"
         "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
@@ -6396,6 +6512,8 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         lock_id,
         lock_id,
         lock_name,
+        (config->activations_enabled && activations_count > 0) ? "true" : "false",
+        activations_count,
         config->answering_machine_messages_enabled ? "true" : "false",
         (config->answering_machine_messages_enabled && config->answering_machine_messages_watch) ? "true" : "false",
         config->answering_machine_messages_enabled ? "true" : "false",
@@ -6403,6 +6521,7 @@ static void api_capabilities(int client_fd, const struct c300x_config *config)
         config->memos_enabled ? "true" : "false",
         config->memos_enabled ? "true" : "false",
         (config->memos_enabled && config->memos_watch) ? "true" : "false",
+        config->memos_enabled ? "true" : "false",
         config->memos_enabled ? "true" : "false",
         config->system_metrics_enabled ? "true" : "false",
         (config->system_metrics_enabled && config->system_metrics_watch) ? "true" : "false",
@@ -6519,7 +6638,16 @@ static void handle_doorbell_video_get(
     int bridge_stop_in_progress = 0;
     int bridge_open_fds = 0;
     int bridge_active_threads = 0;
+    int external_media_active = 0;
+    time_t external_active_until = 0;
+    const char *external_active_until_json = "null";
+    char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
+    char external_owner_json[C300X_JSON_QUOTED_LEN(32)];
+    char last_block_reason_json[C300X_JSON_QUOTED_LEN(64)];
+    char external_active_until_buffer[32];
     unsigned long long rtp_packets = 0;
+    unsigned long long bt_media_start_attempts = 0;
+    unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
     const char *last_media_started_at_json = "null";
     const char *last_error_json = "null";
@@ -6534,6 +6662,9 @@ static void handle_doorbell_video_get(
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
         return;
     }
+    json_string("idle", media_owner_json, sizeof(media_owner_json));
+    json_string("", external_owner_json, sizeof(external_owner_json));
+    json_string("", last_block_reason_json, sizeof(last_block_reason_json));
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
         running = video_status.running;
@@ -6547,6 +6678,17 @@ static void handle_doorbell_video_get(
         bridge_stop_in_progress = video_status.bridge_stop_in_progress;
         bridge_open_fds = video_status.bridge_open_fds;
         bridge_active_threads = video_status.bridge_active_threads;
+        external_media_active = video_status.external_media_active;
+        external_active_until = video_status.external_active_until;
+        bt_media_start_attempts = video_status.bt_media_start_attempts;
+        bt_media_stop_attempts = video_status.bt_media_stop_attempts;
+        if (external_active_until > 0) {
+            snprintf(external_active_until_buffer, sizeof(external_active_until_buffer), "%ld", (long)external_active_until);
+            external_active_until_json = external_active_until_buffer;
+        }
+        json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
+        json_string(video_status.external_owner, external_owner_json, sizeof(external_owner_json));
+        json_string(video_status.last_block_reason, last_block_reason_json, sizeof(last_block_reason_json));
         rtp_packets = video_status.rtp_packets;
         last_rtp_at_json = json_string_or_null(
             video_status.last_rtp_at,
@@ -6583,6 +6725,11 @@ static void handle_doorbell_video_get(
         "\"running\":%s,"
         "\"bridge_running\":%s,"
         "\"media_active\":%s,"
+        "\"media_owner\":%s,"
+        "\"external_media_active\":%s,"
+        "\"external_owner\":%s,"
+        "\"external_active_until\":%s,"
+        "\"last_block_reason\":%s,"
         "\"stop_in_progress\":%s,"
         "\"open_fds\":%d,"
         "\"active_threads\":%d,"
@@ -6590,6 +6737,8 @@ static void handle_doorbell_video_get(
         "\"clients\":%d,"
         "\"media_starting\":%s,"
         "\"audio_enabled\":%s,"
+        "\"bt_media_start_attempts\":%llu,"
+        "\"bt_media_stop_attempts\":%llu,"
         "\"rtp_packets\":%llu,"
         "\"last_rtp_at\":%s,"
         "\"last_media_started_at\":%s,"
@@ -6615,6 +6764,11 @@ static void handle_doorbell_video_get(
         running ? "true" : "false",
         bridge_running ? "true" : "false",
         bridge_media_active ? "true" : "false",
+        media_owner_json,
+        external_media_active ? "true" : "false",
+        external_owner_json,
+        external_active_until_json,
+        last_block_reason_json,
         bridge_stop_in_progress ? "true" : "false",
         bridge_open_fds,
         bridge_active_threads,
@@ -6622,6 +6776,8 @@ static void handle_doorbell_video_get(
         clients,
         media_starting ? "true" : "false",
         stream_audio ? "true" : "false",
+        bt_media_start_attempts,
+        bt_media_stop_attempts,
         rtp_packets,
         last_rtp_at_json,
         last_media_started_at_json,
@@ -6656,19 +6812,27 @@ static void handle_doorbell_video_activate(
     (void)json_bool_field(request->body, "audio", &audio);
     if (!c300x_video_activate(runtime->video, audio)) {
         struct c300x_video_status status;
+        int http_status;
+        const char *http_text;
+        const char *error;
         c300x_video_status(runtime->video, &status);
+        error = status.last_error[0] != '\0' ? status.last_error : "unknown";
+        http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503;
+        http_text = http_status == 409 ? "Conflict" : "Service Unavailable";
         json_string(
-            status.last_error[0] != '\0' ? status.last_error : "unknown",
+            error,
             last_error_json,
             sizeof(last_error_json)
         );
         snprintf(
             body,
             sizeof(body),
-            "{\"ok\":false,\"error\":\"video_activate_failed\",\"last_error\":%s}\n",
-            last_error_json
+            "{\"ok\":false,\"error\":\"%s\",\"last_error\":%s,\"external_media_active\":%s}\n",
+            http_status == 409 ? "external_session_active" : "video_activate_failed",
+            last_error_json,
+            status.external_media_active ? "true" : "false"
         );
-        send_json(client_fd, 503, "Service Unavailable", body);
+        send_json(client_fd, http_status, http_text, body);
         return;
     }
     snprintf(body, sizeof(body), "{\"ok\":true,\"audio\":%s}\n", audio ? "true" : "false");
@@ -7139,6 +7303,219 @@ static void handle_stair_light(
     json_string(address, address_json, sizeof(address_json));
     json_string(reply, reply_json, sizeof(reply_json));
     snprintf(body, sizeof(body), "{\"ok\":true,\"address\":%s,\"raw\":%s}\n", address_json, reply_json);
+    send_json(client_fd, 200, "OK", body);
+}
+
+static const struct c300x_activation *find_activation(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *activation_id
+)
+{
+    const struct c300x_activation_discovery *discovery;
+
+    for (int index = 0; index < config->activations_count; index++) {
+        if (strcmp(config->activations[index].id, activation_id) == 0) {
+            return &config->activations[index];
+        }
+    }
+    discovery = runtime_activation_discovery(config, runtime);
+    if (discovery != NULL) {
+        for (int index = 0; index < discovery->count; index++) {
+            if (strcmp(discovery->items[index].id, activation_id) == 0) {
+                return &discovery->items[index];
+            }
+        }
+    }
+    return NULL;
+}
+
+static void append_activation_json(
+    char *body,
+    size_t body_len,
+    size_t *used,
+    const struct c300x_activation *activation,
+    const char *source,
+    const char *suffix
+)
+{
+    char id[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
+    char name[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_NAME_LEN)];
+    char type[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_TYPE_LEN)];
+    char address_mode[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ADDRESS_MODE_LEN)];
+    char address[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
+    int executable = c300x_activation_is_executable(activation);
+
+    json_string(activation->id, id, sizeof(id));
+    json_string(activation->name, name, sizeof(name));
+    json_string(activation->type, type, sizeof(type));
+    json_string(activation->address_mode, address_mode, sizeof(address_mode));
+    json_string(activation->address, address, sizeof(address));
+    if (*used < body_len) {
+        int written = snprintf(
+            body + *used,
+            body_len - *used,
+            "{\"id\":%s,\"name\":%s,\"type\":%s,\"addressMode\":%s,\"address\":%s,\"source\":\"%s\",\"executable\":%s}%s",
+            id,
+            name,
+            type,
+            address_mode,
+            address,
+            source,
+            executable ? "true" : "false",
+            suffix
+        );
+        if (written > 0) {
+            *used += (size_t)written;
+        }
+    }
+}
+
+static void handle_activations_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
+    size_t used = 0;
+    const struct c300x_activation_discovery *discovery = runtime_activation_discovery(config, runtime);
+    int count = activation_total_count(config, runtime);
+    int emitted = 0;
+
+    if (body == NULL) {
+        return;
+    }
+    used += (size_t)snprintf(
+        body + used,
+        C300X_LARGE_RESPONSE_SIZE - used,
+        "{\"ok\":true,\"supported\":%s,\"count\":%d,\"auto_discover\":%s,\"items\":[",
+        (config->activations_enabled && count > 0) ? "true" : "false",
+        count,
+        (config->activations_enabled && config->activations_auto_discover) ? "true" : "false"
+    );
+    if (config->activations_enabled) {
+        for (int index = 0; index < config->activations_count; index++) {
+            emitted++;
+            append_activation_json(
+                body,
+                C300X_LARGE_RESPONSE_SIZE,
+                &used,
+                &config->activations[index],
+                "config",
+                emitted < count ? "," : ""
+            );
+        }
+        if (discovery != NULL) {
+            for (int index = 0; index < discovery->count; index++) {
+                emitted++;
+                append_activation_json(
+                    body,
+                    C300X_LARGE_RESPONSE_SIZE,
+                    &used,
+                    &discovery->items[index],
+                    "device",
+                    emitted < count ? "," : ""
+                );
+            }
+        }
+    }
+    if (used >= C300X_LARGE_RESPONSE_SIZE) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(body);
+        return;
+    }
+    used += (size_t)snprintf(body + used, C300X_LARGE_RESPONSE_SIZE - used, "]}\n");
+    if (used >= C300X_LARGE_RESPONSE_SIZE) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        free(body);
+        return;
+    }
+    send_json(client_fd, 200, "OK", body);
+    free(body);
+}
+
+static void handle_activation_run(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *activation_id
+)
+{
+    const struct c300x_activation *activation = find_activation(config, runtime, activation_id);
+    char press[C300X_MAX_FRAME_LEN];
+    char release[C300X_MAX_FRAME_LEN];
+    char reply[C300X_MAX_FRAME_LEN];
+    char error[C300X_MAX_ERROR_LEN];
+    char body[1024];
+    char id_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
+    char name_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_NAME_LEN)];
+    char type_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_TYPE_LEN)];
+    char event_data[512];
+
+    if (!config->activations_enabled) {
+        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"activations_disabled\"}\n");
+        return;
+    }
+    if (activation == NULL) {
+        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"unknown_activation\"}\n");
+        return;
+    }
+    if (!c300x_activation_is_executable(activation)) {
+        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"activation_not_executable\"}\n");
+        return;
+    }
+    c300x_activation_press_release_commands(
+        activation,
+        press,
+        sizeof(press),
+        release,
+        sizeof(release)
+    );
+    if (press[0] == '\0') {
+        send_json(client_fd, 405, "Method Not Allowed", "{\"ok\":false,\"error\":\"activation_not_executable\"}\n");
+        return;
+    }
+    if (release[0] != '\0') {
+        int delay_ms = activation->hold_ms > 0 ? activation->hold_ms : config->lock_release_delay_ms;
+        if (!c300x_openwebnet_sequence(
+            config,
+            press,
+            delay_ms,
+            release,
+            error,
+            sizeof(error)
+        )) {
+            send_device_error(client_fd, error);
+            return;
+        }
+    } else if (!c300x_openwebnet_send(config, press, reply, sizeof(reply), error, sizeof(error))) {
+        send_device_error(client_fd, error);
+        return;
+    }
+    json_string(activation->id, id_json, sizeof(id_json));
+    json_string(activation->name, name_json, sizeof(name_json));
+    json_string(activation->type, type_json, sizeof(type_json));
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"id\":%s,\"name\":%s,\"type\":%s}\n",
+        id_json,
+        name_json,
+        type_json
+    );
+    if (runtime != NULL) {
+        if (snprintf(
+            event_data,
+            sizeof(event_data),
+            "{\"id\":%s,\"name\":%s,\"type\":%s}",
+            id_json,
+            name_json,
+            type_json
+        ) < (int)sizeof(event_data)) {
+            dispatch_event(config, runtime, "activation.executed", event_data, 0);
+        }
+    }
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -7747,6 +8124,77 @@ static void handle_memo_audio_get(
     }
     (void)size;
     send_file_response(client_fd, audio_path, content_type, "no-store");
+}
+
+static void handle_text_memo_create(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    char text_b64[1024];
+    unsigned char text[C300X_MAX_MEMO_TEXT_LEN + 1];
+    size_t text_len = 0;
+    int read = 0;
+    char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
+    char error[C300X_MAX_ERROR_LEN];
+    char body[256];
+
+    if (!config->memos_enabled || !runtime->text_memos.enabled) {
+        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
+        return;
+    }
+    json_string_field(request->body, "text_b64", text_b64, sizeof(text_b64));
+    if (
+        text_b64[0] == '\0'
+        || !base64_decode_bytes(text_b64, text, sizeof(text) - 1, &text_len)
+    ) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
+        return;
+    }
+    (void)json_bool_field(request->body, "read", &read);
+    if (!c300x_text_memo_create(
+        runtime->text_memos.root,
+        runtime->text_memos.max_messages,
+        text,
+        text_len,
+        read,
+        entry_name,
+        sizeof(entry_name),
+        error,
+        sizeof(error)
+    )) {
+        if (strcmp(error, "memos_dir_missing") == 0) {
+            send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_dir_missing\"}\n");
+            return;
+        }
+        if (strcmp(error, "memo_store_full") == 0) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"memo_store_full\"}\n");
+            return;
+        }
+        if (strcmp(error, "invalid_text") == 0) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_text\"}\n");
+            return;
+        }
+        if (strcmp(error, "invalid_memo_path") == 0) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_memo_path\"}\n");
+            return;
+        }
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"memo_create_failed\"}\n");
+        return;
+    }
+    voicemail_refresh_watches(&runtime->text_memos);
+    memos_event_dispatch_if_changed(config, runtime);
+    record_agent_write(config, runtime, "memo_create", "text");
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"created\":true,\"id\":\"text/%s\",\"kind\":\"text\",\"read\":%s}\n",
+        entry_name,
+        read ? "true" : "false"
+    );
+    send_json(client_fd, 201, "Created", body);
 }
 
 static void handle_memos_delete(
@@ -9743,6 +10191,32 @@ static int apply_agent_update_init_script(
     return 1;
 }
 
+static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary)
+{
+    int status;
+
+    if (agent_init_link_matches()) {
+        return 1;
+    }
+    if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
+        return 1;
+    }
+    status = system("mount -o remount,rw / >/dev/null 2>&1");
+    (void)status;
+    if (!ensure_agent_init_link()) {
+        status = system("mount -o remount,ro / >/dev/null 2>&1");
+        (void)status;
+        return 0;
+    }
+    status = system("mount -o remount,ro / >/dev/null 2>&1");
+    (void)status;
+    if (summary != NULL) {
+        summary->changed_files++;
+        summary->script_changed = 1;
+    }
+    return 1;
+}
+
 static int apply_agent_update_files(
     const struct c300x_config *config,
     const char *manifest,
@@ -9812,7 +10286,7 @@ static int apply_agent_update_files(
             return 0;
         }
     }
-    return 1;
+    return repair_agent_init_link_after_update(summary);
 }
 
 static void handle_agent_update_apply(
@@ -10040,7 +10514,7 @@ static void handle_api_request(
     }
 
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/capabilities") == 0) {
-        api_capabilities(client_fd, config);
+        api_capabilities(client_fd, config, runtime);
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/state") == 0) {
@@ -10093,6 +10567,30 @@ static void handle_api_request(
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/stair-light/actions/activate") == 0) {
         handle_stair_light(client_fd, config, runtime, request);
         return;
+    }
+    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/activations") == 0) {
+        handle_activations_get(client_fd, config, runtime);
+        return;
+    }
+    if (strncmp(request->path, "/api/v1/activations/", strlen("/api/v1/activations/")) == 0) {
+        const char *activation_id = request->path + strlen("/api/v1/activations/");
+        const char *suffix = strstr(activation_id, "/actions/run");
+        if (strcmp(request->method, "POST") == 0 && suffix != NULL && suffix[12] == '\0') {
+            char decoded_activation_id[C300X_MAX_ACTIVATION_ID_LEN];
+            size_t id_len = (size_t)(suffix - activation_id);
+            if (id_len >= sizeof(decoded_activation_id)) {
+                send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_activation_id\"}\n");
+                return;
+            }
+            percent_decode_query_value(
+                activation_id,
+                activation_id + id_len,
+                decoded_activation_id,
+                sizeof(decoded_activation_id)
+            );
+            handle_activation_run(client_fd, config, runtime, decoded_activation_id);
+            return;
+        }
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/smartphone-forwarding") == 0) {
         handle_smartphone_get(client_fd, config);
@@ -10156,6 +10654,10 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/memos") == 0) {
         handle_memos_get(client_fd, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/memos/text/actions/create") == 0) {
+        handle_text_memo_create(client_fd, config, runtime, request);
         return;
     }
     if (strncmp(request->path, "/api/v1/memos/voice/", strlen("/api/v1/memos/voice/")) == 0) {
@@ -11019,6 +11521,7 @@ cleanup:
         voicemail_close(&runtime->text_memos);
         voicemail_close(&runtime->voice_memos);
         ui_event_close_wait(runtime, 0);
+        c300x_recent_events_clear(&runtime->recent_events);
     }
     c300x_video_destroy(video);
     free(runtime);

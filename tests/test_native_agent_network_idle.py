@@ -22,7 +22,7 @@ def _c300x_run_loop_body(text: str) -> str:
 
 def test_agent_skips_callback_io_without_local_network() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    dispatch_body = _function_body(text, "void", "dispatch_event")
+    dispatch_body = _function_body(text, "void", "dispatch_event_internal")
     bridge_body = _function_body(text, "int", "forward_to_homeassistant")
 
     assert dispatch_body.index("runtime_network_online(runtime, time(NULL))") < (
@@ -126,7 +126,10 @@ def test_video_poll_timeout_preserves_existing_poll_deadlines() -> None:
 
 def test_agent_listener_sockets_cannot_leak_into_gui_reload_children() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    reuse_body = _function_body(text, "void", "allow_socket_reuse")
+    util_text = (ROOT / "native_agent" / "src" / "http_util.c").read_text(
+        encoding="utf-8"
+    )
+    reuse_body = _function_body(util_text, "void", "allow_socket_reuse")
     listener_body = _function_body(text, "int", "make_listener")
     udp_body = _function_body(text, "int", "create_udp_event_socket")
 
@@ -144,7 +147,7 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     body = _function_body(text, "static int", "agent_has_home_assistant_connection")
     subscription_body = _function_body(text, "static void", "handle_subscriptions_post")
     display_body = _function_body(text, "static void", "handle_display_bridge_post")
-    dispatch_body = _function_body(text, "static void", "dispatch_event")
+    dispatch_body = _function_body(text, "static void", "dispatch_event_internal")
 
     assert "runtime->home_assistant_connected_this_run" in body
     assert "runtime->home_assistant_last_seen_at" in body
@@ -154,6 +157,18 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" not in display_body
     assert "if (subscription->last_ok)" in dispatch_body
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in dispatch_body
+
+
+def test_subscription_snapshots_are_marked_as_non_live_events() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    dispatch_body = _function_body(text, "static void", "dispatch_event_internal")
+    voicemail_body = _function_body(text, "static void", "voicemail_event_dispatch_snapshot")
+    memos_body = _function_body(text, "static void", "memos_event_dispatch_snapshot")
+
+    assert '\\"snapshot\\":%s' in dispatch_body
+    assert "snapshot ? \"true\" : \"false\"" in dispatch_body
+    assert "dispatch_event_snapshot(config, runtime, \"answering_machine.messages_changed\"" in voicemail_body
+    assert "dispatch_event_snapshot(config, runtime, \"memos.changed\"" in memos_body
 
 
 def test_agent_keeps_only_one_loaded_subscription_and_cleans_store_lazily() -> None:

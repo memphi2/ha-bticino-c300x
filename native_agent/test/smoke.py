@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import http.server
 import json
@@ -107,6 +108,7 @@ def main() -> int:
         return 2
     assert_video_timer_preserves_existing_poll_timeout(binary)
     assert_rtsp_udp_preserves_ipv4_mapped_peers(binary)
+    assert_overlong_activation_id_is_rejected(binary)
 
     with (
         managed_tcp_server(OpenWebNetServer()) as openwebnet,
@@ -149,6 +151,47 @@ def assert_rtsp_udp_preserves_ipv4_mapped_peers(binary: Path) -> None:
         raise AssertionError("RTSP UDP peer handling must preserve IPv4-mapped IPv6 clients")
 
 
+def assert_overlong_activation_id_is_rejected(binary: Path) -> None:
+    """Guard against silently truncating configured activation IDs."""
+
+    with tempfile.TemporaryDirectory(prefix="c300x-activation-id-smoke-") as temp_dir:
+        config_path = Path(temp_dir) / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "api": {"token": "", "noAuth": True},
+                    "activations": {
+                        "enabled": True,
+                        "items": [
+                            {
+                                "id": ("a" * 32) + "/",
+                                "name": "Overlong",
+                                "type": "unknown",
+                            }
+                        ],
+                    },
+                    "events": {"udp": {"enabled": False}},
+                    "answeringMachine": {"messages": {"enabled": False}},
+                    "memos": {"enabled": False},
+                    "systemMetrics": {"enabled": False},
+                    "video": {"enabled": False},
+                    "displayBridge": {"enabled": False},
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [str(binary), "--config", str(config_path), "--check-config"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    if result.returncode == 0:
+        raise AssertionError("overlong activation id with invalid suffix was accepted")
+    if "activations item id must be a safe string" not in result.stderr:
+        raise AssertionError(f"unexpected activation id validation error: {result.stderr!r}")
+
+
 def run_smoke(
     binary: Path,
     openwebnet: OpenWebNetServer,
@@ -164,6 +207,7 @@ def run_smoke(
         messages_root = temp_path / "messages"
         text_memos_root = temp_path / "memos_text"
         voice_memos_root = temp_path / "memos_voice"
+        activation_root = temp_path / "device_activations"
         qml_patch_script = temp_path / "qml_patch.sh"
         qml_patch_log = temp_path / "qml_patch_actions.txt"
         remove_agent_script = temp_path / "remove_agent.sh"
@@ -173,6 +217,31 @@ def run_smoke(
         ipv6_firewall_path = temp_path / "iptables6"
         ipv6_firewall_backup_path = temp_path / "backup" / "iptables6"
         config_path = temp_path / "config.json"
+        text_memos_root.mkdir()
+        voice_memos_root.mkdir()
+        activation_root.mkdir()
+        (activation_root / "quick_actions.json").write_text(
+            json.dumps(
+                {
+                    "actions": [
+                        {
+                            "name": "Garden gate",
+                            "command": "*8*19*40##",
+                            "release": "*8*20*40##",
+                        },
+                        {
+                            "label": "Path light",
+                            "openwebnet": "*8*21*42##",
+                        },
+                        {
+                            "name": "Unsafe delete must not be imported",
+                            "openwebnet": "*8*94#1#0##",
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
         firewall_path.write_text("#!/bin/sh\n# stock firewall\n", encoding="utf-8")
         ipv6_firewall_path.write_text(
             "#!/bin/sh\n# stock ipv6 firewall\n",
@@ -230,6 +299,33 @@ def run_smoke(
                     "locks": {
                         "releaseDelayMs": 1,
                         "items": {"default": {"name": 'Main "door"', "address": "20"}},
+                    },
+                    "activations": {
+                        "enabled": True,
+                        "autoDiscover": True,
+                        "discoveryRoots": [str(activation_root)],
+                        "items": [
+                            {
+                                "id": "front_gate",
+                                "name": "Front gate",
+                                "type": "lock",
+                                "addressMode": "manual",
+                                "address": "30",
+                            },
+                            {
+                                "id": "activation_id_0123456789abcdef01",
+                                "name": "Long id lock",
+                                "type": "lock",
+                                "addressMode": "manual",
+                                "address": "31",
+                            },
+                            {
+                                "id": "unknown_only",
+                                "name": "Unknown only",
+                                "type": "unknown",
+                                "addressMode": "auto",
+                            },
+                        ],
                     },
                     "maintenance": {
                         "enabled": True,
@@ -374,6 +470,38 @@ def run_smoke(
             assert_int_field_at_least(diagnostics, "open_fd_count", 1)
             assert_int_field_at_least(diagnostics, "video_bridge_open_fds", 0)
             assert_int_field_at_least(diagnostics, "video_bridge_active_threads", 0)
+            read_only_actions = (
+                ("health", lambda: api_get(api_port, "/api/v1/health", authorized=False)),
+                ("capabilities", lambda: api_get(api_port, "/api/v1/capabilities")),
+                ("diagnostics", lambda: api_get(api_port, "/api/v1/diagnostics")),
+                ("auth status", lambda: maintenance_get(api_port, "/api/v1/maintenance/auth")),
+                ("mqtt status", lambda: maintenance_get(api_port, "/api/v1/maintenance/mqtt")),
+                ("legacy mqtt status", lambda: maintenance_get(api_port, "/api/v1/maintenance/legacy-mqtt")),
+                ("subscriptions", lambda: api_get(api_port, "/api/v1/events/subscriptions")),
+                ("activations", lambda: api_get(api_port, "/api/v1/activations")),
+                ("system metrics", lambda: api_get(api_port, "/api/v1/system/metrics")),
+                (
+                    "same auth config",
+                    lambda: maintenance_post(
+                        api_port,
+                        "/api/v1/maintenance/auth",
+                        {"noAuth": True},
+                    ),
+                ),
+                (
+                    "same mqtt config",
+                    lambda: maintenance_post(
+                        api_port,
+                        "/api/v1/maintenance/mqtt",
+                        {"enabled": False},
+                    ),
+                ),
+            )
+            for label, action in read_only_actions:
+                action()
+                diagnostics = api_get(api_port, "/api/v1/diagnostics")
+                if diagnostics.get("agent_write_count") != expected_agent_writes:
+                    raise AssertionError(f"{label} changed agent_write_count")
             setup_page = api_text(api_port, "/setup", authorized=False)
             if "C300X Agent Setup" not in setup_page:
                 raise AssertionError("setup page was not served")
@@ -506,6 +634,8 @@ def run_smoke(
             )
             assert_json_field(capabilities["capabilities"]["memos"], "supported", True)
             assert_json_field(capabilities["capabilities"]["memos"], "delete", True)
+            assert_json_field(capabilities["capabilities"]["activations"], "supported", True)
+            assert_json_field(capabilities["capabilities"]["activations"], "count", 5)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_patch", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_restore", True)
@@ -853,6 +983,32 @@ def run_smoke(
                 "name",
                 'Main "door"',
             )
+            activations = api_get(api_port, "/api/v1/activations")
+            assert_json_field(activations, "supported", True)
+            if len(activations.get("items", [])) != 5:
+                raise AssertionError("activation discovery did not return configured and device items")
+            assert_json_field(activations["items"][0], "id", "front_gate")
+            assert_json_field(activations["items"][0], "addressMode", "manual")
+            assert_json_field(activations["items"][0], "executable", True)
+            assert_json_field(activations["items"][1], "id", "activation_id_0123456789abcdef01")
+            assert_json_field(activations["items"][1], "addressMode", "manual")
+            assert_json_field(activations["items"][1], "executable", True)
+            assert_json_field(activations["items"][2], "id", "unknown_only")
+            assert_json_field(activations["items"][2], "addressMode", "auto")
+            assert_json_field(activations["items"][2], "executable", False)
+            assert_json_field(activations["items"][3], "id", "device_lock_40")
+            assert_json_field(activations["items"][3], "name", "Garden gate")
+            assert_json_field(activations["items"][3], "source", "device")
+            assert_json_field(activations["items"][3], "executable", True)
+            assert_json_field(activations["items"][4], "id", "device_stair_42")
+            assert_json_field(activations["items"][4], "name", "Path light")
+            assert_json_field(activations["items"][4], "source", "device")
+            assert_json_field(activations["items"][4], "executable", True)
+            if any(
+                item.get("name") == "Unsafe delete must not be imported"
+                for item in activations.get("items", [])
+            ):
+                raise AssertionError("unsafe discovered OpenWebNet frame was imported")
             callback_seen = len(callback.requests)
             subscription = api_post(
                 api_port,
@@ -863,6 +1019,7 @@ def run_smoke(
                     "events": [
                         "agent.diagnostics_changed",
                         "stair_light.activated",
+                        "activation.executed",
                         "doorbell.pressed",
                         "answering_machine.messages_changed",
                         "memos.changed",
@@ -886,6 +1043,53 @@ def run_smoke(
             assert_json_field(
                 api_post(
                     api_port,
+                    "/api/v1/activations/front_gate/actions/run",
+                    {},
+                ),
+                "id",
+                "front_gate",
+            )
+            activation_event = wait_for_callback_type(
+                callback,
+                "activation.executed",
+                callback_seen,
+            )
+            assert_json_field(
+                activation_event["body"].get("data", {}),
+                "id",
+                "front_gate",
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/activations/activation_id_0123456789abcdef01/actions/run",
+                    {},
+                ),
+                "id",
+                "activation_id_0123456789abcdef01",
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/activations/device_lock_40/actions/run",
+                    {},
+                ),
+                "id",
+                "device_lock_40",
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/activations/device_stair_42/actions/run",
+                    {},
+                ),
+                "id",
+                "device_stair_42",
+            )
+            callback_seen = len(callback.requests)
+            assert_json_field(
+                api_post(
+                    api_port,
                     "/api/v1/events/subscriptions",
                     {
                         "callback_url": callback_url(callback),
@@ -893,6 +1097,7 @@ def run_smoke(
                         "events": [
                             "agent.diagnostics_changed",
                             "stair_light.activated",
+                            "activation.executed",
                             "doorbell.pressed",
                             "answering_machine.messages_changed",
                             "memos.changed",
@@ -915,6 +1120,7 @@ def run_smoke(
                     "events": [
                         "agent.diagnostics_changed",
                         "stair_light.activated",
+                        "activation.executed",
                         "doorbell.pressed",
                         "answering_machine.messages_changed",
                         "memos.changed",
@@ -1029,11 +1235,41 @@ def run_smoke(
                 raise AssertionError("stair light command was not sent")
             if "*8*19*20##" not in openwebnet.frames or "*8*20*20##" not in openwebnet.frames:
                 raise AssertionError("door unlock command sequence was not sent")
+            if "*8*19*30##" not in openwebnet.frames or "*8*20*30##" not in openwebnet.frames:
+                raise AssertionError("device activation command sequence was not sent")
+            if "*8*19*31##" not in openwebnet.frames or "*8*20*31##" not in openwebnet.frames:
+                raise AssertionError("long-id activation command sequence was not sent")
+            if "*8*19*40##" not in openwebnet.frames or "*8*20*40##" not in openwebnet.frames:
+                raise AssertionError("discovered lock activation command sequence was not sent")
+            if "*8*21*42##" not in openwebnet.frames:
+                raise AssertionError("discovered stair-light activation command was not sent")
             if "*8*94#1#0##" not in openwebnet.frames:
                 raise AssertionError("video message delete command was not sent")
             callback_seen = len(callback.requests)
             memo_ui_wait = start_ui_event_wait(ui_port, ui_revision(ui_port))
-            write_memo(text_memos_root, "memo_1", kind="text", read=False, unix_time=1710000121)
+            created_memo = api_post(
+                api_port,
+                "/api/v1/memos/text/actions/create",
+                {
+                    "text_b64": base64.b64encode(
+                        b'local "memo"\nsecond'
+                    ).decode("ascii"),
+                    "read": False,
+                },
+                expected_status=201,
+            )
+            assert_json_field(created_memo, "id", "text/memo_1")
+            assert_ui_event_topic(memo_ui_wait, "memos")
+            memo_event = wait_for_callback_type(callback, "memos.changed", callback_seen)
+            if memo_event["token"] != "event-token":
+                raise AssertionError("memo callback token was not forwarded")
+            expected_agent_writes += 1
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_write_class", "memo_create")
+            assert_json_field(diagnostics, "last_write_reason", "text")
+            callback_seen = len(callback.requests)
+            memo_ui_wait = start_ui_event_wait(ui_port, ui_revision(ui_port))
             write_memo(voice_memos_root, "memo_1", kind="voice", read=False, unix_time=1710000122)
             assert_ui_event_topic(memo_ui_wait, "memos")
             memo_event = wait_for_callback_type(callback, "memos.changed", callback_seen)

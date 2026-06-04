@@ -157,7 +157,41 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
     )
 
 
-def test_native_agent_sip_uses_configured_flexisip_endpoint_and_identities() -> None:
+def test_native_agent_rtsp_listener_lifecycle_closes_stale_fds() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    thread_body = media_bridge[
+        media_bridge.index("static void *rtsp_server_thread") :
+        media_bridge.index("bool c300x_media_bridge_start")
+    ]
+    start_body = media_bridge[
+        media_bridge.index("bool c300x_media_bridge_start") :
+        media_bridge.index("void c300x_media_bridge_stop")
+    ]
+    stop_body = media_bridge[
+        media_bridge.index("void c300x_media_bridge_stop") :
+    ]
+
+    assert "static void close_fd_if_open(int *fd)" in media_bridge
+    assert start_body.index("close_fd_if_open(&g_bridge.listen_fd);") < start_body.index(
+        "g_bridge.listen_fd = -1;"
+    )
+    assert start_body.index("close_fd_if_open(&g_bridge.client_fd);") < start_body.index(
+        "g_bridge.client_fd = -1;"
+    )
+    assert "bool should_close = true;" in thread_body
+    assert "if (bridge->listen_fd == server_fd)" in thread_body
+    assert "if (should_close)" in thread_body
+    assert stop_body.index("g_bridge.listen_fd = -1;") < stop_body.index(
+        "pthread_mutex_unlock(&g_bridge.mutex);"
+    )
+    assert stop_body.index("g_bridge.client_fd = -1;") < stop_body.index(
+        "pthread_mutex_unlock(&g_bridge.mutex);"
+    )
+
+
+def test_native_agent_sip_uses_app_identity_from_local_flexisip() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
     )
@@ -166,12 +200,51 @@ def test_native_agent_sip_uses_configured_flexisip_endpoint_and_identities() -> 
         media_bridge.index("static bool send_bt_av_media_command")
     ]
 
-    assert "sip_domain_from_config(bridge->config" in setup_body
-    assert "bridge->config->video_sip_from" in setup_body
-    assert "bridge->config->video_sip_to" in setup_body
+    assert 'SIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in media_bridge
+    assert "app_identity_from_flexisip(" in setup_body
     assert "sip_local_endpoint_from_config(bridge->config" in setup_body
     assert "connect_sip_socket(bridge->config)" in setup_body
     assert '"Via: SIP/2.0/%s %s:%u' in setup_body
-    assert '"Contact: <sip:%s@%s;transport=%s>' in setup_body
+    assert '"s=Talk\\r\\n"' in setup_body
+    assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
+    assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
+    assert '"a=nortpproxy:yes\\r\\n"' in setup_body
+    assert '"User-Agent: " APP_USER_AGENT "\\r\\n"' in setup_body
+    assert '"Contact: <sip:%s;transport=%s>' in setup_body
+    assert "APP_AUDIO_RTP_PORT 26986" in media_bridge
+    assert "APP_AUDIO_RTCP_PORT 26987" in media_bridge
+    assert "APP_VIDEO_RTP_PORT 28772" in media_bridge
+    assert "APP_VIDEO_RTCP_PORT 28773" in media_bridge
+    assert "generate_sdes_key(audio_key_raw" in setup_body
+    assert "memcpy(bridge->app_audio_srtp_key, audio_key_raw" in setup_body
+    assert "start_bt_av_media(bridge)" in media_bridge
+    assert "APP_MEDIA_RENEW_SECONDS" in media_bridge
     assert '"sip:webrtc@' not in media_bridge
+    assert "dummykey" not in media_bridge
     assert '"sip:c300x@127.0.0.1"' not in media_bridge
+
+
+def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    app_media_body = media_bridge[
+        media_bridge.index("static void *app_media_thread") :
+        media_bridge.index("static bool send_sip_setup")
+    ]
+
+    assert 'dlopen("libsrtp.so.1", RTLD_NOW | RTLD_LOCAL)' in media_bridge
+    assert 'srtp_load_symbol(handle, "srtp_protect"' in media_bridge
+    assert '"srtp_protect_rtcp"' in media_bridge
+    assert '"crypto_policy_set_rtp_default"' in media_bridge
+    assert '"crypto_policy_set_rtcp_default"' in media_bridge
+    assert "crypto_policy_set_aes_cm_128_hmac_sha1_80" not in media_bridge
+    assert "policy.ssrc.type = 3" in media_bridge
+    assert "APP_AUDIO_PACKET_MS 20" in media_bridge
+    assert "APP_AUDIO_PAYLOAD_TYPE 98" in media_bridge
+    assert "send_app_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in app_media_body
+    assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio" in app_media_body
+    assert "send_srtcp_receiver_report(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body
+    assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body
+    assert "send_rtcp_receiver_report(" not in media_bridge
+    assert "send_rtcp_pli(" not in media_bridge

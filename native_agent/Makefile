@@ -2,7 +2,8 @@ CC ?= gcc
 PYTHON ?= python3
 ARMHF_CC ?= arm-linux-gnueabihf-gcc
 ARMHF_READELF ?= arm-linux-gnueabihf-readelf
-C300X_DEVICE_SYSROOT ?=
+AUTO_C300X_DEVICE_SYSROOT := $(firstword $(wildcard ../../c300x-fwpatch/work/rootfs-1.7.19))
+C300X_DEVICE_SYSROOT ?= $(AUTO_C300X_DEVICE_SYSROOT)
 AGENT_VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 BUILD_DIR := build
 HOST_BUILD_DIR := $(BUILD_DIR)/host
@@ -17,17 +18,17 @@ ARMHF_OBJECTS += $(ARMHF_BUILD_DIR)/arm_start.o
 STACK_USAGE_LIMIT ?= 24576
 
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L -DC300X_NATIVE_AGENT_VERSION=\"$(AGENT_VERSION)\"
-LDFLAGS ?= -pthread
+LDFLAGS ?= -pthread -ldl
 ARMHF_CFLAGS ?= $(CFLAGS) -D_TIME_BITS=32
 ifeq ($(STACK_USAGE),1)
 ARMHF_CFLAGS += -fstack-usage
 endif
 ifneq ($(C300X_DEVICE_SYSROOT),)
-ARMHF_PTHREAD_LDFLAGS := -Wl,-rpath-link,$(C300X_DEVICE_SYSROOT)/lib -L$(C300X_DEVICE_SYSROOT)/lib -l:libpthread.so.0 -l:libc.so.6 -l:ld-linux-armhf.so.3
+ARMHF_PTHREAD_LDFLAGS := -Wl,-rpath-link,$(C300X_DEVICE_SYSROOT)/lib -L$(C300X_DEVICE_SYSROOT)/lib -l:libpthread.so.0 -l:libdl.so.2 -l:libc.so.6 -l:ld-linux-armhf.so.3
 else
-ARMHF_PTHREAD_LDFLAGS := -Wl,--no-as-needed -l:libpthread.so.0
+ARMHF_PTHREAD_LDFLAGS := -Wl,--no-as-needed -l:libpthread.so.0 -l:libdl.so.2
 endif
-ARMHF_LDFLAGS ?= $(LDFLAGS) $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
+ARMHF_LDFLAGS ?= -pthread $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
 
 .PHONY: all armhf armhf-abi-check armhf-stack-check check smoke clean
 

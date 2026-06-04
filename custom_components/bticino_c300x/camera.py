@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import ipaddress
 import random
 import socket
@@ -66,11 +67,27 @@ TALKBACK_RTP_PORT = 40004
 TALKBACK_RTP_PAYLOAD_TYPE = 97
 TALKBACK_SAMPLE_RATE = 8000
 TALKBACK_CODEC = "speex/8000"
-MAX_PENDING_ICE_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
 _AIORTC_MODULES: SimpleNamespace | None = None
+_DNS_MDNS_RDATA_MODULES = (
+    "dns.rdtypes.IN.A",
+    "dns.rdtypes.IN.AAAA",
+    "dns.rdtypes.IN.PTR",
+    "dns.rdtypes.ANY.SRV",
+    "dns.rdtypes.ANY.TXT",
+)
+
+
+def _preload_dns_mdns_modules(
+    import_module: Any = importlib.import_module,
+) -> None:
+    """Preload dnspython mDNS record modules outside HA's event loop."""
+
+    for module_name in _DNS_MDNS_RDATA_MODULES:
+        with suppress(ImportError):
+            import_module(module_name)
 
 
 def _load_aiortc_modules() -> SimpleNamespace:
@@ -79,6 +96,8 @@ def _load_aiortc_modules() -> SimpleNamespace:
     global _AIORTC_MODULES
     if _AIORTC_MODULES is not None:
         return _AIORTC_MODULES
+
+    _preload_dns_mdns_modules()
 
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -129,8 +148,6 @@ class _NativeWebRTCSession:
     def __init__(self, peer: Any) -> None:
         self.peer = peer
         self.player: Any | None = None
-        self.pending_candidates: list[Any] = []
-        self.remote_description_ready = False
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
         self.talkback_requested = False
@@ -626,8 +643,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         try:
             has_audio_media = self._offer_has_audio(offer_sdp)
             session.talkback_requested = self._offer_can_send_microphone(offer_sdp)
-            wants_audio = (
-                has_audio_media and self._offer_accepts_incoming_audio(offer_sdp)
+            wants_audio = has_audio_media and self._offer_should_use_audio_stream(
+                offer_sdp
             )
             stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
 
@@ -662,8 +679,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
-            session.remote_description_ready = True
-            await self._async_flush_webrtc_candidates(session, aiortc_modules)
             answer = await peer.createAnswer()
             await peer.setLocalDescription(answer)
             await self._async_wait_for_ice_gathering(peer)
@@ -688,33 +703,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             aiortc_modules = await self._async_load_aiortc_modules()
         except ImportError:
             return
-
-        if not session.remote_description_ready:
-            if len(session.pending_candidates) < MAX_PENDING_ICE_CANDIDATES:
-                session.pending_candidates.append(candidate)
-            return
-
-        await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
-
-    async def _async_flush_webrtc_candidates(
-        self,
-        session: _NativeWebRTCSession,
-        aiortc_modules: SimpleNamespace,
-    ) -> None:
-        """Add early ICE candidates once the peer has a remote description."""
-
-        pending = session.pending_candidates
-        session.pending_candidates = []
-        for candidate in pending:
-            await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
-
-    async def _async_add_webrtc_candidate(
-        self,
-        session: _NativeWebRTCSession,
-        candidate: Any,
-        aiortc_modules: SimpleNamespace,
-    ) -> None:
-        """Forward one browser ICE candidate to the native WebRTC peer."""
 
         candidate_dict = candidate.to_dict() if hasattr(candidate, "to_dict") else {}
         candidate_sdp = str(
@@ -922,6 +910,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return False
         directions = self._offer_audio_directions(section)
         return "a=inactive" not in directions and "a=sendonly" not in directions
+
+    def _offer_should_use_audio_stream(self, offer_sdp: str) -> bool:
+        """Use audio only for interactive sessions, keeping default camera open autoplay-safe."""
+
+        return self._offer_can_send_microphone(
+            offer_sdp
+        ) and self._offer_accepts_incoming_audio(offer_sdp)
 
     def _offer_can_send_microphone(self, offer_sdp: str) -> bool:
         """Return whether the browser offer can send microphone audio to HA."""

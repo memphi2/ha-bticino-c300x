@@ -96,6 +96,7 @@ from custom_components.bticino_c300x.camera import (
     _filter_link_local_sdp_candidates,
     _NativeWebRTCSession,
     _new_restarting_rtsp_tracks,
+    _preload_dns_mdns_modules,
 )
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
@@ -203,6 +204,26 @@ def test_doorbell_camera_returns_local_still_without_device_warmup() -> None:
     assert asyncio.run(camera.async_camera_image()) == STILL_IMAGE_BYTES
     assert STILL_IMAGE_BYTES.startswith(b"<svg ")
     assert entry.runtime_data.api.activate_calls == []
+
+
+def test_webrtc_preloads_dnspython_mdns_records_without_failing_on_missing_modules() -> None:
+    imported: list[str] = []
+
+    def _fake_import(module_name: str) -> object:
+        imported.append(module_name)
+        if module_name == "dns.rdtypes.ANY.TXT":
+            raise ImportError(module_name)
+        return object()
+
+    _preload_dns_mdns_modules(_fake_import)
+
+    assert imported == [
+        "dns.rdtypes.IN.A",
+        "dns.rdtypes.IN.AAAA",
+        "dns.rdtypes.IN.PTR",
+        "dns.rdtypes.ANY.SRV",
+        "dns.rdtypes.ANY.TXT",
+    ]
 
 
 def test_doorbell_camera_proxy_still_uses_local_fallback() -> None:
@@ -347,52 +368,6 @@ def test_doorbell_camera_reports_talkback_session_state() -> None:
     assert attrs["talkback_active"] is True
     assert attrs["talkback_packets_sent"] == 2
     assert attrs["talkback_last_error"] == "CodecUnavailable"
-
-
-def test_webrtc_candidate_waits_for_remote_description() -> None:
-    class _FakePeer:
-        def __init__(self) -> None:
-            self.candidates: list[Any] = []
-
-        async def addIceCandidate(self, candidate: Any) -> None:
-            self.candidates.append(candidate)
-
-    class _Candidate:
-        def to_dict(self) -> dict[str, Any]:
-            return {
-                "candidate": "candidate:1 1 udp 2130706431 192.0.2.10 5000 typ host",
-                "sdpMid": "0",
-                "sdpMLineIndex": 0,
-            }
-
-    async def _run() -> tuple[_NativeWebRTCSession, _FakePeer]:
-        camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-        peer = _FakePeer()
-        session = _NativeWebRTCSession(peer)
-        camera._webrtc_sessions["session-1"] = session
-        aiortc_modules = SimpleNamespace(
-            candidate_from_sdp=lambda candidate: SimpleNamespace(candidate=candidate)
-        )
-
-        async def _load_aiortc_modules() -> SimpleNamespace:
-            return aiortc_modules
-
-        camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
-        await camera.async_on_webrtc_candidate("session-1", _Candidate())
-
-        assert peer.candidates == []
-        assert len(session.pending_candidates) == 1
-
-        session.remote_description_ready = True
-        await camera._async_flush_webrtc_candidates(session, aiortc_modules)
-        return session, peer
-
-    session, peer = asyncio.run(_run())
-
-    assert session.pending_candidates == []
-    assert len(peer.candidates) == 1
-    assert peer.candidates[0].sdpMid == "0"
-    assert peer.candidates[0].sdpMLineIndex == 0
 
 
 def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -> None:
@@ -541,6 +516,23 @@ def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
         "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
     )
     assert not camera._offer_can_send_microphone(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
+    )
+
+
+def test_doorbell_camera_keeps_default_webrtc_open_video_only_for_autoplay() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert not camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
+    )
+    assert camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
+    )
+    assert not camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
+    )
+    assert not camera._offer_should_use_audio_stream(
         "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
     )
 

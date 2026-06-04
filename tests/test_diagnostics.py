@@ -173,6 +173,9 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         system_metrics={
             "cpu_count": 2,
             "cpu_usage_percent": 3.5,
+            "memory_total_kb": 262144,
+            "memory_available_kb": 151978,
+            "memory_used_kb": 110166,
             "memory_usage_percent": 42.0,
             "temperature_c": 41.2,
         },
@@ -252,6 +255,20 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
     assert diagnostics["configuration"]["dashboard_entity_domains"] == {
         "sensor": 1,
         "switch": 1,
+    }
+    assert diagnostics["runtime"]["system_metrics"] == {
+        "cpu_count": 2,
+        "cpu_usage_percent": 3.5,
+        "load_1m": None,
+        "load_5m": None,
+        "load_15m": None,
+        "load_1m_percent": None,
+        "memory_total_kb": 262144,
+        "memory_available_kb": 151978,
+        "memory_used_kb": 110166,
+        "memory_usage_percent": 42.0,
+        "temperature_c": 41.2,
+        "temperature_source": None,
     }
 
     encoded = json.dumps(diagnostics, sort_keys=True)

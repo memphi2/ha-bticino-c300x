@@ -91,6 +91,66 @@ _DOORBELL_TRANSIENT_STATES = frozenset(
     }
 )
 _DOORBELL_CLOSED_STATES = frozenset({"doorbell_media_closed", "media_closed", "closed"})
+_AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
+    "last_wake_reason",
+    "loop_iterations",
+    "poll_wakeups",
+    "last_poll_timeout_ms",
+    "last_poll_count",
+    "accepted_clients",
+    "open_fd_count",
+    "agent_init_script_present",
+    "agent_init_link_ok",
+    "subscription_count",
+    "recent_event_count",
+    "recent_event_capacity",
+    "display_bridge_registered",
+    "display_bridge_disabled",
+    "home_assistant_connected_this_run",
+    "home_assistant_last_seen_at",
+    "ui_event_revision",
+)
+_AGENT_STATUS_RUNTIME_DIAGNOSTIC_KEYS = tuple(
+    key for key in _AGENT_RUNTIME_DIAGNOSTIC_KEYS if key != "accepted_clients"
+)
+_AGENT_VIDEO_DIAGNOSTIC_KEYS = (
+    "video_running",
+    "video_media_starting",
+    "video_call_active",
+    "video_clients",
+    "video_bridge_open_fds",
+    "video_bridge_active_threads",
+)
+_AGENT_FLEXISIP_DIAGNOSTIC_KEYS = (
+    "flexisip_backup_available",
+    "flexisip_restart_marker",
+    "flexisip_backup_marker",
+    "flexisip_reference_state",
+)
+
+
+def _agent_diagnostic_attributes(
+    diagnostics: dict[str, Any],
+    keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Return selected non-sensitive diagnostic attributes."""
+
+    attrs = {key: diagnostics.get(key) for key in keys}
+    if "poll_wakeups" in keys:
+        attrs["poll_wakeups_per_loop"] = _poll_wakeups_per_loop(diagnostics)
+    return attrs
+
+
+def _poll_wakeups_per_loop(diagnostics: dict[str, Any]) -> float | None:
+    """Return a compact poll wakeup ratio for idle diagnostics."""
+
+    loop_iterations = diagnostics.get("loop_iterations")
+    poll_wakeups = diagnostics.get("poll_wakeups")
+    if type(loop_iterations) not in (int, float) or loop_iterations <= 0:
+        return None
+    if type(poll_wakeups) not in (int, float) or poll_wakeups < 0:
+        return None
+    return round(float(poll_wakeups) / float(loop_iterations), 4)
 
 
 async def async_setup_entry(
@@ -267,32 +327,13 @@ class C300XAgentWritesSensor(C300XEntity, SensorEntity):
             "last_write_class": diagnostics.get("last_write_class"),
             "subscription_store_writes": diagnostics.get("subscription_store_writes"),
             "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
-            "last_wake_reason": diagnostics.get("last_wake_reason"),
-            "loop_iterations": diagnostics.get("loop_iterations"),
-            "poll_wakeups": diagnostics.get("poll_wakeups"),
-            "accepted_clients": diagnostics.get("accepted_clients"),
-            "open_fd_count": diagnostics.get("open_fd_count"),
-            "agent_init_script_present": diagnostics.get("agent_init_script_present"),
-            "agent_init_link_ok": diagnostics.get("agent_init_link_ok"),
-            "subscription_count": diagnostics.get("subscription_count"),
-            "recent_event_count": diagnostics.get("recent_event_count"),
-            "recent_event_capacity": diagnostics.get("recent_event_capacity"),
-            "display_bridge_registered": diagnostics.get("display_bridge_registered"),
-            "display_bridge_disabled": diagnostics.get("display_bridge_disabled"),
-            "home_assistant_connected_this_run": diagnostics.get(
-                "home_assistant_connected_this_run"
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
             ),
-            "home_assistant_last_seen_at": diagnostics.get(
-                "home_assistant_last_seen_at"
-            ),
-            "ui_event_revision": diagnostics.get("ui_event_revision"),
-            "video_running": diagnostics.get("video_running"),
-            "video_media_starting": diagnostics.get("video_media_starting"),
-            "video_call_active": diagnostics.get("video_call_active"),
-            "video_clients": diagnostics.get("video_clients"),
-            "video_bridge_open_fds": diagnostics.get("video_bridge_open_fds"),
-            "video_bridge_active_threads": diagnostics.get(
-                "video_bridge_active_threads"
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_VIDEO_DIAGNOSTIC_KEYS,
             ),
         }
 
@@ -410,29 +451,14 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_write_at": diagnostics.get("last_write_at"),
             "last_write_reason": diagnostics.get("last_write_reason"),
             "last_write_class": diagnostics.get("last_write_class"),
-            "last_wake_reason": diagnostics.get("last_wake_reason"),
-            "poll_wakeups": diagnostics.get("poll_wakeups"),
-            "open_fd_count": diagnostics.get("open_fd_count"),
-            "agent_init_script_present": diagnostics.get("agent_init_script_present"),
-            "agent_init_link_ok": diagnostics.get("agent_init_link_ok"),
-            "subscription_count": diagnostics.get("subscription_count"),
-            "recent_event_count": diagnostics.get("recent_event_count"),
-            "recent_event_capacity": diagnostics.get("recent_event_capacity"),
-            "display_bridge_registered": diagnostics.get("display_bridge_registered"),
-            "display_bridge_disabled": diagnostics.get("display_bridge_disabled"),
-            "home_assistant_connected_this_run": diagnostics.get(
-                "home_assistant_connected_this_run"
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_STATUS_RUNTIME_DIAGNOSTIC_KEYS,
             ),
-            "home_assistant_last_seen_at": diagnostics.get(
-                "home_assistant_last_seen_at"
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_FLEXISIP_DIAGNOSTIC_KEYS,
             ),
-            "ui_event_revision": diagnostics.get("ui_event_revision"),
-            "flexisip_backup_available": diagnostics.get(
-                "flexisip_backup_available"
-            ),
-            "flexisip_restart_marker": diagnostics.get("flexisip_restart_marker"),
-            "flexisip_backup_marker": diagnostics.get("flexisip_backup_marker"),
-            "flexisip_reference_state": diagnostics.get("flexisip_reference_state"),
         }
         if update_state is not None:
             attrs.update(

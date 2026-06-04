@@ -22,7 +22,13 @@ jobs:
       - name: Repository checks
         run: python scripts/check_repo.py
       - name: Native agent ARMHF checks
-        run: make -C native_agent armhf-abi-check armhf-stack-check
+        run: |
+          make -C native_agent armhf-stack-check
+          if [ -n "${C300X_DEVICE_SYSROOT:-}" ] && [ -d "$C300X_DEVICE_SYSROOT/lib" ]; then
+            make -C native_agent armhf-abi-check
+          else
+            echo "Skipping ARMHF ABI check: C300X_DEVICE_SYSROOT is not available on this runner."
+          fi
       - name: Quality scale checks
         run: python scripts/check_quality_scale.py
       - name: Ruff

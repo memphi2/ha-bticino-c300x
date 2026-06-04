@@ -89,6 +89,7 @@ def stage_bundle(
 
     component_dir = component_dir.resolve()
     if not skip_build:
+        _run(["make", "-C", str(ROOT / "native_agent"), "clean"])
         _run(["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"])
     if not AGENT_BINARY.exists():
         raise BundleStageError(

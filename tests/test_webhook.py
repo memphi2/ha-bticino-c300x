@@ -29,6 +29,7 @@ helpers_dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
 helpers_event = types.ModuleType("homeassistant.helpers.event")
 helpers_entity = types.ModuleType("homeassistant.helpers.entity")
 helpers_entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+helpers_issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
 util = sys.modules.setdefault("homeassistant.util", types.ModuleType("homeassistant.util"))
 util_dt = types.ModuleType("homeassistant.util.dt")
 
@@ -72,9 +73,16 @@ helpers.dispatcher = helpers_dispatcher
 helpers.event = helpers_event
 helpers.entity = helpers_entity
 helpers.entity_registry = helpers_entity_registry
+helpers.issue_registry = helpers_issue_registry
 helpers.config_validation = helpers_config_validation
 helpers_config_validation.config_entry_only_config_schema = lambda domain: None
 helpers_entity_registry.async_get = lambda hass: None
+helpers_issue_registry.IssueSeverity = types.SimpleNamespace(
+    ERROR="error",
+    WARNING="warning",
+)
+helpers_issue_registry.async_create_issue = lambda *args, **kwargs: None
+helpers_issue_registry.async_delete_issue = lambda *args, **kwargs: None
 helpers_dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
 helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
 helpers_event.async_call_later = lambda *args, **kwargs: None
@@ -107,6 +115,7 @@ sys.modules["homeassistant.helpers.dispatcher"] = helpers_dispatcher
 sys.modules["homeassistant.helpers.event"] = helpers_event
 sys.modules["homeassistant.helpers.entity"] = helpers_entity
 sys.modules["homeassistant.helpers.entity_registry"] = helpers_entity_registry
+sys.modules["homeassistant.helpers.issue_registry"] = helpers_issue_registry
 sys.modules["homeassistant.util"] = util
 sys.modules["homeassistant.util.dt"] = util_dt
 

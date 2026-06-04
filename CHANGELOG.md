@@ -5,16 +5,16 @@
 ### Changed
 
 - Updates the native C300X device agent to `0.6.0`.
-- Starts the on-demand doorbell live view through the same long-running local
-  camera path used by the C300X mobile app, instead of the short ring preview.
+- Adds a brand-new app-style doorbell streaming path for the on-demand live
+  view, using the same long-running local camera activation as the C300X mobile
+  app instead of the short ring preview.
 - Opens the Home Assistant camera as video-only by default so browsers can
   autoplay the live view. Interactive WebRTC sessions can still request audio
   and talkback.
 
 ### Fixed
 
-- Camera start recovers cleanly after failed or interrupted media sessions
-  instead of requiring a device reboot.
+- Camera start recovers cleanly after failed or interrupted media sessions.
 - Repeated camera starts no longer trip over stale native-agent media state.
 
 ## v0.5.1 - 2026-06-04

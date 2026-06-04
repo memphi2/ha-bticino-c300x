@@ -96,6 +96,7 @@ from custom_components.bticino_c300x.camera import (
     _filter_link_local_sdp_candidates,
     _NativeWebRTCSession,
     _new_restarting_rtsp_tracks,
+    _preload_dns_mdns_modules,
 )
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
@@ -203,6 +204,26 @@ def test_doorbell_camera_returns_local_still_without_device_warmup() -> None:
     assert asyncio.run(camera.async_camera_image()) == STILL_IMAGE_BYTES
     assert STILL_IMAGE_BYTES.startswith(b"<svg ")
     assert entry.runtime_data.api.activate_calls == []
+
+
+def test_webrtc_preloads_dnspython_mdns_records_without_failing_on_missing_modules() -> None:
+    imported: list[str] = []
+
+    def _fake_import(module_name: str) -> object:
+        imported.append(module_name)
+        if module_name == "dns.rdtypes.ANY.TXT":
+            raise ImportError(module_name)
+        return object()
+
+    _preload_dns_mdns_modules(_fake_import)
+
+    assert imported == [
+        "dns.rdtypes.IN.A",
+        "dns.rdtypes.IN.AAAA",
+        "dns.rdtypes.IN.PTR",
+        "dns.rdtypes.ANY.SRV",
+        "dns.rdtypes.ANY.TXT",
+    ]
 
 
 def test_doorbell_camera_proxy_still_uses_local_fallback() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import ipaddress
 import random
 import socket
@@ -71,6 +72,23 @@ STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
 _AIORTC_MODULES: SimpleNamespace | None = None
+_DNS_MDNS_RDATA_MODULES = (
+    "dns.rdtypes.IN.A",
+    "dns.rdtypes.IN.AAAA",
+    "dns.rdtypes.IN.PTR",
+    "dns.rdtypes.ANY.SRV",
+    "dns.rdtypes.ANY.TXT",
+)
+
+
+def _preload_dns_mdns_modules(
+    import_module: Any = importlib.import_module,
+) -> None:
+    """Preload dnspython mDNS record modules outside HA's event loop."""
+
+    for module_name in _DNS_MDNS_RDATA_MODULES:
+        with suppress(ImportError):
+            import_module(module_name)
 
 
 def _load_aiortc_modules() -> SimpleNamespace:
@@ -79,6 +97,8 @@ def _load_aiortc_modules() -> SimpleNamespace:
     global _AIORTC_MODULES
     if _AIORTC_MODULES is not None:
         return _AIORTC_MODULES
+
+    _preload_dns_mdns_modules()
 
     with warnings.catch_warnings():
         warnings.filterwarnings(

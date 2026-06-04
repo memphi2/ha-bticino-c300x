@@ -117,6 +117,9 @@ class _FakeEventState:
     ringer_muted: bool | None = None
     voicemail_total: int | None = None
     voicemail_unread: int | None = None
+    memos_total: int | None = None
+    memos_text_total: int | None = None
+    memos_voice_total: int | None = None
 
 
 @dataclass
@@ -202,6 +205,41 @@ def test_device_event_entity_ignores_unregistered_event_type() -> None:
 
     assert not hasattr(entity, "triggered_event")
     assert not hasattr(entity, "wrote_state")
+
+
+def test_device_event_entity_refreshes_attributes_without_retriggering_same_event() -> None:
+    entity = C300XDeviceAgentEventEntity(
+        _FakeEntry(),  # type: ignore[arg-type]
+        ["doorbell_view_requested"],
+    )
+    entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
+
+    entity._write_event_data(
+        {
+            "entry_id": "entry-1",
+            "event_at": "2026-05-26T12:00:00+00:00",
+            "event_key": "doorbell_view_requested",
+            "event_type": "doorbell_view_requested",
+            "video_available": True,
+            "video_window_available": True,
+        }
+    )
+    first_trigger = entity.triggered_event
+
+    entity._write_event_data(
+        {
+            "entry_id": "entry-1",
+            "event_at": "2026-05-26T12:00:00+00:00",
+            "event_key": "doorbell_view_requested",
+            "event_type": "doorbell_view_requested",
+            "video_available": False,
+            "video_window_available": False,
+        }
+    )
+
+    assert entity.triggered_event == first_trigger
+    assert entity.extra_state_attributes["video_available"] is False
+    assert entity.extra_state_attributes["video_window_available"] is False
 
 
 def test_display_event_types_remain_stable_for_ha_state_translations() -> None:

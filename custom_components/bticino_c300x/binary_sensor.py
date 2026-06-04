@@ -97,8 +97,15 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
     def _handle_event_state_changed(self, entry_id: str) -> None:
         """Refresh HA state when runtime video state is cleared centrally."""
 
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
+        if entry_id != self._entry.entry_id:
+            return
+        event_state = self._entry.runtime_data.event_state
+        if not _video_window_is_active(
+            bool(event_state.video_available),
+            event_state.video_active_until,
+        ):
+            self._clear()
+        self.async_write_ha_state()
 
     @callback
     def _handle_agent_event(self, event) -> None:

@@ -152,10 +152,6 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
                 data.get("video_available"),
                 event_state.last_event_data.get("video_available"),
             ),
-            "video_window_available": _first_value(
-                data.get("video_window_available"),
-                event_state.last_event_data.get("video_window_available"),
-            ),
             "video_active_until": data.get("video_active_until")
             or event_state.video_active_until,
             "smartphone_forwarding_mode": _first_value(
@@ -245,16 +241,10 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
     @callback
     def _write_event_data(self, event_data: dict[str, Any]) -> None:
         event_at = event_data.get("event_at")
+        if event_at == self._last_event_at:
+            return
         event_key = agent_event_key(event_data)
         if event_key not in self._event_keys:
-            return
-        if event_at == self._last_event_at:
-            language = _language(getattr(self, "hass", None))
-            self._last_event_data = agent_event_display_data(
-                event_data,
-                language,
-            )
-            self.async_write_ha_state()
             return
         self._last_event_at = event_at
         if event_key:

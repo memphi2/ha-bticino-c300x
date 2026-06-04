@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import ipaddress
 import random
 import socket
@@ -27,6 +28,7 @@ from homeassistant.components.stream import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
@@ -37,10 +39,12 @@ from .const import (
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_EVENT_STATE_CHANGED,
 )
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .event_payload import agent_event_key
 from .video import (
+    active_until_is_active,
     call_later,
     doorbell_camera_unique_id,
     event_active_seconds,
@@ -63,10 +67,28 @@ TALKBACK_RTP_PORT = 40004
 TALKBACK_RTP_PAYLOAD_TYPE = 97
 TALKBACK_SAMPLE_RATE = 8000
 TALKBACK_CODEC = "speex/8000"
+MAX_PENDING_ICE_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
 _AIORTC_MODULES: SimpleNamespace | None = None
+_DNS_MDNS_RDATA_MODULES = (
+    "dns.rdtypes.IN.A",
+    "dns.rdtypes.IN.AAAA",
+    "dns.rdtypes.IN.PTR",
+    "dns.rdtypes.ANY.SRV",
+    "dns.rdtypes.ANY.TXT",
+)
+
+
+def _preload_dns_mdns_modules(
+    import_module: Any = importlib.import_module,
+) -> None:
+    """Preload dnspython mDNS record modules outside HA's event loop."""
+
+    for module_name in _DNS_MDNS_RDATA_MODULES:
+        with suppress(ImportError):
+            import_module(module_name)
 
 
 def _load_aiortc_modules() -> SimpleNamespace:
@@ -75,6 +97,8 @@ def _load_aiortc_modules() -> SimpleNamespace:
     global _AIORTC_MODULES
     if _AIORTC_MODULES is not None:
         return _AIORTC_MODULES
+
+    _preload_dns_mdns_modules()
 
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -125,9 +149,13 @@ class _NativeWebRTCSession:
     def __init__(self, peer: Any) -> None:
         self.peer = peer
         self.player: Any | None = None
+        self.pending_candidates: list[Any] = []
+        self.remote_description_ready = False
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
+        self.talkback_requested = False
         self.talkback_active = False
+        self.talkback_packets_sent = 0
 
 
 def _new_restarting_rtsp_tracks(
@@ -417,10 +445,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._recorder_stream_path: str | None = None
         self._bridge_available = False
         self._bridge_status: dict[str, Any] = {}
+        self._video_owner = "unknown"
+        self._external_media_active = False
+        self._external_owner: str | None = None
+        self._external_active_until: int | None = None
+        self._last_video_block_reason: str | None = None
         self._reset = None
+        self._rtsp_prepare_lock = asyncio.Lock()
         self._rtsp_ready_lock = asyncio.Lock()
         self._rtsp_unavailable_until = 0.0
         self._last_rtsp_error: str | None = None
+        self._talkback_last_error: str | None = None
         self._webrtc_sessions: dict[str, _NativeWebRTCSession] = {}
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
@@ -484,18 +519,42 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ),
             "video_available": self._bridge_available,
             "video_window_available": (
-                self._video_window_available or event_state.video_available
+                _video_window_is_active(
+                    self._video_window_available,
+                    self._video_active_until,
+                )
+                or _video_window_is_active(
+                    bool(event_state.video_available),
+                    event_state.video_active_until,
+                )
             ),
-            "video_active_until": self._video_active_until
-            or event_state.video_active_until,
+            "video_active_until": _active_until_attribute(
+                self._video_active_until,
+                event_state.video_active_until,
+            ),
+            "video_owner": self._video_owner,
+            "external_media_active": self._external_media_active,
+            "external_owner": self._external_owner,
+            "external_active_until": self._external_active_until,
+            "last_video_block_reason": self._last_video_block_reason,
             "talkback_supported": talkback_supported,
+            "talkback_requires_https": talkback_supported,
+            "talkback_requested": any(
+                session.talkback_requested
+                for session in self._webrtc_sessions.values()
+            ),
             "talkback_active": any(
                 session.talkback_active for session in self._webrtc_sessions.values()
+            ),
+            "talkback_packets_sent": sum(
+                session.talkback_packets_sent
+                for session in self._webrtc_sessions.values()
             ),
             "talkback_proxy_running": bool(self._bridge_status.get("talkback_running")),
             "talkback_codec": self._bridge_status.get("talkback_codec")
             or (TALKBACK_CODEC if talkback_supported else None),
             "talkback_payload_type": talkback_payload_type,
+            "talkback_last_error": self._talkback_last_error,
             "bridge": self._bridge_status,
         }
 
@@ -586,6 +645,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         try:
             has_audio_media = self._offer_has_audio(offer_sdp)
+            session.talkback_requested = self._offer_can_send_microphone(offer_sdp)
             wants_audio = (
                 has_audio_media and self._offer_accepts_incoming_audio(offer_sdp)
             )
@@ -622,6 +682,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
+            session.remote_description_ready = True
+            await self._async_flush_webrtc_candidates(session, aiortc_modules)
             answer = await peer.createAnswer()
             await peer.setLocalDescription(answer)
             await self._async_wait_for_ice_gathering(peer)
@@ -647,6 +709,33 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         except ImportError:
             return
 
+        if not session.remote_description_ready:
+            if len(session.pending_candidates) < MAX_PENDING_ICE_CANDIDATES:
+                session.pending_candidates.append(candidate)
+            return
+
+        await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
+
+    async def _async_flush_webrtc_candidates(
+        self,
+        session: _NativeWebRTCSession,
+        aiortc_modules: SimpleNamespace,
+    ) -> None:
+        """Add early ICE candidates once the peer has a remote description."""
+
+        pending = session.pending_candidates
+        session.pending_candidates = []
+        for candidate in pending:
+            await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
+
+    async def _async_add_webrtc_candidate(
+        self,
+        session: _NativeWebRTCSession,
+        candidate: Any,
+        aiortc_modules: SimpleNamespace,
+    ) -> None:
+        """Forward one browser ICE candidate to the native WebRTC peer."""
+
         candidate_dict = candidate.to_dict() if hasattr(candidate, "to_dict") else {}
         candidate_sdp = str(
             candidate_dict.get("candidate")
@@ -660,16 +749,14 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             candidate_sdp = candidate_sdp[len("candidate:") :]
 
         rtc_candidate = aiortc_modules.candidate_from_sdp(candidate_sdp)
-        rtc_candidate.sdpMid = candidate_dict.get("sdpMid") or getattr(
-            candidate,
-            "sdpMid",
-            None,
-        )
-        rtc_candidate.sdpMLineIndex = candidate_dict.get("sdpMLineIndex") or getattr(
-            candidate,
-            "sdpMLineIndex",
-            None,
-        )
+        sdp_mid = candidate_dict.get("sdpMid")
+        if sdp_mid is None:
+            sdp_mid = getattr(candidate, "sdpMid", None)
+        sdp_mline_index = candidate_dict.get("sdpMLineIndex")
+        if sdp_mline_index is None:
+            sdp_mline_index = getattr(candidate, "sdpMLineIndex", None)
+        rtc_candidate.sdpMid = sdp_mid
+        rtc_candidate.sdpMLineIndex = sdp_mline_index
         await session.peer.addIceCandidate(rtc_candidate)
 
     @callback
@@ -721,25 +808,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_warmup_video(self) -> None:
         """Mark the video window and refresh bridge metadata before RTSP opens."""
 
-        await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        try:
+            await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
+        except Exception:  # noqa: BLE001 - refresh status before re-raising API failure
+            with suppress(Exception):
+                status = await self._entry.runtime_data.api.async_doorbell_video_status()
+                self._apply_status(status)
+                self._async_write_ha_state_if_ready()
+            raise
         with suppress(Exception):
             status = await self._entry.runtime_data.api.async_doorbell_video_status()
             self._apply_status(status)
 
     async def _async_restart_video_reader(self, *, audio: bool = False) -> None:
-        await self._entry.runtime_data.api.async_stop_doorbell_video()
-        await asyncio.sleep(1.0)
-        await self._async_warmup_video()
-        await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+        async with self._rtsp_prepare_lock:
+            await self._entry.runtime_data.api.async_stop_doorbell_video()
+            await asyncio.sleep(1.0)
+            await self._async_warmup_video()
+            await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
 
     async def _async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 
-        self._raise_if_rtsp_cooling_down()
-        await self._async_warmup_video()
-        stream_url = self._build_stream_url(audio=audio)
-        await self._async_wait_for_rtsp_ready(stream_url)
-        return stream_url
+        async with self._rtsp_prepare_lock:
+            self._raise_if_rtsp_cooling_down()
+            await self._async_warmup_video()
+            stream_url = self._build_stream_url(audio=audio)
+            await self._async_wait_for_rtsp_ready(stream_url)
+            return stream_url
 
     async def _async_wait_for_rtsp_ready(self, stream_url: str) -> None:
         """Wait briefly for the native RTSP bridge to accept RTSP requests."""
@@ -844,12 +940,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         section = self._offer_audio_section(offer_sdp)
         if section is None:
             return False
-        directions = {
+        directions = self._offer_audio_directions(section)
+        return "a=inactive" not in directions and "a=sendonly" not in directions
+
+    def _offer_can_send_microphone(self, offer_sdp: str) -> bool:
+        """Return whether the browser offer can send microphone audio to HA."""
+
+        section = self._offer_audio_section(offer_sdp)
+        if section is None:
+            return False
+        directions = self._offer_audio_directions(section)
+        return "a=inactive" not in directions and "a=recvonly" not in directions
+
+    def _offer_audio_directions(self, audio_section: str) -> set[str]:
+        """Return SDP direction attributes from an audio media section."""
+
+        return {
             line.strip()
-            for line in section.splitlines()
+            for line in audio_section.splitlines()
             if line.strip() in {"a=sendonly", "a=recvonly", "a=sendrecv", "a=inactive"}
         }
-        return "a=inactive" not in directions and "a=sendonly" not in directions
 
     def _offer_audio_section(self, offer_sdp: str) -> str | None:
         """Return the SDP audio media section from a WebRTC offer."""
@@ -874,6 +984,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         loop = asyncio.get_running_loop()
         host = self._agent_host_for_socket()
         if not host:
+            self._set_talkback_error("agent_host_missing")
             return
 
         sock: socket.socket | None = None
@@ -893,6 +1004,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             family, socktype, proto, _canonname, target = infos[0]
             sock = socket.socket(family, socktype, proto)
             sock.setblocking(False)
+            self._set_talkback_error(None)
             self._set_talkback_active(session_id, True)
 
             encoder = aiortc_modules.av.CodecContext.create("libspeex", "w")
@@ -924,6 +1036,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                             marker,
                         )
                         await loop.sock_sendto(sock, rtp, target)
+                        self._increment_talkback_packets(session_id)
                         sequence = (sequence + 1) & 0xFFFF
                         timestamp = (
                             timestamp
@@ -932,7 +1045,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         marker = False
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as err:
+            media_stream_error = getattr(aiortc_modules, "MediaStreamError", None)
+            if media_stream_error is None or not isinstance(err, media_stream_error):
+                self._set_talkback_error(type(err).__name__)
             return
         finally:
             if encoder is not None and sock is not None and target is not None:
@@ -965,6 +1081,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
         session.talkback_active = active
         self._async_write_ha_state_if_ready()
+
+    def _set_talkback_error(self, error: str | None) -> None:
+        if self._talkback_last_error == error:
+            return
+        self._talkback_last_error = error
+        self._async_write_ha_state_if_ready()
+
+    def _increment_talkback_packets(self, session_id: str) -> None:
+        session = self._webrtc_sessions.get(session_id)
+        if session is None:
+            return
+        session.talkback_packets_sent += 1
+        if session.talkback_packets_sent == 1:
+            self._async_write_ha_state_if_ready()
 
     def _build_talkback_rtp_packet(
         self,
@@ -1094,6 +1224,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._bridge_status = status.get("bridge") or {}
         self._video_window_available = bool(status.get("window_available"))
         self._video_active_until = status.get("active_until")
+        self._video_owner = str(status.get("media_owner") or "unknown")
+        self._external_media_active = bool(status.get("external_media_active"))
+        self._external_owner = optional_string(status.get("external_owner"))
+        self._external_active_until = status.get("external_active_until")
+        self._last_video_block_reason = optional_string(status.get("last_block_reason"))
         if status.get("stream_path"):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))
@@ -1109,6 +1244,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 self._handle_agent_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_EVENT_STATE_CHANGED,
+                self._handle_event_state_changed,
+            )
+        )
+
+    @callback
+    def _handle_event_state_changed(self, entry_id: str) -> None:
+        """Refresh attributes when runtime video state is cleared centrally."""
+
+        if entry_id == self._entry.entry_id:
+            self._async_write_ha_state_if_ready()
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1135,6 +1284,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             self._reset()
         active_seconds = event_active_seconds(event.data)
 
+        @callback
         def _reset(now: Any = None) -> None:
             self._reset = None
             self._clear_video_window(cancel_timer=False)
@@ -1158,6 +1308,23 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     def _async_write_ha_state_if_ready(self) -> None:
         if hasattr(self, "async_write_ha_state"):
             self.async_write_ha_state()
+
+
+def _video_window_is_active(available: bool, active_until: str | None) -> bool:
+    """Return true when a video window is currently usable by HA."""
+
+    if not available:
+        return False
+    return active_until_is_active(active_until) if active_until else True
+
+
+def _active_until_attribute(*values: str | None) -> str | None:
+    """Return the first non-expired active-until timestamp."""
+
+    for value in values:
+        if value and active_until_is_active(value):
+            return value
+    return None
 
 
 def _filter_link_local_sdp_candidates(sdp: str) -> str:

@@ -643,8 +643,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         try:
             has_audio_media = self._offer_has_audio(offer_sdp)
             session.talkback_requested = self._offer_can_send_microphone(offer_sdp)
-            wants_audio = (
-                has_audio_media and self._offer_accepts_incoming_audio(offer_sdp)
+            wants_audio = has_audio_media and self._offer_should_use_audio_stream(
+                offer_sdp
             )
             stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
 
@@ -910,6 +910,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return False
         directions = self._offer_audio_directions(section)
         return "a=inactive" not in directions and "a=sendonly" not in directions
+
+    def _offer_should_use_audio_stream(self, offer_sdp: str) -> bool:
+        """Use audio only for interactive sessions, keeping default camera open autoplay-safe."""
+
+        return self._offer_can_send_microphone(
+            offer_sdp
+        ) and self._offer_accepts_incoming_audio(offer_sdp)
 
     def _offer_can_send_microphone(self, offer_sdp: str) -> bool:
         """Return whether the browser offer can send microphone audio to HA."""

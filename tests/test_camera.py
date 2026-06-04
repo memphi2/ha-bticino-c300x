@@ -520,6 +520,23 @@ def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
     )
 
 
+def test_doorbell_camera_keeps_default_webrtc_open_video_only_for_autoplay() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert not camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
+    )
+    assert camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
+    )
+    assert not camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
+    )
+    assert not camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
+    )
+
+
 def test_doorbell_camera_builds_speex_talkback_rtp_packet() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
 

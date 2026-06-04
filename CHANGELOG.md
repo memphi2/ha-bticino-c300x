@@ -4,20 +4,18 @@
 
 ### Changed
 
-- Updates the native C300X device agent to `0.6.0` for the new doorbell media
-  bridge runtime.
-- Starts the on-demand doorbell camera through the app-style SIP/SRTP media
-  path used by the C300X mobile app, instead of the short doorbell-call window.
-- Keeps normal Home Assistant camera opening video-only so browser autoplay can
-  start immediately, while interactive WebRTC sessions can still request audio
+- Updates the native C300X device agent to `0.6.0`.
+- Starts the on-demand doorbell live view through the same long-running local
+  camera path used by the C300X mobile app, instead of the short ring preview.
+- Opens the Home Assistant camera as video-only by default so browsers can
+  autoplay the live view. Interactive WebRTC sessions can still request audio
   and talkback.
 
 ### Fixed
 
-- Prevents stale RTSP listener sockets from blocking a later camera start with
-  `video_activate_failed` after a failed or interrupted media bridge run.
-- Cleans up media bridge file-descriptor state deterministically when the RTSP
-  server thread stops or the bridge is restarted.
+- Camera start recovers cleanly after failed or interrupted media sessions
+  instead of requiring a device reboot.
+- Repeated camera starts no longer trip over stale native-agent media state.
 
 ## v0.5.1 - 2026-06-04
 

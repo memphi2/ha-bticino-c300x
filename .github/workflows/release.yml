@@ -1,8 +1,6 @@
 name: Build HACS Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -28,8 +26,3 @@ jobs:
           name: ha-bticino-c300x
           path: .release/ha-bticino-c300x.zip
           if-no-files-found: error
-      - name: Attach release asset
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" .release/ha-bticino-c300x.zip --clobber

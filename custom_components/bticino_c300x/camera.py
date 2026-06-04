@@ -67,7 +67,6 @@ TALKBACK_RTP_PORT = 40004
 TALKBACK_RTP_PAYLOAD_TYPE = 97
 TALKBACK_SAMPLE_RATE = 8000
 TALKBACK_CODEC = "speex/8000"
-MAX_PENDING_ICE_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
@@ -149,8 +148,6 @@ class _NativeWebRTCSession:
     def __init__(self, peer: Any) -> None:
         self.peer = peer
         self.player: Any | None = None
-        self.pending_candidates: list[Any] = []
-        self.remote_description_ready = False
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
         self.talkback_requested = False
@@ -682,8 +679,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
-            session.remote_description_ready = True
-            await self._async_flush_webrtc_candidates(session, aiortc_modules)
             answer = await peer.createAnswer()
             await peer.setLocalDescription(answer)
             await self._async_wait_for_ice_gathering(peer)
@@ -708,33 +703,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             aiortc_modules = await self._async_load_aiortc_modules()
         except ImportError:
             return
-
-        if not session.remote_description_ready:
-            if len(session.pending_candidates) < MAX_PENDING_ICE_CANDIDATES:
-                session.pending_candidates.append(candidate)
-            return
-
-        await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
-
-    async def _async_flush_webrtc_candidates(
-        self,
-        session: _NativeWebRTCSession,
-        aiortc_modules: SimpleNamespace,
-    ) -> None:
-        """Add early ICE candidates once the peer has a remote description."""
-
-        pending = session.pending_candidates
-        session.pending_candidates = []
-        for candidate in pending:
-            await self._async_add_webrtc_candidate(session, candidate, aiortc_modules)
-
-    async def _async_add_webrtc_candidate(
-        self,
-        session: _NativeWebRTCSession,
-        candidate: Any,
-        aiortc_modules: SimpleNamespace,
-    ) -> None:
-        """Forward one browser ICE candidate to the native WebRTC peer."""
 
         candidate_dict = candidate.to_dict() if hasattr(candidate, "to_dict") else {}
         candidate_sdp = str(

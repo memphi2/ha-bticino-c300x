@@ -6,8 +6,7 @@
 
 - Updates the native C300X device agent to `0.6.0`.
 - Adds a brand-new app-style doorbell streaming path for the on-demand live
-  view, using the same long-running local camera activation as the C300X mobile
-  app instead of the short ring preview.
+  view, using the long-running local camera activation.
 - Opens the Home Assistant camera as video-only by default so browsers can
   autoplay the live view. Interactive WebRTC sessions can still request audio
   and talkback.

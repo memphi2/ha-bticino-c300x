@@ -522,6 +522,7 @@ def _safe_system_metrics(runtime: Any | None) -> dict[str, Any] | None:
             "load_1m_percent",
             "memory_total_kb",
             "memory_available_kb",
+            "memory_used_kb",
             "memory_usage_percent",
             "temperature_c",
             "temperature_source",

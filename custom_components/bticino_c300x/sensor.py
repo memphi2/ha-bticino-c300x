@@ -93,6 +93,18 @@ _DOORBELL_TRANSIENT_STATES = frozenset(
 _DOORBELL_CLOSED_STATES = frozenset({"doorbell_media_closed", "media_closed", "closed"})
 
 
+def _poll_wakeups_per_loop(diagnostics: dict[str, Any]) -> float | None:
+    """Return a compact poll wakeup ratio for idle diagnostics."""
+
+    loop_iterations = diagnostics.get("loop_iterations")
+    poll_wakeups = diagnostics.get("poll_wakeups")
+    if type(loop_iterations) not in (int, float) or loop_iterations <= 0:
+        return None
+    if type(poll_wakeups) not in (int, float) or poll_wakeups < 0:
+        return None
+    return round(float(poll_wakeups) / float(loop_iterations), 4)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -270,6 +282,9 @@ class C300XAgentWritesSensor(C300XEntity, SensorEntity):
             "last_wake_reason": diagnostics.get("last_wake_reason"),
             "loop_iterations": diagnostics.get("loop_iterations"),
             "poll_wakeups": diagnostics.get("poll_wakeups"),
+            "poll_wakeups_per_loop": _poll_wakeups_per_loop(diagnostics),
+            "last_poll_timeout_ms": diagnostics.get("last_poll_timeout_ms"),
+            "last_poll_count": diagnostics.get("last_poll_count"),
             "accepted_clients": diagnostics.get("accepted_clients"),
             "open_fd_count": diagnostics.get("open_fd_count"),
             "agent_init_script_present": diagnostics.get("agent_init_script_present"),
@@ -411,7 +426,11 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_write_reason": diagnostics.get("last_write_reason"),
             "last_write_class": diagnostics.get("last_write_class"),
             "last_wake_reason": diagnostics.get("last_wake_reason"),
+            "loop_iterations": diagnostics.get("loop_iterations"),
             "poll_wakeups": diagnostics.get("poll_wakeups"),
+            "poll_wakeups_per_loop": _poll_wakeups_per_loop(diagnostics),
+            "last_poll_timeout_ms": diagnostics.get("last_poll_timeout_ms"),
+            "last_poll_count": diagnostics.get("last_poll_count"),
             "open_fd_count": diagnostics.get("open_fd_count"),
             "agent_init_script_present": diagnostics.get("agent_init_script_present"),
             "agent_init_link_ok": diagnostics.get("agent_init_link_ok"),

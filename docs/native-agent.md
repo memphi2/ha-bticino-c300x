@@ -197,5 +197,9 @@ exercises maintenance/write paths in a temporary runtime tree.
 ## ABI and stack guards
 
 `armhf-abi-check` ensures the produced ARMHF binary stays compatible with the
-firmware glibc baseline. `armhf-stack-check` rejects oversized or dynamic stack
-usage records for the ARMHF build.
+firmware glibc baseline and needs a C300X firmware sysroot through
+`C300X_DEVICE_SYSROOT`. Public CI runners do not ship that proprietary sysroot,
+so they still compile the ARMHF target and run `armhf-stack-check`, while local
+release builds must run the ABI check against the real device sysroot.
+`armhf-stack-check` rejects oversized or dynamic stack usage records for the
+ARMHF build.

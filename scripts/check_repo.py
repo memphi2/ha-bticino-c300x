@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_HOME_ASSISTANT_VERSION = "2026.5.0"
+CURRENT_RELEASE_VERSION = "0.6.1"
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
 TEXT_SUFFIXES = {
     ".c",
@@ -95,7 +96,7 @@ REQUIRED_PATHS = [
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",
     "device_qml/js/c300x_memos.js",
-    ".github/release-notes/v0.6.0.md",
+    f".github/release-notes/v{CURRENT_RELEASE_VERSION}.md",
     ".github/workflows/release.yml",
     ".github/workflows/validate.yml",
 ]
@@ -367,8 +368,10 @@ def check_release_metadata() -> list[str]:
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         failures.append("manifest version must be a stable semver release")
         return failures
-    if version != "0.6.0":
-        failures.append(f"release metadata must stay on 0.6.0, got {version}")
+    if version != CURRENT_RELEASE_VERSION:
+        failures.append(
+            f"release metadata must stay on {CURRENT_RELEASE_VERSION}, got {version}"
+        )
     release_tag = f"v{version}"
     release_note = ROOT / ".github" / "release-notes" / f"{release_tag}.md"
     required_mentions = {

@@ -244,6 +244,86 @@ def test_doorbell_camera_exposes_native_webrtc_offer_handler() -> None:
     assert "async_on_webrtc_candidate" in C300XDoorbellCamera.__dict__
 
 
+def test_doorbell_camera_buffers_ice_candidate_before_remote_description() -> None:
+    class _Peer:
+        def __init__(self) -> None:
+            self.remoteDescription: object | None = None
+            self.candidates: list[Any] = []
+
+        async def addIceCandidate(self, candidate: Any) -> None:  # noqa: N802
+            self.candidates.append(candidate)
+
+    async def _load_aiortc_modules() -> SimpleNamespace:
+        return SimpleNamespace(candidate_from_sdp=lambda sdp: SimpleNamespace(sdp=sdp))
+
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    peer = _Peer()
+    camera._webrtc_sessions["session-1"] = _NativeWebRTCSession(peer)
+    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+
+    asyncio.run(
+        camera.async_on_webrtc_candidate(
+            "session-1",
+            SimpleNamespace(
+                candidate="candidate:1 1 udp 2122260223 192.0.2.10 5000 typ host",
+                sdpMid="0",
+                sdpMLineIndex=0,
+            ),
+        )
+    )
+
+    assert peer.candidates == []
+    assert len(camera._webrtc_sessions["session-1"].pending_ice_candidates) == 1
+
+    peer.remoteDescription = object()
+    asyncio.run(
+        camera._async_flush_pending_webrtc_candidates(
+            camera._webrtc_sessions["session-1"]
+        )
+    )
+
+    assert len(peer.candidates) == 1
+    assert peer.candidates[0].sdp == "1 1 udp 2122260223 192.0.2.10 5000 typ host"
+    assert peer.candidates[0].sdpMid == "0"
+    assert peer.candidates[0].sdpMLineIndex == 0
+    assert camera._webrtc_sessions["session-1"].pending_ice_candidates == []
+
+
+def test_doorbell_camera_forwards_ice_candidate_after_remote_description() -> None:
+    class _Peer:
+        remoteDescription = object()
+
+        def __init__(self) -> None:
+            self.candidates: list[Any] = []
+
+        async def addIceCandidate(self, candidate: Any) -> None:  # noqa: N802
+            self.candidates.append(candidate)
+
+    async def _load_aiortc_modules() -> SimpleNamespace:
+        return SimpleNamespace(candidate_from_sdp=lambda sdp: SimpleNamespace(sdp=sdp))
+
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    peer = _Peer()
+    camera._webrtc_sessions["session-1"] = _NativeWebRTCSession(peer)
+    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+
+    asyncio.run(
+        camera.async_on_webrtc_candidate(
+            "session-1",
+            SimpleNamespace(
+                candidate="candidate:1 1 udp 2122260223 192.0.2.10 5000 typ host",
+                sdpMid="0",
+                sdpMLineIndex=0,
+            ),
+        )
+    )
+
+    assert len(peer.candidates) == 1
+    assert peer.candidates[0].sdp == "1 1 udp 2122260223 192.0.2.10 5000 typ host"
+    assert peer.candidates[0].sdpMid == "0"
+    assert peer.candidates[0].sdpMLineIndex == 0
+
+
 def test_doorbell_camera_mirrors_ha_ice_servers_for_cloud_webrtc() -> None:
     class _AiortcIceServer:
         def __init__(
@@ -520,14 +600,17 @@ def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
     )
 
 
-def test_doorbell_camera_keeps_default_webrtc_open_video_only_for_autoplay() -> None:
+def test_doorbell_camera_uses_audio_whenever_offer_accepts_incoming_audio() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
 
-    assert not camera._offer_should_use_audio_stream(
+    assert camera._offer_should_use_audio_stream(
         "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
     )
     assert camera._offer_should_use_audio_stream(
         "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
+    )
+    assert camera._offer_should_use_audio_stream(
+        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
     )
     assert not camera._offer_should_use_audio_stream(
         "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"

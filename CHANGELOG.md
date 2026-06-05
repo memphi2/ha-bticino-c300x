@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.6.1 - 2026-06-05
+
+### Fixed
+
+- Requests door-station audio whenever the browser WebRTC offer can receive
+  audio, while keeping microphone talkback capability separate.
+- Buffers early trickle ICE candidates until the WebRTC peer connection has a
+  remote description, avoiding noisy `addIceCandidate` race warnings without
+  dropping browser candidates.
+
+### Notes
+
+- The native C300X device agent is unchanged from `0.6.0`; this is a Home
+  Assistant integration hotfix.
+
 ## v0.6.0 - 2026-06-05
 
 ### Changed

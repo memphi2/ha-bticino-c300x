@@ -153,6 +153,7 @@ class _NativeWebRTCSession:
         self.talkback_requested = False
         self.talkback_active = False
         self.talkback_packets_sent = 0
+        self.pending_ice_candidates: list[Any | None] = []
 
 
 def _new_restarting_rtsp_tracks(
@@ -679,6 +680,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
+            await self._async_flush_pending_webrtc_candidates(session)
             answer = await peer.createAnswer()
             await peer.setLocalDescription(answer)
             await self._async_wait_for_ice_gathering(peer)
@@ -711,21 +713,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             or ""
         )
         if not candidate_sdp:
-            await session.peer.addIceCandidate(None)
-            return
-        if candidate_sdp.startswith("candidate:"):
-            candidate_sdp = candidate_sdp[len("candidate:") :]
+            rtc_candidate = None
+        else:
+            if candidate_sdp.startswith("candidate:"):
+                candidate_sdp = candidate_sdp[len("candidate:") :]
 
-        rtc_candidate = aiortc_modules.candidate_from_sdp(candidate_sdp)
-        sdp_mid = candidate_dict.get("sdpMid")
-        if sdp_mid is None:
-            sdp_mid = getattr(candidate, "sdpMid", None)
-        sdp_mline_index = candidate_dict.get("sdpMLineIndex")
-        if sdp_mline_index is None:
-            sdp_mline_index = getattr(candidate, "sdpMLineIndex", None)
-        rtc_candidate.sdpMid = sdp_mid
-        rtc_candidate.sdpMLineIndex = sdp_mline_index
+            rtc_candidate = aiortc_modules.candidate_from_sdp(candidate_sdp)
+            sdp_mid = candidate_dict.get("sdpMid")
+            if sdp_mid is None:
+                sdp_mid = getattr(candidate, "sdpMid", None)
+            sdp_mline_index = candidate_dict.get("sdpMLineIndex")
+            if sdp_mline_index is None:
+                sdp_mline_index = getattr(candidate, "sdpMLineIndex", None)
+            rtc_candidate.sdpMid = sdp_mid
+            rtc_candidate.sdpMLineIndex = sdp_mline_index
+        if getattr(session.peer, "remoteDescription", None) is None:
+            session.pending_ice_candidates.append(rtc_candidate)
+            return
+
         await session.peer.addIceCandidate(rtc_candidate)
+
+    async def _async_flush_pending_webrtc_candidates(
+        self,
+        session: _NativeWebRTCSession,
+    ) -> None:
+        """Replay ICE candidates that arrived before the remote description."""
+
+        while session.pending_ice_candidates:
+            await session.peer.addIceCandidate(session.pending_ice_candidates.pop(0))
 
     @callback
     def close_webrtc_session(self, session_id: str) -> None:
@@ -912,11 +927,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         return "a=inactive" not in directions and "a=sendonly" not in directions
 
     def _offer_should_use_audio_stream(self, offer_sdp: str) -> bool:
-        """Use audio only for interactive sessions, keeping default camera open autoplay-safe."""
+        """Return whether HA should request doorbell audio for this offer."""
 
-        return self._offer_can_send_microphone(
-            offer_sdp
-        ) and self._offer_accepts_incoming_audio(offer_sdp)
+        return self._offer_accepts_incoming_audio(offer_sdp)
 
     def _offer_can_send_microphone(self, offer_sdp: str) -> bool:
         """Return whether the browser offer can send microphone audio to HA."""

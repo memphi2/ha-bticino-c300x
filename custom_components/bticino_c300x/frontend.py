@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +15,9 @@ if TYPE_CHECKING:
 FRONTEND_DIR = Path(__file__).with_name("frontend")
 FRONTEND_URL_PATH = f"/{DOMAIN}/frontend"
 DOORBELL_CALL_CARD_FILENAME = "c300x-doorbell-call-card.js"
+DOORBELL_CALL_CARD_METADATA_FILENAME = "c300x-doorbell-call-card-metadata.js"
 DATA_FRONTEND_MODULE_URL = "frontend_module_url"
+DATA_FRONTEND_METADATA_URL = "frontend_metadata_url"
 
 
 async def async_setup_frontend(hass: HomeAssistant) -> None:
@@ -23,16 +26,53 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
     domain_data: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
     module_url = (
         f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_FILENAME}"
-        f"?v={_frontend_asset_version()}"
+        f"?v={_frontend_asset_version(DOORBELL_CALL_CARD_FILENAME)}"
     )
-    if domain_data.get(DATA_FRONTEND_MODULE_URL) != module_url:
+    metadata_url = (
+        f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_METADATA_FILENAME}"
+        f"?v={_frontend_asset_version(DOORBELL_CALL_CARD_METADATA_FILENAME)}"
+    )
+    previous_module_url = domain_data.get(DATA_FRONTEND_MODULE_URL)
+    previous_metadata_url = domain_data.get(DATA_FRONTEND_METADATA_URL)
+    if previous_module_url != module_url or previous_metadata_url != metadata_url:
         from homeassistant.components.http import StaticPathConfig
 
         await hass.http.async_register_static_paths(
             [StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIR), True)]
         )
+        _register_frontend_module_url(
+            hass,
+            metadata_url,
+            (previous_metadata_url, previous_module_url),
+        )
         domain_data[DATA_FRONTEND_MODULE_URL] = module_url
+        domain_data[DATA_FRONTEND_METADATA_URL] = metadata_url
     await _async_ensure_lovelace_resource(hass, module_url)
+
+
+def _register_frontend_module_url(
+    hass: HomeAssistant,
+    metadata_url: str,
+    previous_urls: tuple[Any, ...],
+) -> None:
+    """Make Home Assistant load card metadata for the add-card picker."""
+
+    try:
+        from homeassistant.components import frontend as ha_frontend  # noqa: PLC0415
+    except (ImportError, ModuleNotFoundError):
+        return
+
+    for previous_url in previous_urls:
+        if previous_url == metadata_url or not isinstance(previous_url, str):
+            continue
+        with suppress(KeyError):
+            ha_frontend.remove_extra_js_url(hass, previous_url)
+    try:
+        ha_frontend.add_extra_js_url(hass, metadata_url)
+    except KeyError:
+        # The frontend dependency owns this manager. If HA is still starting it,
+        # the Lovelace resource registration below remains the fallback path.
+        return
 
 
 async def _async_ensure_lovelace_resource(
@@ -93,10 +133,10 @@ async def _async_ensure_lovelace_resource(
                 await async_delete_item(duplicate_id)
 
 
-def _frontend_asset_version() -> int:
+def _frontend_asset_version(filename: str = DOORBELL_CALL_CARD_FILENAME) -> str:
     """Return a cache-busting version for the bundled frontend module."""
 
     try:
-        return (FRONTEND_DIR / DOORBELL_CALL_CARD_FILENAME).stat().st_mtime_ns
+        return sha256((FRONTEND_DIR / filename).read_bytes()).hexdigest()[:16]
     except OSError:
-        return 0
+        return "0"

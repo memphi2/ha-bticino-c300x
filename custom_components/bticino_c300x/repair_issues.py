@@ -19,8 +19,10 @@ from .const import (
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_VIDEO_ENABLED,
     DOMAIN,
+    FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
@@ -32,8 +34,6 @@ DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
-_DOORBELL_CALL_CARD_TYPE = "custom:c300x-doorbell-call-card"
-_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
@@ -141,11 +141,7 @@ def _sync_frontend_card_setup_hint_issue(hass: HomeAssistant, entry: ConfigEntry
     ):
         async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
         return
-    if _frontend_card_setup_dismissed(entry):
-        async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
-        return
-    if _frontend_card_setup_present(hass, entry):
-        _mark_frontend_card_setup_dismissed(hass, entry)
+    if _frontend_card_setup_repair_handled(entry):
         async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
         return
     _create_issue(
@@ -425,10 +421,13 @@ def _registry_entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     return registry.async_get(entity_id) is not None
 
 
-def _frontend_card_setup_dismissed(entry: ConfigEntry) -> bool:
-    """Return true when the Lovelace card setup hint was already handled."""
+def _frontend_card_setup_repair_handled(entry: ConfigEntry) -> bool:
+    """Return true when this Lovelace card repair generation was handled."""
 
-    return entry.options.get(CONF_FRONTEND_CARD_SETUP_DISMISSED) is True
+    return (
+        entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
+        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+    )
 
 
 def _mark_frontend_card_setup_dismissed(
@@ -437,7 +436,7 @@ def _mark_frontend_card_setup_dismissed(
 ) -> None:
     """Persist that the Lovelace card setup hint has been handled."""
 
-    if _frontend_card_setup_dismissed(entry):
+    if _frontend_card_setup_repair_handled(entry):
         return
     config_entries = getattr(hass, "config_entries", None)
     if config_entries is None or not hasattr(config_entries, "async_update_entry"):
@@ -447,82 +446,8 @@ def _mark_frontend_card_setup_dismissed(
         options={
             **dict(entry.options),
             CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
+                FRONTEND_CARD_SETUP_REPAIR_VERSION
+            ),
         },
     )
-
-
-def _frontend_card_setup_present(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Return true when both generated C300X Lovelace cards already exist."""
-
-    camera_entity_id = _doorbell_camera_entity_id(hass, entry)
-    if camera_entity_id is None:
-        return False
-    try:
-        from homeassistant.components.lovelace.const import (  # noqa: PLC0415
-            LOVELACE_DATA,
-            MODE_STORAGE,
-        )
-    except (ImportError, ModuleNotFoundError):
-        return False
-    lovelace_data = hass.data.get(LOVELACE_DATA) if hasattr(hass, "data") else None
-    dashboards = getattr(lovelace_data, "dashboards", None)
-    if not isinstance(dashboards, dict):
-        return False
-    for dashboard in dashboards.values():
-        if getattr(dashboard, "mode", None) != MODE_STORAGE:
-            continue
-        config = getattr(dashboard, "config", None)
-        if isinstance(config, dict) and _has_c300x_cards(config, camera_entity_id):
-            return True
-    return False
-
-
-def _doorbell_camera_entity_id(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-) -> str | None:
-    """Resolve the doorbell camera entity for a config entry."""
-
-    if er is None:
-        return None
-    try:
-        registry = er.async_get(hass)
-    except Exception:  # noqa: BLE001 - entity registry may be unavailable in tests
-        return None
-    if registry is None or not hasattr(registry, "async_get_entity_id"):
-        return None
-    entity_id = registry.async_get_entity_id(
-        "camera",
-        DOMAIN,
-        f"{entry.entry_id}_{_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX}",
-    )
-    return entity_id if isinstance(entity_id, str) else None
-
-
-def _has_c300x_cards(config: dict[str, object], camera_entity_id: str) -> bool:
-    """Return true when both generated card modes exist in a Lovelace config."""
-
-    modes: set[str] = set()
-    for card in _iter_lovelace_cards(config):
-        if not isinstance(card, dict):
-            continue
-        if card.get("type") != _DOORBELL_CALL_CARD_TYPE:
-            continue
-        if card.get("entity") != camera_entity_id:
-            continue
-        modes.add(str(card.get("mode") or "doorbell_call"))
-    return {"doorbell_call", "home_call"}.issubset(modes)
-
-
-def _iter_lovelace_cards(value: object):
-    """Yield cards from a Lovelace config tree."""
-
-    if isinstance(value, dict):
-        if "type" in value:
-            yield value
-        for key in ("views", "sections", "cards", "entities"):
-            yield from _iter_lovelace_cards(value.get(key))
-        return
-    if isinstance(value, list):
-        for item in value:
-            yield from _iter_lovelace_cards(item)

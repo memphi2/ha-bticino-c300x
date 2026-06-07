@@ -262,12 +262,10 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity) {
-      throw new Error("entity is required");
-    }
     this._config = {
       ...C300X_DEFAULT_CONFIG,
       ...config,
+      entity: config.entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID),
     };
     this._remoteStream = null;
     this._micStream = null;

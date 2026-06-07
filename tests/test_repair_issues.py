@@ -84,7 +84,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_VIDEO_ENABLED,
+    FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from custom_components.bticino_c300x.data import (  # noqa: E402
     C300XCallbackDiagnostics,
@@ -249,9 +251,34 @@ def test_frontend_card_setup_hint_created_for_video_capability() -> None:
     assert issue["translation_key"] == FRONTEND_CARD_SETUP_HINT_ISSUE
 
 
-def test_frontend_card_setup_hint_cleared_after_dismissed() -> None:
+def test_frontend_card_setup_hint_created_after_legacy_dismissal() -> None:
     entry = FakeEntry(
         options={CONF_FRONTEND_CARD_SETUP_DISMISSED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is True
+    assert (
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+        not in DELETED_ISSUES
+    )
+
+
+def test_frontend_card_setup_hint_cleared_after_current_repair_handled() -> None:
+    entry = FakeEntry(
+        options={
+            CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
+                FRONTEND_CARD_SETUP_REPAIR_VERSION
+            ),
+        },
         runtime_data=FakeRuntimeData(
             capabilities={"doorbell_video": {"supported": True}},
         ),
@@ -266,21 +293,7 @@ def test_frontend_card_setup_hint_cleared_after_dismissed() -> None:
     assert CREATED_ISSUES == {}
 
 
-def test_frontend_card_setup_hint_cleared_when_cards_exist(monkeypatch) -> None:
-    components = types.ModuleType("homeassistant.components")
-    components.__path__ = []
-    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
-    lovelace_package.__path__ = []
-    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
-    lovelace_const.LOVELACE_DATA = "lovelace"
-    lovelace_const.MODE_STORAGE = "storage"
-    monkeypatch.setitem(sys.modules, "homeassistant.components", components)
-    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
-    monkeypatch.setitem(
-        sys.modules,
-        "homeassistant.components.lovelace.const",
-        lovelace_const,
-    )
+def test_frontend_card_setup_hint_created_when_cards_exist_without_fix_marker() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(
             capabilities={"doorbell_video": {"supported": True}},
@@ -314,12 +327,10 @@ def test_frontend_card_setup_hint_cleared_when_cards_exist(monkeypatch) -> None:
 
     async_sync_entry_repair_issues(hass, entry)
 
-    assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
-    assert (
+    issue = CREATED_ISSUES[
         repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
-        in DELETED_ISSUES
-    )
-    assert CREATED_ISSUES == {}
+    ]
+    assert issue["is_fixable"] is True
 
 
 def test_frontend_card_setup_hint_cleared_without_video_or_home_call() -> None:

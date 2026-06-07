@@ -1,15 +1,28 @@
 {
   "domain": "bticino_c300x",
   "name": "BTicino C300X",
-  "after_dependencies": ["http", "lovelace", "media_source"],
+  "after_dependencies": [
+    "http",
+    "media_source"
+  ],
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["frontend", "webhook", "websocket_api"],
+  "dependencies": [
+    "frontend",
+    "lovelace",
+    "webhook",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/memphi2/ha-bticino-c300x",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/memphi2/ha-bticino-c300x/issues",
-  "requirements": ["aiortc==1.14.0", "paramiko==3.5.1"],
-  "version": "1.0.0",
-  "zeroconf": ["_bticino-c300x-agent._tcp.local."]
+  "requirements": [
+    "aiortc==1.14.0",
+    "paramiko==3.5.1"
+  ],
+  "version": "1.0.1",
+  "zeroconf": [
+    "_bticino-c300x-agent._tcp.local."
+  ]
 }

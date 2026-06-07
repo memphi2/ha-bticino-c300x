@@ -35,12 +35,14 @@ from .const import (
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DEFAULT_AGENT_PORT,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEVICE_ACTIVATION_MODE_AUTO,
     DOMAIN,
+    FRONTEND_CARD_SETUP_REPAIR_VERSION,
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
 )
@@ -704,13 +706,19 @@ def _frontend_card_setup_placeholders(entry: Any) -> dict[str, str]:
 def _mark_frontend_card_setup_dismissed(hass: HomeAssistant, entry: Any) -> None:
     """Persist that the Lovelace card setup hint has been handled."""
 
-    if entry.options.get(CONF_FRONTEND_CARD_SETUP_DISMISSED) is True:
+    if (
+        entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
+        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+    ):
         return
     hass.config_entries.async_update_entry(
         entry,
         options={
             **dict(entry.options),
             CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
+                FRONTEND_CARD_SETUP_REPAIR_VERSION
+            ),
         },
     )
 

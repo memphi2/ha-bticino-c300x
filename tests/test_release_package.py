@@ -68,6 +68,7 @@ def test_hacs_release_zip_uses_component_root_layout(
     assert "docs/legal.md" in names
     assert "__init__.py" in names
     assert "frontend/c300x-doorbell-call-card.js" in names
+    assert "frontend/c300x-doorbell-call-card-metadata.js" in names
     assert "device_agent/bundle.json" in names
     assert "device_agent/scripts/bootstrap_firewall.sh" in names
     assert not any(name.startswith("custom_components/") for name in names)

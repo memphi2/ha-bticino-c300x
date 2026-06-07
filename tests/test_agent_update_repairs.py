@@ -67,7 +67,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_UI_ENABLED,
     CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION,
     DOMAIN,
+    FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
@@ -295,6 +297,10 @@ def test_frontend_card_repair_can_be_ignored() -> None:
 
     assert result == {"type": "create_entry", "data": {"ignored": True}}
     assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
+    assert (
+        entry.options[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
+        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+    )
     assert IGNORED_ISSUES == [
         (DOMAIN, "frontend_card_setup_hint_entry-1", True),
     ]
@@ -564,6 +570,10 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
         "data": {"dashboard_path": "/dashboard-test/door"},
     }
     assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
+    assert (
+        entry.options[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
+        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+    )
     assert default_dashboard.config == {"views": []}
     assert frontend_setups == [hass]
     assert len(selected_dashboard.config["views"]) == 1

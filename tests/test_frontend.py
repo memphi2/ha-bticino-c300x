@@ -1,22 +1,30 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import sys
 import types
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from custom_components.bticino_c300x.const import DOMAIN
 from custom_components.bticino_c300x.frontend import (
+    DATA_FRONTEND_METADATA_URL,
     DATA_FRONTEND_MODULE_URL,
     DOORBELL_CALL_CARD_FILENAME,
+    DOORBELL_CALL_CARD_METADATA_FILENAME,
     FRONTEND_DIR,
     FRONTEND_URL_PATH,
     _async_ensure_lovelace_resource,
+    _frontend_asset_version,
     async_setup_frontend,
 )
 
 CARD_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_FILENAME
+CARD_METADATA_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_METADATA_FILENAME
+MANIFEST_SOURCE = Path("custom_components/bticino_c300x/manifest.json")
 
 
 @dataclass
@@ -47,7 +55,24 @@ class _FakeHass:
 def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> None:
     http_module = types.ModuleType("homeassistant.components.http")
     http_module.StaticPathConfig = _StaticPathConfig
+    frontend_module = types.ModuleType("homeassistant.components.frontend")
+
+    def add_extra_js_url(hass: _FakeHass, url: str, es5: bool = False) -> None:
+        assert es5 is False
+        hass.extra_module_urls.append(url)
+
+    def remove_extra_js_url(hass: _FakeHass, url: str, es5: bool = False) -> None:
+        assert es5 is False
+        hass.extra_module_urls.remove(url)
+
+    frontend_module.add_extra_js_url = add_extra_js_url
+    frontend_module.remove_extra_js_url = remove_extra_js_url
     monkeypatch.setitem(sys.modules, "homeassistant.components.http", http_module)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.frontend",
+        frontend_module,
+    )
 
     hass = _FakeHass()
 
@@ -57,12 +82,41 @@ def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> N
     assert hass.http.static_paths == [
         _StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIR), True)
     ]
-    assert hass.extra_module_urls == []
     module_url = hass.data[DOMAIN][DATA_FRONTEND_MODULE_URL]
     assert module_url.startswith(
         f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_FILENAME}?v="
     )
+    metadata_url = hass.data[DOMAIN][DATA_FRONTEND_METADATA_URL]
+    assert metadata_url.startswith(
+        f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_METADATA_FILENAME}?v="
+    )
     assert hass.data[DOMAIN][DATA_FRONTEND_MODULE_URL] == module_url
+    assert hass.extra_module_urls == [metadata_url]
+
+
+def test_frontend_asset_version_tracks_content_not_mtime(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    import custom_components.bticino_c300x.frontend as frontend_module
+
+    card_path = tmp_path / DOORBELL_CALL_CARD_FILENAME
+    card_path.write_text("first", encoding="utf-8")
+    os.utime(card_path, (1_700_000_000, 1_700_000_000))
+    monkeypatch.setattr(frontend_module, "FRONTEND_DIR", tmp_path)
+    first_version = _frontend_asset_version()
+
+    card_path.write_text("second", encoding="utf-8")
+    os.utime(card_path, (1_700_000_000, 1_700_000_000))
+
+    assert _frontend_asset_version() != first_version
+
+
+def test_lovelace_is_a_hard_dependency_for_card_resource_registration() -> None:
+    manifest = json.loads(MANIFEST_SOURCE.read_text(encoding="utf-8"))
+
+    assert "lovelace" in manifest["dependencies"]
+    assert "lovelace" not in manifest.get("after_dependencies", [])
 
 
 def test_frontend_lovelace_resource_is_stable_and_idempotent(
@@ -173,6 +227,13 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     source = CARD_SOURCE.read_text(encoding="utf-8")
 
     assert 'static getConfigElement()' in source
+    assert "function c300xRegisterCustomElements()" not in source
+    assert "window.setTimeout(c300xRegisterCustomElements, delay)" not in source
+    assert "static getStubConfig(hass, entityId)" in source
+    assert "type: C300X_CARD_TYPE" in source
+    assert "return {\n      type: C300X_CARD_TYPE," not in source
+    assert 'throw new Error("entity is required")' not in source
+    assert 'entity: config.entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID)' in source
     assert 'getGridOptions()' in source
     assert "rows: 4" in source
     assert "columns: 12" in source
@@ -206,6 +267,18 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "<ha-button" not in source
     assert "Answer / Talkback" not in source
     assert "Offer Audio" not in source
+
+
+def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
+
+    assert "window.customCards.push" in metadata_source
+    assert "getEntitySuggestion: c300xMetadataEntitySuggestion" in metadata_source
+    assert "customElements.define" not in metadata_source
+    assert "extends HTMLElement" not in metadata_source
+    assert "window.customCards.push" in source
+    assert 'customElements.define(C300X_CARD_TAG, C300XDoorbellCallCard)' in source
 
 
 def test_bundled_card_handles_missing_microphone_without_breaking_stream() -> None:

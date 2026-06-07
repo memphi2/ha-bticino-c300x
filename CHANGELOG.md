@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.1 - 2026-06-07
+
+### Fixed
+
+- Fixes bundled Lovelace card loading in Home Assistant's Add to dashboard / By
+  card picker. The picker metadata is now loaded separately from the actual card
+  module and frontend cache busting is based on file content.
+
+### Notes
+
+- The native C300X device agent is unchanged from `1.0.0`; this is a Home
+  Assistant frontend/repair hotfix.
+- After updating, restart Home Assistant and hard-reload the browser or mobile
+  app WebView so the old Lovelace card module is not reused from frontend cache.
+
 ## v1.0.0 - 2026-06-07
 
 ### Added

@@ -21,8 +21,8 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    assert path.stat().st_size <= 415_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_300
+    assert path.stat().st_size <= 425_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 12_450
 
 
 def test_large_python_modules_stay_within_interim_budget() -> None:

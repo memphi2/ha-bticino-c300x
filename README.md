@@ -2,12 +2,12 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v0.6.1-0366d6?style=flat-square)](.github/release-notes/v0.6.1.md)
+[![Release](https://img.shields.io/badge/release-v1.0.0-0366d6?style=flat-square)](.github/release-notes/v1.0.0.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Local-first Home Assistant custom integration for the BTicino Classe 300X /
-C300X video door station.
+Local-first, app-like Home Assistant custom integration for the BTicino Classe
+300X / C300X video door station.
 
 The project pairs a Home Assistant integration with a small native C agent on
 the C300X. The goal is a quiet, local, event-driven setup: no Node.js runtime on
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `0.6.1`
+- Current release line: `1.0.0`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -35,6 +35,17 @@ Use this integration when you want your Classe 300X to behave like a local Home
 Assistant device: doorbell events, camera, talkback, door unlock, stair light,
 ringer/forwarding controls, messages and optional display pages, all without a
 polling controller or a Node.js runtime on the C300X.
+
+The 1.0.0 line adds the three app-like media workflows that users expect from a
+video door station:
+
+- **On-demand**: open the door camera from Home Assistant when nobody is
+  ringing.
+- **Ring Call**: when someone rings and smartphone forwarding is enabled,
+  answer the real incoming door call from Home Assistant with video, device
+  audio and talkback.
+- **Home Call**: call the C300X from Home Assistant as an audio-only in-house
+  call.
 
 Before you start, check these requirements:
 
@@ -54,11 +65,14 @@ yet, do that first. Rooting and firmware patching are outside this repository.
 - Bearer-token API plus a separate maintenance token for sensitive actions.
 - Capability-gated entities: Home Assistant only shows functions the installed
   agent actually supports.
-- Doorbell ring events and on-demand doorbell camera.
-- WebRTC-facing Home Assistant camera path, with the native RTSP bridge started
-  only when video is needed.
-- Two-way audio/talkback through the Home Assistant WebRTC camera path, when the
-  browser or mobile app has microphone access.
+- Three app-like media workflows: on-demand camera, real ring-call
+  answer/hang-up and Home Call.
+- Home Assistant camera handling for app-like doorstation video, started only
+  when video is needed.
+- Two-way audio/talkback through the Home Assistant camera session, when the
+  browser or mobile app has microphone access over HTTPS or Home Assistant
+  Cloud.
+- Audio-only Home Call from Home Assistant to the C300X.
 - Door unlock and stair-light actions.
 - Ringer mute, smartphone forwarding, answering machine and message support.
 - Video-message playback/delete, voice-memo playback/delete and text-memo
@@ -77,16 +91,20 @@ yet, do that first. Rooting and firmware patching are outside this repository.
 Screenshots show a representative setup. Exact entities and display pages depend
 on the installed agent capabilities and the options enabled in Home Assistant.
 
+### Door Camera Inline Dashboard
+
+<p align="center">
+  <img src="docs/images/readme/ha-door-camera-inline-dark.png" alt="BTicino C300X inline door camera dashboard card in Home Assistant dark mode" width="720">
+</p>
+
 ### Home Assistant Entities
 
 <table>
   <tr>
-    <td align="center"><strong>Controls</strong><br><img src="docs/images/readme/ha-controls.png" alt="BTicino C300X Home Assistant controls" width="240"></td>
-    <td align="center"><strong>Sensors</strong><br><img src="docs/images/readme/ha-sensors.png" alt="BTicino C300X Home Assistant sensors" width="240"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Configuration</strong><br><img src="docs/images/readme/ha-configuration.png" alt="BTicino C300X Home Assistant configuration entities" width="240"></td>
-    <td align="center"><strong>Diagnostics</strong><br><img src="docs/images/readme/ha-diagnostics.png" alt="BTicino C300X Home Assistant diagnostic entities" width="240"></td>
+    <td align="center" valign="top"><strong>Controls</strong><br><img src="docs/images/readme/controls.png" alt="BTicino C300X Home Assistant controls" width="170"></td>
+    <td align="center" valign="top"><strong>Sensors / Events</strong><br><img src="docs/images/readme/sensors.png" alt="BTicino C300X Home Assistant sensors" width="170"><br><img src="docs/images/readme/events.png" alt="BTicino C300X Home Assistant device and doorbell events" width="170"></td>
+    <td align="center" valign="top"><strong>Configuration</strong><br><img src="docs/images/readme/configuration.png" alt="BTicino C300X Home Assistant configuration entities" width="170"></td>
+    <td align="center" valign="top"><strong>Diagnostics</strong><br><img src="docs/images/readme/diagnostic.png" alt="BTicino C300X Home Assistant diagnostic entities" width="170"></td>
   </tr>
 </table>
 
@@ -123,9 +141,11 @@ One commonly referenced community project for that topic is:
 https://github.com/fquinto/bticinoClasse300x
 ```
 
-Use that kind of workflow at your own risk and only where it is legal for your
-device and jurisdiction. After SSH/root access is available, this integration
-can install and manage the native agent.
+Use that kind of workflow at your own risk, without warranty, and only where it
+is legal for your device and jurisdiction. When that workflow asks for a
+firmware target, select `1.7.19`; this integration and the packaged native
+agent are validated against the `1.7.x` firmware family. After SSH/root access
+is available, this integration can install and manage the native agent.
 
 The integration installer can copy the bundled native agent to an already
 rooted/SSH-enabled device. It cannot root a stock device for you.
@@ -137,16 +157,16 @@ Exact entities depend on the capabilities reported by your installed agent.
 | Platform | Typical entities |
 | --- | --- |
 | `camera` | Doorbell camera |
-| `event` | Standard doorbell ring event, readable device-agent event stream |
-| `binary_sensor` | Video window availability |
+| `event` | Standard doorbell ring event, optional diagnostic device-event stream |
+| `binary_sensor` | Home Call active state |
 | `button` | Door unlock, stair light, reboot, reload GUI, remove device agent, delete latest memo/message |
 | `switch` | Ringer mute, smartphone forwarding, answering machine, SSH maintenance, noAuth bootstrap, mDNS, GUI patch, firewall patches |
-| `sensor` | Agent version, connection state, reconnect diagnostics, QML patch status, messages, memos, optional device metrics |
+| `sensor` | Device agent status, doorbell state, message/memo counters, optional device metrics |
 
 The integration also registers services for door unlock, stair light, Alarmo
-commands, dashboard actions, latest video-message playback/delete, latest
-voice-memo playback/delete, latest text-memo delete and explicit doorbell-video
-activation for automations.
+commands, dashboard actions, Home Call start/stop, latest video-message
+playback/delete, latest voice-memo playback/delete, latest text-memo
+write/delete and explicit doorbell-video start/stop for automations.
 
 ## Installation
 
@@ -204,7 +224,12 @@ diagnostics, or logs.
 Recommended first-run choices:
 
 - Enable the GUI patch only if you want the C300X display pages.
-- Enable the doorbell camera if you want video/talkback in Home Assistant.
+- Enable the doorbell camera if you want video, ring-call handling, Home Call
+  or talkback in Home Assistant.
+- Leave **Create Home Assistant media user** enabled unless you already manage a
+  dedicated C300X user yourself. The agent prefers that `homeassistant` media
+  identity when present and falls back to an existing app-created user only when
+  no Home Assistant user exists.
 - Select an Alarmo entity only when you use Alarmo.
 - Select a weather entity only when you want it on the C300X display page.
 - Leave destructive maintenance functions disabled until you need them.
@@ -266,6 +291,7 @@ Node modules, or third-party controller code.
 The feature step lets you enable only what you need:
 
 - Doorbell camera/video
+- Home Assistant media user for video, ring-call and Home Call media identity
 - C300X display GUI integration
 - Alarmo entity for the display page
 - Weather entity for the display page
@@ -284,52 +310,235 @@ read-only immediately afterwards.
 
 After setup, verify these basics:
 
-- `sensor.bticino_c300x_device_connection_state` should show connected.
+- `sensor.bticino_c300x_device_agent_status` should show `ok`.
 - The device-agent version should match the integration release or show an
   update Repair.
 - `camera.bticino_c300x_doorbell_camera` should be present when video is
   enabled.
+- `sensor.bticino_c300x_doorbell_state` should change only from real agent
+  doorbell/media events.
+- `binary_sensor.bticino_c300x_home_call_active` should follow real Home Call
+  start, answer and end events.
 - Maintenance entities that can change the device should stay disabled until
   actively needed.
 
-## Doorbell Video and Talkback Automation
+## Home Assistant Media User
 
-The `bticino_c300x.activate_doorbell_video` service starts or renews the C300X
-doorbell video session without waiting for the camera entity to be opened. Use
-it in ring automations to pre-warm video before sending a notification or
-opening a dashboard view.
+Doorbell video, ring-call media and Home Call need a local C300X media
+identity. The integration can create a dedicated device-side user named
+`homeassistant` during setup or reconfigure. This is preferred because it keeps
+Home Assistant separate from personal phone/app users.
 
-Example:
+The user-management rules are deliberately conservative:
+
+- If the `homeassistant` user exists, the agent uses it for media.
+- If it does not exist but another valid C300X app user exists, the agent can
+  use that existing user as a fallback.
+- If no usable user exists and media features are enabled, Home Assistant raises
+  a Repair so you can create the dedicated user.
+- The generated user identity is device-local and must be random. Do not copy
+  phone/app UUIDs, app account ids or other private identifiers into
+  configuration, commits, logs or documentation.
+- If you want to remove the user, delete it from the C300X display/user
+  management UI and rerun the integration Repair or reconfigure flow.
+
+Entities that depend on a media identity expose a compact `media_user`
+attribute so you can see whether Home Assistant is using the dedicated user or
+an existing fallback without exposing private UUIDs.
+
+## Doorbell Video, Ring Calls and Talkback
+
+There are three user-facing media workflows:
+
+- **On-demand**: press play in the doorstation card when nobody is ringing.
+  Home Assistant starts the normal C300X camera path and opens video/audio.
+- **Ring Call**: when someone rings and smartphone forwarding is enabled, the
+  agent reports the real incoming call/media state. Press **Answer** in Home
+  Assistant to take over that call through the app-like Home Assistant workflow,
+  with video, device audio and microphone talkback.
+- **Home Call**: the Home Call card starts an audio-only call from Home
+  Assistant to the C300X. It is intentionally separate from doorbell/ring media.
+
+The `bticino_c300x.activate_doorbell_video` service starts or renews the
+on-demand C300X doorbell video session. The
+`bticino_c300x.stop_doorbell_video` service ends the active doorbell/on-demand
+media session. Use the stop service or card hang-up action; pausing a generic
+camera card may not immediately close the native media session.
+
+When smartphone forwarding is `blocked`, the C300X still emits a doorbell ring
+event but does not deliver a real SIP ring call to the Home Assistant media
+user. In that state the card does not show **Answer**; use **Stream** for
+on-demand viewing. A separate HA-only `in-house only` ring mode is planned for a
+future release and is not enabled silently by 1.0.0.
+
+The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
+loads it automatically when the integration is set up. Add it from the card
+picker or YAML. The visual editor is localized in English, German, French and
+Italian. The card links related entities by the same config entry, so multiple
+C300X devices can each use their own camera/state entities without a manual
+`state_entity` field.
+
+Dashboard example:
 
 ```yaml
-alias: C300X ring video prewarm
+type: vertical-stack
+cards:
+  - type: custom:c300x-doorbell-call-card
+    entity: camera.bticino_c300x_doorbell_camera
+    name: C300X Door Station
+  - type: custom:c300x-doorbell-call-card
+    entity: camera.bticino_c300x_doorbell_camera
+    mode: home_call
+    name: C300X Home Call
+```
+
+### HTTPS and microphone requirements
+
+Talkback needs microphone access in the Home Assistant frontend. Use HTTPS,
+Home Assistant Cloud, or another secure frontend URL. Plain HTTP generally
+cannot grant browser/mobile microphone access except for browser-specific
+localhost exceptions. For mobile notifications, the action that answers a call
+should open the Home Assistant app/dashboard so the user can grant or reuse
+microphone permission and start the media session from the card.
+
+### Mobile notification examples
+
+Home Assistant Companion App actionable notifications can show actions and fire
+`mobile_app_notification_action` events. Camera previews can use
+`entity_id: camera.bticino_c300x_doorbell_camera`; Android can also use
+`/api/camera_proxy/...`, and iOS supports camera streams through dynamic
+attachments. See the official Companion App notification documentation for
+platform-specific details:
+
+- <https://companion.home-assistant.io/docs/notifications/actionable-notifications/>
+- <https://companion.home-assistant.io/docs/notifications/dynamic-content>
+- <https://companion.home-assistant.io/docs/notifications/critical-notifications/>
+- <https://companion.home-assistant.io/docs/notifications/notification-commands/>
+
+Replace `/dashboard-c300x/door` with the dashboard path that contains your
+C300X doorstation card. The notification does not auto-answer the call; it
+opens the card so the user can press **Answer** and start talkback with
+microphone permission. The doorstation card can answer only a real Ring Call
+reported by the agent, so keep mobile push notifications gated behind
+`switch.bticino_c300x_smartphone_forwarding` when forwarding is disabled.
+
+Basic shared automation:
+
+```yaml
+alias: C300X door call notification
 mode: restart
 trigger:
   - platform: event
+    id: ring
     event_type: bticino_c300x_agent_event_received
     event_data:
       event_key: doorbell_pressed
+  - platform: event
+    id: hangup
+    event_type: mobile_app_notification_action
+    event_data:
+      action: C300X_HANGUP_DOOR_CALL
 action:
-  - service: bticino_c300x.activate_doorbell_video
-    data:
-      audio: true
-  - service: notify.mobile_app_phone
-    data:
-      title: Doorbell
-      message: Someone is at the door.
-      data:
-        entity_id: camera.bticino_c300x_doorbell_camera
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: ring
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: switch.bticino_c300x_smartphone_forwarding
+                    state: "on"
+                sequence:
+                  - service: notify.mobile_app_phone
+                    data:
+                      title: Doorbell
+                      message: Someone is at the door
+                      data:
+                        entity_id: camera.bticino_c300x_doorbell_camera
+                        tag: c300x-door-call
+                        group: c300x
+                        actions:
+                          - action: URI
+                            title: Answer
+                            uri: /dashboard-c300x/door
+                            activationMode: foreground
+                          - action: C300X_HANGUP_DOOR_CALL
+                            title: Hang Up
+                            destructive: true
+                          - action: URI
+                            title: Dashboard
+                            uri: /dashboard-c300x/door
+      - conditions:
+          - condition: trigger
+            id: hangup
+        sequence:
+          - service: bticino_c300x.stop_doorbell_video
 ```
 
-Two-way audio uses the camera WebRTC path. Requirements:
+Android high-priority variant:
 
-- Doorbell camera/video enabled in the integration options.
-- Native agent reports `doorbell_video` and talkback support.
-- The user opens the camera through Home Assistant WebRTC.
-- Browser or mobile app has microphone permission.
-- For browser microphone access, use HTTPS, Home Assistant Cloud, or another
-  secure Home Assistant frontend URL. Plain HTTP frontends generally cannot
-  grant microphone access except for browser-specific localhost exceptions.
+```yaml
+service: notify.mobile_app_pixel
+data:
+  title: Doorbell
+  message: Someone is at the door
+  data:
+    ttl: 0
+    priority: high
+    channel: alarm_stream
+    entity_id: camera.bticino_c300x_doorbell_camera
+    actions:
+      - action: URI
+        title: Answer
+        uri: /dashboard-c300x/door
+      - action: C300X_HANGUP_DOOR_CALL
+        title: Hang Up
+      - action: URI
+        title: Dashboard
+        uri: /dashboard-c300x/door
+```
+
+Android can also be sent directly to the dashboard with a notification command:
+
+```yaml
+service: notify.mobile_app_pixel
+data:
+  message: command_webview
+  data:
+    command: /dashboard-c300x/door
+```
+
+iOS critical-alert variant:
+
+```yaml
+service: notify.mobile_app_iphone
+data:
+  title: Doorbell
+  message: Someone is at the door
+  data:
+    entity_id: camera.bticino_c300x_doorbell_camera
+    push:
+      sound:
+        name: default
+        critical: 1
+        volume: 1.0
+    actions:
+      - action: URI
+        title: Answer
+        uri: /dashboard-c300x/door
+        activationMode: foreground
+      - action: C300X_HANGUP_DOOR_CALL
+        title: Hang Up
+        destructive: true
+      - action: URI
+        title: Dashboard
+        uri: /dashboard-c300x/door
+```
+
+Critical alerts require the iOS app/device permission for critical
+notifications. Keep notification action ids unique if several automations can
+send door-call notifications at the same time.
 
 ### MQTT Migration
 
@@ -368,7 +577,7 @@ Home Assistant alarm integration this display page is designed around.
 ### IPv6 Recommendation
 
 IPv6 is optional, but recommended when your Home Assistant network already uses
-stable IPv6 addressing. Home Assistant, browsers, and HA Cloud/WebRTC paths may
+stable IPv6 addressing. Home Assistant, browsers, and HA Cloud media paths may
 prefer IPv6 when it is available; enabling the agent's IPv6 firewall support
 lets those callbacks and camera sessions use the same predictable network path
 instead of falling back to fragile name resolution or link-local addresses.
@@ -425,8 +634,8 @@ identified.
 
 Use this only on a trusted local network.
 
-- Do not expose the agent API, setup page, display bridge, RTSP/WebRTC media
-  ports or the C300X device directly to the internet.
+- Do not expose the agent API, setup page, display bridge, media ports or the
+  C300X device directly to the internet.
 - Use strong random API and maintenance tokens.
 - Keep `noAuth` disabled after bootstrap.
 - Keep noAuth maintenance disabled after bootstrap.
@@ -435,11 +644,14 @@ Use this only on a trusted local network.
 - The display UI listener is local to the device and separate from the
   Home-Assistant-facing API.
 - Diagnostics redact secrets and avoid private callback URLs.
+- The optional SSH installer uses pinned Paramiko legacy SSH support only for
+  bootstrap/fallback installation on devices you control; normal agent operation
+  uses the local token-protected API.
 
 The native agent intentionally does not include a TLS stack. Use plain HTTP only
 on a trusted local segment, or terminate HTTPS in a local reverse proxy if your
 network design requires it. Home Assistant Cloud access should go through Home
-Assistant's own camera/WebRTC handling, not by exposing the C300X agent.
+Assistant's own camera handling, not by exposing the C300X agent.
 
 See [SECURITY.md](SECURITY.md).
 
@@ -450,7 +662,7 @@ The integration is designed for low idle cost:
 - no periodic Home Assistant polling loop for normal C300X state
 - persisted event subscriptions instead of webhook rotation on every start
 - no background still-image camera polling
-- RTSP/video bridge starts on demand
+- doorstation media starts on demand
 - display bridge config is updated only when it differs
 - QML patching is explicit and writes only changed files
 - diagnostics expose write counters so idle writes are visible
@@ -458,26 +670,25 @@ The integration is designed for low idle cost:
 Optional system metrics are disabled by default and should be enabled only when
 you actually want device diagnostics.
 
-### Legacy MQTT and Flexisip Diagnostics
+### Legacy MQTT Diagnostics
 
-The legacy TcpDump2Mqtt bridge and the C300X Flexisip startup script are treated
-as separate device areas. Disabling legacy MQTT only disables the
+The legacy TcpDump2Mqtt bridge and C300X media startup handling are treated as
+separate device areas. Disabling legacy MQTT only disables the
 `S99TcpDump2Mqtt` autostart link and stops TcpDump2Mqtt helper processes; it
-does not restore or rewrite Flexisip.
+does not restore or rewrite unrelated media startup files.
 
 The `sensor.bticino_c300x_device_agent_status` attributes include a
-`flexisip_reference_state` value:
+media-startup reference-state value:
 
 - `legacy_mqtt_patch`: expected state for a device with the legacy
-  TcpDump2Mqtt firmware patch. The active Flexisip startup script contains the
-  restart marker and the backup does not.
-- `stock_or_unpatched`: expected state when no legacy MQTT Flexisip marker is
+  TcpDump2Mqtt firmware patch. The active media startup file contains the
+  legacy restart marker and the backup does not.
+- `stock_or_unpatched`: expected state when no legacy MQTT media startup marker is
   present.
 - `backup_without_active_marker`: a previous cleanup likely restored the
-  Flexisip backup while legacy MQTT files still exist. If video or the old
-  TcpDump2Mqtt watchdog behaves differently than before, restore the Flexisip
-  marker from a known-good device backup or reapply the legacy MQTT firmware
-  patch.
+  media startup backup while legacy MQTT files still exist. If video or the old
+  TcpDump2Mqtt watchdog behaves differently than before, restore the device from
+  a known-good backup or reapply the legacy MQTT firmware patch.
 - `unexpected_backup_marker`, `marker_without_backup` or `missing`: inspect the
   device before changing MQTT state; these are not normal reference states.
 
@@ -534,6 +745,9 @@ If a feature is missing:
 - Prefer a stable local IPv4 address or stable ULA/global IPv6 address.
 - For microphone/talkback in browsers, access Home Assistant through HTTPS,
   Home Assistant Cloud, or another secure frontend URL.
+- After a major native-agent upgrade, if media entities, capabilities or call
+  controls stay inconsistent, use `Remove device agent`, remove the integration
+  entry, then reinstall the integration and native agent cleanly.
 
 ### Messages or memos do not update
 
@@ -555,7 +769,7 @@ Please include:
 - a Home Assistant diagnostics download for this integration.
 
 Do not include passwords, tokens, local usernames, private hostnames, public IP
-addresses, private backups, firmware files or packet captures with private
+addresses, private backups, firmware files, network traces or other private
 data.
 
 ## Project Background and Attribution
@@ -580,10 +794,9 @@ This repository is an independent community project.
 - This repository does not include vendor firmware, extracted firmware, APKs,
   third-party controller source trees, local device backups, or secrets.
 - This repository does not ship codec binaries or codec implementation source
-  code. Doorbell media uses the device-provided H.264/AVC stream and the user's
-  Home Assistant/browser media stack; users and distributors are responsible for
-  codec availability and any jurisdiction-specific patent or licensing
-  requirements.
+  code. Doorbell media uses the user's Home Assistant/browser media stack; users
+  and distributors are responsible for codec availability and any
+  jurisdiction-specific patent or licensing requirements.
 - License: Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 See [docs/legal.md](docs/legal.md) for the full legal and asset-hygiene notes.

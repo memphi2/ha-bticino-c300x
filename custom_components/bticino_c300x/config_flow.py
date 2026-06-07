@@ -33,11 +33,11 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
-    CONF_BOOTSTRAP_APPLY_GUI_PATCH,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
+    CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
@@ -80,6 +80,8 @@ _QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
 _QML_PATCH_STATUS_UNKNOWN = "unknown"
 _QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
 _SETUP_VIDEO_ENABLED_DEFAULT = True
+_CREATE_HOMEASSISTANT_USER_DEFAULT = True
+_DASHBOARD_PREVENT_RETURN_DEFAULT = False
 _RECONFIGURED_OPTION_KEYS = frozenset(
     {
         CONF_ACTIONS,
@@ -87,6 +89,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_AGENT_PORT,
         CONF_AGENT_TOKEN,
         CONF_CALLBACK_BASE_URL,
+        CONF_CREATE_HOMEASSISTANT_USER,
         CONF_ALARM_ENTITY_ID,
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_PREVENT_RETURN,
@@ -115,10 +118,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_connection: dict[str, Any] = {}
         self._setup_unique_id: str | None = None
         self._setup_agent_needs_token = False
-        self._setup_device_ui_default = True
-        self._setup_gui_details_shown = False
+        self._setup_device_ui_default = False
+        self._setup_feature_data: dict[str, Any] = {}
         self._reconfigure_connection: dict[str, Any] = {}
-        self._reconfigure_gui_details_shown = False
+        self._reconfigure_feature_data: dict[str, Any] = {}
 
     async def async_step_user(
         self,
@@ -205,7 +208,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 agent_port=int(
                     self._setup_connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
                 ),
-                apply_gui_patch=bool(user_input.get(CONF_BOOTSTRAP_APPLY_GUI_PATCH, True)),
+                apply_gui_patch=False,
             )
             try:
                 await async_install_device_agent(
@@ -242,7 +245,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         )
                     await self._async_adopt_agent_unique_id(api_token=api_token)
                     self._setup_agent_needs_token = False
-                    self._setup_device_ui_default = request.apply_gui_patch
                     return await self.async_step_user_features()
 
         return self.async_show_form(
@@ -333,6 +335,11 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         unique_id = discovered_unique_id or DOMAIN
         self._setup_unique_id = unique_id
         await self.async_set_unique_id(unique_id)
+        self._async_request_existing_entry_event_registration(
+            discovered_unique_id,
+            connection,
+            discovery_matches_entry=discovery_matches_entry,
+        )
         self._abort_if_unique_id_configured(updates=connection)
         existing_entry_abort = (
             await self._async_abort_if_zeroconf_targets_existing_manual_entry(
@@ -392,8 +399,46 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 entry,
                 unique_id=discovered_unique_id,
             )
+            self._async_request_event_registration(entry)
             return self.async_abort(reason="already_configured")
         return None
+
+    @callback
+    def _async_request_existing_entry_event_registration(
+        self,
+        discovered_unique_id: str | None,
+        connection: dict[str, Any],
+        *,
+        discovery_matches_entry: Any,
+    ) -> None:
+        """Ask a loaded matching entry to renew its runtime agent subscription."""
+
+        if discovered_unique_id is None:
+            return
+        current_entries = getattr(self, "_async_current_entries", None)
+        if current_entries is None:
+            return
+        for entry in current_entries():
+            if not discovery_matches_entry(
+                discovered_unique_id,
+                str(getattr(entry, "unique_id", "") or ""),
+            ):
+                continue
+            if not _entry_connection_matches_discovery(entry, connection):
+                return
+            self._async_request_event_registration(entry)
+            return
+
+    @callback
+    def _async_request_event_registration(
+        self,
+        entry: config_entries.ConfigEntry,
+    ) -> None:
+        """Trigger HA-to-agent runtime subscription renewal for a loaded entry."""
+
+        from .events import async_request_agent_event_registration
+
+        async_request_agent_event_registration(self.hass, entry)
 
     async def async_step_user_features(
         self,
@@ -406,44 +451,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            if _needs_gui_details(
-                user_input,
-                details_shown=self._setup_gui_details_shown,
-            ):
-                self._setup_gui_details_shown = True
-                return self.async_show_form(
-                    step_id="user_features",
-                    data_schema=_setup_features_schema(
-                        user_input.get(CONF_ALARM_ENTITY_ID, ""),
-                        user_input.get(CONF_WEATHER_ENTITY_ID, ""),
-                        bool(
-                            user_input.get(
-                                CONF_VIDEO_ENABLED,
-                                _SETUP_VIDEO_ENABLED_DEFAULT,
-                            )
-                        ),
-                        int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
-                        user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
-                        ),
-                        True,
-                        str(user_input.get(CONF_ACTIONS_JSON, "")),
-                        bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
-                        user_input.get(CONF_DASHBOARD_ENTITIES, []),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_MODE,
-                            DEVICE_ACTIVATION_MODE_AUTO,
-                        ),
-                        str(
-                            user_input.get(
-                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                                DEFAULT_STAIR_LIGHT_ADDRESS,
-                            )
-                        ),
-                    ),
-                    errors=errors,
-                )
             feature_data, errors = _feature_input(
                 user_input,
                 default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
@@ -452,23 +459,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_show_form(
                     step_id="user_features",
                     data_schema=_setup_features_schema(
-                        user_input.get(CONF_ALARM_ENTITY_ID, ""),
-                        user_input.get(CONF_WEATHER_ENTITY_ID, ""),
                         bool(
                             user_input.get(
                                 CONF_VIDEO_ENABLED,
                                 _SETUP_VIDEO_ENABLED_DEFAULT,
                             )
                         ),
-                        int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
-                        user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
-                        ),
-                        bool(user_input.get(CONF_DEVICE_UI_ENABLED, False)),
-                        str(user_input.get(CONF_ACTIONS_JSON, "")),
-                        bool(user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)),
-                        user_input.get(CONF_DASHBOARD_ENTITIES, []),
                         user_input.get(
                             CONF_DEVICE_ACTIVATION_MODE,
                             DEVICE_ACTIVATION_MODE_AUTO,
@@ -479,55 +475,107 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 DEFAULT_STAIR_LIGHT_ADDRESS,
                             )
                         ),
+                        default_create_homeassistant_user=bool(
+                            user_input.get(
+                                CONF_CREATE_HOMEASSISTANT_USER,
+                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                            )
+                        ),
                     ),
                     errors=errors,
                 )
 
-            if self._setup_unique_id is not None:
-                self._async_abort_duplicate_setup_flows(self._setup_unique_id)
-                await self.async_set_unique_id(
-                    self._setup_unique_id,
-                    raise_on_progress=False,
-                )
-            else:
-                await self.async_set_unique_id(
-                    _manual_setup_unique_id(self._setup_connection)
-                )
-            self._abort_if_unique_id_configured()
-
-            title = self._setup_connection.pop(CONF_NAME).strip() or DEFAULT_NAME
-            return self.async_create_entry(
-                title=title,
-                data={
-                    **self._setup_connection,
-                    **feature_data,
-                    CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
-                    CONF_SHARED_SECRET: secrets.token_urlsafe(32),
-                    CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
-                    CONF_EVENT_WEBHOOK_TOKEN: secrets.token_urlsafe(32),
-                },
-                options={
-                    CONF_ACTIONS: feature_data[CONF_ACTIONS],
-                    CONF_DASHBOARD_PREVENT_RETURN: feature_data[
-                        CONF_DASHBOARD_PREVENT_RETURN
-                    ],
-                    CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
-                },
-            )
+            self._setup_feature_data = feature_data
+            return await self.async_step_user_dashboard()
 
         return self.async_show_form(
             step_id="user_features",
             data_schema=_setup_features_schema(
-                "",
-                "",
                 _SETUP_VIDEO_ENABLED_DEFAULT,
-                DEFAULT_VIDEO_PORT,
-                DEFAULT_VIDEO_STREAM_PATH,
-                self._setup_device_ui_default,
                 default_device_activation_mode=DEVICE_ACTIVATION_MODE_AUTO,
                 default_device_activation_stair_light_address=DEFAULT_STAIR_LIGHT_ADDRESS,
+                default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
             ),
             errors=errors,
+        )
+
+    async def async_step_user_dashboard(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Collect initial C300X GUI dashboard settings."""
+
+        if not self._setup_feature_data:
+            return await self.async_step_user_features()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input = _dashboard_input_defaults(user_input)
+            feature_data, errors = _feature_input(
+                {**self._setup_feature_data, **dashboard_input},
+                default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
+            )
+            if not errors:
+                return await self._async_create_setup_entry(feature_data)
+
+        return self.async_show_form(
+            step_id="user_dashboard",
+            data_schema=_dashboard_schema(
+                str((user_input or {}).get(CONF_ALARM_ENTITY_ID, "")),
+                str((user_input or {}).get(CONF_WEATHER_ENTITY_ID, "")),
+                str((user_input or {}).get(CONF_ACTIONS_JSON, "")),
+                bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_PREVENT_RETURN,
+                        _DASHBOARD_PREVENT_RETURN_DEFAULT,
+                    )
+                ),
+                (user_input or {}).get(CONF_DASHBOARD_ENTITIES, []),
+                default_device_ui_enabled=bool(
+                    (user_input or {}).get(
+                        CONF_DEVICE_UI_ENABLED,
+                        self._setup_device_ui_default,
+                    )
+                ),
+            ),
+            errors=errors,
+        )
+
+    async def _async_create_setup_entry(
+        self,
+        feature_data: dict[str, Any],
+    ) -> config_entries.FlowResult:
+        """Create the initial config entry after feature collection."""
+
+        if self._setup_unique_id is not None:
+            self._async_abort_duplicate_setup_flows(self._setup_unique_id)
+            await self.async_set_unique_id(
+                self._setup_unique_id,
+                raise_on_progress=False,
+            )
+        else:
+            await self.async_set_unique_id(
+                _manual_setup_unique_id(self._setup_connection)
+            )
+        self._abort_if_unique_id_configured()
+
+        title = self._setup_connection.pop(CONF_NAME).strip() or DEFAULT_NAME
+        return self.async_create_entry(
+            title=title,
+            data={
+                **self._setup_connection,
+                **feature_data,
+                CONF_WEBHOOK_ID: secrets.token_urlsafe(24),
+                CONF_SHARED_SECRET: secrets.token_urlsafe(32),
+                CONF_EVENT_WEBHOOK_ID: secrets.token_urlsafe(24),
+                CONF_EVENT_WEBHOOK_TOKEN: secrets.token_urlsafe(32),
+            },
+            options={
+                CONF_ACTIONS: feature_data[CONF_ACTIONS],
+                CONF_DASHBOARD_PREVENT_RETURN: feature_data[
+                    CONF_DASHBOARD_PREVENT_RETURN
+                ],
+                CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
+            },
         )
 
     async def async_step_reconfigure(
@@ -569,7 +617,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.FlowResult:
-        """Reconfigure alarm and video feature settings."""
+        """Reconfigure media and GUI feature settings."""
 
         entry = self._get_reconfigure_entry()
         if not self._reconfigure_connection:
@@ -581,67 +629,13 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         feature_defaults = _current_feature_options(entry)
         errors: dict[str, str] = {}
         if user_input is not None:
-            if _needs_gui_details(
-                user_input,
-                details_shown=self._reconfigure_gui_details_shown,
-            ):
-                self._reconfigure_gui_details_shown = True
-                return self.async_show_form(
-                    step_id="reconfigure_features",
-                    data_schema=_reconfigure_features_schema(
-                        feature_defaults[CONF_ALARM_ENTITY_ID],
-                        feature_defaults[CONF_WEATHER_ENTITY_ID],
-                        bool(user_input.get(CONF_VIDEO_ENABLED, False)),
-                        int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
-                        str(user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
-                        )),
-                        True,
-                        _actions_json(feature_defaults[CONF_ACTIONS]),
-                        bool(feature_defaults[CONF_DASHBOARD_PREVENT_RETURN]),
-                        feature_defaults[CONF_DASHBOARD_ENTITIES],
-                        feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
-                        feature_defaults[
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS
-                        ],
-                    ),
-                    errors=errors,
-                    description_placeholders=(
-                        await _async_qml_patch_description_placeholders(entry)
-                    ),
-                )
             feature_input = _feature_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
                     step_id="reconfigure_features",
                     data_schema=_reconfigure_features_schema(
-                        str(user_input.get(CONF_ALARM_ENTITY_ID, "")),
-                        str(user_input.get(CONF_WEATHER_ENTITY_ID, "")),
                         bool(user_input.get(CONF_VIDEO_ENABLED, False)),
-                        int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
-                        str(user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
-                        )),
-                        bool(user_input.get(CONF_DEVICE_UI_ENABLED, False)),
-                        str(
-                            user_input.get(
-                                CONF_ACTIONS_JSON,
-                                _actions_json(feature_defaults[CONF_ACTIONS]),
-                            )
-                        ),
-                        bool(
-                            user_input.get(
-                                CONF_DASHBOARD_PREVENT_RETURN,
-                                feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
-                            )
-                        ),
-                        user_input.get(
-                            CONF_DASHBOARD_ENTITIES,
-                            feature_defaults[CONF_DASHBOARD_ENTITIES],
-                        ),
                         user_input.get(
                             CONF_DEVICE_ACTIVATION_MODE,
                             feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
@@ -654,6 +648,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 ],
                             )
                         ),
+                        default_create_homeassistant_user=bool(
+                            user_input.get(
+                                CONF_CREATE_HOMEASSISTANT_USER,
+                                feature_defaults[CONF_CREATE_HOMEASSISTANT_USER],
+                            )
+                        ),
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -661,20 +661,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 )
 
-            await self.async_set_unique_id(_reconfigure_unique_id(entry))
-            self._abort_if_unique_id_mismatch()
-
-            rotate = bool(self._reconfigure_connection.pop(CONF_ROTATE_SHARED_SECRET))
-            data_updates = {**self._reconfigure_connection, **feature_data}
-            if rotate:
-                data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
-                data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
-
-            _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
-            updater = getattr(self, "async_update_and_abort", None)
-            if updater is not None:
-                return updater(entry, data_updates=data_updates)
-            return self.async_update_reload_and_abort(entry, data_updates=data_updates)
+            self._reconfigure_feature_data = feature_data
+            return await self.async_step_reconfigure_dashboard()
 
         return self.async_show_form(
             step_id="reconfigure_features",
@@ -684,6 +672,91 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 entry
             ),
         )
+
+    async def async_step_reconfigure_dashboard(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Reconfigure C300X GUI dashboard settings."""
+
+        entry = self._get_reconfigure_entry()
+        feature_defaults = _current_feature_options(entry)
+        if not self._reconfigure_feature_data:
+            return await self.async_step_reconfigure_features()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
+            feature_data, errors = _feature_input(
+                {**self._reconfigure_feature_data, **dashboard_input}
+            )
+            if not errors:
+                return await self._async_finish_reconfigure(feature_data)
+
+        return self.async_show_form(
+            step_id="reconfigure_dashboard",
+            data_schema=_dashboard_schema(
+                str(
+                    (user_input or {}).get(
+                        CONF_ALARM_ENTITY_ID,
+                        feature_defaults[CONF_ALARM_ENTITY_ID],
+                    )
+                ),
+                str(
+                    (user_input or {}).get(
+                        CONF_WEATHER_ENTITY_ID,
+                        feature_defaults[CONF_WEATHER_ENTITY_ID],
+                    )
+                ),
+                str(
+                    (user_input or {}).get(
+                        CONF_ACTIONS_JSON,
+                        _actions_json(feature_defaults[CONF_ACTIONS]),
+                    )
+                ),
+                bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_PREVENT_RETURN,
+                        feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
+                    )
+                ),
+                (user_input or {}).get(
+                    CONF_DASHBOARD_ENTITIES,
+                    feature_defaults[CONF_DASHBOARD_ENTITIES],
+                ),
+                default_device_ui_enabled=bool(
+                    (user_input or {}).get(
+                        CONF_DEVICE_UI_ENABLED,
+                        feature_defaults[CONF_DEVICE_UI_ENABLED],
+                    )
+                ),
+            ),
+            errors=errors,
+            description_placeholders=await _async_qml_patch_description_placeholders(
+                entry
+            ),
+        )
+
+    async def _async_finish_reconfigure(
+        self,
+        feature_data: dict[str, Any],
+    ) -> config_entries.FlowResult:
+        """Finish a reconfigure flow after all feature pages."""
+
+        entry = self._get_reconfigure_entry()
+        await self.async_set_unique_id(_reconfigure_unique_id(entry))
+        self._abort_if_unique_id_mismatch()
+
+        rotate = bool(self._reconfigure_connection.pop(CONF_ROTATE_SHARED_SECRET))
+        data_updates = {**self._reconfigure_connection, **feature_data}
+        if rotate:
+            data_updates[CONF_SHARED_SECRET] = secrets.token_urlsafe(32)
+            data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
+
+        _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
+        updater = getattr(self, "async_update_and_abort", None)
+        if updater is not None:
+            return updater(entry, data_updates=data_updates)
+        return self.async_update_reload_and_abort(entry, data_updates=data_updates)
 
     @staticmethod
     @callback
@@ -701,7 +774,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
         self._connection_options: dict[str, Any] = {}
-        self._gui_details_shown = False
+        self._feature_options: dict[str, Any] = {}
 
     async def async_step_init(
         self,
@@ -733,54 +806,27 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.FlowResult:
-        """Manage integration feature and dashboard options."""
+        """Manage integration media and GUI feature options."""
 
         if not self._connection_options:
             self._connection_options = _current_connection_options(self._config_entry)
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            device_ui_enabled = bool(user_input.get(CONF_DEVICE_UI_ENABLED, False))
-            if _needs_gui_details(
-                user_input,
-                details_shown=self._gui_details_shown,
-            ):
-                self._gui_details_shown = True
-                return self.async_show_form(
-                    step_id="features",
-                    data_schema=_options_features_schema(
-                        self._config_entry,
-                        device_ui_enabled=True,
-                        video_enabled=bool(user_input.get(CONF_VIDEO_ENABLED, False)),
-                        video_port=int(
-                            user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
-                        ),
-                        video_stream_path=user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
-                        ),
-                    ),
-                    errors=errors,
-                    description_placeholders=(
-                        await _async_qml_patch_description_placeholders(
-                            self._config_entry
-                        )
-                    ),
-                )
-            feature_data, errors = _feature_input(user_input)
+            feature_defaults = _current_feature_options(self._config_entry)
+            feature_input = _feature_input_defaults(user_input, feature_defaults)
+            feature_data, errors = _feature_input(feature_input)
             if errors:
                 return self.async_show_form(
                     step_id="features",
                     data_schema=_options_features_schema(
                         self._config_entry,
-                        device_ui_enabled=device_ui_enabled,
                         video_enabled=bool(user_input.get(CONF_VIDEO_ENABLED, False)),
-                        video_port=int(
-                            user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
-                        ),
-                        video_stream_path=user_input.get(
-                            CONF_VIDEO_STREAM_PATH,
-                            DEFAULT_VIDEO_STREAM_PATH,
+                        create_homeassistant_user=bool(
+                            user_input.get(
+                                CONF_CREATE_HOMEASSISTANT_USER,
+                                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                            )
                         ),
                     ),
                     errors=errors,
@@ -790,7 +836,34 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                         )
                     ),
                 )
-            else:
+            self._feature_options = feature_data
+            return await self.async_step_dashboard()
+
+        return self.async_show_form(
+            step_id="features",
+            data_schema=_options_features_schema(self._config_entry),
+            errors=errors,
+            description_placeholders=await _async_qml_patch_description_placeholders(
+                self._config_entry
+            ),
+        )
+
+    async def async_step_dashboard(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Manage C300X GUI dashboard options."""
+
+        feature_defaults = _current_feature_options(self._config_entry)
+        if not self._feature_options:
+            return await self.async_step_features()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
+            feature_data, errors = _feature_input(
+                {**self._feature_options, **dashboard_input}
+            )
+            if not errors:
                 return self.async_create_entry(
                     title="",
                     data={
@@ -800,8 +873,43 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                 )
 
         return self.async_show_form(
-            step_id="features",
-            data_schema=_options_features_schema(self._config_entry),
+            step_id="dashboard",
+            data_schema=_dashboard_schema(
+                str(
+                    (user_input or {}).get(
+                        CONF_ALARM_ENTITY_ID,
+                        feature_defaults[CONF_ALARM_ENTITY_ID],
+                    )
+                ),
+                str(
+                    (user_input or {}).get(
+                        CONF_WEATHER_ENTITY_ID,
+                        feature_defaults[CONF_WEATHER_ENTITY_ID],
+                    )
+                ),
+                str(
+                    (user_input or {}).get(
+                        CONF_ACTIONS_JSON,
+                        _actions_json(feature_defaults[CONF_ACTIONS]),
+                    )
+                ),
+                bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_PREVENT_RETURN,
+                        feature_defaults[CONF_DASHBOARD_PREVENT_RETURN],
+                    )
+                ),
+                (user_input or {}).get(
+                    CONF_DASHBOARD_ENTITIES,
+                    feature_defaults[CONF_DASHBOARD_ENTITIES],
+                ),
+                default_device_ui_enabled=bool(
+                    (user_input or {}).get(
+                        CONF_DEVICE_UI_ENABLED,
+                        feature_defaults[CONF_DEVICE_UI_ENABLED],
+                    )
+                ),
+            ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
                 self._config_entry
@@ -847,7 +955,6 @@ def _bootstrap_install_schema() -> vol.Schema:
         {
             vol.Required(CONF_BOOTSTRAP_SSH_USERNAME): str,
             vol.Required(CONF_BOOTSTRAP_SSH_PASSWORD): _password_selector(),
-            vol.Optional(CONF_BOOTSTRAP_APPLY_GUI_PATCH, default=True): bool,
         }
     )
 
@@ -940,40 +1047,26 @@ def _normalize_discovery_host(host: str) -> str:
 
 
 def _setup_features_schema(
-    default_alarm_entity: str,
-    default_weather_entity: str,
     default_video_enabled: bool,
-    default_video_port: int,
-    default_video_stream_path: str,
-    default_device_ui_enabled: bool,
-    default_actions_json: str = "",
-    default_dashboard_prevent_return: bool = True,
-    default_dashboard_entities: Any = None,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
     default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
+    *,
+    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
 
-    return vol.Schema(
+    fields: dict[Any, Any] = {
+        vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
+    }
+    if default_video_enabled:
+        fields[
+            vol.Optional(
+                CONF_CREATE_HOMEASSISTANT_USER,
+                default=default_create_homeassistant_user,
+            )
+        ] = bool
+    fields.update(
         {
-            vol.Optional(
-                CONF_DEVICE_UI_ENABLED,
-                default=default_device_ui_enabled,
-            ): bool,
-            **_setup_gui_dependent_feature_fields(
-                default_alarm_entity,
-                default_weather_entity,
-                default_device_ui_enabled,
-                default_actions_json,
-                default_dashboard_prevent_return,
-                default_dashboard_entities,
-            ),
-            vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
-            vol.Optional(CONF_VIDEO_PORT, default=default_video_port): int,
-            vol.Optional(
-                CONF_VIDEO_STREAM_PATH,
-                default=default_video_stream_path,
-            ): str,
             vol.Optional(
                 CONF_DEVICE_ACTIVATION_MODE,
                 default=default_device_activation_mode,
@@ -984,6 +1077,7 @@ def _setup_features_schema(
             ): str,
         }
     )
+    return vol.Schema(fields)
 
 
 def _reconfigure_connection_schema(
@@ -1014,40 +1108,26 @@ def _reconfigure_connection_schema(
 
 
 def _reconfigure_features_schema(
-    default_alarm_entity: str,
-    default_weather_entity: str,
     default_video_enabled: bool,
-    default_video_port: int,
-    default_video_stream_path: str,
-    default_device_ui_enabled: bool,
-    default_actions_json: str = "",
-    default_dashboard_prevent_return: bool = True,
-    default_dashboard_entities: Any = None,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
     default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
+    *,
+    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
-    return vol.Schema(
+    fields: dict[Any, Any] = {
+        vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
+    }
+    if default_video_enabled:
+        fields[
+            vol.Optional(
+                CONF_CREATE_HOMEASSISTANT_USER,
+                default=default_create_homeassistant_user,
+            )
+        ] = bool
+    fields.update(
         {
-            vol.Optional(
-                CONF_DEVICE_UI_ENABLED,
-                default=default_device_ui_enabled,
-            ): bool,
-            **_setup_gui_dependent_feature_fields(
-                default_alarm_entity,
-                default_weather_entity,
-                default_device_ui_enabled,
-                default_actions_json,
-                default_dashboard_prevent_return,
-                default_dashboard_entities,
-            ),
-            vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
-            vol.Optional(CONF_VIDEO_PORT, default=default_video_port): int,
-            vol.Optional(
-                CONF_VIDEO_STREAM_PATH,
-                default=default_video_stream_path,
-            ): str,
             vol.Optional(
                 CONF_DEVICE_ACTIVATION_MODE,
                 default=default_device_activation_mode,
@@ -1058,6 +1138,7 @@ def _reconfigure_features_schema(
             ): str,
         }
     )
+    return vol.Schema(fields)
 
 
 def _stair_light_address(value: Any) -> str:
@@ -1236,6 +1317,7 @@ def _feature_input(
     user_input: dict[str, Any],
     *,
     default_video_enabled: bool = False,
+    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Validate common feature page input."""
 
@@ -1285,6 +1367,7 @@ def _feature_input(
             )
         except vol.Invalid:
             errors[CONF_DASHBOARD_ENTITIES] = "invalid_dashboard_entities"
+    media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
     return (
         {
             CONF_ALARM_ENTITY_ID: alarm_entity_id,
@@ -1292,21 +1375,31 @@ def _feature_input(
             CONF_DASHBOARD_ENTITIES: dashboard_entities,
             CONF_ACTIONS: actions,
             CONF_DASHBOARD_PREVENT_RETURN: bool(
-                user_input.get(CONF_DASHBOARD_PREVENT_RETURN, True)
+                user_input.get(
+                    CONF_DASHBOARD_PREVENT_RETURN,
+                    _DASHBOARD_PREVENT_RETURN_DEFAULT,
+                )
                 if device_ui_enabled
-                else True
+                else _DASHBOARD_PREVENT_RETURN_DEFAULT
             ),
             CONF_DEVICE_ACTIVATION_MODE: device_activation_mode,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: (
                 device_activation_stair_light_address
             ),
-            CONF_VIDEO_ENABLED: bool(
-                user_input.get(CONF_VIDEO_ENABLED, default_video_enabled)
+            CONF_VIDEO_ENABLED: media_enabled,
+            CONF_CREATE_HOMEASSISTANT_USER: (
+                bool(
+                    user_input.get(
+                        CONF_CREATE_HOMEASSISTANT_USER,
+                        default_create_homeassistant_user,
+                    )
+                )
+                if media_enabled
+                else False
             ),
             CONF_VIDEO_PORT: int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
-            CONF_VIDEO_STREAM_PATH: user_input.get(
-                CONF_VIDEO_STREAM_PATH,
-                DEFAULT_VIDEO_STREAM_PATH,
+            CONF_VIDEO_STREAM_PATH: str(
+                user_input.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
             ),
             CONF_DEVICE_UI_ENABLED: device_ui_enabled,
         },
@@ -1436,36 +1529,24 @@ def _options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.
 def _options_features_schema(
     config_entry: config_entries.ConfigEntry,
     *,
-    device_ui_enabled: bool | None = None,
     video_enabled: bool | None = None,
-    video_port: int | None = None,
-    video_stream_path: str | None = None,
+    create_homeassistant_user: bool | None = None,
 ) -> vol.Schema:
     """Return the second options page schema."""
 
-    default_device_ui_enabled = (
-        bool(_config_default(config_entry, CONF_DEVICE_UI_ENABLED, False))
-        if device_ui_enabled is None
-        else device_ui_enabled
-    )
     default_video_enabled = (
-        _config_default(config_entry, CONF_VIDEO_ENABLED, False)
+        bool(_config_default(config_entry, CONF_VIDEO_ENABLED, False))
         if video_enabled is None
-        else video_enabled
+        else bool(video_enabled)
     )
-    default_video_port = (
-        _config_default(config_entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
-        if video_port is None
-        else video_port
-    )
-    default_video_stream_path = (
+    default_create_homeassistant_user = (
         _config_default(
             config_entry,
-            CONF_VIDEO_STREAM_PATH,
-            DEFAULT_VIDEO_STREAM_PATH,
+            CONF_CREATE_HOMEASSISTANT_USER,
+            _CREATE_HOMEASSISTANT_USER_DEFAULT,
         )
-        if video_stream_path is None
-        else video_stream_path
+        if create_homeassistant_user is None
+        else create_homeassistant_user
     )
     default_device_activation_mode = _config_default(
         config_entry,
@@ -1477,28 +1558,21 @@ def _options_features_schema(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         DEFAULT_STAIR_LIGHT_ADDRESS,
     )
-    return vol.Schema(
+    fields: dict[Any, Any] = {
+        vol.Optional(
+            CONF_VIDEO_ENABLED,
+            default=default_video_enabled,
+        ): bool,
+    }
+    if default_video_enabled:
+        fields[
+            vol.Optional(
+                CONF_CREATE_HOMEASSISTANT_USER,
+                default=default_create_homeassistant_user,
+            )
+        ] = bool
+    fields.update(
         {
-            vol.Optional(
-                CONF_DEVICE_UI_ENABLED,
-                default=default_device_ui_enabled,
-            ): bool,
-            **_options_gui_dependent_feature_fields(
-                config_entry,
-                default_device_ui_enabled,
-            ),
-            vol.Optional(
-                CONF_VIDEO_ENABLED,
-                default=default_video_enabled,
-            ): bool,
-            vol.Optional(
-                CONF_VIDEO_PORT,
-                default=default_video_port,
-            ): int,
-            vol.Optional(
-                CONF_VIDEO_STREAM_PATH,
-                default=default_video_stream_path,
-            ): str,
             vol.Optional(
                 CONF_DEVICE_ACTIVATION_MODE,
                 default=default_device_activation_mode,
@@ -1509,79 +1583,48 @@ def _options_features_schema(
             ): str,
         }
     )
+    return vol.Schema(fields)
 
 
-def _setup_gui_dependent_feature_fields(
+def _dashboard_schema(
     default_alarm_entity: str,
     default_weather_entity: str,
-    device_ui_enabled: bool,
     default_actions_json: str = "",
-    default_dashboard_prevent_return: bool = True,
+    default_dashboard_prevent_return: bool = _DASHBOARD_PREVENT_RETURN_DEFAULT,
     default_dashboard_entities: Any = None,
-) -> dict[Any, Any]:
-    """Return setup/reconfigure fields that require the C300X GUI patch."""
+    *,
+    default_device_ui_enabled: bool = False,
+) -> vol.Schema:
+    """Return the GUI dashboard schema."""
 
-    if not device_ui_enabled:
-        return {}
-    return {
-        _optional_suggested(
-            CONF_ALARM_ENTITY_ID,
-            default_alarm_entity,
-        ): _alarm_entity_selector(),
-        _optional_suggested(
-            CONF_WEATHER_ENTITY_ID,
-            default_weather_entity,
-        ): _weather_entity_selector(),
-        _optional_suggested(
-            CONF_DASHBOARD_ENTITIES,
-            _dashboard_entity_ids(default_dashboard_entities or []),
-        ): _dashboard_entity_selector(),
-        _optional_suggested(
-            CONF_ACTIONS_JSON,
-            default_actions_json,
-        ): _actions_json_field(),
-        vol.Optional(
-            CONF_DASHBOARD_PREVENT_RETURN,
-            default=default_dashboard_prevent_return,
-        ): bool,
-    }
-
-
-def _options_gui_dependent_feature_fields(
-    config_entry: config_entries.ConfigEntry,
-    device_ui_enabled: bool,
-) -> dict[Any, Any]:
-    """Return option fields that require the C300X GUI patch."""
-
-    if not device_ui_enabled:
-        return {}
-    return {
-        _optional_suggested(
-            CONF_ALARM_ENTITY_ID,
-            _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
-        ): _alarm_entity_selector(),
-        _optional_suggested(
-            CONF_WEATHER_ENTITY_ID,
-            _config_default(config_entry, CONF_WEATHER_ENTITY_ID, ""),
-        ): _weather_entity_selector(),
-        _optional_suggested(
-            CONF_DASHBOARD_ENTITIES,
-            _dashboard_entity_ids(
-                _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
-            ),
-        ): _dashboard_entity_selector(),
-        _optional_suggested(
-            CONF_ACTIONS_JSON,
-            _actions_json(_config_default(config_entry, CONF_ACTIONS, {})),
-        ): _actions_json_field(),
-        vol.Optional(
-            CONF_DASHBOARD_PREVENT_RETURN,
-            default=config_entry.options.get(
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_DEVICE_UI_ENABLED,
+                default=default_device_ui_enabled,
+            ): bool,
+            _optional_suggested(
+                CONF_ALARM_ENTITY_ID,
+                default_alarm_entity,
+            ): _alarm_entity_selector(),
+            _optional_suggested(
+                CONF_WEATHER_ENTITY_ID,
+                default_weather_entity,
+            ): _weather_entity_selector(),
+            _optional_suggested(
+                CONF_DASHBOARD_ENTITIES,
+                _dashboard_entity_ids(default_dashboard_entities or []),
+            ): _dashboard_entity_selector(),
+            _optional_suggested(
+                CONF_ACTIONS_JSON,
+                default_actions_json,
+            ): _actions_json_field(),
+            vol.Optional(
                 CONF_DASHBOARD_PREVENT_RETURN,
-                True,
-            ),
-        ): bool,
-    }
+                default=default_dashboard_prevent_return,
+            ): bool,
+        }
+    )
 
 
 def _optional_suggested(key: str, suggested_value: Any) -> vol.Optional:
@@ -1590,27 +1633,6 @@ def _optional_suggested(key: str, suggested_value: Any) -> vol.Optional:
     if suggested_value in (None, ""):
         return vol.Optional(key)
     return vol.Optional(key, description={"suggested_value": suggested_value})
-
-
-def _needs_gui_details(
-    user_input: dict[str, Any],
-    *,
-    details_shown: bool = False,
-) -> bool:
-    """Return true when the flow must redisplay GUI-dependent fields."""
-
-    if details_shown:
-        return False
-    return bool(user_input.get(CONF_DEVICE_UI_ENABLED, False)) and not any(
-        field in user_input
-        for field in (
-            CONF_ALARM_ENTITY_ID,
-            CONF_WEATHER_ENTITY_ID,
-            CONF_DASHBOARD_ENTITIES,
-            CONF_ACTIONS_JSON,
-            CONF_DASHBOARD_PREVENT_RETURN,
-        )
-    )
 
 
 def _current_connection_options(
@@ -1663,12 +1685,23 @@ def _current_feature_options(
             CONF_VIDEO_STREAM_PATH,
             DEFAULT_VIDEO_STREAM_PATH,
         ),
+        CONF_CREATE_HOMEASSISTANT_USER: bool(
+            _config_default(
+                config_entry,
+                CONF_CREATE_HOMEASSISTANT_USER,
+                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+            )
+        ),
         CONF_DEVICE_UI_ENABLED: bool(
             _config_default(config_entry, CONF_DEVICE_UI_ENABLED, False)
         ),
         CONF_ACTIONS: _config_default(config_entry, CONF_ACTIONS, {}),
         CONF_DASHBOARD_PREVENT_RETURN: bool(
-            _config_default(config_entry, CONF_DASHBOARD_PREVENT_RETURN, True)
+            _config_default(
+                config_entry,
+                CONF_DASHBOARD_PREVENT_RETURN,
+                _DASHBOARD_PREVENT_RETURN_DEFAULT,
+            )
         ),
         CONF_DEVICE_ACTIVATION_MODE: _config_default(
             config_entry,
@@ -1705,17 +1738,10 @@ def _reconfigure_features_schema_from_current(
 
     current = _current_feature_options(config_entry)
     return _reconfigure_features_schema(
-        current[CONF_ALARM_ENTITY_ID],
-        current[CONF_WEATHER_ENTITY_ID],
         bool(current[CONF_VIDEO_ENABLED]),
-        int(current[CONF_VIDEO_PORT]),
-        current[CONF_VIDEO_STREAM_PATH],
-        bool(current[CONF_DEVICE_UI_ENABLED]),
-        _actions_json(current[CONF_ACTIONS]),
-        bool(current[CONF_DASHBOARD_PREVENT_RETURN]),
-        current[CONF_DASHBOARD_ENTITIES],
         current[CONF_DEVICE_ACTIVATION_MODE],
         current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS],
+        default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
     )
 
 
@@ -1726,6 +1752,17 @@ def _feature_input_defaults(
     """Return feature input with hidden GUI fields preserved when absent."""
 
     data = dict(user_input)
+    if CONF_CREATE_HOMEASSISTANT_USER not in data:
+        media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))
+        media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))
+        data[CONF_CREATE_HOMEASSISTANT_USER] = (
+            _CREATE_HOMEASSISTANT_USER_DEFAULT
+            if media_enabled and not media_was_enabled
+            else defaults.get(
+                CONF_CREATE_HOMEASSISTANT_USER,
+                _CREATE_HOMEASSISTANT_USER_DEFAULT,
+            )
+        )
     data.setdefault(
         CONF_DEVICE_ACTIVATION_MODE,
         defaults.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO),
@@ -1737,6 +1774,15 @@ def _feature_input_defaults(
             DEFAULT_STAIR_LIGHT_ADDRESS,
         ),
     )
+    data.setdefault(CONF_VIDEO_PORT, defaults.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT))
+    data.setdefault(
+        CONF_VIDEO_STREAM_PATH,
+        defaults.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH),
+    )
+    data.setdefault(
+        CONF_DEVICE_UI_ENABLED,
+        defaults.get(CONF_DEVICE_UI_ENABLED, False),
+    )
     if not bool(data.get(CONF_DEVICE_UI_ENABLED, False)):
         return data
     data.setdefault(CONF_ALARM_ENTITY_ID, defaults[CONF_ALARM_ENTITY_ID])
@@ -1746,6 +1792,44 @@ def _feature_input_defaults(
     data.setdefault(
         CONF_DASHBOARD_PREVENT_RETURN,
         defaults[CONF_DASHBOARD_PREVENT_RETURN],
+    )
+    return data
+
+
+def _dashboard_input_defaults(
+    user_input: dict[str, Any],
+    defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return dashboard input defaults for the separate GUI dashboard page."""
+
+    data = dict(user_input)
+    data.setdefault(
+        CONF_DEVICE_UI_ENABLED,
+        False if defaults is None else defaults.get(CONF_DEVICE_UI_ENABLED, False),
+    )
+    data.setdefault(
+        CONF_ALARM_ENTITY_ID,
+        "" if defaults is None else defaults[CONF_ALARM_ENTITY_ID],
+    )
+    data.setdefault(
+        CONF_WEATHER_ENTITY_ID,
+        "" if defaults is None else defaults[CONF_WEATHER_ENTITY_ID],
+    )
+    data.setdefault(
+        CONF_DASHBOARD_ENTITIES,
+        [] if defaults is None else defaults.get(CONF_DASHBOARD_ENTITIES, []),
+    )
+    data.setdefault(
+        CONF_ACTIONS_JSON,
+        "" if defaults is None else _actions_json(defaults[CONF_ACTIONS]),
+    )
+    data.setdefault(
+        CONF_DASHBOARD_PREVENT_RETURN,
+        (
+            _DASHBOARD_PREVENT_RETURN_DEFAULT
+            if defaults is None
+            else defaults[CONF_DASHBOARD_PREVENT_RETURN]
+        ),
     )
     return data
 

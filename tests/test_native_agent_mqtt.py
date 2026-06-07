@@ -160,7 +160,7 @@ def test_native_mqtt_status_response_checks_for_truncation() -> None:
         http.rindex("static int mqtt_runtime_config_is_valid")
     ]
 
-    assert "MQTT_STATUS_BODY_LEN = 8192" in status
+    assert "MQTT_STATUS_BODY_LEN = 16384" in status
     assert "written = snprintf(" in status
     assert "written < 0 || written >= (int)sizeof(workspace->body)" in status
     assert "mqtt_status_too_large" in status

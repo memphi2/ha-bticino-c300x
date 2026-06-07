@@ -178,15 +178,7 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
     hass = _FakeHass()
     event_state = C300XEventState()
     event_state.video_available = True
-    event_state.video_active_until = "2026-05-27T12:00:00+00:00"
     event_state.video_stream_path = "/doorbell-video"
-    canceled = False
-
-    def _cancel() -> None:
-        nonlocal canceled
-        canceled = True
-
-    event_state.reset_video = _cancel
     entry = SimpleNamespace(
         entry_id="entry-1",
         title="C300X",
@@ -194,7 +186,16 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
         options={},
         runtime_data=SimpleNamespace(event_state=event_state),
     )
-    request = _FakeRequest("event-token", {"event": "doorbell.media.closed"})
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "doorbell.media.closed",
+            "data": {
+                "doorbell": "idle",
+                "video": {"available": False, "window_available": False},
+            },
+        },
+    )
 
     original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
     webhook_module.resolve_doorbell_camera_entity_id = lambda _hass, _entry: None
@@ -211,12 +212,11 @@ def test_doorbell_media_closed_clears_runtime_video_state() -> None:
         webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
 
     assert response.status == 200
-    assert canceled is True
     assert event_state.video_available is False
-    assert event_state.video_active_until is None
+    assert event_state.video_window_available is False
     assert event_state.video_stream_path is None
-    assert event_state.reset_video is None
     assert event_state.last_event_data["event_key"] == "doorbell_media_closed"
+    assert event_state.last_event_data["doorbell"] == "idle"
     assert hass.bus.events[-1][1]["event_key"] == "doorbell_media_closed"
 
 
@@ -232,7 +232,7 @@ def test_real_doorbell_event_fires_public_event() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "doorbell.pressed", "ttl_seconds": 0},
+        {"event": "doorbell.pressed", "data": {"doorbell": "ringing"}},
     )
 
     original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
@@ -258,6 +258,193 @@ def test_real_doorbell_event_fires_public_event() -> None:
     ]
 
 
+def test_external_doorbell_view_does_not_advertise_ha_video_available() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "doorbell.view_requested",
+            "data": {
+                "doorbell": "view_requested",
+                "video": {"available": False, "window_available": False},
+            },
+        },
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = (
+        lambda _hass, _entry: "camera.bticino_doorbell"
+    )
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert event_state.video_available is False
+    assert event_state.last_event_data["video_available"] is False
+    assert event_state.last_event_data["video_window_available"] is False
+    assert event_state.last_event_data["doorbell"] == "view_requested"
+    assert event_state.last_event_data["camera_entity_id"] == "camera.bticino_doorbell"
+    assert hass.bus.events[-1][1]["video_available"] is False
+
+
+def test_doorbell_view_uses_explicit_ha_video_availability() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "doorbell.view_requested",
+            "data": {
+                "doorbell": "view_requested",
+                "video": {
+                    "available": True,
+                    "window_available": True,
+                    "stream_path": "/doorbell-video",
+                },
+            },
+        },
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = (
+        lambda _hass, _entry: "camera.bticino_doorbell"
+    )
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert event_state.video_available is True
+    assert event_state.video_window_available is True
+    assert event_state.last_event_data["video_available"] is True
+    assert event_state.last_event_data["video_window_available"] is True
+    assert event_state.last_event_data["doorbell"] == "view_requested"
+    assert event_state.last_event_data["stream_path"] == "/doorbell-video"
+
+
+def test_doorbell_view_keeps_agent_video_available_without_camera_entity_id() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "doorbell.view_requested",
+            "data": {
+                "doorbell": "view_requested",
+                "video": {
+                    "available": True,
+                    "window_available": True,
+                    "stream_path": "/doorbell-video",
+                },
+            },
+        },
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = lambda _hass, _entry: None
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert event_state.last_event_data["video_available"] is True
+    assert event_state.last_event_data["video_window_available"] is True
+    assert "camera_entity_id" not in event_state.last_event_data
+
+
+def test_external_media_active_overrides_doorbell_video_availability() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {
+            "event": "doorbell.view_requested",
+            "data": {
+                "video": {
+                    "available": True,
+                    "window_available": True,
+                    "external_media_active": True,
+                }
+            },
+        },
+    )
+
+    original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id
+    webhook_module.resolve_doorbell_camera_entity_id = (
+        lambda _hass, _entry: "camera.bticino_doorbell"
+    )
+    try:
+        response = asyncio.run(
+            _async_handle_agent_event(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                event_state,
+                request,  # type: ignore[arg-type]
+            )
+        )
+    finally:
+        webhook_module.resolve_doorbell_camera_entity_id = original_resolve_camera
+
+    assert response.status == 200
+    assert event_state.video_available is False
+    assert event_state.last_event_data["video_available"] is False
+    assert event_state.last_event_data["video_window_available"] is False
+
+
 def test_snapshot_doorbell_event_updates_state_without_public_event() -> None:
     hass = _FakeHass()
     event_state = C300XEventState()
@@ -270,7 +457,11 @@ def test_snapshot_doorbell_event_updates_state_without_public_event() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "doorbell.pressed", "snapshot": True, "ttl_seconds": 0},
+        {
+            "event": "doorbell.pressed",
+            "snapshot": True,
+            "data": {"doorbell": "ringing"},
+        },
     )
 
     original_resolve_camera = webhook_module.resolve_doorbell_camera_entity_id

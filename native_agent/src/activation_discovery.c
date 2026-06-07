@@ -5,6 +5,7 @@
 #endif
 
 #include "activation_discovery.h"
+#include "string_util.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -555,7 +556,7 @@ static void scan_path(
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child)) {
+        if (!c300x_join_path(child, sizeof(child), path, entry->d_name)) {
             continue;
         }
         scan_path(config, discovery, child, depth + 1);

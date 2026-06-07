@@ -161,6 +161,33 @@ static void sha256_final(struct sha256_context *context, unsigned char digest[32
     }
 }
 
+int c300x_sha256_strings3(
+    const char *part1,
+    const char *part2,
+    const char *part3,
+    unsigned char digest[C300X_SHA256_DIGEST_LEN]
+)
+{
+    struct sha256_context context;
+
+    if (digest == NULL) {
+        return 0;
+    }
+    sha256_init(&context);
+    if (part1 != NULL) {
+        sha256_update(&context, (const unsigned char *)part1, strlen(part1));
+    }
+    if (part2 != NULL) {
+        sha256_update(&context, (const unsigned char *)part2, strlen(part2));
+    }
+    if (part3 != NULL) {
+        sha256_update(&context, (const unsigned char *)part3, strlen(part3));
+    }
+    sha256_final(&context, digest);
+    memset(&context, 0, sizeof(context));
+    return 1;
+}
+
 int c300x_sha256_file_hex(const char *path, char *out, size_t out_len)
 {
     static const char hex[] = "0123456789abcdef";

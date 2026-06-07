@@ -48,11 +48,6 @@ void c300x_mqtt_publish_event(
     const char *event_json,
     const char *data_json
 );
-void c300x_mqtt_publish_raw(
-    struct c300x_mqtt *mqtt,
-    const struct c300x_config *config,
-    const char *payload
-);
 int c300x_mqtt_take_command(
     struct c300x_mqtt *mqtt,
     char *out,

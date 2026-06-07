@@ -2,20 +2,32 @@
 
 ## What this integration does
 
-The integration connects Home Assistant to a native C300X device agent running
-locally on the BTicino Classe 300X / C300X. Home Assistant owns the entities,
-services, automations and media routing. The native agent performs the local
-device work and pushes events back to Home Assistant.
+This local-first, app-like Home Assistant custom integration connects Home
+Assistant to a native C300X device agent running locally on the BTicino Classe
+300X / C300X. Home Assistant owns the entities, services, automations and media
+routing. The native agent performs the local device work and pushes events back
+to Home Assistant.
 
 The normal user experience should be simple: install the Home Assistant custom
 integration, install or update the native agent through the setup/Repair flow,
 choose the features you want, and then use the C300X as a local push-based Home
 Assistant device.
 
+Version 1.0.0 focuses on three app-like media workflows:
+
+- **On-demand**: open the door camera from Home Assistant when nobody is
+  ringing.
+- **Ring Call**: when smartphone forwarding is enabled, answer the real
+  incoming doorbell call from Home Assistant with video, device audio and
+  microphone talkback.
+- **Home Call**: call the C300X from Home Assistant as an audio-only in-house
+  call.
+
 ## Before you start
 
 - BTicino Classe 300X / C300X.
-- Tested against the `1.7.x` firmware family.
+- Tested against the `1.7.x` firmware family. If your separate rooting or
+  SSH-enablement workflow asks for a firmware target, select `1.7.19`.
 - Requires a rooted or SSH-enabled C300X for native-agent installation.
 - Requires a trusted local network path from Home Assistant to the C300X.
 
@@ -27,6 +39,9 @@ referenced community firmware-patching project is:
 https://github.com/fquinto/bticinoClasse300x
 ```
 
+Use that kind of workflow at your own risk, without warranty, and only where it
+is legal for your device and jurisdiction.
+
 The integration installer can install the native agent on an already
 rooted/SSH-enabled device. It cannot root a stock device.
 
@@ -35,9 +50,12 @@ rooted/SSH-enabled device. It cannot root a stock device.
 - Door unlock action/button.
 - Stair light action/button with configurable OpenWebNet address.
 - Doorbell ring event and device-agent event stream.
-- On-demand doorbell camera through Home Assistant WebRTC handling.
-- Two-way audio/talkback through the Home Assistant WebRTC camera path when the
-  frontend has microphone access.
+- On-demand doorbell camera through Home Assistant camera handling.
+- App-like doorbell Ring Call answer/hang-up with video, device audio and
+  talkback.
+- Audio-only Home Call from Home Assistant to the C300X.
+- Two-way audio/talkback through the Home Assistant camera path when the
+  frontend has microphone access over HTTPS or Home Assistant Cloud.
 - Ringer mute state/control.
 - Smartphone forwarding state/control.
 - Answering machine state and stored video-message counters/playback/delete.
@@ -68,6 +86,8 @@ Recommended first setup:
 
 - Enable doorbell camera/video when you want video or talkback in Home
   Assistant.
+- Keep **Create Home Assistant media user** enabled unless you already manage a
+  dedicated media user on the C300X yourself.
 - Enable the display GUI patch only when you want Alarmo or Home Assistant pages
   on the physical C300X display.
 - Select an Alarmo entity only when you actually use Alarmo.
@@ -100,6 +120,7 @@ set new tokens.
 Common options:
 
 - Doorbell camera/video.
+- Create Home Assistant media user for video, Ring Call and Home Call media.
 - Stair-light address.
 - Display GUI integration.
 - Alarmo entity for the C300X display page.
@@ -128,9 +149,13 @@ Keep these options disabled unless you need them:
 
 After setup, typical interaction happens through Home Assistant entities:
 
-- Open the doorbell camera from Home Assistant when you need video.
-- Use the camera WebRTC/talkback control when the frontend has microphone
-  access.
+- Use the doorstation card's play button for on-demand camera viewing.
+- Press **Answer** in the doorstation card when the doorbell rings to take over
+  the real Ring Call.
+- Use the Home Call card to call the C300X from Home Assistant and hang up from
+  either side.
+- Use the talkback control only from a secure Home Assistant frontend
+  with microphone permission.
 - Use the door unlock and stair-light buttons/services for direct actions.
 - Toggle ringer mute, smartphone forwarding and answering machine through their
   switches.
@@ -142,6 +167,28 @@ After setup, typical interaction happens through Home Assistant entities:
 Maintenance entities are intentionally separate from everyday controls. Keep
 SSH, reboot, firewall patching, GUI patching and remove-agent disabled unless
 you are actively using them.
+
+## Home Assistant media user
+
+Doorbell video, Ring Call and Home Call need a local C300X media identity. The
+setup and reconfigure flow can create a dedicated device-side `homeassistant`
+user for that purpose.
+
+Rules:
+
+- If the `homeassistant` user exists, the agent uses it first.
+- If it does not exist but an app-created C300X user exists, the agent can use
+  that existing user as a fallback.
+- If no usable user exists while video/Home Call/Ring Call features are enabled,
+  Home Assistant raises a Repair so you can create the dedicated user.
+- Generated user IDs must be random and device-local. Never copy real phone/app
+  UUIDs, account IDs or other private identifiers into code, documentation,
+  examples or issues.
+- To remove the user, delete it from the C300X display/user management UI and
+  then rerun the Repair or reconfigure flow.
+
+Media-related entities expose a compact `media_user` attribute when the agent
+reports which media identity is being used.
 
 ## Alarmo Display Page
 
@@ -173,12 +220,16 @@ The integration can register these services, depending on capabilities:
 - `bticino_c300x.unlock_door`
 - `bticino_c300x.stair_light`
 - `bticino_c300x.activate_doorbell_video`
+- `bticino_c300x.stop_doorbell_video`
+- `bticino_c300x.start_home_call`
+- `bticino_c300x.stop_home_call`
 - `bticino_c300x.reboot`
 - `bticino_c300x.reload_gui`
 - `bticino_c300x.play_latest_video_message`
 - `bticino_c300x.delete_latest_video_message`
 - `bticino_c300x.play_latest_voice_memo`
 - `bticino_c300x.delete_latest_voice_memo`
+- `bticino_c300x.write_text_memo`
 - `bticino_c300x.delete_latest_text_memo`
 
 The `Remove device agent` maintenance button restores supported GUI/firewall
@@ -206,35 +257,199 @@ a safe lock or stair-light action, the integration can expose
 the object itself as a Home Assistant button. The favorite marker is only
 metadata.
 
-## Doorbell video automation
+## Doorbell video, Ring Call and Home Call
 
-Use `bticino_c300x.activate_doorbell_video` in a ring automation to pre-warm the
-C300X video session before a dashboard or notification opens the camera.
+The media workflows are intentionally separate:
+
+- **On-demand** starts the normal camera stream when nobody is ringing.
+- **Ring Call** answers the real incoming doorbell call reported by the agent
+  while smartphone forwarding is enabled.
+- **Home Call** starts an audio-only call from Home Assistant to the C300X.
+
+Use `bticino_c300x.activate_doorbell_video` only for on-demand camera
+pre-warm/start. Use `bticino_c300x.stop_doorbell_video` or the `Stop doorbell
+video` button as the doorstation hang-up action. Use
+`bticino_c300x.start_home_call` and `bticino_c300x.stop_home_call` for Home Call.
+
+When smartphone forwarding is `blocked`, the C300X still emits a doorbell ring
+event but does not deliver a real SIP ring call to Home Assistant. The
+doorstation card therefore does not show **Answer** in that state; use
+**Stream** for on-demand viewing. A separate HA-only `in-house only` ring mode
+is planned for a later release and is not part of 1.0.0 behavior.
+
+The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
+loads it automatically. Add it from the Lovelace card picker or use YAML. The
+card editor is localized in English, German, French and Italian. It only needs
+the camera entity; related doorbell and Home Call state entities are discovered
+through the same config entry. This keeps multiple C300X devices clean without
+manual `state_entity` fields.
+
+Add two cards when you want the full 1.0.0 UI:
+
+- one normal doorstation card for On-demand and Ring Call,
+- one Home Call card for the audio-only in-house call.
+
+Dashboard card:
 
 ```yaml
-alias: C300X ring video prewarm
+type: vertical-stack
+cards:
+  - type: custom:c300x-doorbell-call-card
+    entity: camera.bticino_c300x_doorbell_camera
+    name: C300X Door Station
+  - type: custom:c300x-doorbell-call-card
+    entity: camera.bticino_c300x_doorbell_camera
+    mode: home_call
+    name: C300X Home Call
+```
+
+### HTTPS and microphone requirements
+
+Talkback needs microphone access in the Home Assistant frontend. Use HTTPS,
+Home Assistant Cloud, or another secure frontend URL. Plain HTTP is not a
+reliable microphone path except for browser-specific localhost exceptions. In
+mobile notifications, the **Answer** action should open the Home Assistant
+dashboard so the user starts the media session from the card with microphone
+permission.
+
+### Mobile notification examples
+
+The Companion App supports actionable notifications on Android and iOS. It can
+also display camera content in notifications through `entity_id` or platform
+attachment behavior. Keep action ids unique if several door-call automations can
+run at the same time.
+
+Replace `/dashboard-c300x/door` with the dashboard path that contains your
+C300X doorstation card. The notification does not auto-answer the call; it opens
+the card so the user can press **Answer** and start talkback with
+microphone permission. The doorstation card can answer only a real Ring Call
+reported by the agent, so keep active mobile push notifications gated behind
+`switch.bticino_c300x_smartphone_forwarding` when forwarding is disabled.
+
+```yaml
+alias: C300X door call notification
 mode: restart
 trigger:
   - platform: event
+    id: ring
     event_type: bticino_c300x_agent_event_received
     event_data:
       event_key: doorbell_pressed
+  - platform: event
+    id: hangup
+    event_type: mobile_app_notification_action
+    event_data:
+      action: C300X_HANGUP_DOOR_CALL
 action:
-  - service: bticino_c300x.activate_doorbell_video
-    data:
-      audio: true
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: ring
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: switch.bticino_c300x_smartphone_forwarding
+                    state: "on"
+                sequence:
+                  - service: notify.mobile_app_phone
+                    data:
+                      title: Doorbell
+                      message: Someone is at the door
+                      data:
+                        entity_id: camera.bticino_c300x_doorbell_camera
+                        tag: c300x-door-call
+                        group: c300x
+                        actions:
+                          - action: URI
+                            title: Answer
+                            uri: /dashboard-c300x/door
+                            activationMode: foreground
+                          - action: C300X_HANGUP_DOOR_CALL
+                            title: Hang Up
+                            destructive: true
+                          - action: URI
+                            title: Dashboard
+                            uri: /dashboard-c300x/door
+      - conditions:
+          - condition: trigger
+            id: hangup
+        sequence:
+          - service: bticino_c300x.stop_doorbell_video
 ```
 
-Talkback requires the camera WebRTC path, a native agent that reports talkback
-support, and browser/mobile microphone permission. Browser microphone access
-requires HTTPS, Home Assistant Cloud, or another secure Home Assistant frontend
-URL.
+Android high-priority/alarm-stream example:
+
+```yaml
+service: notify.mobile_app_pixel
+data:
+  title: Doorbell
+  message: Someone is at the door
+  data:
+    ttl: 0
+    priority: high
+    channel: alarm_stream
+    entity_id: camera.bticino_c300x_doorbell_camera
+    actions:
+      - action: URI
+        title: Answer
+        uri: /dashboard-c300x/door
+      - action: C300X_HANGUP_DOOR_CALL
+        title: Hang Up
+      - action: URI
+        title: Dashboard
+        uri: /dashboard-c300x/door
+```
+
+Android command-webview example:
+
+```yaml
+service: notify.mobile_app_pixel
+data:
+  message: command_webview
+  data:
+    command: /dashboard-c300x/door
+```
+
+iOS critical-alert example:
+
+```yaml
+service: notify.mobile_app_iphone
+data:
+  title: Doorbell
+  message: Someone is at the door
+  data:
+    entity_id: camera.bticino_c300x_doorbell_camera
+    push:
+      sound:
+        name: default
+        critical: 1
+        volume: 1.0
+    actions:
+      - action: URI
+        title: Answer
+        uri: /dashboard-c300x/door
+        activationMode: foreground
+      - action: C300X_HANGUP_DOOR_CALL
+        title: Hang Up
+        destructive: true
+      - action: URI
+        title: Dashboard
+        uri: /dashboard-c300x/door
+```
+
+Relevant Companion App documentation:
+
+- <https://companion.home-assistant.io/docs/notifications/actionable-notifications/>
+- <https://companion.home-assistant.io/docs/notifications/dynamic-content>
+- <https://companion.home-assistant.io/docs/notifications/critical-notifications/>
+- <https://companion.home-assistant.io/docs/notifications/notification-commands/>
 
 ## IPv6
 
 IPv6 is not required for a basic local install. It is still worth enabling when
 your Home Assistant host and the C300X both have stable ULA or global IPv6
-addresses. In mixed networks, Home Assistant, browsers, and HA Cloud/WebRTC
+addresses. In mixed networks, Home Assistant, browsers, and HA Cloud media
 paths may prefer IPv6; having the agent reachable on a stable IPv6 path avoids
 unreliable fallbacks through link-local names or IPv4-only routing.
 
@@ -290,6 +505,9 @@ there is no pending Home Assistant Repair for an agent update.
   link-local names.
 - For browser talkback/microphone access, open Home Assistant through HTTPS,
   Home Assistant Cloud, or another secure frontend URL.
+- After a major native-agent upgrade, if media entities, capabilities or call
+  controls stay inconsistent, use `Remove device agent`, remove the integration
+  entry, then reinstall the integration and native agent cleanly.
 
 ### Messages or memos do not update
 
@@ -319,5 +537,5 @@ When asking for help, include:
 - a Home Assistant diagnostics download for this integration.
 
 Do not include passwords, tokens, usernames, private hostnames, private IP
-addresses when they are not needed, local backups, firmware files or packet
-captures with private data.
+addresses when they are not needed, local backups, firmware files, network
+traces or other private data.

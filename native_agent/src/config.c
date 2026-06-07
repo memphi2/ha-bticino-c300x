@@ -5,6 +5,7 @@
 #endif
 
 #include "c300x_agent.h"
+#include "string_util.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -22,7 +23,7 @@ static void set_error(char *error, size_t error_len, const char *message)
     if (error_len == 0) {
         return;
     }
-    snprintf(error, error_len, "%s", message);
+    c300x_copy_string(error, error_len, message);
 }
 
 static void safe_copy(char *dest, size_t dest_len, const char *value)
@@ -30,7 +31,7 @@ static void safe_copy(char *dest, size_t dest_len, const char *value)
     if (dest_len == 0) {
         return;
     }
-    snprintf(dest, dest_len, "%s", value != NULL ? value : "");
+    c300x_copy_string(dest, dest_len, value);
 }
 
 static int address_is_valid(const char *value)
@@ -169,11 +170,6 @@ void c300x_default_config(struct c300x_config *config)
     config->events_enabled = 1;
     safe_copy(config->events_group, sizeof(config->events_group), "239.255.76.67");
     config->events_port = 7667;
-    safe_copy(
-        config->subscription_store_path,
-        sizeof(config->subscription_store_path),
-        "/home/bticino/cfg/extra/c300x-native-agent/subscriptions.json"
-    );
     config->callback_timeout_ms = 2500;
     config->mqtt_enabled = 0;
     config->mqtt_host[0] = '\0';
@@ -1144,18 +1140,6 @@ int c300x_load_config(
             return 0;
         }
     }
-    if (nested_member(document, document_end, "events", "subscriptionStorePath", &value)) {
-        if (!string_value(
-            value,
-            document_end,
-            config->subscription_store_path,
-            sizeof(config->subscription_store_path)
-        )) {
-            set_error(error, error_len, "events.subscriptionStorePath must be a string");
-            free(document);
-            return 0;
-        }
-    }
     if (nested_member(document, document_end, "events", "callbackTimeoutMs", &value)) {
         if (!int_value(value, document_end, &config->callback_timeout_ms)) {
             set_error(error, error_len, "events.callbackTimeoutMs must be positive");
@@ -1428,20 +1412,6 @@ int c300x_load_config(
     if (nested_member(document, document_end, "displayBridge", "enabled", &value)) {
         if (!bool_value(value, document_end, &config->display_bridge_enabled)) {
             set_error(error, error_len, "displayBridge.enabled must be a boolean");
-            free(document);
-            return 0;
-        }
-    }
-    if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "webhookUrl", &value)) {
-        if (!string_value(value, document_end, config->home_assistant_webhook_url, sizeof(config->home_assistant_webhook_url))) {
-            set_error(error, error_len, "displayBridge.homeAssistant.webhookUrl must be a string");
-            free(document);
-            return 0;
-        }
-    }
-    if (nested_member3(document, document_end, "displayBridge", "homeAssistant", "sharedSecret", &value)) {
-        if (!string_value(value, document_end, config->home_assistant_shared_secret, sizeof(config->home_assistant_shared_secret))) {
-            set_error(error, error_len, "displayBridge.homeAssistant.sharedSecret must be a string");
             free(document);
             return 0;
         }
@@ -1947,8 +1917,6 @@ int c300x_config_persisted_equal(
         && C300X_EQ_INT(display_bridge_enabled)
         && C300X_EQ_STR(device_model)
         && C300X_EQ_STR(device_firmware)
-        && C300X_EQ_STR(home_assistant_webhook_url)
-        && C300X_EQ_STR(home_assistant_shared_secret)
         && C300X_EQ_INT(home_assistant_request_timeout_ms)
         && strcmp(persisted_api_token(left), persisted_api_token(right)) == 0
         && C300X_EQ_INT(api_no_auth)
@@ -1984,7 +1952,6 @@ int c300x_config_persisted_equal(
         && C300X_EQ_INT(events_enabled)
         && C300X_EQ_STR(events_group)
         && C300X_EQ_INT(events_port)
-        && C300X_EQ_STR(subscription_store_path)
         && C300X_EQ_INT(callback_timeout_ms)
         && C300X_EQ_INT(mqtt_enabled)
         && C300X_EQ_STR(mqtt_host)
@@ -2258,7 +2225,6 @@ static int save_config_internal(
     write_json_string(file, config->mdns_name);
     fprintf(file, "},\n");
     fprintf(file, "  \"events\": {\n");
-    write_json_string_field(file, "subscriptionStorePath", config->subscription_store_path, ",");
     fprintf(file, "    \"callbackTimeoutMs\": %d,\n", config->callback_timeout_ms);
     fprintf(file, "    \"udp\": {\"enabled\": %s,\"group\": ", config->events_enabled ? "true" : "false");
     write_json_string(file, config->events_group);
@@ -2331,11 +2297,7 @@ static int save_config_internal(
     fprintf(file, ",\"keepAliveMs\": %d,\"rtpPortStart\": %u,\"rtpPortCount\": %d}\n  },\n", config->video_rtsp_keep_alive_ms, config->video_rtp_port_start, config->video_rtp_port_count);
     fprintf(file, "  \"displayBridge\": {\n");
     fprintf(file, "    \"enabled\": %s,\n", config->display_bridge_enabled ? "true" : "false");
-    fprintf(file, "    \"homeAssistant\": {\"webhookUrl\": ");
-    write_json_string(file, config->home_assistant_webhook_url);
-    fprintf(file, ",\"sharedSecret\": ");
-    write_json_string(file, config->home_assistant_shared_secret);
-    fprintf(file, ",\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
+    fprintf(file, "    \"homeAssistant\": {\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
 
     if (fclose(file) != 0) {
         (void)unlink(temporary_path);
@@ -2362,15 +2324,6 @@ static int save_config_internal(
         *changed = 1;
     }
     return 1;
-}
-
-int c300x_save_config(
-    const struct c300x_config *config,
-    char *error,
-    size_t error_len
-)
-{
-    return save_config_internal(config, error, error_len, NULL);
 }
 
 int c300x_save_config_if_changed(

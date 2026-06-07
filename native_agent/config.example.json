@@ -77,7 +77,6 @@
     "name": "BTicino C300X"
   },
   "events": {
-    "subscriptionStorePath": "/home/bticino/cfg/extra/c300x-native-agent/subscriptions.json",
     "callbackTimeoutMs": 2500,
     "udp": {
       "enabled": true,
@@ -161,8 +160,6 @@
   "displayBridge": {
     "enabled": true,
     "homeAssistant": {
-      "webhookUrl": "http://homeassistant.local:8123/api/webhook/REPLACE_WITH_WEBHOOK_ID",
-      "sharedSecret": "REPLACE_WITH_SHARED_SECRET",
       "requestTimeoutMs": 3000
     }
   }

@@ -93,6 +93,7 @@ Authenticated (bearer token):
 - `POST /api/v1/maintenance/ssh/actions/stop`
 - `POST /api/v1/maintenance/reboot`
 - `POST /api/v1/maintenance/agent/actions/remove`
+- `POST /api/v1/maintenance/agent/actions/restart`
 - `POST /api/v1/maintenance/gui/actions/reload`
 - `GET /api/v1/maintenance/firewall`
 - `POST /api/v1/maintenance/firewall/actions/apply`
@@ -101,6 +102,7 @@ Authenticated (bearer token):
 - `POST /api/v1/maintenance/ipv6-firewall/actions/apply`
 - `POST /api/v1/maintenance/ipv6-firewall/actions/restore`
 - `GET /api/v1/maintenance/qml-patch`
+- `POST /api/v1/maintenance/qml-patch/actions/apply-core`
 - `POST /api/v1/maintenance/qml-patch/actions/apply`
 - `POST /api/v1/maintenance/qml-patch/actions/restore`
 
@@ -155,8 +157,8 @@ file differs. The `status` action is read-only and reports both the optional GUI
 patch state and the core media-hook state.
 
 `/api/v1/diagnostics` exposes non-secret write counters (`agent_write_count`,
-`last_write_class`, `last_write_reason`, `subscription_store_writes`, and
-`qml_patch_last_action`) so HA can verify that idle operation stays write-free.
+`last_write_class`, `last_write_reason`, and `qml_patch_last_action`) so HA can
+verify that idle operation stays write-free.
 Firewall apply/restore writes are reported with `last_write_class=firewall`;
 IPv6 firewall writes use `last_write_class=ipv6_firewall`.
 

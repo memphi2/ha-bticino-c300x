@@ -1008,6 +1008,7 @@ def test_mdns_discovery_switch_updates_bootstrap_config() -> None:
     asyncio.run(entity.async_turn_off())
 
     assert entity.is_on is False
+    assert entity._attr_entity_registry_enabled_default is False
     assert entry.runtime_data.api.auth_config_reads == 1
     assert entry.runtime_data.api.mdns_sets == [False]
 

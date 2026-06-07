@@ -31,6 +31,7 @@ class OpenWebNetServer(socketserver.ThreadingTCPServer):
         super().__init__(("127.0.0.1", 0), OpenWebNetHandler)
         self.frames: list[str] = []
         self.delete_paths: dict[str, Path] = {}
+        self.smartphone_forwarding_code = 2
 
 
 class OpenWebNetHandler(socketserver.BaseRequestHandler):
@@ -48,7 +49,7 @@ class OpenWebNetHandler(socketserver.BaseRequestHandler):
             server.frames.append(frame)
             if path := server.delete_paths.get(frame):
                 shutil.rmtree(path, ignore_errors=True)
-            self.request.sendall(reply_for_openwebnet_frame(frame).encode())
+            self.request.sendall(reply_for_openwebnet_frame(server, frame).encode())
 
 
 class CallbackServer(http.server.ThreadingHTTPServer):
@@ -109,6 +110,7 @@ def main() -> int:
     assert_video_timer_preserves_existing_poll_timeout(binary)
     assert_rtsp_udp_preserves_ipv4_mapped_peers(binary)
     assert_overlong_activation_id_is_rejected(binary)
+    assert_graceful_shutdown_signal_is_handled(binary)
 
     with (
         managed_tcp_server(OpenWebNetServer()) as openwebnet,
@@ -192,12 +194,47 @@ def assert_overlong_activation_id_is_rejected(binary: Path) -> None:
         raise AssertionError(f"unexpected activation id validation error: {result.stderr!r}")
 
 
+def assert_graceful_shutdown_signal_is_handled(binary: Path) -> None:
+    """Guard update restarts so SIGTERM runs the native cleanup path."""
+
+    source_root = binary.parents[2] / "src"
+    http = source_root / "http.c"
+    video = source_root / "video_rtsp.c"
+    if not http.exists() or not video.exists():
+        return
+    http_content = http.read_text(encoding="utf-8")
+    video_content = video.read_text(encoding="utf-8")
+    required_http = (
+        "static volatile sig_atomic_t shutdown_requested",
+        "signal(SIGTERM, handle_shutdown_signal)",
+        "while (!shutdown_requested)",
+        "if (shutdown_requested && result == 1)",
+        "c300x_video_destroy(video);",
+    )
+    if any(item not in http_content for item in required_http):
+        raise AssertionError("native agent must handle SIGTERM through cleanup")
+    destroy_body = video_content[
+        video_content.index("void c300x_video_destroy") :
+        video_content.index("int c300x_video_activate")
+    ]
+    if "if (video->enabled)" not in destroy_body:
+        raise AssertionError("video destroy must not depend on the running flag for cleanup")
+    for cleanup_call in (
+        "c300x_media_bridge_stop(video);",
+        "c300x_media_home_call_stop(video);",
+        "c300x_media_ring_receiver_stop(video);",
+    ):
+        if cleanup_call not in destroy_body:
+            raise AssertionError("video destroy must stop all media subsystems")
+
+
 def run_smoke(
     binary: Path,
     openwebnet: OpenWebNetServer,
     callback: CallbackServer,
 ) -> int:
     assert_runtime_bridge_binds_ui_when_disabled(binary, openwebnet, callback)
+    assert_sigterm_shutdown_exits_cleanly(binary, openwebnet)
     api_port = free_tcp_port()
     ui_port = free_tcp_port()
     rtsp_port = free_tcp_port()
@@ -253,9 +290,11 @@ def run_smoke(
                     "#!/bin/sh",
                     f"echo \"$1\" >> {qml_patch_log}",
                     "case \"$1\" in",
-                    "  status) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"backup_available\":false}' ;;",
-                    "  apply) echo '{\"ok\":true,\"available\":true,\"state\":\"patched\",\"patched\":true,\"backup_available\":true,\"changed_files\":1}' ;;",
-                    "  restore) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"backup_available\":true,\"changed_files\":1}' ;;",
+                    "  status) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"core_state\":\"original\",\"core_patched\":false,\"backup_available\":false,\"core_backup_available\":false}' ;;",
+                    "  apply) echo '{\"ok\":true,\"available\":true,\"state\":\"patched\",\"patched\":true,\"core_state\":\"patched\",\"core_patched\":true,\"backup_available\":true,\"core_backup_available\":true,\"changed_files\":1}' ;;",
+                    "  core-apply) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"core_state\":\"patched\",\"core_patched\":true,\"backup_available\":false,\"core_backup_available\":true,\"changed_files\":1}' ;;",
+                    "  core-restore) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"core_state\":\"original\",\"core_patched\":false,\"backup_available\":false,\"core_backup_available\":true,\"changed_files\":1}' ;;",
+                    "  restore) echo '{\"ok\":true,\"available\":true,\"state\":\"original\",\"patched\":false,\"core_state\":\"patched\",\"core_patched\":true,\"backup_available\":true,\"core_backup_available\":true,\"changed_files\":1}' ;;",
                     "  reload) echo '{\"ok\":true,\"action\":\"reload_gui\",\"gui_running\":true}' ;;",
                     "  *) exit 2 ;;",
                     "esac",
@@ -356,7 +395,6 @@ def run_smoke(
                         },
                     },
                     "events": {
-                        "subscriptionStorePath": str(temp_path / "subscriptions.json"),
                         "callbackTimeoutMs": 1000,
                         "udp": {
                             "enabled": True,
@@ -470,6 +508,7 @@ def run_smoke(
             assert_int_field_at_least(diagnostics, "open_fd_count", 1)
             assert_int_field_at_least(diagnostics, "video_bridge_open_fds", 0)
             assert_int_field_at_least(diagnostics, "video_bridge_active_threads", 0)
+            assert_aborted_clients_do_not_leak_fds(process.pid, api_port, ui_port)
             read_only_actions = (
                 ("health", lambda: api_get(api_port, "/api/v1/health", authorized=False)),
                 ("capabilities", lambda: api_get(api_port, "/api/v1/capabilities")),
@@ -638,11 +677,14 @@ def run_smoke(
             assert_json_field(capabilities["capabilities"]["activations"], "count", 5)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_patch", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "qml_core_patch", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "qml_core_restore", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_restore", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_apply", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_restore", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "agent_remove", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "agent_restart", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "ipv6_firewall_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "ipv6_firewall_apply", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "ipv6_firewall_restore", True)
@@ -691,9 +733,10 @@ def run_smoke(
             )
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-            config_backed_bridge = api_get(api_port, "/api/v1/display-bridge")
-            assert_json_field(config_backed_bridge, "configured", True)
-            assert_json_field(config_backed_bridge, "source", "config")
+            idle_bridge = api_get(api_port, "/api/v1/display-bridge")
+            assert_json_field(idle_bridge, "enabled", True)
+            assert_json_field(idle_bridge, "configured", False)
+            assert_json_field(idle_bridge, "source", "none")
             disabled_bridge = api_post(
                 api_port,
                 "/api/v1/display-bridge",
@@ -756,9 +799,38 @@ def run_smoke(
                 "mode",
                 "blocked",
             )
+            video = api_get(api_port, "/api/v1/video/doorbell/status")
+            assert_json_field(video["bridge"], "ring_receiver_running", False)
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/smartphone-forwarding",
+                    {"mode": "enabled"},
+                ),
+                "mode",
+                "enabled",
+            )
             assert_json_field(api_get(api_port, "/api/v1/answering-machine"), "enabled", False)
             qml_status = maintenance_get(api_port, "/api/v1/maintenance/qml-patch")
             assert_json_field(qml_status, "state", "original")
+            assert_json_field(
+                maintenance_post(
+                    api_port,
+                    "/api/v1/maintenance/qml-patch/actions/apply-core",
+                    {"confirm": "apply_qml_core_patch"},
+                ),
+                "core_state",
+                "patched",
+            )
+            assert_json_field(
+                maintenance_post(
+                    api_port,
+                    "/api/v1/maintenance/qml-patch/actions/restore-core",
+                    {"confirm": "restore_qml_core_patch"},
+                ),
+                "core_state",
+                "original",
+            )
             assert_json_field(
                 maintenance_post(
                     api_port,
@@ -778,7 +850,7 @@ def run_smoke(
                 "original",
             )
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
-            expected_agent_writes += 2
+            expected_agent_writes += 4
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_class", "qml_patch")
             assert_json_field(diagnostics, "qml_patch_last_action", "restore")
@@ -924,10 +996,13 @@ def run_smoke(
             assert_json_field(diagnostics, "last_write_reason", "restore")
             video = api_get(api_port, "/api/v1/video/doorbell/status")
             assert_json_field(video, "available", True)
-            assert_json_field(video["bridge"], "running", False)
+            assert_json_field(video["bridge"], "running", True)
             assert_json_field(video["bridge"], "call_active", False)
+            assert_json_field(video["bridge"], "media_active", False)
+            assert_json_field(video["bridge"], "ring_receiver_running", True)
+            assert_json_field(video["bridge"], "ring_registered", False)
             assert_json_field(video["bridge"], "last_error", None)
-            assert_rtsp_not_listening(rtsp_port)
+            rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(
                 api_post(api_port, "/api/v1/video/doorbell/actions/activate", {}),
                 "ok",
@@ -942,12 +1017,24 @@ def run_smoke(
                 "ok",
                 True,
             )
-            wait_for_rtsp_not_listening(rtsp_port)
             video = api_get(api_port, "/api/v1/video/doorbell/status")
-            assert_json_field(video["bridge"], "running", False)
+            assert_json_field(video["bridge"], "running", True)
             assert_json_field(video["bridge"], "call_active", False)
+            assert_json_field(video["bridge"], "media_active", False)
+            rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(video["bridge"], "rtp_packets", 0)
             assert_json_field(video["bridge"], "last_error", None)
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/smartphone-forwarding",
+                    {"mode": "blocked"},
+                ),
+                "mode",
+                "blocked",
+            )
+            video = api_get(api_port, "/api/v1/video/doorbell/status")
+            assert_json_field(video["bridge"], "ring_receiver_running", False)
             metrics = api_get(api_port, "/api/v1/system/metrics")
             if int(metrics.get("cpu_count") or 0) < 1:
                 raise AssertionError("system metrics did not expose cpu_count")
@@ -1031,14 +1118,7 @@ def run_smoke(
             if not subscription.get("subscription", {}).get("id"):
                 raise AssertionError("subscription id missing")
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
-            expected_agent_writes += 1
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-            assert_json_field(diagnostics, "subscription_store_writes", 1)
-            wait_for_callback_type(
-                callback,
-                "agent.diagnostics_changed",
-                callback_seen,
-            )
             callback_seen = len(callback.requests)
             assert_json_field(
                 api_post(
@@ -1110,7 +1190,6 @@ def run_smoke(
             )
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-            assert_json_field(diagnostics, "subscription_store_writes", 1)
             replacement = api_post(
                 api_port,
                 "/api/v1/events/subscriptions",
@@ -1134,9 +1213,7 @@ def run_smoke(
             if len(subscriptions.get("subscriptions", [])) != 1:
                 raise AssertionError("agent kept more than one event subscription")
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
-            expected_agent_writes += 1
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-            assert_json_field(diagnostics, "subscription_store_writes", 2)
             metrics_event = wait_for_callback_type(
                 callback,
                 "system.metrics_changed",
@@ -1372,6 +1449,59 @@ def run_smoke(
                 process.wait(timeout=3)
 
 
+def assert_sigterm_shutdown_exits_cleanly(
+    binary: Path,
+    openwebnet: OpenWebNetServer,
+) -> None:
+    api_port = free_tcp_port()
+    ui_port = free_tcp_port()
+    rtsp_port = free_tcp_port()
+    config = {
+        "listen": {
+            "host": "127.0.0.1",
+            "apiPort": api_port,
+            "uiPort": ui_port,
+            "allowLan": False,
+        },
+        "api": {"token": "", "noAuth": True},
+        "openwebnet": {
+            "host": "127.0.0.1",
+            "port": openwebnet.server_address[1],
+            "timeoutMs": 1000,
+        },
+        "maintenance": {"enabled": False},
+        "events": {"udp": {"enabled": False}},
+        "answeringMachine": {"messages": {"enabled": False}},
+        "memos": {"enabled": False},
+        "systemMetrics": {"enabled": False},
+        "displayBridge": {"enabled": False},
+        "video": {
+            "enabled": True,
+            "rtsp": {"port": rtsp_port, "rtpPortStart": 12000, "rtpPortCount": 4},
+        },
+    }
+    with tempfile.TemporaryDirectory(prefix="c300x-sigterm-smoke-") as temp_dir:
+        config_path = Path(temp_dir) / "config.json"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        process = subprocess.Popen(
+            [str(binary), "--config", str(config_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            wait_for_health(api_port)
+            process.terminate()
+            process.wait(timeout=5)
+            if process.returncode != 0:
+                raise AssertionError(
+                    f"SIGTERM shutdown did not exit cleanly: {process.returncode}"
+                )
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=3)
+
+
 def assert_runtime_bridge_binds_ui_when_disabled(
     binary: Path,
     openwebnet: OpenWebNetServer,
@@ -1433,11 +1563,15 @@ def assert_runtime_bridge_binds_ui_when_disabled(
                 process.wait(timeout=3)
 
 
-def reply_for_openwebnet_frame(frame: str) -> str:
+def reply_for_openwebnet_frame(server: OpenWebNetServer, frame: str) -> str:
     if frame == "*#8**33##":
         return "*#8**33*1##"
     if frame == "*#8**37##":
-        return "*#8**37*2##"
+        return f"*#8**37*{server.smartphone_forwarding_code}##"
+    for code in (0, 1, 2):
+        if frame in (f"*#8**#37*{code}##", f"*#8**37*{code}##"):
+            server.smartphone_forwarding_code = code
+            return f"*#8**37*{code}##"
     if frame == "*#8**40##":
         return "*#8**40*0*1##"
     return "*#*1##"
@@ -1549,6 +1683,60 @@ def assert_ui_event_topic(waiter: tuple[threading.Thread, dict[str, Any]], topic
         raise AssertionError("UI event response missing")
     assert_json_field(event, "changed", True)
     assert_json_field(event, "topic", topic)
+
+
+def assert_aborted_clients_do_not_leak_fds(
+    pid: int,
+    api_port: int,
+    ui_port: int,
+) -> None:
+    baseline = process_fd_count(pid)
+    if baseline is None:
+        return
+    for _ in range(3):
+        raw_http_request_and_close(
+            api_port,
+            "GET /api/v1/diagnostics HTTP/1.1\r\n"
+            "Host: 127.0.0.1\r\n"
+            "Authorization: " + "Bearer " + TOKEN + "\r\n"
+            "Connection: close\r\n"
+            "\r\n",
+        )
+
+    ui_socket = socket.create_connection(("127.0.0.1", ui_port), timeout=3)
+    try:
+        ui_socket.sendall(
+            b"GET /ui/events/next?since=999999 HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Connection: close\r\n"
+            b"\r\n"
+        )
+        time.sleep(0.1)
+    finally:
+        ui_socket.close()
+
+    deadline = time.monotonic() + 2.0
+    current = process_fd_count(pid)
+    while current is not None and current > baseline and time.monotonic() < deadline:
+        time.sleep(0.05)
+        current = process_fd_count(pid)
+    if current is not None and current > baseline:
+        raise AssertionError(f"aborted clients leaked fds: before={baseline} after={current}")
+
+
+def raw_http_request_and_close(port: int, request: str) -> None:
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as sock:
+        sock.sendall(request.encode())
+
+
+def process_fd_count(pid: int) -> int | None:
+    fd_path = Path(f"/proc/{pid}/fd")
+    if not fd_path.exists():
+        return None
+    try:
+        return len(list(fd_path.iterdir()))
+    except OSError:
+        return None
 
 
 def api_get_raw(
@@ -1679,26 +1867,6 @@ def send_udp_event(udp_port: int, frame: str) -> None:
     payload = b"\0" * 8 + b"OPEN\0" + b"\0" * 12 + frame.encode() + b"\0"
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(payload, ("127.0.0.1", udp_port))
-
-
-def assert_rtsp_not_listening(rtsp_port: int) -> None:
-    try:
-        with socket.create_connection(("127.0.0.1", rtsp_port), timeout=0.2):
-            pass
-    except OSError:
-        return
-    raise AssertionError("RTSP listener is running before explicit video activation")
-
-
-def wait_for_rtsp_not_listening(rtsp_port: int) -> None:
-    deadline = time.monotonic() + 2
-    while time.monotonic() < deadline:
-        try:
-            assert_rtsp_not_listening(rtsp_port)
-            return
-        except AssertionError:
-            time.sleep(0.05)
-    assert_rtsp_not_listening(rtsp_port)
 
 
 def rtsp_describe(rtsp_port: int, path: str) -> None:

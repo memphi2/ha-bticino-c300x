@@ -186,9 +186,8 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         memos_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
         agent_diagnostics={
             "agent_write_count": 2,
-            "last_write_class": "subscription",
+            "last_write_class": "config",
             "last_write_reason": "updated",
-            "subscription_store_writes": 1,
             "raw": {"token": "private-token"},
         },
         agent_diagnostics_updated_at=datetime(2026, 6, 2, tzinfo=UTC),

@@ -11,6 +11,7 @@ DOOR_UNLOCK_EVENTS = ("door_unlock.started", "door_unlock.ended")
 STAIR_LIGHT_EVENTS = ("stair_light.activated",)
 ACTIVATION_EVENTS = ("activation.executed",)
 CALL_EVENTS = ("call.started", "call.ended")
+HOME_CALL_EVENTS = ("home_call.started", "home_call.answered", "home_call.ended")
 RINGER_EVENTS = ("ringer.muted", "ringer.unmuted")
 SMARTPHONE_FORWARDING_EVENTS = ("smartphone_forwarding.changed",)
 ANSWERING_MACHINE_EVENTS = ("answering_machine.messages_changed",)
@@ -29,6 +30,9 @@ HA_EVENT_TYPES: dict[str, str] = {
     "activation.executed": "activation_executed",
     "call.started": "call_started",
     "call.ended": "call_ended",
+    "home_call.started": "home_call_started",
+    "home_call.answered": "home_call_answered",
+    "home_call.ended": "home_call_ended",
     "ringer.muted": "ringer_muted",
     "ringer.unmuted": "ringer_unmuted",
     "smartphone_forwarding.changed": "smartphone_forwarding_changed",

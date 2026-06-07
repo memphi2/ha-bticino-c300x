@@ -20,6 +20,22 @@ def test_native_agent_talkback_matches_c300x_speex_backchannel() -> None:
     assert "bind_udp_port(C300X_TALKBACK_RTP_PORT)" in media_bridge
     assert "TALKBACK_TARGET_PORT 4000" in media_bridge
     assert 'inet_pton(AF_INET, "127.0.0.1", &target.sin_addr)' in media_bridge
+    assert "forward_ring_talkback_packet(bridge, packet, n)" in media_bridge
+    assert "forward_home_call_talkback_packet(bridge, packet, n)" in media_bridge
+    assert "forward_app_talkback_packet(bridge, packet, n)" in media_bridge
+    assert "RING_AUDIO_PAYLOAD_TYPE" in media_bridge
+    assert "APP_AUDIO_PAYLOAD_TYPE" in media_bridge[
+        media_bridge.index("static bool forward_home_call_talkback_packet") :
+        media_bridge.index("static void drain_app_media_socket")
+    ]
+    assert "APP_AUDIO_PAYLOAD_TYPE" in media_bridge[
+        media_bridge.index("static bool forward_app_talkback_packet") :
+        media_bridge.index("static void drain_app_media_socket")
+    ]
+    assert "protect_and_send_srtp(" in media_bridge[
+        media_bridge.index("static bool forward_ring_talkback_packet") :
+        media_bridge.index("static void drain_app_media_socket")
+    ]
     assert '\\"talkback_supported\\":true' in http
     assert '\\"talkback_running\\":%s' in http
     assert '\\"talkback_payload_type\\":%d' in http
@@ -61,12 +77,12 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
     assert "external_media_active_locked(video)" in activate_body
-    assert "C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 10" in video
-    assert "static int external_media_guard_ttl_seconds(int ttl_seconds)" in video
-    assert "ttl_seconds > C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS" in video
+    assert "C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS" in video
+    assert "external_media_guard_ttl_seconds" in video
+    assert "external_event_expires_ms" in video
+    assert "now >= video->external_event_expires_ms" in video
     assert "(void)ttl_seconds;" not in event_body
-    assert "video->external_active_until = now + bounded_ttl;" in video
-    assert "if (video->external_active_until <= 0 || now >= video->external_active_until)" in video
+    assert "external_active_until" not in video
     assert "video->media_starting = 1;" in video
     assert "video->media_starting = 0;" in video
     assert video.index("video->media_starting = 1;") < video.index(
@@ -80,12 +96,24 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert '"external_session_active"' in activate_body
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_body
     assert 'strcmp(event_type, "doorbell.view_requested") == 0' in event_body
+    pressed_block = event_body[
+        event_body.index('strcmp(event_type, "doorbell.pressed") == 0') :
+        event_body.index('strcmp(event_type, "doorbell.view_requested") == 0')
+    ]
+    view_block = event_body[
+        event_body.index('strcmp(event_type, "doorbell.view_requested") == 0') :
+        event_body.index('strcmp(event_type, "doorbell.media.closed") == 0')
+    ]
+    assert "ring_call_active = c300x_media_ring_call_active(video) ? 1 : 0;" in event_body
+    assert "if (!video->call_active && !ring_call_active)" in event_body
+    assert "set_external_media_active_locked" not in pressed_block
+    assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in view_block
     assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in event_body
     assert 'clear_external_media_active_locked(video)' in event_body
     assert "c300x_video_note_event(runtime->video, event_type, ttl_seconds)" in http
     assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
-    assert 'c300x_video_note_event(runtime->video, "media.closed", 0)' in http
+    assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http
     assert 'ui_event_notify(runtime, "media.closed")' in http
 
 
@@ -98,14 +126,15 @@ def test_native_agent_reports_media_ownership_and_external_block_state() -> None
     )
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
-    assert "time_t external_active_until;" in header
-    assert "status->external_active_until = video->external_active_until;" in video
+    assert "external_active_until" not in header
+    assert "external_active_until" not in video
     assert "unsigned long long bt_media_start_attempts;" in header
     assert "unsigned long long bt_media_stop_attempts;" in header
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "agent")' in video
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "idle")' in video
     assert '\\"media_owner\\":%s' in http
     assert '\\"external_media_active\\":%s' in http
+    assert '\\"external_active_until\\":%s' not in http
     assert '\\"last_block_reason\\":%s' in http
     assert '\\"bt_media_start_attempts\\":%llu' in http
     assert '\\"bt_media_stop_attempts\\":%llu' in http
@@ -122,8 +151,16 @@ def test_native_agent_external_detection_is_event_state_based() -> None:
     assert "/proc/net/tcp" not in media_bridge
     assert "/proc/net/udp" not in media_bridge
     assert "c300x_media_external_session_active" not in media_bridge
-    assert "time(NULL)" in video[video.index("static int external_media_active_locked") :]
-    assert "time(NULL)" in video[video.index("static void set_external_media_active_locked") :]
+    external_active_body = video[
+        video.index("static int external_media_active_locked") :
+        video.index("static void set_external_media_active_locked")
+    ]
+    set_external_body = video[
+        video.index("static void set_external_media_active_locked") :
+        video.index("static void clear_external_media_active_locked")
+    ]
+    assert "time(NULL)" not in external_active_body
+    assert "time(NULL)" not in set_external_body
 
 
 def test_native_agent_rtsp_response_does_not_send_truncated_stack_buffer() -> None:
@@ -191,8 +228,11 @@ def test_native_agent_rtsp_listener_lifecycle_closes_stale_fds() -> None:
     )
 
 
-def test_native_agent_sip_uses_app_identity_from_local_flexisip() -> None:
+def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    device_user = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"
     )
     setup_body = media_bridge[
@@ -200,8 +240,9 @@ def test_native_agent_sip_uses_app_identity_from_local_flexisip() -> None:
         media_bridge.index("static bool send_bt_av_media_command")
     ]
 
-    assert 'SIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in media_bridge
-    assert "app_identity_from_flexisip(" in setup_body
+    assert 'FLEXISIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in device_user
+    assert "media_identity_from_flexisip(" in setup_body
+    assert "c300x_device_user_media_identity(domain_hint" in media_bridge
     assert "sip_local_endpoint_from_config(bridge->config" in setup_body
     assert "connect_sip_socket(bridge->config)" in setup_body
     assert '"Via: SIP/2.0/%s %s:%u' in setup_body
@@ -224,6 +265,17 @@ def test_native_agent_sip_uses_app_identity_from_local_flexisip() -> None:
     assert '"sip:c300x@127.0.0.1"' not in media_bridge
 
 
+def test_native_agent_device_user_uses_arm_stat64_syscalls() -> None:
+    device_user = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
+        encoding="utf-8"
+    )
+
+    assert "SYS_stat64" in device_user
+    assert "SYS_lstat64" in device_user
+    assert "device_user_stat_path(path, &st)" in device_user
+    assert "device_user_lstat_path(FLEXISIP_ROUTE_ACTIVE_FILE, &lst)" in device_user
+
+
 def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
@@ -242,7 +294,19 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "policy.ssrc.type = 3" in media_bridge
     assert "APP_AUDIO_PACKET_MS 20" in media_bridge
     assert "APP_AUDIO_PAYLOAD_TYPE 98" in media_bridge
+    assert "#define APP_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert "bridge->app_srtp_state = &srtp;" in app_media_body
     assert "send_app_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in app_media_body
+    assert "app_talkback_recent_locked(bridge, now)" in app_media_body
+    assert "forward_app_talkback_packet" in media_bridge
+    assert "bridge->app_target_audio_port" in media_bridge[
+        media_bridge.index("static bool forward_app_talkback_packet") :
+        media_bridge.index("static void drain_app_media_socket")
+    ]
+    assert "bridge->app_last_talkback_ms = monotonic_ms();" in media_bridge[
+        media_bridge.index("static bool forward_app_talkback_packet") :
+        media_bridge.index("static void drain_app_media_socket")
+    ]
     assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio" in app_media_body
     assert "send_srtcp_receiver_report(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body
     assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body

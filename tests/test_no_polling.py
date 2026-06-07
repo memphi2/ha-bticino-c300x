@@ -74,7 +74,7 @@ def test_disabled_metric_sensors_do_not_refresh_during_setup() -> None:
     text = (ROOT / "custom_components" / "bticino_c300x" / "sensor.py").read_text(
         encoding="utf-8"
     )
-    setup_body = text.split("class C300XAgentInfoSensor", maxsplit=1)[0]
+    setup_body = text.split("class C300XConnectionDiagnosticSensor", maxsplit=1)[0]
 
     assert "initial_refresh_entities.append(C300XDeviceTemperatureSensor" not in setup_body
     assert "initial_refresh_entities.append(C300XDeviceLoadSensor" not in setup_body
@@ -86,7 +86,7 @@ def test_message_sensors_do_not_scan_device_during_setup() -> None:
     text = (ROOT / "custom_components" / "bticino_c300x" / "sensor.py").read_text(
         encoding="utf-8"
     )
-    setup_body = text.split("class C300XAgentInfoSensor", maxsplit=1)[0]
+    setup_body = text.split("class C300XConnectionDiagnosticSensor", maxsplit=1)[0]
     refresh_body = text.split("async def _async_refresh_initial_states", maxsplit=1)[1]
 
     assert "initial_refresh_entities.extend(" not in setup_body

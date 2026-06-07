@@ -134,6 +134,11 @@ def stage_bundle(
         component_dir / "device_agent/scripts/bootstrap_firewall.sh",
     )
     script_files.append(bootstrap_firewall_script)
+    init_script = _copy(
+        ROOT / "custom_components" / "bticino_c300x" / "device_agent/init/c300x-native-agent",
+        component_dir / "device_agent/init/c300x-native-agent",
+    )
+    script_files.append(init_script)
     runtime_files.append(
         _copy_agent_binary(AGENT_BINARY, component_dir / "device_agent/armhf/c300x-agent-native")
     )

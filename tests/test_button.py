@@ -38,6 +38,8 @@ if "homeassistant.components.button" not in sys.modules:
     )
     dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
     config_validation = types.ModuleType("homeassistant.helpers.config_validation")
+    issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
     entity = sys.modules.setdefault(
         "homeassistant.helpers.entity",
         types.ModuleType("homeassistant.helpers.entity"),
@@ -81,6 +83,17 @@ if "homeassistant.components.button" not in sys.modules:
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
+    issue_registry.IssueSeverity = types.SimpleNamespace(
+        ERROR="error",
+        WARNING="warning",
+    )
+    issue_registry.async_create_issue = lambda **kwargs: None
+    issue_registry.async_delete_issue = lambda **kwargs: None
+    entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
+    entity_registry.EventEntityRegistryUpdatedData = dict
+    entity_registry.async_get = lambda _hass: types.SimpleNamespace(
+        async_get=lambda _entity_id: None
+    )
     helpers.config_validation = config_validation
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
@@ -93,15 +106,20 @@ if "homeassistant.components.button" not in sys.modules:
     sys.modules["homeassistant.components.button"] = button
     sys.modules["homeassistant.helpers.config_validation"] = config_validation
     sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
+    sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
+    sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x.button import (
     C300XDeleteLatestTextMemoButton,  # noqa: E402
     C300XDeleteLatestVideoMessageButton,
     C300XDeleteLatestVoiceMemoButton,
     C300XDeviceActivationButton,
+    C300XEnsureHomeAssistantUserButton,
     C300XRebootButton,
     C300XReloadGuiButton,
     C300XRemoveAgentButton,
+    C300XRestartAgentButton,
+    C300XStopDoorbellVideoButton,
     async_setup_entry,
 )
 from custom_components.bticino_c300x.capabilities import (
@@ -113,15 +131,20 @@ from custom_components.bticino_c300x.capabilities import (
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
     CONF_MAINTENANCE_TOKEN,
+    CONF_VIDEO_ENABLED,
 )
 from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
+    async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
+    async_restore_qml_core_patch_and_confirm,
     async_restore_qml_patch_and_confirm,
 )
 
 
 class _FakeHass:
-    data: dict[str, Any] = {}
+    def __init__(self) -> None:
+        self.data: dict[str, Any] = {}
+        self.config = types.SimpleNamespace(config_dir="/tmp")
 
     def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
         return asyncio.create_task(coro)
@@ -142,8 +165,12 @@ class _FakeMemoApi:
         self.qml_patch_actions: list[str] = []
         self.firewall_actions: list[str] = []
         self.activation_calls: list[str] = []
+        self.ensure_homeassistant_user_calls = 0
+        self.ensure_homeassistant_user_labels: list[str | None] = []
         self.remove_agent_calls = 0
+        self.restart_agent_calls = 0
         self.reload_gui_calls = 0
+        self.stop_video_calls = 0
         self.memos_calls = 0
         self.video_messages_calls = 0
         self._refreshed_memos = refreshed_memos or {}
@@ -196,24 +223,103 @@ class _FakeMemoApi:
         self.activation_calls.append(activation_id)
         return {"ok": True, "id": activation_id}
 
+    async def async_stop_doorbell_video(self) -> dict[str, Any]:
+        self.stop_video_calls += 1
+        return {"ok": True}
+
+    async def async_ensure_homeassistant_user(
+        self,
+        *,
+        account_label: str | None = None,
+    ) -> dict[str, Any]:
+        self.ensure_homeassistant_user_calls += 1
+        self.ensure_homeassistant_user_labels.append(account_label)
+        return {
+            "homeassistant_user_present": True,
+            "media_identity_available": True,
+            "routes_consistent": True,
+            "account_label": account_label,
+            "media_identity_source": "homeassistant",
+        }
+
     async def async_answering_machine_messages(self) -> dict[str, Any]:
         self.video_messages_calls += 1
         return self._refreshed_video_messages
 
     async def async_apply_qml_patch(self) -> dict[str, Any]:
         self.qml_patch_actions.append("apply")
-        return {"available": True, "patched": True, "state": "patched"}
+        return {
+            "available": True,
+            "patched": True,
+            "state": "patched",
+            "core_patched": True,
+            "core_state": "patched",
+        }
+
+    async def async_apply_qml_core_patch(self) -> dict[str, Any]:
+        self.qml_patch_actions.append("core_apply")
+        return {
+            "available": True,
+            "patched": False,
+            "state": "original",
+            "core_patched": True,
+            "core_state": "patched",
+        }
+
+    async def async_restore_qml_core_patch(self) -> dict[str, Any]:
+        self.qml_patch_actions.append("core_restore")
+        return {
+            "available": True,
+            "patched": False,
+            "state": "original",
+            "core_patched": False,
+            "core_state": "original",
+        }
 
     async def async_restore_qml_patch(self) -> dict[str, Any]:
         self.qml_patch_actions.append("restore")
-        return {"available": True, "patched": False, "state": "original"}
+        return {
+            "available": True,
+            "patched": False,
+            "state": "original",
+            "core_patched": True,
+            "core_state": "patched",
+        }
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         if self._qml_status is not None:
             return self._qml_status
         if self.qml_patch_actions[-1:] == ["apply"]:
-            return {"available": True, "patched": True, "state": "patched"}
-        return {"available": True, "patched": False, "state": "original"}
+            return {
+                "available": True,
+                "patched": True,
+                "state": "patched",
+                "core_patched": True,
+                "core_state": "patched",
+            }
+        if self.qml_patch_actions[-1:] == ["core_apply"]:
+            return {
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": True,
+                "core_state": "patched",
+            }
+        if self.qml_patch_actions[-1:] == ["restore"]:
+            return {
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": True,
+                "core_state": "patched",
+            }
+        return {
+            "available": True,
+            "patched": False,
+            "state": "original",
+            "core_patched": False,
+            "core_state": "original",
+        }
 
     async def async_reload_gui(self) -> dict[str, Any]:
         self.reload_gui_calls += 1
@@ -222,6 +328,10 @@ class _FakeMemoApi:
     async def async_remove_agent(self) -> dict[str, Any]:
         self.remove_agent_calls += 1
         return {"ok": True, "action": "remove_agent", "scheduled": True}
+
+    async def async_restart_agent(self) -> dict[str, Any]:
+        self.restart_agent_calls += 1
+        return {"ok": True, "action": "restart_agent", "scheduled": True}
 
     async def async_apply_firewall(self) -> dict[str, Any]:
         self.firewall_actions.append("apply")
@@ -268,6 +378,7 @@ class _FakeRuntimeData:
     memos_refresh_task: asyncio.Task[Any] | None = None
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
+    device_user_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -289,6 +400,7 @@ def test_supports_maintenance_action_requires_agent_capability_and_token() -> No
                     "ssh_start": True,
                     "reboot": True,
                     "agent_remove": True,
+                    "agent_restart": True,
                     "firewall_apply": True,
                 }
             }
@@ -308,6 +420,11 @@ def test_supports_maintenance_action_requires_agent_capability_and_token() -> No
     assert maintenance_action_is_supported(
         entry.runtime_data.capabilities,
         "agent_remove",
+        entry.data.get(CONF_MAINTENANCE_TOKEN),
+    )
+    assert maintenance_action_is_supported(
+        entry.runtime_data.capabilities,
+        "agent_restart",
         entry.data.get(CONF_MAINTENANCE_TOKEN),
     )
     assert not maintenance_action_is_supported(
@@ -359,11 +476,12 @@ def test_maintenance_buttons_are_always_created_but_capability_gated() -> None:
             runtime_data=_FakeRuntimeData(
                 capabilities={
                     "maintenance": {
-                        "supported": True,
-                        "agent_remove": False,
-                        "gui_reload": False,
-                        "reboot": False,
-                    }
+                    "supported": True,
+                    "agent_remove": False,
+                    "agent_restart": False,
+                    "gui_reload": False,
+                    "reboot": False,
+                }
                 }
             )
         )
@@ -383,6 +501,7 @@ def test_maintenance_buttons_are_always_created_but_capability_gated() -> None:
                 (
                     C300XReloadGuiButton,
                     C300XRemoveAgentButton,
+                    C300XRestartAgentButton,
                     C300XRebootButton,
                 ),
             )
@@ -390,11 +509,13 @@ def test_maintenance_buttons_are_always_created_but_capability_gated() -> None:
         assert set(maintenance_entities) == {
             C300XReloadGuiButton,
             C300XRemoveAgentButton,
+            C300XRestartAgentButton,
             C300XRebootButton,
         }
         assert all(not entity.available for entity in maintenance_entities.values())
 
         entry.runtime_data.capabilities["maintenance"]["agent_remove"] = True
+        entry.runtime_data.capabilities["maintenance"]["agent_restart"] = True
         entry.runtime_data.capabilities["maintenance"]["gui_reload"] = True
         entry.runtime_data.capabilities["maintenance"]["reboot"] = True
         assert all(entity.available for entity in maintenance_entities.values())
@@ -465,6 +586,134 @@ def test_activation_buttons_are_created_from_agent_discovery() -> None:
     asyncio.run(_run())
 
 
+def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi()
+        entry = _FakeEntry(
+            data={CONF_VIDEO_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=api,
+            ),
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        stop_button = next(
+            entity
+            for entity in entities
+            if isinstance(entity, C300XStopDoorbellVideoButton)
+        )
+        assert stop_button.available is True
+
+        await stop_button.async_press()
+
+        assert api.stop_video_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_stop_doorbell_video_button_requires_enabled_video() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            data={CONF_VIDEO_ENABLED: False},
+            runtime_data=_FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=_FakeMemoApi(),
+            ),
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        assert not any(
+            isinstance(entity, C300XStopDoorbellVideoButton) for entity in entities
+        )
+
+    asyncio.run(_run())
+
+
+def test_ensure_homeassistant_user_button_requires_media_and_device_user() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi()
+        entry = _FakeEntry(
+            data={CONF_VIDEO_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                capabilities={
+                    "device_user": {"supported": True},
+                    "maintenance": {
+                        "supported": True,
+                        "device_user_ensure": True,
+                    },
+                },
+                api=api,
+            ),
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        button = next(
+            entity
+            for entity in entities
+            if isinstance(entity, C300XEnsureHomeAssistantUserButton)
+        )
+        assert button.available is True
+        button.hass = _FakeHass()
+
+        await button.async_press()
+
+        assert api.ensure_homeassistant_user_calls == 1
+        assert entry.runtime_data.device_user_status == {
+            "homeassistant_user_present": True,
+            "media_identity_available": True,
+            "routes_consistent": True,
+            "account_label": "Home Assistant",
+            "media_identity_source": "homeassistant",
+        }
+        assert api.ensure_homeassistant_user_labels == ["Home Assistant"]
+
+    asyncio.run(_run())
+
+
+def test_ensure_homeassistant_user_button_requires_enabled_video() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            data={CONF_VIDEO_ENABLED: False},
+            runtime_data=_FakeRuntimeData(
+                capabilities={"device_user": {"supported": True}},
+                api=_FakeMemoApi(),
+            ),
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        assert not any(
+            isinstance(entity, C300XEnsureHomeAssistantUserButton)
+            for entity in entities
+        )
+
+    asyncio.run(_run())
+
+
 def test_qml_patch_apply_reports_transient_patching_status() -> None:
     async def _run() -> None:
         api = _FakeMemoApi(
@@ -477,6 +726,8 @@ def test_qml_patch_apply_reports_transient_patching_status() -> None:
                     "available": True,
                     "patched": False,
                     "state": "original",
+                    "core_patched": True,
+                    "core_state": "patched",
                     "gui_running": True,
                 },
             )
@@ -490,6 +741,8 @@ def test_qml_patch_apply_reports_transient_patching_status() -> None:
 
         assert [state["state"] for state in states] == ["patching", "patched"]
         assert states[0]["patched"] is None
+        assert states[0]["core_patched"] is True
+        assert states[0]["core_state"] == "patched"
         assert states[0]["gui_running"] is True
 
     asyncio.run(_run())
@@ -507,6 +760,8 @@ def test_qml_patch_restore_reports_transient_restoring_status() -> None:
                     "available": True,
                     "patched": True,
                     "state": "patched",
+                    "core_patched": True,
+                    "core_state": "patched",
                 },
             )
         )
@@ -519,6 +774,72 @@ def test_qml_patch_restore_reports_transient_restoring_status() -> None:
 
         assert [state["state"] for state in states] == ["restoring", "original"]
         assert states[0]["patched"] is None
+        assert states[0]["core_patched"] is True
+        assert states[0]["core_state"] == "patched"
+
+    asyncio.run(_run())
+
+
+def test_qml_core_patch_apply_reports_transient_core_status() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                api=_FakeMemoApi(),
+                qml_patch_status={
+                    "available": True,
+                    "patched": False,
+                    "state": "original",
+                    "core_patched": False,
+                    "core_state": "original",
+                },
+            )
+        )
+        states: list[dict[str, Any]] = []
+
+        await async_apply_qml_core_patch_and_confirm(
+            entry,  # type: ignore[arg-type]
+            lambda: states.append(dict(entry.runtime_data.qml_patch_status)),
+        )
+
+        assert [state["core_state"] for state in states] == [
+            "core_patching",
+            "patched",
+        ]
+        assert states[0]["patched"] is False
+        assert states[0]["state"] == "original"
+        assert states[0]["core_patched"] is None
+
+    asyncio.run(_run())
+
+
+def test_qml_core_patch_restore_reports_transient_core_status() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                api=_FakeMemoApi(),
+                qml_patch_status={
+                    "available": True,
+                    "patched": False,
+                    "state": "original",
+                    "core_patched": True,
+                    "core_state": "patched",
+                },
+            )
+        )
+        states: list[dict[str, Any]] = []
+
+        await async_restore_qml_core_patch_and_confirm(
+            entry,  # type: ignore[arg-type]
+            lambda: states.append(dict(entry.runtime_data.qml_patch_status)),
+        )
+
+        assert [state["core_state"] for state in states] == [
+            "core_restoring",
+            "original",
+        ]
+        assert states[0]["patched"] is False
+        assert states[0]["state"] == "original"
+        assert states[0]["core_patched"] is None
 
     asyncio.run(_run())
 
@@ -546,6 +867,20 @@ def test_remove_agent_button_calls_maintenance_api() -> None:
         await button.async_press()
 
         assert api.remove_agent_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_restart_agent_button_calls_maintenance_api() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        button = C300XRestartAgentButton(entry)  # type: ignore[arg-type]
+        button.hass = _FakeHass()
+
+        await button.async_press()
+
+        assert api.restart_agent_calls == 1
 
     asyncio.run(_run())
 
@@ -750,10 +1085,7 @@ def test_delete_latest_video_message_button_deletes_and_refreshes() -> None:
 
         assert entity.available is True
         assert entity.extra_state_attributes["latest_message_id"] == "message_new"
-        assert (
-            entity.extra_state_attributes["media_content_id"]
-            == "media-source://bticino_c300x/entry-1/message_new"
-        )
+        assert entity.extra_state_attributes["has_message"] is True
 
         await entity.async_press()
 
@@ -809,7 +1141,7 @@ def test_delete_latest_text_memo_button_deletes_and_refreshes() -> None:
 
         assert entity.available is True
         assert entity.extra_state_attributes["latest_memo_id"] == "text/newer"
-        assert entity.extra_state_attributes["latest_text"] == "new memo"
+        assert entity.extra_state_attributes["has_memo"] is True
 
         await entity.async_press()
 
@@ -865,7 +1197,7 @@ def test_delete_latest_voice_memo_button_deletes_and_refreshes() -> None:
 
         assert entity.available is True
         assert entity.extra_state_attributes["latest_memo_id"] == "voice/newer"
-        assert entity.extra_state_attributes["has_audio"] is True
+        assert entity.extra_state_attributes["has_memo"] is True
 
         await entity.async_press()
 

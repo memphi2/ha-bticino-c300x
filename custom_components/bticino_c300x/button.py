@@ -32,10 +32,11 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
-from .entity import C300XEntity, supports_capability
+from .device_user import homeassistant_account_label
+from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .event_payload import agent_event_key
 from .executor import async_trigger_stair_light, async_unlock_door
-from .memos import latest_memo_attributes, latest_memo_id
+from .memos import latest_memo_id
 from .message_refresh import (
     async_answering_machine_messages,
     async_memos,
@@ -44,7 +45,6 @@ from .message_refresh import (
 )
 from .qml_patch import async_refresh_qml_patch_status
 from .video_messages import (
-    latest_video_message_attributes,
     latest_video_message_id,
 )
 
@@ -62,6 +62,8 @@ async def async_setup_entry(
     entities: list[ButtonEntity] = []
     if supports_capability(entry, "stair_light"):
         entities.append(C300XStairLightButton(entry))
+    if entry_video_enabled(entry) and supports_capability(entry, "doorbell_video"):
+        entities.append(C300XStopDoorbellVideoButton(entry))
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     for lock in locks_for_capabilities(capabilities):
         entities.append(
@@ -77,7 +79,10 @@ async def async_setup_entry(
                 entities.append(C300XDeviceActivationButton(entry, activation))
     entities.append(C300XRebootButton(entry))
     entities.append(C300XRemoveAgentButton(entry))
+    entities.append(C300XRestartAgentButton(entry))
     entities.append(C300XReloadGuiButton(entry))
+    if entry_video_enabled(entry) and supports_capability(entry, "device_user"):
+        entities.append(C300XEnsureHomeAssistantUserButton(entry))
     if entry_device_ui_enabled_or_patch_active(entry):
         if answering_machine_message_delete_supported(capabilities):
             entities.append(C300XDeleteLatestVideoMessageButton(entry))
@@ -178,6 +183,37 @@ class C300XDeviceActivationButton(C300XEntity, ButtonEntity):
             raise HomeAssistantError("C300X device activation failed") from err
 
 
+class C300XStopDoorbellVideoButton(C300XEntity, ButtonEntity):
+    """Button that stops the active C300X doorbell video session."""
+
+    _attr_translation_key = "stop_doorbell_video"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "stop_doorbell_video")
+
+    @property
+    def available(self) -> bool:
+        """Return true when doorbell video can be controlled."""
+
+        return (
+            super().available
+            and entry_video_enabled(self._entry)
+            and supports_capability(self._entry, "doorbell_video")
+        )
+
+    async def async_press(self) -> None:
+        """Stop the active doorbell video session."""
+
+        try:
+            await self._entry.runtime_data.api.async_stop_doorbell_video()
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support doorbell video"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X doorbell video stop failed") from err
+
+
 class C300XMaintenanceButton(C300XEntity, ButtonEntity):
     """Button backed by an advertised maintenance API action."""
 
@@ -241,6 +277,30 @@ class C300XRemoveAgentButton(C300XMaintenanceButton):
         await async_refresh_agent_diagnostics(self.hass, self._entry)
 
 
+class C300XRestartAgentButton(C300XMaintenanceButton):
+    """Button that restarts the native device agent."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "restart_agent"
+    _maintenance_action = "agent_restart"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "restart_agent")
+
+    async def async_press(self) -> None:
+        """Restart the native device agent through the maintenance API."""
+
+        try:
+            await self._entry.runtime_data.api.async_restart_agent()
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support restarting"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X native-agent restart command failed") from err
+        await async_refresh_agent_diagnostics(self.hass, self._entry)
+
+
 class C300XReloadGuiButton(C300XMaintenanceButton):
     """Button that reloads the C300X graphical interface."""
 
@@ -262,6 +322,46 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
             ) from err
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X GUI reload command failed") from err
+
+
+class C300XEnsureHomeAssistantUserButton(C300XMaintenanceButton):
+    """Button that creates or repairs the dedicated Home Assistant media user."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "ensure_homeassistant_user"
+    _maintenance_action = "device_user_ensure"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "ensure_homeassistant_user")
+
+    @property
+    def available(self) -> bool:
+        """Return true when device-user setup can be controlled."""
+
+        return (
+            super().available
+            and entry_video_enabled(self._entry)
+            and supports_capability(self._entry, "device_user")
+        )
+
+    async def async_press(self) -> None:
+        """Create or repair the dedicated Home Assistant media user."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_ensure_homeassistant_user(
+                account_label=homeassistant_account_label(self.hass)
+            )
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support device-user setup"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X device-user setup failed") from err
+        self._entry.runtime_data.device_user_status = status
+        from .repair_issues import async_sync_entry_repair_issues
+
+        async_sync_entry_repair_issues(self.hass, self._entry)
+        await async_refresh_agent_diagnostics(self.hass, self._entry)
 
 
 class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
@@ -293,14 +393,15 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
                 "kind": self._memo_kind,
                 "has_memo": False,
                 "total": None,
-                "unread": None,
                 "latest_memo_id": None,
             }
-        return latest_memo_attributes(
-            memos,
-            self._memo_kind,
-            include_text=self._memo_kind == "text",
-        )
+        memo_id = latest_memo_id(memos, self._memo_kind)
+        return {
+            "kind": self._memo_kind,
+            "has_memo": memo_id is not None,
+            "total": memos.get(f"{self._memo_kind}_total"),
+            "latest_memo_id": memo_id,
+        }
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to memo refresh notifications."""
@@ -429,7 +530,13 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
                 "unread": None,
                 "latest_message_id": None,
             }
-        return latest_video_message_attributes(messages, self._entry.entry_id)
+        message_id = latest_video_message_id(messages)
+        return {
+            "has_message": message_id is not None,
+            "total": messages.get("total"),
+            "unread": messages.get("unread"),
+            "latest_message_id": message_id,
+        }
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to video-message refresh notifications."""

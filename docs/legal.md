@@ -45,7 +45,7 @@ The repository must not contain:
 - BTicino/Legrand firmware images or extracted firmware trees.
 - Android APKs or extracted app payloads.
 - Local device backups.
-- Runtime captures, packet captures, logs with private data, or local secrets.
+- Runtime artifacts, network traces, logs with private data, or local secrets.
 - Generated native build artifacts except the explicit release-bundle agent
   payload under `custom_components/bticino_c300x/device_agent/`.
 
@@ -68,16 +68,14 @@ controller implementation files.
 
 ## Media codecs and patents
 
-The C300X media bridge transports the device-provided RTP/RTSP media stream.
-The project does not ship codec binaries, FFmpeg binaries, OpenH264/x264
-binaries, or copied codec implementation source code.
+The C300X media path transports device-provided media through the user's local
+Home Assistant runtime/browser media stack. The project does not ship codec
+binaries, FFmpeg binaries, OpenH264/x264 binaries, or copied codec
+implementation source code.
 
-Doorbell video is exposed as the device-provided H.264/AVC stream and decoded by
-the user's Home Assistant runtime/browser media stack. Talkback audio uses
-Speex/8000 RTP toward the device. The Apache-2.0 license for this repository
-does not grant any third-party codec patent licenses. Users and distributors are
-responsible for codec availability and any jurisdiction-specific patent or
-licensing requirements.
+The Apache-2.0 license for this repository does not grant any third-party codec
+patent licenses. Users and distributors are responsible for codec availability
+and any jurisdiction-specific patent or licensing requirements.
 
 ## Repository gate
 

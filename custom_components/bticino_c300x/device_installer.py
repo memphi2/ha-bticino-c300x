@@ -341,9 +341,6 @@ def _device_config_json(
         },
         "mdns": {"enabled": True, "name": "BTicino C300X"},
         "events": {
-            "subscriptionStorePath": (
-                f"{remote_dir}/subscriptions.json"
-            ),
             "callbackTimeoutMs": 2500,
             "udp": {"enabled": True, "group": "239.255.76.67", "port": 7667},
         },

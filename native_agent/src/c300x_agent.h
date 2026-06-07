@@ -49,8 +49,6 @@ struct c300x_config {
     char config_path[C300X_MAX_PATH_LEN];
     char device_model[C300X_MAX_MODEL_LEN];
     char device_firmware[C300X_MAX_VERSION_LEN];
-    char home_assistant_webhook_url[C300X_MAX_PATH_LEN];
-    char home_assistant_shared_secret[C300X_MAX_TOKEN_LEN];
     int home_assistant_request_timeout_ms;
     char api_token[C300X_MAX_TOKEN_LEN];
     char api_file_token[C300X_MAX_TOKEN_LEN];
@@ -94,7 +92,6 @@ struct c300x_config {
     int events_enabled;
     char events_group[C300X_MAX_HOST_LEN];
     uint16_t events_port;
-    char subscription_store_path[C300X_MAX_PATH_LEN];
     int callback_timeout_ms;
     int mqtt_enabled;
     char mqtt_host[C300X_MAX_HOST_LEN];
@@ -155,11 +152,6 @@ void c300x_default_config(struct c300x_config *config);
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
-    char *error,
-    size_t error_len
-);
-int c300x_save_config(
-    const struct c300x_config *config,
     char *error,
     size_t error_len
 );

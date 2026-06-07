@@ -18,6 +18,13 @@ DOMAIN = "bticino_c300x"
 COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 RELEASE_ROOT = ROOT / ".release"
 PACKAGE_ROOT = RELEASE_ROOT / "package"
+PACKAGE_METADATA = (
+    "LICENSE",
+    "NOTICE",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "docs/legal.md",
+)
 
 
 def main() -> int:
@@ -64,6 +71,17 @@ def _prepare_package(version: str) -> None:
     )
 
     stage_bundle(PACKAGE_ROOT, version=version, skip_build=True)
+    _copy_package_metadata()
+
+
+def _copy_package_metadata() -> None:
+    """Include legal/security metadata in the standalone HACS zip asset."""
+
+    for relative_name in PACKAGE_METADATA:
+        source = ROOT / relative_name
+        target = PACKAGE_ROOT / relative_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
 
 
 def _write_zip(output: Path) -> None:

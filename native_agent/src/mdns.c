@@ -1,4 +1,5 @@
 #include "mdns.h"
+#include "string_util.h"
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -618,7 +619,7 @@ static void mdns_instance_name(
         snprintf(out, out_len, "%s %s", base, suffix);
         return;
     }
-    snprintf(out, out_len, "%s", base);
+    c300x_copy_string(out, out_len, base);
 }
 
 void c300x_mdns_device_id(char *out, size_t out_len)
@@ -631,18 +632,18 @@ void c300x_mdns_device_id(char *out, size_t out_len)
         return;
     }
     if (mdns_read_mac_suffix(suffix, sizeof(suffix))) {
-        snprintf(out, out_len, "c300x-%s", suffix);
+        c300x_join_suffix(out, out_len, "c300x-", suffix);
         return;
     }
     if (gethostname(host, sizeof(host)) == 0) {
         host[sizeof(host) - 1] = '\0';
         mdns_sanitize_label(host, clean_host, sizeof(clean_host));
         if (clean_host[0] != '\0') {
-            snprintf(out, out_len, "c300x-%s", clean_host);
+            c300x_join_suffix(out, out_len, "c300x-", clean_host);
             return;
         }
     }
-    snprintf(out, out_len, "%s", C300X_MDNS_FALLBACK_ID);
+    c300x_copy_string(out, out_len, C300X_MDNS_FALLBACK_ID);
 }
 
 static int mdns_read_mac_suffix(char *out, size_t out_len)

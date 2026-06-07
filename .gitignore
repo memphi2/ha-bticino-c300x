@@ -9,6 +9,8 @@ htmlcov/
 .venv/
 .release/
 .DS_Store
+captures/
+tools/
 
 # Local native agent config with secrets
 native_agent/config.json

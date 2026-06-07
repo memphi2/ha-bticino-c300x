@@ -1,7 +1,14 @@
 #ifndef C300X_HTTP_UTIL_H
 #define C300X_HTTP_UTIL_H
 
+#include <poll.h>
 #include <stddef.h>
+
+#ifndef POLLRDHUP
+#define POLLRDHUP 0
+#endif
+
+#define C300X_SOCKET_CLOSED_REVENTS (POLLERR | POLLHUP | POLLNVAL | POLLRDHUP)
 
 int parse_http_url(
     const char *url,
@@ -22,5 +29,6 @@ void set_socket_timeout(int fd, int timeout_ms);
 void set_fd_nonblocking(int fd);
 void set_fd_cloexec(int fd);
 void allow_socket_reuse(int fd);
+void close_agent_socket(int fd);
 
 #endif

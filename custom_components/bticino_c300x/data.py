@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -164,7 +164,7 @@ class C300XEventState:
     """Runtime state derived from device-agent push events."""
 
     video_available: bool = False
-    video_active_until: str | None = None
+    video_window_available: bool = False
     video_stream_path: str | None = None
     smartphone_forwarding_mode: str | None = None
     ringer_muted: bool | None = None
@@ -186,7 +186,6 @@ class C300XEventState:
     last_event_time: str | None = None
     last_event_data: dict[str, Any] = field(default_factory=dict)
     event_sequence: int = 0
-    reset_video: Callable[[], None] | None = None
 
 
 @dataclass(slots=True)
@@ -201,6 +200,7 @@ class BticinoC300XRuntimeData:
     unregister_webhook: Callable[[], None]
     unregister_event_webhook: Callable[[], None]
     unregister_event_registration: Callable[[], None] | None
+    on_runtime_registration_created: Callable[[], Awaitable[None]] | None
     unregister_display_bridge_updates: Callable[[], None] | None
     loaded_platforms: tuple[str, ...]
     system_metrics: dict[str, Any] = field(default_factory=dict)
@@ -214,6 +214,8 @@ class BticinoC300XRuntimeData:
     activations: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: datetime | None = None
+    device_user_status: dict[str, Any] = field(default_factory=dict)
+    device_user_status_updated_at: datetime | None = None
     display_bridge_diagnostics: C300XCallbackDiagnostics = field(
         default_factory=C300XCallbackDiagnostics
     )

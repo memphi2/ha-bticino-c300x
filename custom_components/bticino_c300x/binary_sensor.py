@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import EVENT_AGENT_EVENT_RECEIVED, SIGNAL_EVENT_STATE_CHANGED
+from .const import EVENT_AGENT_EVENT_RECEIVED
+from .device_user import media_user_attributes
 from .entity import C300XEntity, supports_capability
 from .event_payload import agent_event_key
-from .video import active_until_is_active, call_later, event_active_seconds
 
 PARALLEL_UPDATES = 0
-VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
-VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
+HOME_CALL_EVENTS = {"home_call_started", "home_call_answered", "home_call_ended"}
 
 
 async def async_setup_entry(
@@ -26,57 +26,62 @@ async def async_setup_entry(
     """Set up C300X binary sensors."""
 
     entities = []
-    if supports_capability(entry, "doorbell_video"):
-        entities.append(C300XDoorbellVideoAvailableBinarySensor(entry))
+    if supports_capability(entry, "home_call"):
+        entities.append(C300XHomeCallActiveBinarySensor(entry))
     async_add_entities(entities)
 
 
-class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
-    """Doorbell video availability from push-event metadata."""
+class C300XHomeCallActiveBinarySensor(C300XEntity, BinarySensorEntity):
+    """Home-call state from native agent SIP events."""
 
     _attr_should_poll = False
-    _attr_translation_key = "doorbell_video_available"
+    _attr_translation_key = "home_call_active"
 
     def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "doorbell_video_available")
-        self._available = False
-        self._active_until: str | None = None
-        self._stream_path: str | None = None
-        self._reset = None
+        super().__init__(entry, "home_call_active")
+        self._running = False
+        self._active = False
+        self._answered = False
+        self._rtp_proxy = False
+        self._target_audio_port: int | None = None
+        self._rtp_packets = 0
+        self._rtcp_packets = 0
+        self._last_error: str | None = None
 
     @property
     def is_on(self) -> bool:
-        """Return true while a recent doorbell video window is active."""
+        """Return true while the native agent reports a home call."""
 
-        event_state = self._entry.runtime_data.event_state
-        return _video_window_is_active(
-            self._available,
-            self._active_until,
-        ) or _video_window_is_active(
-            bool(event_state.video_available),
-            event_state.video_active_until,
-        )
+        return self._running or self._active or self._answered
 
     @property
-    def extra_state_attributes(self) -> dict[str, str]:
-        """Return video window metadata."""
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return native home-call metadata."""
 
-        event_state = self._entry.runtime_data.event_state
-        attributes = {}
-        active_until = (
-            self._active_until
-            if _video_window_is_active(self._available, self._active_until)
-            else event_state.video_active_until
-        )
-        stream_path = self._stream_path or event_state.video_stream_path
-        if active_until and active_until_is_active(active_until):
-            attributes["active_until"] = active_until
-        if stream_path:
-            attributes["stream_path"] = stream_path
+        attributes: dict[str, Any] = {
+            "phase": self._phase,
+            "answered": self._answered,
+            "rtp_proxy": self._rtp_proxy,
+            "rtp_packets": self._rtp_packets,
+            "rtcp_packets": self._rtcp_packets,
+            **media_user_attributes(self._entry),
+        }
+        if self._target_audio_port is not None:
+            attributes["target_audio_port"] = self._target_audio_port
+        if self._last_error:
+            attributes["last_error"] = self._last_error
         return attributes
 
+    @property
+    def _phase(self) -> str:
+        if self._answered:
+            return "answered"
+        if self._running or self._active:
+            return "ringing"
+        return "idle"
+
     async def async_added_to_hass(self) -> None:
-        """Subscribe to runtime event-state updates."""
+        """Subscribe to native agent event updates."""
 
         await super().async_added_to_hass()
         self.async_on_remove(
@@ -85,62 +90,74 @@ class C300XDoorbellVideoAvailableBinarySensor(C300XEntity, BinarySensorEntity):
                 self._handle_agent_event,
             )
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_EVENT_STATE_CHANGED,
-                self._handle_event_state_changed,
-            )
-        )
-
-    @callback
-    def _handle_event_state_changed(self, entry_id: str) -> None:
-        """Refresh HA state when runtime video state is cleared centrally."""
-
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
 
     @callback
     def _handle_agent_event(self, event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)
-        if event_type not in VIDEO_WINDOW_EVENTS | VIDEO_WINDOW_CLOSED_EVENTS:
+        if event_type not in HOME_CALL_EVENTS:
             return
-        if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
-            self._clear()
-            self.async_write_ha_state()
-            return
-        self._available = bool(event.data.get("video_window_available", True))
-        self._active_until = event.data.get("video_active_until") or event.data.get(
-            "active_until"
-        )
-        self._stream_path = event.data.get("stream_path")
-        if self._reset:
-            self._reset()
-        active_seconds = event_active_seconds(event.data)
-
-        @callback
-        def _reset(now=None) -> None:
-            self._reset = None
-            self._clear(cancel_timer=False)
-            self.async_write_ha_state()
-
-        self._reset = call_later(self.hass, active_seconds, _reset)
+        payload = _home_call_payload(event.data)
+        if event_type == "home_call_ended":
+            self._apply_status(
+                {
+                    **payload,
+                    "running": False,
+                    "active": False,
+                    "answered": False,
+                    "rtp_proxy": False,
+                    "target_audio_port": 0,
+                }
+            )
+        elif event_type == "home_call_answered":
+            self._apply_status(
+                {
+                    **payload,
+                    "running": payload.get("running", True),
+                    "active": payload.get("active", True),
+                    "answered": payload.get("answered", True),
+                }
+            )
+        else:
+            self._apply_status(
+                {
+                    **payload,
+                    "running": payload.get("running", True),
+                    "active": payload.get("active", True),
+                    "answered": payload.get("answered", False),
+                }
+            )
         self.async_write_ha_state()
 
-    def _clear(self, *, cancel_timer: bool = True) -> None:
-        if cancel_timer and self._reset:
-            self._reset()
-        self._reset = None
-        self._available = False
-        self._active_until = None
-        self._stream_path = None
+    def _apply_status(self, status: dict[str, Any]) -> None:
+        self._running = bool(status.get("running"))
+        self._active = bool(status.get("active"))
+        self._answered = bool(status.get("answered"))
+        self._rtp_proxy = bool(status.get("rtp_proxy"))
+        self._target_audio_port = _optional_int(status.get("target_audio_port"))
+        self._rtp_packets = _optional_int(status.get("rtp_packets"), 0) or 0
+        self._rtcp_packets = _optional_int(status.get("rtcp_packets"), 0) or 0
+        self._last_error = (
+            str(status["last_error"]) if status.get("last_error") else None
+        )
 
 
-def _video_window_is_active(available: bool, active_until: str | None) -> bool:
-    """Return true when a video window is currently usable by HA."""
+def _home_call_payload(data: dict[str, Any]) -> dict[str, Any]:
+    payload = data.get("home_call")
+    if isinstance(payload, dict):
+        return payload
+    nested = data.get("data")
+    if isinstance(nested, dict):
+        payload = nested.get("home_call")
+        if isinstance(payload, dict):
+            return payload
+        return nested
+    return {}
 
-    if not available:
-        return False
-    return active_until_is_active(active_until) if active_until else True
+
+def _optional_int(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default

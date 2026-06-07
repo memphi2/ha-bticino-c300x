@@ -5,14 +5,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import timedelta
 from hmac import compare_digest
 from typing import Any
 
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
@@ -34,18 +33,17 @@ from .const import (
     CONF_SHARED_SECRET,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEBHOOK_ID,
-    DEFAULT_EVENT_RESET_SECONDS,
     DEFAULT_VIDEO_STREAM_PATH,
     DOMAIN,
     EVENT_AGENT_EVENT_RECEIVED,
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
-    SIGNAL_EVENT_STATE_CHANGED,
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .data import C300XEventState
+from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
 from .event_payload import agent_event_display_data
 from .event_types import normalize_event_type, payload_event_key
@@ -59,7 +57,6 @@ from .executor import (
 )
 from .forwarding import forwarding_state_from_value
 from .video import (
-    call_later,
     optional_string,
     resolve_doorbell_camera_entity_id,
     safe_stream_path,
@@ -315,7 +312,6 @@ async def _async_handle_agent_event(
             EVENT_AGENT_EVENT_RECEIVED,
             event_data,
         )
-        async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
     return web.json_response({"ok": True})
 
 
@@ -342,7 +338,7 @@ def _apply_doorbell_pressed(context: _AgentEventContext) -> None:
 
 
 def _apply_doorbell_view_requested(context: _AgentEventContext) -> None:
-    _activate_video_state(context, default_available=True)
+    _activate_video_state(context, default_available=False)
 
 
 def _apply_doorbell_media_closed(context: _AgentEventContext) -> None:
@@ -409,54 +405,21 @@ def _activate_video_state(
         if isinstance(context.data.get("video"), dict)
         else {}
     )
-    context.event_state.video_available = bool(video.get("available", default_available))
+    external_media_active = _optional_bool(video.get("external_media_active")) is True
+    context.event_state.video_available = (
+        bool(video.get("available", default_available)) and not external_media_active
+    )
+    context.event_state.video_window_available = (
+        _optional_bool(video.get("window_available")) is True
+        and not external_media_active
+    )
     stream_path = video.get("stream_path") or video.get("rtsp_url")
     context.event_state.video_stream_path = str(stream_path) if stream_path else None
-    ttl_seconds = _ttl_seconds(context.payload.get("ttl_seconds"))
-    context.event_state.video_active_until = (
-        (dt_util.utcnow() + timedelta(seconds=ttl_seconds)).isoformat()
-        if ttl_seconds > 0
-        else None
-    )
-    _schedule_video_reset(
-        context.hass,
-        context.entry,
-        context.event_state,
-        ttl_seconds,
-    )
 
 
-def _schedule_video_reset(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    event_state: C300XEventState,
-    ttl_seconds: int,
-) -> None:
-    if event_state.reset_video:
-        event_state.reset_video()
-        event_state.reset_video = None
-    if ttl_seconds <= 0:
-        return
-
-    @callback
-    def _reset_video(now=None) -> None:
-        event_state.reset_video = None
-        _clear_video_state(event_state, cancel_timer=False)
-        async_dispatcher_send(hass, SIGNAL_EVENT_STATE_CHANGED, entry.entry_id)
-
-    event_state.reset_video = call_later(hass, ttl_seconds, _reset_video)
-
-
-def _clear_video_state(
-    event_state: C300XEventState,
-    *,
-    cancel_timer: bool = True,
-) -> None:
-    if cancel_timer and event_state.reset_video:
-        event_state.reset_video()
-    event_state.reset_video = None
+def _clear_video_state(event_state: C300XEventState) -> None:
     event_state.video_available = False
-    event_state.video_active_until = None
+    event_state.video_window_available = False
     event_state.video_stream_path = None
 
 
@@ -482,13 +445,20 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         "event_at": event_at,
         "data": context.data,
     }
-    if context.event_type in {"doorbell_pressed", "doorbell_view_requested"}:
+    if context.event_type in {
+        "doorbell_pressed",
+        "doorbell_view_requested",
+        "doorbell_media_closed",
+    }:
+        doorbell_state = raw_doorbell_state_value(
+            context.data.get("doorbell")
+        )
         event_data.update(
             _doorbell_event_data(
                 context.hass,
                 context.entry,
                 context.event_state,
-                _ttl_seconds(context.payload.get("ttl_seconds")),
+                doorbell_state,
             )
         )
     elif context.event_type in {"door_unlock_started", "door_unlock_ended"}:
@@ -607,13 +577,13 @@ def _doorbell_event_data(
     hass: HomeAssistant,
     entry: ConfigEntry,
     event_state: C300XEventState,
-    active_seconds: int,
+    doorbell_state: str | None,
 ) -> dict[str, Any]:
     event_data = {
-        "active_seconds": active_seconds,
-        "active_until": event_state.video_active_until,
         **_video_event_data(hass, entry, event_state),
     }
+    if doorbell_state is not None:
+        event_data["doorbell"] = doorbell_state
     return event_data
 
 
@@ -628,9 +598,8 @@ def _video_event_data(
         or entry_config_value(entry, CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
     )
     event_data: dict[str, Any] = {
-        "video_available": camera_entity_id is not None,
-        "video_window_available": event_state.video_available,
-        "video_active_until": event_state.video_active_until,
+        "video_available": bool(event_state.video_available),
+        "video_window_available": bool(event_state.video_window_available),
         "stream_path": stream_path,
     }
     if camera_entity_id is not None:
@@ -646,14 +615,6 @@ def _event_type_value(payload: dict[str, Any]) -> Any:
     if not isinstance(payload, dict):
         return ""
     return payload_event_key(payload) or ""
-
-
-def _ttl_seconds(value: Any) -> int:
-    try:
-        ttl_seconds = int(value)
-    except (TypeError, ValueError):
-        return DEFAULT_EVENT_RESET_SECONDS
-    return max(ttl_seconds, 0)
 
 
 def _optional_bool(value: Any) -> bool | None:

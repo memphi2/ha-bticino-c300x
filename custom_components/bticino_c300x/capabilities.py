@@ -15,6 +15,7 @@ from .event_types import (
     DOORBELL_EVENTS,
     DOORBELL_VIDEO_EVENTS,
     HA_EVENT_TYPES,
+    HOME_CALL_EVENTS,
     MEMO_EVENTS,
     RINGER_EVENTS,
     SMARTPHONE_FORWARDING_EVENTS,
@@ -37,6 +38,9 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "activation_executed": "Device activation executed",
         "call_started": "Call started",
         "call_ended": "Call ended",
+        "home_call_started": "Home call started",
+        "home_call_answered": "Home call answered",
+        "home_call_ended": "Home call ended",
         "ringer_muted": "Ringer muted",
         "ringer_unmuted": "Ringer unmuted",
         "smartphone_forwarding_changed": "Smartphone forwarding changed",
@@ -56,6 +60,9 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "activation_executed": "Geräteaktion ausgeführt",
         "call_started": "Anruf gestartet",
         "call_ended": "Anruf beendet",
+        "home_call_started": "Zuhause-Anruf gestartet",
+        "home_call_answered": "Zuhause-Anruf angenommen",
+        "home_call_ended": "Zuhause-Anruf beendet",
         "ringer_muted": "Klingelton stummgeschaltet",
         "ringer_unmuted": "Klingelton aktiviert",
         "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
@@ -75,6 +82,9 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "activation_executed": "Attivazione dispositivo eseguita",
         "call_started": "Chiamata avviata",
         "call_ended": "Chiamata terminata",
+        "home_call_started": "Chiamata casa avviata",
+        "home_call_answered": "Chiamata casa risposta",
+        "home_call_ended": "Chiamata casa terminata",
         "ringer_muted": "Suoneria disattivata",
         "ringer_unmuted": "Suoneria attivata",
         "smartphone_forwarding_changed": "Inoltro smartphone modificato",
@@ -94,6 +104,9 @@ EVENT_LABELS: dict[str, dict[str, str]] = {
         "activation_executed": "Activation appareil executee",
         "call_started": "Appel demarre",
         "call_ended": "Appel termine",
+        "home_call_started": "Appel domicile demarre",
+        "home_call_answered": "Appel domicile repondu",
+        "home_call_ended": "Appel domicile termine",
         "ringer_muted": "Sonnerie coupee",
         "ringer_unmuted": "Sonnerie activee",
         "smartphone_forwarding_changed": "Renvoi smartphone modifie",
@@ -111,6 +124,7 @@ _CAPABILITY_EVENT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("stair_light", STAIR_LIGHT_EVENTS),
     ("activations", ACTIVATION_EVENTS),
     ("call_events", CALL_EVENTS),
+    ("home_call", HOME_CALL_EVENTS),
     ("ringer", RINGER_EVENTS),
     ("smartphone_forwarding", SMARTPHONE_FORWARDING_EVENTS),
     ("system_metrics", SYSTEM_METRICS_EVENTS),
@@ -156,11 +170,12 @@ def gate_capabilities(
 
     result = dict(capabilities) if isinstance(capabilities, dict) else {}
     if not doorbell_video_enabled:
-        video = result.get("doorbell_video")
-        if isinstance(video, dict):
-            result["doorbell_video"] = {**video, "supported": False}
-        else:
-            result["doorbell_video"] = False
+        for capability in ("doorbell_video", "home_call"):
+            video = result.get(capability)
+            if isinstance(video, dict):
+                result[capability] = {**video, "supported": False}
+            else:
+                result[capability] = False
     return result
 
 

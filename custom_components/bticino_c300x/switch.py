@@ -388,6 +388,9 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         return {
             "state": status.get("state"),
             "backup_available": status.get("backup_available"),
+            "core_state": status.get("core_state"),
+            "core_patched": status.get("core_patched"),
+            "core_backup_available": status.get("core_backup_available"),
             "gui_running": status.get("gui_running"),
         }
 
@@ -1084,6 +1087,7 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
     """Enable bootstrap mDNS discovery while the agent has no HA connection."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "maintenance_mdns_discovery"
     _uses_auth_config_status = True

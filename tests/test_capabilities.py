@@ -119,6 +119,23 @@ def test_events_for_capabilities_registers_device_activations() -> None:
     ]
 
 
+def test_events_for_capabilities_registers_home_call_state_push() -> None:
+    capabilities = {"home_call": {"supported": True, "audio_codec": "speex/8000"}}
+
+    assert events_for_capabilities(capabilities) == [
+        "home_call.started",
+        "home_call.answered",
+        "home_call.ended",
+        "agent.restarted",
+    ]
+    assert ha_event_types_for_capabilities(capabilities) == [
+        "home_call_started",
+        "home_call_answered",
+        "home_call_ended",
+        "agent_restarted",
+    ]
+
+
 def test_memo_text_write_support_requires_agent_capability() -> None:
     assert memo_text_write_supported({"memos": {"supported": True, "write_text": True}})
     assert not memo_text_write_supported({"memos": {"supported": True}})
@@ -236,6 +253,7 @@ def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> No
     capabilities = {
         "doorbell_events": True,
         "doorbell_video": {"supported": True, "stream_path": "/doorbell-video"},
+        "home_call": {"supported": True, "rtp_proxy_supported": True},
     }
 
     gated = gate_capabilities(capabilities, doorbell_video_enabled=False)
@@ -245,7 +263,12 @@ def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> No
         "supported": False,
         "stream_path": "/doorbell-video",
     }
+    assert gated["home_call"] == {
+        "supported": False,
+        "rtp_proxy_supported": True,
+    }
     assert capabilities["doorbell_video"]["supported"] is True
+    assert capabilities["home_call"]["supported"] is True
     assert events_for_capabilities(gated) == [
         "doorbell.pressed",
         "doorbell.view_requested",

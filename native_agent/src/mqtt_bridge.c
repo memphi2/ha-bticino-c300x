@@ -1,4 +1,6 @@
 #include "mqtt_bridge.h"
+#include "string_util.h"
+#include "http_util.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -165,6 +167,7 @@ static int socket_connect_timeout(const char *host, uint16_t port)
         if (fd < 0) {
             continue;
         }
+        set_fd_cloexec(fd);
         (void)set_nonblocking(fd);
         if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
             break;
@@ -545,7 +548,7 @@ void c300x_mqtt_handle_poll(
     if (mqtt->fd < 0) {
         return;
     }
-    if ((revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+    if ((revents & C300X_SOCKET_CLOSED_REVENTS) != 0) {
         mqtt_disconnect(mqtt, config, now);
         return;
     }
@@ -625,24 +628,12 @@ void c300x_mqtt_publish_event(
     }
 }
 
-void c300x_mqtt_publish_raw(
-    struct c300x_mqtt *mqtt,
-    const struct c300x_config *config,
-    const char *payload
-)
-{
-    if (!config->mqtt_enabled || mqtt->fd < 0 || !mqtt->connected || config->mqtt_event_topic[0] == '\0') {
-        return;
-    }
-    (void)mqtt_publish(mqtt, config->mqtt_event_topic, payload, 0);
-}
-
 int c300x_mqtt_take_command(struct c300x_mqtt *mqtt, char *out, size_t out_len)
 {
     if (!mqtt->has_pending_command || out_len == 0) {
         return 0;
     }
-    snprintf(out, out_len, "%s", mqtt->pending_command);
+    c300x_copy_string(out, out_len, mqtt->pending_command);
     mqtt->pending_command[0] = '\0';
     mqtt->has_pending_command = 0;
     return 1;

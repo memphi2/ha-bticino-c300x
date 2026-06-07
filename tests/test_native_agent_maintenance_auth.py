@@ -137,7 +137,7 @@ def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
 def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     body = text.rsplit("static void handle_remove_agent", maxsplit=1)[1].split(
-        "static void handle_api_request",
+        "static void handle_restart_agent",
         maxsplit=1,
     )[0]
     route_body = text.split(
@@ -150,6 +150,23 @@ def test_remove_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
     assert 'run_detached_command("/etc/init.d/dropbear", "start", 0)' in body
     assert "run_detached_command(config->maintenance_agent_remove_script, \"remove\", 500)" in body
     assert "handle_remove_agent(client_fd, config, request)" in route_body
+
+
+def test_restart_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    body = text.rsplit("static void handle_restart_agent", maxsplit=1)[1].split(
+        "static void handle_agent_update_status",
+        maxsplit=1,
+    )[0]
+    route_body = text.split(
+        '"/api/v1/maintenance/agent/actions/restart"',
+        maxsplit=1,
+    )[1].split('"/api/v1/maintenance/update/status"', maxsplit=1)[0]
+
+    assert "maintenance_authorized(config, request)" in body
+    assert 'confirm_matches(request, "restart_agent")' in body
+    assert 'run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)' in body
+    assert "handle_restart_agent(client_fd, config, request)" in route_body
 
 
 def test_remove_agent_script_restores_before_deleting_agent_files() -> None:

@@ -1,8 +1,8 @@
 {
   "entity": {
     "binary_sensor": {
-      "doorbell_video_available": {
-        "default": "mdi:video"
+      "home_call_active": {
+        "default": "mdi:phone-in-talk"
       }
     },
     "button": {
@@ -27,6 +27,9 @@
       "stair_light": {
         "default": "mdi:stairs"
       },
+      "stop_doorbell_video": {
+        "default": "mdi:phone-hangup"
+      },
       "delete_latest_voice_memo": {
         "default": "mdi:trash-can-outline"
       }
@@ -50,15 +53,6 @@
       }
     },
     "sensor": {
-      "connection_state": {
-        "default": "mdi:wifi-sync"
-      },
-      "agent": {
-        "default": "mdi:chip"
-      },
-      "agent_writes": {
-        "default": "mdi:database-edit-outline"
-      },
       "device_cpu": {
         "default": "mdi:cpu-64-bit"
       },
@@ -71,37 +65,13 @@
       "device_temperature": {
         "default": "mdi:thermometer"
       },
-      "qml_patch_status": {
-        "default": "mdi:application-cog-outline"
-      },
-      "last_connection_error": {
-        "default": "mdi:alert-circle-outline"
-      },
-      "next_reconnect_delay": {
-        "default": "mdi:timer-sync-outline"
-      },
-      "reconnect_count": {
-        "default": "mdi:restart"
-      },
       "voicemail_messages": {
-        "default": "mdi:video-box"
-      },
-      "voicemail_unread": {
-        "default": "mdi:video-plus"
-      },
-      "latest_video_message": {
         "default": "mdi:video-box"
       },
       "text_memos": {
         "default": "mdi:text-box-outline"
       },
-      "latest_text_memo": {
-        "default": "mdi:text-box"
-      },
       "voice_memos": {
-        "default": "mdi:microphone-message"
-      },
-      "latest_voice_memo": {
         "default": "mdi:microphone-message"
       }
     },

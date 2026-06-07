@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from asyncio import Task
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 _REGISTRATION_RETRY_SECONDS = 30
 _MAX_REGISTRATION_RETRY_SECONDS = 300
 _ENTITY_REGISTRY_REFRESH_SECONDS = 1
+_SUBSCRIPTION_REFRESH_SECONDS = 300
 
 
 async def async_start_agent_event_registration(
@@ -41,6 +43,7 @@ async def async_start_agent_event_registration(
     api: C300XAgentApi,
     capabilities: dict[str, Any],
     connection_state: C300XConnectionState,
+    on_runtime_registration_created: Callable[[], Awaitable[None]] | None = None,
 ) -> Callable[[], None] | None:
     """Register the HA event webhook with the C300X device agent."""
 
@@ -50,7 +53,57 @@ async def async_start_agent_event_registration(
         api,
         capabilities,
         connection_state,
+        on_runtime_registration_created,
     ).start()
+
+
+def async_request_agent_event_registration(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> bool:
+    """Restart runtime event registration after the agent is rediscovered."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return False
+    api = getattr(runtime_data, "api", None)
+    capabilities = getattr(runtime_data, "capabilities", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    if api is None or not isinstance(capabilities, dict) or connection_state is None:
+        return False
+
+    unregister = getattr(runtime_data, "unregister_event_registration", None)
+    if callable(unregister):
+        unregister()
+        runtime_data.unregister_event_registration = None
+    on_runtime_registration_created = getattr(
+        runtime_data,
+        "on_runtime_registration_created",
+        None,
+    )
+    if not callable(on_runtime_registration_created):
+        on_runtime_registration_created = None
+
+    async def _restart_registration() -> None:
+        if getattr(entry, "runtime_data", None) is not runtime_data:
+            return
+        runtime_data.unregister_event_registration = (
+            await async_start_agent_event_registration(
+                hass,
+                entry,
+                api,
+                capabilities,
+                connection_state,
+                on_runtime_registration_created=on_runtime_registration_created,
+            )
+        )
+
+    create_task = getattr(hass, "async_create_task", None)
+    if callable(create_task):
+        create_task(_restart_registration())
+    else:
+        asyncio.create_task(_restart_registration())
+    return True
 
 
 class _AgentEventRegistration:
@@ -63,15 +116,18 @@ class _AgentEventRegistration:
         api: C300XAgentApi,
         capabilities: dict[str, Any],
         connection_state: C300XConnectionState,
+        on_runtime_registration_created: Callable[[], Awaitable[None]] | None,
     ) -> None:
         self._hass = hass
         self._entry = entry
         self._api = api
         self._capabilities = capabilities
         self._connection_state = connection_state
+        self._on_runtime_registration_created = on_runtime_registration_created
         self._subscription_id: str | None = None
         self._stopped = False
         self._retry_cancel: CALLBACK_TYPE | None = None
+        self._renewal_cancel: CALLBACK_TYPE | None = None
         self._registry_refresh_cancel: CALLBACK_TYPE | None = None
         self._entity_registry_cancel: CALLBACK_TYPE | None = None
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
@@ -94,6 +150,7 @@ class _AgentEventRegistration:
         if self._task is not None and not self._task.done():
             self._task.cancel()
         self._cancel_retry()
+        self._cancel_renewal()
         self._cancel_registry_refresh()
         if self._entity_registry_cancel is not None:
             self._entity_registry_cancel()
@@ -110,6 +167,7 @@ class _AgentEventRegistration:
         if self._stopped:
             return False
         self._cancel_retry()
+        self._cancel_renewal()
         self._cancel_registry_refresh()
         return True
 
@@ -125,18 +183,20 @@ class _AgentEventRegistration:
             self._entry,
             self._capabilities,
         )
+        registration_created = False
         self._connection_state.mark_event_subscription_attempt(
             base_url,
             len(registration_events),
             datetime.now(UTC),
         )
         if registration_events:
-            self._subscription_id = await _ensure_subscription(
+            self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
                 callback_url=base_url,
                 token=token,
                 events=registration_events,
             )
+            self._schedule_renewal()
         else:
             await _remove_inactive_subscriptions(self._api, callback_url=base_url)
             self._subscription_id = None
@@ -149,7 +209,22 @@ class _AgentEventRegistration:
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._send_connection_state_changed()
+        if registration_created:
+            await self._handle_runtime_registration_created()
         await async_refresh_agent_diagnostics(self._hass, self._entry)
+
+    async def _handle_runtime_registration_created(self) -> None:
+        """Refresh runtime-only agent features after a new agent subscription."""
+
+        if self._on_runtime_registration_created is None:
+            return
+        try:
+            await self._on_runtime_registration_created()
+        except Exception as err:  # noqa: BLE001 - event registration itself succeeded
+            _LOGGER.warning(
+                "C300X runtime callback registration refresh failed: %s",
+                compact_error_text(err),
+            )
 
     def _handle_registration_failure(self, err: Exception) -> None:
         error = compact_error_text(err)
@@ -181,6 +256,15 @@ class _AgentEventRegistration:
             self._retry_delay_seconds * 2,
         )
 
+    def _schedule_renewal(self) -> None:
+        if self._stopped:
+            return
+        self._renewal_cancel = async_call_later(
+            self._hass,
+            _SUBSCRIPTION_REFRESH_SECONDS,
+            self._register,
+        )
+
     def _schedule_registry_refresh(self, now: Any = None) -> None:
         if self._stopped or self._registry_refresh_cancel is not None:
             return
@@ -194,6 +278,11 @@ class _AgentEventRegistration:
         if self._retry_cancel is not None:
             self._retry_cancel()
             self._retry_cancel = None
+
+    def _cancel_renewal(self) -> None:
+        if self._renewal_cancel is not None:
+            self._renewal_cancel()
+            self._renewal_cancel = None
 
     def _cancel_registry_refresh(self) -> None:
         if self._registry_refresh_cancel is not None:
@@ -249,6 +338,7 @@ def _active_events_for_capabilities(
 _EVENT_ENTITY_CONSUMER = ("event", "agent_event")
 _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
     {
+        _EVENT_ENTITY_CONSUMER,
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
         ("sensor", "device_memory"),
@@ -256,7 +346,7 @@ _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
     }
 )
 _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
-    "agent.diagnostics_changed": (("sensor", "agent_writes"),),
+    "agent.diagnostics_changed": (("sensor", "agent_status"),),
     "system.metrics_changed": (
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
@@ -265,15 +355,11 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "answering_machine.messages_changed": (
         ("sensor", "voicemail_messages"),
-        ("sensor", "voicemail_unread"),
-        ("sensor", "latest_video_message"),
         ("button", "delete_latest_video_message"),
     ),
     "memos.changed": (
         ("sensor", "text_memos"),
-        ("sensor", "latest_text_memo"),
         ("sensor", "voice_memos"),
-        ("sensor", "latest_voice_memo"),
         ("button", "delete_latest_text_memo"),
         ("button", "delete_latest_voice_memo"),
     ),
@@ -282,15 +368,27 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     "ringer.unmuted": (("switch", "ringer_mute"),),
     "doorbell.pressed": (
         ("event", "doorbell_event"),
-        ("binary_sensor", "doorbell_video_available"),
+        ("sensor", "doorbell_state"),
         ("camera", "doorbell_camera"),
     ),
     "doorbell.view_requested": (
-        ("binary_sensor", "doorbell_video_available"),
+        ("sensor", "doorbell_state"),
         ("camera", "doorbell_camera"),
     ),
     "doorbell.media.closed": (
-        ("binary_sensor", "doorbell_video_available"),
+        ("sensor", "doorbell_state"),
+        ("camera", "doorbell_camera"),
+    ),
+    "home_call.started": (
+        ("binary_sensor", "home_call_active"),
+        ("camera", "doorbell_camera"),
+    ),
+    "home_call.answered": (
+        ("binary_sensor", "home_call_active"),
+        ("camera", "doorbell_camera"),
+    ),
+    "home_call.ended": (
+        ("binary_sensor", "home_call_active"),
         ("camera", "doorbell_camera"),
     ),
 }
@@ -303,7 +401,7 @@ def _filter_events_for_active_entities(
 ) -> list[str]:
     """Filter agent event subscriptions to enabled HA consumers."""
 
-    event_entity_active = _registry_entity_active(
+    event_entity_active = _consumer_active(
         registry,
         entry_id,
         *_EVENT_ENTITY_CONSUMER,
@@ -364,27 +462,20 @@ async def _ensure_subscription(
     callback_url: str,
     token: str,
     events: list[str],
-) -> str | None:
-    """Reuse a persisted event subscription or create one when needed."""
+) -> tuple[str | None, bool]:
+    """Reuse the agent's RAM event subscription or create one when needed."""
 
     subscriptions = _subscriptions(await api.async_list_event_subscriptions())
     for subscription in subscriptions:
         if _subscription_matches(subscription, callback_url, token, events):
-            response = await api.async_register_event_subscription(
-                callback_url=callback_url,
-                token=token,
-                events=events,
-            )
-            return _subscription_id(response) or _subscription_id(
-                {"subscription": subscription}
-            )
+            return _subscription_id({"subscription": subscription}), False
 
     response = await api.async_register_event_subscription(
         callback_url=callback_url,
         token=token,
         events=events,
     )
-    return _subscription_id(response)
+    return _subscription_id(response), True
 
 
 async def _remove_inactive_subscriptions(
@@ -392,7 +483,7 @@ async def _remove_inactive_subscriptions(
     *,
     callback_url: str,
 ) -> None:
-    """Remove persisted subscriptions for this HA webhook when no events are active."""
+    """Remove runtime subscriptions for this HA webhook when no events are active."""
 
     for subscription in _subscriptions(await api.async_list_event_subscriptions()):
         if not _subscription_belongs_to_webhook(subscription, callback_url):
@@ -413,7 +504,7 @@ def _subscription_belongs_to_webhook(
     subscription: dict[str, Any],
     callback_url: str,
 ) -> bool:
-    """Return true for persisted subscriptions owned by this HA entry."""
+    """Return true for runtime subscriptions owned by this HA entry."""
 
     return subscription.get("callback_url") == callback_url
 

@@ -1,12 +1,94 @@
 # Changelog
 
+## v1.0.0 - 2026-06-07
+
+### Added
+
+- Adds the three app-like media workflows: on-demand camera, real doorbell Ring
+  Call answer/hang-up with video, device audio and talkback, and audio-only Home
+  Call.
+- Adds the dedicated Home Assistant media-user flow so video, Ring Call and Home
+  Call can use a separate `homeassistant` device-side identity when available.
+- Bundles Lovelace cards for the doorstation and Home Call workflows with
+  visual editor support and multi-device entity matching.
+- Shows the reported C300X firmware version in the Home Assistant device
+  information.
+- Adds documentation examples for mobile door-call notifications, Android
+  high-priority/alarm-stream delivery and iOS critical alerts.
+
+### Changed
+
+- Updates the native C300X device agent to `1.0.0`.
+- Consolidates redundant diagnostic entities into compact status attributes.
+- Keeps the bundled Lovelace card as the supported dashboard control for
+  on-demand/Ring Call and Home Call workflows.
+
+### Breaking Changes
+
+- Several previously separate entities were removed or moved into attributes to
+  reduce entity noise. This affects doorbell-video availability, latest
+  message/memo metadata, agent connection diagnostics, agent write counters,
+  agent info and QML patch status.
+- Technical camera attributes such as raw bridge dumps, stream paths, recorder
+  paths and internal media ports are no longer exposed as public camera
+  attributes.
+- Dashboards and automations that used the removed entities must be updated to
+  use the remaining status entities, camera attributes or the bundled Lovelace
+  cards.
+
+### Upgrade Notes
+
+- Restart the C300X after installing or updating the `1.0.0` native agent so no
+  old media or display-bridge process keeps running.
+- Restart Home Assistant after updating the integration so the bundled frontend
+  card and the new entity model are loaded cleanly.
+- If media entities or agent capabilities stay inconsistent after the upgrade,
+  use `Remove device agent`, remove the integration entry, then reinstall the
+  integration and native agent cleanly.
+- Microphone talkback requires a secure Home Assistant frontend such as HTTPS or
+  Home Assistant Cloud. Without browser microphone access, the cards try to
+  start receive-only audio where supported.
+- For separate rooting or SSH-enablement workflows, select firmware target
+  `1.7.19`; this integration is validated against the `1.7.x` firmware family.
+
+### Notes
+
+- The bundled Lovelace cards are the supported dashboard UI for on-demand video,
+  Ring Call answer/hang-up and Home Call.
+
+## v0.7.0 - 2026-06-05
+
+### Added
+
+- Adds the native in-house Home Call path with Home Assistant services to start
+  and stop calls.
+- Adds explicit doorbell video stop controls for dashboards and mobile
+  notification call-end actions.
+- Adds the separate native doorbell ring media mode used by real ring-call
+  sessions.
+- Bundles the Lovelace doorstation/Home Call card with the integration and
+  loads it automatically through Home Assistant's frontend module registry.
+
+### Changed
+
+- Updates the native C300X device agent to `0.7.0`.
+- Keeps doorbell audio requested for media sessions while preventing a missing
+  or slow audio track from delaying the first video frames.
+
+### Fixed
+
+- Corrects Home Call stop while still ringing to match app-like call handling.
+- Clears stale doorbell media state on closed media windows and TTL fallback.
+- Keeps the Home Assistant video availability state focused on HA-usable video
+  instead of any unrelated external media session.
+
 ## v0.6.1 - 2026-06-05
 
 ### Fixed
 
-- Requests door-station audio whenever the browser WebRTC offer can receive
+- Requests door-station audio whenever the browser media session can receive
   audio, while keeping microphone talkback capability separate.
-- Buffers early trickle ICE candidates until the WebRTC peer connection has a
+- Buffers early camera connection candidates until the media session has a
   remote description, avoiding noisy `addIceCandidate` race warnings without
   dropping browser candidates.
 
@@ -20,10 +102,10 @@
 ### Changed
 
 - Updates the native C300X device agent to `0.6.0`.
-- Adds a brand-new app-style doorbell streaming path for the on-demand live
-  view, using the long-running local camera activation.
+- Adds a brand-new app-like doorbell streaming path for the on-demand live
+  view.
 - Opens the Home Assistant camera as video-only by default so browsers can
-  autoplay the live view. Interactive WebRTC sessions can still request audio
+  autoplay the live view. Interactive media sessions can still request audio
   and talkback.
 
 ### Fixed
@@ -37,7 +119,7 @@
 
 - Fixes Home Assistant 2026.6 thread-safety warnings from doorbell video TTL
   callbacks.
-- Buffers early WebRTC ICE candidates until the peer connection has a remote
+- Buffers early camera connection candidates until the media session has a remote
   description, avoiding noisy `addIceCandidate` race warnings.
 - Gives Alarmo arm-mode buttons on the C300X display immediate visual feedback:
   yellow while checking/sending, green when accepted, and red when blocked or
@@ -80,19 +162,17 @@
 
 ### Added
 
-- Configurable native SIP/Flexisip identities and endpoint settings for the
-  C300X media bridge.
-- WebRTC talkback state reporting for Home Assistant, including HTTPS
-  requirement, requested/active state, packet count, and last error.
+- Configurable local media identity settings for the C300X media path.
+- Talkback state reporting for Home Assistant, including HTTPS
+  requirement, requested/active state, and last local error.
 - Optional local Home Assistant frontend HTTPS helper for browser microphone
   testing; the native C300X agent itself remains HTTP-only on the local LAN.
 
 ### Changed
 
-- Doorbell WebRTC audio handling now distinguishes door-station audio playback
+- Doorbell audio handling now distinguishes door-station audio playback
   from browser microphone talkback direction.
-- Legal notes explicitly document codec-binary and codec-patent boundaries for
-  the device-provided H.264/AVC stream and Speex talkback audio.
+- Legal notes explicitly document codec-binary and codec-patent boundaries.
 
 ## v0.3.3 - 2026-06-02
 
@@ -105,9 +185,9 @@
 - Native MQTT bridge support mirrors the legacy C300X topics while keeping the
   broker settings in the agent configuration.
 - Guarded legacy MQTT controls can disable the old `TcpDump2Mqtt` autostart
-  path without rewriting Flexisip.
+  path without rewriting unrelated media startup files.
 - Agent diagnostics expose safe runtime health details such as write counters,
-  wake reason, open file descriptors, video-bridge state, and Flexisip reference
+  wake reason, open file descriptors, video state, and media startup reference
   state.
 
 ### Changed
@@ -115,7 +195,7 @@
 - Device-agent bundles use deterministic file hashes so unchanged payloads,
   scripts, GUI files and firewall patches are skipped instead of rewritten.
 - Update and maintenance paths refresh only patches that are already active.
-- The doorbell camera path stays on the native on-demand video bridge and
+- The doorbell camera path stays on the app-like on-demand media path and
   remains independent from the legacy MQTT runtime.
 - Native-agent runtime buffers and MQTT status handling are sized for the C300X
   environment, and the ARMHF stack budget is enforced in CI.
@@ -142,8 +222,7 @@ Home Assistant integration.
 - Native C device agent with authenticated local API, push callbacks, event
   subscriptions, optional mDNS bootstrap discovery, and explicit maintenance
   controls.
-- Doorbell camera support through the native video bridge, with Home Assistant
-  camera/WebRTC integration.
+- Doorbell camera support through Home Assistant camera handling.
 - Door unlock, stair light, ringer mute, smartphone forwarding, answering
   machine, video-message, text-memo, and voice-memo surfaces where supported by
   the installed agent.

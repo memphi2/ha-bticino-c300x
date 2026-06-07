@@ -26,8 +26,7 @@
         "description": "Schreibt den nativen Agent, eine generierte Token-Konfiguration, das Startscript und die QML-Supportdateien per SSH auf den C300X. SSH-Zugangsdaten werden nur fuer diesen Installationsschritt verwendet und nicht gespeichert.",
         "data": {
           "bootstrap_ssh_username": "C300X-SSH-User",
-          "bootstrap_ssh_password": "C300X-SSH-Passwort",
-          "bootstrap_apply_gui_patch": "C300X-GUI-Patch nach Installation anwenden"
+          "bootstrap_ssh_password": "C300X-SSH-Passwort"
         }
       },
       "agent_auth": {
@@ -40,17 +39,22 @@
       },
       "user_features": {
         "title": "BTicino C300X Funktionen",
-        "description": "Waehlt die Home-Assistant-Funktionen fuer diese C300X-Installation aus.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Waehlt die Home-Assistant-Medien- und Geraetefunktionen fuer diese C300X-Installation aus.",
+        "data": {
+          "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
+          "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse"
+        }
+      },
+      "user_dashboard": {
+        "title": "C300X-GUI-Dashboard",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den GUI-Funktionspatch.\n\nAktueller GUI-Funktionspatch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
         "data": {
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
           "dashboard_entities": "Dashboard-Entitaeten",
-          "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
-          "video_port": "Doorbell-RTSP-Port",
-          "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
@@ -72,17 +76,22 @@
       },
       "reconfigure_features": {
         "title": "BTicino C300X Funktionen neu konfigurieren",
-        "description": "Aktualisiert Alarmo-, Video- und GUI-Funktionspatch-Einstellungen.\n\nAktueller GUI-Funktionspatch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Aktualisiert Medien-, Home-Assistant-Media-User- und Geraeteaktivierungs-Einstellungen.",
+        "data": {
+          "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
+          "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse"
+        }
+      },
+      "reconfigure_dashboard": {
+        "title": "C300X-GUI-Dashboard neu konfigurieren",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den GUI-Funktionspatch.\n\nAktueller GUI-Funktionspatch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
         "data": {
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
           "dashboard_entities": "Dashboard-Entitaeten",
-          "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
-          "video_port": "Doorbell-RTSP-Port",
-          "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
@@ -126,17 +135,22 @@
       },
       "features": {
         "title": "BTicino C300X Funktionen",
-        "description": "Konfiguriert Alarmo, Video und GUI-Funktionspatch-Einstellungen.\n\nAktueller GUI-Funktionspatch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Konfiguriert Medien-, Home-Assistant-Media-User- und Geraeteaktivierungs-Einstellungen.",
+        "data": {
+          "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
+          "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse"
+        }
+      },
+      "dashboard": {
+        "title": "C300X-GUI-Dashboard",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den GUI-Funktionspatch.\n\nAktueller GUI-Funktionspatch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des GUI-Patches schreibt QML-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
         "data": {
           "device_ui_enabled": "C300X-GUI-Funktionen patchen",
           "alarm_entity_id": "Alarmo-Entitaet",
           "weather_entity_id": "Wetter-Entitaet",
           "dashboard_entities": "Dashboard-Entitaeten",
-          "video_enabled": "Doorbell-Kamera-Entitaet erstellen",
-          "video_port": "Doorbell-RTSP-Port",
-          "video_stream_path": "Doorbell-RTSP-Stream-Pfad",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
         }
@@ -153,8 +167,8 @@
   },
   "entity": {
     "binary_sensor": {
-      "doorbell_video_available": {
-        "name": "Tuerklingel-Video verfuegbar"
+      "home_call_active": {
+        "name": "Zuhause-Anruf aktiv"
       }
     },
     "button": {
@@ -173,11 +187,20 @@
       "remove_agent": {
         "name": "Agent entfernen"
       },
+      "restart_agent": {
+        "name": "Agent neu starten"
+      },
       "reload_gui": {
         "name": "GUI laden"
       },
       "stair_light": {
         "name": "Treppenlicht"
+      },
+      "stop_doorbell_video": {
+        "name": "Tuerkamera stoppen"
+      },
+      "ensure_homeassistant_user": {
+        "name": "Home-Assistant-Media-User erstellen"
       },
       "delete_latest_voice_memo": {
         "name": "Audio loeschen"
@@ -222,17 +245,6 @@
       }
     },
     "sensor": {
-      "connection_state": {
-        "name": "Verbindungsstatus",
-        "state": {
-          "connected": "Verbunden",
-          "reconnecting": "Verbindet neu",
-          "disconnected": "Getrennt"
-        }
-      },
-      "agent": {
-        "name": "Device-Agent"
-      },
       "agent_status": {
         "name": "Device-Agent-Status",
         "state": {
@@ -240,9 +252,6 @@
           "warning": "Warnung",
           "error": "Fehler"
         }
-      },
-      "agent_writes": {
-        "name": "Schreibvorgaenge"
       },
       "device_cpu": {
         "name": "CPU-Auslastung"
@@ -256,38 +265,14 @@
       "device_temperature": {
         "name": "Geraetetemperatur"
       },
-      "qml_patch_status": {
-        "name": "GUI-Patch"
-      },
-      "last_connection_error": {
-        "name": "Letzter Fehler"
-      },
-      "next_reconnect_delay": {
-        "name": "Naechster Reconnect"
-      },
-      "reconnect_count": {
-        "name": "Reconnects"
-      },
       "voicemail_messages": {
         "name": "Video-Nachrichten"
-      },
-      "voicemail_unread": {
-        "name": "Video ungelesen"
-      },
-      "latest_video_message": {
-        "name": "Letztes Video"
       },
       "text_memos": {
         "name": "Text-Memos"
       },
-      "latest_text_memo": {
-        "name": "Letzter Text"
-      },
       "voice_memos": {
         "name": "Sprach-Memos"
-      },
-      "latest_voice_memo": {
-        "name": "Letztes Audio"
       },
       "doorbell_state": {
         "name": "Klingelstatus",
@@ -357,6 +342,9 @@
     },
     "doorbell_video_not_available": {
       "message": "Doorbell-Video ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstuetzt."
+    },
+    "home_call_not_available": {
+      "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstuetzt."
     },
     "entry_id_required": {
       "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Eintraege existieren."
@@ -439,6 +427,24 @@
           "core_patch_verify_failed": "Die Core-Media-Hook-Aktion wurde ausgefuehrt, aber der Agent hat den gepatchten Zustand nicht bestaetigt."
         },
         "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen.",
+          "core_patch_unsupported": "Der installierte C300X Device-Agent unterstuetzt das Anwenden des Core-Media-Hooks nicht."
+        }
+      }
+    },
+    "device_user_required": {
+      "title": "C300X Media-User-Setup erforderlich",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Home-Assistant-Media-User erstellen",
+            "description": "Home Assistant weist den Device-Agent an, den dedizierten C300X-Media-User `homeassistant` zu erstellen oder zu reparieren. Vorhandene App-User bleiben erhalten. Der Agent schreibt nur den notwendigen geräteseitigen User- und Routing-Zustand."
+          }
+        },
+        "error": {
+          "device_user_setup_failed": "Das Device-User-Setup ist fehlgeschlagen. Pruefe den Maintenance-Zugriff und versuche es erneut."
+        },
+        "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
         }
       }
@@ -450,6 +456,38 @@
     "missing_alarm_entity": {
       "title": "Konfigurierte C300X Alarm-Entitaet fehlt",
       "description": "{entry_title} verweist auf {entity_id}, aber Home Assistant kennt diese Entitaet nicht. Waehle in den Integrationsoptionen eine vorhandene Alarm-Control-Panel-Entitaet oder leere die Alarm-Einstellung."
+    },
+    "frontend_card_setup_hint": {
+      "title": "C300X Lovelace-Card hinzufuegen",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "C300X Lovelace-Cards einrichten",
+            "description": "Home Assistant kann die empfohlenen C300X-Cards zu {dashboard_path} hinzufuegen, oder du kannst diesen Hinweis ignorieren.",
+            "menu_options": {
+              "confirm": "Cards erstellen",
+              "ignore": "Diesen Hinweis ignorieren"
+            }
+          },
+          "confirm": {
+            "title": "C300X Lovelace-Cards erstellen",
+            "description": "Home Assistant fuegt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu. Die View enthaelt eine Card fuer Tuerklingel / On-Demand und eine Home-Call-Card fuer {entry_title}.",
+            "data": {
+              "dashboard_path": "Dashboard",
+              "view_path": "View-Pfad"
+            }
+          }
+        },
+        "error": {
+          "camera_entity_missing": "Home Assistant konnte die C300X-Kamera-Entitaet fuer diesen Config-Entry nicht finden.",
+          "lovelace_config_invalid": "Die ausgewaehlte Lovelace-Dashboard-Konfiguration ist nicht im erwarteten Format schreibbar.",
+          "lovelace_storage_unavailable": "Es ist kein Lovelace-Dashboard im Storage-Modus verfuegbar. YAML-Dashboards muessen manuell bearbeitet werden.",
+          "lovelace_unavailable": "Lovelace ist noch nicht verfuegbar."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino C300X Entry ist nicht geladen."
+        }
+      }
     },
     "unsupported_callback_url": {
       "title": "C300X Callback-URL ist fuer den Device-Agent nicht nutzbar",

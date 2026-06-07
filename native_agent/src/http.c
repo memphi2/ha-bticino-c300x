@@ -1,12 +1,14 @@
 #include "activations.h"
 #include "activation_discovery.h"
 #include "c300x_agent.h"
+#include "device_user.h"
 #include "http_util.h"
 #include "memo_store.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
 #include "recent_events.h"
 #include "sha256.h"
+#include "string_util.h"
 #include "video_rtsp.h"
 
 #include <arpa/inet.h>
@@ -23,7 +25,6 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/inotify.h>
@@ -36,7 +37,7 @@
 
 #define REQUEST_BUFFER_SIZE 8192
 #define C300X_MAX_SUBSCRIPTIONS 4
-#define C300X_MAX_SUBSCRIPTION_EVENTS 16
+#define C300X_MAX_SUBSCRIPTION_EVENTS 24
 #define C300X_MAX_URL_LEN 512
 #define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
 #define C300X_DASHBOARD_DOMAIN "c300x"
@@ -60,7 +61,6 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
-#define C300X_HOME_ASSISTANT_CONNECTED_SECONDS 300
 #define C300X_AGENT_UPDATE_STAGE ".update"
 #define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
 #define C300X_AGENT_BUNDLE_HASH_LEN 96
@@ -87,6 +87,14 @@ struct listener {
     int fd;
     enum listener_kind kind;
 };
+
+static volatile sig_atomic_t shutdown_requested = 0;
+
+static void handle_shutdown_signal(int signo)
+{
+    (void)signo;
+    shutdown_requested = 1;
+}
 
 struct request {
     char method[8];
@@ -199,9 +207,9 @@ struct system_metrics_sample {
 };
 
 struct agent_runtime {
+    const struct c300x_config *config;
     struct subscription subscriptions[C300X_MAX_SUBSCRIPTIONS];
     int subscription_count;
-    int subscriptions_loaded_deduplicated;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
     int display_bridge_registered;
@@ -209,7 +217,6 @@ struct agent_runtime {
     char display_bridge_webhook_url[C300X_MAX_URL_LEN];
     char display_bridge_shared_secret[C300X_MAX_TOKEN_LEN];
     unsigned long agent_write_count;
-    unsigned long subscription_store_writes;
     unsigned long loop_iterations;
     unsigned long poll_wakeups;
     unsigned long accepted_clients;
@@ -239,6 +246,10 @@ struct agent_runtime {
     int system_metrics_dispatched_initialized;
     time_t system_metrics_next_sample_at;
     time_t system_metrics_last_dispatched_at;
+    int smartphone_forwarding_mode_known;
+    int smartphone_forwarding_mode_code;
+    int ringer_muted_known;
+    int ringer_muted;
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
@@ -254,6 +265,10 @@ struct firewall_workspace {
 };
 
 static void send_json(int client_fd, int status, const char *reason, const char *body);
+static void send_response_too_large(int client_fd) { send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n"); }
+static void send_maintenance_unauthorized(int client_fd) { send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n"); }
+static void send_loopback_required(int client_fd) { send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n"); }
+static void send_homeassistant_unavailable(int client_fd) { send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n"); }
 static void send_file_response(
     int client_fd,
     const char *path,
@@ -331,6 +346,13 @@ static void handle_display_bridge_event_post(
     const struct request *request
 );
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime);
+static void handle_device_user_get(int client_fd);
+static void handle_device_user_ensure(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
@@ -484,6 +506,11 @@ static void handle_firewall_action(
     const char *confirmation
 );
 static void handle_gui_reload(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+);
+static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
     const struct request *request
@@ -821,19 +848,17 @@ static void record_agent_write(
     char write_class_json[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_class))];
     char reason_json[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_reason))];
     char qml_patch_last_action_json[C300X_JSON_QUOTED_LEN(sizeof(runtime->qml_patch_last_action))];
-    char data[512];
+    char data[1536];
 
     if (runtime == NULL) {
         return;
     }
     runtime->agent_write_count++;
     runtime->last_write_at = time(NULL);
-    snprintf(runtime->last_write_class, sizeof(runtime->last_write_class), "%s", write_class);
-    snprintf(runtime->last_write_reason, sizeof(runtime->last_write_reason), "%s", reason);
-    if (strcmp(write_class, "subscription") == 0) {
-        runtime->subscription_store_writes++;
-    } else if (strcmp(write_class, "qml_patch") == 0) {
-        snprintf(runtime->qml_patch_last_action, sizeof(runtime->qml_patch_last_action), "%s", reason);
+    c300x_copy_string(runtime->last_write_class, sizeof(runtime->last_write_class), write_class);
+    c300x_copy_string(runtime->last_write_reason, sizeof(runtime->last_write_reason), reason);
+    if (strcmp(write_class, "qml_patch") == 0) {
+        c300x_copy_string(runtime->qml_patch_last_action, sizeof(runtime->qml_patch_last_action), reason);
     }
     if (config == NULL) {
         return;
@@ -852,12 +877,11 @@ static void record_agent_write(
         snprintf(
             data,
             sizeof(data),
-            "{\"agent_write_count\":%lu,\"last_write_at\":%ld,\"last_write_class\":%s,\"last_write_reason\":%s,\"subscription_store_writes\":%lu,\"qml_patch_last_action\":%s}",
+            "{\"agent_write_count\":%lu,\"last_write_at\":%ld,\"last_write_class\":%s,\"last_write_reason\":%s,\"qml_patch_last_action\":%s}",
             runtime->agent_write_count,
             (long)runtime->last_write_at,
             write_class_json,
             reason_json,
-            runtime->subscription_store_writes,
             qml_patch_last_action_json
         ) >= (int)sizeof(data)
     ) {
@@ -871,9 +895,10 @@ static int agent_base_dir(const struct c300x_config *config, char *out, size_t o
     if (out_len == 0 || config == NULL || config->config_path[0] == '\0') {
         return 0;
     }
-    if (snprintf(out, out_len, "%s", config->config_path) >= (int)out_len) {
+    if (strlen(config->config_path) >= out_len) {
         return 0;
     }
+    c300x_copy_string(out, out_len, config->config_path);
     if (!path_parent_inplace(out)) {
         return 0;
     }
@@ -891,7 +916,7 @@ static int agent_update_stage_dir(
     if (!agent_base_dir(config, base, sizeof(base))) {
         return 0;
     }
-    return snprintf(out, out_len, "%s/%s", base, C300X_AGENT_UPDATE_STAGE) < (int)out_len;
+    return c300x_join_path(out, out_len, base, C300X_AGENT_UPDATE_STAGE);
 }
 
 static int agent_bundle_manifest_path(
@@ -905,7 +930,7 @@ static int agent_bundle_manifest_path(
     if (!agent_base_dir(config, base, sizeof(base))) {
         return 0;
     }
-    return snprintf(out, out_len, "%s/%s", base, C300X_AGENT_BUNDLE_MANIFEST) < (int)out_len;
+    return c300x_join_path(out, out_len, base, C300X_AGENT_BUNDLE_MANIFEST);
 }
 
 static int safe_agent_update_path(const char *path)
@@ -949,7 +974,7 @@ static int agent_update_stage_path(
     if (!safe_agent_update_path(bundle_path) || !agent_update_stage_dir(config, stage_dir, sizeof(stage_dir))) {
         return 0;
     }
-    return snprintf(out, out_len, "%s/%s", stage_dir, bundle_path) < (int)out_len;
+    return c300x_join_path(out, out_len, stage_dir, bundle_path);
 }
 
 static int agent_update_target_path(
@@ -974,9 +999,10 @@ static int agent_update_target_path(
     } else if (strcmp(bundle_path, "device_agent/scripts/bootstrap_firewall.sh") == 0) {
         relative_target = "bootstrap_firewall.sh";
     } else if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
-        if (snprintf(out, out_len, "%s", C300X_AGENT_INIT_SCRIPT) >= (int)out_len) {
+        if (strlen(C300X_AGENT_INIT_SCRIPT) >= out_len) {
             return 0;
         }
+        c300x_copy_string(out, out_len, C300X_AGENT_INIT_SCRIPT);
         return 1;
     } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
         relative_target = C300X_AGENT_BUNDLE_MANIFEST;
@@ -986,7 +1012,7 @@ static int agent_update_target_path(
     if (relative_target == NULL) {
         return 0;
     }
-    return snprintf(out, out_len, "%s/%s", base, relative_target) < (int)out_len;
+    return c300x_join_path(out, out_len, base, relative_target);
 }
 
 static int read_agent_bundle_metadata(
@@ -1056,13 +1082,8 @@ static int display_bridge_active(
     const struct agent_runtime *runtime
 )
 {
-    if (display_bridge_runtime_active(runtime)) {
-        return 1;
-    }
-    if (display_bridge_runtime_disabled(runtime)) {
-        return 0;
-    }
-    return config->display_bridge_enabled;
+    (void)config;
+    return display_bridge_runtime_active(runtime);
 }
 
 static const char *display_bridge_webhook_url(
@@ -1070,13 +1091,11 @@ static const char *display_bridge_webhook_url(
     const struct agent_runtime *runtime
 )
 {
+    (void)config;
     if (display_bridge_runtime_active(runtime)) {
         return runtime->display_bridge_webhook_url;
     }
-    if (display_bridge_runtime_disabled(runtime)) {
-        return "";
-    }
-    return config->home_assistant_webhook_url;
+    return "";
 }
 
 static const char *display_bridge_shared_secret(
@@ -1084,13 +1103,11 @@ static const char *display_bridge_shared_secret(
     const struct agent_runtime *runtime
 )
 {
+    (void)config;
     if (display_bridge_runtime_active(runtime)) {
         return runtime->display_bridge_shared_secret;
     }
-    if (display_bridge_runtime_disabled(runtime)) {
-        return "";
-    }
-    return config->home_assistant_shared_secret;
+    return "";
 }
 
 static int forward_to_homeassistant(
@@ -1199,12 +1216,11 @@ static int forward_to_homeassistant(
         const char *status_end = strstr(response, "\r\n");
         if (status_end != NULL) {
             size_t status_len = (size_t)(status_end - response);
-            if (status_len > 0) {
-                char status_line[32] = {0};
-                snprintf(status_line, sizeof(status_line), "%.*s", (int)status_len, response);
-                if (strncmp(status_line, "HTTP/1.1 2", 9) == 0 || strncmp(status_line, "HTTP/1.0 2", 9) == 0) {
-                    ok = 1;
-                }
+            if (
+                status_len >= 9
+                && (strncmp(response, "HTTP/1.1 2", 9) == 0 || strncmp(response, "HTTP/1.0 2", 9) == 0)
+            ) {
+                ok = 1;
             }
         }
         if (ok) {
@@ -1614,7 +1630,7 @@ static int remove_tree(const char *path)
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child)) {
+        if (!c300x_join_path(child, sizeof(child), path, entry->d_name)) {
             closedir(directory);
             return 0;
         }
@@ -1782,35 +1798,6 @@ static int file_content_matches(const char *source, const char *target)
     return constant_time_equal(source_sha, strlen(source_sha), target_sha);
 }
 
-static int file_content_equals_buffer(const char *path, const char *content, size_t content_len)
-{
-    unsigned char buffer[512];
-    FILE *file;
-    size_t offset = 0;
-    size_t read_len;
-
-    if (path == NULL || path[0] == '\0' || content == NULL) {
-        return 0;
-    }
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
-    }
-    while ((read_len = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        if (offset + read_len > content_len || memcmp(content + offset, buffer, read_len) != 0) {
-            fclose(file);
-            return 0;
-        }
-        offset += read_len;
-    }
-    if (ferror(file)) {
-        fclose(file);
-        return 0;
-    }
-    fclose(file);
-    return offset == content_len;
-}
-
 static int copy_binary_file_if_changed(
     const char *source,
     const char *target,
@@ -1860,7 +1847,7 @@ static int base64_decode_bytes(
     size_t *decoded_len
 )
 {
-    int value = 0;
+    unsigned int value = 0;
     int bits = -8;
     size_t used = 0;
 
@@ -1880,7 +1867,7 @@ static int base64_decode_bytes(
         if (sextet < 0) {
             return 0;
         }
-        value = (value << 6) | sextet;
+        value = ((value << 6) | (unsigned int)sextet) & 0x00ffffffU;
         bits += 6;
         if (bits >= 0) {
             if (used >= output_len) {
@@ -2044,26 +2031,26 @@ static int find_answering_message_video(
     ) {
         return 0;
     }
-    if (snprintf(message_dir, sizeof(message_dir), "%s/%s", voicemail->root, message_id) >= (int)sizeof(message_dir)) {
+    if (!c300x_join_path(message_dir, sizeof(message_dir), voicemail->root, message_id)) {
         return 0;
     }
     if (!path_is_symlink(message_dir, &is_symlink) || is_symlink || !path_is_directory(message_dir)) {
         return 0;
     }
-    if (snprintf(info_path, sizeof(info_path), "%s/msg_info.ini", message_dir) >= (int)sizeof(info_path) || !path_exists(info_path)) {
+    if (!c300x_join_suffix(info_path, sizeof(info_path), message_dir, "/msg_info.ini") || !path_exists(info_path)) {
         return 0;
     }
     for (size_t index = 0; index < sizeof(filenames) / sizeof(filenames[0]); index++) {
         char candidate[C300X_MAX_PATH_LEN];
         long long candidate_size = 0;
         int file_is_symlink = 0;
-        if (snprintf(candidate, sizeof(candidate), "%s/%s", message_dir, filenames[index]) >= (int)sizeof(candidate)) {
+        if (!c300x_join_path(candidate, sizeof(candidate), message_dir, filenames[index])) {
             continue;
         }
         if (!regular_file_info(candidate, &candidate_size, &file_is_symlink) || file_is_symlink) {
             continue;
         }
-        snprintf(path, path_len, "%s", candidate);
+        c300x_copy_string(path, path_len, candidate);
         if (content_type != NULL) {
             *content_type = video_mime_type_for_name(filenames[index]);
         }
@@ -2152,26 +2139,26 @@ static int find_memo_audio(
     ) {
         return 0;
     }
-    if (snprintf(memo_dir, sizeof(memo_dir), "%s/%s", memos->root, entry_name) >= (int)sizeof(memo_dir)) {
+    if (!c300x_join_path(memo_dir, sizeof(memo_dir), memos->root, entry_name)) {
         return 0;
     }
     if (!path_is_symlink(memo_dir, &is_symlink) || is_symlink || !path_is_directory(memo_dir)) {
         return 0;
     }
-    if (snprintf(info_path, sizeof(info_path), "%s/msg_info.ini", memo_dir) >= (int)sizeof(info_path) || !path_exists(info_path)) {
+    if (!c300x_join_suffix(info_path, sizeof(info_path), memo_dir, "/msg_info.ini") || !path_exists(info_path)) {
         return 0;
     }
     for (size_t index = 0; index < sizeof(filenames) / sizeof(filenames[0]); index++) {
         char candidate[C300X_MAX_PATH_LEN];
         long long candidate_size = 0;
         int file_is_symlink = 0;
-        if (snprintf(candidate, sizeof(candidate), "%s/%s", memo_dir, filenames[index]) >= (int)sizeof(candidate)) {
+        if (!c300x_join_path(candidate, sizeof(candidate), memo_dir, filenames[index])) {
             continue;
         }
         if (!regular_file_info(candidate, &candidate_size, &file_is_symlink) || file_is_symlink) {
             continue;
         }
-        snprintf(path, path_len, "%s", candidate);
+        c300x_copy_string(path, path_len, candidate);
         if (content_type != NULL) {
             *content_type = audio_mime_type_for_name(filenames[index]);
         }
@@ -2404,7 +2391,7 @@ static void message_collection_read_snapshot(
         if (!safe_voicemail_entry_name(entry->d_name)) {
             continue;
         }
-        if (snprintf(message_dir, sizeof(message_dir), "%s/%s", voicemail->root, entry->d_name) >= (int)sizeof(message_dir)) {
+        if (!c300x_join_path(message_dir, sizeof(message_dir), voicemail->root, entry->d_name)) {
             continue;
         }
         message_directory = opendir(message_dir);
@@ -2412,7 +2399,7 @@ static void message_collection_read_snapshot(
             continue;
         }
         closedir(message_directory);
-        if (snprintf(info_path, sizeof(info_path), "%s/msg_info.ini", message_dir) >= (int)sizeof(info_path)) {
+        if (!c300x_join_suffix(info_path, sizeof(info_path), message_dir, "/msg_info.ini")) {
             continue;
         }
         if (!path_exists(info_path)) {
@@ -2426,8 +2413,8 @@ static void message_collection_read_snapshot(
             }
             memcpy(message.id, entry->d_name, entry_name_len + 1);
         }
-        snprintf(message.kind, sizeof(message.kind), "%s", kind != NULL ? kind : "");
-        snprintf(message.dir_path, sizeof(message.dir_path), "%s", message_dir);
+        c300x_copy_string(message.kind, sizeof(message.kind), kind);
+        c300x_copy_string(message.dir_path, sizeof(message.dir_path), message_dir);
         read_voicemail_info(
             info_path,
             &message.read,
@@ -2435,7 +2422,7 @@ static void message_collection_read_snapshot(
             sizeof(message.date),
             &message.unix_time
         );
-        if (snprintf(thumbnail_path, sizeof(thumbnail_path), "%s/aswm.jpg", message_dir) < (int)sizeof(thumbnail_path)) {
+        if (c300x_join_suffix(thumbnail_path, sizeof(thumbnail_path), message_dir, "/aswm.jpg")) {
             message.has_thumbnail = path_exists(thumbnail_path);
         }
         if (find_answering_message_video(
@@ -2447,10 +2434,10 @@ static void message_collection_read_snapshot(
             &video_size
         )) {
             message.has_video = 1;
-            snprintf(message.video_mime_type, sizeof(message.video_mime_type), "%s", video_mime_type);
+            c300x_copy_string(message.video_mime_type, sizeof(message.video_mime_type), video_mime_type);
             message.video_size = video_size;
         }
-        if (snprintf(thumbnail_path, sizeof(thumbnail_path), "%s/message.txt", message_dir) < (int)sizeof(thumbnail_path)) {
+        if (c300x_join_suffix(thumbnail_path, sizeof(thumbnail_path), message_dir, "/message.txt")) {
             message.has_text = path_exists(thumbnail_path);
             if (message.has_text && strcmp(message.kind, "text") == 0) {
                 (void)read_bounded_text_file(
@@ -2473,12 +2460,12 @@ static void message_collection_read_snapshot(
             )
         ) {
             message.has_audio = 1;
-            snprintf(message.audio_mime_type, sizeof(message.audio_mime_type), "%s", audio_mime_type);
+            c300x_copy_string(message.audio_mime_type, sizeof(message.audio_mime_type), audio_mime_type);
             message.audio_size = audio_size;
-        } else if (snprintf(thumbnail_path, sizeof(thumbnail_path), "%s/audio.wav", message_dir) < (int)sizeof(thumbnail_path)) {
+        } else if (c300x_join_suffix(thumbnail_path, sizeof(thumbnail_path), message_dir, "/audio.wav")) {
             message.has_audio = path_exists(thumbnail_path);
             if (message.has_audio) {
-                snprintf(message.audio_mime_type, sizeof(message.audio_mime_type), "%s", "audio/wav");
+                c300x_copy_string(message.audio_mime_type, sizeof(message.audio_mime_type), "audio/wav");
             }
         }
         message.timestamp = message.unix_time > 0 ? message.unix_time : 0;
@@ -2663,7 +2650,7 @@ static void voicemail_add_entry_dir_watches(struct voicemail_runtime *voicemail)
         if (!safe_voicemail_entry_name(entry->d_name)) {
             continue;
         }
-        if (snprintf(entry_dir, sizeof(entry_dir), "%s/%s", voicemail->root, entry->d_name) >= (int)sizeof(entry_dir)) {
+        if (!c300x_join_path(entry_dir, sizeof(entry_dir), voicemail->root, entry->d_name)) {
             continue;
         }
         if (!path_is_directory(entry_dir)) {
@@ -2852,7 +2839,7 @@ static size_t json_escape_string(const char *value, char *out, size_t out_len)
 
 static const char *json_string(const char *value, char *out, size_t out_len)
 {
-    size_t used;
+    size_t used = 0;
     if (out_len < 3) {
         return "\"\"";
     }
@@ -2871,27 +2858,6 @@ static const char *json_string_or_null(const char *value, char *out, size_t out_
     return json_string(value, out, out_len);
 }
 
-static int appendf(char *buffer, size_t buffer_len, size_t *used, const char *fmt, ...)
-{
-    va_list args;
-    int written;
-    if (*used >= buffer_len) {
-        return 0;
-    }
-    va_start(args, fmt);
-    written = vsnprintf(buffer + *used, buffer_len - *used, fmt, args);
-    va_end(args);
-    if (written < 0) {
-        return 0;
-    }
-    if ((size_t)written >= buffer_len - *used) {
-        *used = buffer_len;
-        return 0;
-    }
-    *used += (size_t)written;
-    return 1;
-}
-
 static char *allocate_response_buffer(int client_fd, size_t size)
 {
     char *buffer = calloc(1, size);
@@ -2904,7 +2870,7 @@ static char *allocate_response_buffer(int client_fd, size_t size)
 
 static void ui_event_send(int client_fd, int changed, unsigned long revision, const char *topic)
 {
-    char body[192];
+    char body[1024];
     char escaped_topic[96];
     char quoted_topic[100];
     const char *topic_json = "null";
@@ -2934,7 +2900,7 @@ static void ui_event_close_wait(struct agent_runtime *runtime, int changed)
     }
     runtime->ui_event_wait_fd = -1;
     ui_event_send(fd, changed, runtime->ui_event_revision, runtime->ui_event_topic);
-    close(fd);
+    close_agent_socket(fd);
 }
 
 static void ui_event_notify(struct agent_runtime *runtime, const char *topic)
@@ -3185,64 +3151,6 @@ static void utc_now(char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_value);
 }
 
-static void json_string_field_range(
-    const char *start,
-    const char *end,
-    const char *field,
-    char *out,
-    size_t out_len
-)
-{
-    char pattern[64];
-    const char *found;
-    const char *ptr;
-    size_t written = 0;
-
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    snprintf(pattern, sizeof(pattern), "\"%s\"", field);
-    found = start;
-    while (found != NULL && found < end) {
-        found = strstr(found, pattern);
-        if (found == NULL || found >= end) {
-            return;
-        }
-        ptr = found + strlen(pattern);
-        while (ptr < end && isspace((unsigned char)*ptr)) {
-            ptr++;
-        }
-        if (ptr < end && *ptr == ':') {
-            break;
-        }
-        found++;
-    }
-    if (found == NULL || found >= end) {
-        return;
-    }
-    ptr = strchr(found + strlen(pattern), ':');
-    if (ptr == NULL || ptr >= end) {
-        return;
-    }
-    ptr++;
-    while (ptr < end && isspace((unsigned char)*ptr)) {
-        ptr++;
-    }
-    if (ptr >= end || *ptr != '"') {
-        return;
-    }
-    ptr++;
-    while (ptr < end && *ptr != '"' && written + 1 < out_len) {
-        if (*ptr == '\\' && ptr + 1 < end) {
-            ptr++;
-        }
-        out[written++] = *ptr++;
-    }
-    if (out_len > 0) {
-        out[written] = '\0';
-    }
-}
-
 static void json_events_array_range(
     const char *start,
     const char *end,
@@ -3352,206 +3260,6 @@ static void subscription_token_fingerprint(
     fnv1a64_fingerprint(token, output, output_len);
 }
 
-static void load_subscriptions(struct agent_runtime *runtime, const char *store_path)
-{
-    FILE *file;
-    long size;
-    char *buffer;
-    const char *ptr;
-
-    runtime->subscription_count = 0;
-    if (store_path[0] == '\0') {
-        return;
-    }
-    file = fopen(store_path, "rb");
-    if (file == NULL) {
-        return;
-    }
-    if (fseek(file, 0, SEEK_END) != 0) {
-        fclose(file);
-        return;
-    }
-    size = ftell(file);
-    if (size <= 0 || size > 1024 * 1024) {
-        fclose(file);
-        return;
-    }
-    if (fseek(file, 0, SEEK_SET) != 0) {
-        fclose(file);
-        return;
-    }
-    buffer = calloc((size_t)size + 1, 1);
-    if (buffer == NULL) {
-        fclose(file);
-        return;
-    }
-    if (fread(buffer, 1, (size_t)size, file) != (size_t)size) {
-        free(buffer);
-        fclose(file);
-        return;
-    }
-    fclose(file);
-
-    ptr = buffer;
-    while (1) {
-        const char *callback = strstr(ptr, "\"callback_url\"");
-        const char *object_start;
-        const char *object_end;
-        struct subscription subscription;
-
-        if (callback == NULL) {
-            break;
-        }
-        object_start = callback;
-        while (object_start > buffer && *object_start != '{') {
-            object_start--;
-        }
-        object_end = strchr(callback, '}');
-        if (object_start == buffer && *object_start != '{') {
-            break;
-        }
-        if (object_end == NULL) {
-            break;
-        }
-        memset(&subscription, 0, sizeof(subscription));
-        json_string_field_range(object_start, object_end, "id", subscription.id, sizeof(subscription.id));
-        json_string_field_range(
-            object_start,
-            object_end,
-            "callback_url",
-            subscription.callback_url,
-            sizeof(subscription.callback_url)
-        );
-        json_string_field_range(object_start, object_end, "token", subscription.token, sizeof(subscription.token));
-        json_events_array_range(object_start, object_end, &subscription);
-        if (subscription.callback_url[0] != '\0') {
-            if (subscription.id[0] == '\0') {
-                snprintf(subscription.id, sizeof(subscription.id), "native-%ld-0", (long)time(NULL));
-            }
-            if (runtime->subscription_count > 0) {
-                runtime->subscriptions_loaded_deduplicated = 1;
-            }
-            runtime->subscriptions[0] = subscription;
-            runtime->subscription_count = 1;
-        }
-        ptr = object_end + 1;
-    }
-    free(buffer);
-}
-
-static void save_subscriptions(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *store_path,
-    const char *reason
-)
-{
-    char temporary_path[C300X_MAX_PATH_LEN + 8];
-    char *body;
-    FILE *file;
-    size_t used = 0;
-
-    if (store_path[0] == '\0') {
-        return;
-    }
-    body = calloc(1, C300X_LARGE_RESPONSE_SIZE);
-    if (body == NULL) {
-        return;
-    }
-    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "{\n  \"subscriptions\": [\n")) {
-        free(body);
-        return;
-    }
-    for (int index = 0; index < runtime->subscription_count; index++) {
-        const struct subscription *subscription = &runtime->subscriptions[index];
-        char id[C300X_JSON_QUOTED_LEN(sizeof(subscription->id))];
-        char callback_url[C300X_JSON_QUOTED_LEN(sizeof(subscription->callback_url))];
-        char token[C300X_JSON_QUOTED_LEN(sizeof(subscription->token))];
-        char last_event_type[C300X_JSON_QUOTED_LEN(sizeof(subscription->last_event_type))];
-        char last_delivered_at[C300X_JSON_QUOTED_LEN(sizeof(subscription->last_delivered_at))];
-
-        json_string(subscription->id, id, sizeof(id));
-        json_string(subscription->callback_url, callback_url, sizeof(callback_url));
-        json_string(subscription->token, token, sizeof(token));
-        json_string(subscription->last_event_type, last_event_type, sizeof(last_event_type));
-        json_string(subscription->last_delivered_at, last_delivered_at, sizeof(last_delivered_at));
-        if (!appendf(
-            body,
-            C300X_LARGE_RESPONSE_SIZE,
-            &used,
-            "    {\"id\":%s,\"callback_url\":%s,\"token\":%s,\"events\":[",
-            id,
-            callback_url,
-            token
-        )) {
-            free(body);
-            return;
-        }
-        for (int event_index = 0; event_index < subscription->event_count; event_index++) {
-            char event_type[C300X_JSON_QUOTED_LEN(sizeof(subscription->events[0]))];
-            json_string(subscription->events[event_index], event_type, sizeof(event_type));
-            if (!appendf(
-                body,
-                C300X_LARGE_RESPONSE_SIZE,
-                &used,
-                "%s%s",
-                event_index == 0 ? "" : ",",
-                event_type
-            )) {
-                free(body);
-                return;
-            }
-        }
-        if (!appendf(
-            body,
-            C300X_LARGE_RESPONSE_SIZE,
-            &used,
-            "],\"created_at\":\"\",\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s}}%s\n",
-            subscription->last_ok ? "true" : "false",
-            last_event_type,
-            last_delivered_at,
-            index + 1 == runtime->subscription_count ? "" : ","
-        )) {
-            free(body);
-            return;
-        }
-    }
-    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "  ]\n}\n")) {
-        free(body);
-        return;
-    }
-    if (file_content_equals_buffer(store_path, body, used)) {
-        (void)chmod(store_path, 0600);
-        free(body);
-        return;
-    }
-    snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", store_path);
-    file = fopen(temporary_path, "w");
-    if (file == NULL) {
-        free(body);
-        return;
-    }
-    if (fwrite(body, 1, used, file) != used) {
-        (void)fclose(file);
-        (void)unlink(temporary_path);
-        free(body);
-        return;
-    }
-    if (fclose(file) != 0) {
-        (void)unlink(temporary_path);
-        free(body);
-        return;
-    }
-    free(body);
-    (void)chmod(temporary_path, 0600);
-    if (rename(temporary_path, store_path) == 0) {
-        (void)chmod(store_path, 0600);
-        record_agent_write(config, runtime, "subscription", reason);
-    } else {
-        (void)unlink(temporary_path);
-    }
-}
-
 static int post_callback(
     const struct c300x_config *config,
     const struct subscription *subscription,
@@ -3629,8 +3337,8 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
     char body[8192];
     size_t used = 0;
 
-    if (!appendf(body, sizeof(body), &used, "{\"ok\":true,\"subscriptions\":[")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (!c300x_appendf(body, sizeof(body), &used, "{\"ok\":true,\"subscriptions\":[")) {
+        send_response_too_large(client_fd);
         return;
     }
     for (int index = 0; index < runtime->subscription_count && used < sizeof(body); index++) {
@@ -3648,7 +3356,7 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
         json_string(token_fingerprint, token_fingerprint_json, sizeof(token_fingerprint_json));
         json_string(subscription->last_event_type, last_event_type, sizeof(last_event_type));
         json_string(subscription->last_delivered_at, last_delivered_at, sizeof(last_delivered_at));
-        if (!appendf(
+        if (!c300x_appendf(
             body,
             sizeof(body),
             &used,
@@ -3658,13 +3366,13 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
             callback_url,
             token_fingerprint_json
         )) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            send_response_too_large(client_fd);
             return;
         }
         for (int event_index = 0; event_index < subscription->event_count && used < sizeof(body); event_index++) {
             char event_type[C300X_JSON_QUOTED_LEN(sizeof(subscription->events[0]))];
             json_string(subscription->events[event_index], event_type, sizeof(event_type));
-            if (!appendf(
+            if (!c300x_appendf(
                 body,
                 sizeof(body),
                 &used,
@@ -3672,11 +3380,11 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
                 event_index == 0 ? "" : ",",
                 event_type
             )) {
-                send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+                send_response_too_large(client_fd);
                 return;
             }
         }
-        if (!appendf(
+        if (!c300x_appendf(
             body,
             sizeof(body),
             &used,
@@ -3685,12 +3393,12 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
             last_event_type,
             last_delivered_at
         )) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            send_response_too_large(client_fd);
             return;
         }
     }
-    if (!appendf(body, sizeof(body), &used, "]}\n")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (!c300x_appendf(body, sizeof(body), &used, "]}\n")) {
+        send_response_too_large(client_fd);
         return;
     }
     send_json(client_fd, 200, "OK", body);
@@ -3701,11 +3409,9 @@ static void handle_recent_events_get(int client_fd, const struct agent_runtime *
     char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     size_t used = 0;
 
-    if (body == NULL) {
-        return;
-    }
-    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "{\"ok\":true,\"events\":[")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (body == NULL) { return; }
+    if (!c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "{\"ok\":true,\"events\":[")) {
+        send_response_too_large(client_fd);
         free(body);
         return;
     }
@@ -3719,7 +3425,7 @@ static void handle_recent_events_get(int client_fd, const struct agent_runtime *
         if (event == NULL) {
             continue;
         }
-        if (!appendf(
+        if (!c300x_appendf(
             body,
             C300X_LARGE_RESPONSE_SIZE,
             &used,
@@ -3727,13 +3433,13 @@ static void handle_recent_events_get(int client_fd, const struct agent_runtime *
             emitted++ == 0 ? "" : ",",
             event
         )) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            send_response_too_large(client_fd);
             free(body);
             return;
         }
     }
-    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (!c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+        send_response_too_large(client_fd);
         free(body);
         return;
     }
@@ -3780,12 +3486,9 @@ static void handle_subscriptions_post(
     if (matching_index >= 0) {
         snprintf(subscription.id, sizeof(subscription.id), "%s", runtime->subscriptions[matching_index].id);
         if (runtime->subscription_count == 1) {
-            if (runtime->subscriptions_loaded_deduplicated) {
-                save_subscriptions(config, runtime, config->subscription_store_path, "deduplicated");
-                runtime->subscriptions_loaded_deduplicated = 0;
-            }
             json_string(runtime->subscriptions[0].id, subscription_id_json, sizeof(subscription_id_json));
             snprintf(body, sizeof(body), "{\"ok\":true,\"subscription\":{\"id\":%s}}\n", subscription_id_json);
+            mark_home_assistant_callback_seen(runtime, time(NULL));
             if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed")) {
                 system_metrics_dispatch_now(config, runtime, time(NULL));
             }
@@ -3805,14 +3508,9 @@ static void handle_subscriptions_post(
 
     runtime->subscriptions[0] = subscription;
     runtime->subscription_count = 1;
-    save_subscriptions(
-        config,
-        runtime,
-        config->subscription_store_path,
-        matching_index >= 0 ? "deduplicated" : (had_existing ? "replaced" : "created")
-    );
     json_string(runtime->subscriptions[0].id, subscription_id_json, sizeof(subscription_id_json));
     snprintf(body, sizeof(body), "{\"ok\":true,\"subscription\":{\"id\":%s}}\n", subscription_id_json);
+    mark_home_assistant_callback_seen(runtime, time(NULL));
     if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed")) {
         system_metrics_dispatch_now(config, runtime, time(NULL));
     }
@@ -3828,10 +3526,11 @@ static void handle_display_bridge_status(
 {
     char body[384];
     char callback_hash[C300X_TOKEN_FINGERPRINT_LEN];
-    int active = display_bridge_active(config, runtime);
+    int configured = display_bridge_runtime_active(runtime);
+    int enabled = config->display_bridge_enabled && !display_bridge_runtime_disabled(runtime);
 
     display_bridge_callback_fingerprint(
-        active,
+        configured,
         display_bridge_webhook_url(config, runtime),
         display_bridge_shared_secret(config, runtime),
         callback_hash,
@@ -3841,11 +3540,11 @@ static void handle_display_bridge_status(
         body,
         sizeof(body),
         "{\"ok\":true,\"enabled\":%s,\"configured\":%s,\"display_bridge_configured\":%s,\"callback_hash\":\"%s\",\"source\":\"%s\"}\n",
-        active ? "true" : "false",
-        active ? "true" : "false",
-        active ? "true" : "false",
+        enabled ? "true" : "false",
+        configured ? "true" : "false",
+        configured ? "true" : "false",
         callback_hash,
-        (display_bridge_runtime_active(runtime) || display_bridge_runtime_disabled(runtime)) ? "runtime" : "config"
+        (configured || display_bridge_runtime_disabled(runtime)) ? "runtime" : "none"
     );
     send_json(client_fd, 200, "OK", body);
 }
@@ -3923,7 +3622,7 @@ static void handle_display_bridge_event_post(
 {
     char topic[64];
     char topic_json[C300X_JSON_QUOTED_LEN(sizeof(topic))];
-    char body[192];
+    char body[512];
 
     if (runtime == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"runtime_unavailable\"}\n");
@@ -3952,15 +3651,123 @@ static void handle_display_bridge_event_post(
     send_json(client_fd, 202, "Accepted", body);
 }
 
-static void handle_ui_media_closed(int client_fd, struct agent_runtime *runtime)
+static void handle_ui_media_closed(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
 {
-    if (runtime != NULL && runtime->video != NULL) {
-        c300x_video_note_event(runtime->video, "media.closed", 0);
-    }
     if (runtime != NULL) {
+        dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
         ui_event_notify(runtime, "media.closed");
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true,\"event\":\"media.closed\"}\n");
+}
+
+static void device_user_status_body(
+    const struct c300x_device_user_status *status,
+    char *body,
+    size_t body_len
+)
+{
+    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
+    char account_label_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_LABEL_LEN)];
+    char source_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_SOURCE_LEN)];
+
+    json_string(status->error, error_json, sizeof(error_json));
+    json_string(status->account_label, account_label_json, sizeof(account_label_json));
+    json_string(
+        status->media_identity_source,
+        source_json,
+        sizeof(source_json)
+    );
+    snprintf(
+        body,
+        body_len,
+        "{"
+        "\"ok\":true,"
+        "\"supported\":%s,"
+        "\"domain_present\":%s,"
+        "\"c300x_user_present\":%s,"
+        "\"app_user_present\":%s,"
+        "\"homeassistant_user_present\":%s,"
+        "\"accounts_homeassistant_present\":%s,"
+        "\"route_int_homeassistant_present\":%s,"
+        "\"route_ext_homeassistant_present\":%s,"
+        "\"route_conf_homeassistant_present\":%s,"
+        "\"route_conf_is_symlink\":%s,"
+        "\"writable_files_present\":%s,"
+        "\"media_identity_available\":%s,"
+        "\"routes_consistent\":%s,"
+        "\"account_label\":%s,"
+        "\"media_identity_source\":%s,"
+        "\"error\":%s"
+        "}\n",
+        status->supported ? "true" : "false",
+        status->domain_present ? "true" : "false",
+        status->c300x_user_present ? "true" : "false",
+        status->app_user_present ? "true" : "false",
+        status->homeassistant_user_present ? "true" : "false",
+        status->accounts_homeassistant_present ? "true" : "false",
+        status->route_int_homeassistant_present ? "true" : "false",
+        status->route_ext_homeassistant_present ? "true" : "false",
+        status->route_conf_homeassistant_present ? "true" : "false",
+        status->route_conf_is_symlink ? "true" : "false",
+        status->writable_files_present ? "true" : "false",
+        status->media_identity_available ? "true" : "false",
+        status->routes_consistent ? "true" : "false",
+        account_label_json,
+        source_json,
+        error_json
+    );
+}
+
+static void handle_device_user_get(int client_fd)
+{
+    struct c300x_device_user_status status;
+    char body[4096];
+
+    (void)c300x_device_user_read_status(&status);
+    device_user_status_body(&status, body, sizeof(body));
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_device_user_ensure(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct c300x_device_user_status status;
+    char error[C300X_DEVICE_USER_ERROR_LEN] = "";
+    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
+    char account_label[C300X_DEVICE_USER_LABEL_LEN] = "";
+    char body[4096];
+
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    if (!confirm_matches(request, "ensure_homeassistant_user")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    json_string_field(request->body, "account_label", account_label, sizeof(account_label));
+    if (!c300x_device_user_ensure_homeassistant(&status, account_label, error, sizeof(error))) {
+        json_string(error, error_json, sizeof(error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"device_user_update_failed\",\"detail\":%s}\n",
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
+        return;
+    }
+    record_agent_write(config, runtime, "device_user", "ensure_homeassistant_user");
+    device_user_status_body(&status, body, sizeof(body));
+    send_json(client_fd, 200, "OK", body);
 }
 
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime)
@@ -3999,7 +3806,6 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"last_write_at\":%ld,"
             "\"last_write_reason\":%s,"
             "\"last_write_class\":%s,"
-            "\"subscription_store_writes\":%lu,"
             "\"qml_patch_last_action\":%s,"
             "\"loop_iterations\":%lu,"
             "\"poll_wakeups\":%lu,"
@@ -4037,7 +3843,6 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             (long)runtime->last_write_at,
             last_write_reason,
             last_write_class,
-            runtime->subscription_store_writes,
             qml_patch_last_action,
             runtime->loop_iterations,
             runtime->poll_wakeups,
@@ -4072,7 +3877,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             flexisip_reference_state()
         ) >= (int)sizeof(body)
     ) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        send_response_too_large(client_fd);
         return;
     }
     send_json(client_fd, 200, "OK", body);
@@ -4125,7 +3930,8 @@ static void handle_setup_page(int client_fd)
         "<option value=\"GET /api/v1/smartphone-forwarding\">GET smartphone forwarding</option><option value=\"POST /api/v1/smartphone-forwarding\">POST smartphone forwarding</option>"
         "<option value=\"GET /api/v1/ringer\">GET ringer</option><option value=\"POST /api/v1/ringer\">POST ringer</option>"
         "<option value=\"GET /api/v1/video/doorbell\">GET doorbell video</option><option value=\"GET /api/v1/video/doorbell/status\">GET doorbell video status</option><option value=\"POST /api/v1/video/doorbell/actions/activate\">POST activate doorbell video</option>"
-        "<option value=\"POST /api/v1/video/doorbell/actions/stop\">POST stop doorbell video</option><option value=\"GET /api/v1/answering-machine\">GET answering machine</option>"
+        "<option value=\"POST /api/v1/video/doorbell/actions/stop\">POST stop doorbell video</option><option value=\"GET /api/v1/calls/home\">GET home call</option><option value=\"POST /api/v1/calls/home/actions/start\">POST start home call</option>"
+        "<option value=\"POST /api/v1/calls/home/actions/stop\">POST stop home call</option><option value=\"GET /api/v1/answering-machine\">GET answering machine</option>"
         "<option value=\"POST /api/v1/answering-machine\">POST answering machine</option><option value=\"GET /api/v1/answering-machine/messages\">GET video messages</option>",
         "<option value=\"GET /api/v1/answering-machine/messages/{id}/video\">GET video message media</option><option value=\"POST /api/v1/answering-machine/messages/actions/delete\">POST delete video message</option>"
         "<option value=\"GET /api/v1/memos\">GET memos</option><option value=\"GET /api/v1/memos/voice/{id}/audio\">GET voice memo audio</option><option value=\"POST /api/v1/memos/actions/delete\">POST delete memo</option>"
@@ -4133,11 +3939,13 @@ static void handle_setup_page(int client_fd)
         "<option value=\"POST /api/v1/maintenance/ssh\">POST SSH set</option><option value=\"POST /api/v1/maintenance/ssh/actions/start\">POST SSH start</option>"
         "<option value=\"POST /api/v1/maintenance/ssh/actions/stop\">POST SSH stop</option><option value=\"POST /api/v1/maintenance/reboot\">POST reboot</option>"
         "<option value=\"POST /api/v1/maintenance/agent/actions/remove\">POST remove agent</option>"
+        "<option value=\"POST /api/v1/maintenance/agent/actions/restart\">POST restart agent</option>"
         "<option value=\"POST /api/v1/maintenance/gui/actions/reload\">POST reload GUI</option><option value=\"GET /api/v1/maintenance/firewall\">GET firewall status</option>"
         "<option value=\"POST /api/v1/maintenance/firewall/actions/apply\">POST apply firewall</option><option value=\"POST /api/v1/maintenance/firewall/actions/restore\">POST restore firewall</option>"
         "<option value=\"GET /api/v1/maintenance/ipv6-firewall\">GET IPv6 firewall status</option><option value=\"POST /api/v1/maintenance/ipv6-firewall/actions/apply\">POST apply IPv6 firewall</option><option value=\"POST /api/v1/maintenance/ipv6-firewall/actions/restore\">POST restore IPv6 firewall</option>"
         "<option value=\"GET /api/v1/maintenance/qml-patch\">GET QML patch status</option>"
         "<option value=\"POST /api/v1/maintenance/qml-patch/actions/apply-core\">POST apply core media QML hook</option>"
+        "<option value=\"POST /api/v1/maintenance/qml-patch/actions/restore-core\">POST restore core media QML hook</option>"
         "<option value=\"POST /api/v1/maintenance/qml-patch/actions/apply\">POST apply QML patch</option><option value=\"POST /api/v1/maintenance/qml-patch/actions/restore\">POST restore QML patch</option>",
         "</select></div><div><label>Method</label><select id=\"m\"><option>GET</option><option>POST</option><option>DELETE</option></select></div>"
         "<div><label>Path</label><input id=\"p\" value=\"/api/v1/health\"></div></div><label>JSON body</label><textarea id=\"b\" rows=\"4\"></textarea>"
@@ -4386,7 +4194,7 @@ static void handle_auth_config_post(
     } while (0)
 
     if (!config_admin_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     baseline = calloc(1, sizeof(*baseline));
@@ -4570,7 +4378,7 @@ static void handle_auth_config_post(
         int changed = 0;
         if (!c300x_save_config_if_changed(updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-            char body[384];
+            char body[2048];
             json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
@@ -4600,7 +4408,7 @@ static void handle_mqtt_status(
     const struct agent_runtime *runtime
 )
 {
-    enum { MQTT_STATUS_BODY_LEN = 8192 };
+    enum { MQTT_STATUS_BODY_LEN = 16384 };
     struct mqtt_status_workspace {
         char client_id[C300X_JSON_QUOTED_LEN(C300X_MAX_TOKEN_LEN)];
         char command_topic[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
@@ -4724,6 +4532,7 @@ static int mqtt_runtime_config_is_valid(const struct c300x_config *config, const
 static void firewall_remount_rw_if_needed(const char *path);
 static void firewall_remount_ro_if_needed(const char *path);
 static int run_detached_command(const char *program, const char *argument, int delay_ms);
+static void close_extra_fds_for_exec(void);
 
 static int process_cmdline_contains(const char *needle)
 {
@@ -4919,7 +4728,7 @@ static int legacy_mqtt_copy_nonempty_value(char *target, size_t target_len, cons
     if (strlen(buffer) >= target_len) {
         return 0;
     }
-    snprintf(target, target_len, "%s", buffer);
+    c300x_copy_string(target, target_len, buffer);
     if (imported != NULL) {
         *imported = 1;
     }
@@ -5190,7 +4999,7 @@ static void handle_legacy_mqtt_post(
     char error[C300X_MAX_ERROR_LEN];
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!json_bool_field(request->body, "enabled", &enabled)) {
@@ -5211,7 +5020,7 @@ static void handle_legacy_mqtt_post(
         updated->mqtt_enabled = 0;
         if (!c300x_save_config_if_changed(updated, error, sizeof(error), &native_config_changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-            char body[256];
+            char body[2048];
             json_string(error, error_json, sizeof(error_json));
             snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"config_save_failed\",\"detail\":%s}\n", error_json);
             send_json(client_fd, 500, "Internal Server Error", body);
@@ -5268,7 +5077,7 @@ static void handle_mqtt_migrate_legacy_post(
     char error[C300X_MAX_ERROR_LEN];
     const char *validation_error = NULL;
     char validation_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-    char body[1024];
+    char body[2048];
     int legacy_was_installed;
     int legacy_was_enabled;
     int legacy_was_running;
@@ -5278,7 +5087,7 @@ static void handle_mqtt_migrate_legacy_post(
     int config_changed = 0;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!confirm_matches(request, "migrate_legacy_mqtt")) {
@@ -5454,7 +5263,7 @@ static void handle_mqtt_post(
     } while (0)
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     updated = calloc(1, sizeof(*updated));
@@ -5548,7 +5357,6 @@ static void handle_mqtt_post(
 static void handle_subscription_delete(
     int client_fd,
     struct agent_runtime *runtime,
-    const struct c300x_config *config,
     const char *id
 )
 {
@@ -5560,11 +5368,158 @@ static void handle_subscription_delete(
             runtime->subscriptions[move - 1] = runtime->subscriptions[move];
         }
         runtime->subscription_count--;
-        save_subscriptions(config, runtime, config->subscription_store_path, "deleted");
         send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
         return;
     }
     send_json(client_fd, 404, "Not Found", "{\"ok\":false}\n");
+}
+
+static int doorbell_event_needs_video_status(const char *event_type)
+{
+    return event_type != NULL && (
+        strcmp(event_type, "doorbell.pressed") == 0
+        || strcmp(event_type, "doorbell.view_requested") == 0
+        || strcmp(event_type, "doorbell.media.closed") == 0
+    );
+}
+
+static const char *doorbell_state_for_event(const char *event_type)
+{
+    if (event_type == NULL) {
+        return "idle";
+    }
+    if (strcmp(event_type, "doorbell.pressed") == 0) {
+        return "ringing";
+    }
+    if (strcmp(event_type, "doorbell.view_requested") == 0) {
+        return "view_requested";
+    }
+    return "idle";
+}
+
+static int build_doorbell_event_video_json(
+    const struct c300x_config *config,
+    struct c300x_video *video,
+    char *out,
+    size_t out_len
+)
+{
+    struct c300x_video_status status;
+    char stream_path[C300X_MAX_PATH_JSON_LEN];
+    int available;
+    int window_available;
+    int external_media_active;
+    int written;
+
+    if (config == NULL || video == NULL || out == NULL) {
+        return 0;
+    }
+    c300x_video_status(video, &status);
+    available = (
+        !status.home_call_running
+        && !status.home_call_active
+        && (
+            status.ring_call_active
+            || status.ring_media_active
+            || status.bridge_media_active
+            || status.call_active
+        )
+    );
+    window_available = config->video_enabled && available;
+    external_media_active = status.external_media_active && !available;
+    json_escape_string(config->video_rtsp_video_path, stream_path, sizeof(stream_path));
+    written = snprintf(
+        out,
+        out_len,
+        "{"
+        "\"available\":%s,"
+        "\"window_available\":%s,"
+        "\"stream_path\":\"%s\","
+        "\"external_media_active\":%s"
+        "}",
+        (config->video_enabled && available && !external_media_active) ? "true" : "false",
+        window_available ? "true" : "false",
+        stream_path,
+        external_media_active ? "true" : "false"
+    );
+    return written >= 0 && (size_t)written < out_len;
+}
+
+static int build_doorbell_event_state_json(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *event_type,
+    char *out,
+    size_t out_len
+)
+{
+    char doorbell_state_json[32];
+    char video_json[2048];
+    int has_video;
+    int written;
+
+    if (out == NULL || out_len == 0) {
+        return 0;
+    }
+    json_string(
+        doorbell_state_for_event(event_type),
+        doorbell_state_json,
+        sizeof(doorbell_state_json)
+    );
+    has_video = runtime != NULL
+        && runtime->video != NULL
+        && build_doorbell_event_video_json(config, runtime->video, video_json, sizeof(video_json));
+    written = has_video
+        ? snprintf(out, out_len, "\"doorbell\":%s,\"video\":%s", doorbell_state_json, video_json)
+        : snprintf(out, out_len, "\"doorbell\":%s", doorbell_state_json);
+    return written >= 0 && (size_t)written < out_len;
+}
+
+static void build_event_data_json(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const char *event_type,
+    const char *data_json,
+    char *out,
+    size_t out_len
+)
+{
+    char doorbell_json[2304];
+    const char *source = data_json != NULL ? data_json : "{}";
+    size_t source_len;
+    size_t used = 0;
+
+    if (
+        !doorbell_event_needs_video_status(event_type)
+        || !build_doorbell_event_state_json(
+            config,
+            runtime,
+            event_type,
+            doorbell_json,
+            sizeof(doorbell_json)
+        )
+    ) {
+        c300x_copy_string(out, out_len, source);
+        return;
+    }
+    source_len = strlen(source);
+    if (source_len < 2 || source[0] != '{' || source[source_len - 1] != '}') {
+        c300x_copy_string(out, out_len, source);
+        return;
+    }
+    if (!c300x_appendf(
+        out,
+        out_len,
+        &used,
+        "%.*s%s%s}",
+        (int)(source_len - 1),
+        source,
+        source_len == 2 ? "" : ",",
+        doorbell_json
+    )) {
+        c300x_copy_string(out, out_len, source);
+        return;
+    }
 }
 
 static void dispatch_event_internal(
@@ -5577,10 +5532,15 @@ static void dispatch_event_internal(
 )
 {
     char occurred_at[40];
-    char event_json[2048];
+    char merged_json[4096];
+    char event_json[8192];
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
     int written;
 
+    if (runtime->video != NULL) {
+        c300x_video_note_event(runtime->video, event_type, ttl_seconds);
+    }
+    build_event_data_json(config, runtime, event_type, data_json, merged_json, sizeof(merged_json));
     utc_now(occurred_at, sizeof(occurred_at));
     json_string(event_type, event_type_json, sizeof(event_type_json));
     written = snprintf(
@@ -5593,15 +5553,12 @@ static void dispatch_event_internal(
         occurred_at,
         ttl_seconds,
         snapshot ? "true" : "false",
-        data_json
+        merged_json
     );
     if (written < 0 || (size_t)written >= sizeof(event_json)) {
         return;
     }
-    if (runtime->video != NULL) {
-        c300x_video_note_event(runtime->video, event_type, ttl_seconds);
-    }
-    c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, data_json);
+    c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, merged_json);
     if (!has_matching_subscription(runtime, event_type)) {
         return;
     }
@@ -5656,6 +5613,21 @@ static void dispatch_event_snapshot(
 )
 {
     dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 1);
+}
+
+static void dispatch_video_event(
+    void *user_data,
+    const char *event_type,
+    const char *data_json,
+    int ttl_seconds
+)
+{
+    struct agent_runtime *runtime = user_data;
+
+    if (runtime == NULL || runtime->config == NULL) {
+        return;
+    }
+    dispatch_event(runtime->config, runtime, event_type, data_json, ttl_seconds);
 }
 
 static int has_matching_subscription(
@@ -6020,7 +5992,140 @@ static int parse_openwebnet_address_event(
     return address_is_valid(address);
 }
 
-static int map_openwebnet_event(const char *msg, char *type, size_t type_len, char *data, size_t data_len)
+static const char *smartphone_mode_from_code(int code)
+{
+    if (code == 0) {
+        return "enabled";
+    }
+    if (code == 1) {
+        return "in-house-only";
+    }
+    if (code == 2) {
+        return "blocked";
+    }
+    return NULL;
+}
+
+static int smartphone_code_from_reply(const char *reply, int *code)
+{
+    int parsed = -1;
+
+    if (reply == NULL || code == NULL) {
+        return 0;
+    }
+    if (
+        sscanf(reply, "*#8**37*%d##", &parsed) != 1
+        && sscanf(reply, "*#8**#37*%d##", &parsed) != 1
+    ) {
+        return 0;
+    }
+    if (smartphone_mode_from_code(parsed) == NULL) {
+        return 0;
+    }
+    *code = parsed;
+    return 1;
+}
+
+static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
+{
+    if (runtime == NULL || smartphone_mode_from_code(code) == NULL) {
+        return;
+    }
+    runtime->smartphone_forwarding_mode_known = 1;
+    runtime->smartphone_forwarding_mode_code = code;
+}
+
+static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int code)
+{
+    if (runtime == NULL) {
+        return smartphone_mode_from_code(code) != NULL;
+    }
+    if (!runtime->smartphone_forwarding_mode_known) {
+        remember_smartphone_forwarding_mode(runtime, code);
+        return 0;
+    }
+    if (runtime->smartphone_forwarding_mode_code == code) {
+        return 0;
+    }
+    remember_smartphone_forwarding_mode(runtime, code);
+    return 1;
+}
+
+static void remember_ringer_muted(struct agent_runtime *runtime, int muted)
+{
+    if (runtime == NULL) {
+        return;
+    }
+    runtime->ringer_muted_known = 1;
+    runtime->ringer_muted = muted ? 1 : 0;
+}
+
+static int note_ringer_muted_changed(struct agent_runtime *runtime, int muted)
+{
+    muted = muted ? 1 : 0;
+    if (runtime == NULL) {
+        return 1;
+    }
+    if (!runtime->ringer_muted_known) {
+        remember_ringer_muted(runtime, muted);
+        return 0;
+    }
+    if (runtime->ringer_muted == muted) {
+        return 0;
+    }
+    remember_ringer_muted(runtime, muted);
+    return 1;
+}
+
+static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime);
+
+static void refresh_smartphone_forwarding_mode(
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    char reply[C300X_MAX_FRAME_LEN];
+    char error[C300X_MAX_ERROR_LEN];
+    int code;
+
+    if (config == NULL || runtime == NULL) {
+        return;
+    }
+    if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
+        return;
+    }
+    if (smartphone_code_from_reply(reply, &code)) {
+        remember_smartphone_forwarding_mode(runtime, code);
+        sync_ring_receiver_for_forwarding(runtime);
+    }
+}
+
+static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime *runtime)
+{
+    return runtime != NULL
+        && runtime->smartphone_forwarding_mode_known
+        && runtime->smartphone_forwarding_mode_code == 0;
+}
+
+static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)
+{
+    if (runtime == NULL || runtime->video == NULL) {
+        return;
+    }
+    c300x_video_set_ring_receiver_enabled(
+        runtime->video,
+        smartphone_forwarding_allows_ring_receiver(runtime)
+    );
+}
+
+static int map_openwebnet_event(
+    struct agent_runtime *runtime,
+    const char *msg,
+    char *type,
+    size_t type_len,
+    char *data,
+    size_t data_len
+)
 {
     int code;
     char address[C300X_MAX_ADDRESS_LEN];
@@ -6033,43 +6138,70 @@ static int map_openwebnet_event(const char *msg, char *type, size_t type_len, ch
     json_string(msg, raw_json, sizeof(raw_json));
 
     if (sscanf(msg, "*#8**33*%d##", &code) == 1 || sscanf(msg, "*#8**#33*%d##", &code) == 1) {
-        snprintf(type, type_len, "%s", code == 0 ? "ringer.muted" : "ringer.unmuted");
-        snprintf(data, data_len, "{\"raw\":%s,\"muted\":%s}", raw_json, code == 0 ? "true" : "false");
-        return 1;
+        size_t used = 0;
+        int muted;
+        if (code != 0 && code != 1) {
+            return 0;
+        }
+        muted = code == 0;
+        if (!note_ringer_muted_changed(runtime, muted)) {
+            return 0;
+        }
+        c300x_copy_string(type, type_len, muted ? "ringer.muted" : "ringer.unmuted");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"muted\":%s}", raw_json, muted ? "true" : "false");
     }
-    if (sscanf(msg, "*#8**37*%d##", &code) == 1 || sscanf(msg, "*#8**#37*%d##", &code) == 1) {
-        const char *mode = code == 0 ? "enabled" : (code == 1 ? "in-house-only" : "blocked");
-        snprintf(type, type_len, "smartphone_forwarding.changed");
-        snprintf(data, data_len, "{\"raw\":%s,\"mode\":\"%s\"}", raw_json, mode);
-        return 1;
+    if (smartphone_code_from_reply(msg, &code)) {
+        const char *mode = smartphone_mode_from_code(code);
+        size_t used = 0;
+        int changed = note_smartphone_forwarding_changed(runtime, code);
+        sync_ring_receiver_for_forwarding(runtime);
+        if (!changed) {
+            return 0;
+        }
+        c300x_copy_string(type, type_len, "smartphone_forwarding.changed");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"mode\":\"%s\"}", raw_json, mode);
     }
     if (parse_openwebnet_address_event(msg, "*8*19*", address, sizeof(address))) {
+        size_t used = 0;
         json_string(address, address_json, sizeof(address_json));
-        snprintf(type, type_len, "door_unlock.started");
-        snprintf(data, data_len, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
-        return 1;
+        c300x_copy_string(type, type_len, "door_unlock.started");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (parse_openwebnet_address_event(msg, "*8*20*", address, sizeof(address))) {
+        size_t used = 0;
         json_string(address, address_json, sizeof(address_json));
-        snprintf(type, type_len, "door_unlock.ended");
-        snprintf(data, data_len, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
-        return 1;
+        c300x_copy_string(type, type_len, "door_unlock.ended");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (parse_openwebnet_address_event(msg, "*8*21*", address, sizeof(address))) {
+        size_t used = 0;
         json_string(address, address_json, sizeof(address_json));
-        snprintf(type, type_len, "stair_light.activated");
-        snprintf(data, data_len, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
-        return 1;
+        c300x_copy_string(type, type_len, "stair_light.activated");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (strncmp(msg, "*8*1#5#4#", strlen("*8*1#5#4#")) == 0) {
-        snprintf(type, type_len, "doorbell.view_requested");
-        snprintf(data, data_len, "{\"raw\":%s}", raw_json);
-        return 1;
+        size_t used = 0;
+        c300x_copy_string(type, type_len, "doorbell.view_requested");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
+    }
+    if (strncmp(msg, "*8*2#1#4*", strlen("*8*2#1#4*")) == 0) {
+        size_t used = 0;
+        c300x_copy_string(type, type_len, "doorbell.view_requested");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
+    }
+    if (
+        strncmp(msg, "*8*3#1#4*", strlen("*8*3#1#4*")) == 0
+        || strncmp(msg, "*8*3#5#4*", strlen("*8*3#5#4*")) == 0
+        || strcmp(msg, "*7*0*##") == 0
+    ) {
+        size_t used = 0;
+        c300x_copy_string(type, type_len, "doorbell.media.closed");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
     }
     if (strncmp(msg, "*8*1#1#4#", strlen("*8*1#1#4#")) == 0) {
-        snprintf(type, type_len, "doorbell.pressed");
-        snprintf(data, data_len, "{\"raw\":%s}", raw_json);
-        return 1;
+        size_t used = 0;
+        c300x_copy_string(type, type_len, "doorbell.pressed");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
     }
     return 0;
 }
@@ -6124,7 +6256,7 @@ static void handle_udp_event(
     }
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
-    if (map_openwebnet_event(msg, type, sizeof(type), data, sizeof(data))) {
+    if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
         dispatch_event(config, runtime, type, data, 30);
     }
 }
@@ -6531,7 +6663,7 @@ static void api_capabilities(
     struct agent_runtime *runtime
 )
 {
-    char body[8192];
+    char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     char video_path[C300X_MAX_PATH_JSON_LEN];
     char audio_path[C300X_MAX_PATH_JSON_LEN];
     char recorder_path[C300X_MAX_PATH_JSON_LEN];
@@ -6548,6 +6680,11 @@ static void api_capabilities(
     char bundle_api_version[16];
     int maintenance_supported = maintenance_auth_available(config);
     int activations_count = activation_total_count(config, runtime);
+    int written;
+
+    if (body == NULL) {
+        return;
+    }
 
     c300x_mdns_device_id(device_id, sizeof(device_id));
     (void)read_agent_bundle_metadata(
@@ -6569,9 +6706,9 @@ static void api_capabilities(
     json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
     json_escape_string(config->lock_name, lock_name, sizeof(lock_name));
     json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
-    snprintf(
+    written = snprintf(
         body,
-        sizeof(body),
+        C300X_LARGE_RESPONSE_SIZE,
         "{"
         "\"api_version\":\"1\","
         "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s},"
@@ -6579,6 +6716,7 @@ static void api_capabilities(
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
+        "\"home_call\":{\"supported\":%s,\"audio_codec\":\"%s\",\"rtp_proxy_supported\":true,\"max_duration_seconds\":%d},"
         "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
         "\"activations\":{\"supported\":%s,\"count\":%d},"
@@ -6590,8 +6728,9 @@ static void api_capabilities(
         "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"memory\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
         "\"mqtt\":{\"supported\":true,\"enabled\":%s,\"configured\":%s},"
         "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
+        "\"device_user\":{\"supported\":true},"
         "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
-        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_restore\":%s},"
+        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s},"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
         "}"
         "}\n",
@@ -6608,6 +6747,9 @@ static void api_capabilities(
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_RTP_PAYLOAD_TYPE,
+        config->video_enabled ? "true" : "false",
+        C300X_TALKBACK_CODEC,
+        C300X_HOME_CALL_MAX_DURATION_SECONDS,
         stair_address,
         lock_id,
         lock_id,
@@ -6646,6 +6788,9 @@ static void api_capabilities(
         maintenance_supported ? "true" : "false",
         maintenance_supported ? "true" : "false",
         maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
         (maintenance_supported && config->maintenance_gui_reload_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
@@ -6656,9 +6801,17 @@ static void api_capabilities(
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
+        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
+        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
+    if (written < 0 || written >= C300X_LARGE_RESPONSE_SIZE) {
+        send_response_too_large(client_fd);
+        free(body);
+        return;
+    }
     send_json(client_fd, 200, "OK", body);
+    free(body);
 }
 
 static void api_state(
@@ -6669,16 +6822,32 @@ static void api_state(
 {
     char body[2048];
     char video_path_escaped[C300X_MAX_PATH_JSON_LEN];
+    char smartphone_forwarding_json[32];
+    char ringer_muted_json[8];
     struct c300x_video_status video_status;
     int video_available = 0;
+    const char *smartphone_forwarding = NULL;
     const char *video_path = NULL;
 
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
         video_available = video_status.enabled;
     }
+    if (runtime != NULL && runtime->smartphone_forwarding_mode_known) {
+        smartphone_forwarding = smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
+    }
     if (config->video_enabled) {
         video_path = config->video_rtsp_video_path;
+    }
+    if (smartphone_forwarding != NULL) {
+        snprintf(smartphone_forwarding_json, sizeof(smartphone_forwarding_json), "\"%s\"", smartphone_forwarding);
+    } else {
+        snprintf(smartphone_forwarding_json, sizeof(smartphone_forwarding_json), "null");
+    }
+    if (runtime != NULL && runtime->ringer_muted_known) {
+        snprintf(ringer_muted_json, sizeof(ringer_muted_json), "%s", runtime->ringer_muted ? "true" : "false");
+    } else {
+        snprintf(ringer_muted_json, sizeof(ringer_muted_json), "null");
     }
 
     if (video_path != NULL) {
@@ -6691,13 +6860,15 @@ static void api_state(
             "\"doorbell\":\"idle\","
             "\"video_available\":%s,"
             "\"video_stream_path\":\"%s\","
-            "\"smartphone_forwarding\":null,"
-            "\"ringer_muted\":null,"
+            "\"smartphone_forwarding\":%s,"
+            "\"ringer_muted\":%s,"
             "\"answering_machine_enabled\":null"
             "}"
             "}\n",
             video_available ? "true" : "false",
-            video_path_escaped
+            video_path_escaped,
+            smartphone_forwarding_json,
+            ringer_muted_json
         );
     } else {
         snprintf(
@@ -6708,11 +6879,13 @@ static void api_state(
             "\"doorbell\":\"idle\","
             "\"video_available\":false,"
             "\"video_stream_path\":null,"
-            "\"smartphone_forwarding\":null,"
-            "\"ringer_muted\":null,"
+            "\"smartphone_forwarding\":%s,"
+            "\"ringer_muted\":%s,"
             "\"answering_machine_enabled\":null"
             "}"
-            "}\n"
+            "}\n",
+            smartphone_forwarding_json,
+            ringer_muted_json
         );
     }
     send_json(client_fd, 200, "OK", body);
@@ -6739,13 +6912,22 @@ static void handle_doorbell_video_get(
     int bridge_open_fds = 0;
     int bridge_active_threads = 0;
     int external_media_active = 0;
-    time_t external_active_until = 0;
-    const char *external_active_until_json = "null";
+    int ring_receiver_running = 0;
+    int ring_registered = 0;
+    int ring_call_active = 0;
+    int ring_media_active = 0;
+    int ring_audio_active = 0;
+    int home_call_running = 0;
+    int home_call_active = 0;
+    int home_call_answered = 0;
+    int home_call_rtp_proxy = 0;
+    int home_call_target_audio_port = 0;
     char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
     char external_owner_json[C300X_JSON_QUOTED_LEN(32)];
     char last_block_reason_json[C300X_JSON_QUOTED_LEN(64)];
-    char external_active_until_buffer[32];
     unsigned long long rtp_packets = 0;
+    unsigned long long home_call_rtp_packets = 0;
+    unsigned long long home_call_rtcp_packets = 0;
     unsigned long long bt_media_start_attempts = 0;
     unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
@@ -6757,6 +6939,7 @@ static void handle_doorbell_video_get(
     char last_rtp_at_quoted[96];
     char last_media_started_at_quoted[96];
     char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
+    int window_available = 0;
 
     if (body == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
@@ -6779,17 +6962,24 @@ static void handle_doorbell_video_get(
         bridge_open_fds = video_status.bridge_open_fds;
         bridge_active_threads = video_status.bridge_active_threads;
         external_media_active = video_status.external_media_active;
-        external_active_until = video_status.external_active_until;
+        ring_receiver_running = video_status.ring_receiver_running;
+        ring_registered = video_status.ring_registered;
+        ring_call_active = video_status.ring_call_active;
+        ring_media_active = video_status.ring_media_active;
+        ring_audio_active = video_status.ring_audio_active;
+        home_call_running = video_status.home_call_running;
+        home_call_active = video_status.home_call_active;
+        home_call_answered = video_status.home_call_answered;
+        home_call_rtp_proxy = video_status.home_call_rtp_proxy;
+        home_call_target_audio_port = video_status.home_call_target_audio_port;
         bt_media_start_attempts = video_status.bt_media_start_attempts;
         bt_media_stop_attempts = video_status.bt_media_stop_attempts;
-        if (external_active_until > 0) {
-            snprintf(external_active_until_buffer, sizeof(external_active_until_buffer), "%ld", (long)external_active_until);
-            external_active_until_json = external_active_until_buffer;
-        }
         json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
         json_string(video_status.external_owner, external_owner_json, sizeof(external_owner_json));
         json_string(video_status.last_block_reason, last_block_reason_json, sizeof(last_block_reason_json));
         rtp_packets = video_status.rtp_packets;
+        home_call_rtp_packets = video_status.home_call_rtp_packets;
+        home_call_rtcp_packets = video_status.home_call_rtcp_packets;
         last_rtp_at_json = json_string_or_null(
             video_status.last_rtp_at,
             last_rtp_at_quoted,
@@ -6806,6 +6996,15 @@ static void handle_doorbell_video_get(
             sizeof(last_error_quoted)
         );
     }
+    window_available = (
+        ring_call_active
+        || ring_media_active
+        || (
+            !home_call_running
+            && !home_call_active
+            && (bridge_media_active || call_active)
+        )
+    );
     json_escape_string(config->video_rtsp_video_path, stream_path, sizeof(stream_path));
     json_escape_string(config->video_rtsp_path, audio_stream_path, sizeof(audio_stream_path));
     json_escape_string(config->video_rtsp_recorder_path, recorder_stream_path, sizeof(recorder_stream_path));
@@ -6815,8 +7014,7 @@ static void handle_doorbell_video_get(
         "{"
         "\"ok\":true,"
         "\"available\":%s,"
-        "\"window_available\":false,"
-        "\"active_until\":null,"
+        "\"window_available\":%s,"
         "\"stream_path\":\"%s\","
         "\"audio_stream_path\":\"%s\","
         "\"recorder_stream_path\":\"%s\","
@@ -6827,8 +7025,19 @@ static void handle_doorbell_video_get(
         "\"media_active\":%s,"
         "\"media_owner\":%s,"
         "\"external_media_active\":%s,"
+        "\"ring_receiver_running\":%s,"
+        "\"ring_registered\":%s,"
+        "\"ring_call_active\":%s,"
+        "\"ring_media_active\":%s,"
+        "\"ring_audio_active\":%s,"
+        "\"home_call_running\":%s,"
+        "\"home_call_active\":%s,"
+        "\"home_call_answered\":%s,"
+        "\"home_call_rtp_proxy\":%s,"
+        "\"home_call_target_audio_port\":%d,"
+        "\"home_call_rtp_packets\":%llu,"
+        "\"home_call_rtcp_packets\":%llu,"
         "\"external_owner\":%s,"
-        "\"external_active_until\":%s,"
         "\"last_block_reason\":%s,"
         "\"stop_in_progress\":%s,"
         "\"open_fds\":%d,"
@@ -6857,6 +7066,7 @@ static void handle_doorbell_video_get(
         "}"
         "}\n",
         config->video_enabled ? "true" : "false",
+        window_available ? "true" : "false",
         stream_path,
         audio_stream_path,
         recorder_stream_path,
@@ -6866,8 +7076,19 @@ static void handle_doorbell_video_get(
         bridge_media_active ? "true" : "false",
         media_owner_json,
         external_media_active ? "true" : "false",
+        ring_receiver_running ? "true" : "false",
+        ring_registered ? "true" : "false",
+        ring_call_active ? "true" : "false",
+        ring_media_active ? "true" : "false",
+        ring_audio_active ? "true" : "false",
+        home_call_running ? "true" : "false",
+        home_call_active ? "true" : "false",
+        home_call_answered ? "true" : "false",
+        home_call_rtp_proxy ? "true" : "false",
+        home_call_target_audio_port,
+        home_call_rtp_packets,
+        home_call_rtcp_packets,
         external_owner_json,
-        external_active_until_json,
         last_block_reason_json,
         bridge_stop_in_progress ? "true" : "false",
         bridge_open_fds,
@@ -6910,6 +7131,21 @@ static void handle_doorbell_video_activate(
         return;
     }
     (void)json_bool_field(request->body, "audio", &audio);
+    {
+        struct c300x_video_status status;
+
+        c300x_video_status(runtime->video, &status);
+        if (status.ring_call_active || status.ring_media_active) {
+            snprintf(
+                body,
+                sizeof(body),
+                "{\"ok\":true,\"audio\":%s,\"ring_active\":true,\"media_owner\":\"ring\"}\n",
+                audio ? "true" : "false"
+            );
+            send_json(client_fd, 200, "OK", body);
+            return;
+        }
+    }
     if (!c300x_video_activate(runtime->video, audio)) {
         struct c300x_video_status status;
         int http_status;
@@ -6943,6 +7179,124 @@ static void handle_doorbell_video_stop(int client_fd, struct agent_runtime *runt
 {
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_stop(runtime->video);
+    }
+    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+}
+
+static void handle_home_call_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+) {
+    char body[2048];
+    struct c300x_video_status video_status;
+    int running = 0;
+    int active = 0;
+    int answered = 0;
+    int rtp_proxy = 0;
+    int target_audio_port = 0;
+    unsigned long long rtp_packets = 0;
+    unsigned long long rtcp_packets = 0;
+    const char *last_error_json = "null";
+    char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
+
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_status(runtime->video, &video_status);
+        running = video_status.home_call_running;
+        active = video_status.home_call_active;
+        answered = video_status.home_call_answered;
+        rtp_proxy = video_status.home_call_rtp_proxy;
+        target_audio_port = video_status.home_call_target_audio_port;
+        rtp_packets = video_status.home_call_rtp_packets;
+        rtcp_packets = video_status.home_call_rtcp_packets;
+        last_error_json = json_string_or_null(
+            video_status.last_error,
+            last_error_quoted,
+            sizeof(last_error_quoted)
+        );
+    }
+    snprintf(
+        body,
+        sizeof(body),
+        "{"
+        "\"ok\":true,"
+        "\"available\":%s,"
+        "\"running\":%s,"
+        "\"active\":%s,"
+        "\"answered\":%s,"
+        "\"rtp_proxy\":%s,"
+        "\"target_audio_port\":%d,"
+        "\"rtp_packets\":%llu,"
+        "\"rtcp_packets\":%llu,"
+        "\"max_duration_seconds\":%d,"
+        "\"last_error\":%s"
+        "}\n",
+        config->video_enabled ? "true" : "false",
+        running ? "true" : "false",
+        active ? "true" : "false",
+        answered ? "true" : "false",
+        rtp_proxy ? "true" : "false",
+        target_audio_port,
+        rtp_packets,
+        rtcp_packets,
+        C300X_HOME_CALL_MAX_DURATION_SECONDS,
+        last_error_json
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_home_call_start(
+    int client_fd,
+    struct agent_runtime *runtime,
+    const struct request *request
+) {
+    int duration_seconds = 0;
+    char body[2048];
+    char last_error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+
+    if (request != NULL) {
+        (void)json_int_field(request->body, "duration_seconds", &duration_seconds);
+    }
+    if (duration_seconds < 0 || duration_seconds > C300X_HOME_CALL_MAX_DURATION_SECONDS) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_duration_seconds\"}\n");
+        return;
+    }
+    if (runtime == NULL || runtime->video == NULL) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
+        return;
+    }
+    if (!c300x_video_home_call_start(runtime->video, duration_seconds)) {
+        struct c300x_video_status status;
+        int http_status;
+        const char *http_text;
+        const char *error;
+
+        c300x_video_status(runtime->video, &status);
+        error = status.last_error[0] != '\0' ? status.last_error : "unknown";
+        http_status = (
+            strcmp(error, "external_session_active") == 0
+            || strcmp(error, "home_call_active") == 0
+            || strcmp(error, "media_session_active") == 0
+        ) ? 409 : 503;
+        http_text = http_status == 409 ? "Conflict" : "Service Unavailable";
+        json_string(error, last_error_json, sizeof(last_error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"home_call_start_failed\",\"last_error\":%s}\n",
+            last_error_json
+        );
+        send_json(client_fd, http_status, http_text, body);
+        return;
+    }
+    snprintf(body, sizeof(body), "{\"ok\":true,\"duration_seconds\":%d}\n", duration_seconds);
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_home_call_stop(int client_fd, struct agent_runtime *runtime)
+{
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_home_call_stop(runtime->video);
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
 }
@@ -7186,7 +7540,11 @@ static int read_system_metrics_sample(
     if (temperature_source != NULL) {
         sample->has_temperature = 1;
         sample->temperature_c = temperature;
-        snprintf(sample->temperature_source, sizeof(sample->temperature_source), "%s", temperature_source);
+        c300x_copy_string(
+            sample->temperature_source,
+            sizeof(sample->temperature_source),
+            temperature_source
+        );
     }
     return 1;
 }
@@ -7199,10 +7557,10 @@ static int system_metrics_json(
 )
 {
     const char *prefix = include_ok ? "{\"ok\":true," : "{";
-    char cpu_usage_json[32];
-    char memory_json[192];
-    char temperature_json[768];
-    int written;
+    char cpu_usage_json[512];
+    char memory_json[1024];
+    char temperature_json[2048];
+    size_t used = 0;
 
     if (sample->has_cpu_usage) {
         snprintf(cpu_usage_json, sizeof(cpu_usage_json), "%.1f", sample->cpu_usage_percent);
@@ -7241,9 +7599,10 @@ static int system_metrics_json(
             "\"temperature_c\":null,\"temperature_source\":null"
         );
     }
-    written = snprintf(
+    return c300x_appendf(
         body,
         body_len,
+        &used,
         "%s\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,%s,%s}",
         prefix,
         sample->cpu_count,
@@ -7257,20 +7616,19 @@ static int system_metrics_json(
         memory_json,
         temperature_json
     );
-    return written > 0 && (size_t)written < body_len;
 }
 
 static void handle_system_metrics(int client_fd, const struct agent_runtime *runtime)
 {
     struct system_metrics_sample sample;
-    char body[2048];
+    char body[4096];
 
     read_system_metrics_sample(
         &sample,
         runtime != NULL && runtime->system_metrics_initialized ? &runtime->system_metrics_last : NULL
     );
     if (!system_metrics_json(&sample, 1, body, sizeof(body))) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        send_response_too_large(client_fd);
         return;
     }
     strncat(body, "\n", sizeof(body) - strlen(body) - 1);
@@ -7279,14 +7637,10 @@ static void handle_system_metrics(int client_fd, const struct agent_runtime *run
 
 static const char *smartphone_mode_from_reply(const char *reply)
 {
-    if (strcmp(reply, "*#8**37*0##") == 0 || strcmp(reply, "*#8**#37*0##") == 0) {
-        return "enabled";
-    }
-    if (strcmp(reply, "*#8**37*1##") == 0 || strcmp(reply, "*#8**#37*1##") == 0) {
-        return "in-house-only";
-    }
-    if (strcmp(reply, "*#8**37*2##") == 0 || strcmp(reply, "*#8**#37*2##") == 0) {
-        return "blocked";
+    int code;
+
+    if (smartphone_code_from_reply(reply, &code)) {
+        return smartphone_mode_from_code(code);
     }
     return NULL;
 }
@@ -7345,7 +7699,7 @@ static int activate_stair_light(
 )
 {
     char command[64];
-    char event_data[128];
+    char event_data[512];
     char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
 
     if (address[0] == '\0') {
@@ -7452,9 +7806,10 @@ static void append_activation_json(
     json_string(activation->address_mode, address_mode, sizeof(address_mode));
     json_string(activation->address, address, sizeof(address));
     if (*used < body_len) {
-        int written = snprintf(
-            body + *used,
-            body_len - *used,
+        if (!c300x_appendf(
+            body,
+            body_len,
+            used,
             "{\"id\":%s,\"name\":%s,\"type\":%s,\"addressMode\":%s,\"address\":%s,\"source\":\"%s\",\"executable\":%s}%s",
             id,
             name,
@@ -7464,9 +7819,8 @@ static void append_activation_json(
             source,
             executable ? "true" : "false",
             suffix
-        );
-        if (written > 0) {
-            *used += (size_t)written;
+        )) {
+            return;
         }
     }
 }
@@ -7521,13 +7875,12 @@ static void handle_activations_get(
         }
     }
     if (used >= C300X_LARGE_RESPONSE_SIZE) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        send_response_too_large(client_fd);
         free(body);
         return;
     }
-    used += (size_t)snprintf(body + used, C300X_LARGE_RESPONSE_SIZE - used, "]}\n");
-    if (used >= C300X_LARGE_RESPONSE_SIZE) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (!c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+        send_response_too_large(client_fd);
         free(body);
         return;
     }
@@ -7551,7 +7904,7 @@ static void handle_activation_run(
     char id_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
     char name_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_NAME_LEN)];
     char type_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_TYPE_LEN)];
-    char event_data[512];
+    char event_data[1024];
 
     if (!config->activations_enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"activations_disabled\"}\n");
@@ -7661,11 +8014,16 @@ static void handle_unlock(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_smartphone_get(int client_fd, const struct c300x_config *config)
+static void handle_smartphone_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
 {
     char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     const char *mode;
+    int code;
     char body[2048];
     char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
 
@@ -7678,6 +8036,10 @@ static void handle_smartphone_get(int client_fd, const struct c300x_config *conf
     if (mode == NULL) {
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
     } else {
+        if (smartphone_code_from_reply(reply, &code)) {
+            remember_smartphone_forwarding_mode(runtime, code);
+            sync_ring_receiver_for_forwarding(runtime);
+        }
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":\"%s\",\"raw\":%s}\n", mode, reply_json);
     }
     send_json(client_fd, 200, "OK", body);
@@ -7686,6 +8048,7 @@ static void handle_smartphone_get(int client_fd, const struct c300x_config *conf
 static void handle_smartphone_post(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -7697,6 +8060,7 @@ static void handle_smartphone_post(
     char body[2048];
     char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
     int enabled;
+    int readback_code;
 
     json_string_field(request->body, "mode", mode, sizeof(mode));
     if (mode[0] == '\0' && json_bool_field(request->body, "enabled", &enabled)) {
@@ -7717,6 +8081,10 @@ static void handle_smartphone_post(
         return;
     }
     readback = smartphone_mode_from_reply(reply);
+    if (smartphone_code_from_reply(reply, &readback_code)) {
+        remember_smartphone_forwarding_mode(runtime, readback_code);
+        sync_ring_receiver_for_forwarding(runtime);
+    }
     json_string(reply, reply_json, sizeof(reply_json));
     snprintf(
         body,
@@ -7728,7 +8096,11 @@ static void handle_smartphone_post(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_ringer_get(int client_fd, const struct c300x_config *config)
+static void handle_ringer_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
 {
     char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
@@ -7742,6 +8114,7 @@ static void handle_ringer_get(int client_fd, const struct c300x_config *config)
     }
     json_string(reply, reply_json, sizeof(reply_json));
     if (ringer_muted_from_reply(reply, &muted)) {
+        remember_ringer_muted(runtime, muted);
         snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n", muted ? "true" : "false", reply_json);
     } else {
         snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
@@ -7752,6 +8125,7 @@ static void handle_ringer_get(int client_fd, const struct c300x_config *config)
 static void handle_ringer_post(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -7780,6 +8154,7 @@ static void handle_ringer_post(
     if (!ringer_muted_from_reply(reply, &readback)) {
         readback = muted;
     }
+    remember_ringer_muted(runtime, readback);
     json_string(reply, reply_json, sizeof(reply_json));
     snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n", readback ? "true" : "false", reply_json);
     send_json(client_fd, 200, "OK", body);
@@ -7839,7 +8214,7 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         json_escape_string(snapshot->reason, reason, sizeof(reason));
         reason_json = reason;
     }
-    if (!appendf(
+    if (!c300x_appendf(
         body,
         C300X_LARGE_RESPONSE_SIZE,
         &used,
@@ -7855,7 +8230,7 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         newest_at_json,
         newest_at_json == newest_at ? "\"" : ""
     )) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        send_response_too_large(client_fd);
         free(snapshot);
         free(body);
         return;
@@ -7901,7 +8276,7 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
         } else {
             snprintf(media_size_json, sizeof(media_size_json), "null");
         }
-        if (!appendf(
+        if (!c300x_appendf(
             body,
             C300X_LARGE_RESPONSE_SIZE,
             &used,
@@ -7923,14 +8298,14 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
             media_mime_type_json == media_mime_type ? "\"" : "",
             media_size_json
         )) {
-            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+            send_response_too_large(client_fd);
             free(snapshot);
             free(body);
             return;
         }
     }
-    if (!appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+    if (!c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+        send_response_too_large(client_fd);
         free(snapshot);
         free(body);
         return;
@@ -7981,7 +8356,7 @@ static void handle_answering_message_delete(
     char message_id_json[256];
     char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
-    char body[256];
+    char body[512];
     int message_number = 0;
     int is_symlink = 0;
     int path_present = 1;
@@ -7995,7 +8370,7 @@ static void handle_answering_message_delete(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_message_id\"}\n");
         return;
     }
-    if (snprintf(message_path, sizeof(message_path), "%s/%s", runtime->voicemail.root, message_id) >= (int)sizeof(message_path)) {
+    if (!c300x_join_path(message_path, sizeof(message_path), runtime->voicemail.root, message_id)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_message_id\"}\n");
         return;
     }
@@ -8102,7 +8477,7 @@ static int append_memo_entries(
         } else {
             snprintf(audio_size_json, sizeof(audio_size_json), "null");
         }
-        if (!appendf(
+        if (!c300x_appendf(
             body,
             body_len,
             used,
@@ -8161,7 +8536,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
         json_escape_string(newest_at_value, newest_at_escaped, sizeof(newest_at_escaped));
         newest_at_json = newest_at_escaped;
     }
-    if (!appendf(
+    if (!c300x_appendf(
         body,
         C300X_LARGE_RESPONSE_SIZE,
         &used,
@@ -8176,7 +8551,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
         newest_at_json,
         newest_at_json == newest_at_escaped ? "\"" : ""
     )) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        send_response_too_large(client_fd);
         free(text);
         free(voice);
         free(body);
@@ -8184,8 +8559,8 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
     }
     if (!append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, text, "text", &first)
         || !append_memo_entries(body, C300X_LARGE_RESPONSE_SIZE, &used, voice, "voice", &first)
-        || !appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"response_too_large\"}\n");
+        || !c300x_appendf(body, C300X_LARGE_RESPONSE_SIZE, &used, "]}\n")) {
+        send_response_too_large(client_fd);
         free(text);
         free(voice);
         free(body);
@@ -8239,7 +8614,7 @@ static void handle_text_memo_create(
     int read = 0;
     char entry_name[C300X_MAX_VOICEMAIL_ID_LEN];
     char error[C300X_MAX_ERROR_LEN];
-    char body[256];
+    char body[512];
 
     if (!config->memos_enabled || !runtime->text_memos.enabled) {
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
@@ -8311,7 +8686,7 @@ static void handle_memos_delete(
     char memo_path[C300X_MAX_PATH_LEN];
     char reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
-    char body[256];
+    char body[1024];
     char memo_id_json[256];
     char kind_json[48];
     int memo_number = 0;
@@ -8333,7 +8708,7 @@ static void handle_memos_delete(
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"memos_disabled\"}\n");
         return;
     }
-    if (snprintf(memo_path, sizeof(memo_path), "%s/%s", collection->root, entry_name) >= (int)sizeof(memo_path)) {
+    if (!c300x_join_path(memo_path, sizeof(memo_path), collection->root, entry_name)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_memo_id\"}\n");
         return;
     }
@@ -8494,6 +8869,7 @@ static int run_detached_command(const char *program, const char *argument, int d
         if (delay_ms > 0) {
             sleep_ms(delay_ms);
         }
+        close_extra_fds_for_exec();
         if (argument != NULL) {
             execl(program, program, argument, (char *)NULL);
         } else {
@@ -8509,6 +8885,22 @@ static int run_detached_command(const char *program, const char *argument, int d
         return WIFEXITED(status) && WEXITSTATUS(status) == 0;
     }
     return 1;
+}
+
+static void close_extra_fds_for_exec(void)
+{
+    long max_fd = sysconf(_SC_OPEN_MAX);
+    long fd;
+
+    if (max_fd < 0) {
+        max_fd = 1024;
+    }
+    if (max_fd > 4096) {
+        max_fd = 4096;
+    }
+    for (fd = STDERR_FILENO + 1; fd < max_fd; fd++) {
+        close((int)fd);
+    }
 }
 
 static int run_command_capture(
@@ -8870,15 +9262,18 @@ static int firewall_remove_block_for(
         return 0;
     }
     if (start == NULL || end == NULL) {
-        return snprintf(out, out_len, "%s", content) < (int)out_len;
+        if (strlen(content) >= out_len) {
+            return 0;
+        }
+        c300x_copy_string(out, out_len, content);
+        return 1;
     }
     prefix_len = (size_t)(start - content);
-    if (prefix_len + strlen(end) + 1 > out_len) {
+    if (prefix_len + strlen(end) >= out_len) {
         return 0;
     }
     memcpy(out, content, prefix_len);
-    out[prefix_len] = '\0';
-    snprintf(out + prefix_len, out_len - prefix_len, "%s", end);
+    memcpy(out + prefix_len, end, strlen(end) + 1);
     while (out[0] != '\0' && strlen(out) > 1 && out[strlen(out) - 1] == '\n' && out[strlen(out) - 2] == '\n') {
         out[strlen(out) - 1] = '\0';
     }
@@ -9063,7 +9458,7 @@ static void send_firewall_status_body(
     char backup_path_json[C300X_JSON_QUOTED_LEN(C300X_MAX_PATH_LEN)];
     char family_json[C300X_JSON_QUOTED_LEN(8)];
     char changed_json[32] = "";
-    char body[1024];
+    char body[4096];
 
     json_string(family, family_json, sizeof(family_json));
     json_string(path, path_json, sizeof(path_json));
@@ -9107,7 +9502,7 @@ static void handle_firewall_status(
         return;
     }
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         free(current);
         return;
     }
@@ -9331,7 +9726,7 @@ static void handle_ipv6_firewall_status(
         return;
     }
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         free(current);
         return;
     }
@@ -9538,7 +9933,7 @@ static void handle_ipv6_firewall_action(
     int ok;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_ipv6_firewall_supported(config)) {
@@ -9581,7 +9976,7 @@ static void handle_firewall_action(
     int ok;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_firewall_supported(config)) {
@@ -9672,7 +10067,7 @@ static void handle_qml_patch_status(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_qml_patch_supported(config)) {
@@ -9692,7 +10087,7 @@ static void handle_qml_patch_action(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_qml_patch_supported(config)) {
@@ -9716,7 +10111,7 @@ static void handle_gui_reload(
     char *start;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_gui_reload_supported(config)) {
@@ -9757,7 +10152,7 @@ static void handle_ssh_get(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_ssh_supported(config)) {
@@ -9774,7 +10169,7 @@ static void handle_start_ssh(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_ssh_supported(config)) {
@@ -9799,7 +10194,7 @@ static void handle_stop_ssh(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_ssh_supported(config)) {
@@ -9825,7 +10220,7 @@ static void handle_ssh_set(
 {
     int enabled = 0;
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_ssh_supported(config)) {
@@ -9850,7 +10245,7 @@ static void handle_reboot(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!config->maintenance_reboot_enabled) {
@@ -9878,7 +10273,7 @@ static void handle_remove_agent(
 )
 {
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!maintenance_agent_remove_supported(config)) {
@@ -9899,6 +10294,35 @@ static void handle_remove_agent(
     send_json(client_fd, 202, "Accepted", "{\"ok\":true,\"action\":\"remove_agent\",\"scheduled\":true,\"ssh_kept_running\":true}\n");
 }
 
+static void handle_restart_agent(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct request *request
+)
+{
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    if (!maintenance_auth_available(config)) {
+        send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
+        return;
+    }
+    if (!confirm_matches(request, "restart_agent")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
+        return;
+    }
+    if (!run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)) {
+        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
+        return;
+    }
+    send_json(client_fd, 202, "Accepted", "{\"ok\":true,\"action\":\"restart_agent\",\"scheduled\":true}\n");
+}
+
 static void handle_agent_update_status(
     int client_fd,
     const struct c300x_config *config,
@@ -9913,10 +10337,10 @@ static void handle_agent_update_status(
     char api_version_json[64];
     char stage_dir[C300X_MAX_PATH_LEN];
     int staged = 0;
-    char body[512];
+    char body[2048];
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     (void)read_agent_bundle_metadata(
@@ -9959,10 +10383,11 @@ static void handle_agent_update_prepare(
     char stage_dir[C300X_MAX_PATH_LEN];
     char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
     char agent_version_json[C300X_JSON_QUOTED_LEN(C300X_MAX_VERSION_LEN)];
-    char body[384];
+    char body[1024];
+    size_t used = 0;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     json_string_field(request->body, "bundle_hash", bundle_hash, sizeof(bundle_hash));
@@ -9982,13 +10407,17 @@ static void handle_agent_update_prepare(
     record_agent_write(config, runtime, "agent_update", "prepare");
     json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
     json_string(agent_version, agent_version_json, sizeof(agent_version_json));
-    snprintf(
+    if (!c300x_appendf(
         body,
         sizeof(body),
+        &used,
         "{\"ok\":true,\"prepared\":true,\"bundle_hash\":%s,\"agent_version\":%s}\n",
         bundle_hash_json,
         agent_version_json
-    );
+    )) {
+        send_response_too_large(client_fd);
+        return;
+    }
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -10016,7 +10445,7 @@ static void handle_agent_update_file(
     int final = 0;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     workspace = calloc(1, sizeof(*workspace));
@@ -10169,6 +10598,7 @@ static int render_agent_init_script(
     const char *found;
     int truncated = 0;
     size_t prefix_len;
+    size_t used = 0;
 
     if (workspace == NULL) {
         return 0;
@@ -10187,17 +10617,16 @@ static int render_agent_init_script(
         return 0;
     }
     prefix_len = (size_t)(found - workspace->source);
-    if (
-        snprintf(
-            workspace->rendered,
-            sizeof(workspace->rendered),
-            "%.*sDEFAULT_AGENT_DIR=\"%s\"%s",
-            (int)prefix_len,
-            workspace->source,
-            base,
-            found + strlen(needle)
-        ) >= (int)sizeof(workspace->rendered)
-    ) {
+    if (!c300x_appendf(
+        workspace->rendered,
+        sizeof(workspace->rendered),
+        &used,
+        "%.*sDEFAULT_AGENT_DIR=\"%s\"%s",
+        (int)prefix_len,
+        workspace->source,
+        base,
+        found + strlen(needle)
+    )) {
         free(workspace);
         return 0;
     }
@@ -10339,6 +10768,7 @@ static int apply_agent_update_files(
         {"device_agent/scripts/qml_patch.sh", 0700},
         {"device_agent/scripts/remove_agent.sh", 0700},
         {"device_agent/scripts/bootstrap_firewall.sh", 0700},
+        {"device_agent/init/c300x-native-agent", 0700},
         {"device_agent/qml/Alarm.qml", 0644},
         {"device_agent/qml/HomeAssistant.qml", 0644},
         {"device_agent/qml/js/c300x_ha.js", 0644},
@@ -10419,7 +10849,7 @@ static void handle_agent_update_apply(
     struct agent_update_change_summary summary;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!confirm_matches(request, "update_agent")) {
@@ -10507,7 +10937,7 @@ static void handle_agent_update_apply(
     }
     record_agent_write(config, runtime, "agent_update", "apply");
     if (summary.runtime_changed) {
-        (void)run_detached_command("/etc/init.d/c300x-native-agent", "restart", 500);
+        (void)run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500);
     }
     snprintf(
         workspace->body,
@@ -10541,11 +10971,11 @@ static void handle_config_normalize(
 {
     char error[C300X_MAX_ERROR_LEN];
     char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
-    char body[384];
+    char body[2048];
     int changed = 0;
 
     if (!maintenance_authorized(config, request)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+        send_maintenance_unauthorized(client_fd);
         return;
     }
     if (!confirm_matches(request, "normalize_config")) {
@@ -10603,7 +11033,7 @@ static void handle_api_request(
     if (strcmp(request->path, "/api/v1/maintenance/auth") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             if (!auth_config_read_authorized(config, request)) {
-                send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+                send_maintenance_unauthorized(client_fd);
                 return;
             }
             handle_auth_config_get(client_fd, config);
@@ -10658,7 +11088,7 @@ static void handle_api_request(
     if (strncmp(request->path, "/api/v1/events/subscriptions/", strlen("/api/v1/events/subscriptions/")) == 0) {
         const char *id = request->path + strlen("/api/v1/events/subscriptions/");
         if (strcmp(request->method, "DELETE") == 0) {
-            handle_subscription_delete(client_fd, runtime, config, id);
+            handle_subscription_delete(client_fd, runtime, id);
             return;
         }
     }
@@ -10668,6 +11098,10 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/diagnostics") == 0) {
         handle_diagnostics_get(client_fd, runtime);
+        return;
+    }
+    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/device-user") == 0) {
+        handle_device_user_get(client_fd);
         return;
     }
 
@@ -10700,15 +11134,15 @@ static void handle_api_request(
         }
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/smartphone-forwarding") == 0) {
-        handle_smartphone_get(client_fd, config);
+        handle_smartphone_get(client_fd, config, runtime);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/smartphone-forwarding") == 0) {
-        handle_smartphone_post(client_fd, config, request);
+        handle_smartphone_post(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
-        handle_ringer_get(client_fd, config);
+        handle_ringer_get(client_fd, config, runtime);
         return;
     }
     if (
@@ -10727,8 +11161,24 @@ static void handle_api_request(
         handle_doorbell_video_stop(client_fd, runtime);
         return;
     }
+    if (
+        strcmp(request->method, "GET") == 0
+        && (strcmp(request->path, "/api/v1/calls/home") == 0
+            || strcmp(request->path, "/api/v1/calls/home/status") == 0)
+    ) {
+        handle_home_call_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/home/actions/start") == 0) {
+        handle_home_call_start(client_fd, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/home/actions/stop") == 0) {
+        handle_home_call_stop(client_fd, runtime);
+        return;
+    }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
-        handle_ringer_post(client_fd, config, request);
+        handle_ringer_post(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine") == 0) {
@@ -10837,6 +11287,10 @@ static void handle_api_request(
         handle_remove_agent(client_fd, config, request);
         return;
     }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/agent/actions/restart") == 0) {
+        handle_restart_agent(client_fd, config, request);
+        return;
+    }
     if (strcmp(request->path, "/api/v1/maintenance/update/status") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             handle_agent_update_status(client_fd, config, request);
@@ -10859,6 +11313,10 @@ static void handle_api_request(
         handle_config_normalize(client_fd, config, runtime, request);
         return;
     }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/device-user/actions/ensure-homeassistant") == 0) {
+        handle_device_user_ensure(client_fd, config, runtime, request);
+        return;
+    }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/mqtt/actions/migrate-legacy") == 0) {
         handle_mqtt_migrate_legacy_post(client_fd, config, runtime, request);
         return;
@@ -10866,7 +11324,7 @@ static void handle_api_request(
     if (strcmp(request->path, "/api/v1/maintenance/mqtt") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             if (!maintenance_authorized(config, request)) {
-                send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+                send_maintenance_unauthorized(client_fd);
                 return;
             }
             handle_mqtt_status(client_fd, config, runtime);
@@ -10880,7 +11338,7 @@ static void handle_api_request(
     if (strcmp(request->path, "/api/v1/maintenance/legacy-mqtt") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             if (!maintenance_authorized(config, request)) {
-                send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"maintenance_unauthorized\"}\n");
+                send_maintenance_unauthorized(client_fd);
                 return;
             }
             handle_legacy_mqtt_status(client_fd, config);
@@ -10979,6 +11437,17 @@ static void handle_api_request(
         );
         return;
     }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/qml-patch/actions/restore-core") == 0) {
+        handle_qml_patch_action(
+            client_fd,
+            config,
+            runtime,
+            request,
+            "core-restore",
+            "restore_qml_core_patch"
+        );
+        return;
+    }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/qml-patch/actions/restore") == 0) {
         handle_qml_patch_action(
             client_fd,
@@ -11013,7 +11482,7 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/memos") == 0) {
         if (!client_is_loopback(client_fd)) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+            send_loopback_required(client_fd);
             return 1;
         }
         handle_memos_get(client_fd, runtime);
@@ -11022,7 +11491,7 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/answering-machine/messages") == 0) {
         if (!client_is_loopback(client_fd)) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+            send_loopback_required(client_fd);
             return 1;
         }
         handle_answering_messages_get(client_fd, runtime);
@@ -11031,7 +11500,7 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/events/status") == 0) {
         if (!client_is_loopback(client_fd)) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+            send_loopback_required(client_fd);
             return 1;
         }
         handle_ui_events_status(client_fd, runtime);
@@ -11040,7 +11509,7 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/events/next") == 0) {
         if (!client_is_loopback(client_fd)) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+            send_loopback_required(client_fd);
             return 1;
         }
         return handle_ui_events_next(client_fd, runtime, request);
@@ -11048,10 +11517,10 @@ static int handle_ui_request(
 
     if (strcmp(request->path, "/ui/media-closed") == 0) {
         if (!client_is_loopback(client_fd)) {
-            send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+            send_loopback_required(client_fd);
             return 1;
         }
-        handle_ui_media_closed(client_fd, runtime);
+        handle_ui_media_closed(client_fd, config, runtime);
         return 1;
     }
 
@@ -11060,7 +11529,7 @@ static int handle_ui_request(
         return 1;
     }
     if (!client_is_loopback(client_fd)) {
-        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"loopback_required\"}\n");
+        send_loopback_required(client_fd);
         return 1;
     }
 
@@ -11072,7 +11541,7 @@ static int handle_ui_request(
         }
         snprintf(payload, sizeof(payload), "{\"type\":\"status\"}");
         if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-            send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+            send_homeassistant_unavailable(client_fd);
             free(response);
             return 1;
         }
@@ -11128,7 +11597,7 @@ static void handle_ui_homeassistant(
     if (domain[0] == '\0' && service[0] == '\0' && entities[0] == '\0') {
         snprintf(payload, sizeof(payload), "{\"type\":\"dashboard\"}");
         if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-            send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+            send_homeassistant_unavailable(client_fd);
             free(response);
             return;
         }
@@ -11163,7 +11632,7 @@ static void handle_ui_homeassistant(
         snprintf(payload, sizeof(payload), "{\"type\":\"dashboard_action\",\"entity_id\":\"%s\"}", trimmed);
     }
     if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        send_homeassistant_unavailable(client_fd);
         free(response);
         return;
     }
@@ -11193,7 +11662,7 @@ static void handle_ui_action(
     }
     snprintf(payload, sizeof(payload), "{\"type\":\"action\",\"action_id\":\"%s\"}", action_id);
     if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        send_homeassistant_unavailable(client_fd);
         free(response);
         return;
     }
@@ -11294,7 +11763,7 @@ static void handle_ui_alarm_command(
         );
     }
     if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"homeassistant_unavailable\"}\n");
+        send_homeassistant_unavailable(client_fd);
         free(response);
         return;
     }
@@ -11317,7 +11786,7 @@ static void handle_client(
 
     if (workspace == NULL) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"out_of_memory\"}\n");
-        close(client_fd);
+        close_agent_socket(client_fd);
         return;
     }
 
@@ -11360,7 +11829,7 @@ static void handle_client(
 cleanup:
     free(workspace);
     if (close_client) {
-        close(client_fd);
+        close_agent_socket(client_fd);
     }
 }
 
@@ -11369,15 +11838,14 @@ static int agent_has_home_assistant_connection(
     time_t now
 )
 {
-    return runtime->home_assistant_connected_this_run
-        && runtime->home_assistant_last_seen_at > 0
-        && now - runtime->home_assistant_last_seen_at < C300X_HOME_ASSISTANT_CONNECTED_SECONDS;
+    (void)now;
+    return runtime->home_assistant_connected_this_run;
 }
 
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 3 + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 3 + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -11386,6 +11854,10 @@ int c300x_run(struct c300x_config *config)
     char video_error[C300X_MAX_ERROR_LEN];
     int ui_listener_enabled = 1;
     int result = 1;
+
+    shutdown_requested = 0;
+    (void)signal(SIGTERM, handle_shutdown_signal);
+    (void)signal(SIGINT, handle_shutdown_signal);
 
     if (!config->api_no_auth && config->api_token[0] == '\0') {
         fprintf(stderr, "api.token must be configured when api.noAuth=false\n");
@@ -11396,10 +11868,10 @@ int c300x_run(struct c300x_config *config)
         fprintf(stderr, "failed to allocate agent runtime\n");
         return 2;
     }
+    runtime->config = config;
     runtime->ui_event_wait_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
-    load_subscriptions(runtime, config->subscription_store_path);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
     system_metrics_init(config, runtime);
@@ -11432,6 +11904,10 @@ int c300x_run(struct c300x_config *config)
         }
     }
     runtime->video = video;
+    if (video != NULL) {
+        c300x_video_set_event_callback(video, dispatch_video_event, runtime);
+        refresh_smartphone_forwarding_mode(config, runtime);
+    }
 
     fprintf(stderr, "c300x native agent %s listening api=%s:%u ui=%s\n",
         C300X_NATIVE_AGENT_VERSION,
@@ -11440,7 +11916,7 @@ int c300x_run(struct c300x_config *config)
         ui_listener_enabled ? C300X_UI_LISTEN_HOST : "disabled"
     );
 
-    for (;;) {
+    while (!shutdown_requested) {
         nfds_t index;
         nfds_t poll_count = listener_count;
         int udp_poll_index = -1;
@@ -11449,8 +11925,8 @@ int c300x_run(struct c300x_config *config)
         int voicemail_poll_index = -1;
         int text_memos_poll_index = -1;
         int voice_memos_poll_index = -1;
-        int video_poll_index = -1;
-        int video_poll_count = 0;
+        int ui_event_poll_index = -1;
+        int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         time_t now = time(NULL);
         int network_online = runtime_network_online(runtime, now);
@@ -11489,7 +11965,7 @@ int c300x_run(struct c300x_config *config)
         if (c300x_mqtt_fd(&runtime->mqtt) >= 0) {
             mqtt_poll_index = (int)poll_count;
             poll_fds[poll_count].fd = c300x_mqtt_fd(&runtime->mqtt);
-            poll_fds[poll_count].events = POLLIN;
+            poll_fds[poll_count].events = POLLIN | POLLRDHUP;
             poll_fds[poll_count].revents = 0;
             poll_count++;
             poll_timeout_ms = min_timeout_ms(
@@ -11523,6 +11999,13 @@ int c300x_run(struct c300x_config *config)
             poll_fds[poll_count].revents = 0;
             poll_count++;
         }
+        if (runtime->ui_event_wait_fd >= 0) {
+            ui_event_poll_index = (int)poll_count;
+            poll_fds[poll_count].fd = runtime->ui_event_wait_fd;
+            poll_fds[poll_count].events = POLLIN | POLLRDHUP;
+            poll_fds[poll_count].revents = 0;
+            poll_count++;
+        }
         if (video != NULL && poll_count < (sizeof(poll_fds) / sizeof(poll_fds[0]))) {
             int max_video_fds = (int)((sizeof(poll_fds) / sizeof(poll_fds[0])) - poll_count);
             video_poll_index = (int)poll_count;
@@ -11546,6 +12029,10 @@ int c300x_run(struct c300x_config *config)
         int poll_result = poll(poll_fds, poll_count, poll_timeout_ms);
         if (poll_result < 0) {
             if (errno == EINTR) {
+                if (shutdown_requested) {
+                    result = 0;
+                    break;
+                }
                 continue;
             }
             fprintf(stderr, "poll failed: %s\n", strerror(errno));
@@ -11572,6 +12059,7 @@ int c300x_run(struct c300x_config *config)
                         break;
                     }
                     runtime->accepted_clients++;
+                    set_fd_cloexec(client_fd);
                     handle_client(client_fd, listeners[index].kind, config, runtime);
                 }
             }
@@ -11621,6 +12109,11 @@ int c300x_run(struct c300x_config *config)
                 handle_memos_inotify(config, runtime, &runtime->voice_memos);
             }
         }
+        if (ui_event_poll_index >= 0
+            && (poll_fds[ui_event_poll_index].revents & (POLLIN | C300X_SOCKET_CLOSED_REVENTS)) != 0) {
+            runtime_set_wake_reason(runtime, "ui_event_closed");
+            ui_event_close_wait(runtime, 0);
+        }
         if (video != NULL && video_poll_index >= 0 && video_poll_count > 0) {
             runtime_set_wake_reason(runtime, "video");
             c300x_video_handle_pollfds(video, &poll_fds[video_poll_index], video_poll_count);
@@ -11635,6 +12128,9 @@ int c300x_run(struct c300x_config *config)
     }
 
 cleanup:
+    if (shutdown_requested && result == 1) {
+        result = 0;
+    }
     for (nfds_t index = 0; index < listener_count; index++) {
         close(listeners[index].fd);
     }

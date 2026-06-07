@@ -21,18 +21,25 @@ EXPECTED_HA_VERSION_PREFIXES = tuple(
 )
 EXPECTED_PYTHON_PREFIX = os.environ.get("HA_EXPECTED_PYTHON_PREFIX", "3.14.")
 REQUIRED_SERVICES = {
+    "activate_doorbell_video",
     "alarm_command",
     "reboot",
     "run_action",
     "stair_light",
+    "start_home_call",
+    "stop_doorbell_video",
+    "stop_home_call",
     "unlock_door",
 }
 FORBIDDEN_SERVICES = {"start_ssh"}
 REQUIRED_ENTITIES = {
+    "binary_sensor.bticino_c300x_home_call_active",
     "button.bticino_c300x_reboot",
+    "button.bticino_c300x_stop_doorbell_video",
     "camera.bticino_c300x_doorbell_camera",
-    "sensor.bticino_c300x_connection_state",
-    "sensor.bticino_c300x_device_agent",
+    "event.bticino_c300x_doorbell_ring_event",
+    "sensor.bticino_c300x_device_agent_status",
+    "sensor.bticino_c300x_doorbell_state",
     "switch.bticino_c300x_ssh",
 }
 FORBIDDEN_ENTITIES = {"button.bticino_c300x_start_ssh"}

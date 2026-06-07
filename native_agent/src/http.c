@@ -9337,31 +9337,59 @@ static int firewall_build_managed_content(
 )
 {
     const char *separator = "";
+    size_t used = 0;
 
     if (base[0] != '\0' && base[strlen(base) - 1] != '\n') {
         separator = "\n\n";
     } else if (base[0] != '\0') {
         separator = "\n";
     }
-    return snprintf(
+    if (!c300x_appendf(
         out,
         out_len,
+        &used,
         "%s%s"
         "%s\n"
-        "# Managed by c300x-native-agent. Opens only the configured API port.\n"
+        "# Managed by c300x-native-agent. Opens the configured API and media ports.\n"
         "if command -v iptables >/dev/null 2>&1; then\n"
         "    if ! iptables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null; then\n"
         "        iptables -A INPUT -p tcp --dport %u -j ACCEPT\n"
-        "    fi\n"
-        "fi\n"
-        "%s\n",
+        "    fi\n",
         base,
         separator,
         C300X_FIREWALL_BEGIN,
         config->api_port,
-        config->api_port,
+        config->api_port
+    )) {
+        return 0;
+    }
+    if (config->video_enabled) {
+        if (!c300x_appendf(
+            out,
+            out_len,
+            &used,
+            "    if ! iptables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null; then\n"
+            "        iptables -A INPUT -p tcp --dport %u -j ACCEPT\n"
+            "    fi\n"
+            "    if ! iptables -C INPUT -p udp --dport %u -j ACCEPT 2>/dev/null; then\n"
+            "        iptables -A INPUT -p udp --dport %u -j ACCEPT\n"
+            "    fi\n",
+            config->video_rtsp_port,
+            config->video_rtsp_port,
+            C300X_TALKBACK_RTP_PORT,
+            C300X_TALKBACK_RTP_PORT
+        )) {
+            return 0;
+        }
+    }
+    return c300x_appendf(
+        out,
+        out_len,
+        &used,
+        "fi\n"
+        "%s\n",
         C300X_FIREWALL_END
-    ) < (int)out_len;
+    );
 }
 
 static int firewall_build_ipv6_managed_content(
@@ -9372,18 +9400,20 @@ static int firewall_build_ipv6_managed_content(
 )
 {
     const char *separator = "";
+    size_t used = 0;
 
     if (base[0] != '\0' && base[strlen(base) - 1] != '\n') {
         separator = "\n\n";
     } else if (base[0] != '\0') {
         separator = "\n";
     }
-    return snprintf(
+    if (!c300x_appendf(
         out,
         out_len,
+        &used,
         "%s%s"
         "%s\n"
-        "# Managed by c300x-native-agent. Opens IPv6 ICMP and the configured API port.\n"
+        "# Managed by c300x-native-agent. Opens IPv6 ICMP and configured API/media ports.\n"
         "if command -v ip6tables >/dev/null 2>&1; then\n"
         "    if ! ip6tables -C INPUT -p ipv6-icmp -j ACCEPT 2>/dev/null; then\n"
         "        ip6tables -I INPUT 1 -p ipv6-icmp -j ACCEPT\n"
@@ -9393,18 +9423,124 @@ static int firewall_build_ipv6_managed_content(
         "    fi\n"
         "    if ! ip6tables -C INPUT -p tcp --sport %u -j ACCEPT 2>/dev/null; then\n"
         "        ip6tables -I INPUT 1 -p tcp --sport %u -j ACCEPT\n"
-        "    fi\n"
-        "fi\n"
-        "%s\n",
+        "    fi\n",
         base,
         separator,
         C300X_IPV6_FIREWALL_BEGIN,
         config->api_port,
         config->api_port,
         config->api_port,
-        config->api_port,
+        config->api_port
+    )) {
+        return 0;
+    }
+    if (config->video_enabled) {
+        if (!c300x_appendf(
+            out,
+            out_len,
+            &used,
+            "    if ! ip6tables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null; then\n"
+            "        ip6tables -I INPUT 1 -p tcp --dport %u -j ACCEPT\n"
+            "    fi\n"
+            "    if ! ip6tables -C INPUT -p udp --dport %u -j ACCEPT 2>/dev/null; then\n"
+            "        ip6tables -I INPUT 1 -p udp --dport %u -j ACCEPT\n"
+            "    fi\n",
+            config->video_rtsp_port,
+            config->video_rtsp_port,
+            C300X_TALKBACK_RTP_PORT,
+            C300X_TALKBACK_RTP_PORT
+        )) {
+            return 0;
+        }
+    }
+    return c300x_appendf(
+        out,
+        out_len,
+        &used,
+        "fi\n"
+        "%s\n",
         C300X_IPV6_FIREWALL_END
-    ) < (int)out_len;
+    );
+}
+
+static int firewall_apply_runtime_rules(const struct c300x_config *config)
+{
+    char command[1024];
+
+    if (config->video_enabled) {
+        snprintf(
+            command,
+            sizeof(command),
+            "PATH=${C300X_FIREWALL_RUNTIME_PATH:-/sbin:/usr/sbin:/bin:/usr/bin}; export PATH; "
+            "if command -v iptables >/dev/null 2>&1; then "
+            "iptables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport %u -j ACCEPT; "
+            "iptables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport %u -j ACCEPT; "
+            "iptables -C INPUT -p udp --dport %u -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport %u -j ACCEPT; "
+            "fi",
+            config->api_port,
+            config->api_port,
+            config->video_rtsp_port,
+            config->video_rtsp_port,
+            C300X_TALKBACK_RTP_PORT,
+            C300X_TALKBACK_RTP_PORT
+        );
+    } else {
+        snprintf(
+            command,
+            sizeof(command),
+            "PATH=${C300X_FIREWALL_RUNTIME_PATH:-/sbin:/usr/sbin:/bin:/usr/bin}; export PATH; "
+            "if command -v iptables >/dev/null 2>&1; then "
+            "iptables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport %u -j ACCEPT; "
+            "fi",
+            config->api_port,
+            config->api_port
+        );
+    }
+    return run_fixed_shell_command(command);
+}
+
+static int ipv6_firewall_apply_runtime_rules(const struct c300x_config *config)
+{
+    char command[1280];
+
+    if (config->video_enabled) {
+        snprintf(
+            command,
+            sizeof(command),
+            "PATH=${C300X_FIREWALL_RUNTIME_PATH:-/sbin:/usr/sbin:/bin:/usr/bin}; export PATH; "
+            "if command -v ip6tables >/dev/null 2>&1; then "
+            "ip6tables -C INPUT -p ipv6-icmp -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p ipv6-icmp -j ACCEPT; "
+            "ip6tables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport %u -j ACCEPT; "
+            "ip6tables -C INPUT -p tcp --sport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --sport %u -j ACCEPT; "
+            "ip6tables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport %u -j ACCEPT; "
+            "ip6tables -C INPUT -p udp --dport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p udp --dport %u -j ACCEPT; "
+            "fi",
+            config->api_port,
+            config->api_port,
+            config->api_port,
+            config->api_port,
+            config->video_rtsp_port,
+            config->video_rtsp_port,
+            C300X_TALKBACK_RTP_PORT,
+            C300X_TALKBACK_RTP_PORT
+        );
+    } else {
+        snprintf(
+            command,
+            sizeof(command),
+            "PATH=${C300X_FIREWALL_RUNTIME_PATH:-/sbin:/usr/sbin:/bin:/usr/bin}; export PATH; "
+            "if command -v ip6tables >/dev/null 2>&1; then "
+            "ip6tables -C INPUT -p ipv6-icmp -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p ipv6-icmp -j ACCEPT; "
+            "ip6tables -C INPUT -p tcp --dport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport %u -j ACCEPT; "
+            "ip6tables -C INPUT -p tcp --sport %u -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --sport %u -j ACCEPT; "
+            "fi",
+            config->api_port,
+            config->api_port,
+            config->api_port,
+            config->api_port
+        );
+    }
+    return run_fixed_shell_command(command);
 }
 
 static const char *firewall_state_for_content_for(
@@ -9474,7 +9610,8 @@ static void send_firewall_status_body(
         body,
         sizeof(body),
         "{\"ok\":true,\"available\":true,\"state\":\"%s\",\"patched\":%s,"
-        "\"family\":%s,\"exists\":%s,\"backup_available\":%s,\"api_port\":%u,"
+        "\"family\":%s,\"exists\":%s,\"backup_available\":%s,"
+        "\"api_port\":%u,\"rtsp_port\":%u,\"talkback_rtp_port\":%u,\"media_ports_enabled\":%s,"
         "\"path\":%s,\"backup_path\":%s%s}\n",
         state,
         strcmp(state, "patched") == 0 ? "true" : strcmp(state, "partial") == 0 ? "null" : "false",
@@ -9482,6 +9619,9 @@ static void send_firewall_status_body(
         exists ? "true" : "false",
         firewall_backup_available(backup_path) ? "true" : "false",
         config->api_port,
+        config->video_rtsp_port,
+        C300X_TALKBACK_RTP_PORT,
+        config->video_enabled ? "true" : "false",
         path_json,
         backup_path_json,
         changed_json
@@ -9597,6 +9737,11 @@ static int firewall_apply(
         if (changed_files != NULL) {
             *changed_files = 0;
         }
+        if (!firewall_apply_runtime_rules(config)) {
+            snprintf(state, state_len, "%s", "runtime_apply_failed");
+            free(workspace);
+            return 0;
+        }
         snprintf(state, state_len, "%s", "patched");
         free(workspace);
         return 1;
@@ -9621,6 +9766,11 @@ static int firewall_apply(
     }
     if (changed_files != NULL) {
         *changed_files = backup_written + target_written;
+    }
+    if (!firewall_apply_runtime_rules(config)) {
+        snprintf(state, state_len, "%s", "runtime_apply_failed");
+        free(workspace);
+        return 0;
     }
     snprintf(state, state_len, "%s", "patched");
     free(workspace);
@@ -9806,6 +9956,11 @@ static int ipv6_firewall_apply(
         if (changed_files != NULL) {
             *changed_files = 0;
         }
+        if (!ipv6_firewall_apply_runtime_rules(config)) {
+            snprintf(state, state_len, "%s", "runtime_apply_failed");
+            free(workspace);
+            return 0;
+        }
         snprintf(state, state_len, "%s", "patched");
         free(workspace);
         return 1;
@@ -9830,6 +9985,11 @@ static int ipv6_firewall_apply(
     }
     if (changed_files != NULL) {
         *changed_files = backup_written + target_written;
+    }
+    if (!ipv6_firewall_apply_runtime_rules(config)) {
+        snprintf(state, state_len, "%s", "runtime_apply_failed");
+        free(workspace);
+        return 0;
     }
     snprintf(state, state_len, "%s", "patched");
     free(workspace);
@@ -9915,6 +10075,68 @@ static int ipv6_firewall_restore(
     }
     snprintf(state, state_len, "%s", workspace->desired[0] == '\0' ? "missing" : "original");
     free(workspace);
+    return 1;
+}
+
+static int firewall_patch_currently_active(
+    const char *path,
+    const char *(*state_for_content)(const char *, int)
+)
+{
+    char *current = malloc(C300X_FIREWALL_BUFFER_SIZE);
+    const char *state;
+    int exists = 0;
+    int active = 0;
+
+    if (current == NULL) {
+        return 0;
+    }
+    if (firewall_read_file(path, current, C300X_FIREWALL_BUFFER_SIZE, &exists)) {
+        state = state_for_content(current, exists);
+        active = strcmp(state, "patched") == 0;
+    }
+    free(current);
+    return active;
+}
+
+static int apply_agent_update_firewall_patches(
+    const struct c300x_config *config,
+    struct agent_update_change_summary *summary
+)
+{
+    char state[32] = "unknown";
+    int exists = 0;
+    int changed_files = 0;
+
+    if (summary == NULL) {
+        return 1;
+    }
+    if (
+        summary->firewall_patch_changed
+        && config->maintenance_firewall_enabled
+        && firewall_patch_currently_active(
+            config->maintenance_firewall_path,
+            firewall_state_for_content
+        )
+    ) {
+        if (!firewall_apply(config, &exists, &changed_files, state, sizeof(state))) {
+            return 0;
+        }
+        summary->changed_files += changed_files;
+    }
+    if (
+        summary->ipv6_firewall_patch_changed
+        && config->maintenance_ipv6_firewall_enabled
+        && firewall_patch_currently_active(
+            config->maintenance_ipv6_firewall_path,
+            ipv6_firewall_state_for_content
+        )
+    ) {
+        if (!ipv6_firewall_apply(config, &exists, &changed_files, state, sizeof(state))) {
+            return 0;
+        }
+        summary->changed_files += changed_files;
+    }
     return 1;
 }
 
@@ -10929,6 +11151,11 @@ static void handle_agent_update_apply(
     }
     if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest, &summary)) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
+        free(workspace);
+        return;
+    }
+    if (!apply_agent_update_firewall_patches(config, &summary)) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_firewall_refresh_failed\"}\n");
         free(workspace);
         return;
     }

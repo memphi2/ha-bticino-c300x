@@ -6,21 +6,32 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
 BACKUP="${C300X_IPTABLES_BACKUP:-/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables}"
 PORT="${C300X_API_PORT:-${1:-}}"
+RTSP_PORT="${C300X_RTSP_PORT:-${2:-6554}}"
+TALKBACK_RTP_PORT="${C300X_TALKBACK_RTP_PORT:-${3:-40004}}"
+VIDEO_ENABLED="${C300X_VIDEO_ENABLED:-1}"
 BEGIN="# c300x-native-agent firewall begin"
 END="# c300x-native-agent firewall end"
 IPV6_BEGIN="# c300x-native-agent ipv6 firewall begin"
 IPV6_END="# c300x-native-agent ipv6 firewall end"
 
-case "$PORT" in
-    ''|*[!0-9]*)
-        printf 'invalid api port\n' >&2
+validate_port() {
+    label="$1"
+    value="$2"
+    case "$value" in
+        ''|*[!0-9]*)
+            printf 'invalid %s port\n' "$label" >&2
+            exit 2
+            ;;
+    esac
+    if [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
+        printf 'invalid %s port\n' "$label" >&2
         exit 2
-        ;;
-esac
-if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
-    printf 'invalid api port\n' >&2
-    exit 2
-fi
+    fi
+}
+
+validate_port api "$PORT"
+validate_port rtsp "$RTSP_PORT"
+validate_port talkback "$TALKBACK_RTP_PORT"
 
 TMP="/tmp/c300x-firewall.$$"
 BASE="/tmp/c300x-firewall-base.$$"
@@ -54,11 +65,23 @@ fi
 
 cat >> "$TMP" <<EOF
 $BEGIN
-# Managed by c300x-native-agent. Opens only the configured API port.
+# Managed by c300x-native-agent. Opens the configured API and media ports.
 if command -v iptables >/dev/null 2>&1; then
     if ! iptables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null; then
         iptables -A INPUT -p tcp --dport $PORT -j ACCEPT
     fi
+EOF
+if [ "$VIDEO_ENABLED" = "1" ]; then
+    cat >> "$TMP" <<EOF
+    if ! iptables -C INPUT -p tcp --dport $RTSP_PORT -j ACCEPT 2>/dev/null; then
+        iptables -A INPUT -p tcp --dport $RTSP_PORT -j ACCEPT
+    fi
+    if ! iptables -C INPUT -p udp --dport $TALKBACK_RTP_PORT -j ACCEPT 2>/dev/null; then
+        iptables -A INPUT -p udp --dport $TALKBACK_RTP_PORT -j ACCEPT
+    fi
+EOF
+fi
+cat >> "$TMP" <<EOF
 fi
 $END
 EOF
@@ -87,6 +110,14 @@ fi
 if command -v iptables >/dev/null 2>&1; then
     if ! iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null; then
         iptables -A INPUT -p tcp --dport "$PORT" -j ACCEPT
+    fi
+    if [ "$VIDEO_ENABLED" = "1" ]; then
+        if ! iptables -C INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p tcp --dport "$RTSP_PORT" -j ACCEPT
+        fi
+        if ! iptables -C INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT 2>/dev/null; then
+            iptables -A INPUT -p udp --dport "$TALKBACK_RTP_PORT" -j ACCEPT
+        fi
     fi
 fi
 

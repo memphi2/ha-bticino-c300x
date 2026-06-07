@@ -267,6 +267,23 @@ def test_qml_core_apply_installs_only_media_hook(tmp_path: Path) -> None:
     assert not (gui_dir / "Alarm.qml").exists()
 
 
+def test_qml_core_status_detects_missing_call_end_hook(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "core-apply")
+    event_manager = (gui_dir / "EventManager.qml").read_text()
+    (gui_dir / "EventManager.qml").write_text(
+        event_manager.replace("            c300xNotifyMediaClosed()\n", "", 1)
+    )
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")
+
+    assert status["core_state"] == "partial"
+    assert status["core_patched"] is None
+
+
 def test_qml_restore_all_removes_feature_and_core_patches(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"

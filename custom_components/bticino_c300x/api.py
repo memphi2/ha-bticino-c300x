@@ -1480,6 +1480,9 @@ def normalize_firewall_status(data: Any) -> dict[str, Any]:
         "exists": _optional_bool(data.get("exists")),
         "backup_available": _optional_bool(data.get("backup_available")),
         "api_port": _optional_int(data.get("api_port")),
+        "rtsp_port": _optional_int(data.get("rtsp_port")),
+        "talkback_rtp_port": _optional_int(data.get("talkback_rtp_port")),
+        "media_ports_enabled": _optional_bool(data.get("media_ports_enabled")),
         "changed_files": _optional_int(data.get("changed_files")),
         "raw": data,
     }

@@ -1496,6 +1496,9 @@ def test_normalize_firewall_status_derives_patched_state() -> None:
         "exists": None,
         "backup_available": None,
         "api_port": 8091,
+        "rtsp_port": None,
+        "talkback_rtp_port": None,
+        "media_ports_enabled": None,
         "changed_files": None,
         "raw": {"state": "patched", "api_port": "8091"},
     }

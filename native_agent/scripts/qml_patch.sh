@@ -111,13 +111,33 @@ partial_patch_present() {
 core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         && file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
-        && file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
+        && core_call_end_hooks_present
 }
 
 core_partial_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
+}
+
+core_call_end_hooks_present() {
+    [ -f "$GUI_DIR/EventManager.qml" ] || return 1
+    awk '
+        $0 == "        onCallEnded: {" {
+            count += 1
+            if ((getline next_line) <= 0 || next_line != "            c300xNotifyMediaClosed()") {
+                bad = 1
+            }
+        }
+        END {
+            if (bad) {
+                exit 2
+            }
+            if (count < 1) {
+                exit 1
+            }
+        }
+    ' "$GUI_DIR/EventManager.qml"
 }
 
 reload_gui() {

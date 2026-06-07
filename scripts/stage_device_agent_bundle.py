@@ -23,8 +23,8 @@ AGENT_BINARY = ROOT / "native_agent" / "build" / "armhf" / "c300x-agent-native"
 AGENT_VERSION_FILE = ROOT / "native_agent" / "VERSION"
 AGENT_API_VERSION = "1"
 ARMHF_STRIP = "arm-linux-gnueabihf-strip"
-FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v1-api-port"
-IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v1-api-port"
+FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv4-firewall-v2-api-rtsp-talkback"
+IPV6_FIREWALL_PATCH_MATERIAL = "c300x-native-agent-ipv6-firewall-v2-api-rtsp-talkback"
 CONFIG_SCHEMA_MATERIAL = "c300x-native-agent-config-schema-v1"
 
 
@@ -151,8 +151,16 @@ def stage_bundle(
         "runtime_hash": _content_hash(component_dir, runtime_files),
         "script_hash": _content_hash(component_dir, script_files),
         "qml_patch_hash": _content_hash(component_dir, qml_files),
-        "firewall_patch_hash": _material_hash(FIREWALL_PATCH_MATERIAL),
-        "ipv6_firewall_patch_hash": _material_hash(IPV6_FIREWALL_PATCH_MATERIAL),
+        "firewall_patch_hash": _content_hash(
+            component_dir,
+            [bootstrap_firewall_script],
+            extra_material=FIREWALL_PATCH_MATERIAL,
+        ),
+        "ipv6_firewall_patch_hash": _content_hash(
+            component_dir,
+            [bootstrap_firewall_script],
+            extra_material=IPV6_FIREWALL_PATCH_MATERIAL,
+        ),
         "config_schema_hash": _content_hash(
             ROOT,
             [ROOT / "native_agent" / "config.example.json"],

@@ -740,5 +740,7 @@ def test_bootstrap_firewall_logic_lives_in_project_script() -> None:
     assert "iptables -A INPUT" not in installer
     assert "c300x-firewall-base" not in installer
     assert "iptables -A INPUT" in script
+    assert "--dport $RTSP_PORT" in script
+    assert "--dport $TALKBACK_RTP_PORT" in script
     assert "# c300x-native-agent firewall begin" in script
     assert "# c300x-native-agent ipv6 firewall begin" in script

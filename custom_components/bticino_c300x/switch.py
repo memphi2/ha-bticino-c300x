@@ -502,6 +502,9 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
             "exists": self._status.get("exists"),
             "backup_available": self._status.get("backup_available"),
             "api_port": self._status.get("api_port"),
+            "rtsp_port": self._status.get("rtsp_port"),
+            "talkback_rtp_port": self._status.get("talkback_rtp_port"),
+            "media_ports_enabled": self._status.get("media_ports_enabled"),
             "changed_files": self._status.get("changed_files"),
         }
 
@@ -617,6 +620,9 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
             "exists": self._status.get("exists"),
             "backup_available": self._status.get("backup_available"),
             "api_port": self._status.get("api_port"),
+            "rtsp_port": self._status.get("rtsp_port"),
+            "talkback_rtp_port": self._status.get("talkback_rtp_port"),
+            "media_ports_enabled": self._status.get("media_ports_enabled"),
             "changed_files": self._status.get("changed_files"),
         }
 

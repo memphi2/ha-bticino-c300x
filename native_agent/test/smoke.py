@@ -253,10 +253,31 @@ def run_smoke(
         firewall_backup_path = temp_path / "backup" / "iptables"
         ipv6_firewall_path = temp_path / "iptables6"
         ipv6_firewall_backup_path = temp_path / "backup" / "iptables6"
+        firewall_runtime_bin = temp_path / "firewall-runtime-bin"
+        firewall_runtime_log = temp_path / "firewall-runtime.log"
         config_path = temp_path / "config.json"
         text_memos_root.mkdir()
         voice_memos_root.mkdir()
         activation_root.mkdir()
+        firewall_runtime_bin.mkdir()
+        for tool_name in ("iptables", "ip6tables"):
+            tool = firewall_runtime_bin / tool_name
+            tool.write_text(
+                "\n".join(
+                    [
+                        "#!/bin/sh",
+                        f'echo "{tool_name} $*" >> "{firewall_runtime_log}"',
+                        'case "$1" in',
+                        "  -C) exit 1 ;;",
+                        "  -A|-I) exit 0 ;;",
+                        "  *) exit 0 ;;",
+                        "esac",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            tool.chmod(0o700)
         (activation_root / "quick_actions.json").write_text(
             json.dumps(
                 {
@@ -448,6 +469,7 @@ def run_smoke(
         )
         environment = os.environ.copy()
         environment["C300X_AGENT_TOKEN"] = TOKEN
+        environment["C300X_FIREWALL_RUNTIME_PATH"] = str(firewall_runtime_bin)
         process = subprocess.Popen(
             [str(binary), "--config", str(config_path)],
             env=environment,
@@ -872,15 +894,25 @@ def run_smoke(
             )
             expected_agent_writes += 1
             assert_json_field(firewall_status, "state", "patched")
+            assert_json_field(firewall_status, "api_port", api_port)
+            assert_json_field(firewall_status, "rtsp_port", rtsp_port)
+            assert_json_field(firewall_status, "talkback_rtp_port", 40004)
+            assert_json_field(firewall_status, "media_ports_enabled", True)
             expected_firewall_content = (
                 "#!/bin/sh\n"
                 "# stock firewall\n"
                 "\n"
                 "# c300x-native-agent firewall begin\n"
-                "# Managed by c300x-native-agent. Opens only the configured API port.\n"
+                "# Managed by c300x-native-agent. Opens the configured API and media ports.\n"
                 "if command -v iptables >/dev/null 2>&1; then\n"
                 f"    if ! iptables -C INPUT -p tcp --dport {api_port} -j ACCEPT 2>/dev/null; then\n"
                 f"        iptables -A INPUT -p tcp --dport {api_port} -j ACCEPT\n"
+                "    fi\n"
+                f"    if ! iptables -C INPUT -p tcp --dport {rtsp_port} -j ACCEPT 2>/dev/null; then\n"
+                f"        iptables -A INPUT -p tcp --dport {rtsp_port} -j ACCEPT\n"
+                "    fi\n"
+                "    if ! iptables -C INPUT -p udp --dport 40004 -j ACCEPT 2>/dev/null; then\n"
+                "        iptables -A INPUT -p udp --dport 40004 -j ACCEPT\n"
                 "    fi\n"
                 "fi\n"
                 "# c300x-native-agent firewall end\n"
@@ -893,10 +925,25 @@ def run_smoke(
                 )
             if not firewall_backup_path.exists():
                 raise AssertionError("firewall apply did not create one original backup")
+            firewall_runtime = firewall_runtime_log.read_text(encoding="utf-8")
+            for expected_runtime in (
+                f"iptables -C INPUT -p tcp --dport {api_port} -j ACCEPT",
+                f"iptables -A INPUT -p tcp --dport {api_port} -j ACCEPT",
+                f"iptables -C INPUT -p tcp --dport {rtsp_port} -j ACCEPT",
+                f"iptables -A INPUT -p tcp --dport {rtsp_port} -j ACCEPT",
+                "iptables -C INPUT -p udp --dport 40004 -j ACCEPT",
+                "iptables -A INPUT -p udp --dport 40004 -j ACCEPT",
+            ):
+                if expected_runtime not in firewall_runtime:
+                    raise AssertionError(
+                        f"firewall apply did not initialize runtime rule: {expected_runtime}\n"
+                        f"{firewall_runtime}"
+                    )
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_class", "firewall")
             assert_json_field(diagnostics, "last_write_reason", "apply")
+            runtime_lines_before = len(firewall_runtime_log.read_text(encoding="utf-8").splitlines())
             assert_json_field(
                 maintenance_post(
                     api_port,
@@ -906,6 +953,9 @@ def run_smoke(
                 "changed_files",
                 0,
             )
+            runtime_lines_after = len(firewall_runtime_log.read_text(encoding="utf-8").splitlines())
+            if runtime_lines_after <= runtime_lines_before:
+                raise AssertionError("firewall re-apply did not refresh runtime rules")
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             firewall_status = maintenance_post(
@@ -937,12 +987,16 @@ def run_smoke(
             expected_agent_writes += 1
             assert_json_field(ipv6_firewall_status, "state", "patched")
             assert_json_field(ipv6_firewall_status, "family", "ipv6")
+            assert_json_field(ipv6_firewall_status, "api_port", api_port)
+            assert_json_field(ipv6_firewall_status, "rtsp_port", rtsp_port)
+            assert_json_field(ipv6_firewall_status, "talkback_rtp_port", 40004)
+            assert_json_field(ipv6_firewall_status, "media_ports_enabled", True)
             expected_ipv6_firewall_content = (
                 "#!/bin/sh\n"
                 "# stock ipv6 firewall\n"
                 "\n"
                 "# c300x-native-agent ipv6 firewall begin\n"
-                "# Managed by c300x-native-agent. Opens IPv6 ICMP and the configured API port.\n"
+                "# Managed by c300x-native-agent. Opens IPv6 ICMP and configured API/media ports.\n"
                 "if command -v ip6tables >/dev/null 2>&1; then\n"
                 "    if ! ip6tables -C INPUT -p ipv6-icmp -j ACCEPT 2>/dev/null; then\n"
                 "        ip6tables -I INPUT 1 -p ipv6-icmp -j ACCEPT\n"
@@ -952,6 +1006,12 @@ def run_smoke(
                 "    fi\n"
                 f"    if ! ip6tables -C INPUT -p tcp --sport {api_port} -j ACCEPT 2>/dev/null; then\n"
                 f"        ip6tables -I INPUT 1 -p tcp --sport {api_port} -j ACCEPT\n"
+                "    fi\n"
+                f"    if ! ip6tables -C INPUT -p tcp --dport {rtsp_port} -j ACCEPT 2>/dev/null; then\n"
+                f"        ip6tables -I INPUT 1 -p tcp --dport {rtsp_port} -j ACCEPT\n"
+                "    fi\n"
+                "    if ! ip6tables -C INPUT -p udp --dport 40004 -j ACCEPT 2>/dev/null; then\n"
+                "        ip6tables -I INPUT 1 -p udp --dport 40004 -j ACCEPT\n"
                 "    fi\n"
                 "fi\n"
                 "# c300x-native-agent ipv6 firewall end\n"
@@ -964,6 +1024,24 @@ def run_smoke(
                 )
             if not ipv6_firewall_backup_path.exists():
                 raise AssertionError("IPv6 firewall apply did not create one original backup")
+            firewall_runtime = firewall_runtime_log.read_text(encoding="utf-8")
+            for expected_runtime in (
+                "ip6tables -C INPUT -p ipv6-icmp -j ACCEPT",
+                "ip6tables -I INPUT 1 -p ipv6-icmp -j ACCEPT",
+                f"ip6tables -C INPUT -p tcp --dport {api_port} -j ACCEPT",
+                f"ip6tables -I INPUT 1 -p tcp --dport {api_port} -j ACCEPT",
+                f"ip6tables -C INPUT -p tcp --sport {api_port} -j ACCEPT",
+                f"ip6tables -I INPUT 1 -p tcp --sport {api_port} -j ACCEPT",
+                f"ip6tables -C INPUT -p tcp --dport {rtsp_port} -j ACCEPT",
+                f"ip6tables -I INPUT 1 -p tcp --dport {rtsp_port} -j ACCEPT",
+                "ip6tables -C INPUT -p udp --dport 40004 -j ACCEPT",
+                "ip6tables -I INPUT 1 -p udp --dport 40004 -j ACCEPT",
+            ):
+                if expected_runtime not in firewall_runtime:
+                    raise AssertionError(
+                        f"IPv6 firewall apply did not initialize runtime rule: {expected_runtime}\n"
+                        f"{firewall_runtime}"
+                    )
             diagnostics = api_get(api_port, "/api/v1/diagnostics")
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_class", "ipv6_firewall")

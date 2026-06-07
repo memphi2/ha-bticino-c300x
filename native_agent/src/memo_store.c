@@ -5,6 +5,7 @@
 #endif
 
 #include "memo_store.h"
+#include "string_util.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -47,7 +48,7 @@ static void set_error(char *error, size_t error_len, const char *value)
     if (error_len == 0) {
         return;
     }
-    snprintf(error, error_len, "%s", value);
+    c300x_copy_string(error, error_len, value);
 }
 
 static int memo_path_exists(const char *path)
@@ -80,7 +81,7 @@ static int memo_remove_tree(const char *path)
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child)) {
+        if (!c300x_join_path(child, sizeof(child), path, entry->d_name)) {
             closedir(directory);
             return 0;
         }
@@ -313,8 +314,8 @@ int c300x_text_memo_create(
         return 0;
     }
     if (
-        snprintf(message_path, sizeof(message_path), "%s/message.txt", tmp_path) >= (int)sizeof(message_path)
-        || snprintf(info_path, sizeof(info_path), "%s/msg_info.ini", tmp_path) >= (int)sizeof(info_path)
+        !c300x_join_suffix(message_path, sizeof(message_path), tmp_path, "/message.txt")
+        || !c300x_join_suffix(info_path, sizeof(info_path), tmp_path, "/msg_info.ini")
     ) {
         (void)memo_remove_tree(tmp_path);
         set_error(error, error_len, "invalid_memo_path");

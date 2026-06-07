@@ -115,11 +115,53 @@ activate_doorbell_video:
         text:
     audio:
       name: Enable audio
-      description: Request the C300X audio path together with video. Required for WebRTC talkback.
+      description: Request the C300X audio path together with video. Required for browser or mobile-app talkback.
       required: false
       default: true
       selector:
         boolean:
+
+stop_doorbell_video:
+  name: Stop C300X doorbell video
+  description: Stop the active C300X doorbell video session through the local device agent. Use this from cards and ring automations as the call-end action.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+start_home_call:
+  name: Start C300X home call
+  description: Start an app-like in-house call to the C300X through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    duration_seconds:
+      name: Duration seconds
+      description: Optional maximum call duration. Set 0 or leave empty to keep the call active until stopped or ended remotely.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 3600
+          mode: box
+
+stop_home_call:
+  name: Stop C300X home call
+  description: Stop the active app-like in-house call through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
 
 reboot:
   name: Reboot C300X

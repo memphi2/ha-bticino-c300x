@@ -43,6 +43,8 @@ helpers = sys.modules.setdefault(
 config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
 entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
+entity_registry.EventEntityRegistryUpdatedData = dict
 
 CREATED_ISSUES: dict[str, dict[str, Any]] = {}
 DELETED_ISSUES: list[str] = []
@@ -81,6 +83,8 @@ from custom_components.bticino_c300x.agent_update import AgentUpdateState  # noq
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_VIDEO_ENABLED,
 )
 from custom_components.bticino_c300x.data import (  # noqa: E402
     C300XCallbackDiagnostics,
@@ -91,6 +95,8 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    DEVICE_USER_REQUIRED_ISSUE,
+    FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
@@ -112,6 +118,7 @@ class FakeRuntimeData:
     display_bridge_diagnostics: Any | None = None
     agent_diagnostics: dict[str, Any] | None = None
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
+    device_user_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -138,11 +145,34 @@ class FakeEntityRegistry:
     def async_get(self, entity_id: str) -> object | None:
         return object() if entity_id in self.entity_ids else None
 
+    def async_get_entity_id(
+        self,
+        domain: str,
+        platform: str,
+        unique_id: str,
+    ) -> str | None:
+        if (
+            domain == "camera"
+            and platform == "bticino_c300x"
+            and unique_id == "entry-1_doorbell_camera"
+        ):
+            return "camera.bticino_c300x_doorbell_camera"
+        return None
+
+
+@dataclass(slots=True)
+class FakeConfigEntries:
+    def async_update_entry(self, entry: Any, **kwargs: Any) -> None:
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+
 
 @dataclass(slots=True)
 class FakeHass:
     states: FakeStates = field(default_factory=FakeStates)
     entity_registry: FakeEntityRegistry = field(default_factory=FakeEntityRegistry)
+    data: dict[str, Any] = field(default_factory=dict)
+    config_entries: FakeConfigEntries = field(default_factory=FakeConfigEntries)
 
 
 def setup_function() -> None:
@@ -200,6 +230,107 @@ def test_existing_alarm_entity_clears_repair_issue() -> None:
 
     assert repair_issue_id(MISSING_ALARM_ENTITY_ISSUE, entry.entry_id) in DELETED_ISSUES
     assert CREATED_ISSUES == {}
+
+
+def test_frontend_card_setup_hint_created_for_video_capability() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == FRONTEND_CARD_SETUP_HINT_ISSUE
+
+
+def test_frontend_card_setup_hint_cleared_after_dismissed() -> None:
+    entry = FakeEntry(
+        options={CONF_FRONTEND_CARD_SETUP_DISMISSED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+    assert CREATED_ISSUES == {}
+
+
+def test_frontend_card_setup_hint_cleared_when_cards_exist(monkeypatch) -> None:
+    components = types.ModuleType("homeassistant.components")
+    components.__path__ = []
+    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_package.__path__ = []
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    monkeypatch.setitem(sys.modules, "homeassistant.components", components)
+    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        )
+    )
+    dashboard = types.SimpleNamespace(
+        mode="storage",
+        config={
+            "views": [
+                {
+                    "sections": [
+                        {
+                            "cards": [
+                                {
+                                    "type": "custom:c300x-doorbell-call-card",
+                                    "entity": "camera.bticino_c300x_doorbell_camera",
+                                    "mode": "home_call",
+                                },
+                                {
+                                    "type": "custom:c300x-doorbell-call-card",
+                                    "entity": "camera.bticino_c300x_doorbell_camera",
+                                },
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+    )
+    hass = FakeHass(data={"lovelace": types.SimpleNamespace(dashboards={None: dashboard})})
+
+    async_sync_entry_repair_issues(hass, entry)
+
+    assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
+    assert (
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+    assert CREATED_ISSUES == {}
+
+
+def test_frontend_card_setup_hint_cleared_without_video_or_home_call() -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(capabilities={"doorbell_events": True}))
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
 
 
 def test_empty_agent_capabilities_create_repair_issue() -> None:
@@ -339,7 +470,14 @@ def test_agent_startup_link_ok_clears_repair_issue() -> None:
 
 def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
     entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "qml_core_patch": True,
+                }
+            },
             qml_patch_status={
                 "available": True,
                 "patched": False,
@@ -361,9 +499,43 @@ def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
     assert issue["translation_placeholders"]["core_state"] == "original"
 
 
+def test_missing_core_qml_hook_without_supported_action_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "qml_patch": True,
+                }
+            },
+            qml_patch_status={
+                "available": True,
+                "patched": False,
+                "state": "original",
+                "core_patched": False,
+                "core_state": "original",
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue_id = repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
+
+
 def test_present_core_qml_hook_clears_repair_issue() -> None:
     entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "qml_core_patch": True,
+                }
+            },
             qml_patch_status={
                 "available": True,
                 "patched": False,
@@ -379,6 +551,86 @@ def test_present_core_qml_hook_clears_repair_issue() -> None:
     assert (
         repair_issue_id(DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, entry.entry_id)
         in DELETED_ISSUES
+    )
+
+
+def test_missing_device_user_media_identity_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "home_call": {"supported": True},
+                "maintenance": {
+                    "supported": True,
+                    "device_user_ensure": True,
+                },
+            },
+            device_user_status={
+                "app_user_present": False,
+                "homeassistant_user_present": False,
+                "media_identity_available": False,
+                "routes_consistent": False,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["severity"] == "error"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_USER_REQUIRED_ISSUE
+    assert issue["translation_placeholders"]["reason"] == "media_identity_missing"
+
+
+def test_device_user_app_fallback_without_homeassistant_user_clears_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            device_user_status={
+                "app_user_present": True,
+                "homeassistant_user_present": False,
+                "media_identity_available": True,
+                "routes_consistent": False,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
+
+
+def test_homeassistant_user_with_incomplete_routes_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "home_call": {"supported": True},
+                "maintenance": {
+                    "supported": True,
+                    "device_user_ensure": True,
+                },
+            },
+            device_user_status={
+                "app_user_present": True,
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": False,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["severity"] == "error"
+    assert issue["is_fixable"] is True
+    assert issue["translation_placeholders"]["reason"] == (
+        "homeassistant_routes_inconsistent"
     )
 
 

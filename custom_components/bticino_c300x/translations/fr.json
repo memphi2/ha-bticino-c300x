@@ -26,8 +26,7 @@
         "description": "Cette etape ecrit l'agent natif, la configuration de tokens generee, le script de demarrage et les fichiers QML de support sur le C300X via SSH. Les identifiants SSH ne sont utilises que pour cette installation et ne sont pas stockes.",
         "data": {
           "bootstrap_ssh_username": "Utilisateur SSH C300X",
-          "bootstrap_ssh_password": "Mot de passe SSH C300X",
-          "bootstrap_apply_gui_patch": "Appliquer le patch GUI C300X apres installation"
+          "bootstrap_ssh_password": "Mot de passe SSH C300X"
         }
       },
       "agent_auth": {
@@ -40,17 +39,22 @@
       },
       "user_features": {
         "title": "Fonctions BTicino C300X",
-        "description": "Selectionnez les fonctions Home Assistant exposees par cette installation C300X.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Selectionnez les fonctions media et appareil Home Assistant exposees par cette installation C300X.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "user_dashboard": {
+        "title": "Dashboard GUI C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch de fonctions GUI.\n\nEtat actuel du patch GUI de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
         "data": {
           "device_ui_enabled": "Patcher les fonctions GUI C300X",
           "alarm_entity_id": "Entite Alarmo",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
-          "video_enabled": "Creer l'entite camera de sonnette",
-          "video_port": "Port RTSP de la sonnette",
-          "video_stream_path": "Chemin du flux RTSP de la sonnette",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }
@@ -72,17 +76,22 @@
       },
       "reconfigure_features": {
         "title": "Reconfigurer les fonctions BTicino C300X",
-        "description": "Mettez a jour les reglages Alarmo, video et patch de fonctions GUI.\n\nEtat actuel du patch GUI de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Mettez a jour les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "reconfigure_dashboard": {
+        "title": "Reconfigurer le dashboard GUI C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch de fonctions GUI.\n\nEtat actuel du patch GUI de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
         "data": {
           "device_ui_enabled": "Patcher les fonctions GUI C300X",
           "alarm_entity_id": "Entite Alarmo",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
-          "video_enabled": "Creer l'entite camera de sonnette",
-          "video_port": "Port RTSP de la sonnette",
-          "video_stream_path": "Chemin du flux RTSP de la sonnette",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }
@@ -126,17 +135,22 @@
       },
       "features": {
         "title": "Fonctions BTicino C300X",
-        "description": "Configurez Alarmo, la video et le patch de fonctions GUI.\n\nEtat actuel du patch GUI de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "dashboard": {
+        "title": "Dashboard GUI C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch de fonctions GUI.\n\nEtat actuel du patch GUI de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch GUI ecrit des fichiers QML sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
         "data": {
           "device_ui_enabled": "Patcher les fonctions GUI C300X",
           "alarm_entity_id": "Entite Alarmo",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
-          "video_enabled": "Creer l'entite camera de sonnette",
-          "video_port": "Port RTSP de la sonnette",
-          "video_stream_path": "Chemin du flux RTSP de la sonnette",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }
@@ -153,8 +167,8 @@
   },
   "entity": {
     "binary_sensor": {
-      "doorbell_video_available": {
-        "name": "Video sonnette disponible"
+      "home_call_active": {
+        "name": "Appel domicile actif"
       }
     },
     "button": {
@@ -173,11 +187,20 @@
       "remove_agent": {
         "name": "Supprimer l'agent appareil"
       },
+      "restart_agent": {
+        "name": "Redemarrer l'agent appareil"
+      },
       "reload_gui": {
         "name": "Recharger l'interface appareil"
       },
       "stair_light": {
         "name": "Lumiere d'escalier"
+      },
+      "stop_doorbell_video": {
+        "name": "Arreter la camera de sonnette"
+      },
+      "ensure_homeassistant_user": {
+        "name": "Creer l'utilisateur media Home Assistant"
       },
       "delete_latest_voice_memo": {
         "name": "Supprimer le dernier memo vocal"
@@ -222,17 +245,6 @@
       }
     },
     "sensor": {
-      "connection_state": {
-        "name": "Etat de connexion",
-        "state": {
-          "connected": "Connecte",
-          "reconnecting": "Reconnexion",
-          "disconnected": "Deconnecte"
-        }
-      },
-      "agent": {
-        "name": "Agent appareil"
-      },
       "agent_status": {
         "name": "Etat de l'agent appareil",
         "state": {
@@ -240,9 +252,6 @@
           "warning": "Avertissement",
           "error": "Erreur"
         }
-      },
-      "agent_writes": {
-        "name": "Ecritures de l'agent appareil"
       },
       "device_cpu": {
         "name": "CPU appareil"
@@ -256,38 +265,14 @@
       "device_temperature": {
         "name": "Temperature appareil"
       },
-      "qml_patch_status": {
-        "name": "Patch fonctions GUI appareil"
-      },
-      "last_connection_error": {
-        "name": "Derniere erreur de connexion"
-      },
-      "next_reconnect_delay": {
-        "name": "Delai avant reconnexion"
-      },
-      "reconnect_count": {
-        "name": "Reconnexions"
-      },
       "voicemail_messages": {
         "name": "Messages video"
-      },
-      "voicemail_unread": {
-        "name": "Messages video non lus"
-      },
-      "latest_video_message": {
-        "name": "Dernier message video"
       },
       "text_memos": {
         "name": "Memos texte"
       },
-      "latest_text_memo": {
-        "name": "Dernier memo texte"
-      },
       "voice_memos": {
         "name": "Memos vocaux"
-      },
-      "latest_voice_memo": {
-        "name": "Dernier memo vocal"
       },
       "doorbell_state": {
         "name": "Etat sonnette",
@@ -357,6 +342,9 @@
     },
     "doorbell_video_not_available": {
       "message": "La video de sonnette n'est pas activee ou n'est pas prise en charge par l'agent C300X installe."
+    },
+    "home_call_not_available": {
+      "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installe."
     },
     "entry_id_required": {
       "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
@@ -439,6 +427,24 @@
           "core_patch_verify_failed": "L'action du hook media core a ete executee, mais l'agent n'a pas confirme l'etat patche."
         },
         "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee.",
+          "core_patch_unsupported": "L'agent appareil C300X installe ne prend pas en charge l'application du hook media core."
+        }
+      }
+    },
+    "device_user_required": {
+      "title": "Configuration utilisateur media C300X requise",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Creer l'utilisateur media Home Assistant",
+            "description": "Home Assistant demandera a l'agent appareil de creer ou reparer l'utilisateur media C300X dedie `homeassistant`. Les utilisateurs app existants sont conserves. L'agent ecrit uniquement l'etat utilisateur et routage necessaire sur l'appareil."
+          }
+        },
+        "error": {
+          "device_user_setup_failed": "La configuration utilisateur appareil a echoue. Verifiez l'acces maintenance et reessayez."
+        },
+        "abort": {
           "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
         }
       }
@@ -450,6 +456,38 @@
     "missing_alarm_entity": {
       "title": "L'entite d'alarme C300X configuree est manquante",
       "description": "{entry_title} reference {entity_id}, mais Home Assistant ne connait pas cette entite. Choisissez une entite alarm_control_panel existante dans les options ou videz le reglage d'alarme."
+    },
+    "frontend_card_setup_hint": {
+      "title": "Ajouter la carte Lovelace C300X",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Configurer les cartes Lovelace C300X",
+            "description": "Home Assistant peut ajouter les cartes C300X recommandees a {dashboard_path}, ou vous pouvez ignorer cette indication.",
+            "menu_options": {
+              "confirm": "Creer les cartes",
+              "ignore": "Ignorer cette indication"
+            }
+          },
+          "confirm": {
+            "title": "Creer les cartes Lovelace C300X",
+            "description": "Home Assistant ajoutera une vue C300X a un dashboard Lovelace en mode storage. La vue contient une carte Sonnette / a la demande et une carte Home Call pour {entry_title}.",
+            "data": {
+              "dashboard_path": "Dashboard",
+              "view_path": "Chemin de la vue"
+            }
+          }
+        },
+        "error": {
+          "camera_entity_missing": "Home Assistant n'a pas trouve l'entite camera C300X pour cette entree de configuration.",
+          "lovelace_config_invalid": "La configuration du dashboard Lovelace selectionne n'est pas modifiable au format attendu.",
+          "lovelace_storage_unavailable": "Aucun dashboard Lovelace en mode storage n'est disponible. Les dashboards YAML doivent etre modifies manuellement.",
+          "lovelace_unavailable": "Lovelace n'est pas encore disponible."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
     },
     "unsupported_callback_url": {
       "title": "L'URL callback C300X n'est pas utilisable par l'agent appareil",

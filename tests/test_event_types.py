@@ -13,6 +13,7 @@ def test_normalize_event_type_handles_canonical_agent_events() -> None:
     assert normalize_event_type("agent.restarted") == "agent_restarted"
     assert normalize_event_type("doorbell.media.closed") == "doorbell_media_closed"
     assert normalize_event_type("activation.executed") == "activation_executed"
+    assert normalize_event_type("home_call.ended") == "home_call_ended"
     assert normalize_event_type("memos.changed") == "memos_changed"
     assert normalize_event_type("system.metrics_changed") == "system_metrics_changed"
     assert normalize_event_type("agent.diagnostics_changed") == "agent_diagnostics_changed"

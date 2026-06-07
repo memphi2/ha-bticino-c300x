@@ -5,6 +5,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 int parse_http_url(
     const char *url,
@@ -126,4 +127,13 @@ void allow_socket_reuse(int fd)
     int enabled = 1;
 
     (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled));
+}
+
+void close_agent_socket(int fd)
+{
+    if (fd < 0) {
+        return;
+    }
+    (void)shutdown(fd, SHUT_RDWR);
+    close(fd);
 }

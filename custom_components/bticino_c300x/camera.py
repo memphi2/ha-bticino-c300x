@@ -11,6 +11,7 @@ import struct
 import warnings
 from contextlib import suppress
 from fractions import Fraction
+from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
@@ -28,7 +29,6 @@ from homeassistant.components.stream import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
@@ -39,29 +39,28 @@ from .const import (
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     EVENT_AGENT_EVENT_RECEIVED,
-    SIGNAL_EVENT_STATE_CHANGED,
+    MAX_HOME_CALL_DURATION_SECONDS,
 )
+from .device_user import media_user_attribute
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .event_payload import agent_event_key
 from .video import (
-    active_until_is_active,
-    call_later,
     doorbell_camera_unique_id,
-    event_active_seconds,
     optional_string,
-    safe_optional_stream_path,
-    safe_stream_path,
 )
 
 PARALLEL_UPDATES = 0
 VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
 VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
+HOME_CALL_EVENTS = {"home_call_started", "home_call_answered", "home_call_ended"}
 RTSP_FRAME_TIMEOUT_SECONDS = 5.0
 RTSP_READY_CONNECT_TIMEOUT_SECONDS = 1.0
 RTSP_READY_INTERVAL_SECONDS = 0.25
 RTSP_READY_TIMEOUT_SECONDS = 6.0
 RTSP_FAILURE_COOLDOWN_SECONDS = 20.0
 RTSP_MAX_SESSION_RESTARTS = 3
+RING_CALL_WAIT_INTERVAL_SECONDS = 0.2
+RING_CALL_WAIT_TIMEOUT_SECONDS = 4.0
 WEBRTC_RENEW_SECONDS = 60
 TALKBACK_RTP_PORT = 40004
 TALKBACK_RTP_PAYLOAD_TYPE = 97
@@ -71,6 +70,7 @@ STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
 _AIORTC_MODULES: SimpleNamespace | None = None
+_MDNS_CACHE_FLUSH_BIT = 0x8000
 _DNS_MDNS_RDATA_MODULES = (
     "dns.rdtypes.IN.A",
     "dns.rdtypes.IN.AAAA",
@@ -88,6 +88,54 @@ def _preload_dns_mdns_modules(
     for module_name in _DNS_MDNS_RDATA_MODULES:
         with suppress(ImportError):
             import_module(module_name)
+    with suppress(ImportError, AttributeError):
+        dns_rdata = import_module("dns.rdata")
+        dns_rdataclass = import_module("dns.rdataclass")
+        dns_rdatatype = import_module("dns.rdatatype")
+        mdns_rdclass = int(dns_rdataclass.IN) | _MDNS_CACHE_FLUSH_BIT
+        for rdtype in (dns_rdatatype.A, dns_rdatatype.AAAA):
+            dns_rdata.get_rdata_class(mdns_rdclass, rdtype)
+
+
+def _status_is_call_media_active(status: dict[str, Any]) -> bool:
+    """Return true when the native bridge is already serving call media."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
+    return owner in {"ring", "home_call"} or bool(
+        bridge.get("ring_call_active") or bridge.get("ring_media_active")
+        or bridge.get("home_call_running") or bridge.get("home_call_active")
+    )
+
+
+def _status_is_external_media_active(status: dict[str, Any]) -> bool:
+    """Return true while the native agent sees a non-HA doorbell media window."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    return bool(status.get("external_media_active") or bridge.get("external_media_active"))
+
+
+def _status_is_home_call_media_active(status: dict[str, Any]) -> bool:
+    """Return true when the native bridge is serving an audio-only home call."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
+    return owner == "home_call" or bool(
+        bridge.get("home_call_running") or bridge.get("home_call_active")
+    )
+
+
+def _home_call_payload(data: dict[str, Any]) -> dict[str, Any]:
+    payload = data.get("home_call")
+    if isinstance(payload, dict):
+        return payload
+    nested = data.get("data")
+    if isinstance(nested, dict):
+        payload = nested.get("home_call")
+        if isinstance(payload, dict):
+            return payload
+        return nested
+    return {}
 
 
 def _load_aiortc_modules() -> SimpleNamespace:
@@ -145,9 +193,18 @@ def _load_aiortc_modules() -> SimpleNamespace:
 class _NativeWebRTCSession:
     """Runtime resources for one native WebRTC session."""
 
-    def __init__(self, peer: Any) -> None:
+    def __init__(
+        self,
+        peer: Any,
+        *,
+        owner: str = "doorbell",
+        send_message: WebRTCSendMessage | None = None,
+    ) -> None:
         self.peer = peer
+        self.owner = owner
+        self.send_message = send_message
         self.player: Any | None = None
+        self.ice_flush_task: asyncio.Task | None = None
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
         self.talkback_requested = False
@@ -411,6 +468,123 @@ def _new_restarting_rtsp_video_track(
     return RestartingRTSPVideoTrack()
 
 
+def _new_restarting_rtsp_audio_track(
+    audio_stream_track_cls: Any,
+    media_stream_error_cls: type[Exception],
+    media_player_cls: Any,
+    hass: HomeAssistant,
+    stream_url: str,
+    restart_callback: Any,
+) -> Any:
+    """Create an audio-only RTSP track for app-style Home Call media."""
+
+    class RestartingRTSPAudioTrack(audio_stream_track_cls):
+        kind = "audio"
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._player: Any | None = None
+            self._track: Any | None = None
+            self._opened_once = False
+            self._restart_pending = False
+            self._restart_attempts = 0
+            self._retry_delay = 0.2
+            self._stopped = False
+            self._lock = asyncio.Lock()
+
+        async def recv(self) -> Any:
+            while not self._stopped:
+                had_reader = self._track is not None
+                try:
+                    await self._ensure_reader()
+                    frame = await asyncio.wait_for(
+                        self._track.recv(),
+                        timeout=RTSP_FRAME_TIMEOUT_SECONDS,
+                    )
+                    self._restart_attempts = 0
+                    self._retry_delay = 0.2
+                    return frame
+                except Exception:
+                    if had_reader and self._opened_once:
+                        self._restart_pending = True
+                    await self._async_close_reader()
+                    await asyncio.sleep(self._retry_delay)
+                    self._retry_delay = min(self._retry_delay * 2, 2.0)
+
+            raise media_stream_error_cls
+
+        async def _ensure_reader(self) -> None:
+            if self._track is not None:
+                return
+
+            async with self._lock:
+                if self._track is not None:
+                    return
+                await self._async_open_reader()
+
+        async def _async_open_reader(self) -> None:
+            await self._async_close_reader()
+            if self._restart_pending:
+                self._restart_pending = False
+                if self._restart_attempts >= RTSP_MAX_SESSION_RESTARTS:
+                    raise media_stream_error_cls
+                self._restart_attempts += 1
+                await restart_callback()
+            self._opened_once = True
+            player = await hass.async_add_executor_job(
+                lambda: media_player_cls(
+                    stream_url,
+                    options={
+                        "rtsp_transport": "tcp",
+                        "timeout": "5000000",
+                        "fflags": "nobuffer",
+                        "flags": "low_delay",
+                        "probesize": "32768",
+                        "analyzeduration": "0",
+                    },
+                )
+            )
+            if player.audio is None:
+                with suppress(Exception):
+                    if player.video is not None:
+                        player.video.stop()
+                raise media_stream_error_cls
+
+            with suppress(Exception):
+                if player.video is not None:
+                    player.video.stop()
+            self._player = player
+            self._track = player.audio
+
+        async def _async_close_reader(self) -> None:
+            player = self._player
+            track = self._track
+            self._player = None
+            self._track = None
+            with suppress(Exception):
+                if track is not None:
+                    track.stop()
+            with suppress(Exception):
+                if player is not None and player.video is not None:
+                    player.video.stop()
+
+        def stop(self) -> None:
+            self._stopped = True
+            player = self._player
+            track = self._track
+            self._player = None
+            self._track = None
+            with suppress(Exception):
+                if track is not None:
+                    track.stop()
+            with suppress(Exception):
+                if player is not None and player.video is not None:
+                    player.video.stop()
+            super().stop()
+
+    return RestartingRTSPAudioTrack()
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -435,9 +609,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         Camera.__init__(self)
         C300XEntity.__init__(self, entry, "doorbell_camera")
         self._attr_unique_id = doorbell_camera_unique_id(entry)
+        self._attr_is_streaming = False
         self.content_type = STILL_IMAGE_CONTENT_TYPE
         self._video_window_available = False
-        self._video_active_until: str | None = None
         self._video_stream_path: str | None = None
         self._audio_stream_path: str | None = None
         self._recorder_stream_path: str | None = None
@@ -446,9 +620,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._video_owner = "unknown"
         self._external_media_active = False
         self._external_owner: str | None = None
-        self._external_active_until: int | None = None
         self._last_video_block_reason: str | None = None
-        self._reset = None
         self._rtsp_prepare_lock = asyncio.Lock()
         self._rtsp_ready_lock = asyncio.Lock()
         self._rtsp_unavailable_until = 0.0
@@ -485,75 +657,16 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose safe stream metadata without leaking the agent host."""
+        """Expose compact user-facing media state without bridge internals."""
 
-        event_state = self._entry.runtime_data.event_state
-        talkback_supported = self._talkback_supported()
-        talkback_payload_type = self._bridge_status.get("talkback_payload_type")
-        if talkback_supported and talkback_payload_type is None:
-            talkback_payload_type = TALKBACK_RTP_PAYLOAD_TYPE
         return {
-            "rtsp_port": int(
-                entry_config_value(self._entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
-            ),
-            "stream_path": safe_stream_path(
-                self._video_stream_path
-                or event_state.video_stream_path
-                or entry_config_value(
-                    self._entry,
-                    CONF_VIDEO_STREAM_PATH,
-                    DEFAULT_VIDEO_STREAM_PATH,
-                )
-            ),
-            "audio_stream_path": safe_optional_stream_path(
-                self._audio_stream_path
-                or event_state.last_event_data.get("audio_stream_path")
-                or self._bridge_status.get("audio_stream_path")
-            ),
-            "recorder_stream_path": safe_optional_stream_path(
-                self._recorder_stream_path
-                or event_state.last_event_data.get("recorder_stream_path")
-                or self._bridge_status.get("recorder_stream_path")
-            ),
-            "video_available": self._bridge_available,
-            "video_window_available": (
-                _video_window_is_active(
-                    self._video_window_available,
-                    self._video_active_until,
-                )
-                or _video_window_is_active(
-                    bool(event_state.video_available),
-                    event_state.video_active_until,
-                )
-            ),
-            "video_active_until": _active_until_attribute(
-                self._video_active_until,
-                event_state.video_active_until,
-            ),
+            "video_window_available": self._video_window_available,
             "video_owner": self._video_owner,
             "external_media_active": self._external_media_active,
             "external_owner": self._external_owner,
-            "external_active_until": self._external_active_until,
             "last_video_block_reason": self._last_video_block_reason,
-            "talkback_supported": talkback_supported,
-            "talkback_requires_https": talkback_supported,
-            "talkback_requested": any(
-                session.talkback_requested
-                for session in self._webrtc_sessions.values()
-            ),
-            "talkback_active": any(
-                session.talkback_active for session in self._webrtc_sessions.values()
-            ),
-            "talkback_packets_sent": sum(
-                session.talkback_packets_sent
-                for session in self._webrtc_sessions.values()
-            ),
-            "talkback_proxy_running": bool(self._bridge_status.get("talkback_running")),
-            "talkback_codec": self._bridge_status.get("talkback_codec")
-            or (TALKBACK_CODEC if talkback_supported else None),
-            "talkback_payload_type": talkback_payload_type,
-            "talkback_last_error": self._talkback_last_error,
-            "bridge": self._bridge_status,
+            "talkback_supported": self._talkback_supported(),
+            **media_user_attribute(self._entry),
         }
 
     async def async_update(self) -> None:
@@ -605,6 +718,42 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     ) -> None:
         """Handle native WebRTC offers directly."""
 
+        await self._async_handle_webrtc_offer(
+            offer_sdp,
+            session_id,
+            send_message,
+            owner="doorbell",
+        )
+
+    async def async_handle_home_call_webrtc_offer(
+        self,
+        offer_sdp: str,
+        session_id: str,
+        send_message: WebRTCSendMessage,
+        *,
+        duration_seconds: int | None = None,
+    ) -> None:
+        """Handle an audio-only Home Call WebRTC offer."""
+
+        await self._async_handle_webrtc_offer(
+            offer_sdp,
+            session_id,
+            send_message,
+            owner="home_call",
+            duration_seconds=duration_seconds,
+        )
+
+    async def _async_handle_webrtc_offer(
+        self,
+        offer_sdp: str,
+        session_id: str,
+        send_message: WebRTCSendMessage,
+        *,
+        owner: str,
+        duration_seconds: int | None = None,
+    ) -> None:
+        """Handle a native WebRTC offer for doorbell video or Home Call audio."""
+
         try:
             aiortc_modules = await self._async_load_aiortc_modules()
         except ImportError as err:
@@ -613,13 +762,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             )
             raise HomeAssistantError("aiortc is not installed") from err
 
+        has_audio_media = self._offer_has_audio(offer_sdp)
+        talkback_requested = self._offer_can_send_microphone(offer_sdp)
+        wants_audio = has_audio_media and self._offer_should_use_audio_stream(offer_sdp)
+        if owner == "home_call" and not wants_audio:
+            send_message(
+                WebRTCError(
+                    "bticino_webrtc_offer_failed",
+                    "Home Call WebRTC offer must accept incoming audio",
+                )
+            )
+            return
+
         if session_id in self._webrtc_sessions:
             await self._async_close_webrtc_session(session_id)
 
         peer = aiortc_modules.RTCPeerConnection(
             configuration=self._webrtc_server_configuration(aiortc_modules)
         )
-        session = _NativeWebRTCSession(peer)
+        session = _NativeWebRTCSession(peer, owner=owner, send_message=send_message)
+        session.talkback_requested = talkback_requested
         self._webrtc_sessions[session_id] = session
 
         @peer.on("connectionstatechange")
@@ -642,17 +804,39 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             )
 
         try:
-            has_audio_media = self._offer_has_audio(offer_sdp)
-            session.talkback_requested = self._offer_can_send_microphone(offer_sdp)
-            wants_audio = has_audio_media and self._offer_should_use_audio_stream(
-                offer_sdp
-            )
-            stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
-
             async def _restart_reader() -> None:
-                await self._async_restart_video_reader(audio=wants_audio)
+                if owner == "home_call":
+                    await self._async_restart_home_call_reader()
+                else:
+                    await self._async_restart_video_reader(audio=wants_audio)
 
-            if wants_audio:
+            if owner == "home_call":
+                await self._entry.runtime_data.api.async_start_home_call(
+                    duration_seconds=duration_seconds
+                )
+                stream_url = await self._async_prepare_home_call_rtsp_stream()
+                home_call_audio_only = True
+            else:
+                stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
+                home_call_audio_only = wants_audio and _status_is_home_call_media_active(
+                    {
+                        "media_owner": self._video_owner,
+                        "bridge": self._bridge_status,
+                    }
+                )
+
+            if home_call_audio_only:
+                audio_track = _new_restarting_rtsp_audio_track(
+                    aiortc_modules.AudioStreamTrack,
+                    aiortc_modules.MediaStreamError,
+                    aiortc_modules.MediaPlayer,
+                    self.hass,
+                    stream_url,
+                    _restart_reader,
+                )
+                session.player = audio_track
+                peer.addTrack(audio_track)
+            elif wants_audio:
                 media, video_track, audio_track = _new_restarting_rtsp_tracks(
                     aiortc_modules.VideoStreamTrack,
                     aiortc_modules.AudioStreamTrack,
@@ -676,17 +860,15 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
                 session.player = video_track
                 peer.addTrack(video_track)
-            self._prefer_h264(peer, aiortc_modules)
+            self._prefer_webrtc_codecs(peer, aiortc_modules)
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
             )
-            await self._async_flush_pending_webrtc_candidates(session)
             answer = await peer.createAnswer()
             await peer.setLocalDescription(answer)
             await self._async_wait_for_ice_gathering(peer)
-            self._attr_is_streaming = True
-            self._async_write_ha_state_if_ready()
             send_message(WebRTCAnswer(_filter_link_local_sdp_candidates(peer.localDescription.sdp)))
+            self._schedule_pending_webrtc_candidate_flush(session_id)
             session.renew_task = self.hass.async_create_task(
                 self._async_renew_webrtc_until_closed(session_id)
             )
@@ -727,20 +909,42 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 sdp_mline_index = getattr(candidate, "sdpMLineIndex", None)
             rtc_candidate.sdpMid = sdp_mid
             rtc_candidate.sdpMLineIndex = sdp_mline_index
+
         if getattr(session.peer, "remoteDescription", None) is None:
             session.pending_ice_candidates.append(rtc_candidate)
             return
 
         await session.peer.addIceCandidate(rtc_candidate)
 
-    async def _async_flush_pending_webrtc_candidates(
-        self,
-        session: _NativeWebRTCSession,
-    ) -> None:
+    def _schedule_pending_webrtc_candidate_flush(self, session_id: str) -> None:
+        """Flush early browser ICE candidates without blocking the WebRTC answer."""
+
+        session = self._webrtc_sessions.get(session_id)
+        if (
+            session is None
+            or not session.pending_ice_candidates
+            or (session.ice_flush_task is not None and not session.ice_flush_task.done())
+        ):
+            return
+        session.ice_flush_task = self.hass.async_create_task(
+            self._async_flush_pending_webrtc_candidates(session_id)
+        )
+
+    async def _async_flush_pending_webrtc_candidates(self, session_id: str) -> None:
         """Replay ICE candidates that arrived before the remote description."""
 
-        while session.pending_ice_candidates:
-            await session.peer.addIceCandidate(session.pending_ice_candidates.pop(0))
+        session = self._webrtc_sessions.get(session_id)
+        if session is None:
+            return
+        try:
+            if getattr(session.peer, "remoteDescription", None) is None:
+                return
+            while session.pending_ice_candidates:
+                await session.peer.addIceCandidate(session.pending_ice_candidates.pop(0))
+        finally:
+            current_session = self._webrtc_sessions.get(session_id)
+            if current_session is session:
+                session.ice_flush_task = None
 
     @callback
     def close_webrtc_session(self, session_id: str) -> None:
@@ -751,42 +955,51 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""
 
-        if self._reset:
-            self._reset()
-            self._reset = None
         for session_id in list(self._webrtc_sessions):
             await self._async_close_webrtc_session(session_id)
         with suppress(Exception):
             await self._entry.runtime_data.api.async_stop_doorbell_video()
 
-    async def _async_close_webrtc_session(self, session_id: str) -> None:
+    async def _async_close_webrtc_session(
+        self,
+        session_id: str,
+        *,
+        stop_media: bool = True,
+        notify_client: bool = False,
+        reason: str = "closed",
+    ) -> None:
         session = self._webrtc_sessions.pop(session_id, None)
         if session is None:
-            if not self._webrtc_sessions and self._attr_is_streaming:
-                self._attr_is_streaming = False
-                self._async_write_ha_state_if_ready()
             return
-
-        self._attr_is_streaming = bool(self._webrtc_sessions)
-        self._async_write_ha_state_if_ready()
 
         if session.renew_task is not None and session.renew_task is not asyncio.current_task():
             session.renew_task.cancel()
             session.renew_task = None
+        if (
+            session.ice_flush_task is not None
+            and session.ice_flush_task is not asyncio.current_task()
+        ):
+            session.ice_flush_task.cancel()
+            session.ice_flush_task = None
         if session.talkback_task is not None and session.talkback_task is not asyncio.current_task():
             session.talkback_task.cancel()
             session.talkback_task = None
         if session.player is not None:
             with suppress(Exception):
                 session.player.stop()
+        if notify_client and session.send_message is not None:
+            with suppress(Exception):
+                session.send_message({"type": "closed", "reason": reason})
         with suppress(Exception):
             await session.peer.close()
 
-        if not self._webrtc_sessions:
-            with suppress(Exception):
-                await self._entry.runtime_data.api.async_stop_doorbell_video()
-        self._attr_is_streaming = bool(self._webrtc_sessions)
-        self._async_write_ha_state_if_ready()
+        if not self._webrtc_sessions and stop_media:
+            if session.owner == "home_call":
+                with suppress(Exception):
+                    await self._entry.runtime_data.api.async_stop_home_call()
+            else:
+                with suppress(Exception):
+                    await self._entry.runtime_data.api.async_stop_doorbell_video()
 
     async def _async_warmup_video(self) -> None:
         """Mark the video window and refresh bridge metadata before RTSP opens."""
@@ -795,30 +1008,148 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await self._entry.runtime_data.api.async_activate_doorbell_video(audio=True)
         except Exception:  # noqa: BLE001 - refresh status before re-raising API failure
             with suppress(Exception):
-                status = await self._entry.runtime_data.api.async_doorbell_video_status()
-                self._apply_status(status)
+                await self._async_refresh_video_status()
                 self._async_write_ha_state_if_ready()
             raise
         with suppress(Exception):
-            status = await self._entry.runtime_data.api.async_doorbell_video_status()
-            self._apply_status(status)
+            await self._async_refresh_video_status()
 
     async def _async_restart_video_reader(self, *, audio: bool = False) -> None:
         async with self._rtsp_prepare_lock:
+            status = await self._async_refresh_video_status_or_none()
+            if status is not None and _status_is_call_media_active(status):
+                await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+                return
+            if status is not None and _status_is_external_media_active(status):
+                status = await self._async_wait_for_call_media_after_external_event(status)
+                if status is not None and _status_is_call_media_active(status):
+                    await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+                    return
             await self._entry.runtime_data.api.async_stop_doorbell_video()
             await asyncio.sleep(1.0)
             await self._async_warmup_video()
             await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=audio))
+
+    async def _async_restart_home_call_reader(self) -> None:
+        async with self._rtsp_prepare_lock:
+            await self._async_wait_for_home_call_active()
+            await self._async_wait_for_rtsp_ready(self._build_stream_url(audio=True))
 
     async def _async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 
         async with self._rtsp_prepare_lock:
             self._raise_if_rtsp_cooling_down()
-            await self._async_warmup_video()
+            status = await self._async_refresh_video_status_or_none()
+            if status is not None and _status_is_external_media_active(status):
+                status = await self._async_wait_for_call_media_after_external_event(status)
+            if status is None or not _status_is_call_media_active(status):
+                await self._async_warmup_video()
             stream_url = self._build_stream_url(audio=audio)
             await self._async_wait_for_rtsp_ready(stream_url)
             return stream_url
+
+    async def _async_wait_for_call_media_after_external_event(
+        self,
+        status: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Wait for a real SIP ring call after an OpenWebNet doorbell event."""
+
+        if _status_is_call_media_active(status) or not _status_is_external_media_active(status):
+            return status
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + RING_CALL_WAIT_TIMEOUT_SECONDS
+        current: dict[str, Any] | None = status
+        while loop.time() < deadline:
+            await asyncio.sleep(RING_CALL_WAIT_INTERVAL_SECONDS)
+            refreshed = await self._async_refresh_video_status_or_none()
+            if refreshed is None:
+                continue
+            current = refreshed
+            if _status_is_call_media_active(refreshed) or not _status_is_external_media_active(refreshed):
+                return refreshed
+        return current
+
+    async def _async_prepare_home_call_rtsp_stream(self) -> str:
+        """Return the audio-only RTSP source for an active Home Call."""
+
+        async with self._rtsp_prepare_lock:
+            self._raise_if_rtsp_cooling_down()
+            await self._async_wait_for_home_call_active()
+            stream_url = self._build_stream_url(audio=True)
+            await self._async_wait_for_rtsp_ready(stream_url)
+            return stream_url
+
+    async def _async_wait_for_home_call_active(
+        self,
+        *,
+        apply_status: bool = True,
+    ) -> dict[str, Any]:
+        """Wait until the native agent reports the Home Call media as active."""
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(RTSP_READY_TIMEOUT_SECONDS, 20.0)
+        last_status: dict[str, Any] = {}
+        while True:
+            with suppress(Exception):
+                status = await self._entry.runtime_data.api.async_home_call_status()
+                last_status = status
+                if (
+                    status.get("answered")
+                    or status.get("rtp_proxy")
+                    or status.get("target_audio_port")
+                ):
+                    if apply_status:
+                        self._apply_home_call_status(status)
+                    return status
+            if loop.time() >= deadline:
+                last_error = last_status.get("last_error") if last_status else None
+                raise HomeAssistantError(
+                    f"C300X Home Call did not become active: {last_error or last_status}"
+                )
+            await asyncio.sleep(RTSP_READY_INTERVAL_SECONDS)
+
+    def _apply_home_call_status(self, status: dict[str, Any]) -> None:
+        """Mirror Home Call media into the audio bridge attributes."""
+
+        self._bridge_available = bool(status.get("available", True))
+        self._video_owner = "home_call"
+        self._bridge_status = {
+            **self._bridge_status,
+            "media_owner": "home_call",
+            "home_call_running": bool(status.get("running")),
+            "home_call_active": bool(status.get("active")),
+            "home_call_answered": bool(status.get("answered")),
+            "home_call_rtp_proxy": bool(status.get("rtp_proxy")),
+            "home_call_target_audio_port": status.get("target_audio_port"),
+            "home_call_rtp_packets": status.get("rtp_packets", 0),
+            "home_call_rtcp_packets": status.get("rtcp_packets", 0),
+            "audio_codec": TALKBACK_CODEC,
+            "talkback_supported": True,
+            "talkback_codec": TALKBACK_CODEC,
+            "talkback_payload_type": TALKBACK_RTP_PAYLOAD_TYPE,
+        }
+        self._audio_stream_path = "/doorbell"
+
+    async def _async_refresh_video_status(
+        self,
+        *,
+        apply_status: bool = True,
+    ) -> dict[str, Any]:
+        status = await self._entry.runtime_data.api.async_doorbell_video_status()
+        if apply_status:
+            self._apply_status(status)
+        return status
+
+    async def _async_refresh_video_status_or_none(
+        self,
+        *,
+        apply_status: bool = True,
+    ) -> dict[str, Any] | None:
+        with suppress(Exception):
+            return await self._async_refresh_video_status(apply_status=apply_status)
+        return None
 
     async def _async_wait_for_rtsp_ready(self, stream_url: str) -> None:
         """Wait briefly for the native RTSP bridge to accept RTSP requests."""
@@ -896,8 +1227,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_renew_webrtc_until_closed(self, session_id: str) -> None:
         while session_id in self._webrtc_sessions:
             await asyncio.sleep(WEBRTC_RENEW_SECONDS)
-            if session_id not in self._webrtc_sessions:
+            session = self._webrtc_sessions.get(session_id)
+            if session is None:
                 return
+            if session.owner == "home_call":
+                with suppress(Exception):
+                    await self._async_wait_for_home_call_active(apply_status=False)
+                continue
+            with suppress(Exception):
+                if _status_is_call_media_active(
+                    await self._async_refresh_video_status(apply_status=False)
+                ):
+                    continue
             with suppress(Exception):
                 await self._async_warmup_video()
 
@@ -1128,6 +1469,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         return aiortc_modules.RTCConfiguration(iceServers=ice_servers)
 
+    def _prefer_webrtc_codecs(self, peer: Any, aiortc_modules: SimpleNamespace) -> None:
+        self._prefer_h264(peer, aiortc_modules)
+        self._prefer_browser_audio(peer, aiortc_modules)
+
     def _prefer_h264(self, peer: Any, aiortc_modules: SimpleNamespace) -> None:
         capabilities = aiortc_modules.RTCRtpSender.getCapabilities("video")
         h264_codecs = [
@@ -1147,6 +1492,29 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             if transceiver.kind == "video":
                 with suppress(Exception):
                     transceiver.setCodecPreferences([*h264_codecs, *other_codecs])
+
+    def _prefer_browser_audio(self, peer: Any, aiortc_modules: SimpleNamespace) -> None:
+        capabilities = aiortc_modules.RTCRtpSender.getCapabilities("audio")
+        preferred_mime_types = {"audio/opus", "audio/pcmu", "audio/pcma"}
+        preferred_codecs = [
+            codec
+            for codec in capabilities.codecs
+            if codec.mimeType.lower() in preferred_mime_types
+        ]
+        other_codecs = [
+            codec
+            for codec in capabilities.codecs
+            if codec.mimeType.lower() not in preferred_mime_types
+        ]
+        if not preferred_codecs:
+            return
+
+        for transceiver in peer.getTransceivers():
+            if transceiver.kind == "audio":
+                with suppress(Exception):
+                    transceiver.setCodecPreferences(
+                        [*preferred_codecs, *other_codecs]
+                    )
 
     async def _async_wait_for_ice_gathering(self, peer: Any) -> None:
         if peer.iceGatheringState == "complete":
@@ -1191,7 +1559,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         else:
             path = (
                 self._video_stream_path
-                or self._entry.runtime_data.event_state.video_stream_path
                 or entry_config_value(
                     self._entry,
                     CONF_VIDEO_STREAM_PATH,
@@ -1211,11 +1578,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._bridge_available = bool(status.get("available"))
         self._bridge_status = status.get("bridge") or {}
         self._video_window_available = bool(status.get("window_available"))
-        self._video_active_until = status.get("active_until")
+        self._attr_is_streaming = self._video_window_available
         self._video_owner = str(status.get("media_owner") or "unknown")
         self._external_media_active = bool(status.get("external_media_active"))
         self._external_owner = optional_string(status.get("external_owner"))
-        self._external_active_until = status.get("external_active_until")
         self._last_video_block_reason = optional_string(status.get("last_block_reason"))
         if status.get("stream_path"):
             self._video_stream_path = str(status["stream_path"])
@@ -1232,87 +1598,266 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 self._handle_agent_event,
             )
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_EVENT_STATE_CHANGED,
-                self._handle_event_state_changed,
-            )
-        )
-
-    @callback
-    def _handle_event_state_changed(self, entry_id: str) -> None:
-        """Refresh attributes when runtime video state is cleared centrally."""
-
-        if entry_id == self._entry.entry_id:
-            self._async_write_ha_state_if_ready()
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)
+        if event_type in HOME_CALL_EVENTS:
+            self._handle_home_call_event(event_type, event.data)
+            self._async_write_ha_state_if_ready()
+            return
         if event_type not in VIDEO_WINDOW_EVENTS | VIDEO_WINDOW_CLOSED_EVENTS:
             return
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
             self._async_write_ha_state_if_ready()
             return
-        self._video_window_available = bool(event.data.get("video_window_available", True))
-        self._bridge_available = bool(event.data.get("video_available", True))
-        self._video_active_until = event.data.get("video_active_until") or event.data.get(
-            "active_until"
+        self._video_window_available = bool(
+            event.data.get("video_window_available", False)
         )
+        self._attr_is_streaming = self._video_window_available
+        self._bridge_available = bool(event.data.get("video_available", False))
         self._video_stream_path = event.data.get("stream_path")
         self._audio_stream_path = optional_string(event.data.get("audio_stream_path"))
         self._recorder_stream_path = optional_string(
             event.data.get("recorder_stream_path")
         )
-        if self._reset:
-            self._reset()
-        active_seconds = event_active_seconds(event.data)
-
-        @callback
-        def _reset(now: Any = None) -> None:
-            self._reset = None
-            self._clear_video_window(cancel_timer=False)
-            self._async_write_ha_state_if_ready()
-
-        if hasattr(self, "hass"):
-            self._reset = call_later(self.hass, active_seconds, _reset)
         self._async_write_ha_state_if_ready()
 
-    def _clear_video_window(self, *, cancel_timer: bool = True) -> None:
-        if cancel_timer and self._reset:
-            self._reset()
-        self._reset = None
+    def _handle_home_call_event(self, event_type: str, data: dict[str, Any]) -> None:
+        payload = _home_call_payload(data)
+        if event_type == "home_call_ended":
+            self._apply_home_call_ended(payload)
+            self._close_home_call_webrtc_sessions_from_event()
+            return
+        if event_type == "home_call_answered":
+            self._apply_home_call_status(
+                {
+                    **payload,
+                    "running": payload.get("running", True),
+                    "active": payload.get("active", True),
+                    "answered": payload.get("answered", True),
+                }
+            )
+            return
+        self._apply_home_call_status(
+            {
+                **payload,
+                "running": payload.get("running", True),
+                "active": payload.get("active", True),
+                "answered": payload.get("answered", False),
+            }
+        )
+
+    def _close_home_call_webrtc_sessions_from_event(self) -> None:
+        """Close HA Home Call WebRTC sessions after an authoritative agent end event."""
+
+        session_ids = [
+            session_id
+            for session_id, session in self._webrtc_sessions.items()
+            if session.owner == "home_call"
+        ]
+        if (
+            not session_ids
+            or not hasattr(self, "hass")
+            or not hasattr(self.hass, "async_create_task")
+        ):
+            return
+
+        async def _close_sessions() -> None:
+            for session_id in session_ids:
+                await self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="home_call_ended",
+                )
+
+        self.hass.async_create_task(_close_sessions())
+
+    def _apply_home_call_ended(self, status: dict[str, Any]) -> None:
+        was_home_call = (
+            self._video_owner == "home_call"
+            or self._bridge_status.get("media_owner") == "home_call"
+        )
+        self._bridge_available = bool(status.get("available", True))
+        self._bridge_status = {
+            **self._bridge_status,
+            "home_call_running": False,
+            "home_call_active": False,
+            "home_call_answered": False,
+            "home_call_rtp_proxy": False,
+            "home_call_target_audio_port": 0,
+            "home_call_rtp_packets": status.get("rtp_packets", 0),
+            "home_call_rtcp_packets": status.get("rtcp_packets", 0),
+        }
+        if was_home_call:
+            self._bridge_status["media_owner"] = "idle"
+            self._video_owner = "idle"
+            self._video_window_available = False
+            self._attr_is_streaming = False
+            self._video_stream_path = None
+            self._audio_stream_path = None
+            self._recorder_stream_path = None
+
+    def _clear_video_window(self) -> None:
         self._video_window_available = False
-        self._video_active_until = None
+        self._attr_is_streaming = False
         self._video_stream_path = None
         self._audio_stream_path = None
         self._recorder_stream_path = None
         self._bridge_available = False
+        self._video_owner = "idle"
+        self._external_media_active = False
+        self._external_owner = None
+        self._last_video_block_reason = None
+        self._bridge_status = {
+            **self._bridge_status,
+            "media_owner": "idle",
+            "media_active": False,
+            "external_media_active": False,
+            "ring_call_active": False,
+            "ring_media_active": False,
+            "call_active": False,
+        }
 
     def _async_write_ha_state_if_ready(self) -> None:
         if hasattr(self, "async_write_ha_state"):
             self.async_write_ha_state()
 
 
-def _video_window_is_active(available: bool, active_until: str | None) -> bool:
-    """Return true when a video window is currently usable by HA."""
+@callback
+def async_register_home_call_ws(hass: HomeAssistant) -> None:
+    """Register Home Call audio WebRTC websocket commands."""
 
-    if not available:
-        return False
-    return active_until_is_active(active_until) if active_until else True
+    import voluptuous as vol
+    from homeassistant.components import websocket_api
+    from homeassistant.components.camera.helper import get_camera_from_entity_id
+    from homeassistant.components.camera.webrtc import WebRTCSession
+    from homeassistant.helpers import config_validation as cv
+    from homeassistant.util.ulid import ulid
 
+    def _home_call_camera(entity_id: str) -> C300XDoorbellCamera | None:
+        camera = get_camera_from_entity_id(hass, entity_id)
+        return camera if isinstance(camera, C300XDoorbellCamera) else None
 
-def _active_until_attribute(*values: str | None) -> str | None:
-    """Return the first non-expired active-until timestamp."""
+    def _parse_candidate(value: Any) -> Any:
+        if not isinstance(value, dict):
+            raise vol.Invalid("candidate must be an object")
+        return SimpleNamespace(
+            candidate=str(value.get("candidate") or ""),
+            sdpMid=value.get("sdpMid"),
+            sdpMLineIndex=value.get("sdpMLineIndex"),
+        )
 
-    for value in values:
-        if value and active_until_is_active(value):
-            return value
-    return None
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): "bticino_c300x/home_call/webrtc/get_client_config",
+            vol.Required("entity_id"): cv.entity_id,
+        }
+    )
+    @websocket_api.async_response
+    async def ws_home_call_get_client_config(
+        _hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        camera = _home_call_camera(msg["entity_id"])
+        if camera is None:
+            connection.send_error(
+                msg["id"],
+                "home_call_webrtc_not_found",
+                "C300X doorbell camera entity not found",
+            )
+            return
+        connection.send_result(
+            msg["id"],
+            camera.async_get_webrtc_client_configuration().to_frontend_dict(),
+        )
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): "bticino_c300x/home_call/webrtc/offer",
+            vol.Required("entity_id"): cv.entity_id,
+            vol.Required("offer"): str,
+            vol.Optional("duration_seconds"): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=0, max=MAX_HOME_CALL_DURATION_SECONDS),
+            ),
+        }
+    )
+    @websocket_api.async_response
+    async def ws_home_call_webrtc_offer(
+        _hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        camera = _home_call_camera(msg["entity_id"])
+        if camera is None:
+            connection.send_error(
+                msg["id"],
+                "home_call_webrtc_not_found",
+                "C300X doorbell camera entity not found",
+            )
+            return
+
+        session_id = ulid()
+        connection.subscriptions[msg["id"]] = partial(
+            camera.close_webrtc_session,
+            session_id,
+        )
+        connection.send_message(websocket_api.result_message(msg["id"]))
+
+        @callback
+        def send_message(message: Any) -> None:
+            connection.send_message(
+                websocket_api.event_message(
+                    msg["id"],
+                    message.as_dict() if hasattr(message, "as_dict") else message,
+                )
+            )
+
+        send_message(WebRTCSession(session_id))
+        try:
+            await camera.async_handle_home_call_webrtc_offer(
+                msg["offer"],
+                session_id,
+                send_message,
+                duration_seconds=msg.get("duration_seconds"),
+            )
+        except HomeAssistantError as err:
+            send_message(WebRTCError("home_call_webrtc_offer_failed", str(err)))
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): "bticino_c300x/home_call/webrtc/candidate",
+            vol.Required("entity_id"): cv.entity_id,
+            vol.Required("session_id"): str,
+            vol.Required("candidate"): _parse_candidate,
+        }
+    )
+    @websocket_api.async_response
+    async def ws_home_call_candidate(
+        _hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        camera = _home_call_camera(msg["entity_id"])
+        if camera is None:
+            connection.send_error(
+                msg["id"],
+                "home_call_webrtc_not_found",
+                "C300X doorbell camera entity not found",
+            )
+            return
+        await camera.async_on_webrtc_candidate(msg["session_id"], msg["candidate"])
+        connection.send_message(websocket_api.result_message(msg["id"]))
+
+    websocket_api.async_register_command(hass, ws_home_call_get_client_config)
+    websocket_api.async_register_command(hass, ws_home_call_webrtc_offer)
+    websocket_api.async_register_command(hass, ws_home_call_candidate)
 
 
 def _filter_link_local_sdp_candidates(sdp: str) -> str:

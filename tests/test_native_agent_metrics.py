@@ -124,6 +124,85 @@ def test_native_agent_openwebnet_address_events_do_not_use_greedy_scanf() -> Non
     assert "%31[0-9#]##" not in text
 
 
+def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    event_body = text.split("static int map_openwebnet_event", maxsplit=1)[1].split(
+        "static void handle_udp_event",
+        maxsplit=1,
+    )[0]
+    remember_body = text.split(
+        "static void remember_smartphone_forwarding_mode",
+        maxsplit=1,
+    )[1].split("static int note_smartphone_forwarding_changed", maxsplit=1)[0]
+    note_body = text.split(
+        "static int note_smartphone_forwarding_changed",
+        maxsplit=1,
+    )[1].split("static void refresh_smartphone_forwarding_mode", maxsplit=1)[0]
+    state_body = text.split("static void api_state", maxsplit=1)[1].split(
+        "static void handle_doorbell_video_get",
+        maxsplit=1,
+    )[0]
+
+    assert "int smartphone_forwarding_mode_known;" in text
+    assert "int smartphone_forwarding_mode_code;" in text
+    assert "smartphone_code_from_reply(msg, &code)" in event_body
+    assert "note_smartphone_forwarding_changed(runtime, code)" in event_body
+    assert "return 0;" in note_body
+    assert "runtime->smartphone_forwarding_mode_code == code" in note_body
+    assert "c300x_video_set_ring_forwarding_enabled" not in remember_body
+    assert '\\"smartphone_forwarding\\":%s' in state_body
+    assert "refresh_smartphone_forwarding_mode(config, runtime)" in text
+
+
+def test_native_agent_ringer_events_are_change_based() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    event_body = text.split("static int map_openwebnet_event", maxsplit=1)[1].split(
+        "static void handle_udp_event",
+        maxsplit=1,
+    )[0]
+    note_body = text.split(
+        "static int note_ringer_muted_changed",
+        maxsplit=1,
+    )[1].split("static void refresh_smartphone_forwarding_mode", maxsplit=1)[0]
+    state_body = text.split("static void api_state", maxsplit=1)[1].split(
+        "static void handle_doorbell_video_get",
+        maxsplit=1,
+    )[0]
+
+    assert "int ringer_muted_known;" in text
+    assert "int ringer_muted;" in text
+    assert "note_ringer_muted_changed(runtime, muted)" in event_body
+    assert "return 0;" in note_body
+    assert "runtime->ringer_muted == muted" in note_body
+    assert "remember_ringer_muted(runtime, muted)" in note_body
+    assert "remember_ringer_muted(runtime, readback)" in text
+    assert '\\"ringer_muted\\":%s' in state_body
+
+
+def test_native_agent_maps_device_doorbell_answer_and_close_frames() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    event_body = text.split("static int map_openwebnet_event", maxsplit=1)[1].split(
+        "static void handle_udp_event",
+        maxsplit=1,
+    )[0]
+
+    assert 'strncmp(msg, "*8*2#1#4*", strlen("*8*2#1#4*")) == 0' in event_body
+    assert 'strncmp(msg, "*8*3#1#4*", strlen("*8*3#1#4*")) == 0' in event_body
+    assert 'strncmp(msg, "*8*3#5#4*", strlen("*8*3#5#4*")) == 0' in event_body
+    assert 'strcmp(msg, "*7*0*##") == 0' in event_body
+    assert event_body.index('strncmp(msg, "*8*2#1#4*"') < event_body.index(
+        'c300x_copy_string(type, type_len, "doorbell.pressed")'
+    )
+    assert event_body.index(
+        'c300x_copy_string(type, type_len, "doorbell.view_requested")'
+    ) < event_body.index('strncmp(msg, "*8*3#1#4*"')
+    assert event_body.index(
+        'c300x_copy_string(type, type_len, "doorbell.media.closed")'
+    ) < event_body.index(
+        'strncmp(msg, "*8*1#1#4#"'
+    )
+
+
 def test_native_agent_message_watch_mask_includes_file_modifications() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 

@@ -26,8 +26,7 @@
         "description": "This writes the native agent, generated token config, startup script, and QML support files to the C300X through SSH. SSH credentials are used only for this install step and are not stored.",
         "data": {
           "bootstrap_ssh_username": "C300X SSH user",
-          "bootstrap_ssh_password": "C300X SSH password",
-          "bootstrap_apply_gui_patch": "Apply C300X GUI patch after install"
+          "bootstrap_ssh_password": "C300X SSH password"
         }
       },
       "agent_auth": {
@@ -40,17 +39,22 @@
       },
       "user_features": {
         "title": "BTicino C300X features",
-        "description": "Select the Home Assistant features exposed by this C300X installation.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Select the Home Assistant media and device features exposed by this C300X installation.",
+        "data": {
+          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
+          "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_address": "Manual stair light activation address"
+        }
+      },
+      "user_dashboard": {
+        "title": "C300X GUI dashboard",
+        "description": "Configure the optional C300X display dashboard and GUI function patch.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
         "data": {
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
-          "video_enabled": "Create doorbell camera entity",
-          "video_port": "Doorbell RTSP port",
-          "video_stream_path": "Doorbell RTSP stream path",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }
@@ -72,17 +76,22 @@
       },
       "reconfigure_features": {
         "title": "Reconfigure BTicino C300X features",
-        "description": "Update Alarmo, video, and GUI function patch settings.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Update media, Home Assistant media user, and device activation settings.",
+        "data": {
+          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
+          "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_address": "Manual stair light activation address"
+        }
+      },
+      "reconfigure_dashboard": {
+        "title": "Reconfigure C300X GUI dashboard",
+        "description": "Configure the optional C300X display dashboard and GUI function patch.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
         "data": {
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
-          "video_enabled": "Create doorbell camera entity",
-          "video_port": "Doorbell RTSP port",
-          "video_stream_path": "Doorbell RTSP stream path",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }
@@ -126,17 +135,22 @@
       },
       "features": {
         "title": "BTicino C300X features",
-        "description": "Configure Alarmo, video, and GUI function patch settings.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Configure media, Home Assistant media user, and device activation settings.",
+        "data": {
+          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
+          "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_address": "Manual stair light activation address"
+        }
+      },
+      "dashboard": {
+        "title": "C300X GUI dashboard",
+        "description": "Configure the optional C300X display dashboard and GUI function patch.\n\nCurrent device GUI function patch status: {qml_patch_status}.\n\nApplying or restoring the GUI patch writes QML files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
         "data": {
           "device_ui_enabled": "Patch C300X GUI functions",
           "alarm_entity_id": "Alarmo entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
-          "video_enabled": "Create doorbell camera entity",
-          "video_port": "Doorbell RTSP port",
-          "video_stream_path": "Doorbell RTSP stream path",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }
@@ -153,8 +167,8 @@
   },
   "entity": {
     "binary_sensor": {
-      "doorbell_video_available": {
-        "name": "Doorbell video available"
+      "home_call_active": {
+        "name": "Home call active"
       }
     },
     "button": {
@@ -173,11 +187,20 @@
       "remove_agent": {
         "name": "Remove device agent"
       },
+      "restart_agent": {
+        "name": "Restart device agent"
+      },
       "reload_gui": {
         "name": "Reload device GUI"
       },
       "stair_light": {
         "name": "Stair light"
+      },
+      "stop_doorbell_video": {
+        "name": "Stop doorbell video"
+      },
+      "ensure_homeassistant_user": {
+        "name": "Create Home Assistant media user"
       },
       "delete_latest_voice_memo": {
         "name": "Delete latest voice memo"
@@ -222,17 +245,6 @@
       }
     },
     "sensor": {
-      "connection_state": {
-        "name": "Connection state",
-        "state": {
-          "connected": "Connected",
-          "reconnecting": "Reconnecting",
-          "disconnected": "Disconnected"
-        }
-      },
-      "agent": {
-        "name": "Device agent"
-      },
       "agent_status": {
         "name": "Device agent status",
         "state": {
@@ -240,9 +252,6 @@
           "warning": "Warning",
           "error": "Error"
         }
-      },
-      "agent_writes": {
-        "name": "Device agent writes"
       },
       "device_cpu": {
         "name": "Device CPU"
@@ -256,38 +265,14 @@
       "device_temperature": {
         "name": "Device temperature"
       },
-      "qml_patch_status": {
-        "name": "Device GUI function patch"
-      },
-      "last_connection_error": {
-        "name": "Last connection error"
-      },
-      "next_reconnect_delay": {
-        "name": "Next reconnect delay"
-      },
-      "reconnect_count": {
-        "name": "Reconnects"
-      },
       "voicemail_messages": {
         "name": "Video messages"
-      },
-      "voicemail_unread": {
-        "name": "Unread video messages"
-      },
-      "latest_video_message": {
-        "name": "Latest video message"
       },
       "text_memos": {
         "name": "Text memos"
       },
-      "latest_text_memo": {
-        "name": "Latest text memo"
-      },
       "voice_memos": {
         "name": "Voice memos"
-      },
-      "latest_voice_memo": {
-        "name": "Latest voice memo"
       },
       "doorbell_state": {
         "name": "Doorbell state",
@@ -357,6 +342,9 @@
     },
     "doorbell_video_not_available": {
       "message": "Doorbell video is not enabled or is not supported by the installed C300X device agent."
+    },
+    "home_call_not_available": {
+      "message": "Home call is not enabled or is not supported by the installed C300X device agent."
     },
     "entry_id_required": {
       "message": "Entry ID is required when more than one BTicino C300X entry exists."
@@ -439,6 +427,24 @@
           "core_patch_verify_failed": "The core media hook action ran, but the agent did not confirm the patched state."
         },
         "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded.",
+          "core_patch_unsupported": "The installed C300X device agent does not support applying the core media hook."
+        }
+      }
+    },
+    "device_user_required": {
+      "title": "C300X media user setup required",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Create Home Assistant media user",
+            "description": "Home Assistant will ask the device agent to create or repair the dedicated `homeassistant` C300X media user. Existing app users are kept. The agent writes only the required device-side user and routing state."
+          }
+        },
+        "error": {
+          "device_user_setup_failed": "The device-user setup failed. Check maintenance access and retry."
+        },
+        "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."
         }
       }
@@ -450,6 +456,38 @@
     "missing_alarm_entity": {
       "title": "Configured C300X alarm entity is missing",
       "description": "{entry_title} references {entity_id}, but Home Assistant does not know that entity. Pick an existing alarm control panel entity in the integration options or clear the alarm setting."
+    },
+    "frontend_card_setup_hint": {
+      "title": "Add the C300X Lovelace card",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Set up C300X Lovelace cards",
+            "description": "Home Assistant can add the recommended C300X cards to {dashboard_path}, or you can ignore this hint.",
+            "menu_options": {
+              "confirm": "Create cards",
+              "ignore": "Ignore this hint"
+            }
+          },
+          "confirm": {
+            "title": "Create C300X Lovelace cards",
+            "description": "Home Assistant will add a C300X view to a storage-mode Lovelace dashboard. The view contains one Doorbell / On-demand card and one Home Call card for {entry_title}.",
+            "data": {
+              "dashboard_path": "Dashboard",
+              "view_path": "View path"
+            }
+          }
+        },
+        "error": {
+          "camera_entity_missing": "Home Assistant could not find the C300X camera entity for this config entry.",
+          "lovelace_config_invalid": "The selected Lovelace dashboard config is not writable in the expected format.",
+          "lovelace_storage_unavailable": "No storage-mode Lovelace dashboard is available. YAML dashboards must be edited manually.",
+          "lovelace_unavailable": "Lovelace is not available yet."
+        },
+        "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded."
+        }
+      }
     },
     "unsupported_callback_url": {
       "title": "C300X callback URL is not usable by the device agent",

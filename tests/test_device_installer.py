@@ -100,6 +100,7 @@ def test_installer_bundle_uses_built_agent_without_running_make() -> None:
         assert any(payload.endswith("/qml_patch.sh") for payload in payloads)
         assert any(payload.endswith("/remove_agent.sh") for payload in payloads)
         assert any(payload.endswith("/bootstrap_firewall.sh") for payload in payloads)
+        assert status["init_script"].endswith("/c300x-native-agent")
         assert any(payload.endswith("/Alarm.qml") for payload in payloads)
     else:
         assert status["reason"] == "agent_bundle_missing"
@@ -116,7 +117,7 @@ def test_bootstrap_paths_follow_configured_device_agent_dir() -> None:
         )
     )
 
-    assert config["events"]["subscriptionStorePath"] == f"{remote_dir}/subscriptions.json"
+    assert "subscriptionStorePath" not in config["events"]
     assert config["maintenance"]["qmlPatch"]["script"] == f"{remote_dir}/qml_patch.sh"
     assert config["maintenance"]["agentRemove"]["script"] == f"{remote_dir}/remove_agent.sh"
 

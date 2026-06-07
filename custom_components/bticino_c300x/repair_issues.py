@@ -14,24 +14,37 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stub
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
 from .callback_target import callback_target_is_clean_local_http
-from .const import CONF_ACTIONS, CONF_ALARM_ENTITY_ID, DOMAIN
+from .capabilities import capability_is_supported, maintenance_action_is_advertised
+from .const import (
+    CONF_ACTIONS,
+    CONF_ALARM_ENTITY_ID,
+    CONF_FRONTEND_CARD_SETUP_DISMISSED,
+    CONF_VIDEO_ENABLED,
+    DOMAIN,
+)
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
+FRONTEND_CARD_SETUP_HINT_ISSUE = "frontend_card_setup_hint"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
 DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
+DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
+_DOORBELL_CALL_CARD_TYPE = "custom:c300x-doorbell-call-card"
+_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
         MISSING_ALARM_ENTITY_ISSUE,
+        FRONTEND_CARD_SETUP_HINT_ISSUE,
         AGENT_CAPABILITY_MISMATCH_ISSUE,
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
         DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        DEVICE_USER_REQUIRED_ISSUE,
     }
 )
 
@@ -51,11 +64,13 @@ def async_sync_entry_repair_issues(
 
     _sync_action_map_issue(hass, entry)
     _sync_missing_alarm_entity_issue(hass, entry)
+    _sync_frontend_card_setup_hint_issue(hass, entry)
     _sync_agent_capability_issue(hass, entry)
     _sync_device_agent_update_issue(hass, entry)
     _sync_device_agent_startup_issue(hass, entry)
     _sync_unsupported_callback_url_issue(hass, entry)
     _sync_device_core_qml_hook_issue(hass, entry)
+    _sync_device_user_issue(hass, entry)
 
 
 @callback
@@ -115,6 +130,30 @@ def _sync_missing_alarm_entity_issue(hass: HomeAssistant, entry: ConfigEntry) ->
         MISSING_ALARM_ENTITY_ISSUE,
         severity=ir.IssueSeverity.WARNING,
         placeholders={"entity_id": alarm_entity_id},
+    )
+
+
+def _sync_frontend_card_setup_hint_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    capabilities = getattr(entry.runtime_data, "capabilities", {})
+    if not isinstance(capabilities, dict) or not (
+        capability_is_supported(capabilities, "doorbell_video")
+        or capability_is_supported(capabilities, "home_call")
+    ):
+        async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
+        return
+    if _frontend_card_setup_dismissed(entry):
+        async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
+        return
+    if _frontend_card_setup_present(hass, entry):
+        _mark_frontend_card_setup_dismissed(hass, entry)
+        async_delete_repair_issue(hass, entry.entry_id, FRONTEND_CARD_SETUP_HINT_ISSUE)
+        return
+    _create_issue(
+        hass,
+        entry,
+        FRONTEND_CARD_SETUP_HINT_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        is_fixable=True,
     )
 
 
@@ -211,18 +250,33 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) ->
             DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         )
         return
-    status = getattr(runtime_data, "qml_patch_status", None)
-    if not isinstance(status, dict):
+    if not _entry_media_enabled(entry):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
             DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         )
         return
-    core_patched = status.get("core_patched")
-    core_state = str(status.get("core_state") or "").strip().lower()
-    missing = core_patched is False or core_state in {"original", "partial"}
-    if not missing:
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not maintenance_action_is_advertised(capabilities, "qml_core_patch"):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+        )
+        return
+    status = getattr(runtime_data, "qml_patch_status", None)
+    core_state = "unknown"
+    missing = False
+    if isinstance(status, dict):
+        core_state = str(status.get("core_state") or "").strip().lower() or "unknown"
+        missing = status.get("core_patched") is False or core_state in {
+            "original",
+            "partial",
+        }
+    diagnostics = getattr(runtime_data, "qml_patch_diagnostics", None)
+    failed = bool(getattr(diagnostics, "last_error", None))
+    if not missing and not failed:
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -235,7 +289,46 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) ->
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         severity=ir.IssueSeverity.WARNING,
         is_fixable=True,
-        placeholders={"core_state": core_state or "unknown"},
+        placeholders={"core_state": core_state},
+    )
+
+
+def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    if connection_state is not None and not getattr(connection_state, "available", True):
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
+    if not _entry_media_enabled(entry):
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not (
+        capability_is_supported(capabilities, "doorbell_video")
+        or capability_is_supported(capabilities, "home_call")
+    ):
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
+    status = getattr(runtime_data, "device_user_status", None)
+    if not isinstance(status, dict) or not status:
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
+
+    reason = None
+    if status.get("homeassistant_user_present") is True and status.get("routes_consistent") is not True:
+        reason = "homeassistant_routes_inconsistent"
+    elif status.get("media_identity_available") is not True:
+        reason = "media_identity_missing"
+    if reason is None:
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_USER_REQUIRED_ISSUE,
+        severity=ir.IssueSeverity.ERROR,
+        is_fixable=maintenance_action_is_advertised(capabilities, "device_user_ensure"),
+        placeholders={"reason": reason},
     )
 
 
@@ -304,6 +397,14 @@ def _configured_alarm_entity_id(entry: ConfigEntry) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _entry_media_enabled(entry: ConfigEntry) -> bool:
+    options = getattr(entry, "options", {})
+    data = getattr(entry, "data", {})
+    if isinstance(options, dict) and CONF_VIDEO_ENABLED in options:
+        return bool(options[CONF_VIDEO_ENABLED])
+    return bool(data.get(CONF_VIDEO_ENABLED)) if isinstance(data, dict) else False
+
+
 def _entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     if _registry_entity_exists(hass, entity_id):
         return True
@@ -322,3 +423,106 @@ def _registry_entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     except Exception:  # noqa: BLE001 - entity registry may be unavailable in tests
         return False
     return registry.async_get(entity_id) is not None
+
+
+def _frontend_card_setup_dismissed(entry: ConfigEntry) -> bool:
+    """Return true when the Lovelace card setup hint was already handled."""
+
+    return entry.options.get(CONF_FRONTEND_CARD_SETUP_DISMISSED) is True
+
+
+def _mark_frontend_card_setup_dismissed(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Persist that the Lovelace card setup hint has been handled."""
+
+    if _frontend_card_setup_dismissed(entry):
+        return
+    config_entries = getattr(hass, "config_entries", None)
+    if config_entries is None or not hasattr(config_entries, "async_update_entry"):
+        return
+    config_entries.async_update_entry(
+        entry,
+        options={
+            **dict(entry.options),
+            CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+        },
+    )
+
+
+def _frontend_card_setup_present(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Return true when both generated C300X Lovelace cards already exist."""
+
+    camera_entity_id = _doorbell_camera_entity_id(hass, entry)
+    if camera_entity_id is None:
+        return False
+    try:
+        from homeassistant.components.lovelace.const import (  # noqa: PLC0415
+            LOVELACE_DATA,
+            MODE_STORAGE,
+        )
+    except (ImportError, ModuleNotFoundError):
+        return False
+    lovelace_data = hass.data.get(LOVELACE_DATA) if hasattr(hass, "data") else None
+    dashboards = getattr(lovelace_data, "dashboards", None)
+    if not isinstance(dashboards, dict):
+        return False
+    for dashboard in dashboards.values():
+        if getattr(dashboard, "mode", None) != MODE_STORAGE:
+            continue
+        config = getattr(dashboard, "config", None)
+        if isinstance(config, dict) and _has_c300x_cards(config, camera_entity_id):
+            return True
+    return False
+
+
+def _doorbell_camera_entity_id(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> str | None:
+    """Resolve the doorbell camera entity for a config entry."""
+
+    if er is None:
+        return None
+    try:
+        registry = er.async_get(hass)
+    except Exception:  # noqa: BLE001 - entity registry may be unavailable in tests
+        return None
+    if registry is None or not hasattr(registry, "async_get_entity_id"):
+        return None
+    entity_id = registry.async_get_entity_id(
+        "camera",
+        DOMAIN,
+        f"{entry.entry_id}_{_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX}",
+    )
+    return entity_id if isinstance(entity_id, str) else None
+
+
+def _has_c300x_cards(config: dict[str, object], camera_entity_id: str) -> bool:
+    """Return true when both generated card modes exist in a Lovelace config."""
+
+    modes: set[str] = set()
+    for card in _iter_lovelace_cards(config):
+        if not isinstance(card, dict):
+            continue
+        if card.get("type") != _DOORBELL_CALL_CARD_TYPE:
+            continue
+        if card.get("entity") != camera_entity_id:
+            continue
+        modes.add(str(card.get("mode") or "doorbell_call"))
+    return {"doorbell_call", "home_call"}.issubset(modes)
+
+
+def _iter_lovelace_cards(value: object):
+    """Yield cards from a Lovelace config tree."""
+
+    if isinstance(value, dict):
+        if "type" in value:
+            yield value
+        for key in ("views", "sections", "cards", "entities"):
+            yield from _iter_lovelace_cards(value.get(key))
+        return
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_lovelace_cards(item)

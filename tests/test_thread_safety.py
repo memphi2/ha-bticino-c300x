@@ -27,21 +27,34 @@ def test_display_bridge_alarm_notify_uses_thread_safe_scheduling() -> None:
     )
 
 
-def test_video_ttl_uses_home_assistant_scheduler() -> None:
-    text = (
-        ROOT / "custom_components" / "bticino_c300x" / "video.py"
-    ).read_text(encoding="utf-8")
-    call_later_body = text.split("def call_later", maxsplit=1)[1]
-
-    assert "async_call_later(hass, delay, action)" in call_later_body
-    assert "hass.loop.call_later" not in call_later_body
-
-
-def test_video_ttl_callbacks_stay_on_event_loop() -> None:
-    """Guard against HA running state-writing TTL callbacks in the executor."""
+def test_live_media_entities_do_not_use_ttl_state_callbacks() -> None:
+    """Live media state must come from agent push events only."""
 
     for filename in ("webhook.py", "binary_sensor.py", "camera.py", "sensor.py"):
         text = (
             ROOT / "custom_components" / "bticino_c300x" / filename
         ).read_text(encoding="utf-8")
-        assert "@callback\n" in text.split("def _reset", maxsplit=1)[0][-80:]
+        assert "event_active_seconds" not in text
+        assert "active_seconds" not in text
+        assert "active_until" not in text
+        assert "reset_video" not in text
+        assert "SIGNAL_EVENT_STATE_CHANGED" not in text
+        assert "_handle_event_state_changed" not in text
+        assert "_mark_ha_video_window_active" not in text
+        assert "_clear_ha_video_window" not in text
+        assert '"talkback_requested"' not in text
+        assert '"talkback_active"' not in text
+        assert '"talkback_packets_sent"' not in text
+        assert '"talkback_last_error"' not in text
+
+    native_video = (
+        ROOT / "native_agent" / "src" / "video_rtsp.c"
+    ).read_text(encoding="utf-8")
+    native_header = (
+        ROOT / "native_agent" / "src" / "video_rtsp.h"
+    ).read_text(encoding="utf-8")
+    assert "external_active_until" not in native_video
+    assert "external_active_until" not in native_header
+    assert "external_media_guard_ttl_seconds" in native_video
+    assert "external_event_expires_ms" in native_video
+    assert "external_event_expires_ms" not in native_header

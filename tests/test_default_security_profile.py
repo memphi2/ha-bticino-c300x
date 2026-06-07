@@ -47,9 +47,7 @@ def test_sample_config_is_bootstrap_only_and_does_not_enable_heavy_paths() -> No
     assert config["video"]["sip"]["to"] == "c300x"
     assert config["video"]["sip"]["domain"] == ""
     assert config["displayBridge"]["enabled"] is True
-    assert config["displayBridge"]["homeAssistant"]["webhookUrl"].startswith(
-        "http://homeassistant.local:"
-    )
+    assert config["displayBridge"]["homeAssistant"] == {"requestTimeoutMs": 3000}
 
 
 def test_installer_config_closes_noauth_and_enables_runtime_defaults() -> None:
@@ -107,7 +105,7 @@ def test_agent_setup_completion_closes_noauth_without_disabling_token_auth() -> 
     assert "updated->maintenance_admin_token[0] = '\\0'" not in body
 
 
-def test_video_default_is_webrtc_on_demand_with_idle_rtsp_closed() -> None:
+def test_video_default_is_webrtc_on_demand_with_persistent_rtsp_listener() -> None:
     camera_text = (
         ROOT / "custom_components" / "bticino_c300x" / "camera.py"
     ).read_text(encoding="utf-8")
@@ -122,7 +120,7 @@ def test_video_default_is_webrtc_on_demand_with_idle_rtsp_closed() -> None:
     assert "_attr_frontend_stream_type = \"web_rtc\"" in camera_text
     assert "async_handle_async_webrtc_offer" in camera_text
     assert "async_activate_doorbell_video(audio=True)" in camera_text
-    assert "assert_rtsp_not_listening(rtsp_port)" in smoke_text
+    assert 'rtsp_describe(rtsp_port, "/doorbell-video")' in smoke_text
     assert '"/api/v1/video/doorbell/actions/activate"' in smoke_text
     assert '"/api/v1/video/doorbell/actions/stop"' in smoke_text
 

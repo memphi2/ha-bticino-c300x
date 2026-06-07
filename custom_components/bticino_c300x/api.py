@@ -274,20 +274,30 @@ class C300XAgentApi:
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         """Return doorbell video availability and bridge status."""
 
-        try:
-            data = await self._request_json("GET", "/api/v1/video/doorbell/status")
-        except C300XAgentApiUnsupportedError:
-            data = await self._request_json("GET", "/api/v1/state")
+        data = await self._request_json("GET", "/api/v1/video/doorbell/status")
         return normalize_doorbell_video(data)
 
     async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
         """Start or renew the native doorbell video call on demand."""
 
-        data = await self._request_json(
-            "POST",
-            "/api/v1/video/doorbell/actions/activate",
-            json_data={"audio": bool(audio)},
-        )
+        try:
+            data = await self._request_json(
+                "POST",
+                "/api/v1/video/doorbell/actions/activate",
+                json_data={"audio": bool(audio)},
+            )
+        except C300XAgentApiConnectionError as err:
+            if "HTTP 409" not in str(err) or "external_session_active" not in str(err):
+                raise
+            status = await self.async_doorbell_video_status()
+            if not _doorbell_video_has_ring_call(status):
+                raise
+            return {
+                "ok": True,
+                "audio": bool(audio),
+                "ring_active": True,
+                "status": status,
+            }
         return _ok_response(data)
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
@@ -296,6 +306,37 @@ class C300XAgentApi:
         data = await self._request_json(
             "POST",
             "/api/v1/video/doorbell/actions/stop",
+        )
+        return _ok_response(data)
+
+    async def async_home_call_status(self) -> dict[str, Any]:
+        """Return the in-house home-call status."""
+
+        data = await self._request_json("GET", "/api/v1/calls/home/status")
+        return normalize_home_call(data)
+
+    async def async_start_home_call(
+        self,
+        duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Start an in-house SIP/SRTP call to the C300X."""
+
+        payload: dict[str, Any] = {}
+        if duration_seconds is not None:
+            payload["duration_seconds"] = int(duration_seconds)
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/home/actions/start",
+            json_data=payload,
+        )
+        return _ok_response(data)
+
+    async def async_stop_home_call(self) -> dict[str, Any]:
+        """Stop the in-house SIP/SRTP call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/home/actions/stop",
         )
         return _ok_response(data)
 
@@ -347,7 +388,7 @@ class C300XAgentApi:
         return data
 
     async def async_list_event_subscriptions(self) -> dict[str, Any]:
-        """Return persisted event subscriptions from the device agent."""
+        """Return runtime event subscriptions from the device agent."""
 
         data = await self._request_json("GET", "/api/v1/events/subscriptions")
         if not isinstance(data, dict):
@@ -357,7 +398,7 @@ class C300XAgentApi:
         return data
 
     async def async_delete_event_subscription(self, subscription_id: str) -> None:
-        """Delete an event subscription from the device agent."""
+        """Delete a runtime event subscription from the device agent."""
 
         await self._request_json("DELETE", f"/api/v1/events/subscriptions/{subscription_id}")
 
@@ -411,6 +452,12 @@ class C300XAgentApi:
         if not isinstance(data, dict):
             raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
         return normalize_agent_diagnostics(data)
+
+    async def async_device_user_status(self) -> dict[str, Any]:
+        """Return non-sensitive Flexisip device-user status."""
+
+        data = await self._request_json("GET", "/api/v1/device-user")
+        return normalize_device_user_status(data)
 
     async def async_auth_config_status(self) -> dict[str, Any]:
         """Return bootstrap/auth configuration status without exposing token values."""
@@ -645,6 +692,25 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
+    async def async_ensure_homeassistant_user(
+        self,
+        *,
+        account_label: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or repair the dedicated Home Assistant Flexisip user."""
+
+        payload: dict[str, Any] = {"confirm": "ensure_homeassistant_user"}
+        if account_label:
+            payload["account_label"] = account_label
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/device-user/actions/ensure-homeassistant",
+            json_data=payload,
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return normalize_device_user_status(data)
+
     async def async_set_maintenance_no_auth_allowed(
         self,
         enabled: bool,
@@ -723,6 +789,17 @@ class C300XAgentApi:
             "POST",
             "/api/v1/maintenance/agent/actions/remove",
             json_data={"confirm": "remove_agent"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return _ok_response(data)
+
+    async def async_restart_agent(self) -> dict[str, Any]:
+        """Restart the native device agent through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/agent/actions/restart",
+            json_data={"confirm": "restart_agent"},
             extra_headers=self._maintenance_headers(),
         )
         return _ok_response(data)
@@ -830,6 +907,17 @@ class C300XAgentApi:
             "POST",
             "/api/v1/maintenance/qml-patch/actions/apply-core",
             json_data={"confirm": "apply_qml_core_patch"},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_qml_patch_status(data)
+
+    async def async_restore_qml_core_patch(self) -> dict[str, Any]:
+        """Restore the core media QML hook through the maintenance API."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/qml-patch/actions/restore-core",
+            json_data={"confirm": "restore_qml_core_patch"},
             extra_headers=self._maintenance_headers(),
         )
         return normalize_qml_patch_status(data)
@@ -1083,28 +1171,10 @@ def normalize_doorbell_video(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("doorbell video returned non-object JSON")
-    if isinstance(data.get("state"), dict):
-        state = data["state"]
-        return {
-            "available": bool(state.get("video_available")),
-            "window_available": bool(state.get("video_available")),
-            "active_until": state.get("video_active_until"),
-            "stream_path": state.get("video_stream_path"),
-            "audio_stream_path": None,
-            "recorder_stream_path": None,
-            "media_owner": "unknown",
-            "external_media_active": False,
-            "external_owner": None,
-            "external_active_until": None,
-            "last_block_reason": None,
-            "bridge": {},
-            "raw": data,
-        }
     bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
     return {
         "available": bool(data.get("available")),
-        "window_available": bool(data.get("window_available", data.get("available"))),
-        "active_until": data.get("active_until"),
+        "window_available": bool(data.get("window_available")),
         "stream_path": data.get("stream_path"),
         "audio_stream_path": data.get("audio_stream_path"),
         "recorder_stream_path": data.get("recorder_stream_path"),
@@ -1112,9 +1182,38 @@ def normalize_doorbell_video(data: Any) -> dict[str, Any]:
         "external_media_active": _optional_bool(bridge.get("external_media_active"))
         is True,
         "external_owner": _optional_string(bridge.get("external_owner")),
-        "external_active_until": _optional_int(bridge.get("external_active_until")),
         "last_block_reason": _optional_string(bridge.get("last_block_reason")),
         "bridge": bridge,
+        "raw": data,
+    }
+
+
+def _doorbell_video_has_ring_call(data: dict[str, Any]) -> bool:
+    """Return true while the native bridge owns a doorbell ring call."""
+
+    bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
+    owner = str(data.get("media_owner") or bridge.get("media_owner") or "").lower()
+    return owner == "ring" or bool(
+        bridge.get("ring_call_active") or bridge.get("ring_media_active")
+    )
+
+
+def normalize_home_call(data: Any) -> dict[str, Any]:
+    """Normalize device-agent in-house home-call status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("home call returned non-object JSON")
+    return {
+        "available": bool(data.get("available")),
+        "running": bool(data.get("running")),
+        "active": bool(data.get("active")),
+        "answered": bool(data.get("answered")),
+        "rtp_proxy": bool(data.get("rtp_proxy")),
+        "target_audio_port": _optional_int(data.get("target_audio_port")),
+        "rtp_packets": _optional_int(data.get("rtp_packets"), 0) or 0,
+        "rtcp_packets": _optional_int(data.get("rtcp_packets"), 0) or 0,
+        "max_duration_seconds": _optional_int(data.get("max_duration_seconds")),
+        "last_error": _optional_string(data.get("last_error")),
         "raw": data,
     }
 
@@ -1173,10 +1272,6 @@ def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
         "last_write_at": _optional_int(data.get("last_write_at")),
         "last_write_reason": _optional_string(data.get("last_write_reason")),
         "last_write_class": _optional_string(data.get("last_write_class")),
-        "subscription_store_writes": _optional_int(
-            data.get("subscription_store_writes")
-        )
-        or 0,
         "qml_patch_last_action": _optional_string(data.get("qml_patch_last_action")),
         "loop_iterations": _optional_int(data.get("loop_iterations")),
         "poll_wakeups": _optional_int(data.get("poll_wakeups")),
@@ -1227,6 +1322,53 @@ def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
         "flexisip_reference_state": _optional_string(
             data.get("flexisip_reference_state")
         ),
+        "raw": data,
+    }
+
+
+def normalize_device_user_status(data: Any) -> dict[str, Any]:
+    """Normalize non-sensitive Flexisip device-user status."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("device user status returned non-object JSON")
+    return {
+        "available": bool(data.get("ok", True)),
+        "supported": _optional_bool(data.get("supported")) is True,
+        "domain_present": _optional_bool(data.get("domain_present")) is True,
+        "c300x_user_present": _optional_bool(data.get("c300x_user_present")) is True,
+        "app_user_present": _optional_bool(data.get("app_user_present")) is True,
+        "homeassistant_user_present": _optional_bool(
+            data.get("homeassistant_user_present")
+        )
+        is True,
+        "accounts_homeassistant_present": _optional_bool(
+            data.get("accounts_homeassistant_present")
+        )
+        is True,
+        "route_int_homeassistant_present": _optional_bool(
+            data.get("route_int_homeassistant_present")
+        )
+        is True,
+        "route_ext_homeassistant_present": _optional_bool(
+            data.get("route_ext_homeassistant_present")
+        )
+        is True,
+        "route_conf_homeassistant_present": _optional_bool(
+            data.get("route_conf_homeassistant_present")
+        )
+        is True,
+        "route_conf_is_symlink": _optional_bool(data.get("route_conf_is_symlink"))
+        is True,
+        "writable_files_present": _optional_bool(data.get("writable_files_present"))
+        is True,
+        "media_identity_available": _optional_bool(
+            data.get("media_identity_available")
+        )
+        is True,
+        "routes_consistent": _optional_bool(data.get("routes_consistent")) is True,
+        "account_label": _optional_string(data.get("account_label")),
+        "media_identity_source": _optional_string(data.get("media_identity_source")),
+        "error": _optional_string(data.get("error")),
         "raw": data,
     }
 

@@ -8,6 +8,7 @@ from custom_components.bticino_c300x.api import (
     C300XAgentApi,
     C300XAgentApiConnectionError,
     C300XAgentApiResponseError,
+    C300XAgentApiUnsupportedError,
     build_agent_base_url,
     display_bridge_callback_fingerprint,
     encode_endpoint_url,
@@ -17,8 +18,10 @@ from custom_components.bticino_c300x.api import (
     normalize_answering_machine,
     normalize_answering_machine_messages,
     normalize_auth_config_status,
+    normalize_device_user_status,
     normalize_doorbell_video,
     normalize_firewall_status,
+    normalize_home_call,
     normalize_legacy_mqtt_status,
     normalize_lock_id,
     normalize_memo_id,
@@ -86,6 +89,17 @@ class _FakeSession:
             body=self._response_body,
             content_type=self._content_type,
         )
+
+
+class _QueuedSession:
+    def __init__(self, responses: list[tuple[int, str]]) -> None:
+        self.requests: list[dict[str, object]] = []
+        self._responses = list(responses)
+
+    def request(self, *args: object, **kwargs: object) -> _FakeResponse:
+        self.requests.append({"args": args, "kwargs": kwargs})
+        status, text = self._responses.pop(0)
+        return _FakeResponse(status=status, text=text)
 
 
 def test_build_agent_base_url_defaults_to_http() -> None:
@@ -231,7 +245,6 @@ def test_normalize_doorbell_video_exposes_external_media_owner() -> None:
                 "media_owner": "device_display",
                 "external_media_active": True,
                 "external_owner": "device_display",
-                "external_active_until": 1780500000,
                 "last_block_reason": "external_session_active",
             },
         }
@@ -240,7 +253,6 @@ def test_normalize_doorbell_video_exposes_external_media_owner() -> None:
     assert status["media_owner"] == "device_display"
     assert status["external_media_active"] is True
     assert status["external_owner"] == "device_display"
-    assert status["external_active_until"] == 1780500000
     assert status["last_block_reason"] == "external_session_active"
     assert display_bridge_callback_fingerprint(False, "ignored", "ignored") == (
         "fnv1a64:48f6eb502600b569"
@@ -909,6 +921,29 @@ def test_remove_agent_sends_maintenance_token_and_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "remove_agent"}
 
 
+def test_restart_agent_sends_maintenance_token_and_confirmation() -> None:
+    session = _FakeSession('{"ok": true, "action": "restart_agent"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    assert asyncio.run(api.async_restart_agent())["action"] == "restart_agent"
+
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/agent/actions/restart",
+    )
+    assert request["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
+    }
+    assert request["kwargs"]["json"] == {"confirm": "restart_agent"}
+
+
 def test_qml_patch_status_uses_maintenance_endpoint() -> None:
     session = _FakeSession('{"ok": true, "state": "patched"}')
     api = C300XAgentApi(
@@ -1073,6 +1108,26 @@ def test_apply_qml_core_patch_sends_maintenance_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "apply_qml_core_patch"}
 
 
+def test_restore_qml_core_patch_sends_maintenance_confirmation() -> None:
+    session = _FakeSession(
+        '{"ok": true, "state": "original", "core_state": "original", "core_patched": false}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    assert asyncio.run(api.async_restore_qml_core_patch())["core_patched"] is False
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/qml-patch/actions/restore-core",
+    )
+    assert request["kwargs"]["json"] == {"confirm": "restore_qml_core_patch"}
+
+
 def test_restore_qml_patch_sends_maintenance_confirmation() -> None:
     session = _FakeSession('{"ok": true, "state": "original"}')
     api = C300XAgentApi(
@@ -1119,8 +1174,8 @@ def test_system_metrics_requests_authenticated_metrics_endpoint() -> None:
 
 def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
     session = _FakeSession(
-        '{"ok": true, "agent_write_count": 2, "last_write_class": "subscription", '
-        '"last_write_reason": "updated", "subscription_store_writes": 1, '
+        '{"ok": true, "agent_write_count": 2, "last_write_class": "config", '
+        '"last_write_reason": "updated", '
         '"last_wake_reason": "api", "open_fd_count": 7}'
     )
     api = C300XAgentApi(
@@ -1136,6 +1191,90 @@ def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
     )
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
+    }
+
+
+def test_device_user_status_requests_read_only_endpoint() -> None:
+    session = _FakeSession(
+        '{"ok": true, "supported": true, "homeassistant_user_present": false, '
+        '"app_user_present": true, "media_identity_available": true, '
+        '"routes_consistent": false}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    status = asyncio.run(api.async_device_user_status())
+
+    assert status["supported"] is True
+    assert status["homeassistant_user_present"] is False
+    assert status["app_user_present"] is True
+    assert status["media_identity_available"] is True
+    assert status["routes_consistent"] is False
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/device-user",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+
+
+def test_ensure_homeassistant_user_sends_maintenance_confirmation() -> None:
+    session = _FakeSession(
+        '{"ok": true, "supported": true, "homeassistant_user_present": true, '
+        '"media_identity_available": true, "routes_consistent": true}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(api.async_ensure_homeassistant_user())
+
+    assert status["homeassistant_user_present"] is True
+    assert status["routes_consistent"] is True
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/device-user/actions/ensure-homeassistant",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {
+        "confirm": "ensure_homeassistant_user"
+    }
+    assert session.requests[0]["kwargs"]["timeout"] == 20.0
+
+
+def test_ensure_homeassistant_user_can_send_account_label() -> None:
+    session = _FakeSession(
+        '{"ok": true, "supported": true, "homeassistant_user_present": true, '
+        '"account_label": "Home Assistant Test", '
+        '"media_identity_source": "homeassistant", '
+        '"media_identity_available": true, "routes_consistent": true}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    status = asyncio.run(
+        api.async_ensure_homeassistant_user(account_label="Home Assistant Test")
+    )
+
+    assert status["account_label"] == "Home Assistant Test"
+    assert status["media_identity_source"] == "homeassistant"
+    assert session.requests[0]["kwargs"]["json"] == {
+        "confirm": "ensure_homeassistant_user",
+        "account_label": "Home Assistant Test",
     }
 
 
@@ -1161,6 +1300,43 @@ def test_activate_doorbell_video_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["json"] == {"audio": True}
 
 
+def test_activate_doorbell_video_accepts_active_ring_conflict() -> None:
+    session = _QueuedSession(
+        [
+            (
+                409,
+                '{"ok": false, "error": "external_session_active"}',
+            ),
+            (
+                200,
+                '{"available": true, "window_available": false, '
+                '"stream_path": "/doorbell-video", "audio_stream_path": "/doorbell", '
+                '"bridge": {"media_owner": "ring", "ring_call_active": true, '
+                '"ring_media_active": false}}',
+            ),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    response = asyncio.run(api.async_activate_doorbell_video(audio=True))
+
+    assert response["ok"] is True
+    assert response["ring_active"] is True
+    assert response["status"]["window_available"] is False
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/video/doorbell/actions/activate",
+    )
+    assert session.requests[1]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/video/doorbell/status",
+    )
+
+
 def test_doorbell_video_status_uses_reference_status_endpoint() -> None:
     session = _FakeSession(
         '{"available": true, "stream_path": "/doorbell-video", '
@@ -1184,6 +1360,30 @@ def test_doorbell_video_status_uses_reference_status_endpoint() -> None:
     }
 
 
+def test_doorbell_video_status_does_not_fallback_to_legacy_state() -> None:
+    session = _QueuedSession(
+        [
+            (404, '{"error": "not_found"}'),
+            (
+                200,
+                '{"state": {"video_available": true, "video_stream_path": "/legacy"}}',
+            ),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiUnsupportedError):
+        asyncio.run(api.async_doorbell_video_status())
+
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/video/doorbell/status"),
+    ]
+
+
 def test_stop_doorbell_video_requests_authenticated_endpoint() -> None:
     session = _FakeSession('{"ok": true}')
     api = C300XAgentApi(
@@ -1196,6 +1396,68 @@ def test_stop_doorbell_video_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["args"] == (
         "POST",
         "http://agent.local:8080/api/v1/video/doorbell/actions/stop",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+
+
+def test_home_call_status_requests_authenticated_endpoint() -> None:
+    session = _FakeSession(
+        '{"ok": true, "available": true, "running": true, "active": true, '
+        '"answered": true, "rtp_proxy": true, "target_audio_port": 41528, '
+        '"rtp_packets": 3, "rtcp_packets": 1}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_home_call_status())["target_audio_port"] == 41528
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/calls/home/status",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+
+
+def test_start_home_call_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true, "duration_seconds": 30}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_start_home_call(duration_seconds=30)) == {
+        "ok": True,
+        "duration_seconds": 30,
+    }
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/calls/home/actions/start",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {"duration_seconds": 30}
+
+
+def test_stop_home_call_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_stop_home_call()) == {"ok": True}
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/calls/home/actions/stop",
     )
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
@@ -1247,6 +1509,51 @@ def test_normalize_auth_config_status_accepts_camel_case_no_auth() -> None:
 
 def test_normalize_auth_config_status_accepts_snake_case_no_auth() -> None:
     assert normalize_auth_config_status({"no_auth": True})["no_auth"] is True
+
+
+def test_normalize_device_user_status_is_non_sensitive() -> None:
+    raw = {
+        "ok": True,
+        "supported": True,
+        "domain_present": True,
+        "c300x_user_present": True,
+        "app_user_present": False,
+        "homeassistant_user_present": True,
+        "accounts_homeassistant_present": True,
+        "route_int_homeassistant_present": True,
+        "route_ext_homeassistant_present": True,
+        "route_conf_homeassistant_present": False,
+        "route_conf_is_symlink": True,
+        "writable_files_present": True,
+        "media_identity_available": True,
+        "routes_consistent": False,
+        "account_label": "Home Assistant Test",
+        "media_identity_source": "homeassistant",
+        "error": "",
+    }
+
+    status = normalize_device_user_status(raw)
+
+    assert status == {
+        "available": True,
+        "supported": True,
+        "domain_present": True,
+        "c300x_user_present": True,
+        "app_user_present": False,
+        "homeassistant_user_present": True,
+        "accounts_homeassistant_present": True,
+        "route_int_homeassistant_present": True,
+        "route_ext_homeassistant_present": True,
+        "route_conf_homeassistant_present": False,
+        "route_conf_is_symlink": True,
+        "writable_files_present": True,
+        "media_identity_available": True,
+        "routes_consistent": False,
+        "account_label": "Home Assistant Test",
+        "media_identity_source": "homeassistant",
+        "error": None,
+        "raw": raw,
+    }
 
 
 def test_answering_machine_messages_requests_authenticated_endpoint() -> None:
@@ -1598,14 +1905,12 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
     ) == {
         "available": True,
         "window_available": False,
-        "active_until": None,
         "stream_path": "/doorbell-video",
         "audio_stream_path": "/doorbell",
         "recorder_stream_path": "/doorbell-recorder",
         "media_owner": "unknown",
         "external_media_active": False,
         "external_owner": None,
-        "external_active_until": None,
         "last_block_reason": None,
         "bridge": {
             "enabled": True,
@@ -1627,6 +1932,65 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
                 "talkback_supported": True,
                 "talkback_payload_type": 97,
             },
+        },
+    }
+
+
+def test_normalize_doorbell_video_trusts_agent_window_available_field() -> None:
+    status = normalize_doorbell_video(
+        {
+            "available": True,
+            "window_available": False,
+            "stream_path": "/doorbell-video",
+            "audio_stream_path": "/doorbell",
+            "bridge": {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": False,
+            },
+        }
+    )
+
+    assert status["window_available"] is False
+    assert status["media_owner"] == "ring"
+
+
+def test_normalize_home_call_from_agent_status() -> None:
+    assert normalize_home_call(
+        {
+            "available": True,
+            "running": True,
+            "active": True,
+            "answered": True,
+            "rtp_proxy": True,
+            "target_audio_port": 41528,
+            "rtp_packets": 5,
+            "rtcp_packets": 2,
+            "max_duration_seconds": 3600,
+            "last_error": None,
+        }
+    ) == {
+        "available": True,
+        "running": True,
+        "active": True,
+        "answered": True,
+        "rtp_proxy": True,
+        "target_audio_port": 41528,
+        "rtp_packets": 5,
+        "rtcp_packets": 2,
+        "max_duration_seconds": 3600,
+        "last_error": None,
+        "raw": {
+            "available": True,
+            "running": True,
+            "active": True,
+            "answered": True,
+            "rtp_proxy": True,
+            "target_audio_port": 41528,
+            "rtp_packets": 5,
+            "rtcp_packets": 2,
+            "max_duration_seconds": 3600,
+            "last_error": None,
         },
     }
 
@@ -1692,8 +2056,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "agent_write_count": "2",
             "last_write_at": "1770000000",
             "last_write_reason": " updated ",
-            "last_write_class": "subscription",
-            "subscription_store_writes": 1,
+            "last_write_class": "config",
             "qml_patch_last_action": "",
             "loop_iterations": "10",
             "poll_wakeups": "4",
@@ -1728,8 +2091,7 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["agent_write_count"] == 2
     assert normalized["last_write_at"] == 1770000000
     assert normalized["last_write_reason"] == "updated"
-    assert normalized["last_write_class"] == "subscription"
-    assert normalized["subscription_store_writes"] == 1
+    assert normalized["last_write_class"] == "config"
     assert normalized["qml_patch_last_action"] is None
     assert normalized["loop_iterations"] == 10
     assert normalized["poll_wakeups"] == 4

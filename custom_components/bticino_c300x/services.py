@@ -36,6 +36,7 @@ from .capabilities import (
 from .const import (
     CONF_MAINTENANCE_TOKEN,
     DOMAIN,
+    MAX_HOME_CALL_DURATION_SECONDS,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_ALARM_COMMAND,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
@@ -48,6 +49,9 @@ from .const import (
     SERVICE_RUN_ACTION,
     SERVICE_RUN_DEVICE_ACTIVATION,
     SERVICE_STAIR_LIGHT,
+    SERVICE_START_HOME_CALL,
+    SERVICE_STOP_DOORBELL_VIDEO,
+    SERVICE_STOP_HOME_CALL,
     SERVICE_UNLOCK_DOOR,
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_MEMOS_CHANGED,
@@ -80,6 +84,7 @@ _ATTR_CODE = "code"
 _ATTR_COMMAND = "command"
 _ATTR_ENTRY_ID = "entry_id"
 _ATTR_FORCE = "force"
+_ATTR_DURATION_SECONDS = "duration_seconds"
 _ATTR_LOCK_ID = "lock_id"
 _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
 _ATTR_READ = "read"
@@ -150,6 +155,18 @@ def _activation_id(value: str) -> str:
     return activation_id
 
 
+def _home_call_duration_seconds(value: Any) -> int:
+    """Validate optional home-call duration."""
+
+    try:
+        duration_seconds = int(value)
+    except (TypeError, ValueError) as err:
+        raise vol.Invalid("invalid duration seconds") from err
+    if duration_seconds < 0 or duration_seconds > MAX_HOME_CALL_DURATION_SECONDS:
+        raise vol.Invalid("invalid duration seconds")
+    return duration_seconds
+
+
 def _ensure_maintenance_action(entry, action: str) -> None:
     """Reject maintenance services unless the agent advertises and authorizes them."""
 
@@ -172,6 +189,18 @@ def _ensure_doorbell_video_supported(entry: Any) -> None:
         and capability_is_supported(capabilities, "doorbell_video")
     ):
         raise service_validation_error("doorbell_video_not_available")
+
+
+def _ensure_home_call_supported(entry: Any) -> None:
+    """Reject in-house home-call actions unless HA and the agent expose them."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not (
+        entry_video_enabled(entry)
+        and capability_is_supported(capabilities, "home_call")
+    ):
+        raise service_validation_error("home_call_not_available")
 
 
 def _ensure_text_memo_write_supported(entry: Any) -> None:
@@ -379,6 +408,35 @@ class _C300XServiceHandlers:
             )
         )
 
+    async def async_stop_doorbell_video(self, call: ServiceCall) -> None:
+        """Stop the active C300X doorbell video session."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_video_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_stop_doorbell_video()
+        )
+
+    async def async_start_home_call(self, call: ServiceCall) -> None:
+        """Start an in-house call to the C300X."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_home_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_start_home_call(
+                duration_seconds=call.data.get(_ATTR_DURATION_SECONDS)
+            )
+        )
+
+    async def async_stop_home_call(self, call: ServiceCall) -> None:
+        """Stop the in-house call to the C300X."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_home_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_stop_home_call()
+        )
+
     async def async_reboot(self, call: ServiceCall) -> None:
         """Reboot the C300X through the maintenance API."""
 
@@ -579,6 +637,26 @@ def _register_base_services(
                     vol.Optional(_ATTR_AUDIO, default=True): _boolean_service_value,
                 }
             ),
+        ),
+        (
+            SERVICE_STOP_DOORBELL_VIDEO,
+            handlers.async_stop_doorbell_video,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_START_HOME_CALL,
+            handlers.async_start_home_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_DURATION_SECONDS): _home_call_duration_seconds,
+                }
+            ),
+        ),
+        (
+            SERVICE_STOP_HOME_CALL,
+            handlers.async_stop_home_call,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
         ),
         (
             SERVICE_REBOOT,

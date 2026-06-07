@@ -28,6 +28,12 @@ class C300XEntity(Entity):
         )
 
     @property
+    def device_info(self) -> DeviceInfo:
+        """Return device metadata shown in the Home Assistant device page."""
+
+        return _device_info(self._entry)
+
+    @property
     def available(self) -> bool:
         """Return false when the device agent is outside reconnect grace."""
 
@@ -64,3 +70,32 @@ def entry_video_enabled(entry: ConfigEntry) -> bool:
     """Return the effective HA video setting for this entry."""
 
     return bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False))
+
+
+def _device_info(entry: ConfigEntry) -> DeviceInfo:
+    """Return C300X device metadata without extra device reads."""
+
+    info: dict[str, object] = {
+        "identifiers": {(DOMAIN, entry.entry_id)},
+        "manufacturer": "BTicino",
+        "model": "Classe 300X",
+        "name": entry.title,
+    }
+    firmware = _agent_info_string(entry, "firmware")
+    if firmware is not None:
+        info["sw_version"] = firmware
+    return DeviceInfo(**info)
+
+
+def _agent_info_string(entry: ConfigEntry, key: str) -> str | None:
+    """Return a non-empty string value from cached agent setup metadata."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    agent_info = getattr(runtime_data, "agent_info", {})
+    if not isinstance(agent_info, dict):
+        return None
+    value = agent_info.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

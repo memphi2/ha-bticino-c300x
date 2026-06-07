@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 from base64 import b64decode
-from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_call_later
 
 from .const import DEFAULT_VIDEO_STREAM_PATH, DOMAIN
 
 CAMERA_DOMAIN = "camera"
-DEFAULT_ACTIVE_SECONDS = 30
 DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
 _CAMERA_PROXY_IMAGE_B64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAIAAACwpMoFAAACCUlEQVR4nO3dMU4CQRSA4cFwAmsTW6m9hCewpKS0"
@@ -82,37 +78,3 @@ def safe_optional_stream_path(path: Any) -> str | None:
     if text.startswith("rtsp://"):
         return None
     return text
-
-
-def event_active_seconds(data: Mapping[str, Any]) -> int:
-    """Return an event activity TTL in seconds."""
-
-    try:
-        return max(int(data.get("active_seconds", DEFAULT_ACTIVE_SECONDS)), 0)
-    except (TypeError, ValueError):
-        return DEFAULT_ACTIVE_SECONDS
-
-
-def active_until_is_active(value: Any, *, now: datetime | None = None) -> bool:
-    """Return true when an ISO timestamp still points into the future."""
-
-    text = optional_string(value)
-    if text is None:
-        return False
-    try:
-        active_until = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return True
-    if active_until.tzinfo is None:
-        active_until = active_until.replace(tzinfo=UTC)
-    return active_until > (now or datetime.now(UTC))
-
-
-def call_later(
-    hass: HomeAssistant,
-    delay: int,
-    action: Callable[[Any], None],
-) -> Callable[[], None]:
-    """Schedule a cancellable callback on the HA loop."""
-
-    return async_call_later(hass, delay, action)

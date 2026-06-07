@@ -19,6 +19,10 @@ config_entries = sys.modules.setdefault(
     "homeassistant.config_entries",
     types.ModuleType("homeassistant.config_entries"),
 )
+const = sys.modules.setdefault(
+    "homeassistant.const",
+    types.ModuleType("homeassistant.const"),
+)
 core = sys.modules.setdefault(
     "homeassistant.core",
     types.ModuleType("homeassistant.core"),
@@ -74,10 +78,15 @@ class EventDeviceClass:  # pragma: no cover - import-time stub only
     DOORBELL = "doorbell"
 
 
+class EntityCategory:  # pragma: no cover - import-time stub only
+    DIAGNOSTIC = "diagnostic"
+
+
 event_module.DoorbellEventType = DoorbellEventType
 event_module.EventDeviceClass = EventDeviceClass
 event_module.EventEntity = EventEntity
 config_entries.ConfigEntry = ConfigEntry
+const.EntityCategory = EntityCategory
 core.HomeAssistant = HomeAssistant
 core.callback = lambda func: func
 config_validation.config_entry_only_config_schema = lambda _domain: dict
@@ -86,6 +95,7 @@ entity.Entity = Entity
 entity.DeviceInfo = DeviceInfo
 entity_platform.AddEntitiesCallback = object
 components.event = event_module
+homeassistant.const = const
 helpers.config_validation = config_validation
 helpers.dispatcher = dispatcher
 helpers.entity = entity
@@ -95,6 +105,9 @@ sys.modules["homeassistant.components.event"] = event_module
 sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 
+from homeassistant.const import EntityCategory  # noqa: E402
+
+from custom_components.bticino_c300x.entity import C300XEntity  # noqa: E402
 from custom_components.bticino_c300x.event import (  # noqa: E402
     C300XDeviceAgentEventEntity,
     C300XDoorbellEventEntity,
@@ -112,7 +125,6 @@ class _FakeEventState:
     last_event: str | None = None
     last_event_time: str | None = None
     last_event_data: dict[str, Any] = field(default_factory=dict)
-    video_active_until: str | None = None
     smartphone_forwarding_mode: str | None = None
     ringer_muted: bool | None = None
     voicemail_total: int | None = None
@@ -123,6 +135,7 @@ class _FakeEventState:
 class _FakeRuntimeData:
     event_state: _FakeEventState = field(default_factory=_FakeEventState)
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
+    agent_info: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -130,6 +143,29 @@ class _FakeEntry:
     entry_id: str = "entry-1"
     title: str = "C300X"
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
+
+
+def test_device_event_entity_is_diagnostic_disabled_by_default() -> None:
+    assert C300XDeviceAgentEventEntity._attr_entity_category == EntityCategory.DIAGNOSTIC
+    assert C300XDeviceAgentEventEntity._attr_entity_registry_enabled_default is False
+
+
+def test_device_info_uses_c300x_firmware_as_software_version() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(agent_info={"firmware": "1.7.19"}),
+    )
+    entity = C300XEntity(entry, "test")  # type: ignore[arg-type]
+
+    assert entity.device_info["sw_version"] == "1.7.19"
+
+
+def test_device_info_omits_empty_firmware_version() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(agent_info={"firmware": ""}),
+    )
+    entity = C300XEntity(entry, "test")  # type: ignore[arg-type]
+
+    assert "sw_version" not in entity.device_info
 
 
 def test_device_event_entity_triggers_stable_event_type_with_readable_attributes() -> None:

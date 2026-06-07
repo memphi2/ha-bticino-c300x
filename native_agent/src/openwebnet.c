@@ -1,4 +1,5 @@
 #include "c300x_agent.h"
+#include "string_util.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -17,7 +18,7 @@
 static void set_error(char *error, size_t error_len, const char *message)
 {
     if (error_len > 0) {
-        snprintf(error, error_len, "%s", message);
+        c300x_copy_string(error, error_len, message);
     }
 }
 

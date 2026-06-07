@@ -24,7 +24,17 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
     sections = _services_yaml_sections()
 
     assert "activate_doorbell_video" in sections
+    assert "stop_doorbell_video" in sections
     assert "\n    audio:\n" in sections["activate_doorbell_video"]
+    assert "call-end action" in sections["stop_doorbell_video"]
+
+
+def test_services_yaml_exposes_home_call_controls() -> None:
+    sections = _services_yaml_sections()
+
+    assert "start_home_call" in sections
+    assert "stop_home_call" in sections
+    assert "\n    duration_seconds:\n" in sections["start_home_call"]
 
 
 def test_services_yaml_exposes_device_activation_runner() -> None:

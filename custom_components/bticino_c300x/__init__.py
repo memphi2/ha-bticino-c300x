@@ -26,6 +26,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
@@ -44,6 +45,7 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
+from .device_user import homeassistant_account_label
 from .entry_config import (
     entry_config_value as _entry_config_value,
 )
@@ -74,10 +76,14 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the integration domain."""
 
+    from .camera import async_register_home_call_ws
+    from .frontend import async_setup_frontend
     from .services import async_setup_services
 
     hass.data.setdefault(DOMAIN, {})
+    await async_setup_frontend(hass)
     await async_setup_services(hass)
+    async_register_home_call_ws(hass)
     return True
 
 
@@ -201,6 +207,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         entry,
         event_state,
     )
+
+    async def _async_refresh_runtime_registration() -> None:
+        await _async_configure_display_bridge(hass, entry, api)
+
     if unregister_event_registration is None:
         unregister_event_registration = await async_start_agent_event_registration(
             hass,
@@ -208,6 +218,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
             api,
             capabilities,
             connection_state,
+            on_runtime_registration_created=_async_refresh_runtime_registration,
         )
     platforms = _entry_platforms(entry, capabilities)
     entry.runtime_data = BticinoC300XRuntimeData(
@@ -219,6 +230,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         unregister_webhook=unregister_webhook,
         unregister_event_webhook=unregister_event_webhook,
         unregister_event_registration=unregister_event_registration,
+        on_runtime_registration_created=_async_refresh_runtime_registration,
         unregister_display_bridge_updates=None,
         loaded_platforms=platforms,
         agent_update_state=agent_update_state,
@@ -230,6 +242,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         await _async_configure_device_activations(entry, api)
         await _async_configure_display_bridge(hass, entry, api)
         await _async_sync_device_ui_patch(entry)
+        await _async_sync_device_user(hass, entry)
     _async_remove_stale_gui_dependent_entities(hass, entry)
     async_sync_entry_repair_issues(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -266,8 +279,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
             entry.runtime_data.unregister_event_registration()
         if entry.runtime_data.unregister_display_bridge_updates:
             entry.runtime_data.unregister_display_bridge_updates()
-        if entry.runtime_data.event_state.reset_video:
-            entry.runtime_data.event_state.reset_video()
         if entry.runtime_data.connection_state.expire_unavailable:
             entry.runtime_data.connection_state.expire_unavailable()
         if entry.runtime_data.memos_refresh_task:
@@ -395,12 +406,7 @@ def _entry_video_enabled(entry: BticinoC300XConfigEntry) -> bool:
 
 
 async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
-    """Refresh device UI patch status without mutating QML during setup.
-
-    Applying or restoring QML writes to the C300X filesystem and reloads the
-    device GUI. That must be an explicit maintenance action, not a side effect
-    of Home Assistant setup/reload.
-    """
+    """Refresh QML patch status without mutating the device."""
 
     from .qml_patch import async_refresh_qml_patch_status
 
@@ -409,13 +415,60 @@ async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
     try:
         if maintenance_action_is_advertised(capabilities, "qml_status"):
             diagnostics.mark_attempt(datetime.now(UTC))
-            await async_refresh_qml_patch_status(entry)
+            status = await async_refresh_qml_patch_status(entry)
             diagnostics.mark_success(datetime.now(UTC))
+        else:
+            status = {}
+        entry.runtime_data.qml_patch_status = status
     except C300XAgentApiError as err:
         error = compact_error_text(err)
         diagnostics.mark_failure(error, datetime.now(UTC))
-        _LOGGER.warning("C300X device UI patch status refresh failed: %s", error)
+        _LOGGER.warning("C300X QML patch status sync failed: %s", error)
         return
+
+
+async def _async_sync_device_user(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> None:
+    """Refresh and optionally repair the Flexisip user used for media calls."""
+
+    if not _entry_video_enabled(entry):
+        return
+    capabilities = getattr(entry.runtime_data, "capabilities", {})
+    if not capability_is_supported(capabilities, "device_user"):
+        return
+    try:
+        status = await entry.runtime_data.api.async_device_user_status()
+        entry.runtime_data.device_user_status = status
+        entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
+        if _entry_create_homeassistant_user(entry) and _device_user_needs_ensure(status):
+            status = await entry.runtime_data.api.async_ensure_homeassistant_user(
+                account_label=homeassistant_account_label(hass)
+            )
+            entry.runtime_data.device_user_status = status
+            entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
+    except C300XAgentApiUnsupportedError:
+        _LOGGER.debug("C300X device agent does not support device-user status")
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X device-user setup/status sync failed: %s",
+            compact_error_text(err),
+        )
+
+
+def _device_user_needs_ensure(status: dict[str, Any]) -> bool:
+    """Return true when the dedicated HA media user is absent or incomplete."""
+
+    return status.get("homeassistant_user_present") is not True or (
+        status.get("routes_consistent") is not True
+    )
+
+
+def _entry_create_homeassistant_user(entry: BticinoC300XConfigEntry) -> bool:
+    """Return whether setup should create/repair the dedicated media user."""
+
+    return bool(_entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, True))
 
 
 async def _async_configure_device_activations(
@@ -505,16 +558,17 @@ async def _async_configure_display_bridge(
         diagnostics.mark_attempt(datetime.now(UTC))
     try:
         status = await api.async_display_bridge_status()
-        expected_hash = display_bridge_callback_fingerprint(
-            enabled,
-            webhook_url,
-            shared_secret,
-        )
-        if (
-            bool(status.get("enabled")) == enabled
-            and bool(status.get("configured")) == enabled
-            and status.get("callback_hash") == expected_hash
-        ):
+        configured = bool(status.get("configured"))
+        if enabled:
+            expected_hash = display_bridge_callback_fingerprint(
+                True,
+                webhook_url,
+                shared_secret,
+            )
+            if configured and status.get("callback_hash") == expected_hash:
+                diagnostics.mark_success(datetime.now(UTC))
+                return
+        elif not configured:
             diagnostics.mark_success(datetime.now(UTC))
             return
         await api.async_configure_display_bridge(

@@ -57,8 +57,8 @@ treated as bootstrap completion: once an API token is configured, that save
 automatically turns off `api.noAuth` and `maintenance.allowNoAuth`.
 
 Default runtime security is deliberately low-load and local-first: token auth
-after bootstrap, video disabled until HA enables it, on-demand RTSP behind the
-HA WebRTC camera path, and no GUI/firewall writes unless a maintenance action is
+after bootstrap, video disabled until HA enables it, media starts only when Home
+Assistant requests it, and no GUI/firewall writes unless a maintenance action is
 explicitly invoked.
 
 Key sections:
@@ -69,7 +69,7 @@ Key sections:
 - `events`: callback store and timeout
 - `maintenance`: gated SSH/reboot/GUI-reload commands
 - `systemMetrics`: optional low-frequency push updates for load and temperature
-- `video`: optional SIP activation plus RTSP/WebRTC media bridge
+- `video`: optional app-like doorstation media support
 - `displayBridge`: optional dashboard proxy for QML
 
 Callback URLs for event subscriptions and the display bridge must use a local

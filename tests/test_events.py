@@ -90,6 +90,18 @@ fake_scheduler = _FakeScheduler()
 webhook_calls: list[tuple[str, dict[str, Any]]] = []
 
 
+def _active_scheduled_delays() -> list[int]:
+    return [call.delay for call in fake_scheduler.calls if not call.canceled]
+
+
+def _active_scheduled_calls(delay: int) -> list[_ScheduledCall]:
+    return [
+        call
+        for call in fake_scheduler.calls
+        if call.delay == delay and not call.canceled
+    ]
+
+
 def _webhook_url(_: HomeAssistant, webhook_id: str, **kwargs: Any) -> str:
     webhook_calls.append((webhook_id, kwargs))
     return f"http://localhost:8123/webhook/{webhook_id}"
@@ -133,6 +145,7 @@ def restore_webhook_stub() -> None:
 
 from custom_components.bticino_c300x.events import (  # noqa: E402,I001
     _filter_events_for_active_entities,
+    async_request_agent_event_registration,
     async_start_agent_event_registration,
     event_token_fingerprint,
 )
@@ -299,6 +312,14 @@ class _FakeEntry:
     )
 
 
+async def _drain_hass_tasks(hass: _FakeHass) -> None:
+    for _ in range(4):
+        pending = [task for task in hass.async_tasks if not task.done()]
+        if not pending:
+            return
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 class _FakeEntityRegistry:
     def __init__(
         self,
@@ -327,7 +348,7 @@ class _FakeEntityRegistry:
         return types.SimpleNamespace(disabled_by=disabled_by)
 
 
-def test_async_start_agent_event_registration_reuses_persisted_subscription() -> None:
+def test_async_start_agent_event_registration_reuses_ram_subscription() -> None:
     api = _FakeApi(
         [{"subscription": {"id": "sub-a"}}],
         subscriptions=[
@@ -355,9 +376,7 @@ def test_async_start_agent_event_registration_reuses_persisted_subscription() ->
     )
 
     assert api.list_calls == 1
-    assert api.subscription_calls == [
-        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
-    ]
+    assert api.subscription_calls == []
     assert webhook_calls == [
         (
             "event-hook",
@@ -368,7 +387,73 @@ def test_async_start_agent_event_registration_reuses_persisted_subscription() ->
             },
         )
     ]
-    assert fake_scheduler.calls == []
+    assert _active_scheduled_delays() == [events_module._SUBSCRIPTION_REFRESH_SECONDS]
+
+
+def test_runtime_refresh_callback_runs_when_agent_subscription_is_created() -> None:
+    api = _FakeApi([{"subscription": {"id": "sub-new"}}], subscriptions=[])
+    hass = _FakeHass()
+    calls: list[str] = []
+    fake_scheduler.reset()
+    webhook_calls.clear()
+
+    async def _runtime_refresh() -> None:
+        calls.append("refresh")
+
+    async def _run() -> None:
+        await async_start_agent_event_registration(
+            hass,
+            _FakeEntry(),  # type: ignore[arg-type]
+            api,
+            {},
+            _FakeConnectionState(),
+            on_runtime_registration_created=_runtime_refresh,
+        )
+        await _drain_hass_tasks(hass)
+
+    asyncio.run(_run())
+
+    assert api.subscription_calls == [
+        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
+    ]
+    assert calls == ["refresh"]
+
+
+def test_runtime_refresh_callback_is_not_polled_for_reused_subscription() -> None:
+    api = _FakeApi(
+        [],
+        subscriptions=[
+            {
+                "id": "sub-a",
+                "callback_url": "http://localhost:8123/webhook/event-hook",
+                "token_fingerprint": event_token_fingerprint("event-token"),
+                "events": ["agent.restarted"],
+            }
+        ],
+    )
+    hass = _FakeHass()
+    calls: list[str] = []
+    fake_scheduler.reset()
+    webhook_calls.clear()
+
+    async def _runtime_refresh() -> None:
+        calls.append("refresh")
+
+    async def _run() -> None:
+        await async_start_agent_event_registration(
+            hass,
+            _FakeEntry(),  # type: ignore[arg-type]
+            api,
+            {},
+            _FakeConnectionState(),
+            on_runtime_registration_created=_runtime_refresh,
+        )
+        await _drain_hass_tasks(hass)
+
+    asyncio.run(_run())
+
+    assert api.subscription_calls == []
+    assert calls == []
 
 
 def test_unavailable_expiry_schedules_dispatcher_thread_safely() -> None:
@@ -395,7 +480,7 @@ def test_unavailable_expiry_schedules_dispatcher_thread_safely() -> None:
     ]
 
 
-def test_async_start_agent_event_registration_replaces_duplicate_subscriptions() -> None:
+def test_async_start_agent_event_registration_reuses_matching_subscription_from_list() -> None:
     api = _FakeApi(
         [{"subscription": {"id": "sub-a"}}],
         subscriptions=[
@@ -429,10 +514,8 @@ def test_async_start_agent_event_registration_replaces_duplicate_subscriptions()
     )
 
     assert api.list_calls == 1
-    assert api.subscription_calls == [
-        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
-    ]
-    assert fake_scheduler.calls == []
+    assert api.subscription_calls == []
+    assert _active_scheduled_delays() == [events_module._SUBSCRIPTION_REFRESH_SECONDS]
 
 
 def test_filter_events_for_active_entities_skips_disabled_internal_diagnostics() -> None:
@@ -441,7 +524,7 @@ def test_filter_events_for_active_entities_skips_disabled_internal_diagnostics()
         "entry-1",
         _FakeEntityRegistry(
             disabled={
-                ("sensor", "agent_writes"),
+                ("sensor", "agent_status"),
                 ("event", "agent_event"),
             }
         ),
@@ -502,7 +585,7 @@ def test_filter_events_for_active_entities_keeps_missing_default_enabled_consume
     assert _filter_events_for_active_entities(
         ["agent.diagnostics_changed"],
         "entry-1",
-        _FakeEntityRegistry(missing={("sensor", "agent_writes")}),
+        _FakeEntityRegistry(missing={("sensor", "agent_status")}),
     ) == ["agent.diagnostics_changed"]
 
 
@@ -512,6 +595,67 @@ def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity(
         "entry-1",
         _FakeEntityRegistry(),
     ) == ["door_unlock.started"]
+
+
+def test_filter_events_for_active_entities_skips_missing_default_disabled_event_entity() -> None:
+    assert (
+        _filter_events_for_active_entities(
+            ["door_unlock.started"],
+            "entry-1",
+            _FakeEntityRegistry(missing={("event", "agent_event")}),
+        )
+        == []
+    )
+
+
+def test_filter_events_for_active_entities_keeps_home_call_events_for_consumers() -> None:
+    assert _filter_events_for_active_entities(
+        ["home_call.started", "home_call.answered", "home_call.ended"],
+        "entry-1",
+        _FakeEntityRegistry(disabled={("event", "agent_event")}),
+    ) == ["home_call.started", "home_call.answered", "home_call.ended"]
+
+
+def test_filter_events_for_active_entities_keeps_doorbell_state_events_for_sensor() -> None:
+    assert _filter_events_for_active_entities(
+        ["doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed"],
+        "entry-1",
+        _FakeEntityRegistry(disabled={("event", "agent_event")}),
+    ) == ["doorbell.pressed", "doorbell.view_requested", "doorbell.media.closed"]
+
+
+def test_filter_events_for_active_entities_skips_doorbell_state_events_without_consumers() -> None:
+    assert (
+        _filter_events_for_active_entities(
+            ["doorbell.view_requested", "doorbell.media.closed"],
+            "entry-1",
+            _FakeEntityRegistry(
+                disabled={
+                    ("event", "agent_event"),
+                    ("sensor", "doorbell_state"),
+                    ("camera", "doorbell_camera"),
+                }
+            ),
+        )
+        == []
+    )
+
+
+def test_filter_events_for_active_entities_skips_home_call_when_consumers_disabled() -> None:
+    assert (
+        _filter_events_for_active_entities(
+            ["home_call.started", "home_call.answered", "home_call.ended"],
+            "entry-1",
+            _FakeEntityRegistry(
+                disabled={
+                    ("event", "agent_event"),
+                    ("binary_sensor", "home_call_active"),
+                    ("camera", "doorbell_camera"),
+                }
+            ),
+        )
+        == []
+    )
 
 
 def test_async_start_agent_event_registration_registers_when_missing() -> None:
@@ -533,7 +677,257 @@ def test_async_start_agent_event_registration_registers_when_missing() -> None:
 
     assert api.list_calls == 1
     assert len(api.subscription_calls) == 1
-    assert fake_scheduler.calls == []
+    assert _active_scheduled_delays() == [events_module._SUBSCRIPTION_REFRESH_SECONDS]
+
+
+def test_event_registration_periodic_refresh_posts_after_agent_lost_ram_subscription() -> None:
+    api = _FakeApi(
+        [{"subscription": {"id": "sub-new"}}],
+        subscription_lists=[
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+            [],
+        ],
+    )
+    hass = _FakeHass()
+    fake_scheduler.reset()
+
+    async def run() -> None:
+        await async_start_agent_event_registration(
+            hass,
+            _FakeEntry(),  # type: ignore[arg-type]
+            api,
+            {},
+            _FakeConnectionState(),
+        )
+        await asyncio.sleep(0)
+        refresh_calls = _active_scheduled_calls(
+            events_module._SUBSCRIPTION_REFRESH_SECONDS
+        )
+        assert len(refresh_calls) == 1
+        await refresh_calls[0].callback()
+        await asyncio.sleep(0)
+
+    asyncio.run(run())
+
+    assert api.list_calls == 2
+    assert api.subscription_calls == [
+        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
+    ]
+
+
+def test_event_registration_discovery_refresh_does_not_post_when_ram_subscription_exists() -> None:
+    api = _FakeApi(
+        [],
+        subscription_lists=[
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+        ],
+    )
+    hass = _FakeHass()
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+
+    async def run() -> None:
+        entry = _FakeEntry()
+        connection_state = _FakeConnectionState()
+        unregister = await async_start_agent_event_registration(
+            hass,
+            entry,  # type: ignore[arg-type]
+            api,
+            {},
+            connection_state,
+        )
+        await asyncio.sleep(0)
+        entry.runtime_data = types.SimpleNamespace(
+            api=api,
+            capabilities={},
+            connection_state=connection_state,
+            unregister_event_registration=unregister,
+        )
+        assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
+        await _drain_hass_tasks(hass)
+        entry.runtime_data.unregister_event_registration()
+
+    asyncio.run(run())
+
+    assert api.list_calls == 2
+    assert api.subscription_calls == []
+    assert _active_scheduled_delays() == []
+
+
+def test_event_registration_discovery_refresh_posts_after_agent_lost_ram_subscription() -> None:
+    api = _FakeApi(
+        [{"subscription": {"id": "sub-new"}}],
+        subscription_lists=[
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+            [],
+        ],
+    )
+    hass = _FakeHass()
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+
+    async def run() -> None:
+        entry = _FakeEntry()
+        connection_state = _FakeConnectionState()
+        unregister = await async_start_agent_event_registration(
+            hass,
+            entry,  # type: ignore[arg-type]
+            api,
+            {},
+            connection_state,
+        )
+        await asyncio.sleep(0)
+        entry.runtime_data = types.SimpleNamespace(
+            api=api,
+            capabilities={},
+            connection_state=connection_state,
+            unregister_event_registration=unregister,
+        )
+        assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
+        await _drain_hass_tasks(hass)
+        entry.runtime_data.unregister_event_registration()
+
+    asyncio.run(run())
+
+    assert api.list_calls == 2
+    assert api.subscription_calls == [
+        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
+    ]
+    assert _active_scheduled_delays() == []
+
+
+def test_event_registration_discovery_refresh_runs_runtime_registration_callback() -> None:
+    api = _FakeApi(
+        [{"subscription": {"id": "sub-new"}}],
+        subscription_lists=[
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+            [],
+        ],
+    )
+    hass = _FakeHass()
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+    runtime_refreshes = 0
+
+    async def _runtime_refresh() -> None:
+        nonlocal runtime_refreshes
+        runtime_refreshes += 1
+
+    async def run() -> None:
+        entry = _FakeEntry()
+        connection_state = _FakeConnectionState()
+        unregister = await async_start_agent_event_registration(
+            hass,
+            entry,  # type: ignore[arg-type]
+            api,
+            {},
+            connection_state,
+            on_runtime_registration_created=_runtime_refresh,
+        )
+        await asyncio.sleep(0)
+        entry.runtime_data = types.SimpleNamespace(
+            api=api,
+            capabilities={},
+            connection_state=connection_state,
+            unregister_event_registration=unregister,
+            on_runtime_registration_created=_runtime_refresh,
+        )
+        assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
+        await _drain_hass_tasks(hass)
+        entry.runtime_data.unregister_event_registration()
+
+    asyncio.run(run())
+
+    assert api.list_calls == 2
+    assert api.subscription_calls == [
+        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
+    ]
+    assert runtime_refreshes == 1
+    assert _active_scheduled_delays() == []
+
+
+def test_event_registration_discovery_refresh_uses_backoff_when_agent_goes_offline() -> None:
+    api = _FakeApi(
+        [],
+        subscription_lists=[
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+            RuntimeError("agent offline"),
+        ],
+    )
+    hass = _FakeHass()
+    connection_state = _FakeConnectionState()
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+
+    async def run() -> None:
+        entry = _FakeEntry()
+        unregister = await async_start_agent_event_registration(
+            hass,
+            entry,  # type: ignore[arg-type]
+            api,
+            {},
+            connection_state,
+        )
+        await asyncio.sleep(0)
+        entry.runtime_data = types.SimpleNamespace(
+            api=api,
+            capabilities={},
+            connection_state=connection_state,
+            unregister_event_registration=unregister,
+        )
+        assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
+        await _drain_hass_tasks(hass)
+
+    asyncio.run(run())
+
+    assert api.list_calls == 2
+    assert api.subscription_calls == []
+    assert connection_state.connection_state == "reconnecting"
+    assert connection_state.next_reconnect_delay_seconds == 30
+    assert sorted(_active_scheduled_delays()) == [15, 30]
 
 
 def test_async_start_agent_event_registration_updates_event_set_mismatch() -> None:
@@ -567,32 +961,29 @@ def test_async_start_agent_event_registration_updates_event_set_mismatch() -> No
     ]
     assert api.delete_calls == []
     assert connection_state.connection_state == "connected"
+    assert _active_scheduled_delays() == [events_module._SUBSCRIPTION_REFRESH_SECONDS]
 
 
 def test_metric_subscription_is_skipped_until_metric_entity_is_enabled() -> None:
     api = _FakeApi([], subscriptions=[])
     hass = _FakeHass()
-    hass.entity_registry = _FakeEntityRegistry(
-        disabled={("event", "agent_event")},
-        missing={
-            ("sensor", "device_cpu"),
-            ("sensor", "device_load"),
-            ("sensor", "device_memory"),
-            ("sensor", "device_temperature"),
-        }
-    )
     fake_dispatcher.signals.clear()
     fake_scheduler.reset()
+    original_active_events = events_module._active_events_for_capabilities
+    events_module._active_events_for_capabilities = lambda *args: []
 
-    asyncio.run(
-        async_start_agent_event_registration(
-            hass,
-            _FakeEntry(),  # type: ignore[arg-type]
-            api,
-            {"system_metrics": {"supported": True}},
-            _FakeConnectionState(),
+    try:
+        asyncio.run(
+            async_start_agent_event_registration(
+                hass,
+                _FakeEntry(),  # type: ignore[arg-type]
+                api,
+                {"system_metrics": {"supported": True}},
+                _FakeConnectionState(),
+            )
         )
-    )
+    finally:
+        events_module._active_events_for_capabilities = original_active_events
 
     assert api.list_calls == 1
     assert api.subscription_calls == []
@@ -643,7 +1034,7 @@ def test_event_registration_removes_stale_subscriptions_when_no_events_are_activ
 
     assert api.subscription_calls == []
     assert api.delete_calls == ["old-current-token-sub", "old-rotated-token-sub"]
-    assert fake_scheduler.calls == []
+    assert _active_scheduled_delays() == []
 
 
 def test_event_registration_recomputes_when_entity_registry_changes() -> None:
@@ -805,9 +1196,7 @@ def test_event_registration_waits_for_offline_agent_before_reusing_subscription(
     asyncio.run(asyncio.sleep(0))
 
     assert api.list_calls == 2
-    assert api.subscription_calls == [
-        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
-    ]
+    assert api.subscription_calls == []
     assert connection_state.connection_state == "connected"
 
 

@@ -25,9 +25,18 @@ helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
 )
+helpers.__path__ = []
 config_validation = sys.modules.setdefault(
     "homeassistant.helpers.config_validation",
     types.ModuleType("homeassistant.helpers.config_validation"),
+)
+dispatcher = sys.modules.setdefault(
+    "homeassistant.helpers.dispatcher",
+    types.ModuleType("homeassistant.helpers.dispatcher"),
+)
+event = sys.modules.setdefault(
+    "homeassistant.helpers.event",
+    types.ModuleType("homeassistant.helpers.event"),
 )
 
 
@@ -59,15 +68,23 @@ if not hasattr(config_entries, "FlowResult"):
 const.CONF_NAME = "name"
 if not hasattr(core, "callback"):
     core.callback = lambda func: func
+if not hasattr(core, "CALLBACK_TYPE"):
+    core.CALLBACK_TYPE = object
 if not hasattr(core, "HomeAssistant"):
     core.HomeAssistant = HomeAssistant
 if not hasattr(config_validation, "config_entry_only_config_schema"):
     config_validation.config_entry_only_config_schema = lambda _domain: dict
+if not hasattr(dispatcher, "async_dispatcher_send"):
+    dispatcher.async_dispatcher_send = lambda *_args, **_kwargs: None
+if not hasattr(event, "async_call_later"):
+    event.async_call_later = lambda *_args, **_kwargs: (lambda: None)
 homeassistant.config_entries = config_entries
 homeassistant.const = const
 homeassistant.core = core
 homeassistant.helpers = helpers
 helpers.config_validation = config_validation
+helpers.dispatcher = dispatcher
+helpers.event = event
 helpers.selector = None
 sys.modules.pop("homeassistant.helpers.selector", None)
 
@@ -85,12 +102,13 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _connection_input,
     _current_connection_options,
     _current_feature_options,
+    _dashboard_input_defaults,
+    _dashboard_schema,
     _dashboard_entity_ids,
     _feature_input,
     _feature_input_defaults,
     _non_empty_string,
     _initial_connection_input,
-    _needs_gui_details,
     _options_connection_schema,
     _options_features_schema,
     _qml_patch_status_label,
@@ -113,10 +131,10 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_ALARM_ENTITY_ID,
-    CONF_BOOTSTRAP_APPLY_GUI_PATCH,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
+    CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
@@ -434,19 +452,13 @@ def test_bootstrap_install_schema_collects_only_ephemeral_ssh_fields() -> None:
         {
             CONF_BOOTSTRAP_SSH_USERNAME: "root",
             CONF_BOOTSTRAP_SSH_PASSWORD: "temporary",
-            CONF_BOOTSTRAP_APPLY_GUI_PATCH: False,
         }
     )
 
     assert result[CONF_BOOTSTRAP_SSH_USERNAME] == "root"
     assert result[CONF_BOOTSTRAP_SSH_PASSWORD] == "temporary"
-    assert schema(
-        {
-            CONF_BOOTSTRAP_SSH_USERNAME: "root",
-            CONF_BOOTSTRAP_SSH_PASSWORD: "temporary",
-        }
-    )[CONF_BOOTSTRAP_APPLY_GUI_PATCH] is True
     assert CONF_AGENT_TOKEN not in result
+    assert CONF_DEVICE_UI_ENABLED not in result
 
 
 def test_reconfigure_schema_preserves_defaults() -> None:
@@ -458,11 +470,6 @@ def test_reconfigure_schema_preserves_defaults() -> None:
         "http://192.0.2.10:8123",
     )
     feature_schema = _reconfigure_features_schema(
-        "alarm_control_panel.home",
-        "weather.home",
-        True,
-        6554,
-        "/doorbell-video",
         True,
     )
 
@@ -481,16 +488,12 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
-    assert features[CONF_DEVICE_UI_ENABLED] is True
+    assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert CONF_DEVICE_UI_ENABLED not in features
 
 
 def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     schema = _setup_features_schema(
-        "alarm_control_panel.home",
-        "weather.home",
-        True,
-        6554,
-        "/doorbell-video",
         True,
     )
 
@@ -499,9 +502,11 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_ALARM_ENTITY_ID not in result
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
-    assert result[CONF_VIDEO_STREAM_PATH] == "/doorbell-video"
-    assert result[CONF_DEVICE_UI_ENABLED] is True
-    assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert CONF_VIDEO_PORT not in result
+    assert CONF_VIDEO_STREAM_PATH not in result
+    assert CONF_DEVICE_UI_ENABLED not in result
+    assert CONF_DASHBOARD_PREVENT_RETURN not in result
     assert result[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
     assert (
         result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS]
@@ -529,23 +534,25 @@ def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is True
 
 
-def test_feature_schema_serializes_gui_entity_selectors() -> None:
+def test_dashboard_schema_serializes_gui_entity_selectors() -> None:
     schema = _setup_features_schema(
+        True,
+    )
+    dashboard_schema = _dashboard_schema(
         "alarm_control_panel.home",
         "weather.home",
-        True,
-        6554,
-        "/doorbell-video",
-        True,
+        default_device_ui_enabled=True,
     )
 
     result = schema({})
+    dashboard_result = dashboard_schema({})
 
-    assert result[CONF_DEVICE_UI_ENABLED] is True
+    assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_ALARM_ENTITY_ID not in result
     assert CONF_WEATHER_ENTITY_ID not in result
     assert CONF_DASHBOARD_ENTITIES not in result
-    assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert dashboard_result[CONF_DEVICE_UI_ENABLED] is True
+    assert dashboard_result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
 def test_feature_input_allows_empty_gui_optional_fields() -> None:
@@ -553,8 +560,6 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
         {
             CONF_DEVICE_UI_ENABLED: True,
             CONF_VIDEO_ENABLED: True,
-            CONF_VIDEO_PORT: 6554,
-            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
         }
     )
 
@@ -563,7 +568,9 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_WEATHER_ENTITY_ID] == ""
     assert data[CONF_DASHBOARD_ENTITIES] == []
     assert data[CONF_ACTIONS] == {}
-    assert data[CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
+    assert data[CONF_VIDEO_PORT] == 6554
+    assert data[CONF_VIDEO_STREAM_PATH] == DEFAULT_VIDEO_STREAM_PATH
 
 
 def test_initial_feature_input_defaults_video_enabled() -> None:
@@ -571,6 +578,35 @@ def test_initial_feature_input_defaults_video_enabled() -> None:
 
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
+    assert data[CONF_CREATE_HOMEASSISTANT_USER] is True
+
+
+def test_feature_input_can_disable_homeassistant_user_creation() -> None:
+    data, errors = _feature_input(
+        {
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+        },
+        default_video_enabled=True,
+    )
+
+    assert errors == {}
+    assert data[CONF_VIDEO_ENABLED] is True
+    assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
+
+
+def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None:
+    data, errors = _feature_input(
+        {
+            CONF_VIDEO_ENABLED: False,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
+        },
+        default_video_enabled=True,
+    )
+
+    assert errors == {}
+    assert data[CONF_VIDEO_ENABLED] is False
+    assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
 
 
 def test_feature_input_keeps_selected_gui_features() -> None:
@@ -672,7 +708,6 @@ def test_bootstrap_duplicate_aborts_before_device_install(
                 {
                     CONF_BOOTSTRAP_SSH_USERNAME: "user",
                     CONF_BOOTSTRAP_SSH_PASSWORD: "password",
-                    CONF_BOOTSTRAP_APPLY_GUI_PATCH: False,
                 }
             )
         )
@@ -708,6 +743,7 @@ def test_zeroconf_probes_agent_before_auth_form(
     flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
     flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
     flow.async_step_agent_auth = step_agent_auth  # type: ignore[method-assign]
+    flow._async_current_entries = lambda: []  # type: ignore[method-assign]
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow._async_probe_agent",
         probe_agent,
@@ -763,6 +799,8 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
     flow.async_step_agent_auth = step_agent_auth  # type: ignore[method-assign]
     flow.async_create_entry = create_entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow._async_current_entries = lambda: []  # type: ignore[method-assign]
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow._async_probe_agent",
         probe_agent,
@@ -778,17 +816,19 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
             )
         )
     )
-    result = asyncio.run(
+    feature_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
                 CONF_VIDEO_ENABLED: True,
-                CONF_VIDEO_PORT: 6554,
-                CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
             }
         )
     )
+    result = asyncio.run(
+        flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: False})
+    )
 
+    assert feature_form["step_id"] == "user_dashboard"
     assert result["title"] == "Door Station"
     assert calls == [
         "unique:abcdef",
@@ -873,6 +913,48 @@ def test_zeroconf_merges_existing_manual_entry_when_token_matches(
     ]
 
 
+def test_zeroconf_rediscovery_requests_runtime_event_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    entry = SimpleNamespace(
+        unique_id="c300xaabbcc001122",
+        data={
+            CONF_AGENT_HOST: "c300x-agent.local",
+            CONF_AGENT_PORT: 8091,
+        },
+        options={},
+        runtime_data=SimpleNamespace(),
+    )
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow._async_current_entries = lambda: [entry]  # type: ignore[method-assign]
+
+    def request_registration(hass: object, target: object) -> bool:
+        assert hass is flow.hass
+        assert target is entry
+        calls.append("register")
+        return True
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.events.async_request_agent_event_registration",
+        request_registration,
+    )
+
+    flow._async_request_existing_entry_event_registration(
+        "C300X-AA-BB-CC-00-11-22",
+        {
+            CONF_AGENT_HOST: "c300x-agent.local.",
+            CONF_AGENT_PORT: 8091,
+        },
+        discovery_matches_entry=lambda left, right: (
+            str(left).replace("-", "").lower() == str(right).replace("-", "").lower()
+        ),
+    )
+
+    assert calls == ["register"]
+
+
 def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -922,23 +1004,26 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
     flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
     flow.async_create_entry = create_entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow._async_agent_stable_unique_id",
         agent_stable_unique_id,
     )
 
     asyncio.run(flow._async_adopt_agent_unique_id(api_token="known-token"))
-    result = asyncio.run(
+    feature_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
                 CONF_VIDEO_ENABLED: True,
-                CONF_VIDEO_PORT: 6554,
-                CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
             }
         )
     )
+    result = asyncio.run(
+        flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: False})
+    )
 
+    assert feature_form["step_id"] == "user_dashboard"
     assert result["title"] == "BTicino C300X"
     assert calls == [
         "agent_id:c300x.local:known-token",
@@ -949,54 +1034,45 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     ]
 
 
-def test_feature_schemas_place_gui_patch_first_and_hide_gui_dependent_fields() -> None:
+def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     setup_schema = _setup_features_schema(
-        "alarm_control_panel.home",
-        "weather.home",
         True,
-        6554,
-        "/doorbell-video",
-        False,
     )
     reconfigure_schema = _reconfigure_features_schema(
-        "alarm_control_panel.home",
-        "weather.home",
         True,
-        6554,
-        "/doorbell-video",
-        False,
     )
 
-    assert _schema_key_names(setup_schema)[0] == CONF_DEVICE_UI_ENABLED
+    assert _schema_key_names(setup_schema)[0] == CONF_VIDEO_ENABLED
+    assert CONF_DEVICE_UI_ENABLED not in _schema_key_names(setup_schema)
     assert CONF_ALARM_ENTITY_ID not in _schema_key_names(setup_schema)
     assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(setup_schema)
     assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(setup_schema)
-    assert _schema_key_names(reconfigure_schema)[0] == CONF_DEVICE_UI_ENABLED
+    assert _schema_key_names(reconfigure_schema)[0] == CONF_VIDEO_ENABLED
+    assert CONF_DEVICE_UI_ENABLED not in _schema_key_names(reconfigure_schema)
     assert CONF_ALARM_ENTITY_ID not in _schema_key_names(reconfigure_schema)
     assert CONF_WEATHER_ENTITY_ID not in _schema_key_names(reconfigure_schema)
     assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(reconfigure_schema)
 
-    enabled_schema = _setup_features_schema(
+    dashboard_schema = _dashboard_schema(
         "alarm_control_panel.home",
         "weather.home",
-        True,
-        6554,
-        "/doorbell-video",
-        True,
+        default_device_ui_enabled=True,
     )
 
-    assert _schema_key_names(enabled_schema)[:2] == [
+    assert _schema_key_names(dashboard_schema)[:2] == [
         CONF_DEVICE_UI_ENABLED,
         CONF_ALARM_ENTITY_ID,
     ]
-    assert CONF_WEATHER_ENTITY_ID in _schema_key_names(enabled_schema)
-    assert CONF_DASHBOARD_ENTITIES in _schema_key_names(enabled_schema)
+    assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
+    assert CONF_DASHBOARD_ENTITIES in _schema_key_names(dashboard_schema)
+    assert CONF_VIDEO_PORT not in _schema_key_names(dashboard_schema)
+    assert CONF_VIDEO_STREAM_PATH not in _schema_key_names(dashboard_schema)
 
 
-def test_initial_flow_defaults_gui_patch_enabled() -> None:
+def test_initial_flow_defaults_gui_patch_disabled() -> None:
     flow = BticinoC300XConfigFlow()
 
-    assert flow._setup_device_ui_default is True
+    assert flow._setup_device_ui_default is False
 
 
 def test_options_connection_schema_keeps_connection_on_first_page() -> None:
@@ -1059,6 +1135,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_VIDEO_PORT: 6555,
             CONF_VIDEO_STREAM_PATH: "/custom-video",
             CONF_DEVICE_UI_ENABLED: True,
@@ -1089,16 +1166,20 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
-    assert features[CONF_VIDEO_PORT] == 6555
-    assert features[CONF_VIDEO_STREAM_PATH] == "/custom-video"
-    assert features[CONF_DEVICE_UI_ENABLED] is True
-    assert features[CONF_DASHBOARD_PREVENT_RETURN] is False
+    assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert CONF_VIDEO_PORT not in features
+    assert CONF_VIDEO_STREAM_PATH not in features
+    assert CONF_DEVICE_UI_ENABLED not in features
+    assert CONF_DASHBOARD_PREVENT_RETURN not in features
     assert features[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
     assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "20#1"
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
+    assert _current_feature_options(entry)[CONF_VIDEO_PORT] == 6555
+    assert _current_feature_options(entry)[CONF_VIDEO_STREAM_PATH] == "/custom-video"
     assert _current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is True
+    assert _current_feature_options(entry)[CONF_CREATE_HOMEASSISTANT_USER] is False
     assert _current_feature_options(entry)[CONF_ACTIONS] == {
         "standby": {"domain": "button", "service": "press"}
     }
@@ -1119,14 +1200,15 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
             }
         },
         CONF_DASHBOARD_PREVENT_RETURN: False,
+        CONF_VIDEO_PORT: 6555,
+        CONF_VIDEO_STREAM_PATH: "/custom-video",
     }
 
     prepared = _feature_input_defaults(
         {
             CONF_DEVICE_UI_ENABLED: True,
             CONF_VIDEO_ENABLED: True,
-            CONF_VIDEO_PORT: 6554,
-            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
         },
         defaults,
     )
@@ -1136,11 +1218,13 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
     assert feature_data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert feature_data[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert feature_data[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
+    assert feature_data[CONF_VIDEO_PORT] == 6555
+    assert feature_data[CONF_VIDEO_STREAM_PATH] == "/custom-video"
     assert feature_data[CONF_ACTIONS] == defaults[CONF_ACTIONS]
     assert feature_data[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
-def test_options_features_schema_keeps_dashboard_features_on_second_page() -> None:
+def test_options_features_schema_excludes_dashboard_fields() -> None:
     entry = SimpleNamespace(
         data={
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
@@ -1149,8 +1233,7 @@ def test_options_features_schema_keeps_dashboard_features_on_second_page() -> No
         },
         options={
             CONF_VIDEO_ENABLED: True,
-            CONF_VIDEO_PORT: 6554,
-            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
             CONF_ACTIONS: {"standby": {"domain": "button", "service": "press"}},
             CONF_DEVICE_UI_ENABLED: True,
             CONF_DASHBOARD_PREVENT_RETURN: False,
@@ -1159,27 +1242,44 @@ def test_options_features_schema_keeps_dashboard_features_on_second_page() -> No
 
     result = _options_features_schema(entry)(
         {
+            CONF_VIDEO_ENABLED: True,
+        }
+    )
+
+    assert result[CONF_VIDEO_ENABLED] is True
+    assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert CONF_DEVICE_UI_ENABLED not in result
+    assert CONF_DASHBOARD_PREVENT_RETURN not in result
+    assert CONF_ACTIONS_JSON not in result
+
+
+def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
+    schema = _dashboard_schema(
+        "alarm_control_panel.home",
+        "weather.home",
+        _actions_json({"standby": {"domain": "button", "service": "press"}}),
+        default_dashboard_entities=["sensor.temperature"],
+        default_device_ui_enabled=True,
+    )
+
+    result = schema(
+        {
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
-            CONF_VIDEO_ENABLED: True,
-            CONF_VIDEO_PORT: 6554,
-            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
-            CONF_ACTIONS_JSON: _actions_json(entry.options[CONF_ACTIONS]),
-            CONF_DEVICE_UI_ENABLED: True,
-            CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
         }
     )
 
     assert result[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert result[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
-    assert result[CONF_VIDEO_ENABLED] is True
+    assert result[CONF_ACTIONS_JSON] == '{"standby":{"domain":"button","service":"press"}}'
     assert result[CONF_DEVICE_UI_ENABLED] is True
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
-def test_options_features_schema_hides_gui_dependent_fields_until_enabled() -> None:
+def test_options_features_schema_never_contains_dashboard_fields() -> None:
     entry = SimpleNamespace(
         data={
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
@@ -1188,8 +1288,6 @@ def test_options_features_schema_hides_gui_dependent_fields_until_enabled() -> N
         },
         options={
             CONF_VIDEO_ENABLED: True,
-            CONF_VIDEO_PORT: 6554,
-            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
             CONF_ACTIONS: {"standby": {"domain": "button", "service": "press"}},
             CONF_DEVICE_UI_ENABLED: False,
             CONF_DASHBOARD_PREVENT_RETURN: False,
@@ -1198,20 +1296,23 @@ def test_options_features_schema_hides_gui_dependent_fields_until_enabled() -> N
 
     disabled_keys = _schema_key_names(_options_features_schema(entry))
     enabled_keys = _schema_key_names(
-        _options_features_schema(entry, device_ui_enabled=True)
+        _options_features_schema(entry, video_enabled=True)
     )
 
-    assert disabled_keys[0] == CONF_DEVICE_UI_ENABLED
+    assert disabled_keys[0] == CONF_VIDEO_ENABLED
+    assert CONF_DEVICE_UI_ENABLED not in disabled_keys
     assert CONF_ALARM_ENTITY_ID not in disabled_keys
     assert CONF_WEATHER_ENTITY_ID not in disabled_keys
     assert CONF_DASHBOARD_ENTITIES not in disabled_keys
     assert CONF_ACTIONS_JSON not in disabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
-    assert enabled_keys[:2] == [CONF_DEVICE_UI_ENABLED, CONF_ALARM_ENTITY_ID]
-    assert CONF_WEATHER_ENTITY_ID in enabled_keys
-    assert CONF_DASHBOARD_ENTITIES in enabled_keys
-    assert CONF_ACTIONS_JSON in enabled_keys
-    assert CONF_DASHBOARD_PREVENT_RETURN in enabled_keys
+    assert enabled_keys[:2] == [CONF_VIDEO_ENABLED, CONF_CREATE_HOMEASSISTANT_USER]
+    assert CONF_DEVICE_UI_ENABLED not in enabled_keys
+    assert CONF_ALARM_ENTITY_ID not in enabled_keys
+    assert CONF_WEATHER_ENTITY_ID not in enabled_keys
+    assert CONF_DASHBOARD_ENTITIES not in enabled_keys
+    assert CONF_ACTIONS_JSON not in enabled_keys
+    assert CONF_DASHBOARD_PREVENT_RETURN not in enabled_keys
 
 
 def test_reconfigure_clears_stale_option_overrides() -> None:
@@ -1253,20 +1354,24 @@ def test_reconfigure_preserves_existing_unique_id() -> None:
     assert _reconfigure_unique_id(SimpleNamespace(unique_id=None)) == "bticino_c300x"
 
 
-def test_gui_detail_detection_redisplays_after_enabling_hidden_patch_fields() -> None:
-    assert _needs_gui_details({CONF_DEVICE_UI_ENABLED: True})
-    assert not _needs_gui_details(
-        {CONF_DEVICE_UI_ENABLED: True},
-        details_shown=True,
-    )
-    assert not _needs_gui_details(
-        {
-            CONF_DEVICE_UI_ENABLED: True,
-            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-            CONF_WEATHER_ENTITY_ID: "weather.home",
-        }
-    )
-    assert not _needs_gui_details({CONF_DEVICE_UI_ENABLED: False})
+def test_dashboard_schema_defaults_keep_page_open_disabled() -> None:
+    result = _dashboard_schema("", "")({})
+
+    assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
+
+
+def test_dashboard_input_defaults_preserve_existing_keep_page_open() -> None:
+    defaults = {
+        CONF_ALARM_ENTITY_ID: "",
+        CONF_WEATHER_ENTITY_ID: "",
+        CONF_DASHBOARD_ENTITIES: [],
+        CONF_ACTIONS: {},
+        CONF_DASHBOARD_PREVENT_RETURN: True,
+    }
+
+    result = _dashboard_input_defaults({}, defaults)
+
+    assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
 
 
 @pytest.mark.parametrize(

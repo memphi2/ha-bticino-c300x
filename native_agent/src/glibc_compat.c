@@ -38,11 +38,4 @@ int __wrap___libc_start_main(
     );
 }
 
-#else
-
-int c300x_glibc_compat_not_used(void)
-{
-    return 0;
-}
-
 #endif

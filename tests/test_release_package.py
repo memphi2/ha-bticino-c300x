@@ -61,7 +61,13 @@ def test_hacs_release_zip_uses_component_root_layout(
         names = set(archive.namelist())
 
     assert "manifest.json" in names
+    assert "LICENSE" in names
+    assert "NOTICE" in names
+    assert "PRIVACY.md" in names
+    assert "SECURITY.md" in names
+    assert "docs/legal.md" in names
     assert "__init__.py" in names
+    assert "frontend/c300x-doorbell-call-card.js" in names
     assert "device_agent/bundle.json" in names
     assert "device_agent/scripts/bootstrap_firewall.sh" in names
     assert not any(name.startswith("custom_components/") for name in names)
@@ -88,12 +94,13 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     paths = {entry["path"] for entry in bundle["files"]}
     assert bundle["agent"] == "device_agent/armhf/c300x-agent-native"
     assert "device_agent/armhf/c300x-agent-native" in paths
-    assert "device_agent/init/c300x-native-agent" not in paths
+    assert "device_agent/init/c300x-native-agent" in paths
     assert "device_agent/scripts/qml_patch.sh" in paths
     assert "device_agent/scripts/remove_agent.sh" in paths
     assert "device_agent/scripts/bootstrap_firewall.sh" in paths
     modes = {entry["path"]: entry["mode"] for entry in bundle["files"]}
     assert modes["device_agent/armhf/c300x-agent-native"] == "700"
+    assert modes["device_agent/init/c300x-native-agent"] == "700"
     assert modes["device_agent/scripts/qml_patch.sh"] == "700"
     assert modes["device_agent/scripts/remove_agent.sh"] == "700"
     assert modes["device_agent/scripts/bootstrap_firewall.sh"] == "700"
@@ -143,7 +150,7 @@ def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     assert '"device_agent/scripts/qml_patch.sh"' in apply_files
     assert '"device_agent/scripts/remove_agent.sh"' in apply_files
     assert '"device_agent/scripts/bootstrap_firewall.sh"' in apply_files
-    assert '"device_agent/init/c300x-native-agent"' not in apply_files
+    assert '"device_agent/init/c300x-native-agent"' in apply_files
 
 
 def test_native_self_update_apply_repairs_existing_startup_link() -> None:

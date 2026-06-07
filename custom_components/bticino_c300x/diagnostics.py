@@ -57,7 +57,6 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "last_write_at",
     "last_write_reason",
     "last_write_class",
-    "subscription_store_writes",
     "qml_patch_last_action",
     "last_wake_reason",
     "loop_iterations",
@@ -461,7 +460,6 @@ def _event_state_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "last_event": getattr(state, "last_event", None),
         "last_event_time": getattr(state, "last_event_time", None),
         "video_available": getattr(state, "video_available", None),
-        "video_active_until": getattr(state, "video_active_until", None),
         "call_active": getattr(state, "call_active", None),
         "smartphone_forwarding_known": getattr(
             state,

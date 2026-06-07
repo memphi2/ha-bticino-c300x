@@ -35,6 +35,19 @@ token is supplied through the `C300X_AGENT_TOKEN` environment variable.
 The setup page and diagnostics only report whether tokens are configured. They
 do not echo token values back.
 
+## Legacy SSH Installer Dependency
+
+The Home Assistant package pins `paramiko==3.5.1` for the optional first-install
+and fallback repair path because the C300X SSH server needs legacy SSH
+compatibility. Normal C300X agent operation does not use Paramiko after the
+native agent is installed; it communicates through the local token-protected
+agent API.
+
+Security scanners may flag Paramiko for SHA-1/RSA-key handling
+(`CVE-2026-44405`). Keep SSH and the native-agent installer on a trusted local
+network, use the installer only for rooted/SSH-enabled devices you control, and
+disable SSH again after bootstrap when your maintenance model allows it.
+
 ## Maintenance Surface
 
 Maintenance endpoints are disabled unless explicitly enabled in agent config and

@@ -16,7 +16,6 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfTemperature,
-    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import (
@@ -33,7 +32,6 @@ from .capabilities import (
     answering_machine_messages_supported,
     capability_is_supported,
     diagnostics_supported,
-    maintenance_action_is_advertised,
     memos_supported,
 )
 from .const import (
@@ -41,16 +39,16 @@ from .const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
-    SIGNAL_EVENT_STATE_CHANGED,
     SIGNAL_MEMOS_CHANGED,
-    SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
+from .device_user import media_user_attributes
 from .doorbell_state import (
     DOORBELL_STATE_IDLE,
+    DOORBELL_STATE_RINGING,
+    DOORBELL_STATE_VIEW_REQUESTED,
     DOORBELL_STATES,
-    normalize_doorbell_state,
     raw_doorbell_state_value,
 )
 from .entity import C300XEntity
@@ -58,11 +56,6 @@ from .event_payload import agent_event_key
 from .memos import (
     latest_memo,
     latest_memo_attributes,
-    latest_memo_label,
-    memo_kind_items,
-    memo_state_text,
-    memo_text_was_state_truncated,
-    no_memo_label,
 )
 from .message_refresh import (
     async_answering_machine_messages,
@@ -70,27 +63,18 @@ from .message_refresh import (
     schedule_answering_machine_messages_refresh,
     schedule_memos_refresh,
 )
-from .video import call_later, event_active_seconds
 from .video_messages import (
-    latest_video_message,
     latest_video_message_attributes,
-    video_message_title,
 )
 
 PARALLEL_UPDATES = 1
 _METRICS_CACHE_SECONDS = 10
-_DOORBELL_TRANSIENT_STATES = frozenset(
-    {
-        "ringing",
-        "view_requested",
-        "view_requeste",
-        "pressed",
-        "ring",
-        "doorbell_pressed",
-        "doorbell_view_requested",
-    }
-)
-_DOORBELL_CLOSED_STATES = frozenset({"doorbell_media_closed", "media_closed", "closed"})
+_DOORBELL_CLOSED_STATES = frozenset({DOORBELL_STATE_IDLE})
+_DOORBELL_EVENT_STATES = {
+    "doorbell_pressed": DOORBELL_STATE_RINGING,
+    "doorbell_view_requested": DOORBELL_STATE_VIEW_REQUESTED,
+    "doorbell_media_closed": DOORBELL_STATE_IDLE,
+}
 _AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
     "last_wake_reason",
     "loop_iterations",
@@ -109,9 +93,6 @@ _AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
     "home_assistant_connected_this_run",
     "home_assistant_last_seen_at",
     "ui_event_revision",
-)
-_AGENT_STATUS_RUNTIME_DIAGNOSTIC_KEYS = tuple(
-    key for key in _AGENT_RUNTIME_DIAGNOSTIC_KEYS if key != "accepted_clients"
 )
 _AGENT_VIDEO_DIAGNOSTIC_KEYS = (
     "video_running",
@@ -141,6 +122,23 @@ def _agent_diagnostic_attributes(
     return attrs
 
 
+def _agent_info_attributes(agent_info: dict[str, Any]) -> dict[str, Any]:
+    """Return non-sensitive device-agent metadata for the status sensor."""
+
+    version = agent_info.get("version")
+    return {
+        key: value
+        for key, value in (
+            ("agent_version", version),
+            ("implementation", agent_info.get("implementation")),
+            ("api_version", agent_info.get("api_version")),
+            ("model", agent_info.get("model")),
+            ("firmware", agent_info.get("firmware")),
+        )
+        if value is not None
+    }
+
+
 def _poll_wakeups_per_loop(diagnostics: dict[str, Any]) -> float | None:
     """Return a compact poll wakeup ratio for idle diagnostics."""
 
@@ -161,19 +159,13 @@ async def async_setup_entry(
     """Set up C300X sensors."""
 
     entities: list[SensorEntity] = [
-        C300XAgentInfoSensor(entry),
         C300XAgentStatusSensor(entry),
-        C300XConnectionStateSensor(entry),
-        C300XReconnectCountSensor(entry),
-        C300XLastConnectionErrorSensor(entry),
-        C300XNextReconnectDelaySensor(entry),
     ]
     metrics = _system_metrics_capability(entry)
     initial_refresh_entities: list[SensorEntity] = []
-    if capability_is_supported(entry.runtime_data.capabilities, "doorbell_events"):
+    if capability_is_supported(entry.runtime_data.capabilities, "doorbell_video"):
         doorbell_state_sensor = C300XDoorbellStateSensor(entry)
         entities.append(doorbell_state_sensor)
-        initial_refresh_entities.append(doorbell_state_sensor)
     if metrics.get("cpu"):
         cpu_sensor = C300XDeviceCpuSensor(entry)
         entities.append(cpu_sensor)
@@ -187,177 +179,24 @@ async def async_setup_entry(
         memory_sensor = C300XDeviceMemorySensor(entry)
         entities.append(memory_sensor)
     if diagnostics_supported(entry.runtime_data.capabilities):
-        diagnostics_sensor = C300XAgentWritesSensor(entry)
-        entities.append(diagnostics_sensor)
-        initial_refresh_entities.append(diagnostics_sensor)
+        initial_refresh_entities.append(entities[0])
     if answering_machine_messages_supported(entry.runtime_data.capabilities):
         await _async_refresh_initial_answering_machine_messages(entry)
         message_sensor = C300XVoicemailMessagesSensor(entry)
-        unread_sensor = C300XVoicemailUnreadSensor(entry)
-        latest_message_sensor = C300XLatestVideoMessageSensor(entry)
-        entities.extend([message_sensor, unread_sensor, latest_message_sensor])
+        entities.append(message_sensor)
     if memos_supported(entry.runtime_data.capabilities):
         await _async_refresh_initial_memos(entry)
         text_memos_sensor = C300XTextMemosSensor(entry)
-        latest_text_memo_sensor = C300XLatestTextMemoSensor(entry)
         voice_memos_sensor = C300XVoiceMemosSensor(entry)
-        latest_voice_memo_sensor = C300XLatestVoiceMemoSensor(entry)
         entities.extend(
             [
                 text_memos_sensor,
-                latest_text_memo_sensor,
                 voice_memos_sensor,
-                latest_voice_memo_sensor,
             ]
         )
-    if maintenance_action_is_advertised(entry.runtime_data.capabilities, "qml_status"):
-        qml_patch_status_sensor = C300XQmlPatchStatusSensor(entry)
-        entities.append(qml_patch_status_sensor)
-        initial_refresh_entities.append(qml_patch_status_sensor)
     if initial_refresh_entities:
         await _async_refresh_initial_states(initial_refresh_entities)
     async_add_entities(entities)
-
-
-class C300XAgentInfoSensor(C300XEntity, SensorEntity):
-    """Device-agent info sensor."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_should_poll = False
-    _attr_translation_key = "agent"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "agent")
-        self._apply_setup(entry.runtime_data.agent_info)
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to agent metadata changes."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_AGENT_INFO_CHANGED,
-                self._handle_agent_info_changed,
-            )
-        )
-
-    async def async_update(self) -> None:
-        """Refresh agent metadata on explicit HA update requests."""
-
-        try:
-            setup = await self._entry.runtime_data.api.async_validate_setup()
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        self._entry.runtime_data.agent_info = setup
-        self._apply_setup(setup)
-
-    def _apply_setup(self, setup: dict, *, write_state: bool = False) -> None:
-        version = setup.get("version")
-        self._attr_available = version is not None
-        self._attr_native_value = version
-        self._attr_extra_state_attributes = {
-            key: value
-            for key, value in (
-                ("agent_version", version),
-                ("implementation", setup.get("implementation")),
-                ("api_version", setup.get("api_version")),
-                ("model", setup.get("model")),
-                ("firmware", setup.get("firmware")),
-            )
-            if value is not None
-        }
-        if write_state:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_agent_info_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self._apply_setup(self._entry.runtime_data.agent_info, write_state=True)
-
-
-class C300XAgentWritesSensor(C300XEntity, SensorEntity):
-    """Non-sensitive write diagnostics reported by the device agent."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_should_poll = False
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_translation_key = "agent_writes"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "agent_writes")
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to one-shot diagnostics refresh notifications."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
-                self._handle_diagnostics_changed,
-            )
-        )
-
-    async def async_update(self) -> None:
-        """Refresh write diagnostics on explicit HA update requests."""
-
-        try:
-            diagnostics = await self._entry.runtime_data.api.async_diagnostics()
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        self._apply_diagnostics(diagnostics)
-
-    @property
-    def native_value(self) -> int:
-        """Return the total number of write-class actions observed by the agent."""
-
-        return int(self._diagnostics.get("agent_write_count") or 0)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return safe write diagnostics without secrets or URLs."""
-
-        diagnostics = self._diagnostics
-        return {
-            "last_write_at": diagnostics.get("last_write_at"),
-            "last_write_reason": diagnostics.get("last_write_reason"),
-            "last_write_class": diagnostics.get("last_write_class"),
-            "subscription_store_writes": diagnostics.get("subscription_store_writes"),
-            "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
-            **_agent_diagnostic_attributes(
-                diagnostics,
-                _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
-            ),
-            **_agent_diagnostic_attributes(
-                diagnostics,
-                _AGENT_VIDEO_DIAGNOSTIC_KEYS,
-            ),
-        }
-
-    @property
-    def _diagnostics(self) -> dict[str, Any]:
-        return self._entry.runtime_data.agent_diagnostics
-
-    def _apply_diagnostics(
-        self,
-        diagnostics: dict[str, Any],
-        *,
-        write_state: bool = True,
-    ) -> None:
-        self._entry.runtime_data.agent_diagnostics = diagnostics
-        self._entry.runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
-        self._attr_available = True
-        if write_state:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_diagnostics_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self._attr_available = True
-            self.async_write_ha_state()
 
 
 class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
@@ -400,6 +239,18 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "agent_status")
 
+    async def async_update(self) -> None:
+        """Refresh agent metadata and diagnostics on explicit HA update requests."""
+
+        try:
+            self._entry.runtime_data.agent_info = (
+                await self._entry.runtime_data.api.async_validate_setup()
+            )
+        except C300XAgentApiError:
+            return
+        if diagnostics_supported(self._entry.runtime_data.capabilities):
+            await self._async_refresh_diagnostics(write_state=False)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to connection and diagnostics updates."""
 
@@ -438,9 +289,11 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
 
         state = self._entry.runtime_data.connection_state
         diagnostics = self._entry.runtime_data.agent_diagnostics
+        agent_info = self._entry.runtime_data.agent_info
         update_state = getattr(self._entry.runtime_data, "agent_update_state", None)
         attrs: dict[str, Any] = {
             "reason": self._status_reason(),
+            **_agent_info_attributes(agent_info),
             "connection_state": self._connection_state_value(),
             "last_connection_stage": state.last_connection_stage,
             "last_connection_error": state.last_connection_error,
@@ -451,9 +304,14 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_write_at": diagnostics.get("last_write_at"),
             "last_write_reason": diagnostics.get("last_write_reason"),
             "last_write_class": diagnostics.get("last_write_class"),
+            "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
             **_agent_diagnostic_attributes(
                 diagnostics,
-                _AGENT_STATUS_RUNTIME_DIAGNOSTIC_KEYS,
+                _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
+            ),
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_VIDEO_DIAGNOSTIC_KEYS,
             ),
             **_agent_diagnostic_attributes(
                 diagnostics,
@@ -501,119 +359,15 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
-
-class C300XConnectionStateSensor(C300XConnectionDiagnosticSensor):
-    """Device-agent connection state sensor."""
-
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["connected", "reconnecting", "disconnected"]
-    _attr_translation_key = "connection_state"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "connection_state")
-
-    @property
-    def native_value(self) -> str:
-        """Return the device-agent connection state."""
-
-        state = self._entry.runtime_data.connection_state
-        if not state.available:
-            return "disconnected"
-        return state.connection_state
-
-    @property
-    def extra_state_attributes(self) -> dict[str, str | int | None]:
-        """Return reconnect diagnostics."""
-
-        state = self._entry.runtime_data.connection_state
-        return {
-            "last_connection_stage": state.last_connection_stage,
-            "last_connection_error": state.last_connection_error,
-            "last_reconnect_reason": state.last_reconnect_reason,
-            "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
-        }
-
-
-class C300XReconnectCountSensor(C300XConnectionDiagnosticSensor):
-    """Device-agent reconnect count sensor."""
-
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_translation_key = "reconnect_count"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "reconnect_count")
-
-    @property
-    def native_value(self) -> int:
-        """Return successful reconnect count."""
-
-        return self._entry.runtime_data.connection_state.reconnect_count
-
-
-class C300XLastConnectionErrorSensor(C300XConnectionDiagnosticSensor):
-    """Device-agent last connection error sensor."""
-
-    _attr_translation_key = "last_connection_error"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "last_connection_error")
-
-    @property
-    def native_value(self) -> str:
-        """Return the last reconnectable connection error."""
-
-        return (
-            self._entry.runtime_data.connection_state.last_connection_error
-            or self._no_connection_error_value()
-        )
-
-    @property
-    def extra_state_attributes(self) -> dict[str, str | int | None]:
-        """Return related reconnect diagnostics."""
-
-        state = self._entry.runtime_data.connection_state
-        return {
-            "connection_state": state.connection_state,
-            "last_connection_stage": state.last_connection_stage,
-            "last_reconnect_reason": state.last_reconnect_reason,
-            "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
-        }
-
-    def _no_connection_error_value(self) -> str:
-        language = str(getattr(self.hass.config, "language", "") or "").lower()
-        if language.startswith("de"):
-            return "Kein Verbindungsfehler"
-        if language.startswith("fr"):
-            return "Aucune erreur de connexion"
-        return "No connection error"
-
-
-class C300XNextReconnectDelaySensor(C300XConnectionDiagnosticSensor):
-    """Device-agent next reconnect delay sensor."""
-
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
-    _attr_translation_key = "next_reconnect_delay"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "next_reconnect_delay")
-
-    @property
-    def native_value(self) -> int:
-        """Return seconds until the next scheduled reconnect attempt."""
-
-        return self._entry.runtime_data.connection_state.next_reconnect_delay_seconds or 0
-
-    @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
-        """Return related reconnect diagnostics."""
-
-        state = self._entry.runtime_data.connection_state
-        return {
-            "connection_state": state.connection_state,
-            "last_connection_stage": state.last_connection_stage,
-            "last_reconnect_reason": state.last_reconnect_reason,
-        }
+    async def _async_refresh_diagnostics(self, *, write_state: bool = True) -> None:
+        try:
+            diagnostics = await self._entry.runtime_data.api.async_diagnostics()
+        except C300XAgentApiError:
+            return
+        self._entry.runtime_data.agent_diagnostics = diagnostics
+        self._entry.runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
+        if write_state:
+            self.async_write_ha_state()
 
 
 class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
@@ -628,7 +382,6 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         super().__init__(entry, "doorbell_state")
         self._state: str | None = None
         self._last_event_at: str | None = None
-        self._reset = None
 
     @property
     def native_value(self) -> str | None:
@@ -637,10 +390,13 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         return self._state
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return doorbell-state metadata."""
 
-        return {"last_event_at": self._last_event_at}
+        return {
+            "last_event_at": self._last_event_at,
+            **media_user_attributes(self._entry),
+        }
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to doorbell push events."""
@@ -652,48 +408,15 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
                 self._handle_agent_event,
             )
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_EVENT_STATE_CHANGED,
-                self._handle_event_state_changed,
-            )
-        )
-
-    @callback
-    def _handle_event_state_changed(self, entry_id: str) -> None:
-        """Refresh state when the runtime doorbell video window is cleared."""
-
-        if entry_id == self._entry.entry_id and self._state in _DOORBELL_TRANSIENT_STATES:
-            self._state = DOORBELL_STATE_IDLE
-            self.async_write_ha_state()
-
-    async def async_update(self) -> None:
-        """Refresh the current doorbell state once from the agent."""
-
-        try:
-            state = await self._entry.runtime_data.api.async_state()
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        doorbell = normalize_doorbell_state(state)
-        self._state = doorbell
-        self._attr_available = doorbell is not None
 
     @callback
     def _handle_agent_event(self, event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
-        event_key = agent_event_key(event.data)
-        state = raw_doorbell_state_value(
-            event.data.get("doorbell")
-            or event.data.get("state")
-            or event_key
-        )
+        state = self._doorbell_state_from_event(event.data)
         if state is None:
             return
         if state in _DOORBELL_CLOSED_STATES:
-            self._clear_transient_state()
             self._state = DOORBELL_STATE_IDLE
             self._last_event_at = event.data.get("event_at")
             self._attr_available = True
@@ -702,35 +425,14 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
         self._state = state
         self._last_event_at = event.data.get("event_at")
         self._attr_available = True
-        if state in _DOORBELL_TRANSIENT_STATES:
-            self._schedule_transient_reset(event.data)
-        else:
-            self._clear_transient_state()
         self.async_write_ha_state()
 
-    def _schedule_transient_reset(self, event_data: dict[str, Any]) -> None:
-        """Return transient doorbell states to idle after the event window."""
-
-        self._clear_transient_state()
-        active_seconds = event_active_seconds(event_data)
-        if active_seconds <= 0:
-            return
-
-        @callback
-        def _reset(now: Any = None) -> None:
-            self._reset = None
-            self._state = DOORBELL_STATE_IDLE
-            self._attr_available = True
-            self.async_write_ha_state()
-
-        self._reset = call_later(self.hass, active_seconds, _reset)
-
-    def _clear_transient_state(self) -> None:
-        """Cancel any pending transient doorbell state reset."""
-
-        if self._reset:
-            self._reset()
-        self._reset = None
+    def _doorbell_state_from_event(self, data: dict[str, Any]) -> str | None:
+        state = raw_doorbell_state_value(data.get("doorbell"))
+        if state is not None:
+            return state
+        event_key = agent_event_key(data)
+        return _DOORBELL_EVENT_STATES.get(event_key or "")
 
 
 class C300XSystemMetricSensor(C300XEntity, SensorEntity):
@@ -947,73 +649,6 @@ class C300XDeviceCpuSensor(C300XSystemMetricSensor):
         return {"cpu_count": self._metrics.get("cpu_count")}
 
 
-class C300XQmlPatchStatusSensor(C300XEntity, SensorEntity):
-    """Maintenance status for the installed device UI QML patch."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_should_poll = False
-    _attr_translation_key = "qml_patch_status"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "qml_patch_status")
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to QML patch maintenance updates."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_QML_PATCH_CHANGED,
-                self._handle_qml_patch_changed,
-            )
-        )
-
-    async def async_update(self) -> None:
-        """Refresh QML patch status on explicit request."""
-
-        try:
-            status = await self._entry.runtime_data.api.async_qml_patch_status()
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        self._apply_status(status)
-
-    @property
-    def native_value(self) -> str:
-        """Return current QML patch state."""
-
-        return str(self._entry.runtime_data.qml_patch_status.get("state") or "unknown")
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return QML patch diagnostics without exposing secrets."""
-
-        status = self._entry.runtime_data.qml_patch_status
-        return {
-            "available": status.get("available"),
-            "patched": status.get("patched"),
-            "backup_available": status.get("backup_available"),
-            "gui_running": status.get("gui_running"),
-        }
-
-    @callback
-    def _handle_qml_patch_changed(self, entry_id: str) -> None:
-        if entry_id != self._entry.entry_id:
-            return
-        self._attr_available = bool(
-            self._entry.runtime_data.qml_patch_status.get("available", True)
-        )
-        self.async_write_ha_state()
-
-    def _apply_status(self, status: dict[str, Any], *, write_state: bool = True) -> None:
-        self._entry.runtime_data.qml_patch_status = status
-        self._entry.runtime_data.qml_patch_status_updated_at = datetime.now(UTC)
-        self._attr_available = bool(status.get("available", True))
-        if write_state:
-            self.async_write_ha_state()
-
-
 class C300XVoicemailSensor(C300XEntity, SensorEntity):
     """Base class for event-driven video message metadata sensors."""
 
@@ -1108,68 +743,8 @@ class C300XVoicemailMessagesSensor(C300XVoicemailSensor):
             "unread": self._messages.get("unread"),
             "read": self._messages.get("read"),
             "newest_at": self._messages.get("newest_at"),
+            **latest_video_message_attributes(self._messages, self._entry.entry_id),
         }
-
-
-class C300XVoicemailUnreadSensor(C300XVoicemailSensor):
-    """Unread video messages stored on the device."""
-
-    _attr_native_unit_of_measurement = "messages"
-    _attr_translation_key = "voicemail_unread"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "voicemail_unread")
-
-    @property
-    def native_value(self) -> int | None:
-        """Return unread video message count."""
-
-        return self._messages.get("unread")
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return non-sensitive video message summary metadata."""
-
-        return {
-            "total": self._messages.get("total"),
-            "newest_at": self._messages.get("newest_at"),
-        }
-
-
-class C300XLatestVideoMessageSensor(C300XVoicemailSensor):
-    """Latest answering-machine video message as a visible sensor state."""
-
-    _attr_translation_key = "latest_video_message"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "latest_video_message")
-
-    @property
-    def native_value(self) -> str:
-        """Return a readable latest video-message label."""
-
-        if not _messages_loaded(self._entry):
-            return None
-        latest = latest_video_message(self._messages)
-        if latest is None:
-            return self._no_video_message_value()
-        return video_message_title(latest, language=_entity_language(self))
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return playable latest video-message metadata."""
-
-        return latest_video_message_attributes(self._messages, self._entry.entry_id)
-
-    def _no_video_message_value(self) -> str:
-        language = _entity_language(self)
-        if language.startswith("de"):
-            return "Keine Video-Nachrichten"
-        if language.startswith("it"):
-            return "Nessun messaggio video"
-        if language.startswith("fr"):
-            return "Aucun message video"
-        return "No video message"
 
 
 class C300XMemoSensor(C300XEntity, SensorEntity):
@@ -1240,9 +815,6 @@ class C300XMemoSensor(C300XEntity, SensorEntity):
         if write_state:
             self.async_write_ha_state()
 
-    def _kind_items(self) -> list[dict[str, Any]]:
-        return memo_kind_items(self._memos, self._memo_kind)
-
     def _latest_item(self) -> dict[str, Any] | None:
         return latest_memo(self._memos, self._memo_kind)
 
@@ -1265,63 +837,16 @@ class C300XTextMemosSensor(C300XMemoSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return text memo counters without embedding memo bodies."""
+        """Return text memo counters and latest memo metadata."""
 
-        latest = self._latest_item() or {}
         return {
-            "total": self._memos.get("total"),
-            "unread": sum(1 for memo in self._kind_items() if memo.get("read") is False),
-            "read": sum(1 for memo in self._kind_items() if memo.get("read") is True),
+            "all_memos_total": self._memos.get("total"),
             "newest_at": self._memos.get("newest_at"),
-            "latest_memo_id": latest.get("id"),
-            "latest_memo_at": latest.get("iso_time") or latest.get("date"),
-        }
-
-
-class C300XLatestTextMemoSensor(C300XMemoSensor):
-    """Latest manual text memo body as a visible sensor state."""
-
-    _attr_translation_key = "latest_text_memo"
-    _memo_kind = "text"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "latest_text_memo")
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the newest text memo body constrained to HA's state limit."""
-
-        if not _memos_loaded(self._entry):
-            return None
-        latest = self._latest_item()
-        if latest is None:
-            return no_memo_label("text", _entity_language(self))
-        return memo_state_text(latest.get("text"))
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return metadata for the visible latest text memo state."""
-
-        latest = self._latest_item()
-        if latest is None:
-            return {
-                "has_memo": False,
-                "memo_id": None,
-                "read": None,
-                "date": None,
-                "iso_time": None,
-                "text_truncated": False,
-                "total": self._memos.get("text_total"),
-            }
-        return {
-            "has_memo": True,
-            "memo_id": latest.get("id"),
-            "read": latest.get("read"),
-            "date": latest.get("date"),
-            "iso_time": latest.get("iso_time"),
-            "text_truncated": bool(latest.get("text_truncated"))
-            or memo_text_was_state_truncated(latest.get("text")),
-            "total": self._memos.get("text_total"),
+            **latest_memo_attributes(
+                self._memos,
+                self._memo_kind,
+                include_text=True,
+            ),
         }
 
 
@@ -1343,51 +868,17 @@ class C300XVoiceMemosSensor(C300XMemoSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return non-sensitive voice memo metadata."""
+        """Return voice memo counters and latest playable metadata."""
 
-        latest = self._latest_item()
         return {
-            "total": self._memos.get("total"),
-            "unread": sum(1 for memo in self._kind_items() if memo.get("read") is False),
-            "read": sum(1 for memo in self._kind_items() if memo.get("read") is True),
+            "all_memos_total": self._memos.get("total"),
             "newest_at": self._memos.get("newest_at"),
-            "latest_memo_id": latest.get("id") if latest else None,
-            "latest_memo_at": latest.get("iso_time") or latest.get("date")
-            if latest
-            else None,
+            **latest_memo_attributes(
+                self._memos,
+                self._memo_kind,
+                entry_id=self._entry.entry_id,
+            ),
         }
-
-
-class C300XLatestVoiceMemoSensor(C300XMemoSensor):
-    """Latest manual voice memo as a visible sensor state."""
-
-    _attr_translation_key = "latest_voice_memo"
-    _memo_kind = "voice"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "latest_voice_memo")
-
-    @property
-    def native_value(self) -> str | None:
-        """Return a readable latest voice-memo label."""
-
-        if not _memos_loaded(self._entry):
-            return None
-        return latest_memo_label(
-            self._memos,
-            "voice",
-            language=_entity_language(self),
-        )
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return metadata for the latest voice memo."""
-
-        return latest_memo_attributes(
-            self._memos,
-            "voice",
-            entry_id=self._entry.entry_id,
-        )
 
 
 async def _async_system_metrics(
@@ -1418,26 +909,6 @@ def _system_metrics_capability(entry: ConfigEntry) -> dict[str, Any]:
     if not isinstance(metrics, dict) or not metrics.get("supported"):
         return {}
     return metrics
-
-
-def _messages_loaded(entry: ConfigEntry) -> bool:
-    return (
-        getattr(entry.runtime_data, "answering_machine_messages_updated_at", None)
-        is not None
-        or bool(getattr(entry.runtime_data, "answering_machine_messages", {}))
-    )
-
-
-def _memos_loaded(entry: ConfigEntry) -> bool:
-    return (
-        getattr(entry.runtime_data, "memos_updated_at", None) is not None
-        or bool(getattr(entry.runtime_data, "memos", {}))
-    )
-
-
-def _entity_language(entity: object) -> str:
-    hass = getattr(entity, "hass", None)
-    return str(getattr(getattr(hass, "config", None), "language", "") or "").lower()
 
 
 async def _async_refresh_initial_answering_machine_messages(
@@ -1472,31 +943,8 @@ async def _async_refresh_initial_states(entities: list[SensorEntity]) -> None:
     """Populate lightweight diagnostic sensors once during setup."""
 
     for entity in entities:
-        if isinstance(entity, C300XDoorbellStateSensor):
-            try:
-                state = await entity._entry.runtime_data.api.async_state()
-            except C300XAgentApiError:
-                entity._attr_available = False
-                continue
-            doorbell = normalize_doorbell_state(state)
-            entity._state = doorbell
-            entity._attr_available = doorbell is not None
-            continue
-        if isinstance(entity, C300XAgentWritesSensor):
-            try:
-                diagnostics = await entity._entry.runtime_data.api.async_diagnostics()
-            except C300XAgentApiError:
-                entity._attr_available = False
-                continue
-            entity._apply_diagnostics(diagnostics, write_state=False)
-            continue
-        if isinstance(entity, C300XQmlPatchStatusSensor):
-            try:
-                status = await entity._entry.runtime_data.api.async_qml_patch_status()
-            except C300XAgentApiError:
-                entity._attr_available = False
-                continue
-            entity._apply_status(status, write_state=False)
+        if isinstance(entity, C300XAgentStatusSensor):
+            await entity._async_refresh_diagnostics(write_state=False)
             continue
         if isinstance(entity, C300XSystemMetricSensor):
             await entity.async_update()

@@ -103,6 +103,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
     SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_START_HOME_CALL,
+    SERVICE_STOP_DOORBELL_VIDEO,
+    SERVICE_STOP_HOME_CALL,
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
@@ -161,12 +164,30 @@ class _FakeHass:
 class _FakeApi:
     def __init__(self) -> None:
         self.activate_video_calls: list[bool] = []
+        self.stop_video_calls = 0
         self.activation_calls: list[str] = []
+        self.home_call_start_calls: list[int | None] = []
+        self.home_call_stop_calls = 0
         self.text_memo_calls: list[dict[str, Any]] = []
 
     async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
         self.activate_video_calls.append(audio)
         return {"ok": True, "audio": audio}
+
+    async def async_stop_doorbell_video(self) -> dict[str, Any]:
+        self.stop_video_calls += 1
+        return {"ok": True}
+
+    async def async_start_home_call(
+        self,
+        duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        self.home_call_start_calls.append(duration_seconds)
+        return {"ok": True, "duration_seconds": duration_seconds or 0}
+
+    async def async_stop_home_call(self) -> dict[str, Any]:
+        self.home_call_stop_calls += 1
+        return {"ok": True}
 
     async def async_run_device_activation(
         self,
@@ -219,6 +240,9 @@ def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_WRITE_TEXT_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_STOP_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_START_HOME_CALL) in hass.services.registered
+        assert (DOMAIN, SERVICE_STOP_HOME_CALL) in hass.services.registered
         assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) in hass.services.registered
@@ -250,6 +274,9 @@ def test_delete_services_require_enabled_device_ui_option() -> None:
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_STOP_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_START_HOME_CALL) in hass.services.registered
+        assert (DOMAIN, SERVICE_STOP_HOME_CALL) in hass.services.registered
         assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
@@ -404,6 +431,8 @@ def test_service_setup_tolerates_not_loaded_entries_without_runtime_data() -> No
         assert (DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE) in hass.services.registered
         assert (DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO) in hass.services.registered
         assert (DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO) in hass.services.registered
+        assert (DOMAIN, SERVICE_START_HOME_CALL) in hass.services.registered
+        assert (DOMAIN, SERVICE_STOP_HOME_CALL) in hass.services.registered
         assert (DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION) in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE) not in hass.services.registered
         assert (DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO) not in hass.services.registered
@@ -429,6 +458,69 @@ def test_activate_doorbell_video_service_calls_agent_api() -> None:
         await handler(types.SimpleNamespace(data={"audio": False}))
 
         assert api.activate_video_calls == [False]
+
+    asyncio.run(_run())
+
+
+def test_stop_doorbell_video_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_STOP_DOORBELL_VIDEO)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert api.stop_video_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_start_home_call_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"home_call": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_START_HOME_CALL)]
+        await handler(types.SimpleNamespace(data={"duration_seconds": 30}))
+
+        assert api.home_call_start_calls == [30]
+
+    asyncio.run(_run())
+
+
+def test_stop_home_call_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"home_call": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_STOP_HOME_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert api.home_call_stop_calls == 1
 
     asyncio.run(_run())
 

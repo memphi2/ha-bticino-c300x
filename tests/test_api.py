@@ -19,6 +19,7 @@ from custom_components.bticino_c300x.api import (
     normalize_answering_machine_messages,
     normalize_auth_config_status,
     normalize_device_user_status,
+    normalize_doorbell_call,
     normalize_doorbell_video,
     normalize_firewall_status,
     normalize_home_call,
@@ -1400,6 +1401,94 @@ def test_stop_doorbell_video_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
     }
+
+
+def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
+    session = _FakeSession(
+        '{"ok": true, "supported": true, "active": true, '
+        '"early_media_active": true, "audio_active": false, '
+        '"answer_requested": false, "answered": false, "can_answer": true, '
+        '"can_hangup": true, "media_owner": "ring", '
+        '"ring_receiver_running": true, "ring_registered": true, '
+        '"capture_supported": false, "open_fds": 5, "active_threads": 2}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    status = asyncio.run(api.async_doorbell_call_status())
+
+    assert status["active"] is True
+    assert status["can_answer"] is True
+    assert status["capture_supported"] is False
+    assert status["open_fds"] == 5
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/calls/doorbell/status",
+    )
+
+
+def test_answer_doorbell_call_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true, "audio": true, "answer_requested": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_answer_doorbell_call(audio=True)) == {
+        "ok": True,
+        "audio": True,
+        "answer_requested": True,
+    }
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/calls/doorbell/actions/answer",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {"audio": True}
+
+
+def test_hangup_doorbell_call_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_hangup_doorbell_call()) == {"ok": True}
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/calls/doorbell/actions/hangup",
+    )
+
+
+def test_capture_doorbell_call_requests_authenticated_endpoint() -> None:
+    session = _FakeSession('{"ok": true, "path": "/tmp/capture.jpg"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_capture_doorbell_call()) == {
+        "ok": True,
+        "path": "/tmp/capture.jpg",
+    }
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/calls/doorbell/actions/capture",
+    )
+
+
+def test_normalize_doorbell_call_rejects_non_object() -> None:
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_doorbell_call([])
 
 
 def test_home_call_status_requests_authenticated_endpoint() -> None:

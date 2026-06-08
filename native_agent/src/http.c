@@ -6716,6 +6716,7 @@ static void api_capabilities(
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
+        "\"doorbell_call\":{\"supported\":%s,\"answer\":true,\"hangup\":true,\"status\":true,\"capture\":false},"
         "\"home_call\":{\"supported\":%s,\"audio_codec\":\"%s\",\"rtp_proxy_supported\":true,\"max_duration_seconds\":%d},"
         "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
@@ -6747,6 +6748,7 @@ static void api_capabilities(
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_RTP_PAYLOAD_TYPE,
+        config->video_enabled ? "true" : "false",
         config->video_enabled ? "true" : "false",
         C300X_TALKBACK_CODEC,
         C300X_HOME_CALL_MAX_DURATION_SECONDS,
@@ -6917,6 +6919,8 @@ static void handle_doorbell_video_get(
     int ring_call_active = 0;
     int ring_media_active = 0;
     int ring_audio_active = 0;
+    int ring_answer_requested = 0;
+    int ring_answered = 0;
     int home_call_running = 0;
     int home_call_active = 0;
     int home_call_answered = 0;
@@ -6967,6 +6971,8 @@ static void handle_doorbell_video_get(
         ring_call_active = video_status.ring_call_active;
         ring_media_active = video_status.ring_media_active;
         ring_audio_active = video_status.ring_audio_active;
+        ring_answer_requested = video_status.ring_answer_requested;
+        ring_answered = video_status.ring_answered;
         home_call_running = video_status.home_call_running;
         home_call_active = video_status.home_call_active;
         home_call_answered = video_status.home_call_answered;
@@ -7030,6 +7036,8 @@ static void handle_doorbell_video_get(
         "\"ring_call_active\":%s,"
         "\"ring_media_active\":%s,"
         "\"ring_audio_active\":%s,"
+        "\"ring_answer_requested\":%s,"
+        "\"ring_answered\":%s,"
         "\"home_call_running\":%s,"
         "\"home_call_active\":%s,"
         "\"home_call_answered\":%s,"
@@ -7081,6 +7089,8 @@ static void handle_doorbell_video_get(
         ring_call_active ? "true" : "false",
         ring_media_active ? "true" : "false",
         ring_audio_active ? "true" : "false",
+        ring_answer_requested ? "true" : "false",
+        ring_answered ? "true" : "false",
         home_call_running ? "true" : "false",
         home_call_active ? "true" : "false",
         home_call_answered ? "true" : "false",
@@ -7181,6 +7191,148 @@ static void handle_doorbell_video_stop(int client_fd, struct agent_runtime *runt
         c300x_video_stop(runtime->video);
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+}
+
+static void handle_doorbell_call_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    char body[2048];
+    struct c300x_video_status video_status;
+    int ring_receiver_running = 0;
+    int ring_registered = 0;
+    int active = 0;
+    int early_media_active = 0;
+    int audio_active = 0;
+    int answer_requested = 0;
+    int answered = 0;
+    int can_answer = 0;
+    int can_hangup = 0;
+    int bridge_open_fds = 0;
+    int bridge_active_threads = 0;
+    char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
+    char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
+    const char *last_error_json = "null";
+
+    json_string("idle", media_owner_json, sizeof(media_owner_json));
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_status(runtime->video, &video_status);
+        ring_receiver_running = video_status.ring_receiver_running;
+        ring_registered = video_status.ring_registered;
+        active = video_status.ring_call_active;
+        early_media_active = video_status.ring_media_active;
+        audio_active = video_status.ring_audio_active;
+        answer_requested = video_status.ring_answer_requested;
+        answered = video_status.ring_answered;
+        can_answer = video_status.ring_call_active && !video_status.ring_answered;
+        can_hangup = video_status.ring_call_active || video_status.ring_media_active;
+        bridge_open_fds = video_status.bridge_open_fds;
+        bridge_active_threads = video_status.bridge_active_threads;
+        json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
+        last_error_json = json_string_or_null(
+            video_status.last_error,
+            last_error_quoted,
+            sizeof(last_error_quoted)
+        );
+    }
+
+    snprintf(
+        body,
+        sizeof(body),
+        "{"
+        "\"ok\":true,"
+        "\"supported\":%s,"
+        "\"active\":%s,"
+        "\"early_media_active\":%s,"
+        "\"audio_active\":%s,"
+        "\"answer_requested\":%s,"
+        "\"answered\":%s,"
+        "\"can_answer\":%s,"
+        "\"can_hangup\":%s,"
+        "\"media_owner\":%s,"
+        "\"ring_receiver_running\":%s,"
+        "\"ring_registered\":%s,"
+        "\"capture_supported\":false,"
+        "\"open_fds\":%d,"
+        "\"active_threads\":%d,"
+        "\"last_error\":%s"
+        "}\n",
+        config->video_enabled ? "true" : "false",
+        active ? "true" : "false",
+        early_media_active ? "true" : "false",
+        audio_active ? "true" : "false",
+        answer_requested ? "true" : "false",
+        answered ? "true" : "false",
+        can_answer ? "true" : "false",
+        can_hangup ? "true" : "false",
+        media_owner_json,
+        ring_receiver_running ? "true" : "false",
+        ring_registered ? "true" : "false",
+        bridge_open_fds,
+        bridge_active_threads,
+        last_error_json
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_doorbell_call_answer(
+    int client_fd,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    int audio = 1;
+    struct c300x_video_status video_status;
+    char body[1024];
+
+    if (runtime == NULL || runtime->video == NULL) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
+        return;
+    }
+    (void)json_bool_field(request->body, "audio", &audio);
+    if (!c300x_video_doorbell_call_answer(runtime->video, audio)) {
+        c300x_video_status(runtime->video, &video_status);
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"ring_call_not_active\",\"ring_call_active\":%s,\"ring_media_active\":%s,\"answered\":%s}\n",
+            video_status.ring_call_active ? "true" : "false",
+            video_status.ring_media_active ? "true" : "false",
+            video_status.ring_answered ? "true" : "false"
+        );
+        send_json(client_fd, 409, "Conflict", body);
+        return;
+    }
+    c300x_video_status(runtime->video, &video_status);
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"audio\":%s,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
+        audio ? "true" : "false",
+        video_status.ring_answer_requested ? "true" : "false",
+        video_status.ring_answered ? "true" : "false"
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_doorbell_call_hangup(int client_fd, struct agent_runtime *runtime)
+{
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_doorbell_call_hangup(runtime->video);
+    }
+    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+}
+
+static void handle_doorbell_call_capture(int client_fd)
+{
+    send_json(
+        client_fd,
+        501,
+        "Not Implemented",
+        "{\"ok\":false,\"error\":\"capture_not_supported\",\"capture_supported\":false}\n"
+    );
 }
 
 static void handle_home_call_get(
@@ -11386,6 +11538,26 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/stop") == 0) {
         handle_doorbell_video_stop(client_fd, runtime);
+        return;
+    }
+    if (
+        strcmp(request->method, "GET") == 0
+        && (strcmp(request->path, "/api/v1/calls/doorbell") == 0
+            || strcmp(request->path, "/api/v1/calls/doorbell/status") == 0)
+    ) {
+        handle_doorbell_call_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/answer") == 0) {
+        handle_doorbell_call_answer(client_fd, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/hangup") == 0) {
+        handle_doorbell_call_hangup(client_fd, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/capture") == 0) {
+        handle_doorbell_call_capture(client_fd);
         return;
     }
     if (

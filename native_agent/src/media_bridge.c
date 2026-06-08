@@ -1641,10 +1641,9 @@ static bool ring_call_active_locked(const media_bridge_t *bridge) {
 static bool request_ring_answer_if_active(media_bridge_t *bridge, bool audio) {
     bool active;
 
-    (void)audio;
     pthread_mutex_lock(&bridge->mutex);
     active = ring_call_active_locked(bridge);
-    if (active && !bridge->ring_answered) {
+    if (active && audio && !bridge->ring_answered) {
         bridge->ring_answer_requested = true;
     }
     pthread_mutex_unlock(&bridge->mutex);
@@ -2921,6 +2920,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         "a=rtcp-fb:* trr-int 1000\r\n"
         "a=rtcp-fb:* ccm tmmbr\r\n"
         "m=video %d RTP/SAVP 96 97 98 99\r\n"
+        "a=rtpmap:96 AV1/90000\r\n"
         "a=rtpmap:97 VP8/90000\r\n"
         "a=rtpmap:98 H264/90000\r\n"
         "a=fmtp:98 profile-level-id=42801F\r\n"
@@ -4390,6 +4390,30 @@ bool c300x_media_session_keepalive(struct c300x_video *video, bool audio) {
     return true;
 }
 
+bool c300x_media_ring_call_answer(struct c300x_video *video, bool audio) {
+    bool ready;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    ready = g_bridge.video == video && g_bridge.ring_call_active && !g_bridge.ring_call_stop;
+    pthread_mutex_unlock(&g_bridge.mutex);
+    if (!ready) {
+        return false;
+    }
+    return request_ring_answer_if_active(&g_bridge, audio);
+}
+
+void c300x_media_ring_call_hangup(struct c300x_video *video) {
+    bool owned;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    owned = g_bridge.video == video;
+    pthread_mutex_unlock(&g_bridge.mutex);
+    if (!owned) {
+        return;
+    }
+    c300x_media_session_stop(video);
+}
+
 bool c300x_media_talkback_running(const struct c300x_video *video) {
     bool running;
 
@@ -4425,6 +4449,8 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         status->ring_call_active = g_bridge.ring_call_active ? 1 : 0;
         status->ring_media_active = g_bridge.ring_media_active ? 1 : 0;
         status->ring_audio_active = g_bridge.ring_audio_active ? 1 : 0;
+        status->ring_answer_requested = g_bridge.ring_answer_requested ? 1 : 0;
+        status->ring_answered = g_bridge.ring_answered ? 1 : 0;
         status->home_call_running = g_bridge.home_call_started ? 1 : 0;
         status->home_call_active = g_bridge.home_call_active ? 1 : 0;
         status->home_call_answered = g_bridge.home_call_answered ? 1 : 0;
@@ -4578,9 +4604,15 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "t=0 0\r\n"
                 "m=audio 0 RTP/AVP 110\r\n"
                 "a=rtpmap:110 speex/8000\r\n"
+                "a=fmtp:110 vbr=on\r\n"
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
+                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=rtcp-fb:* trr-int 5000\r\n"
+                "a=rtcp-fb:* ccm tmmbr\r\n"
+                "a=rtcp-fb:96 nack pli\r\n"
+                "a=rtcp-fb:96 ccm fir\r\n"
                 "a=control:streamid=1\r\n";
             const char *sdp_ring_audio_video =
                 "v=0\r\n"
@@ -4590,9 +4622,15 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "t=0 0\r\n"
                 "m=audio 0 RTP/AVP 110\r\n"
                 "a=rtpmap:110 speex/8000\r\n"
+                "a=fmtp:110 vbr=on\r\n"
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
+                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=rtcp-fb:* trr-int 5000\r\n"
+                "a=rtcp-fb:* ccm tmmbr\r\n"
+                "a=rtcp-fb:96 nack pli\r\n"
+                "a=rtcp-fb:96 ccm fir\r\n"
                 "a=control:streamid=1\r\n";
             const char *sdp_home_call_audio =
                 "v=0\r\n"
@@ -4602,6 +4640,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "t=0 0\r\n"
                 "m=audio 0 RTP/AVP 110\r\n"
                 "a=rtpmap:110 speex/8000\r\n"
+                "a=fmtp:110 vbr=on\r\n"
                 "a=control:streamid=0\r\n";
             const char *sdp_video =
                 "v=0\r\n"
@@ -4611,6 +4650,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "t=0 0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
+                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=rtcp-fb:* trr-int 5000\r\n"
+                "a=rtcp-fb:* ccm tmmbr\r\n"
+                "a=rtcp-fb:96 nack pli\r\n"
+                "a=rtcp-fb:96 ccm fir\r\n"
                 "a=control:streamid=1\r\n";
             const char *sdp = sdp_video;
             if (wants_audio) {

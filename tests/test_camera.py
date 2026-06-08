@@ -91,11 +91,13 @@ except ImportError:  # pragma: no cover - only used by the lightweight stub fall
 
 from custom_components.bticino_c300x import camera as camera_module
 from custom_components.bticino_c300x.camera import (
+    DOORSTATION_AUDIO_GAIN,
     STILL_IMAGE_BYTES,
     STILL_IMAGE_CONTENT_TYPE,
     TALKBACK_CODEC,
     TALKBACK_RTP_PAYLOAD_TYPE,
     C300XDoorbellCamera,
+    _apply_audio_gain,
     _filter_link_local_sdp_candidates,
     _NativeWebRTCSession,
     _new_restarting_rtsp_audio_track,
@@ -663,7 +665,7 @@ def test_doorbell_camera_stream_source_warms_video_once() -> None:
 
     assert source.startswith("rtsp://127.0.0.1:")
     assert source.endswith("/doorbell-video")
-    assert entry.runtime_data.api.activate_calls == [True]
+    assert entry.runtime_data.api.activate_calls == [False]
 
 
 def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:
@@ -1475,6 +1477,7 @@ def test_restarting_rtsp_tracks_share_one_audio_video_reader() -> None:
 
     async def _run() -> tuple[_Frame, _Frame]:
         media, video_track, audio_track = _new_restarting_rtsp_tracks(
+            SimpleNamespace(),
             _VideoTrack,
             _AudioTrack,
             Exception,
@@ -1899,6 +1902,50 @@ def test_doorbell_camera_does_not_infer_runtime_video_window() -> None:
 
     assert attrs["video_window_available"] is False
     assert "video_active_until" not in attrs
+
+
+def test_doorbell_audio_gain_is_applied_to_decoded_webrtc_frames() -> None:
+    import numpy as np
+
+    class _FakeFormat:
+        name = "s16"
+
+    class _FakeLayout:
+        name = "mono"
+
+    class _FakeAudioFrame:
+        format = _FakeFormat()
+        layout = _FakeLayout()
+        sample_rate = 8000
+        pts = 160
+        time_base = "time-base"
+
+        def __init__(self, samples: Any) -> None:
+            self.samples = samples
+
+        def to_ndarray(self) -> Any:
+            return self.samples
+
+    class _FakeAudioFrameFactory:
+        @staticmethod
+        def from_ndarray(samples: Any, *, format: str, layout: str) -> Any:
+            assert format == "s16"
+            assert layout == "mono"
+            return _FakeAudioFrame(samples)
+
+    frame = _FakeAudioFrame(np.array([[1000, -1000, 20000]], dtype=np.int16))
+
+    boosted = _apply_audio_gain(
+        SimpleNamespace(AudioFrame=_FakeAudioFrameFactory),
+        frame,
+        DOORSTATION_AUDIO_GAIN,
+    )
+
+    assert boosted is not frame
+    assert boosted.to_ndarray().tolist() == [[3000, -3000, 32767]]
+    assert boosted.sample_rate == frame.sample_rate
+    assert boosted.pts == frame.pts
+    assert boosted.time_base == frame.time_base
 
 
 async def _rtsp_options_server(

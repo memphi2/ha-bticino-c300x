@@ -104,6 +104,7 @@ function c300xMetadataEntitySuggestion(hass, entityId) {
         ...c300xMetadataStubConfig(
           c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID, suffix),
         ),
+        doorbell_state_entity: entityId,
       },
     };
   }
@@ -121,6 +122,7 @@ function c300xMetadataEntitySuggestion(hass, entityId) {
           c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID, suffix),
         ),
         mode: "home_call",
+        home_call_entity: entityId,
       },
     };
   }

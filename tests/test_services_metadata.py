@@ -25,8 +25,17 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
 
     assert "activate_doorbell_video" in sections
     assert "stop_doorbell_video" in sections
+    assert "answer_doorbell_call" in sections
+    assert "hangup_doorbell_call" in sections
+    assert "capture_doorbell_call" in sections
     assert "\n    audio:\n" in sections["activate_doorbell_video"]
+    assert "\n    audio:\n" in sections["answer_doorbell_call"]
     assert "call-end action" in sections["stop_doorbell_video"]
+    assert "/media/c300x/" in sections["capture_doorbell_call"]
+    assert "\n    output_path:\n" in sections["capture_doorbell_call"]
+    assert "\n    duration_seconds:\n" in sections["capture_doorbell_call"]
+    assert "\n    include_audio:\n" in sections["capture_doorbell_call"]
+    assert "\n    announcement_path:\n" in sections["capture_doorbell_call"]
 
 
 def test_services_yaml_exposes_home_call_controls() -> None:

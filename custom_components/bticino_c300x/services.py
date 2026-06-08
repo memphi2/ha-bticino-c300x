@@ -39,9 +39,12 @@ from .const import (
     MAX_HOME_CALL_DURATION_SECONDS,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_ALARM_COMMAND,
+    SERVICE_ANSWER_DOORBELL_CALL,
+    SERVICE_CAPTURE_DOORBELL_CALL,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
+    SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
     SERVICE_REBOOT,
@@ -73,6 +76,7 @@ from .memos import (
 )
 from .message_refresh import async_answering_machine_messages, async_memos
 from .qml_patch import async_refresh_qml_patch_status
+from .ring_capture import async_capture_doorbell_ring_call
 from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
@@ -87,6 +91,9 @@ _ATTR_FORCE = "force"
 _ATTR_DURATION_SECONDS = "duration_seconds"
 _ATTR_LOCK_ID = "lock_id"
 _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
+_ATTR_OUTPUT_PATH = "output_path"
+_ATTR_INCLUDE_AUDIO = "include_audio"
+_ATTR_ANNOUNCEMENT_PATH = "announcement_path"
 _ATTR_READ = "read"
 _ATTR_TEXT = "text"
 _BASE_SERVICES_MARKER = "__services_registered"
@@ -167,6 +174,18 @@ def _home_call_duration_seconds(value: Any) -> int:
     return duration_seconds
 
 
+def _capture_duration_seconds(value: Any) -> int:
+    """Validate service-level capture duration."""
+
+    try:
+        duration_seconds = int(value)
+    except (TypeError, ValueError) as err:
+        raise vol.Invalid("invalid duration seconds") from err
+    if duration_seconds < 1 or duration_seconds > 15:
+        raise vol.Invalid("invalid duration seconds")
+    return duration_seconds
+
+
 def _ensure_maintenance_action(entry, action: str) -> None:
     """Reject maintenance services unless the agent advertises and authorizes them."""
 
@@ -187,6 +206,18 @@ def _ensure_doorbell_video_supported(entry: Any) -> None:
     if not (
         entry_video_enabled(entry)
         and capability_is_supported(capabilities, "doorbell_video")
+    ):
+        raise service_validation_error("doorbell_video_not_available")
+
+
+def _ensure_doorbell_call_supported(entry: Any) -> None:
+    """Reject ring-call control unless HA and the agent expose it."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not (
+        entry_video_enabled(entry)
+        and capability_is_supported(capabilities, "doorbell_call")
     ):
         raise service_validation_error("doorbell_video_not_available")
 
@@ -417,6 +448,50 @@ class _C300XServiceHandlers:
             entry.runtime_data.api.async_stop_doorbell_video()
         )
 
+    async def async_answer_doorbell_call(self, call: ServiceCall) -> None:
+        """Answer the active C300X doorbell ring call through the agent."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_answer_doorbell_call(
+                audio=bool(call.data.get(_ATTR_AUDIO, True))
+            )
+        )
+
+    async def async_hangup_doorbell_call(self, call: ServiceCall) -> None:
+        """Hang up the active C300X doorbell ring call through the agent."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_hangup_doorbell_call()
+        )
+
+    async def async_capture_doorbell_call(self, call: ServiceCall) -> None:
+        """Capture a short C300X doorbell ring-call clip on Home Assistant."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_video_supported(entry)
+        announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
+        if announcement_path:
+            await _raise_agent_command_failed(
+                entry.runtime_data.api.async_answer_doorbell_call(audio=True)
+            )
+        try:
+            await async_capture_doorbell_ring_call(
+                self._hass,
+                entry,
+                output_path=call.data.get(_ATTR_OUTPUT_PATH),
+                duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
+                include_audio=bool(call.data.get(_ATTR_INCLUDE_AUDIO, True)),
+                announcement_path=announcement_path,
+            )
+        finally:
+            await _raise_agent_command_failed(
+                entry.runtime_data.api.async_hangup_doorbell_call()
+            )
+
     async def async_start_home_call(self, call: ServiceCall) -> None:
         """Start an in-house call to the C300X."""
 
@@ -642,6 +717,34 @@ def _register_base_services(
             SERVICE_STOP_DOORBELL_VIDEO,
             handlers.async_stop_doorbell_video,
             vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_ANSWER_DOORBELL_CALL,
+            handlers.async_answer_doorbell_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_AUDIO, default=True): _boolean_service_value,
+                }
+            ),
+        ),
+        (
+            SERVICE_HANGUP_DOORBELL_CALL,
+            handlers.async_hangup_doorbell_call,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_CAPTURE_DOORBELL_CALL,
+            handlers.async_capture_doorbell_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_OUTPUT_PATH): cv.string,
+                    vol.Optional(_ATTR_DURATION_SECONDS, default=5): _capture_duration_seconds,
+                    vol.Optional(_ATTR_INCLUDE_AUDIO, default=True): _boolean_service_value,
+                    vol.Optional(_ATTR_ANNOUNCEMENT_PATH): cv.string,
+                }
+            ),
         ),
         (
             SERVICE_START_HOME_CALL,

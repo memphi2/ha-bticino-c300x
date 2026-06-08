@@ -378,9 +378,9 @@ future release and is not enabled silently by 1.0.0.
 The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
 loads it automatically when the integration is set up. Add it from the card
 picker or YAML. The visual editor is localized in English, German, French and
-Italian. The card links related entities by the same config entry, so multiple
-C300X devices can each use their own camera/state entities without a manual
-`state_entity` field.
+Italian. The setup repair writes the matching Doorbell state and Home Call state
+entities into generated cards, and the editor lets you select them explicitly
+for renamed or localized entities.
 
 Dashboard example:
 

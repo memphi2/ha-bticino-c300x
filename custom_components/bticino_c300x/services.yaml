@@ -132,6 +132,75 @@ stop_doorbell_video:
       selector:
         text:
 
+answer_doorbell_call:
+  name: Answer C300X doorbell call
+  description: Request app-like answering of the active C300X doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    audio:
+      name: Enable audio
+      description: Request the C300X audio path when answering the ring call.
+      required: false
+      default: true
+      selector:
+        boolean:
+
+hangup_doorbell_call:
+  name: Hang up C300X doorbell call
+  description: Hang up the active C300X doorbell ring call through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+capture_doorbell_call:
+  name: Capture C300X doorbell call
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. Output is allowed only below /media/c300x/ or /config/www/c300x/.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    output_path:
+      name: Output path
+      description: Absolute MP4 path below /media/c300x/ or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
+      required: false
+      selector:
+        text:
+    duration_seconds:
+      name: Duration
+      description: Capture duration in seconds.
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: slider
+    include_audio:
+      name: Include audio
+      description: Include the C300X audio track when available.
+      required: false
+      default: true
+      selector:
+        boolean:
+    announcement_path:
+      name: Announcement path
+      description: Optional HA-local audio file below /media/c300x/ or /config/www/c300x/ to play through C300X talkback while capturing.
+      required: false
+      selector:
+        text:
+
 start_home_call:
   name: Start C300X home call
   description: Start an app-like in-house call to the C300X through the local device agent.

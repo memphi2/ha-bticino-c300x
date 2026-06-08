@@ -309,6 +309,40 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
+    async def async_doorbell_call_status(self) -> dict[str, Any]:
+        """Return the native doorbell ring-call control status."""
+
+        data = await self._request_json("GET", "/api/v1/calls/doorbell/status")
+        return normalize_doorbell_call(data)
+
+    async def async_answer_doorbell_call(self, audio: bool = True) -> dict[str, Any]:
+        """Request app-like answering of the active doorbell ring call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/answer",
+            json_data={"audio": bool(audio)},
+        )
+        return _ok_response(data)
+
+    async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+        """Hang up the active doorbell ring call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/hangup",
+        )
+        return _ok_response(data)
+
+    async def async_capture_doorbell_call(self) -> dict[str, Any]:
+        """Request a native doorbell ring-call capture."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/capture",
+        )
+        return _ok_response(data)
+
     async def async_home_call_status(self) -> dict[str, Any]:
         """Return the in-house home-call status."""
 
@@ -1196,6 +1230,31 @@ def _doorbell_video_has_ring_call(data: dict[str, Any]) -> bool:
     return owner == "ring" or bool(
         bridge.get("ring_call_active") or bridge.get("ring_media_active")
     )
+
+
+def normalize_doorbell_call(data: Any) -> dict[str, Any]:
+    """Normalize device-agent doorbell ring-call control status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("doorbell call returned non-object JSON")
+    return {
+        "supported": bool(data.get("supported")),
+        "active": bool(data.get("active")),
+        "early_media_active": bool(data.get("early_media_active")),
+        "audio_active": bool(data.get("audio_active")),
+        "answer_requested": bool(data.get("answer_requested")),
+        "answered": bool(data.get("answered")),
+        "can_answer": bool(data.get("can_answer")),
+        "can_hangup": bool(data.get("can_hangup")),
+        "media_owner": _optional_string(data.get("media_owner")) or "unknown",
+        "ring_receiver_running": bool(data.get("ring_receiver_running")),
+        "ring_registered": bool(data.get("ring_registered")),
+        "capture_supported": bool(data.get("capture_supported")),
+        "open_fds": _optional_int(data.get("open_fds"), 0) or 0,
+        "active_threads": _optional_int(data.get("active_threads"), 0) or 0,
+        "last_error": _optional_string(data.get("last_error")),
+        "raw": data,
+    }
 
 
 def normalize_home_call(data: Any) -> dict[str, Any]:

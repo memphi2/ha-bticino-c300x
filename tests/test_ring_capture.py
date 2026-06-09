@@ -243,12 +243,14 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert "aresample=48000" in audio_filter
     assert "pan=stereo" in audio_filter
     assert "dynaudnorm=" in audio_filter
-    assert "volume=9dB" in audio_filter
     assert "alimiter=" in audio_filter
+    assert "volume=" not in audio_filter
     assert "volume=30dB" not in audio_filter
     assert command[command.index("-ac") + 1] == "2"
     assert command[command.index("-ar") + 1] == "48000"
     assert command[command.index("-b:a") + 1] == "128k"
+    assert str(tmp_path / "clip.raw.wav") in command
+    assert commands[1][-1] == str(tmp_path / "clip.processed.wav")
 
 
 def test_announcement_speex_encoder_accepts_runtime_codec_alias() -> None:

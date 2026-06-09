@@ -474,7 +474,8 @@ class _C300XServiceHandlers:
         entry = _entry_for_call(self._hass, call)
         _ensure_doorbell_video_supported(entry)
         announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
-        if announcement_path:
+        include_audio = bool(call.data.get(_ATTR_INCLUDE_AUDIO, True))
+        if include_audio:
             await _raise_agent_command_failed(
                 entry.runtime_data.api.async_answer_doorbell_call(audio=True)
             )
@@ -484,7 +485,7 @@ class _C300XServiceHandlers:
                 entry,
                 output_path=call.data.get(_ATTR_OUTPUT_PATH),
                 duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
-                include_audio=bool(call.data.get(_ATTR_INCLUDE_AUDIO, True)),
+                include_audio=include_audio,
                 announcement_path=announcement_path,
             )
         finally:

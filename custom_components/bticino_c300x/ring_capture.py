@@ -264,6 +264,8 @@ async def _async_run_ffmpeg(
     duration_seconds: int,
     include_audio: bool,
 ) -> None:
+    raw_audio_target = target.with_suffix(".raw.wav")
+    processed_audio_target = target.with_suffix(".processed.wav")
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -276,6 +278,14 @@ async def _async_run_ffmpeg(
         "tcp",
         "-timeout",
         "5000000",
+        "-fflags",
+        "nobuffer",
+        "-flags",
+        "low_delay",
+        "-probesize",
+        "32768",
+        "-analyzeduration",
+        "0",
         "-t",
         str(duration_seconds),
         "-i",
@@ -295,7 +305,6 @@ async def _async_run_ffmpeg(
                     "aresample=48000:async=1:first_pts=0,"
                     "pan=stereo|c0=c0|c1=c0,"
                     "dynaudnorm=f=75:g=31:p=0.95:m=10,"
-                    "volume=9dB,"
                     "alimiter=limit=0.95"
                 ),
                 "-ac",
@@ -311,6 +320,62 @@ async def _async_run_ffmpeg(
     else:
         command.append("-an")
     command.extend(["-movflags", "+faststart", str(target)])
+    if include_audio:
+        command.extend(
+            [
+                "-map",
+                "0:a:0?",
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
+                str(raw_audio_target),
+            ]
+        )
+    await _async_run_ffmpeg_command(
+        command,
+        timeout=duration_seconds + 10,
+        error_prefix="C300X capture failed",
+    )
+    if include_audio:
+        await _async_extract_processed_audio_wav(target, processed_audio_target)
+
+
+async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None:
+    await _async_run_ffmpeg_command(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-map",
+            "0:a:0?",
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            str(target),
+        ],
+        timeout=10,
+        error_prefix="C300X processed audio extraction failed",
+    )
+
+
+async def _async_run_ffmpeg_command(
+    command: list[str],
+    *,
+    timeout: int,
+    error_prefix: str,
+) -> None:
     try:
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -320,19 +385,14 @@ async def _async_run_ffmpeg(
     except FileNotFoundError as err:
         raise HomeAssistantError("ffmpeg is not installed on Home Assistant") from err
     try:
-        _, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=duration_seconds + 10,
-        )
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except TimeoutError as err:
         process.kill()
         await process.communicate()
-        raise HomeAssistantError("C300X capture timed out") from err
+        raise HomeAssistantError(f"{error_prefix}: timed out") from err
     if process.returncode != 0:
         message = stderr.decode("utf-8", "replace").strip()
-        raise HomeAssistantError(
-            f"C300X capture failed{': ' + message if message else ''}"
-        )
+        raise HomeAssistantError(f"{error_prefix}{': ' + message if message else ''}")
 
 
 async def _async_play_announcement_when_ready(entry: Any, host: str, source: Path) -> None:

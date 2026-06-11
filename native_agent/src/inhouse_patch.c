@@ -211,6 +211,15 @@ static int remount_root(const char *mode)
     return status == 0;
 }
 
+static int remount_root_ro_or_error(char *error, size_t error_len)
+{
+    if (remount_root("ro")) {
+        return 1;
+    }
+    set_error(error, error_len, "remount_ro_failed");
+    return 0;
+}
+
 static int read_file(const char *path, unsigned char **data, size_t *len)
 {
     C300X_INHOUSE_STAT_STRUCT st;
@@ -330,7 +339,7 @@ int c300x_inhouse_binary_patch_apply(
             fclose(fp);
         }
         unlink(BT_ANSWERING_MACHINE_PATH ".tmp");
-        remount_root("ro");
+        (void)remount_root("ro");
         free(data);
         set_error(error, error_len, "binary_write_failed");
         return 0;
@@ -344,11 +353,13 @@ int c300x_inhouse_binary_patch_apply(
         || rename(BT_ANSWERING_MACHINE_PATH ".tmp", BT_ANSWERING_MACHINE_PATH) != 0
     ) {
         unlink(BT_ANSWERING_MACHINE_PATH ".tmp");
-        remount_root("ro");
+        (void)remount_root("ro");
         set_error(error, error_len, "binary_replace_failed");
         return 0;
     }
-    remount_root("ro");
+    if (!remount_root_ro_or_error(error, error_len)) {
+        return 0;
+    }
     if (!c300x_sha256_file_hex(BT_ANSWERING_MACHINE_PATH, digest, sizeof(digest)) || strcmp(digest, BT_ANSWERING_MACHINE_PATCHED_SHA256) != 0) {
         set_error(error, error_len, "patched_hash_mismatch");
         return 0;
@@ -379,10 +390,12 @@ int c300x_inhouse_binary_patch_restore(
         return 0;
     }
     if (!copy_file_exact(BT_ANSWERING_MACHINE_BACKUP, BT_ANSWERING_MACHINE_PATH, backup_mode)) {
-        remount_root("ro");
+        (void)remount_root("ro");
         set_error(error, error_len, "binary_restore_failed");
         return 0;
     }
-    remount_root("ro");
+    if (!remount_root_ro_or_error(error, error_len)) {
+        return 0;
+    }
     return c300x_inhouse_binary_patch_read_status(status);
 }

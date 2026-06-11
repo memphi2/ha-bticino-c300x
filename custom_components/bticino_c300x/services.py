@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -108,6 +109,7 @@ _ATTR_DECISION_PATH = "decision_path"
 _ATTR_UNLOCK_ON_MATCH = "unlock_on_match"
 _ATTR_READ = "read"
 _ATTR_TEXT = "text"
+_LOGGER = logging.getLogger(__name__)
 _BASE_SERVICES_MARKER = "__services_registered"
 _GUI_REQUIRED_SERVICES_MARKER = "__gui_required_services_registered"
 _GUI_REQUIRED_SERVICES_LISTENER_MARKER = "__gui_required_services_listener"
@@ -503,6 +505,7 @@ class _C300XServiceHandlers:
             await _raise_agent_command_failed(
                 entry.runtime_data.api.async_answer_doorbell_call(audio=True)
             )
+        capture_error: Exception | None = None
         try:
             await async_capture_doorbell_ring_call(
                 self._hass,
@@ -512,10 +515,20 @@ class _C300XServiceHandlers:
                 include_audio=include_audio,
                 announcement_path=announcement_path,
             )
+        except Exception as err:
+            capture_error = err
+            raise
         finally:
-            await _raise_agent_command_failed(
-                entry.runtime_data.api.async_hangup_doorbell_call()
-            )
+            try:
+                await entry.runtime_data.api.async_hangup_doorbell_call()
+            except Exception as err:
+                if capture_error is not None:
+                    _LOGGER.warning(
+                        "C300X doorbell capture failed and hangup also failed",
+                        exc_info=err,
+                    )
+                else:
+                    raise service_validation_error("agent_command_failed") from err
 
     async def async_run_ring_wyoming_analysis(self, call: ServiceCall) -> None:
         """Transcribe the latest C300X ring raw WAV through Wyoming Whisper."""

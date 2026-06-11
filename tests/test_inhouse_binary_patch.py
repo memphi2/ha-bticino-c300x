@@ -81,6 +81,8 @@ def test_python_and_agent_patch_tables_match() -> None:
     assert patcher.PATCHED_SHA256 in source
     assert "original_mode = (mode_t)(original_stat.st_mode & 07777);" in source
     assert "backup_mode = (mode_t)(backup_stat.st_mode & 07777);" in source
+    assert "remount_root_ro_or_error(error, error_len)" in source
+    assert 'set_error(error, error_len, "remount_ro_failed");' in source
 
 
 def _c_array_hex(source: str, name: str) -> str:

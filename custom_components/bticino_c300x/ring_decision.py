@@ -108,9 +108,8 @@ async def _async_write_json(hass: Any, path: Path, payload: dict[str, Any]) -> N
 
 
 def _phrase_match(payload: dict[str, Any], *, expected_phrase: str | None) -> bool:
-    if "phrase_match" in payload:
-        return bool(payload["phrase_match"])
-    if not expected_phrase:
-        return False
     transcript = str(payload.get("transcript") or "").strip()
-    return transcript.casefold() == expected_phrase.strip().casefold()
+    phrase = str(expected_phrase or "").strip()
+    if phrase:
+        return transcript.casefold() == phrase.casefold()
+    return bool(payload.get("phrase_match", False))

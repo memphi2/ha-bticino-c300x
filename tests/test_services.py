@@ -179,6 +179,7 @@ class _FakeApi:
         self.stop_video_calls = 0
         self.answer_doorbell_call_calls: list[bool] = []
         self.hangup_doorbell_call_calls = 0
+        self.hangup_doorbell_call_error: Exception | None = None
         self.capture_doorbell_call_calls = 0
         self.activation_calls: list[str] = []
         self.home_call_start_calls: list[int | None] = []
@@ -199,6 +200,8 @@ class _FakeApi:
 
     async def async_hangup_doorbell_call(self) -> dict[str, Any]:
         self.hangup_doorbell_call_calls += 1
+        if self.hangup_doorbell_call_error is not None:
+            raise self.hangup_doorbell_call_error
         return {"ok": True}
 
     async def async_capture_doorbell_call(self) -> dict[str, Any]:
@@ -625,6 +628,41 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         await handler(types.SimpleNamespace(data={}))
 
         assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_preserves_capture_error_when_hangup_fails(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        api.hangup_doorbell_call_error = RuntimeError("hangup failed")
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        capture_error = RuntimeError("capture failed")
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            raise capture_error
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except RuntimeError as err:
+            assert err is capture_error
+        else:
+            raise AssertionError("capture failure was swallowed")
+
         assert api.hangup_doorbell_call_calls == 1
 
     asyncio.run(_run())

@@ -24,7 +24,6 @@ from homeassistant.helpers.dispatcher import (
 
 from .action import ActionValidationError
 from .agent_diagnostics import async_refresh_agent_diagnostics
-from .api import C300XAgentApiResponseError, normalize_text_memo_text
 from .capabilities import (
     answering_machine_message_delete_supported,
     capability_is_supported,
@@ -37,7 +36,6 @@ from .capabilities import (
 from .const import (
     CONF_MAINTENANCE_TOKEN,
     DOMAIN,
-    MAX_HOME_CALL_DURATION_SECONDS,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_ALARM_COMMAND,
     SERVICE_ANSWER_DOORBELL_CALL,
@@ -82,34 +80,43 @@ from .qml_patch import async_refresh_qml_patch_status
 from .ring_ai import async_run_wyoming_ring_analysis
 from .ring_capture import async_capture_doorbell_ring_call
 from .ring_decision import async_evaluate_ring_analysis
-from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
+from .service_schema import (
+    ATTR_ACTION_ID as _ATTR_ACTION_ID,
+    ATTR_ACTIVATION_ID as _ATTR_ACTIVATION_ID,
+    ATTR_ADDRESS as _ATTR_ADDRESS,
+    ATTR_ANNOUNCEMENT_PATH as _ATTR_ANNOUNCEMENT_PATH,
+    ATTR_AUDIO as _ATTR_AUDIO,
+    ATTR_CODE as _ATTR_CODE,
+    ATTR_COMMAND as _ATTR_COMMAND,
+    ATTR_DECISION_PATH as _ATTR_DECISION_PATH,
+    ATTR_DURATION_SECONDS as _ATTR_DURATION_SECONDS,
+    ATTR_ENTRY_ID as _ATTR_ENTRY_ID,
+    ATTR_EXPECTED_PHRASE as _ATTR_EXPECTED_PHRASE,
+    ATTR_FORCE as _ATTR_FORCE,
+    ATTR_INCLUDE_AUDIO as _ATTR_INCLUDE_AUDIO,
+    ATTR_LANGUAGE as _ATTR_LANGUAGE,
+    ATTR_LOCK_ID as _ATTR_LOCK_ID,
+    ATTR_MEDIA_PLAYER_ENTITY_ID as _ATTR_MEDIA_PLAYER_ENTITY_ID,
+    ATTR_OUTPUT_PATH as _ATTR_OUTPUT_PATH,
+    ATTR_READ as _ATTR_READ,
+    ATTR_RESULT_PATH as _ATTR_RESULT_PATH,
+    ATTR_TEXT as _ATTR_TEXT,
+    ATTR_UNLOCK_ON_MATCH as _ATTR_UNLOCK_ON_MATCH,
+    ATTR_WAV_OUTPUT_DIR as _ATTR_WAV_OUTPUT_DIR,
+    ATTR_WAV_PATH as _ATTR_WAV_PATH,
+    ATTR_WYOMING_HOST as _ATTR_WYOMING_HOST,
+    ATTR_WYOMING_PORT as _ATTR_WYOMING_PORT,
+    activation_id as _activation_id,
+    boolean_service_value as _boolean_service_value,
+    capture_duration_seconds as _capture_duration_seconds,
+    home_call_duration_seconds as _home_call_duration_seconds,
+    lock_id as _lock_id,
+    stair_light_address as _stair_light_address,
+    text_memo_text as _text_memo_text,
+    wyoming_port as _wyoming_port,
+)
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
-_ATTR_ACTION_ID = "action_id"
-_ATTR_ACTIVATION_ID = "activation_id"
-_ATTR_ADDRESS = "address"
-_ATTR_AUDIO = "audio"
-_ATTR_CODE = "code"
-_ATTR_COMMAND = "command"
-_ATTR_ENTRY_ID = "entry_id"
-_ATTR_FORCE = "force"
-_ATTR_DURATION_SECONDS = "duration_seconds"
-_ATTR_LOCK_ID = "lock_id"
-_ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
-_ATTR_OUTPUT_PATH = "output_path"
-_ATTR_INCLUDE_AUDIO = "include_audio"
-_ATTR_WAV_OUTPUT_DIR = "wav_output_dir"
-_ATTR_ANNOUNCEMENT_PATH = "announcement_path"
-_ATTR_WAV_PATH = "wav_path"
-_ATTR_RESULT_PATH = "result_path"
-_ATTR_WYOMING_HOST = "wyoming_host"
-_ATTR_WYOMING_PORT = "wyoming_port"
-_ATTR_LANGUAGE = "language"
-_ATTR_EXPECTED_PHRASE = "expected_phrase"
-_ATTR_DECISION_PATH = "decision_path"
-_ATTR_UNLOCK_ON_MATCH = "unlock_on_match"
-_ATTR_READ = "read"
-_ATTR_TEXT = "text"
 _LOGGER = logging.getLogger(__name__)
 _BASE_SERVICES_MARKER = "__services_registered"
 _GUI_REQUIRED_SERVICES_MARKER = "__gui_required_services_registered"
@@ -123,20 +130,6 @@ type _ServiceHandler = Callable[[ServiceCall], Awaitable[None]]
 type _EntrySupport = Callable[[Any], bool]
 
 
-def _boolean_service_value(value: Any) -> bool:
-    """Validate service booleans without relying on HA-private helper names."""
-
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on", "enable", "enabled"}:
-            return True
-        if lowered in {"0", "false", "no", "off", "disable", "disabled"}:
-            return False
-    raise vol.Invalid("expected boolean")
-
-
 def _entry_for_call(hass: HomeAssistant, call: ServiceCall):
     entry_id = call.data.get(_ATTR_ENTRY_ID)
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -148,69 +141,6 @@ def _entry_for_call(hass: HomeAssistant, call: ServiceCall):
     if len(entries) != 1:
         raise service_validation_error("entry_id_required")
     return entries[0]
-
-
-def _stair_light_address(value: str) -> str:
-    """Validate service-level OpenWebNet stair-light address input."""
-
-    address = cv.string(value).strip()
-    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
-        raise vol.Invalid("invalid staircase light address")
-    return address
-
-
-def _lock_id(value: str) -> str:
-    """Validate service-level C300X lock id input."""
-
-    lock_id = cv.string(value).strip()
-    if not LOCK_ID_RE.fullmatch(lock_id):
-        raise vol.Invalid("invalid lock id")
-    return lock_id
-
-
-def _activation_id(value: str) -> str:
-    """Validate service-level C300X activation id input."""
-
-    activation_id = cv.string(value).strip()
-    if not ACTIVATION_ID_RE.fullmatch(activation_id):
-        raise vol.Invalid("invalid activation id")
-    return activation_id
-
-
-def _home_call_duration_seconds(value: Any) -> int:
-    """Validate optional home-call duration."""
-
-    try:
-        duration_seconds = int(value)
-    except (TypeError, ValueError) as err:
-        raise vol.Invalid("invalid duration seconds") from err
-    if duration_seconds < 0 or duration_seconds > MAX_HOME_CALL_DURATION_SECONDS:
-        raise vol.Invalid("invalid duration seconds")
-    return duration_seconds
-
-
-def _capture_duration_seconds(value: Any) -> int:
-    """Validate service-level capture duration."""
-
-    try:
-        duration_seconds = int(value)
-    except (TypeError, ValueError) as err:
-        raise vol.Invalid("invalid duration seconds") from err
-    if duration_seconds < 1 or duration_seconds > 15:
-        raise vol.Invalid("invalid duration seconds")
-    return duration_seconds
-
-
-def _wyoming_port(value: Any) -> int:
-    """Validate Wyoming service port."""
-
-    try:
-        port = int(value)
-    except (TypeError, ValueError) as err:
-        raise vol.Invalid("invalid Wyoming port") from err
-    if port < 1 or port > 65535:
-        raise vol.Invalid("invalid Wyoming port")
-    return port
 
 
 def _ensure_maintenance_action(entry, action: str) -> None:
@@ -268,15 +198,6 @@ def _ensure_text_memo_write_supported(entry: Any) -> None:
     capabilities = getattr(runtime_data, "capabilities", {})
     if not memo_text_write_supported(capabilities):
         raise service_validation_error("text_memo_write_not_supported")
-
-
-def _text_memo_text(value: Any) -> str:
-    """Validate service-level text memo content."""
-
-    try:
-        return normalize_text_memo_text(value)
-    except C300XAgentApiResponseError as err:
-        raise vol.Invalid(str(err)) from err
 
 
 async def _async_ensure_gui_function_patch(entry) -> None:

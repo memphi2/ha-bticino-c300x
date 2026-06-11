@@ -1641,9 +1641,10 @@ static bool ring_call_active_locked(const media_bridge_t *bridge) {
 static bool request_ring_answer_if_active(media_bridge_t *bridge, bool audio) {
     bool active;
 
+    (void)audio;
     pthread_mutex_lock(&bridge->mutex);
     active = ring_call_active_locked(bridge);
-    if (active && audio && !bridge->ring_answered) {
+    if (active && !bridge->ring_answered) {
         bridge->ring_answer_requested = true;
     }
     pthread_mutex_unlock(&bridge->mutex);

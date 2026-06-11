@@ -146,7 +146,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         media_bridge.index("static bool stop_ring_call_if_active")
     ]
     assert "active = ring_call_active_locked(bridge);" in answer_request_body
-    assert "active && audio && !bridge->ring_answered" in answer_request_body
+    assert "active && !bridge->ring_answered" in answer_request_body
     assert "bridge->ring_answer_requested = true;" in media_bridge
     assert rtsp_body.index("request_home_call_media_if_active") < rtsp_body.index(
         "request_ring_answer_if_active"

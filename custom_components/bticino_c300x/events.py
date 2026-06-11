@@ -579,7 +579,10 @@ def _sync_repair_issues(hass: HomeAssistant, entry: ConfigEntry) -> None:
         from .repair_issues import async_sync_entry_repair_issues
     except ImportError:
         return
-    async_sync_entry_repair_issues(hass, entry)
+    try:
+        async_sync_entry_repair_issues(hass, entry)
+    except Exception as err:  # noqa: BLE001 - repairs must not break push registration
+        _LOGGER.debug("C300X repair sync after event-state change failed: %s", err)
 
 
 def _subscription_id(response: dict[str, Any]) -> str | None:

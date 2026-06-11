@@ -163,7 +163,7 @@ hangup_doorbell_call:
 
 capture_doorbell_call:
   name: Capture C300X doorbell call
-  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. Output is allowed only below /media/c300x/ or /config/www/c300x/.
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; internal WAV work files are written below /config/c300x/.
   fields:
     entry_id:
       name: Entry ID
@@ -173,7 +173,7 @@ capture_doorbell_call:
         text:
     output_path:
       name: Output path
-      description: Absolute MP4 path below /media/c300x/ or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
+      description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
       required: false
       selector:
         text:
@@ -196,14 +196,14 @@ capture_doorbell_call:
         boolean:
     announcement_path:
       name: Announcement path
-      description: Optional HA-local audio file below /media/c300x/ or /config/www/c300x/ to play through C300X talkback while capturing.
+      description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing.
       required: false
       selector:
         text:
 
 run_ring_wyoming_analysis:
   name: Transcribe C300X ring audio with Wyoming Whisper
-  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to the newest /media/c300x/doorbell_*.raw.wav.
+  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to the newest *.raw.wav below /config/c300x/.
   fields:
     wyoming_host:
       name: Wyoming host
@@ -223,13 +223,13 @@ run_ring_wyoming_analysis:
           mode: box
     wav_path:
       name: WAV path
-      description: Optional mono WAV path below /media/c300x/ or /config/www/c300x/. Defaults to the newest /media/c300x/doorbell_*.raw.wav.
+      description: Optional mono WAV path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the newest *.raw.wav below /config/c300x/.
       required: false
       selector:
         text:
     result_path:
       name: Result path
-      description: Optional JSON result path below /media/c300x/ or /config/www/c300x/. Defaults to /media/c300x/ring/analysis/result.json.
+      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/result.json.
       required: false
       selector:
         text:
@@ -258,13 +258,13 @@ evaluate_ring_analysis:
         text:
     result_path:
       name: Result path
-      description: JSON result path below /media/c300x/ or /config/www/c300x/. Defaults to /media/c300x/ring/analysis/result.json.
+      description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/result.json.
       required: false
       selector:
         text:
     decision_path:
       name: Decision path
-      description: JSON decision path below /media/c300x/ or /config/www/c300x/. Defaults to /media/c300x/ring/analysis/decision.json.
+      description: JSON decision path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/decision.json.
       required: false
       selector:
         text:

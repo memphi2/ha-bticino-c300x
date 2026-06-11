@@ -17,6 +17,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _announcement_input_path,
     _async_run_ffmpeg,
     _capture_output_path,
+    _capture_work_dir,
     _capture_stream_path,
     _create_speex_encoder,
     _rtsp_url_from_status,
@@ -130,6 +131,12 @@ def test_capture_output_path_rejects_paths_outside_allowed_roots(tmp_path: Path)
         _capture_output_path(hass, "/media/c300x/clip.mkv")
 
 
+def test_capture_work_dir_defaults_below_config_c300x(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path / "config")
+
+    assert _capture_work_dir(hass) == tmp_path / "config" / "c300x" / "ring" / "capture"
+
+
 def test_announcement_path_allows_only_c300x_media_roots(tmp_path: Path) -> None:
     hass = _FakeHass(tmp_path / "config")
     announcement = tmp_path / "config" / "www" / "c300x" / "announce.wav"
@@ -173,10 +180,11 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
         rtsp_url: str,
         output: Path,
         *,
+        work_dir: Path | None,
         duration_seconds: int,
         include_audio: bool,
     ) -> None:
-        calls.append(("ffmpeg", (rtsp_url, output, duration_seconds, include_audio)))
+        calls.append(("ffmpeg", (rtsp_url, output, work_dir, duration_seconds, include_audio)))
 
     async def _unexpected_announcement(_host: str, _source: Path) -> None:
         calls.append(("unexpected_announcement", None))
@@ -207,7 +215,16 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
     assert result == target
     assert calls == [
         ("ready", "rtsp://192.0.2.10:6554/doorbell-recorder"),
-        ("ffmpeg", ("rtsp://192.0.2.10:6554/doorbell-recorder", target, 4, True)),
+        (
+            "ffmpeg",
+            (
+                "rtsp://192.0.2.10:6554/doorbell-recorder",
+                target,
+                tmp_path / "config" / "c300x" / "ring" / "capture",
+                4,
+                True,
+            ),
+        ),
     ]
 
 
@@ -233,6 +250,7 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
         _async_run_ffmpeg(
             "rtsp://192.0.2.10:6554/doorbell",
             tmp_path / "clip.mp4",
+            work_dir=tmp_path / "work",
             duration_seconds=4,
             include_audio=True,
         )
@@ -249,8 +267,8 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert command[command.index("-ac") + 1] == "2"
     assert command[command.index("-ar") + 1] == "48000"
     assert command[command.index("-b:a") + 1] == "128k"
-    assert str(tmp_path / "clip.raw.wav") in command
-    assert commands[1][-1] == str(tmp_path / "clip.processed.wav")
+    assert str(tmp_path / "work" / "clip.raw.wav") in command
+    assert commands[1][-1] == str(tmp_path / "work" / "clip.processed.wav")
 
 
 def test_announcement_speex_encoder_accepts_runtime_codec_alias() -> None:
@@ -290,10 +308,11 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
         rtsp_url: str,
         output: Path,
         *,
+        work_dir: Path | None,
         duration_seconds: int,
         include_audio: bool,
     ) -> None:
-        calls.append(("ffmpeg", (rtsp_url, output, duration_seconds, include_audio)))
+        calls.append(("ffmpeg", (rtsp_url, output, work_dir, duration_seconds, include_audio)))
 
     async def _announcement(_entry: Any, host: str, source: Path) -> None:
         calls.append(("announcement", (host, source)))

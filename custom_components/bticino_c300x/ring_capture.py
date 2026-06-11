@@ -31,6 +31,7 @@ _TALKBACK_READY_TIMEOUT_SECONDS = 5.0
 _TALKBACK_SAMPLE_RATE = 8000
 _TALKBACK_FRAME_SAMPLES = 160
 _ANNOUNCEMENT_PREROLL_SECONDS = 1.0
+_CAPTURE_WORK_DIR = Path("/config/c300x/ring/capture")
 
 
 async def async_capture_doorbell_ring_call(
@@ -46,16 +47,19 @@ async def async_capture_doorbell_ring_call(
 
     duration = _validate_duration(duration_seconds)
     target = _capture_output_path(hass, output_path)
+    work_dir = _capture_work_dir(hass)
     announcement = _announcement_input_path(hass, announcement_path)
     status = await entry.runtime_data.api.async_doorbell_video_status()
     rtsp_url = _rtsp_url_from_status(entry, status, include_audio=include_audio)
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
+    await _async_mkdir(hass, work_dir)
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
             target,
+            work_dir=work_dir,
             duration_seconds=duration,
             include_audio=include_audio,
         )
@@ -106,6 +110,16 @@ def _capture_output_path(hass: Any, output_path: str | None) -> Path:
     return resolved
 
 
+def _capture_work_dir(hass: Any) -> Path:
+    config = getattr(hass, "config", None)
+    target = (
+        Path(config.path("c300x", "ring", "capture"))
+        if config is not None and hasattr(config, "path")
+        else _CAPTURE_WORK_DIR
+    )
+    return _safe_c300x_path(hass, target, "capture work directory")
+
+
 def _announcement_input_path(hass: Any, announcement_path: str | None) -> Path | None:
     if not announcement_path:
         return None
@@ -128,16 +142,18 @@ def _safe_c300x_path(hass: Any, target: Path, path_kind: str) -> Path:
     except OSError as err:
         raise HomeAssistantError(f"Invalid C300X {path_kind} path") from err
 
-    allowed_roots = [Path("/media/c300x")]
+    allowed_roots = [Path("/media/c300x"), Path("/config/c300x")]
     config = getattr(hass, "config", None)
     if config is not None and hasattr(config, "path"):
+        allowed_roots.append(Path(config.path("c300x")))
+        allowed_roots.append(Path(config.path("media", "c300x")))
         allowed_roots.append(Path(config.path("www", "c300x")))
     else:
         allowed_roots.append(Path("/config/www/c300x"))
     allowed = [_resolve_root(root) for root in allowed_roots]
     if not any(resolved == root or root in resolved.parents for root in allowed):
         raise HomeAssistantError(
-            "C300X paths must be below /media/c300x or /config/www/c300x"
+            "C300X paths must be below /media/c300x, /config/c300x, or /config/www/c300x"
         )
     return resolved
 
@@ -261,11 +277,13 @@ async def _async_run_ffmpeg(
     rtsp_url: str,
     target: Path,
     *,
+    work_dir: Path | None = None,
     duration_seconds: int,
     include_audio: bool,
 ) -> None:
-    raw_audio_target = target.with_suffix(".raw.wav")
-    processed_audio_target = target.with_suffix(".processed.wav")
+    audio_dir = work_dir or target.parent
+    raw_audio_target = audio_dir / target.with_suffix(".raw.wav").name
+    processed_audio_target = audio_dir / target.with_suffix(".processed.wav").name
     command = [
         "ffmpeg",
         "-hide_banner",

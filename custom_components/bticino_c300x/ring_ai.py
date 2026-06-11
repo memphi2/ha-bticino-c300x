@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import wave
 from datetime import UTC, datetime
@@ -13,10 +14,9 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .ring_capture import _safe_c300x_path
 
-DEFAULT_RING_WAV_GLOB = "/media/c300x/doorbell_*.raw.wav"
-DEFAULT_RING_AI_RESULT_PATH = "/media/c300x/ring/analysis/result.json"
-_DEFAULT_RING_WAV_DIR = Path("/media/c300x")
-_DEFAULT_RING_WAV_PATTERN = "doorbell_*.raw.wav"
+DEFAULT_RING_WAV_GLOB = "/config/c300x/**/*.raw.wav"
+DEFAULT_RING_AI_RESULT_PATH = "/config/c300x/ring/analysis/result.json"
+_DEFAULT_RING_WAV_PATTERN = "*.raw.wav"
 _WYOMING_CHUNK_BYTES = 8192
 _WYOMING_TIMEOUT_SECONDS = 60
 
@@ -59,22 +59,46 @@ async def async_run_wyoming_ring_analysis(
 
 def _ring_wav_path(hass: Any, wav_path: str | None) -> Path:
     if not wav_path:
-        return _latest_ring_wav_path()
+        return _latest_ring_wav_path(hass)
     source = _safe_c300x_path(hass, Path(wav_path).expanduser(), "ring analysis WAV")
     return _validate_ring_wav(source)
 
 
-def _latest_ring_wav_path() -> Path:
-    candidates = sorted(
-        _DEFAULT_RING_WAV_DIR.glob(_DEFAULT_RING_WAV_PATTERN),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+def _latest_ring_wav_path(hass: Any) -> Path:
+    candidates = sorted(_ring_wav_candidates(hass), key=_safe_mtime, reverse=True)
     if not candidates:
         raise HomeAssistantError(
             f"C300X ring analysis found no WAV files matching {DEFAULT_RING_WAV_GLOB}"
         )
     return _validate_ring_wav(candidates[0])
+
+
+def _ring_wav_candidates(hass: Any) -> list[Path]:
+    roots = [Path("/config/c300x")]
+    config = getattr(hass, "config", None)
+    if config is not None and hasattr(config, "path"):
+        roots.append(Path(config.path("c300x")))
+
+    candidates: dict[str, Path] = {}
+    for root in roots:
+        try:
+            resolved_root = root.resolve(strict=False)
+        except OSError:
+            continue
+        if not resolved_root.exists():
+            continue
+        for path in resolved_root.rglob(_DEFAULT_RING_WAV_PATTERN):
+            with contextlib.suppress(OSError):
+                if path.is_file():
+                    candidates[str(path.resolve(strict=False))] = path
+    return list(candidates.values())
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def _validate_ring_wav(path: Path) -> Path:

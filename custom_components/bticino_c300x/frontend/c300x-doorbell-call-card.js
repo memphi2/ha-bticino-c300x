@@ -680,6 +680,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       await this._startTalkback({ microphone: false, receiveAudio: false });
       if (this._remoteStream && !this._error) {
         this._ringPreviewActive = true;
+        this._updateState();
       }
     } finally {
       this._previewStarting = false;
@@ -1044,7 +1045,10 @@ class C300XDoorbellCallCard extends HTMLElement {
       return "answer";
     }
     if (this._isRingPreviewAvailable(cameraEntity)) {
-      return (!active || this._ringPreviewActive) ? "answer" : "hang_up";
+      if (this._previewStarting || this._ringPreviewActive) {
+        return "answer";
+      }
+      return active ? "hang_up" : "answer";
     }
     if (active) {
       return "hang_up";

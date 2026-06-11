@@ -335,6 +335,7 @@ _EVENT_ENTITY_CONSUMER = ("event", "agent_event")
 _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
     {
         _EVENT_ENTITY_CONSUMER,
+        ("sensor", "agent_diagnostics"),
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
         ("sensor", "device_memory"),
@@ -342,7 +343,7 @@ _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
     }
 )
 _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
-    "agent.diagnostics_changed": (("sensor", "agent_status"),),
+    "agent.diagnostics_changed": (("sensor", "agent_diagnostics"),),
     "system.metrics_changed": (
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),

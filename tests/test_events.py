@@ -524,7 +524,7 @@ def test_filter_events_for_active_entities_skips_disabled_internal_diagnostics()
         "entry-1",
         _FakeEntityRegistry(
             disabled={
-                ("sensor", "agent_status"),
+                ("sensor", "agent_diagnostics"),
                 ("event", "agent_event"),
             }
         ),
@@ -581,12 +581,12 @@ def test_filter_events_for_active_entities_skips_missing_default_disabled_metric
     )
 
 
-def test_filter_events_for_active_entities_keeps_missing_default_enabled_consumer() -> None:
+def test_filter_events_for_active_entities_skips_missing_default_disabled_diagnostics() -> None:
     assert _filter_events_for_active_entities(
         ["agent.diagnostics_changed"],
         "entry-1",
-        _FakeEntityRegistry(missing={("sensor", "agent_status")}),
-    ) == ["agent.diagnostics_changed"]
+        _FakeEntityRegistry(missing={("sensor", "agent_diagnostics")}),
+    ) == []
 
 
 def test_filter_events_for_active_entities_keeps_visible_event_for_event_entity() -> None:

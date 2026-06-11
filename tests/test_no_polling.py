@@ -87,11 +87,9 @@ def test_message_sensors_do_not_scan_device_during_setup() -> None:
         encoding="utf-8"
     )
     setup_body = text.split("class C300XConnectionDiagnosticSensor", maxsplit=1)[0]
-    refresh_body = text.split("async def _async_refresh_initial_states", maxsplit=1)[1]
 
     assert "initial_refresh_entities.extend(" not in setup_body
-    assert "_async_answering_machine_messages(" not in refresh_body
-    assert "_async_memos(" not in refresh_body
+    assert "async def _async_refresh_initial_states" not in text
 
 
 def test_message_delete_buttons_do_not_refresh_during_setup() -> None:

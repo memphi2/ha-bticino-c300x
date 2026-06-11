@@ -250,6 +250,9 @@
           "error": "Error"
         }
       },
+      "agent_diagnostics": {
+        "name": "Device agent diagnostics"
+      },
       "device_cpu": {
         "name": "Device CPU"
       },

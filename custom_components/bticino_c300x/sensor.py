@@ -130,7 +130,6 @@ def _agent_info_attributes(agent_info: dict[str, Any]) -> dict[str, Any]:
         key: value
         for key, value in (
             ("agent_version", version),
-            ("implementation", agent_info.get("implementation")),
             ("api_version", agent_info.get("api_version")),
             ("model", agent_info.get("model")),
             ("firmware", agent_info.get("firmware")),
@@ -162,7 +161,6 @@ async def async_setup_entry(
         C300XAgentStatusSensor(entry),
     ]
     metrics = _system_metrics_capability(entry)
-    initial_refresh_entities: list[SensorEntity] = []
     if capability_is_supported(entry.runtime_data.capabilities, "doorbell_video"):
         doorbell_state_sensor = C300XDoorbellStateSensor(entry)
         entities.append(doorbell_state_sensor)
@@ -179,7 +177,7 @@ async def async_setup_entry(
         memory_sensor = C300XDeviceMemorySensor(entry)
         entities.append(memory_sensor)
     if diagnostics_supported(entry.runtime_data.capabilities):
-        initial_refresh_entities.append(entities[0])
+        entities.append(C300XAgentDiagnosticsSensor(entry))
     if answering_machine_messages_supported(entry.runtime_data.capabilities):
         await _async_refresh_initial_answering_machine_messages(entry)
         message_sensor = C300XVoicemailMessagesSensor(entry)
@@ -194,8 +192,6 @@ async def async_setup_entry(
                 voice_memos_sensor,
             ]
         )
-    if initial_refresh_entities:
-        await _async_refresh_initial_states(initial_refresh_entities)
     async_add_entities(entities)
 
 
@@ -240,7 +236,7 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         super().__init__(entry, "agent_status")
 
     async def async_update(self) -> None:
-        """Refresh agent metadata and diagnostics on explicit HA update requests."""
+        """Refresh agent metadata on explicit HA update requests."""
 
         try:
             self._entry.runtime_data.agent_info = (
@@ -248,20 +244,11 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             )
         except C300XAgentApiError:
             return
-        if diagnostics_supported(self._entry.runtime_data.capabilities):
-            await self._async_refresh_diagnostics(write_state=False)
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to connection and diagnostics updates."""
+        """Subscribe to connection and agent-info updates."""
 
         await super().async_added_to_hass()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
-                self._handle_diagnostics_changed,
-            )
-        )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -288,7 +275,6 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         """Return safe status context without secrets or callback URLs."""
 
         state = self._entry.runtime_data.connection_state
-        diagnostics = self._entry.runtime_data.agent_diagnostics
         agent_info = self._entry.runtime_data.agent_info
         update_state = getattr(self._entry.runtime_data, "agent_update_state", None)
         attrs: dict[str, Any] = {
@@ -300,23 +286,6 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
-            "agent_write_count": diagnostics.get("agent_write_count"),
-            "last_write_at": diagnostics.get("last_write_at"),
-            "last_write_reason": diagnostics.get("last_write_reason"),
-            "last_write_class": diagnostics.get("last_write_class"),
-            "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
-            **_agent_diagnostic_attributes(
-                diagnostics,
-                _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
-            ),
-            **_agent_diagnostic_attributes(
-                diagnostics,
-                _AGENT_VIDEO_DIAGNOSTIC_KEYS,
-            ),
-            **_agent_diagnostic_attributes(
-                diagnostics,
-                _AGENT_FLEXISIP_DIAGNOSTIC_KEYS,
-            ),
         }
         if update_state is not None:
             attrs.update(
@@ -350,12 +319,71 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         return "agent_ok"
 
     @callback
-    def _handle_diagnostics_changed(self, entry_id: str) -> None:
+    def _handle_agent_info_changed(self, entry_id: str) -> None:
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
+
+class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
+    """Detailed device-agent runtime diagnostics."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "agent_diagnostics"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        super().__init__(entry, "agent_diagnostics")
+
+    async def async_update(self) -> None:
+        """Refresh detailed device-agent diagnostics on explicit HA update requests."""
+
+        await self._async_refresh_diagnostics(write_state=False)
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when detailed diagnostics were last refreshed."""
+
+        return self._entry.runtime_data.agent_diagnostics_updated_at
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed non-sensitive agent diagnostics."""
+
+        diagnostics = self._entry.runtime_data.agent_diagnostics
+        return {
+            "agent_write_count": diagnostics.get("agent_write_count"),
+            "last_write_at": diagnostics.get("last_write_at"),
+            "last_write_reason": diagnostics.get("last_write_reason"),
+            "last_write_class": diagnostics.get("last_write_class"),
+            "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
+            ),
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_VIDEO_DIAGNOSTIC_KEYS,
+            ),
+            **_agent_diagnostic_attributes(
+                diagnostics,
+                _AGENT_FLEXISIP_DIAGNOSTIC_KEYS,
+            ),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to detailed diagnostics updates."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
+                self._handle_diagnostics_changed,
+            )
+        )
+
     @callback
-    def _handle_agent_info_changed(self, entry_id: str) -> None:
+    def _handle_diagnostics_changed(self, entry_id: str) -> None:
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
@@ -938,14 +966,3 @@ async def _async_refresh_initial_memos(entry: ConfigEntry) -> None:
         }
         entry.runtime_data.memos_updated_at = datetime.now(UTC)
 
-
-async def _async_refresh_initial_states(entities: list[SensorEntity]) -> None:
-    """Populate lightweight diagnostic sensors once during setup."""
-
-    for entity in entities:
-        if isinstance(entity, C300XAgentStatusSensor):
-            await entity._async_refresh_diagnostics(write_state=False)
-            continue
-        if isinstance(entity, C300XSystemMetricSensor):
-            await entity.async_update()
-            continue

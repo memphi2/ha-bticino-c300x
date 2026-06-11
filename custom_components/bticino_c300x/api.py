@@ -12,17 +12,10 @@ from aiohttp import ClientError, ClientSession
 from .const import (
     DEFAULT_AGENT_PORT,
     HEADER_MAINTENANCE_TOKEN,
-    SMARTPHONE_FORWARDING_MODE_BLOCKED,
-    SMARTPHONE_FORWARDING_MODE_ENABLED,
     SMARTPHONE_FORWARDING_MODES,
 )
 from .fingerprint import fnv1a64_fingerprint
-from .forwarding import (
-    FORWARDING_CODE_BY_STATE,
-    FORWARDING_STATE_BY_CODE,
-    coerce_forwarding_mode_state,
-    forwarding_state_from_value,
-)
+from .forwarding import coerce_forwarding_mode_state
 from .validation_patterns import (
     ACTIVATION_ID_RE,
     LOCK_ID_RE,
@@ -1658,46 +1651,36 @@ def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
         raw_value = data["state"].get("smartphone_forwarding")
         if raw_value is None:
             return {"mode": None, "state": "unknown", "raw": data}
-        normalized = coerce_forwarding_mode_state(raw_value, raw_value)
-        return {
-            "mode": normalized["mode"],
-            "state": normalized["state"],
-            "raw": data,
-        }
-    if (
-        "mode" in data
-        and isinstance(data["mode"], str)
-        and str(data["mode"]).strip().lower() in SMARTPHONE_FORWARDING_MODES
-    ):
-        state = normalize_smartphone_forwarding_mode(data["mode"])
-        return {
-            "mode": FORWARDING_CODE_BY_STATE[state],
-            "state": state,
-            "raw": data.get("raw"),
-        }
+        return _normalized_smartphone_forwarding(raw_value, raw_value, raw=data)
     if data.get("mode") is None and data.get("state") == "unknown":
         return {"mode": None, "state": "unknown", "raw": data.get("raw", data)}
     if "enabled" in data:
-        enabled = forwarding_state_from_value(data["enabled"]) == SMARTPHONE_FORWARDING_MODE_ENABLED
-        return {
-            "mode": 0 if enabled else 2,
-            "state": (
-                SMARTPHONE_FORWARDING_MODE_ENABLED
-                if enabled
-                else SMARTPHONE_FORWARDING_MODE_BLOCKED
-            ),
-            "raw": data.get("raw"),
-        }
-    raw_mode = data.get("mode")
-    try:
-        mode = int(raw_mode)
-    except (TypeError, ValueError) as err:
-        raise C300XAgentApiResponseError("smartphone-forwarding mode is missing") from err
-    state = data.get("state") or FORWARDING_STATE_BY_CODE.get(mode, "unknown")
+        return _normalized_smartphone_forwarding(
+            data["enabled"],
+            data["enabled"],
+            raw=data.get("raw"),
+        )
+    normalized = coerce_forwarding_mode_state(data.get("mode"), data.get("state"))
+    if normalized["mode"] is None:
+        raise C300XAgentApiResponseError("smartphone-forwarding mode is missing")
     return {
-        "mode": mode,
-        "state": str(state),
+        "mode": normalized["mode"],
+        "state": normalized["state"],
         "raw": data.get("raw"),
+    }
+
+
+def _normalized_smartphone_forwarding(
+    mode: Any,
+    state: Any,
+    *,
+    raw: Any,
+) -> dict[str, Any]:
+    normalized = coerce_forwarding_mode_state(mode, state)
+    return {
+        "mode": normalized["mode"],
+        "state": normalized["state"],
+        "raw": raw,
     }
 
 

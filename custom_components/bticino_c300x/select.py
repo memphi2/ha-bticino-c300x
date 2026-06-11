@@ -7,11 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import (
-    C300XAgentApiError,
-    C300XAgentApiResponseError,
-    normalize_smartphone_forwarding,
-)
+from .api import C300XAgentApiError
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SMARTPHONE_FORWARDING_MODES,
@@ -115,21 +111,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 def _normalize_smartphone_forwarding_event(
     payload: dict[str, object],
 ) -> dict[str, str | int | None]:
-    mode = payload.get("mode")
-    state = payload.get("state")
-
-    try:
-        normalized = normalize_smartphone_forwarding({"mode": mode, "state": state})
-        if isinstance(normalized.get("mode"), int) and isinstance(
-            normalized.get("state"), str
-        ):
-            return {
-                "mode": normalized.get("mode"),
-                "state": normalized.get("state"),
-            }
-    except C300XAgentApiResponseError:
-        return coerce_forwarding_mode_state(mode, state)
-    return coerce_forwarding_mode_state(mode, state)
+    return coerce_forwarding_mode_state(payload.get("mode"), payload.get("state"))
 
 
 async def _async_refresh_initial_states(entities: list[SelectEntity]) -> None:

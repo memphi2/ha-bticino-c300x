@@ -13,8 +13,8 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .ring_capture import _safe_c300x_path
 
-DEFAULT_RING_ANALYSIS_RESULT_PATH = "/config/c300x/ring/analysis/result.json"
-DEFAULT_RING_ANALYSIS_DECISION_PATH = "/config/c300x/ring/analysis/decision.json"
+DEFAULT_RING_ANALYSIS_RESULT_PATH = "/config/c300x/analysis/result.json"
+DEFAULT_RING_ANALYSIS_DECISION_PATH = "/config/c300x/analysis/decision.json"
 
 
 @dataclass(frozen=True)

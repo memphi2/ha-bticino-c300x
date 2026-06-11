@@ -98,6 +98,7 @@ _ATTR_LOCK_ID = "lock_id"
 _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
 _ATTR_OUTPUT_PATH = "output_path"
 _ATTR_INCLUDE_AUDIO = "include_audio"
+_ATTR_WAV_OUTPUT_DIR = "wav_output_dir"
 _ATTR_ANNOUNCEMENT_PATH = "announcement_path"
 _ATTR_WAV_PATH = "wav_path"
 _ATTR_RESULT_PATH = "result_path"
@@ -511,6 +512,7 @@ class _C300XServiceHandlers:
                 self._hass,
                 entry,
                 output_path=call.data.get(_ATTR_OUTPUT_PATH),
+                wav_output_dir=call.data.get(_ATTR_WAV_OUTPUT_DIR),
                 duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
                 include_audio=include_audio,
                 announcement_path=announcement_path,
@@ -809,6 +811,7 @@ def _register_base_services(
                     vol.Optional(_ATTR_OUTPUT_PATH): cv.string,
                     vol.Optional(_ATTR_DURATION_SECONDS, default=5): _capture_duration_seconds,
                     vol.Optional(_ATTR_INCLUDE_AUDIO, default=True): _boolean_service_value,
+                    vol.Optional(_ATTR_WAV_OUTPUT_DIR): cv.string,
                     vol.Optional(_ATTR_ANNOUNCEMENT_PATH): cv.string,
                 }
             ),

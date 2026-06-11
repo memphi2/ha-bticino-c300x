@@ -134,7 +134,16 @@ def test_capture_output_path_rejects_paths_outside_allowed_roots(tmp_path: Path)
 def test_capture_work_dir_defaults_below_config_c300x(tmp_path: Path) -> None:
     hass = _FakeHass(tmp_path / "config")
 
-    assert _capture_work_dir(hass) == tmp_path / "config" / "c300x" / "ring" / "capture"
+    assert _capture_work_dir(hass) == tmp_path / "config" / "c300x"
+
+
+def test_capture_work_dir_accepts_directory_not_wav_file(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path / "config")
+    wav_dir = tmp_path / "config" / "c300x" / "analysis"
+
+    assert _capture_work_dir(hass, str(wav_dir)) == wav_dir
+    with pytest.raises(HomeAssistantError):
+        _capture_work_dir(hass, str(wav_dir / "clip.wav"))
 
 
 def test_announcement_path_allows_only_c300x_media_roots(tmp_path: Path) -> None:
@@ -220,7 +229,7 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
             (
                 "rtsp://192.0.2.10:6554/doorbell-recorder",
                 target,
-                tmp_path / "config" / "c300x" / "ring" / "capture",
+                tmp_path / "config" / "c300x",
                 4,
                 True,
             ),

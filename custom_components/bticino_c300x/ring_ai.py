@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .ring_capture import _safe_c300x_path
 
 DEFAULT_RING_WAV_GLOB = "/config/c300x/**/*.raw.wav"
-DEFAULT_RING_AI_RESULT_PATH = "/config/c300x/ring/analysis/result.json"
+DEFAULT_RING_AI_RESULT_PATH = "/config/c300x/analysis/result.json"
 _DEFAULT_RING_WAV_PATTERN = "*.raw.wav"
 _WYOMING_CHUNK_BYTES = 8192
 _WYOMING_TIMEOUT_SECONDS = 60

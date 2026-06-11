@@ -35,12 +35,15 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
     assert "\n    output_path:\n" in sections["capture_doorbell_call"]
     assert "\n    duration_seconds:\n" in sections["capture_doorbell_call"]
     assert "\n    include_audio:\n" in sections["capture_doorbell_call"]
+    assert "\n    wav_output_dir:\n" in sections["capture_doorbell_call"]
     assert "\n    announcement_path:\n" in sections["capture_doorbell_call"]
     assert "run_ring_wyoming_analysis" in sections
     assert "\n    wyoming_host:\n" in sections["run_ring_wyoming_analysis"]
     assert "\n    wav_path:\n" in sections["run_ring_wyoming_analysis"]
+    assert "/config/c300x/analysis/result.json" in sections["run_ring_wyoming_analysis"]
     assert "evaluate_ring_analysis" in sections
     assert "\n    unlock_on_match:\n" in sections["evaluate_ring_analysis"]
+    assert "/config/c300x/analysis/decision.json" in sections["evaluate_ring_analysis"]
 
 
 def test_services_yaml_exposes_home_call_controls() -> None:

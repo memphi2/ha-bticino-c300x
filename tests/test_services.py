@@ -581,6 +581,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                     "output_path": "/media/c300x/test.mp4",
                     "duration_seconds": 3,
                     "include_audio": True,
+                    "wav_output_dir": "/config/c300x/analysis",
                     "announcement_path": "/media/c300x/announce.wav",
                 }
             )
@@ -591,6 +592,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                 "args": (hass, entry),
                 "kwargs": {
                     "output_path": "/media/c300x/test.mp4",
+                    "wav_output_dir": "/config/c300x/analysis",
                     "duration_seconds": 3,
                     "include_audio": True,
                     "announcement_path": "/media/c300x/announce.wav",

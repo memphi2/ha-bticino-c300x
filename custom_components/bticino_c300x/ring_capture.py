@@ -33,6 +33,7 @@ async def async_capture_doorbell_ring_call(
     entry: Any,
     *,
     output_path: str | None = None,
+    wav_output_dir: str | None = None,
     duration_seconds: int = 5,
     include_audio: bool = True,
     announcement_path: str | None = None,
@@ -41,7 +42,7 @@ async def async_capture_doorbell_ring_call(
 
     duration = _validate_duration(duration_seconds)
     target = _capture_output_path(hass, output_path)
-    work_dir = _capture_work_dir(hass)
+    work_dir = _capture_work_dir(hass, wav_output_dir)
     announcement = _announcement_input_path(hass, announcement_path)
     status = await entry.runtime_data.api.async_doorbell_video_status()
     rtsp_url = _rtsp_url_from_status(entry, status, include_audio=include_audio)
@@ -104,12 +105,23 @@ def _capture_output_path(hass: Any, output_path: str | None) -> Path:
     return resolved
 
 
-def _capture_work_dir(hass: Any) -> Path:
+def _capture_work_dir(hass: Any, wav_output_dir: str | None = None) -> Path:
+    if wav_output_dir:
+        resolved = _safe_c300x_path(
+            hass,
+            Path(wav_output_dir).expanduser(),
+            "capture WAV output directory",
+        )
+        if resolved.suffix:
+            raise HomeAssistantError(
+                "C300X capture WAV output must be a directory, not a file"
+            )
+        return resolved
     config = getattr(hass, "config", None)
     target = (
-        Path(config.path("c300x", "ring", "capture"))
+        Path(config.path("c300x"))
         if config is not None and hasattr(config, "path")
-        else _CAPTURE_WORK_DIR
+        else _CAPTURE_WORK_DIR.parent.parent
     )
     return _safe_c300x_path(hass, target, "capture work directory")
 
@@ -405,4 +417,3 @@ async def _async_run_ffmpeg_command(
     if process.returncode != 0:
         message = stderr.decode("utf-8", "replace").strip()
         raise HomeAssistantError(f"{error_prefix}{': ' + message if message else ''}")
-

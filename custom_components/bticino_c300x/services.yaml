@@ -163,7 +163,7 @@ hangup_doorbell_call:
 
 capture_doorbell_call:
   name: Capture C300X doorbell call
-  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; internal WAV work files are written below /config/c300x/.
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV work files default to /config/c300x/.
   fields:
     entry_id:
       name: Entry ID
@@ -194,6 +194,12 @@ capture_doorbell_call:
       default: true
       selector:
         boolean:
+    wav_output_dir:
+      name: WAV output directory
+      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for the raw and processed WAV files. Defaults to /config/c300x/.
+      required: false
+      selector:
+        text:
     announcement_path:
       name: Announcement path
       description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing.
@@ -229,7 +235,7 @@ run_ring_wyoming_analysis:
         text:
     result_path:
       name: Result path
-      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/result.json.
+      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
       required: false
       selector:
         text:
@@ -258,13 +264,13 @@ evaluate_ring_analysis:
         text:
     result_path:
       name: Result path
-      description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/result.json.
+      description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
       required: false
       selector:
         text:
     decision_path:
       name: Decision path
-      description: JSON decision path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/ring/analysis/decision.json.
+      description: JSON decision path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/decision.json.
       required: false
       selector:
         text:

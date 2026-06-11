@@ -111,10 +111,12 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
+    SERVICE_EVALUATE_RING_ANALYSIS,
     SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
     SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_RUN_RING_WYOMING_ANALYSIS,
     SERVICE_START_HOME_CALL,
     SERVICE_STOP_DOORBELL_VIDEO,
     SERVICE_STOP_HOME_CALL,
@@ -155,15 +157,19 @@ class _FakeServices:
     def __init__(self) -> None:
         self.registered: set[tuple[str, str]] = set()
         self.handlers: dict[tuple[str, str], Any] = {}
+        self.schemas: dict[tuple[str, str], Any] = {}
 
     def async_register(self, domain: str, service: str, *args: Any, **_kwargs: Any) -> None:
         self.registered.add((domain, service))
         if args:
             self.handlers[(domain, service)] = args[0]
+        if "schema" in _kwargs:
+            self.schemas[(domain, service)] = _kwargs["schema"]
 
     def async_remove(self, domain: str, service: str) -> None:
         self.registered.discard((domain, service))
         self.handlers.pop((domain, service), None)
+        self.schemas.pop((domain, service), None)
 
 
 class _FakeHass:
@@ -602,6 +608,69 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         assert api.capture_doorbell_call_calls == 0
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+
+        capture_schema = hass.services.schemas[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        assert capture_schema(
+            {
+                "output_path": "/media/c300x/test.mp4",
+                "duration_seconds": 3,
+                "include_audio": "true",
+                "wav_output_dir": "/config/c300x/analysis",
+                "announcement_path": "/config/www/c300x/announce.wav",
+            }
+        ) == {
+            "output_path": "/media/c300x/test.mp4",
+            "duration_seconds": 3,
+            "include_audio": True,
+            "wav_output_dir": "/config/c300x/analysis",
+            "announcement_path": "/config/www/c300x/announce.wav",
+        }
+
+        wyoming_schema = hass.services.schemas[(DOMAIN, SERVICE_RUN_RING_WYOMING_ANALYSIS)]
+        assert wyoming_schema(
+            {
+                "wyoming_host": "core-whisper",
+                "wyoming_port": "10300",
+                "wav_path": "/config/c300x/latest.raw.wav",
+                "result_path": "/config/c300x/analysis/result.json",
+                "language": "de",
+                "expected_phrase": "open",
+            }
+        ) == {
+            "wyoming_host": "core-whisper",
+            "wyoming_port": 10300,
+            "wav_path": "/config/c300x/latest.raw.wav",
+            "result_path": "/config/c300x/analysis/result.json",
+            "language": "de",
+            "expected_phrase": "open",
+        }
+
+        evaluate_schema = hass.services.schemas[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)]
+        assert evaluate_schema(
+            {
+                "result_path": "/config/c300x/analysis/result.json",
+                "decision_path": "/config/c300x/analysis/decision.json",
+                "expected_phrase": "open",
+                "unlock_on_match": "false",
+                "lock_id": "default",
+            }
+        ) == {
+            "result_path": "/config/c300x/analysis/result.json",
+            "decision_path": "/config/c300x/analysis/decision.json",
+            "expected_phrase": "open",
+            "unlock_on_match": False,
+            "lock_id": "default",
+        }
 
     asyncio.run(_run())
 

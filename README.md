@@ -46,9 +46,9 @@ video door station:
 
 - **On-demand**: open the door camera from Home Assistant when nobody is
   ringing.
-- **Ring Call**: when someone rings and smartphone forwarding is enabled,
-  answer the real incoming door call from Home Assistant with video, device
-  audio and talkback.
+- **Ring Call**: when someone rings and smartphone forwarding is `enabled` or
+  `in-house-only`, answer the real incoming door call from Home Assistant with
+  video, device audio and talkback.
 - **Home Call**: call the C300X from Home Assistant as an audio-only in-house
   call.
 
@@ -175,7 +175,9 @@ Exact entities depend on the capabilities reported by your installed agent.
 The integration also registers services for door unlock, stair light, Alarmo
 commands, dashboard actions, Home Call start/stop, latest video-message
 playback/delete, latest voice-memo playback/delete, latest text-memo
-write/delete and explicit doorbell-video start/stop for automations.
+write/delete, explicit doorbell-video start/stop, Ring Call answer/hang-up,
+Ring Call capture, local Wyoming transcription and strict phrase-match
+evaluation for automations.
 
 ## Installation
 
@@ -361,10 +363,10 @@ There are three user-facing media workflows:
 
 - **On-demand**: press play in the doorstation card when nobody is ringing.
   Home Assistant starts the normal C300X camera path and opens video/audio.
-- **Ring Call**: when someone rings and smartphone forwarding is enabled, the
-  agent reports the real incoming call/media state. Press **Answer** in Home
-  Assistant to take over that call through the app-like Home Assistant workflow,
-  with video, device audio and microphone talkback.
+- **Ring Call**: when someone rings and smartphone forwarding is `enabled` or
+  `in-house-only`, the agent reports the real incoming call/media state. Press
+  **Answer** in Home Assistant to take over that call through the app-like Home
+  Assistant workflow, with video, device audio and microphone talkback.
 - **Home Call**: the Home Call card starts an audio-only call from Home
   Assistant to the C300X. It is intentionally separate from doorbell/ring media.
 

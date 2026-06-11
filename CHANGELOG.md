@@ -38,8 +38,8 @@
 - Restart Home Assistant after updating so the new services are registered.
 - Update the native C300X device agent from Home Assistant so the new forwarding
   mode, binary patch support, QML labels and capture APIs are installed.
-- Ring Call capture files are local runtime artifacts and must stay outside the
-  repository.
+- Ring Call MP4 captures, retained WAV files and local analysis JSON are local
+  runtime artifacts and must stay outside the repository.
 
 ## v1.0.2 - 2026-06-08
 

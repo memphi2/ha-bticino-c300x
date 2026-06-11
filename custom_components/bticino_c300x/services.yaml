@@ -132,6 +132,168 @@ stop_doorbell_video:
       selector:
         text:
 
+answer_doorbell_call:
+  name: Answer C300X doorbell call
+  description: Request app-like answering of the active C300X doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    audio:
+      name: Enable audio
+      description: Request the C300X audio path when answering the ring call.
+      required: false
+      default: true
+      selector:
+        boolean:
+
+hangup_doorbell_call:
+  name: Hang up C300X doorbell call
+  description: Hang up the active C300X doorbell ring call through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+capture_doorbell_call:
+  name: Capture C300X doorbell call
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV work files default to /config/c300x/.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    output_path:
+      name: Output path
+      description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
+      required: false
+      selector:
+        text:
+    duration_seconds:
+      name: Duration
+      description: Capture duration in seconds.
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: slider
+    include_audio:
+      name: Include audio
+      description: Include the C300X audio track when available.
+      required: false
+      default: true
+      selector:
+        boolean:
+    wav_output_dir:
+      name: WAV output directory
+      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for the raw and processed WAV files. Defaults to /config/c300x/.
+      required: false
+      selector:
+        text:
+    announcement_path:
+      name: Announcement path
+      description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing.
+      required: false
+      selector:
+        text:
+
+run_ring_wyoming_analysis:
+  name: Transcribe C300X ring audio with Wyoming Whisper
+  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to the newest *.raw.wav below /config/c300x/.
+  fields:
+    wyoming_host:
+      name: Wyoming host
+      description: Hostname or IP address of the Wyoming Whisper service, for example core-whisper.
+      required: true
+      selector:
+        text:
+    wyoming_port:
+      name: Wyoming port
+      description: Wyoming Whisper TCP port.
+      required: false
+      default: 10300
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    wav_path:
+      name: WAV path
+      description: Optional mono WAV path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the newest *.raw.wav below /config/c300x/.
+      required: false
+      selector:
+        text:
+    result_path:
+      name: Result path
+      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
+      required: false
+      selector:
+        text:
+    language:
+      name: Language
+      description: Optional language hint for Whisper, for example de or en.
+      required: false
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Optional phrase to compare exactly against the transcript.
+      required: false
+      selector:
+        text:
+
+evaluate_ring_analysis:
+  name: Evaluate C300X ring analysis
+  description: Evaluate a local C300X ring transcription JSON result and optionally unlock the door only on a strict phrase match. This service does not run AI itself.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists. Required only when unlock on match is enabled and more than one entry exists.
+      required: false
+      selector:
+        text:
+    result_path:
+      name: Result path
+      description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
+      required: false
+      selector:
+        text:
+    decision_path:
+      name: Decision path
+      description: JSON decision path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/decision.json.
+      required: false
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Exact spoken phrase to match when the result JSON does not provide phrase_match.
+      required: false
+      selector:
+        text:
+    unlock_on_match:
+      name: Unlock on match
+      description: Unlock the configured C300X door only when the phrase matches. Defaults to false.
+      required: false
+      default: false
+      selector:
+        boolean:
+    lock_id:
+      name: Lock ID
+      description: Optional C300X lock id reported by the device agent. Defaults to default.
+      required: false
+      selector:
+        text:
+
 start_home_call:
   name: Start C300X home call
   description: Start an app-like in-house call to the C300X through the local device agent.

@@ -315,6 +315,18 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         reason = "homeassistant_routes_inconsistent"
     elif status.get("media_identity_available") is not True:
         reason = "media_identity_missing"
+    elif (
+        status.get("homeassistant_user_present") is True
+        and "inhouse_binary_patch_applied" in status
+        and status.get("inhouse_binary_patch_applied") is not True
+    ):
+        reason = "homeassistant_binary_patch_missing"
+    elif (
+        status.get("homeassistant_user_present") is True
+        and "inhouse_qml_patch_applied" in status
+        and status.get("inhouse_qml_patch_applied") is not True
+    ):
+        reason = "homeassistant_qml_patch_missing"
     if reason is None:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return

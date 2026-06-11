@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Tuerkamera stoppen"
       },
-      "ensure_homeassistant_user": {
-        "name": "Home-Assistant-Media-User erstellen"
-      },
       "delete_latest_voice_memo": {
         "name": "Audio loeschen"
       }
@@ -252,6 +249,9 @@
           "warning": "Warnung",
           "error": "Fehler"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Device-Agent-Diagnose"
       },
       "device_cpu": {
         "name": "CPU-Auslastung"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Legacy MQTT-Bridge"
       },
-      "smartphone_forwarding": {
-        "name": "Weiterleitung"
+      "homeassistant_user_patch": {
+        "name": "Home Assistant User-Patch"
       }
     }
   },

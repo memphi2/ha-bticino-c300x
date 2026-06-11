@@ -12,17 +12,10 @@ from aiohttp import ClientError, ClientSession
 from .const import (
     DEFAULT_AGENT_PORT,
     HEADER_MAINTENANCE_TOKEN,
-    SMARTPHONE_FORWARDING_MODE_BLOCKED,
-    SMARTPHONE_FORWARDING_MODE_ENABLED,
     SMARTPHONE_FORWARDING_MODES,
 )
 from .fingerprint import fnv1a64_fingerprint
-from .forwarding import (
-    FORWARDING_CODE_BY_STATE,
-    FORWARDING_STATE_BY_CODE,
-    coerce_forwarding_mode_state,
-    forwarding_state_from_value,
-)
+from .forwarding import coerce_forwarding_mode_state
 from .validation_patterns import (
     ACTIVATION_ID_RE,
     LOCK_ID_RE,
@@ -111,18 +104,6 @@ class C300XAgentApi:
 
         data = await self._request_json("GET", "/api/v1/state")
         return normalize_smartphone_forwarding(data)
-
-    async def async_set_smartphone_forwarding_enabled(
-        self,
-        enabled: bool,
-    ) -> dict[str, Any]:
-        """Enable all or block all smartphone forwarding."""
-
-        return await self.async_set_smartphone_forwarding_mode(
-            SMARTPHONE_FORWARDING_MODE_ENABLED
-            if enabled
-            else SMARTPHONE_FORWARDING_MODE_BLOCKED
-        )
 
     async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
         """Set the smartphone forwarding mode."""
@@ -306,6 +287,40 @@ class C300XAgentApi:
         data = await self._request_json(
             "POST",
             "/api/v1/video/doorbell/actions/stop",
+        )
+        return _ok_response(data)
+
+    async def async_doorbell_call_status(self) -> dict[str, Any]:
+        """Return the native doorbell ring-call control status."""
+
+        data = await self._request_json("GET", "/api/v1/calls/doorbell/status")
+        return normalize_doorbell_call(data)
+
+    async def async_answer_doorbell_call(self, audio: bool = True) -> dict[str, Any]:
+        """Request app-like answering of the active doorbell ring call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/answer",
+            json_data={"audio": bool(audio)},
+        )
+        return _ok_response(data)
+
+    async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+        """Hang up the active doorbell ring call."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/hangup",
+        )
+        return _ok_response(data)
+
+    async def async_capture_doorbell_call(self) -> dict[str, Any]:
+        """Request a native doorbell ring-call capture."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/calls/doorbell/actions/capture",
         )
         return _ok_response(data)
 
@@ -706,6 +721,18 @@ class C300XAgentApi:
             "POST",
             "/api/v1/maintenance/device-user/actions/ensure-homeassistant",
             json_data=payload,
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return normalize_device_user_status(data)
+
+    async def async_restore_homeassistant_user_patch(self) -> dict[str, Any]:
+        """Restore the device-side Home Assistant user patch files from backups."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/device-user/actions/restore-homeassistant-patch",
+            json_data={"confirm": "restore_hass_user_patch"},
             extra_headers=self._maintenance_headers(),
             request_timeout=max(self._timeout, 20.0),
         )
@@ -1198,6 +1225,31 @@ def _doorbell_video_has_ring_call(data: dict[str, Any]) -> bool:
     )
 
 
+def normalize_doorbell_call(data: Any) -> dict[str, Any]:
+    """Normalize device-agent doorbell ring-call control status responses."""
+
+    if not isinstance(data, dict):
+        raise C300XAgentApiResponseError("doorbell call returned non-object JSON")
+    return {
+        "supported": bool(data.get("supported")),
+        "active": bool(data.get("active")),
+        "early_media_active": bool(data.get("early_media_active")),
+        "audio_active": bool(data.get("audio_active")),
+        "answer_requested": bool(data.get("answer_requested")),
+        "answered": bool(data.get("answered")),
+        "can_answer": bool(data.get("can_answer")),
+        "can_hangup": bool(data.get("can_hangup")),
+        "media_owner": _optional_string(data.get("media_owner")) or "unknown",
+        "ring_receiver_running": bool(data.get("ring_receiver_running")),
+        "ring_registered": bool(data.get("ring_registered")),
+        "capture_supported": bool(data.get("capture_supported")),
+        "open_fds": _optional_int(data.get("open_fds"), 0) or 0,
+        "active_threads": _optional_int(data.get("active_threads"), 0) or 0,
+        "last_error": _optional_string(data.get("last_error")),
+        "raw": data,
+    }
+
+
 def normalize_home_call(data: Any) -> dict[str, Any]:
     """Normalize device-agent in-house home-call status responses."""
 
@@ -1366,6 +1418,35 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         )
         is True,
         "routes_consistent": _optional_bool(data.get("routes_consistent")) is True,
+        "inhouse_binary_patch_supported": _optional_bool(
+            data.get("inhouse_binary_patch_supported")
+        )
+        is True,
+        "inhouse_binary_patch_applied": _optional_bool(
+            data.get("inhouse_binary_patch_applied")
+        )
+        is True,
+        "inhouse_binary_patch_state": _optional_string(
+            data.get("inhouse_binary_patch_state")
+        ),
+        "inhouse_binary_patch_backup_present": _optional_bool(
+            data.get("inhouse_binary_patch_backup_present")
+        )
+        is True,
+        "inhouse_binary_patch_error": _optional_string(
+            data.get("inhouse_binary_patch_error")
+        ),
+        "inhouse_qml_patch_available": _optional_bool(
+            data.get("inhouse_qml_patch_available")
+        )
+        is True,
+        "inhouse_qml_patch_applied": _optional_bool(
+            data.get("inhouse_qml_patch_applied")
+        )
+        is True,
+        "inhouse_qml_patch_state": _optional_string(
+            data.get("inhouse_qml_patch_state")
+        ),
         "account_label": _optional_string(data.get("account_label")),
         "media_identity_source": _optional_string(data.get("media_identity_source")),
         "error": _optional_string(data.get("error")),
@@ -1570,46 +1651,36 @@ def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
         raw_value = data["state"].get("smartphone_forwarding")
         if raw_value is None:
             return {"mode": None, "state": "unknown", "raw": data}
-        normalized = coerce_forwarding_mode_state(raw_value, raw_value)
-        return {
-            "mode": normalized["mode"],
-            "state": normalized["state"],
-            "raw": data,
-        }
-    if (
-        "mode" in data
-        and isinstance(data["mode"], str)
-        and str(data["mode"]).strip().lower() in SMARTPHONE_FORWARDING_MODES
-    ):
-        state = normalize_smartphone_forwarding_mode(data["mode"])
-        return {
-            "mode": FORWARDING_CODE_BY_STATE[state],
-            "state": state,
-            "raw": data.get("raw"),
-        }
+        return _normalized_smartphone_forwarding(raw_value, raw_value, raw=data)
     if data.get("mode") is None and data.get("state") == "unknown":
         return {"mode": None, "state": "unknown", "raw": data.get("raw", data)}
     if "enabled" in data:
-        enabled = forwarding_state_from_value(data["enabled"]) == SMARTPHONE_FORWARDING_MODE_ENABLED
-        return {
-            "mode": 0 if enabled else 2,
-            "state": (
-                SMARTPHONE_FORWARDING_MODE_ENABLED
-                if enabled
-                else SMARTPHONE_FORWARDING_MODE_BLOCKED
-            ),
-            "raw": data.get("raw"),
-        }
-    raw_mode = data.get("mode")
-    try:
-        mode = int(raw_mode)
-    except (TypeError, ValueError) as err:
-        raise C300XAgentApiResponseError("smartphone-forwarding mode is missing") from err
-    state = data.get("state") or FORWARDING_STATE_BY_CODE.get(mode, "unknown")
+        return _normalized_smartphone_forwarding(
+            data["enabled"],
+            data["enabled"],
+            raw=data.get("raw"),
+        )
+    normalized = coerce_forwarding_mode_state(data.get("mode"), data.get("state"))
+    if normalized["mode"] is None:
+        raise C300XAgentApiResponseError("smartphone-forwarding mode is missing")
     return {
-        "mode": mode,
-        "state": str(state),
+        "mode": normalized["mode"],
+        "state": normalized["state"],
         "raw": data.get("raw"),
+    }
+
+
+def _normalized_smartphone_forwarding(
+    mode: Any,
+    state: Any,
+    *,
+    raw: Any,
+) -> dict[str, Any]:
+    normalized = coerce_forwarding_mode_state(mode, state)
+    return {
+        "mode": normalized["mode"],
+        "state": normalized["state"],
+        "raw": raw,
     }
 
 

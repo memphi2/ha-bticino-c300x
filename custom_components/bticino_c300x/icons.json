@@ -103,8 +103,8 @@
       "ipv6_firewall_patch": {
         "default": "mdi:shield-link-variant"
       },
-      "smartphone_forwarding": {
-        "default": "mdi:cellphone-arrow-down"
+      "homeassistant_user_patch": {
+        "default": "mdi:account-wrench"
       }
     }
   },

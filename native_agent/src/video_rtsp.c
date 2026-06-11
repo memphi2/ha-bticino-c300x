@@ -304,6 +304,22 @@ void c300x_video_stop(struct c300x_video *video)
     c300x_media_session_stop(video);
 }
 
+int c300x_video_doorbell_call_answer(struct c300x_video *video, int include_audio)
+{
+    if (video == NULL || !video->enabled) {
+        return 0;
+    }
+    return c300x_media_ring_call_answer(video, include_audio != 0) ? 1 : 0;
+}
+
+void c300x_video_doorbell_call_hangup(struct c300x_video *video)
+{
+    if (video == NULL) {
+        return;
+    }
+    c300x_media_ring_call_hangup(video);
+}
+
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds)
 {
     if (video == NULL || !video->enabled) {

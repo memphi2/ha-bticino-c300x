@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Stop doorbell video"
       },
-      "ensure_homeassistant_user": {
-        "name": "Create Home Assistant media user"
-      },
       "delete_latest_voice_memo": {
         "name": "Delete latest voice memo"
       }
@@ -252,6 +249,9 @@
           "warning": "Warning",
           "error": "Error"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Device agent diagnostics"
       },
       "device_cpu": {
         "name": "Device CPU"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Legacy MQTT bridge"
       },
-      "smartphone_forwarding": {
-        "name": "Smartphone forwarding"
+      "homeassistant_user_patch": {
+        "name": "Home Assistant user patch"
       }
     }
   },

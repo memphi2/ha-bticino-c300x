@@ -243,3 +243,45 @@ def test_apply_packaged_agent_update_uploads_files_and_manifest(
     assert uploads[0]["final"] is True
     assert uploads[1]["sha256"] == sha256(manifest.read_bytes()).hexdigest()
     assert api.calls[-1] == ("apply", {"bundle_hash": "sha256:bundle"})
+
+
+def test_apply_packaged_agent_update_uses_legacy_safe_upload_chunks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    component = tmp_path / "bticino_c300x"
+    payload = component / "device_agent" / "armhf" / "c300x-agent-native"
+    manifest = component / "device_agent" / "bundle.json"
+    payload.parent.mkdir(parents=True)
+    payload.write_bytes(b"x" * 5000)
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest_data = {
+        "agent_version": "1.1.0",
+        "api_version": "1",
+        "bundle_hash": "sha256:bundle",
+        "files": [
+            {
+                "path": "device_agent/armhf/c300x-agent-native",
+                "sha256": sha256(payload.read_bytes()).hexdigest(),
+                "mode": "700",
+            }
+        ],
+    }
+    manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+    api = FakeUpdateApi()
+
+    monkeypatch.setattr(agent_update, "COMPONENT_DIR", component)
+    monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest)
+
+    assert asyncio.run(async_apply_packaged_agent_update(FakeHass(), api)) == {"ok": True}
+
+    payload_uploads = [
+        payload
+        for name, payload in api.calls
+        if name == "upload"
+        and payload["path"] == "device_agent/armhf/c300x-agent-native"
+    ]
+    assert len(payload_uploads) == 3
+    assert all(len(upload["data"]) <= 2048 for upload in payload_uploads)
+    assert [upload["offset"] for upload in payload_uploads] == [0, 2048, 4096]
+    assert payload_uploads[-1]["final"] is True

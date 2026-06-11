@@ -31,6 +31,8 @@ struct c300x_video_status {
     int ring_call_active;
     int ring_media_active;
     int ring_audio_active;
+    int ring_answer_requested;
+    int ring_answered;
     int home_call_running;
     int home_call_active;
     int home_call_answered;
@@ -67,6 +69,8 @@ void c300x_video_destroy(struct c300x_video *video);
 void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enabled);
 int c300x_video_activate(struct c300x_video *video, int include_audio);
 void c300x_video_stop(struct c300x_video *video);
+int c300x_video_doorbell_call_answer(struct c300x_video *video, int include_audio);
+void c300x_video_doorbell_call_hangup(struct c300x_video *video);
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds);
 void c300x_video_home_call_stop(struct c300x_video *video);
 int c300x_video_pollfds(struct c300x_video *video, struct pollfd *fds, int max_fds);

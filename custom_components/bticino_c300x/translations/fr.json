@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Arreter la camera de sonnette"
       },
-      "ensure_homeassistant_user": {
-        "name": "Creer l'utilisateur media Home Assistant"
-      },
       "delete_latest_voice_memo": {
         "name": "Supprimer le dernier memo vocal"
       }
@@ -252,6 +249,9 @@
           "warning": "Avertissement",
           "error": "Erreur"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Diagnostics de l'agent appareil"
       },
       "device_cpu": {
         "name": "CPU appareil"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Bridge MQTT legacy"
       },
-      "smartphone_forwarding": {
-        "name": "Renvoi smartphone"
+      "homeassistant_user_patch": {
+        "name": "Patch utilisateur Home Assistant"
       }
     }
   },

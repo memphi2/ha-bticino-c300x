@@ -1,0 +1,256 @@
+"""HA-side C300X ring-call talkback helpers."""
+
+from __future__ import annotations
+
+import asyncio
+import random
+import socket
+import struct
+import time
+from fractions import Fraction
+from pathlib import Path
+from typing import Any
+
+from homeassistant.exceptions import HomeAssistantError
+
+_TALKBACK_RTP_PORT = 40004
+_TALKBACK_READY_TIMEOUT_SECONDS = 5.0
+_TALKBACK_SAMPLE_RATE = 8000
+_TALKBACK_FRAME_SAMPLES = 160
+_ANNOUNCEMENT_PREROLL_SECONDS = 1.0
+
+
+async def async_play_announcement_when_ready(
+    entry: Any,
+    host: str,
+    source: Path,
+) -> None:
+    """Wait for ring-call talkback and play one HA-local announcement file."""
+
+    await _async_wait_talkback_ready(entry)
+    await _async_play_announcement(host, source)
+
+
+async def _async_wait_talkback_ready(entry: Any) -> None:
+    deadline = asyncio.get_running_loop().time() + _TALKBACK_READY_TIMEOUT_SECONDS
+    last_status: dict[str, Any] | None = None
+    while asyncio.get_running_loop().time() < deadline:
+        status = await entry.runtime_data.api.async_doorbell_call_status()
+        last_status = status if isinstance(status, dict) else None
+        if (
+            last_status is not None
+            and last_status.get("answered") is True
+            and last_status.get("audio_active") is True
+        ):
+            return
+        await asyncio.sleep(0.2)
+    raise HomeAssistantError(
+        "C300X talkback was not ready for announcement playback"
+    )
+
+
+async def _async_play_announcement(host: str, source: Path) -> None:
+    """Play one HA-local announcement file into the C300X talkback RTP port."""
+
+    try:
+        await asyncio.to_thread(_play_announcement_sync, host, source)
+    except HomeAssistantError:
+        raise
+    except Exception as err:
+        raise HomeAssistantError("C300X announcement playback failed") from err
+
+
+def _play_announcement_sync(host: str, source: Path) -> None:
+    try:
+        import av
+        from av.audio.fifo import AudioFifo
+        from av.audio.resampler import AudioResampler
+    except ImportError as err:
+        raise HomeAssistantError("PyAV is not installed on Home Assistant") from err
+
+    sequence = random.randrange(0, 65536)
+    timestamp = random.randrange(0, 2**32)
+    ssrc = random.randrange(1, 2**32)
+    marker = True
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    target = (host, _TALKBACK_RTP_PORT)
+    encoder = _create_speex_encoder(av)
+    encoder.sample_rate = _TALKBACK_SAMPLE_RATE
+    encoder.layout = "mono"
+    encoder.format = "s16"
+    encoder.time_base = Fraction(1, _TALKBACK_SAMPLE_RATE)
+    encoder.options = {"vbr": "on"}
+    encoder.open()
+    fifo = AudioFifo()
+    resampler = AudioResampler(
+        format="s16",
+        layout="mono",
+        rate=_TALKBACK_SAMPLE_RATE,
+    )
+    try:
+        sequence, timestamp, marker = _send_talkback_silence_preroll(
+            av,
+            encoder,
+            sock,
+            target,
+            sequence,
+            timestamp,
+            ssrc,
+            marker,
+        )
+        with av.open(str(source)) as container:
+            audio_stream = next(
+                (stream for stream in container.streams if stream.type == "audio"),
+                None,
+            )
+            if audio_stream is None:
+                raise HomeAssistantError("C300X announcement file has no audio stream")
+            for frame in container.decode(audio_stream):
+                for resampled in resampler.resample(frame):
+                    fifo.write(resampled)
+                    sequence, timestamp, marker = _send_ready_talkback_frames(
+                        encoder,
+                        fifo,
+                        sock,
+                        target,
+                        sequence,
+                        timestamp,
+                        ssrc,
+                        marker,
+                    )
+            while fifo.samples:
+                frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
+                if frame is None:
+                    break
+                sequence, timestamp, marker = _send_encoded_talkback_frame(
+                    encoder,
+                    frame,
+                    sock,
+                    target,
+                    sequence,
+                    timestamp,
+                    ssrc,
+                    marker,
+                )
+        for packet in encoder.encode(None):
+            payload = bytes(packet)
+            if not payload:
+                continue
+            rtp = _build_talkback_rtp_packet(payload, sequence, timestamp, ssrc, marker)
+            sock.sendto(rtp, target)
+            sequence = (sequence + 1) & 0xFFFF
+            timestamp = (
+                timestamp + max(1, int(getattr(packet, "duration", None) or _TALKBACK_FRAME_SAMPLES))
+            ) & 0xFFFFFFFF
+            marker = False
+    finally:
+        sock.close()
+
+
+def _send_talkback_silence_preroll(
+    av_module: Any,
+    encoder: Any,
+    sock: socket.socket,
+    target: tuple[str, int],
+    sequence: int,
+    timestamp: int,
+    ssrc: int,
+    marker: bool,
+) -> tuple[int, int, bool]:
+    frames = int(_ANNOUNCEMENT_PREROLL_SECONDS * _TALKBACK_SAMPLE_RATE / _TALKBACK_FRAME_SAMPLES)
+    for _ in range(frames):
+        frame = av_module.AudioFrame(
+            format="s16",
+            layout="mono",
+            samples=_TALKBACK_FRAME_SAMPLES,
+        )
+        frame.sample_rate = _TALKBACK_SAMPLE_RATE
+        frame.planes[0].update(bytes(frame.planes[0].buffer_size))
+        sequence, timestamp, marker = _send_encoded_talkback_frame(
+            encoder,
+            frame,
+            sock,
+            target,
+            sequence,
+            timestamp,
+            ssrc,
+            marker,
+        )
+    return sequence, timestamp, marker
+
+
+def _send_ready_talkback_frames(
+    encoder: Any,
+    fifo: Any,
+    sock: socket.socket,
+    target: tuple[str, int],
+    sequence: int,
+    timestamp: int,
+    ssrc: int,
+    marker: bool,
+) -> tuple[int, int, bool]:
+    while fifo.samples >= _TALKBACK_FRAME_SAMPLES:
+        frame = fifo.read(_TALKBACK_FRAME_SAMPLES)
+        if frame is None:
+            break
+        sequence, timestamp, marker = _send_encoded_talkback_frame(
+            encoder,
+            frame,
+            sock,
+            target,
+            sequence,
+            timestamp,
+            ssrc,
+            marker,
+        )
+    return sequence, timestamp, marker
+
+
+def _send_encoded_talkback_frame(
+    encoder: Any,
+    frame: Any,
+    sock: socket.socket,
+    target: tuple[str, int],
+    sequence: int,
+    timestamp: int,
+    ssrc: int,
+    marker: bool,
+) -> tuple[int, int, bool]:
+    samples = max(1, int(getattr(frame, "samples", _TALKBACK_FRAME_SAMPLES) or _TALKBACK_FRAME_SAMPLES))
+    for packet in encoder.encode(frame):
+        payload = bytes(packet)
+        if not payload:
+            continue
+        rtp = _build_talkback_rtp_packet(payload, sequence, timestamp, ssrc, marker)
+        sock.sendto(rtp, target)
+        sequence = (sequence + 1) & 0xFFFF
+        timestamp = (
+            timestamp + max(1, int(getattr(packet, "duration", None) or samples))
+        ) & 0xFFFFFFFF
+        marker = False
+        time.sleep(samples / _TALKBACK_SAMPLE_RATE)
+    return sequence, timestamp, marker
+
+
+def _create_speex_encoder(av_module: Any) -> Any:
+    """Return a Speex encoder using the codec name available in this runtime."""
+
+    last_error: Exception | None = None
+    for codec_name in ("speex", "libspeex"):
+        try:
+            return av_module.CodecContext.create(codec_name, "w")
+        except Exception as err:  # noqa: BLE001
+            last_error = err
+    raise HomeAssistantError("Speex encoding is not available on Home Assistant") from last_error
+
+
+def _build_talkback_rtp_packet(
+    payload: bytes,
+    sequence: int,
+    timestamp: int,
+    ssrc: int,
+    marker: bool,
+) -> bytes:
+    marker_payload = 97 | (0x80 if marker else 0)
+    header = struct.pack("!BBHII", 0x80, marker_payload, sequence, timestamp, ssrc)
+    return header + payload

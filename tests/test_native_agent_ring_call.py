@@ -120,12 +120,19 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "bridge_instance_uuid(bridge, bridge->app_instance_uuid" in setup_body
     assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
+    assert '"a=rtpmap:96 AV1/90000\\r\\n"' in setup_body
     assert "start_bt_av_media(bridge)" in media_bridge
     assert "request_ring_answer_if_active" not in start_body
     assert "sdp_audio_video" in rtsp_body
     assert "sdp_ring_audio_video" in rtsp_body
     assert "sdp_home_call_audio" in rtsp_body
     assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_body
+    assert '"a=fmtp:110 vbr=on\\r\\n"' in rtsp_body
+    assert rtsp_body.count('"a=fmtp:96 profile-level-id=42801F\\r\\n"') >= 3
+    assert rtsp_body.count('"a=rtcp-fb:* trr-int 5000\\r\\n"') >= 3
+    assert rtsp_body.count('"a=rtcp-fb:* ccm tmmbr\\r\\n"') >= 3
+    assert rtsp_body.count('"a=rtcp-fb:96 nack pli\\r\\n"') >= 3
+    assert rtsp_body.count('"a=rtcp-fb:96 ccm fir\\r\\n"') >= 3
     assert '"m=audio 0 RTP/AVP 96\\r\\n"' not in rtsp_body
     assert "bool home_call_audio = home_call_active_locked(&g_bridge);" in rtsp_body
     assert "sdp = home_call_audio" in rtsp_body
@@ -139,7 +146,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         media_bridge.index("static bool stop_ring_call_if_active")
     ]
     assert "active = ring_call_active_locked(bridge);" in answer_request_body
-    assert "active && audio" not in answer_request_body
+    assert "active && !bridge->ring_answered" in answer_request_body
     assert "bridge->ring_answer_requested = true;" in media_bridge
     assert rtsp_body.index("request_home_call_media_if_active") < rtsp_body.index(
         "request_ring_answer_if_active"
@@ -436,6 +443,8 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         "ring_call_active",
         "ring_media_active",
         "ring_audio_active",
+        "ring_answer_requested",
+        "ring_answered",
         "home_call_running",
         "home_call_active",
         "home_call_answered",
@@ -467,6 +476,78 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert '\\"ring_active\\":true' in activate_body
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "ring")' in video
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "home_call")' in video
+
+
+def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    video = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
+        encoding="utf-8"
+    )
+    video_header = (ROOT / "native_agent" / "src" / "video_rtsp.h").read_text(
+        encoding="utf-8"
+    )
+    media_header = (ROOT / "native_agent" / "src" / "media_bridge.h").read_text(
+        encoding="utf-8"
+    )
+    http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+
+    answer_bridge_body = media_bridge[
+        media_bridge.index("bool c300x_media_ring_call_answer") :
+        media_bridge.index("void c300x_media_ring_call_hangup")
+    ]
+    hangup_bridge_body = media_bridge[
+        media_bridge.index("void c300x_media_ring_call_hangup") :
+        media_bridge.index("bool c300x_media_talkback_running")
+    ]
+    answer_video_body = video[
+        video.index("int c300x_video_doorbell_call_answer") :
+        video.index("void c300x_video_doorbell_call_hangup")
+    ]
+    hangup_video_body = video[
+        video.index("void c300x_video_doorbell_call_hangup") :
+        video.index("int c300x_video_home_call_start")
+    ]
+    answer_http_body = http[
+        http.index("static void handle_doorbell_call_answer") :
+        http.index("static void handle_doorbell_call_hangup")
+    ]
+    hangup_http_body = http[
+        http.index("static void handle_doorbell_call_hangup") :
+        http.index("static void handle_doorbell_call_capture")
+    ]
+    router_body = http[
+        http.index('"/api/v1/video/doorbell/actions/stop"') :
+        http.index('"/api/v1/calls/home"', http.index('"/api/v1/video/doorbell/actions/stop"'))
+    ]
+
+    assert "int ring_answer_requested;" in video_header
+    assert "int ring_answered;" in video_header
+    assert "bool c300x_media_ring_call_answer(struct c300x_video *video, bool audio);" in media_header
+    assert "void c300x_media_ring_call_hangup(struct c300x_video *video);" in media_header
+    assert "int c300x_video_doorbell_call_answer(struct c300x_video *video, int include_audio);" in video_header
+    assert "void c300x_video_doorbell_call_hangup(struct c300x_video *video);" in video_header
+    assert "request_ring_answer_if_active(&g_bridge, audio)" in answer_bridge_body
+    assert "send_ring_response" not in answer_bridge_body
+    assert "build_ring_sdp" not in answer_bridge_body
+    assert "c300x_media_session_stop(video);" in hangup_bridge_body
+    assert "stop_ring_call_if_active" not in hangup_bridge_body
+    assert "c300x_media_ring_call_answer(video, include_audio != 0)" in answer_video_body
+    assert "c300x_media_ring_call_hangup(video);" in hangup_video_body
+    assert "c300x_video_doorbell_call_answer(runtime->video, audio)" in answer_http_body
+    assert '\\"ring_call_not_active\\"' in answer_http_body
+    assert "c300x_video_doorbell_call_hangup(runtime->video);" in hangup_http_body
+    for path in (
+        "/api/v1/calls/doorbell/status",
+        "/api/v1/calls/doorbell/actions/answer",
+        "/api/v1/calls/doorbell/actions/hangup",
+        "/api/v1/calls/doorbell/actions/capture",
+    ):
+        assert path in router_body
+    assert '\\"capture_supported\\":false' in http
+    assert '\\"capture_not_supported\\"' in http
+    assert '\\"doorbell_call\\":{\\"supported\\":%s,\\"answer\\":true,\\"hangup\\":true,\\"status\\":true,\\"capture\\":false}' in http
 
 
 def test_native_agent_doorbell_events_include_device_media_state() -> None:

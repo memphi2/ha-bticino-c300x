@@ -51,6 +51,9 @@ class _FakeHass:
         self.http = _FakeHttp()
         self.extra_module_urls: list[str] = []
 
+    async def async_add_executor_job(self, func: Any, *args: Any) -> Any:
+        return func(*args)
+
 
 def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> None:
     http_module = types.ModuleType("homeassistant.components.http")
@@ -235,12 +238,12 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'throw new Error("entity is required")' not in source
     assert 'entity: config.entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID)' in source
     assert 'getGridOptions()' in source
-    assert "rows: 4" in source
+    assert "rows: 5" in source
     assert "columns: 12" in source
-    assert "min_rows: 4" in source
-    assert "max_rows: 4" in source
+    assert "min_rows: 5" in source
+    assert "max_rows: 5" in source
     assert "min_columns: 6" in source
-    assert "return this._isHomeCallMode() ? 1 : 6;" in source
+    assert "return this._isHomeCallMode() ? 1 : 7;" in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
     assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
     assert 'preview: true' in source
@@ -252,16 +255,28 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'config_entry_id' in source
     assert "_autoRelatedEntityId" in source
     assert "_firstRelatedEntityId" in source
+    assert "translation_key" in source
+    assert "unique_id" in source
+    assert "C300X_DOORBELL_STATE_TRANSLATION_KEY" in source
+    assert "C300X_HOME_CALL_TRANSLATION_KEY" in source
     assert ".filter((entityId)" not in source
     assert ".sort((left, right)" not in source
     assert 'name: "state_entity"' not in source
     assert 'name: "state_label"' not in source
+    assert 'name: "doorbell_state_entity"' in source
+    assert 'name: "home_call_entity"' in source
+    assert 'selector: { entity: { domain: "sensor" } }' in source
+    assert 'selector: { entity: { domain: "binary_sensor" } }' in source
+    assert "doorbell_state_entity: entityId" in source
+    assert "home_call_entity: entityId" in source
     assert 'customElements.define("c300x-doorbell-call-card-editor"' in source
     assert 'customElements.get(C300X_CARD_TAG)' in source
     for language in ("en", "de", "fr", "it"):
         assert f"  {language}: {{" in source
-    assert "state_entity" not in source
+    assert '"state_entity"' not in source
     assert "state_label" not in source
+    assert "_config.doorbell_state_entity" in source
+    assert "_config.home_call_entity" in source
     assert "bticino_c300x_doorbell_camera" in source
     assert "script.c300x_stop_doorbell_call_simulation" not in source
     assert "<ha-button" not in source
@@ -274,6 +289,12 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
 
     assert "window.customCards.push" in metadata_source
+    assert "doorbell_state_entity: entityId" in metadata_source
+    assert "home_call_entity: entityId" in metadata_source
+    assert "c300xMetadataRegistryEntity" in metadata_source
+    assert "c300xMetadataRelatedCamera" in metadata_source
+    assert "translation_key" in metadata_source
+    assert "unique_id" in metadata_source
     assert "getEntitySuggestion: c300xMetadataEntitySuggestion" in metadata_source
     assert "customElements.define" not in metadata_source
     assert "extends HTMLElement" not in metadata_source
@@ -309,11 +330,24 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'attributes.external_owner === "external_media"' in source
 
 
-def test_bundled_card_answers_only_real_ring_media() -> None:
+def test_bundled_card_answers_pending_doorbell_state_without_camera_owner() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
 
     assert "_isRingCallPending(entity, cameraEntity)" in source
     assert "_isRingCallAvailable(entity, cameraEntity)" in source
+    assert source.index("this._isRingCallPending(entity, cameraEntity)") < source.index("if (active) {")
     assert 'attributes.video_owner === "ring"' in source
-    assert 'if (entity?.state === "ringing" || entity?.state === "doorbell_pressed")' not in source
-    assert 'return "answer";\n    }\n    return "stream";' not in source
+    assert 'state === "ringing" || state === "doorbell_pressed"' in source
+    assert "&& !this._isExternalDoorstationMedia(cameraEntity)" in source
+
+
+def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+
+    assert "async _ensureDoorbellPreview()" in source
+    assert 'doorstationAction === "answer"' in source
+    assert "_isRingPreviewAvailable(cameraEntity)" in source
+    assert 'attributes.video_owner === "ring"' in source
+    assert "this._ringPreviewActive = true;" in source
+    assert "this._startTalkback({ microphone: false, receiveAudio: false })" in source
+    assert "} else if (receiveAudio) {" in source

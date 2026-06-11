@@ -133,6 +133,50 @@ ORIGINAL_MEMO_PAGE = "\n".join(
         "",
     ]
 )
+ORIGINAL_CALL_BLOCK_POPUP = "\n".join(
+    [
+        "import QtQuick 1.1",
+        "import BtObjects 2.0",
+        "",
+        "Item {",
+        "    id: root",
+        "    property variant answeringMachine",
+        "",
+        "    QtObject {",
+        "        id: privateProps",
+        "        property variant modes: [",
+        "            {icon: \"../../images/call/icon_call-ok.svg\", message: qsTr(\"Calls forwarded to all the smartphones\") + trsl.empty},",
+        "            {icon: \"../../images/call/icon_call-home.svg\", message: qsTr(\"Calls forwarded to the smartphones in the home\") + trsl.empty},",
+        "            {icon: \"../../images/call/icon_call-ko.svg\", message: qsTr(\"Calls blocked to all the smartphones\") + trsl.empty}",
+        "        ]",
+        "    }",
+        "",
+        "    Repeater {",
+        "        id: buttonsColumn",
+        "        function blockCallFunction(action) {",
+        "            switch (action) {",
+        "            case AnsweringMachine.DisableAll:",
+        "            case AnsweringMachine.InHouseOnly:",
+        "            case AnsweringMachine.EnableAll:",
+        "                answeringMachine.ipcCallMode = action",
+        "                privateProps.selectedMode = action",
+        "                pageContent.sourceComponent = message",
+        "                break;",
+        "            default:",
+        "                dismissPopup()",
+        "            }",
+        "        }",
+        "        model: [",
+        "            {text: qsTr(\"Block calls to all the smartphones\") + trsl.empty, action: AnsweringMachine.DisableAll},",
+        "            //{text: qsTr(\"Forward calls to the smartphones in the home\") + trsl.empty, action: AnsweringMachine.InHouseOnly},",
+        "            {text: qsTr(\"Forward calls to all the smartphones\") + trsl.empty, action: AnsweringMachine.EnableAll},",
+        "            {text: qsTr(\"Cancel\") + trsl.empty, action: -1},",
+        "        ]",
+        "    }",
+        "}",
+        "",
+    ]
+)
 ORIGINAL_EVENT_MANAGER = "\n".join(
     [
         "import QtQuick 1.1",
@@ -206,6 +250,7 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
     assert (backup_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (backup_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (backup_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert not (backup_dir / "Components/Settings/CallBlockPopup.qml").exists()
     assert (backup_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
     assert not (backup_dir / "Alarm.qml").exists()
     assert not (backup_dir / "HomeAssistant.qml").exists()
@@ -220,6 +265,7 @@ def test_qml_patch_keeps_original_backup_across_reapply(tmp_path: Path) -> None:
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert (gui_dir / "Components/Settings/CallBlockPopup.qml").read_text() == ORIGINAL_CALL_BLOCK_POPUP
     assert "c300xNotifyMediaClosed()" in (gui_dir / "EventManager.qml").read_text()
     assert not (gui_dir / "Alarm.qml").exists()
     assert not (gui_dir / "HomeAssistant.qml").exists()
@@ -244,7 +290,26 @@ def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> Non
     assert status["patched"] is True
     assert status["core_state"] == "patched"
     assert status["core_patched"] is True
+    assert status["inhouse_state"] == "original"
+    assert status["inhouse_patched"] is False
     _assert_complete_gui_patch(gui_dir)
+
+
+def test_qml_inhouse_apply_installs_call_forwarding_patch(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "inhouse-apply")
+
+    assert status["state"] == "original"
+    assert status["patched"] is False
+    assert status["core_state"] == "original"
+    assert status["core_patched"] is False
+    assert status["inhouse_state"] == "patched"
+    assert status["inhouse_patched"] is True
+    _assert_inhouse_gui_patch(gui_dir)
 
 
 def test_qml_core_apply_installs_only_media_hook(tmp_path: Path) -> None:
@@ -300,6 +365,7 @@ def test_qml_restore_all_removes_feature_and_core_patches(tmp_path: Path) -> Non
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE
+    assert (gui_dir / "Components/Settings/CallBlockPopup.qml").read_text() == ORIGINAL_CALL_BLOCK_POPUP
     assert (gui_dir / "EventManager.qml").read_text() == ORIGINAL_EVENT_MANAGER
 
 
@@ -584,6 +650,8 @@ def _write_original_gui(gui_dir: Path) -> None:
     (gui_dir / "MainApp.qml").write_text(ORIGINAL_MAIN_APP)
     (gui_dir / "HomePage.qml").write_text(ORIGINAL_HOME_PAGE)
     (gui_dir / "MemoPage.qml").write_text(ORIGINAL_MEMO_PAGE)
+    (gui_dir / "Components/Settings").mkdir(parents=True, exist_ok=True)
+    (gui_dir / "Components/Settings/CallBlockPopup.qml").write_text(ORIGINAL_CALL_BLOCK_POPUP)
     (gui_dir / "EventManager.qml").write_text(ORIGINAL_EVENT_MANAGER)
 
 
@@ -682,6 +750,22 @@ def _assert_complete_gui_patch(
     assert main_app.count('id: haPage') == 1
     assert main_app.count('sourceUrl: "Alarm.qml"') == 1
     assert main_app.count('sourceUrl: "HomeAssistant.qml"') == 1
+
+
+def _assert_inhouse_gui_patch(gui_dir: Path) -> None:
+    call_block_popup = (gui_dir / "Components/Settings/CallBlockPopup.qml").read_text()
+    assert "original" not in call_block_popup
+    assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
+    assert "Chiamate inoltrate a Home Assistant" in call_block_popup
+    assert "Appels renvoyes vers Home Assistant" in call_block_popup
+    assert "Calls forwarded to Home Assistant" in call_block_popup
+    assert "Anrufe an Home Assistant" in call_block_popup
+    assert "Inoltra chiamate a Home Assistant" in call_block_popup
+    assert "Renvoyer les appels vers Home Assistant" in call_block_popup
+    assert "Forward calls to Home Assistant" in call_block_popup
+    assert "action: AnsweringMachine.InHouseOnly" in call_block_popup
+    assert 'qsTr("Forward calls to the smartphones in the home")' not in call_block_popup
+    assert "answeringMachine.ipcCallMode = action" in call_block_popup
 
 
 def _fake_mount_env(tmp_path: Path, mount_log: Path) -> dict[str, str]:

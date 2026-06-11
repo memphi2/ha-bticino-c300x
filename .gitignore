@@ -11,6 +11,14 @@ htmlcov/
 .DS_Store
 captures/
 tools/
+codex-backups/
+*.pcap
+*.pcapng
+*.har
+*.mp4
+*.wav
+*.raw.wav
+*.processed.wav
 
 # Local native agent config with secrets
 native_agent/config.json

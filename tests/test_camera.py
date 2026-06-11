@@ -91,11 +91,13 @@ except ImportError:  # pragma: no cover - only used by the lightweight stub fall
 
 from custom_components.bticino_c300x import camera as camera_module
 from custom_components.bticino_c300x.camera import (
+    DOORSTATION_AUDIO_GAIN,
     STILL_IMAGE_BYTES,
     STILL_IMAGE_CONTENT_TYPE,
     TALKBACK_CODEC,
     TALKBACK_RTP_PAYLOAD_TYPE,
     C300XDoorbellCamera,
+    _apply_audio_gain,
     _filter_link_local_sdp_candidates,
     _NativeWebRTCSession,
     _new_restarting_rtsp_audio_track,
@@ -663,7 +665,7 @@ def test_doorbell_camera_stream_source_warms_video_once() -> None:
 
     assert source.startswith("rtsp://127.0.0.1:")
     assert source.endswith("/doorbell-video")
-    assert entry.runtime_data.api.activate_calls == [True]
+    assert entry.runtime_data.api.activate_calls == [False]
 
 
 def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:
@@ -1475,6 +1477,7 @@ def test_restarting_rtsp_tracks_share_one_audio_video_reader() -> None:
 
     async def _run() -> tuple[_Frame, _Frame]:
         media, video_track, audio_track = _new_restarting_rtsp_tracks(
+            SimpleNamespace(),
             _VideoTrack,
             _AudioTrack,
             Exception,
@@ -1706,6 +1709,51 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     assert camera._bridge_status["external_media_active"] is False
 
 
+def test_doorbell_camera_closes_ring_webrtc_session_on_video_closed_event() -> None:
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _FakeHass:
+        def __init__(self) -> None:
+            self.tasks: list[Any] = []
+
+        def async_create_task(self, coro: Any) -> Any:
+            task = asyncio.create_task(coro)
+            self.tasks.append(task)
+            return task
+
+    async def _run() -> tuple[C300XDoorbellCamera, _Peer]:
+        entry = _FakeEntry()
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        hass = _FakeHass()
+        camera.hass = hass  # type: ignore[assignment]
+        peer = _Peer()
+        session = _NativeWebRTCSession(peer)
+        session.ring_call = True
+        camera._webrtc_sessions["ring-session"] = session
+
+        camera._handle_agent_event(
+            SimpleNamespace(
+                data={
+                    "entry_id": entry.entry_id,
+                    "event_key": "doorbell_media_closed",
+                }
+            )
+        )
+        await asyncio.gather(*hass.tasks)
+        return camera, peer
+
+    camera, peer = asyncio.run(_run())
+
+    assert "ring-session" not in camera._webrtc_sessions
+    assert peer.closed is True
+    assert camera._entry.runtime_data.api.stop_calls == 0
+
+
 def test_doorbell_camera_applies_home_call_answered_event_without_polling() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
@@ -1899,6 +1947,50 @@ def test_doorbell_camera_does_not_infer_runtime_video_window() -> None:
 
     assert attrs["video_window_available"] is False
     assert "video_active_until" not in attrs
+
+
+def test_doorbell_audio_gain_is_applied_to_decoded_webrtc_frames() -> None:
+    import numpy as np
+
+    class _FakeFormat:
+        name = "s16"
+
+    class _FakeLayout:
+        name = "mono"
+
+    class _FakeAudioFrame:
+        format = _FakeFormat()
+        layout = _FakeLayout()
+        sample_rate = 8000
+        pts = 160
+        time_base = "time-base"
+
+        def __init__(self, samples: Any) -> None:
+            self.samples = samples
+
+        def to_ndarray(self) -> Any:
+            return self.samples
+
+    class _FakeAudioFrameFactory:
+        @staticmethod
+        def from_ndarray(samples: Any, *, format: str, layout: str) -> Any:
+            assert format == "s16"
+            assert layout == "mono"
+            return _FakeAudioFrame(samples)
+
+    frame = _FakeAudioFrame(np.array([[1000, -1000, 20000]], dtype=np.int16))
+
+    boosted = _apply_audio_gain(
+        SimpleNamespace(AudioFrame=_FakeAudioFrameFactory),
+        frame,
+        DOORSTATION_AUDIO_GAIN,
+    )
+
+    assert boosted is not frame
+    assert boosted.to_ndarray().tolist() == [[3000, -3000, 32767]]
+    assert boosted.sample_rate == frame.sample_rate
+    assert boosted.pts == frame.pts
+    assert boosted.time_base == frame.time_base
 
 
 async def _rtsp_options_server(

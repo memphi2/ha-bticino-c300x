@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_HOME_ASSISTANT_VERSION = "2026.5.0"
-CURRENT_RELEASE_VERSION = "1.0.2"
+CURRENT_RELEASE_VERSION = "1.1.0"
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
 TEXT_SUFFIXES = {
     ".c",

@@ -36,7 +36,7 @@ async def async_run_wyoming_ring_analysis(
     host = wyoming_host.strip()
     if not host:
         raise HomeAssistantError("C300X Wyoming Whisper host is required")
-    wav_file = _ring_wav_path(hass, wav_path)
+    wav_file = await _async_ring_wav_path(hass, wav_path)
     target = _result_path(hass, result_path)
     wav = await _async_read_wav(hass, wav_file)
     transcript = await _async_wyoming_transcribe(
@@ -62,6 +62,12 @@ def _ring_wav_path(hass: Any, wav_path: str | None) -> Path:
         return _latest_ring_wav_path(hass)
     source = _safe_c300x_path(hass, Path(wav_path).expanduser(), "ring analysis WAV")
     return _validate_ring_wav(source)
+
+
+async def _async_ring_wav_path(hass: Any, wav_path: str | None) -> Path:
+    if hasattr(hass, "async_add_executor_job"):
+        return await hass.async_add_executor_job(_ring_wav_path, hass, wav_path)
+    return await asyncio.to_thread(_ring_wav_path, hass, wav_path)
 
 
 def _latest_ring_wav_path(hass: Any) -> Path:

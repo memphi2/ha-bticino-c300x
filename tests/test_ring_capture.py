@@ -37,11 +37,13 @@ class _FakeConfig:
 class _FakeHass:
     root: Path
     config: _FakeConfig = field(init=False)
+    executor_jobs: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.config = _FakeConfig(self.root)
 
     async def async_add_executor_job(self, func: Any, *args: Any) -> Any:
+        self.executor_jobs.append(getattr(func, "__name__", str(func)))
         return func(*args)
 
 
@@ -169,6 +171,54 @@ def test_announcement_path_accepts_ha_www_alias(tmp_path: Path) -> None:
     announcement.write_bytes(b"fake")
 
     assert _announcement_input_path(hass, "/www/c300x/announce.wav") == announcement
+
+
+def test_capture_resolves_announcement_path_in_executor(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    announcement = tmp_path / "config" / "www" / "c300x" / "announce.wav"
+    announcement.parent.mkdir(parents=True)
+    announcement.write_bytes(b"fake")
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _ready(_rtsp_url: str) -> None:
+        return None
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _announcement(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_wait_rtsp_ready",
+        _ready,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_run_ffmpeg",
+        _ffmpeg,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_play_announcement_when_ready",
+        _announcement,
+    )
+
+    asyncio.run(
+        async_capture_doorbell_ring_call(
+            hass,
+            entry,
+            output_path=str(target),
+            announcement_path=str(announcement),
+        )
+    )
+
+    assert "_announcement_input_path" in hass.executor_jobs
 
 
 def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

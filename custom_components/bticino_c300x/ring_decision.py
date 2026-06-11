@@ -35,7 +35,7 @@ async def async_evaluate_ring_analysis(
 ) -> RingAnalysisDecision:
     """Evaluate a local Whisper result without image/person guessing."""
 
-    result = _ring_result_path(hass, result_path)
+    result = await _async_ring_result_path(hass, result_path)
     decision = _ring_decision_path(hass, decision_path)
     payload = await _async_read_json(hass, result)
     phrase_match = _phrase_match(payload, expected_phrase=expected_phrase)
@@ -66,6 +66,12 @@ def _ring_result_path(hass: Any, result_path: str | None) -> Path:
     if not result.is_file():
         raise HomeAssistantError("C300X ring analysis result does not exist")
     return result
+
+
+async def _async_ring_result_path(hass: Any, result_path: str | None) -> Path:
+    if hasattr(hass, "async_add_executor_job"):
+        return await hass.async_add_executor_job(_ring_result_path, hass, result_path)
+    return await asyncio.to_thread(_ring_result_path, hass, result_path)
 
 
 def _ring_decision_path(hass: Any, decision_path: str | None) -> Path:

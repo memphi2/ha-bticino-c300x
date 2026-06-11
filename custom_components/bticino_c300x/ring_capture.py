@@ -43,7 +43,7 @@ async def async_capture_doorbell_ring_call(
     duration = _validate_duration(duration_seconds)
     target = _capture_output_path(hass, output_path)
     work_dir = _capture_work_dir(hass, wav_output_dir)
-    announcement = _announcement_input_path(hass, announcement_path)
+    announcement = await _async_announcement_input_path(hass, announcement_path)
     status = await entry.runtime_data.api.async_doorbell_video_status()
     rtsp_url = _rtsp_url_from_status(entry, status, include_audio=include_audio)
 
@@ -137,6 +137,19 @@ def _announcement_input_path(hass: Any, announcement_path: str | None) -> Path |
     if not source.is_file():
         raise HomeAssistantError("C300X announcement file does not exist")
     return source
+
+
+async def _async_announcement_input_path(
+    hass: Any,
+    announcement_path: str | None,
+) -> Path | None:
+    if hasattr(hass, "async_add_executor_job"):
+        return await hass.async_add_executor_job(
+            _announcement_input_path,
+            hass,
+            announcement_path,
+        )
+    return await asyncio.to_thread(_announcement_input_path, hass, announcement_path)
 
 
 def _safe_c300x_path(hass: Any, target: Path, path_kind: str) -> Path:

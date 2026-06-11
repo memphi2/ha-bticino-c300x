@@ -563,13 +563,13 @@ patch_call_block_popup() {
     require_clean_call_block_popup "$source_popup"
     awk '
         /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
-            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: \"Calls forwarded to Home Assistant\" + trsl.empty")
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: (trsl.language === \"de\" ? \"Anrufe an Home Assistant weitergeleitet\" : (trsl.language === \"it\" ? \"Chiamate inoltrate a Home Assistant\" : (trsl.language === \"fr\" ? \"Appels renvoyes vers Home Assistant\" : \"Calls forwarded to Home Assistant\"))) + trsl.empty")
             print
             message_patched=1
             next
         }
         /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
-            print "                    {text: \"Forward calls to Home Assistant\" + trsl.empty, action: AnsweringMachine.InHouseOnly},"
+            print "                    {text: (trsl.language === \"de\" ? \"Anrufe an Home Assistant\" : (trsl.language === \"it\" ? \"Inoltra chiamate a Home Assistant\" : (trsl.language === \"fr\" ? \"Renvoyer les appels vers Home Assistant\" : \"Forward calls to Home Assistant\"))) + trsl.empty, action: AnsweringMachine.InHouseOnly},"
             button_patched=1
             next
         }

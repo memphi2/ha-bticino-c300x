@@ -755,8 +755,15 @@ def _assert_complete_gui_patch(
 def _assert_inhouse_gui_patch(gui_dir: Path) -> None:
     call_block_popup = (gui_dir / "Components/Settings/CallBlockPopup.qml").read_text()
     assert "original" not in call_block_popup
-    assert 'message: "Calls forwarded to Home Assistant" + trsl.empty' in call_block_popup
-    assert '{text: "Forward calls to Home Assistant" + trsl.empty, action: AnsweringMachine.InHouseOnly}' in call_block_popup
+    assert "Anrufe an Home Assistant weitergeleitet" in call_block_popup
+    assert "Chiamate inoltrate a Home Assistant" in call_block_popup
+    assert "Appels renvoyes vers Home Assistant" in call_block_popup
+    assert "Calls forwarded to Home Assistant" in call_block_popup
+    assert "Anrufe an Home Assistant" in call_block_popup
+    assert "Inoltra chiamate a Home Assistant" in call_block_popup
+    assert "Renvoyer les appels vers Home Assistant" in call_block_popup
+    assert "Forward calls to Home Assistant" in call_block_popup
+    assert "action: AnsweringMachine.InHouseOnly" in call_block_popup
     assert 'qsTr("Forward calls to the smartphones in the home")' not in call_block_popup
     assert "answeringMachine.ipcCallMode = action" in call_block_popup
 

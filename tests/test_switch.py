@@ -101,6 +101,7 @@ from custom_components.bticino_c300x.api import (
 from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XFirewallPatchSwitch,
     C300XGuiFunctionPatchSwitch,
+    C300XHomeAssistantUserPatchSwitch,
     C300XIpv6FirewallPatchSwitch,
     C300XLegacyMqttBridgeSwitch,
     C300XMaintenanceNoAuthSwitch,
@@ -135,6 +136,7 @@ class _FakeApi:
         self.ipv6_firewall_config_enabled = True
         self.ipv6_firewall_enable_sets: list[bool] = []
         self.auth_config_reads = 0
+        self.device_user_status_reads = 0
         self.no_auth_sets: list[tuple[bool, str | None, str | None, bool | None]] = []
         self.maintenance_no_auth_sets: list[bool] = []
         self.mdns_sets: list[bool] = []
@@ -292,6 +294,15 @@ class _FakeApi:
             "ipv6_firewall_enabled": self.ipv6_firewall_config_enabled,
         }
 
+    async def async_device_user_status(self) -> dict[str, Any]:
+        self.device_user_status_reads += 1
+        return {
+            "homeassistant_user_present": True,
+            "routes_consistent": True,
+            "inhouse_binary_patch_applied": True,
+            "inhouse_qml_patch_applied": True,
+        }
+
     async def async_set_no_auth_enabled(
         self,
         enabled: bool,
@@ -438,6 +449,7 @@ class _FakeRuntimeData:
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
+    device_user_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -485,6 +497,18 @@ def test_maintenance_ssh_switch_stops_ssh() -> None:
 
     assert entry.runtime_data.api.ssh_sets == [False]
     assert entity.is_on is False
+
+
+def test_homeassistant_user_patch_refreshes_before_hass_is_bound() -> None:
+    entry = _FakeEntry()
+    entity = C300XHomeAssistantUserPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entry.runtime_data.api.device_user_status_reads == 1
+    assert entry.runtime_data.device_user_status["homeassistant_user_present"] is True
+    assert entity.available is True
+    assert entity.is_on is True
 
 
 def test_gui_function_patch_switch_uses_read_only_status() -> None:

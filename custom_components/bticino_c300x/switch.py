@@ -153,10 +153,13 @@ class C300XHomeAssistantUserPatchSwitch(C300XEntity, SwitchEntity):
         self._status = status
         self._attr_available = True
         self._entry.runtime_data.device_user_status = status
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
         from .repair_issues import async_sync_entry_repair_issues
 
-        async_sync_entry_repair_issues(self.hass, self._entry)
-        await async_refresh_agent_diagnostics(self.hass, self._entry)
+        async_sync_entry_repair_issues(hass, self._entry)
+        await async_refresh_agent_diagnostics(hass, self._entry)
         if write_state:
             self.async_write_ha_state()
 

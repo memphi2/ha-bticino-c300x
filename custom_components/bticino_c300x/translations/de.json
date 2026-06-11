@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Tuerkamera stoppen"
       },
-      "ensure_homeassistant_user": {
-        "name": "Home-Assistant-Media-User erstellen"
-      },
       "delete_latest_voice_memo": {
         "name": "Audio loeschen"
       }
@@ -324,6 +321,9 @@
       },
       "legacy_mqtt_bridge": {
         "name": "Legacy MQTT-Bridge"
+      },
+      "homeassistant_user_patch": {
+        "name": "Home Assistant User-Patch"
       },
       "smartphone_forwarding": {
         "name": "Weiterleitung"

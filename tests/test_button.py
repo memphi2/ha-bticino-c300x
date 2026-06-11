@@ -114,7 +114,6 @@ from custom_components.bticino_c300x.button import (
     C300XDeleteLatestVideoMessageButton,
     C300XDeleteLatestVoiceMemoButton,
     C300XDeviceActivationButton,
-    C300XEnsureHomeAssistantUserButton,
     C300XRebootButton,
     C300XReloadGuiButton,
     C300XRemoveAgentButton,
@@ -637,78 +636,6 @@ def test_stop_doorbell_video_button_requires_enabled_video() -> None:
 
         assert not any(
             isinstance(entity, C300XStopDoorbellVideoButton) for entity in entities
-        )
-
-    asyncio.run(_run())
-
-
-def test_ensure_homeassistant_user_button_requires_media_and_device_user() -> None:
-    async def _run() -> None:
-        api = _FakeMemoApi()
-        entry = _FakeEntry(
-            data={CONF_VIDEO_ENABLED: True},
-            runtime_data=_FakeRuntimeData(
-                capabilities={
-                    "device_user": {"supported": True},
-                    "maintenance": {
-                        "supported": True,
-                        "device_user_ensure": True,
-                    },
-                },
-                api=api,
-            ),
-        )
-        entities: list[Any] = []
-
-        await async_setup_entry(
-            _FakeHass(),  # type: ignore[arg-type]
-            entry,  # type: ignore[arg-type]
-            entities.extend,
-        )
-
-        button = next(
-            entity
-            for entity in entities
-            if isinstance(entity, C300XEnsureHomeAssistantUserButton)
-        )
-        assert button.available is True
-        button.hass = _FakeHass()
-
-        await button.async_press()
-
-        assert api.ensure_homeassistant_user_calls == 1
-        assert entry.runtime_data.device_user_status == {
-            "homeassistant_user_present": True,
-            "media_identity_available": True,
-            "routes_consistent": True,
-            "account_label": "Home Assistant",
-            "media_identity_source": "homeassistant",
-        }
-        assert api.ensure_homeassistant_user_labels == ["Home Assistant"]
-
-    asyncio.run(_run())
-
-
-def test_ensure_homeassistant_user_button_requires_enabled_video() -> None:
-    async def _run() -> None:
-        entry = _FakeEntry(
-            data={CONF_VIDEO_ENABLED: False},
-            runtime_data=_FakeRuntimeData(
-                capabilities={"device_user": {"supported": True}},
-                api=_FakeMemoApi(),
-            ),
-        )
-        entities: list[Any] = []
-
-        await async_setup_entry(
-            _FakeHass(),  # type: ignore[arg-type]
-            entry,  # type: ignore[arg-type]
-            entities.extend,
-        )
-
-        assert not any(
-            isinstance(entity, C300XEnsureHomeAssistantUserButton)
-            for entity in entities
         )
 
     asyncio.run(_run())

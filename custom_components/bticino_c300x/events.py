@@ -363,7 +363,7 @@ _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("button", "delete_latest_text_memo"),
         ("button", "delete_latest_voice_memo"),
     ),
-    "smartphone_forwarding.changed": (("switch", "smartphone_forwarding"),),
+    "smartphone_forwarding.changed": (("select", "smartphone_forwarding_mode"),),
     "ringer.muted": (("switch", "ringer_mute"),),
     "ringer.unmuted": (("switch", "ringer_mute"),),
     "doorbell.pressed": (

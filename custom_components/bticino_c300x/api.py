@@ -745,6 +745,18 @@ class C300XAgentApi:
         )
         return normalize_device_user_status(data)
 
+    async def async_restore_homeassistant_user_patch(self) -> dict[str, Any]:
+        """Restore the device-side Home Assistant user patch files from backups."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/maintenance/device-user/actions/restore-homeassistant-patch",
+            json_data={"confirm": "restore_hass_user_patch"},
+            extra_headers=self._maintenance_headers(),
+            request_timeout=max(self._timeout, 20.0),
+        )
+        return normalize_device_user_status(data)
+
     async def async_set_maintenance_no_auth_allowed(
         self,
         enabled: bool,
@@ -1425,6 +1437,35 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         )
         is True,
         "routes_consistent": _optional_bool(data.get("routes_consistent")) is True,
+        "inhouse_binary_patch_supported": _optional_bool(
+            data.get("inhouse_binary_patch_supported")
+        )
+        is True,
+        "inhouse_binary_patch_applied": _optional_bool(
+            data.get("inhouse_binary_patch_applied")
+        )
+        is True,
+        "inhouse_binary_patch_state": _optional_string(
+            data.get("inhouse_binary_patch_state")
+        ),
+        "inhouse_binary_patch_backup_present": _optional_bool(
+            data.get("inhouse_binary_patch_backup_present")
+        )
+        is True,
+        "inhouse_binary_patch_error": _optional_string(
+            data.get("inhouse_binary_patch_error")
+        ),
+        "inhouse_qml_patch_available": _optional_bool(
+            data.get("inhouse_qml_patch_available")
+        )
+        is True,
+        "inhouse_qml_patch_applied": _optional_bool(
+            data.get("inhouse_qml_patch_applied")
+        )
+        is True,
+        "inhouse_qml_patch_state": _optional_string(
+            data.get("inhouse_qml_patch_state")
+        ),
         "account_label": _optional_string(data.get("account_label")),
         "media_identity_source": _optional_string(data.get("media_identity_source")),
         "error": _optional_string(data.get("error")),

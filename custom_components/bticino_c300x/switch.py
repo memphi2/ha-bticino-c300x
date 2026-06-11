@@ -6,6 +6,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -15,9 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import (
     C300XAgentApiError,
-    C300XAgentApiResponseError,
     C300XAgentApiUnsupportedError,
-    normalize_smartphone_forwarding,
 )
 from .capabilities import auth_config_supported, maintenance_action_is_advertised
 from .const import (
@@ -28,9 +27,10 @@ from .const import (
     SIGNAL_MQTT_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from .device_user import homeassistant_account_label
 from .entity import C300XEntity, entry_config_value, supports_capability
+from .entity import entry_video_enabled
 from .event_payload import agent_event_key
-from .forwarding import coerce_forwarding_mode_state
 from .qml_patch import (
     async_apply_qml_patch_and_confirm,
     async_refresh_qml_patch_status,
@@ -48,12 +48,12 @@ async def async_setup_entry(
     """Set up C300X switches."""
 
     entities: list[SwitchEntity] = []
-    if supports_capability(entry, "smartphone_forwarding"):
-        entities.append(C300XSmartphoneForwardingSwitch(entry))
     if supports_capability(entry, "ringer"):
         entities.append(C300XRingerMuteSwitch(entry))
     if supports_capability(entry, "answering_machine"):
         entities.append(C300XAnsweringMachineSwitch(entry))
+    if entry_video_enabled(entry) and supports_capability(entry, "device_user"):
+        entities.append(C300XHomeAssistantUserPatchSwitch(entry))
     entities.append(C300XNoAuthSwitch(entry))
     entities.append(C300XMaintenanceNoAuthSwitch(entry))
     entities.append(C300XMdnsDiscoverySwitch(entry))
@@ -68,110 +68,97 @@ async def async_setup_entry(
         async_add_entities(entities)
 
 
-class C300XSmartphoneForwardingSwitch(C300XEntity, SwitchEntity):
-    """Switch for all-calls smartphone forwarding."""
+class C300XHomeAssistantUserPatchSwitch(C300XEntity, SwitchEntity):
+    """Apply or restore the full Home Assistant media-user patch."""
 
     _attr_should_poll = False
-    _attr_translation_key = "smartphone_forwarding"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "homeassistant_user_patch"
 
     def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "smartphone_forwarding")
-        self._mode: int | None = None
-        self._state = "unknown"
+        super().__init__(entry, "homeassistant_user_patch")
+        self._status: dict = {}
         self._attr_available = True
 
     @property
     def is_on(self) -> bool | None:
-        """Return true when all calls are forwarded to smartphone."""
+        """Return whether the complete Home Assistant user patch is active."""
 
-        if self._mode is None:
+        if not self._status:
             return None
-        return self._mode == 0
+        return (
+            self._status.get("homeassistant_user_present") is True
+            and self._status.get("routes_consistent") is True
+            and self._status.get("inhouse_binary_patch_applied") is True
+            and self._status.get("inhouse_qml_patch_applied") is True
+        )
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | int | None]:
-        """Return raw forwarding state metadata."""
+    def extra_state_attributes(self) -> dict:
+        """Return the non-sensitive patch status reported by the agent."""
 
-        return {"mode": self._mode, "state": self._state}
+        keys = (
+            "homeassistant_user_present",
+            "routes_consistent",
+            "media_identity_available",
+            "media_identity_source",
+            "inhouse_binary_patch_state",
+            "inhouse_binary_patch_backup_present",
+            "inhouse_binary_patch_error",
+            "inhouse_qml_patch_state",
+            "account_label",
+            "error",
+        )
+        return {key: self._status.get(key) for key in keys if key in self._status}
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Enable all smartphone forwarding."""
-
-        await self._set_enabled(True)
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        """Block all smartphone forwarding."""
-
-        await self._set_enabled(False)
-        self.async_write_ha_state()
-
-    async def async_update(self) -> None:
-        """Refresh forwarding state through the agent read-only endpoint."""
+        """Apply the complete Home Assistant media-user patch."""
 
         try:
-            status = await self._entry.runtime_data.api.async_smartphone_forwarding_status()
+            status = await self._entry.runtime_data.api.async_ensure_homeassistant_user(
+                account_label=homeassistant_account_label(self.hass)
+            )
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support device-user setup"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X Home Assistant user patch failed") from err
+        await self._store_status(status)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Restore the binary/QML parts of the Home Assistant media-user patch."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_restore_homeassistant_user_patch()
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(
+                "The installed C300X device agent does not support device-user restore"
+            ) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError("C300X Home Assistant user patch restore failed") from err
+        await self._store_status(status)
+
+    async def async_update(self) -> None:
+        """Refresh patch state through the agent read-only endpoint."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_device_user_status()
         except C300XAgentApiError:
             self._attr_available = False
             return
-        self._apply_status(status)
+        await self._store_status(status, write_state=False)
 
-    async def _set_enabled(self, enabled: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_smartphone_forwarding_enabled(
-            enabled
-        )
-        self._apply_status(status)
-
-    def _apply_status(self, status: dict) -> None:
-        self._mode = status.get("mode")
-        self._state = status.get("state", "unknown")
+    async def _store_status(self, status: dict, *, write_state: bool = True) -> None:
+        self._status = status
         self._attr_available = True
+        self._entry.runtime_data.device_user_status = status
+        from .repair_issues import async_sync_entry_repair_issues
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to push state updates."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-
-    @callback
-    def _handle_agent_event(self, event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        event_type = agent_event_key(event.data) or ""
-        if not event_type.startswith("smartphone_forwarding_"):
-            return
-        forwarding = _normalize_smartphone_forwarding_event(event.data)
-        self._state = forwarding.get("state")
-        self._mode = forwarding.get("mode")
-        self._attr_available = True
-        self.async_write_ha_state()
-
-
-def _normalize_smartphone_forwarding_event(payload: dict[str, object]) -> dict[str, str | int | None]:
-    mode = payload.get("mode")
-    state = payload.get("state")
-
-    try:
-        normalized = normalize_smartphone_forwarding({"mode": mode, "state": state})
-        if isinstance(normalized.get("mode"), int) and isinstance(
-            normalized.get("state"), str
-        ):
-            return {
-                "mode": normalized.get("mode"),
-                "state": normalized.get("state"),
-            }
-    except C300XAgentApiResponseError:
-        return _coerce_smartphone_forwarding_event(mode, state)
-    return _coerce_smartphone_forwarding_event(mode, state)
-
-
-def _coerce_smartphone_forwarding_event(mode: object, state: object) -> dict[str, str | int | None]:
-    return coerce_forwarding_mode_state(mode, state)
+        async_sync_entry_repair_issues(self.hass, self._entry)
+        await async_refresh_agent_diagnostics(self.hass, self._entry)
+        if write_state:
+            self.async_write_ha_state()
 
 
 class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):

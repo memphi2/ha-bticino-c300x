@@ -29,6 +29,10 @@ if "homeassistant.components.switch" not in sys.modules:
         "homeassistant.const",
         types.ModuleType("homeassistant.const"),
     )
+    exceptions = sys.modules.setdefault(
+        "homeassistant.exceptions",
+        types.ModuleType("homeassistant.exceptions"),
+    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -66,11 +70,15 @@ if "homeassistant.components.switch" not in sys.modules:
     class EntityCategory:  # pragma: no cover - import-time stub only
         CONFIG = "config"
 
+    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+        pass
+
     switch.SwitchEntity = SwitchEntity
     config_entries.ConfigEntry = ConfigEntry
     const.EntityCategory = EntityCategory
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
+    exceptions.HomeAssistantError = HomeAssistantError
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
@@ -101,7 +109,6 @@ from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XNativeMqttBridgeSwitch,
     C300XNoAuthSwitch,
     C300XRingerMuteSwitch,
-    C300XSmartphoneForwardingSwitch,
     _async_refresh_initial_states,
     async_setup_entry,
 )
@@ -440,70 +447,6 @@ class _FakeEntry:
     data: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
-
-
-def test_smartphone_forwarding_refresh_uses_active_read_only_status() -> None:
-    entry = _FakeEntry()
-    entity = C300XSmartphoneForwardingSwitch(entry)  # type: ignore[arg-type]
-
-    asyncio.run(entity.async_update())
-
-    assert entry.runtime_data.api.active_smartphone_reads == 1
-    assert entry.runtime_data.api.cached_smartphone_reads == 0
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
-
-
-def test_smartphone_forwarding_event_updates_switch_state() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "mode": "enabled",
-            }
-        )
-    )
-
-    assert entity.is_on is True
-    assert entity.extra_state_attributes == {"mode": 0, "state": "enabled"}
-
-
-def test_smartphone_forwarding_event_supports_numeric_state_only_payload() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "state": "blocked",
-                "mode": None,
-            }
-        )
-    )
-
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
-
-
-def test_smartphone_forwarding_event_supports_numeric_mode_only_payload() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "mode": 1,
-            }
-        )
-    )
-
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 1, "state": "in-house-only"}
 
 
 def test_ringer_unmuted_event_updates_switch_state() -> None:

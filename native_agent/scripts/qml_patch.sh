@@ -12,6 +12,7 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="EventManager.qml"
+INHOUSE_PATCH_FILES="Components/Settings/CallBlockPopup.qml"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
 OBSOLETE_GUI_FILES="C300XText.qml images/c300x_alarm_icon.svg images/c300x_alarm_icon_p.svg images/c300x_home_assistant_icon.svg images/c300x_home_assistant_icon_p.svg"
@@ -22,8 +23,11 @@ json_status() {
     patched=false
     core_state=original
     core_patched=false
+    inhouse_state=original
+    inhouse_patched=false
     backup_available=false
     core_backup_available=false
+    inhouse_backup_available=false
     gui_running=false
     if full_patch_present; then
         state=patched
@@ -39,19 +43,29 @@ json_status() {
         core_state=partial
         core_patched=null
     fi
+    if inhouse_patch_present; then
+        inhouse_state=patched
+        inhouse_patched=true
+    elif inhouse_partial_patch_present; then
+        inhouse_state=partial
+        inhouse_patched=null
+    fi
     if [ -f "$BACKUP_DIR/MainApp.qml" ]; then
         backup_available=true
     fi
     if [ -f "$BACKUP_DIR/EventManager.qml" ]; then
         core_backup_available=true
     fi
+    if [ -f "$BACKUP_DIR/Components/Settings/CallBlockPopup.qml" ]; then
+        inhouse_backup_available=true
+    fi
     if command -v pidof >/dev/null 2>&1 && pidof BtClass >/dev/null 2>&1; then
         gui_running=true
     fi
     if [ -n "$changed_files" ]; then
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"backup_available":%s,"core_backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$backup_available" "$core_backup_available" "$gui_running" "$changed_files"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"inhouse_state":"%s","inhouse_patched":%s,"backup_available":%s,"core_backup_available":%s,"inhouse_backup_available":%s,"gui_running":%s,"changed_files":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$inhouse_state" "$inhouse_patched" "$backup_available" "$core_backup_available" "$inhouse_backup_available" "$gui_running" "$changed_files"
     else
-        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"backup_available":%s,"core_backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$backup_available" "$core_backup_available" "$gui_running"
+        printf '{"ok":true,"available":true,"state":"%s","patched":%s,"core_state":"%s","core_patched":%s,"inhouse_state":"%s","inhouse_patched":%s,"backup_available":%s,"core_backup_available":%s,"inhouse_backup_available":%s,"gui_running":%s}\n' "$state" "$patched" "$core_state" "$core_patched" "$inhouse_state" "$inhouse_patched" "$backup_available" "$core_backup_available" "$inhouse_backup_available" "$gui_running"
     fi
 }
 
@@ -118,6 +132,16 @@ core_partial_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
         || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
+}
+
+inhouse_patch_present() {
+    file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Forward calls to Home Assistant' \
+        && file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant'
+}
+
+inhouse_partial_patch_present() {
+    file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Forward calls to Home Assistant' \
+        || file_contains "$GUI_DIR/Components/Settings/CallBlockPopup.qml" 'Calls forwarded to Home Assistant'
 }
 
 core_call_end_hooks_present() {
@@ -211,6 +235,9 @@ backup_file() {
         HomePage.qml|MemoPage.qml)
             require_clean_original_page "$backup_src" "$backup_rel"
             ;;
+        Components/Settings/CallBlockPopup.qml)
+            require_clean_call_block_popup "$backup_src"
+            ;;
         EventManager.qml)
             if grep -F -q 'function c300xNotifyMediaClosed()' "$backup_src"; then
                 printf 'Refusing to back up an already patched EventManager.qml\n' >&2
@@ -254,6 +281,16 @@ require_clean_original_page() {
         || grep -F -q 'homeAssistantButtonColumn' "$page_file" \
         || grep -F -q 'MemoSync.syncMemoModel' "$page_file"; then
         printf 'Refusing to patch %s from an already patched source\n' "$page_name" >&2
+        return 1
+    fi
+}
+
+require_clean_call_block_popup() {
+    page_file="$1"
+    [ -s "$page_file" ]
+    if grep -F -q 'Forward calls to Home Assistant' "$page_file" \
+        || grep -F -q 'Calls forwarded to Home Assistant' "$page_file"; then
+        printf 'Refusing to patch CallBlockPopup.qml from an already patched source\n' >&2
         return 1
     fi
 }
@@ -512,6 +549,48 @@ patch_memo_page() {
     mv "$temp_file" "$memo_page"
 }
 
+patch_call_block_popup() {
+    output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
+    popup="$output_dir/Components/Settings/CallBlockPopup.qml"
+    source_popup="$BACKUP_DIR/Components/Settings/CallBlockPopup.qml"
+    temp_file="$output_dir/Components/Settings/CallBlockPopup.qml.tmp.$$"
+    backup_file "Components/Settings/CallBlockPopup.qml"
+    if [ ! -f "$source_popup" ]; then
+        printf 'Missing original CallBlockPopup.qml backup\n' >&2
+        return 1
+    fi
+    mkdir -p "$output_dir"
+    require_clean_call_block_popup "$source_popup"
+    awk '
+        /message: qsTr\("Calls forwarded to the smartphones in the home"\)/ {
+            sub(/message: qsTr\("Calls forwarded to the smartphones in the home"\) \+ trsl.empty/, "message: \"Calls forwarded to Home Assistant\" + trsl.empty")
+            print
+            message_patched=1
+            next
+        }
+        /\/\/\{text: qsTr\("Forward calls to the smartphones in the home"\).*AnsweringMachine\.InHouseOnly/ {
+            print "                    {text: \"Forward calls to Home Assistant\" + trsl.empty, action: AnsweringMachine.InHouseOnly},"
+            button_patched=1
+            next
+        }
+        { print }
+        END {
+            if (!message_patched || !button_patched) {
+                exit 12
+            }
+        }
+    ' "$source_popup" > "$temp_file"
+    verify_generated_page \
+        "$temp_file" \
+        "Components/Settings/CallBlockPopup.qml" \
+        'case AnsweringMachine.InHouseOnly:' \
+        'answeringMachine.ipcCallMode = action' \
+        'Calls forwarded to Home Assistant' \
+        'Forward calls to Home Assistant' \
+        'action: AnsweringMachine.InHouseOnly'
+    mv "$temp_file" "$popup"
+}
+
 patch_event_manager() {
     output_dir="${PATCH_OUTPUT_DIR:-$GUI_DIR}"
     event_manager="$output_dir/EventManager.qml"
@@ -633,6 +712,15 @@ generate_full_patch_stage() {
     unset PATCH_OUTPUT_DIR
 }
 
+generate_inhouse_patch_stage() {
+    cleanup_staging
+    mkdir -p "$STAGING_DIR/Components/Settings"
+    PATCH_OUTPUT_DIR="$STAGING_DIR"
+    export PATCH_OUTPUT_DIR
+    patch_call_block_popup
+    unset PATCH_OUTPUT_DIR
+}
+
 apply_stage_changed_count() {
     changed=0
     for rel do
@@ -688,6 +776,10 @@ copy_changed_full_patch_files() {
 
 copy_changed_core_patch_files() {
     copy_changed_patch_files $CORE_PATCH_FILES
+}
+
+copy_changed_inhouse_patch_files() {
+    copy_changed_patch_files $INHOUSE_PATCH_FILES
 }
 
 apply_generated_patch_if_changed() {
@@ -760,6 +852,14 @@ apply_core_patch_files() {
     generate_core_patch_stage
     changed_count="$(apply_stage_changed_count $CORE_PATCH_FILES)"
     apply_generated_patch_if_changed "$changed_count" copy_changed_core_patch_files
+    cleanup_staging
+    printf '%s\n' "$changed_count"
+}
+
+apply_inhouse_patch_files() {
+    generate_inhouse_patch_stage
+    changed_count="$(apply_stage_changed_count $INHOUSE_PATCH_FILES)"
+    apply_generated_patch_if_changed "$changed_count" copy_changed_inhouse_patch_files
     cleanup_staging
     printf '%s\n' "$changed_count"
 }
@@ -876,6 +976,28 @@ restore_patch_files() {
     rmdir "$GUI_DIR/js" >/dev/null 2>&1 || true
 }
 
+restore_inhouse_changed_count() {
+    restore_original="$BACKUP_DIR/Components/Settings/CallBlockPopup.qml"
+    restore_dest="$GUI_DIR/Components/Settings/CallBlockPopup.qml"
+    if [ ! -e "$restore_original" ]; then
+        if inhouse_partial_patch_present; then
+            printf 'No original backup available for Components/Settings/CallBlockPopup.qml; refusing to remove stock GUI file\n' >&2
+            return 1
+        fi
+        printf '0\n'
+        return 0
+    fi
+    if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
+        printf '1\n'
+    else
+        printf '0\n'
+    fi
+}
+
+restore_inhouse_patch_files() {
+    restore_file "Components/Settings/CallBlockPopup.qml"
+}
+
 restore_core_patch_files() {
     restore_file "EventManager.qml"
 }
@@ -911,6 +1033,14 @@ case "$ACTION" in
         fi
         json_status "$changed_count"
         ;;
+    inhouse-apply)
+        changed_count="$(apply_inhouse_patch_files)"
+        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
+            json_reload_failed
+            exit 0
+        fi
+        json_status "$changed_count"
+        ;;
     restore)
         changed_count="$(restore_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
@@ -926,6 +1056,17 @@ case "$ACTION" in
         changed_count="$(restore_core_changed_count)"
         if [ "$changed_count" -gt 0 ]; then
             run_write_action restore_core_patch_files
+        fi
+        if [ "$changed_count" -gt 0 ] && ! reload_gui; then
+            json_reload_failed
+            exit 0
+        fi
+        json_status "$changed_count"
+        ;;
+    inhouse-restore)
+        changed_count="$(restore_inhouse_changed_count)"
+        if [ "$changed_count" -gt 0 ]; then
+            run_write_action restore_inhouse_patch_files
         fi
         if [ "$changed_count" -gt 0 ] && ! reload_gui; then
             json_reload_failed

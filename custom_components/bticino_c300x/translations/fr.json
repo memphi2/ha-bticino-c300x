@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Arreter la camera de sonnette"
       },
-      "ensure_homeassistant_user": {
-        "name": "Creer l'utilisateur media Home Assistant"
-      },
       "delete_latest_voice_memo": {
         "name": "Supprimer le dernier memo vocal"
       }
@@ -324,6 +321,9 @@
       },
       "legacy_mqtt_bridge": {
         "name": "Bridge MQTT legacy"
+      },
+      "homeassistant_user_patch": {
+        "name": "Patch utilisateur Home Assistant"
       },
       "smartphone_forwarding": {
         "name": "Renvoi smartphone"

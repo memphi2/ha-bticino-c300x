@@ -17,12 +17,12 @@ from custom_components.bticino_c300x.ring_capture import (
     _announcement_input_path,
     _async_run_ffmpeg,
     _capture_output_path,
-    _capture_work_dir,
     _capture_stream_path,
-    _create_speex_encoder,
+    _capture_work_dir,
     _rtsp_url_from_status,
     async_capture_doorbell_ring_call,
 )
+from custom_components.bticino_c300x.ring_talkback import _create_speex_encoder
 
 
 @dataclass

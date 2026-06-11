@@ -14,7 +14,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 STOCK_SHA256 = "605a808f1ed0c826c06bbf1eb4131b9198007a7ab822e7541a6666e79816c810"
 PATCHED_SHA256 = "8f6e45d4c5f94bab74fa1dc8bd9ce06ca76a3a499dc664a9c6dbd934943e1c13"
 
@@ -151,13 +150,13 @@ def main() -> int:
     try:
         digest = patch_binary(args.source, args.target)
     except OSError as err:
-        print(f"error: {err}", file=sys.stderr)
+        sys.stderr.write(f"error: {err}\n")
         return 1
     except PatchError as err:
-        print(f"error: {err}", file=sys.stderr)
+        sys.stderr.write(f"error: {err}\n")
         return 2
 
-    print(digest)
+    sys.stdout.write(f"{digest}\n")
     return 0
 
 

@@ -28,8 +28,12 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .device_user import homeassistant_account_label
-from .entity import C300XEntity, entry_config_value, supports_capability
-from .entity import entry_video_enabled
+from .entity import (
+    C300XEntity,
+    entry_config_value,
+    entry_video_enabled,
+    supports_capability,
+)
 from .event_payload import agent_event_key
 from .qml_patch import (
     async_apply_qml_patch_and_confirm,

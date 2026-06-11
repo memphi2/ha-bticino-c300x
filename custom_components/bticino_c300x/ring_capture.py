@@ -20,7 +20,6 @@ from .const import (
 )
 from .entry_config import entry_config_value
 from .ring_talkback import (
-    _create_speex_encoder,
     async_play_announcement_when_ready as _async_play_announcement_when_ready,
 )
 
@@ -374,7 +373,7 @@ async def _async_run_ffmpeg(
         )
     await _async_run_ffmpeg_command(
         command,
-        timeout=duration_seconds + 10,
+        command_timeout=duration_seconds + 10,
         error_prefix="C300X capture failed",
     )
     if include_audio:
@@ -402,7 +401,7 @@ async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None
             "pcm_s16le",
             str(target),
         ],
-        timeout=10,
+        command_timeout=10,
         error_prefix="C300X processed audio extraction failed",
     )
 
@@ -410,7 +409,7 @@ async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None
 async def _async_run_ffmpeg_command(
     command: list[str],
     *,
-    timeout: int,
+    command_timeout: int,
     error_prefix: str,
 ) -> None:
     try:
@@ -422,7 +421,9 @@ async def _async_run_ffmpeg_command(
     except FileNotFoundError as err:
         raise HomeAssistantError("ffmpeg is not installed on Home Assistant") from err
     try:
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        _, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=command_timeout
+        )
     except TimeoutError as err:
         process.kill()
         await process.communicate()

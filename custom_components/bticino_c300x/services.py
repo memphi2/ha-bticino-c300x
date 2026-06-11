@@ -82,37 +82,101 @@ from .ring_capture import async_capture_doorbell_ring_call
 from .ring_decision import async_evaluate_ring_analysis
 from .service_schema import (
     ATTR_ACTION_ID as _ATTR_ACTION_ID,
+)
+from .service_schema import (
     ATTR_ACTIVATION_ID as _ATTR_ACTIVATION_ID,
+)
+from .service_schema import (
     ATTR_ADDRESS as _ATTR_ADDRESS,
+)
+from .service_schema import (
     ATTR_ANNOUNCEMENT_PATH as _ATTR_ANNOUNCEMENT_PATH,
+)
+from .service_schema import (
     ATTR_AUDIO as _ATTR_AUDIO,
+)
+from .service_schema import (
     ATTR_CODE as _ATTR_CODE,
+)
+from .service_schema import (
     ATTR_COMMAND as _ATTR_COMMAND,
+)
+from .service_schema import (
     ATTR_DECISION_PATH as _ATTR_DECISION_PATH,
+)
+from .service_schema import (
     ATTR_DURATION_SECONDS as _ATTR_DURATION_SECONDS,
+)
+from .service_schema import (
     ATTR_ENTRY_ID as _ATTR_ENTRY_ID,
+)
+from .service_schema import (
     ATTR_EXPECTED_PHRASE as _ATTR_EXPECTED_PHRASE,
+)
+from .service_schema import (
     ATTR_FORCE as _ATTR_FORCE,
+)
+from .service_schema import (
     ATTR_INCLUDE_AUDIO as _ATTR_INCLUDE_AUDIO,
+)
+from .service_schema import (
     ATTR_LANGUAGE as _ATTR_LANGUAGE,
+)
+from .service_schema import (
     ATTR_LOCK_ID as _ATTR_LOCK_ID,
+)
+from .service_schema import (
     ATTR_MEDIA_PLAYER_ENTITY_ID as _ATTR_MEDIA_PLAYER_ENTITY_ID,
+)
+from .service_schema import (
     ATTR_OUTPUT_PATH as _ATTR_OUTPUT_PATH,
+)
+from .service_schema import (
     ATTR_READ as _ATTR_READ,
+)
+from .service_schema import (
     ATTR_RESULT_PATH as _ATTR_RESULT_PATH,
+)
+from .service_schema import (
     ATTR_TEXT as _ATTR_TEXT,
+)
+from .service_schema import (
     ATTR_UNLOCK_ON_MATCH as _ATTR_UNLOCK_ON_MATCH,
+)
+from .service_schema import (
     ATTR_WAV_OUTPUT_DIR as _ATTR_WAV_OUTPUT_DIR,
+)
+from .service_schema import (
     ATTR_WAV_PATH as _ATTR_WAV_PATH,
+)
+from .service_schema import (
     ATTR_WYOMING_HOST as _ATTR_WYOMING_HOST,
+)
+from .service_schema import (
     ATTR_WYOMING_PORT as _ATTR_WYOMING_PORT,
+)
+from .service_schema import (
     activation_id as _activation_id,
+)
+from .service_schema import (
     boolean_service_value as _boolean_service_value,
+)
+from .service_schema import (
     capture_duration_seconds as _capture_duration_seconds,
+)
+from .service_schema import (
     home_call_duration_seconds as _home_call_duration_seconds,
+)
+from .service_schema import (
     lock_id as _lock_id,
+)
+from .service_schema import (
     stair_light_address as _stair_light_address,
+)
+from .service_schema import (
     text_memo_text as _text_memo_text,
+)
+from .service_schema import (
     wyoming_port as _wyoming_port,
 )
 from .video_messages import latest_video_message_id, video_message_media_source_id

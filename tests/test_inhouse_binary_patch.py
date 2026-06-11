@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
-import re
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCHER_PATH = ROOT / "scripts" / "patch_bticino_inhouse_binary.py"

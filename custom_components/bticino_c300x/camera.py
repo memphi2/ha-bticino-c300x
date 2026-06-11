@@ -209,6 +209,7 @@ class _NativeWebRTCSession:
         self.renew_task: asyncio.Task | None = None
         self.talkback_task: asyncio.Task | None = None
         self.talkback_requested = False
+        self.ring_call = False
         self.ring_preview = False
         self.talkback_active = False
         self.talkback_packets_sent = 0
@@ -857,6 +858,12 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 home_call_audio_only = True
             else:
                 stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
+                ring_call_active = (
+                    self._video_owner == "ring"
+                    or bool(self._bridge_status.get("ring_call_active"))
+                    or bool(self._bridge_status.get("ring_media_active"))
+                )
+                session.ring_call = ring_call_active
                 home_call_audio_only = wants_audio and _status_is_home_call_media_active(
                     {
                         "media_owner": self._video_owner,
@@ -865,8 +872,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
                 session.ring_preview = (
                     not wants_audio
-                    and self._video_owner == "ring"
-                    and bool(self._bridge_status.get("ring_call_active"))
+                    and ring_call_active
                 )
 
             if home_call_audio_only:
@@ -1284,6 +1290,14 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     await self._async_refresh_video_status(apply_status=False)
                 ):
                     continue
+            if session.ring_call:
+                await self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="ring_call_closed",
+                )
+                continue
             with suppress(Exception):
                 await self._async_warmup_video()
 
@@ -1657,6 +1671,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
+            self._close_ring_webrtc_sessions_from_event()
             self._async_write_ha_state_if_ready()
             return
         self._video_window_available = bool(
@@ -1718,6 +1733,32 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     stop_media=False,
                     notify_client=True,
                     reason="home_call_ended",
+                )
+
+        self.hass.async_create_task(_close_sessions())
+
+    def _close_ring_webrtc_sessions_from_event(self) -> None:
+        """Close HA Ring Call WebRTC sessions after an authoritative agent end event."""
+
+        session_ids = [
+            session_id
+            for session_id, session in self._webrtc_sessions.items()
+            if session.ring_call
+        ]
+        if (
+            not session_ids
+            or not hasattr(self, "hass")
+            or not hasattr(self.hass, "async_create_task")
+        ):
+            return
+
+        async def _close_sessions() -> None:
+            for session_id in session_ids:
+                await self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="ring_call_closed",
                 )
 
         self.hass.async_create_task(_close_sessions())

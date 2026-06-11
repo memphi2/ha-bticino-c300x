@@ -44,6 +44,7 @@ from .const import (
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
+    SERVICE_EVALUATE_RING_ANALYSIS,
     SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
@@ -51,6 +52,7 @@ from .const import (
     SERVICE_RELOAD_GUI,
     SERVICE_RUN_ACTION,
     SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_RUN_RING_WYOMING_ANALYSIS,
     SERVICE_STAIR_LIGHT,
     SERVICE_START_HOME_CALL,
     SERVICE_STOP_DOORBELL_VIDEO,
@@ -76,7 +78,9 @@ from .memos import (
 )
 from .message_refresh import async_answering_machine_messages, async_memos
 from .qml_patch import async_refresh_qml_patch_status
+from .ring_ai import async_run_wyoming_ring_analysis
 from .ring_capture import async_capture_doorbell_ring_call
+from .ring_decision import async_evaluate_ring_analysis
 from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
@@ -94,6 +98,14 @@ _ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
 _ATTR_OUTPUT_PATH = "output_path"
 _ATTR_INCLUDE_AUDIO = "include_audio"
 _ATTR_ANNOUNCEMENT_PATH = "announcement_path"
+_ATTR_WAV_PATH = "wav_path"
+_ATTR_RESULT_PATH = "result_path"
+_ATTR_WYOMING_HOST = "wyoming_host"
+_ATTR_WYOMING_PORT = "wyoming_port"
+_ATTR_LANGUAGE = "language"
+_ATTR_EXPECTED_PHRASE = "expected_phrase"
+_ATTR_DECISION_PATH = "decision_path"
+_ATTR_UNLOCK_ON_MATCH = "unlock_on_match"
 _ATTR_READ = "read"
 _ATTR_TEXT = "text"
 _BASE_SERVICES_MARKER = "__services_registered"
@@ -184,6 +196,18 @@ def _capture_duration_seconds(value: Any) -> int:
     if duration_seconds < 1 or duration_seconds > 15:
         raise vol.Invalid("invalid duration seconds")
     return duration_seconds
+
+
+def _wyoming_port(value: Any) -> int:
+    """Validate Wyoming service port."""
+
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as err:
+        raise vol.Invalid("invalid Wyoming port") from err
+    if port < 1 or port > 65535:
+        raise vol.Invalid("invalid Wyoming port")
+    return port
 
 
 def _ensure_maintenance_action(entry, action: str) -> None:
@@ -493,6 +517,35 @@ class _C300XServiceHandlers:
                 entry.runtime_data.api.async_hangup_doorbell_call()
             )
 
+    async def async_run_ring_wyoming_analysis(self, call: ServiceCall) -> None:
+        """Transcribe the latest C300X ring raw WAV through Wyoming Whisper."""
+
+        await async_run_wyoming_ring_analysis(
+            self._hass,
+            wyoming_host=call.data[_ATTR_WYOMING_HOST],
+            wyoming_port=call.data.get(_ATTR_WYOMING_PORT, 10300),
+            wav_path=call.data.get(_ATTR_WAV_PATH),
+            result_path=call.data.get(_ATTR_RESULT_PATH),
+            language=call.data.get(_ATTR_LANGUAGE),
+            expected_phrase=call.data.get(_ATTR_EXPECTED_PHRASE),
+        )
+
+    async def async_evaluate_ring_analysis(self, call: ServiceCall) -> None:
+        """Evaluate a local C300X ring-analysis result and optionally unlock."""
+
+        decision = await async_evaluate_ring_analysis(
+            self._hass,
+            result_path=call.data.get(_ATTR_RESULT_PATH),
+            decision_path=call.data.get(_ATTR_DECISION_PATH),
+            expected_phrase=call.data.get(_ATTR_EXPECTED_PHRASE),
+        )
+        if not (decision.matched and call.data.get(_ATTR_UNLOCK_ON_MATCH, False)):
+            return
+        entry = _entry_for_call(self._hass, call)
+        await _raise_agent_command_failed(
+            async_unlock_door(self._hass, entry, call.data.get(_ATTR_LOCK_ID, "default"))
+        )
+
     async def async_start_home_call(self, call: ServiceCall) -> None:
         """Start an in-house call to the C300X."""
 
@@ -744,6 +797,34 @@ def _register_base_services(
                     vol.Optional(_ATTR_DURATION_SECONDS, default=5): _capture_duration_seconds,
                     vol.Optional(_ATTR_INCLUDE_AUDIO, default=True): _boolean_service_value,
                     vol.Optional(_ATTR_ANNOUNCEMENT_PATH): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_RUN_RING_WYOMING_ANALYSIS,
+            handlers.async_run_ring_wyoming_analysis,
+            vol.Schema(
+                {
+                    vol.Required(_ATTR_WYOMING_HOST): cv.string,
+                    vol.Optional(_ATTR_WYOMING_PORT, default=10300): _wyoming_port,
+                    vol.Optional(_ATTR_WAV_PATH): cv.string,
+                    vol.Optional(_ATTR_RESULT_PATH): cv.string,
+                    vol.Optional(_ATTR_LANGUAGE): cv.string,
+                    vol.Optional(_ATTR_EXPECTED_PHRASE): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_EVALUATE_RING_ANALYSIS,
+            handlers.async_evaluate_ring_analysis,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_RESULT_PATH): cv.string,
+                    vol.Optional(_ATTR_DECISION_PATH): cv.string,
+                    vol.Optional(_ATTR_EXPECTED_PHRASE): cv.string,
+                    vol.Optional(_ATTR_UNLOCK_ON_MATCH, default=False): _boolean_service_value,
+                    vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
                 }
             ),
         ),

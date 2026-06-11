@@ -51,6 +51,9 @@ class _FakeHass:
         self.http = _FakeHttp()
         self.extra_module_urls: list[str] = []
 
+    async def async_add_executor_job(self, func: Any, *args: Any) -> Any:
+        return func(*args)
+
 
 def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> None:
     http_module = types.ModuleType("homeassistant.components.http")
@@ -252,6 +255,10 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'config_entry_id' in source
     assert "_autoRelatedEntityId" in source
     assert "_firstRelatedEntityId" in source
+    assert "translation_key" in source
+    assert "unique_id" in source
+    assert "C300X_DOORBELL_STATE_TRANSLATION_KEY" in source
+    assert "C300X_HOME_CALL_TRANSLATION_KEY" in source
     assert ".filter((entityId)" not in source
     assert ".sort((left, right)" not in source
     assert 'name: "state_entity"' not in source
@@ -284,6 +291,10 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     assert "window.customCards.push" in metadata_source
     assert "doorbell_state_entity: entityId" in metadata_source
     assert "home_call_entity: entityId" in metadata_source
+    assert "c300xMetadataRegistryEntity" in metadata_source
+    assert "c300xMetadataRelatedCamera" in metadata_source
+    assert "translation_key" in metadata_source
+    assert "unique_id" in metadata_source
     assert "getEntitySuggestion: c300xMetadataEntitySuggestion" in metadata_source
     assert "customElements.define" not in metadata_source
     assert "extends HTMLElement" not in metadata_source

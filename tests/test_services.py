@@ -577,7 +577,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                 data={
                     "output_path": "/media/c300x/test.mp4",
                     "duration_seconds": 3,
-                    "include_audio": False,
+                    "include_audio": True,
                     "announcement_path": "/media/c300x/announce.wav",
                 }
             )
@@ -589,7 +589,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                 "kwargs": {
                     "output_path": "/media/c300x/test.mp4",
                     "duration_seconds": 3,
-                    "include_audio": False,
+                    "include_audio": True,
                     "announcement_path": "/media/c300x/announce.wav",
                 },
             }
@@ -601,7 +601,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
     asyncio.run(_run())
 
 
-def test_capture_doorbell_call_service_does_not_answer_without_announcement(
+def test_capture_doorbell_call_service_answers_audio_capture_without_announcement(
     monkeypatch,
 ) -> None:  # noqa: ANN001
     async def _run() -> None:
@@ -624,7 +624,7 @@ def test_capture_doorbell_call_service_does_not_answer_without_announcement(
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert api.answer_doorbell_call_calls == []
+        assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
     asyncio.run(_run())

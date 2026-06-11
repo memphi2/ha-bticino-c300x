@@ -1709,6 +1709,51 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     assert camera._bridge_status["external_media_active"] is False
 
 
+def test_doorbell_camera_closes_ring_webrtc_session_on_video_closed_event() -> None:
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _FakeHass:
+        def __init__(self) -> None:
+            self.tasks: list[Any] = []
+
+        def async_create_task(self, coro: Any) -> Any:
+            task = asyncio.create_task(coro)
+            self.tasks.append(task)
+            return task
+
+    async def _run() -> tuple[C300XDoorbellCamera, _Peer]:
+        entry = _FakeEntry()
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        hass = _FakeHass()
+        camera.hass = hass  # type: ignore[assignment]
+        peer = _Peer()
+        session = _NativeWebRTCSession(peer)
+        session.ring_call = True
+        camera._webrtc_sessions["ring-session"] = session
+
+        camera._handle_agent_event(
+            SimpleNamespace(
+                data={
+                    "entry_id": entry.entry_id,
+                    "event_key": "doorbell_media_closed",
+                }
+            )
+        )
+        await asyncio.gather(*hass.tasks)
+        return camera, peer
+
+    camera, peer = asyncio.run(_run())
+
+    assert "ring-session" not in camera._webrtc_sessions
+    assert peer.closed is True
+    assert camera._entry.runtime_data.api.stop_calls == 0
+
+
 def test_doorbell_camera_applies_home_call_answered_event_without_polling() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]

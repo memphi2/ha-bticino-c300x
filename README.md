@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v1.0.2-0366d6?style=flat-square)](.github/release-notes/v1.0.2.md)
+[![Release](https://img.shields.io/badge/release-v1.1.0-0366d6?style=flat-square)](.github/release-notes/v1.1.0.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `1.0.2`
+- Current release line: `1.1.0`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -36,9 +36,9 @@ Assistant device: doorbell events, camera, talkback, door unlock, stair light,
 ringer/forwarding controls, messages and optional display pages, all without a
 polling controller or a Node.js runtime on the C300X.
 
-The 1.0.2 release fixes the managed C300X firewall patch so reboot-persistent
-firewall rules open the API, RTSP and talkback RTP ports needed by the app-like
-media workflows.
+The 1.1.0 release adds HA-side Ring Call capture diagnostics, local Whisper
+transcription from the retained raw WAV, and an optional strict phrase-match door
+unlock evaluation service.
 
 The 1.0.0 line adds the three app-like media workflows that users expect from a
 video door station:

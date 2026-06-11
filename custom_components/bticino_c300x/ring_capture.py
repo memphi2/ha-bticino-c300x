@@ -304,7 +304,7 @@ async def _async_run_ffmpeg(
                 (
                     "aresample=48000:async=1:first_pts=0,"
                     "pan=stereo|c0=c0|c1=c0,"
-                    "dynaudnorm=f=75:g=31:p=0.95:m=10,"
+                    "volume=6dB,"
                     "alimiter=limit=0.95"
                 ),
                 "-ac",

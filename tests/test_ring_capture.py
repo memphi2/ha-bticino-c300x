@@ -242,9 +242,9 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     audio_filter = command[command.index("-af") + 1]
     assert "aresample=48000" in audio_filter
     assert "pan=stereo" in audio_filter
-    assert "dynaudnorm=" in audio_filter
+    assert "dynaudnorm=" not in audio_filter
     assert "alimiter=" in audio_filter
-    assert "volume=" not in audio_filter
+    assert "volume=6dB" in audio_filter
     assert "volume=30dB" not in audio_filter
     assert command[command.index("-ac") + 1] == "2"
     assert command[command.index("-ar") + 1] == "48000"

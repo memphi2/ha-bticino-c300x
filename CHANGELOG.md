@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.1.0 - 2026-06-11
+
+### Added
+
+- Adds HA-side Ring Call capture diagnostics that keep a raw mono WAV next to
+  the captured MP4 for local speech analysis.
+- Adds local Wyoming Whisper transcription for the newest retained Ring Call raw
+  WAV without requiring image analysis or cloud AI.
+- Adds an optional strict phrase-match evaluation service that can unlock the
+  configured C300X door only when explicitly requested with `unlock_on_match`.
+
+### Changed
+
+- Updates the packaged native C300X device agent to `1.1.0`.
+- Reduces Ring Call capture audio distortion risk by removing dynamic
+  normalization and keeping only moderate gain plus limiting for the MP4 audio
+  track. The raw WAV remains unfiltered for Whisper.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating so the new services are registered.
+- Ring Call capture files are local runtime artifacts and must stay outside the
+  repository.
+
 ## v1.0.2 - 2026-06-08
 
 ### Fixed

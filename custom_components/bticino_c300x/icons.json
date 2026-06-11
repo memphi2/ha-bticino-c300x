@@ -105,9 +105,6 @@
       },
       "homeassistant_user_patch": {
         "default": "mdi:account-wrench"
-      },
-      "smartphone_forwarding": {
-        "default": "mdi:cellphone-arrow-down"
       }
     }
   },

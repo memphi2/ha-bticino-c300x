@@ -112,18 +112,6 @@ class C300XAgentApi:
         data = await self._request_json("GET", "/api/v1/state")
         return normalize_smartphone_forwarding(data)
 
-    async def async_set_smartphone_forwarding_enabled(
-        self,
-        enabled: bool,
-    ) -> dict[str, Any]:
-        """Enable all or block all smartphone forwarding."""
-
-        return await self.async_set_smartphone_forwarding_mode(
-            SMARTPHONE_FORWARDING_MODE_ENABLED
-            if enabled
-            else SMARTPHONE_FORWARDING_MODE_BLOCKED
-        )
-
     async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
         """Set the smartphone forwarding mode."""
 

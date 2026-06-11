@@ -324,9 +324,6 @@
       },
       "homeassistant_user_patch": {
         "name": "Home Assistant user patch"
-      },
-      "smartphone_forwarding": {
-        "name": "Smartphone forwarding"
       }
     }
   },

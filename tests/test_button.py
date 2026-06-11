@@ -164,8 +164,6 @@ class _FakeMemoApi:
         self.qml_patch_actions: list[str] = []
         self.firewall_actions: list[str] = []
         self.activation_calls: list[str] = []
-        self.ensure_homeassistant_user_calls = 0
-        self.ensure_homeassistant_user_labels: list[str | None] = []
         self.remove_agent_calls = 0
         self.restart_agent_calls = 0
         self.reload_gui_calls = 0
@@ -225,21 +223,6 @@ class _FakeMemoApi:
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_video_calls += 1
         return {"ok": True}
-
-    async def async_ensure_homeassistant_user(
-        self,
-        *,
-        account_label: str | None = None,
-    ) -> dict[str, Any]:
-        self.ensure_homeassistant_user_calls += 1
-        self.ensure_homeassistant_user_labels.append(account_label)
-        return {
-            "homeassistant_user_present": True,
-            "media_identity_available": True,
-            "routes_consistent": True,
-            "account_label": account_label,
-            "media_identity_source": "homeassistant",
-        }
 
     async def async_answering_machine_messages(self) -> dict[str, Any]:
         self.video_messages_calls += 1

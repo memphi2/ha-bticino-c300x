@@ -238,12 +238,12 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'throw new Error("entity is required")' not in source
     assert 'entity: config.entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID)' in source
     assert 'getGridOptions()' in source
-    assert "rows: 4" in source
+    assert "rows: 5" in source
     assert "columns: 12" in source
-    assert "min_rows: 4" in source
-    assert "max_rows: 4" in source
+    assert "min_rows: 5" in source
+    assert "max_rows: 5" in source
     assert "min_columns: 6" in source
-    assert "return this._isHomeCallMode() ? 1 : 6;" in source
+    assert "return this._isHomeCallMode() ? 1 : 7;" in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
     assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
     assert 'preview: true' in source

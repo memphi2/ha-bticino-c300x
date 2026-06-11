@@ -317,10 +317,10 @@ class C300XDoorbellCallCard extends HTMLElement {
       };
     }
     return {
-      rows: 4,
+      rows: 5,
       columns: 12,
-      min_rows: 4,
-      max_rows: 4,
+      min_rows: 5,
+      max_rows: 5,
       min_columns: 6,
     };
   }
@@ -360,7 +360,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._isHomeCallMode() ? 1 : 6;
+    return this._isHomeCallMode() ? 1 : 7;
   }
 
   _ensureRendered() {

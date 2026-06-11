@@ -290,11 +290,7 @@ class _AgentEventRegistration:
             self._registry_refresh_cancel = None
 
     def _send_connection_state_changed(self) -> None:
-        _send_connection_state_changed(
-            self._hass,
-            self._entry.entry_id,
-        )
-        _sync_repair_issues(self._hass, self._entry)
+        _send_connection_update(self._hass, self._entry)
 
 
 def _async_listen_entity_registry_updates(
@@ -545,14 +541,20 @@ def _schedule_unavailable_expiry(
     def _expire(now: Any = None) -> None:
         connection_state.expire_unavailable = None
         connection_state.mark_unavailable()
-        _send_connection_state_changed(hass, entry.entry_id)
-        _sync_repair_issues(hass, entry)
+        _send_connection_update(hass, entry)
 
     connection_state.expire_unavailable = async_call_later(
         hass,
         DEFAULT_RECONNECT_GRACE_SECONDS,
         _expire,
     )
+
+
+def _send_connection_update(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Notify entities and refresh repair issues after connection state changes."""
+
+    _send_connection_state_changed(hass, entry.entry_id)
+    _sync_repair_issues(hass, entry)
 
 
 def _send_connection_state_changed(hass: HomeAssistant, entry_id: str) -> None:

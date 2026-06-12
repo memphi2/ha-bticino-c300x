@@ -330,7 +330,7 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'attributes.external_owner === "external_media"' in source
 
 
-def test_bundled_card_answers_pending_doorbell_state_without_camera_owner() -> None:
+def test_bundled_card_answers_pending_doorbell_state_only_with_ring_media() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
 
     assert "_isRingCallPending(entity, cameraEntity)" in source
@@ -338,7 +338,7 @@ def test_bundled_card_answers_pending_doorbell_state_without_camera_owner() -> N
     assert source.index("this._isRingCallPending(entity, cameraEntity)") < source.index("if (active) {")
     assert 'attributes.video_owner === "ring"' in source
     assert 'state === "ringing" || state === "doorbell_pressed"' in source
-    assert "&& !this._isExternalDoorstationMedia(cameraEntity)" in source
+    assert "&& this._isRingPreviewAvailable(cameraEntity)" in source
 
 
 def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:

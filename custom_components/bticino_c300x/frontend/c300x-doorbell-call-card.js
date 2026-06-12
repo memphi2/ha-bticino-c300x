@@ -1070,7 +1070,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   _isRingCallPending(entity, cameraEntity) {
     const state = entity?.state;
     return (state === "ringing" || state === "doorbell_pressed")
-      && !this._isExternalDoorstationMedia(cameraEntity);
+      && this._isRingPreviewAvailable(cameraEntity);
   }
 
   _isRingPreviewAvailable(cameraEntity) {

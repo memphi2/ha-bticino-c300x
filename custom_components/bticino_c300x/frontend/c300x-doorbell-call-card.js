@@ -344,6 +344,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._previewStarting = false;
     this._answeringDoorbell = false;
     this._ringPreviewActive = false;
+    this._doorbellAnswered = false;
     this._error = "";
     this._notice = "";
     this._ensureRendered();
@@ -637,8 +638,11 @@ class C300XDoorbellCallCard extends HTMLElement {
       if (action === "answer") {
         this._answeringDoorbell = true;
         try {
-          this._closePeer(true, { keepMediaElement: true });
+          if (this._ringPreviewActive && this._pc) {
+            this._closePeer(true, { keepMediaElement: true });
+          }
           await this._answerDoorbellCall();
+          this._doorbellAnswered = true;
           await this._startTalkback();
         } finally {
           this._answeringDoorbell = false;
@@ -878,6 +882,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     this._remoteStream = null;
     this._ringPreviewActive = false;
+    this._doorbellAnswered = false;
     if (this._videoEl && !options.keepMediaElement) {
       this._videoEl.srcObject = null;
     }
@@ -1040,6 +1045,9 @@ class C300XDoorbellCallCard extends HTMLElement {
   _doorstationAction(entity, cameraEntity, active) {
     if (this._isExternalDoorstationMedia(cameraEntity)) {
       return "external_call";
+    }
+    if (this._doorbellAnswered) {
+      return "hang_up";
     }
     if (this._isRingCallPending(entity, cameraEntity)) {
       return "answer";

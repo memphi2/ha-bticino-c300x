@@ -33,6 +33,8 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "#define RING_VIDEO_RTCP_PORT 16719" in media_bridge
     assert "#define RING_AUDIO_PAYLOAD_TYPE 96" in media_bridge
     assert "#define RING_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert "#define RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS 300000" in media_bridge
+    assert "#define RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS 30000" in media_bridge
     assert "#define RTSP_AUDIO_PAYLOAD_TYPE 110" in media_bridge
     assert "strstr(message, \"sip:alluser@\")" in ring_thread_body
     assert ring_invite_body.index('100, "Trying"') < ring_invite_body.index(
@@ -75,6 +77,13 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert 'send_ring_response(bridge, sip_fd, invite, 200, "Ok"' in ring_media_loop_body
     assert "bridge->ring_audio_active = true;" in ring_media_loop_body
     assert "c300x_video_bridge_ring_media_started(bridge->video, 1)" in ring_media_loop_body
+    assert "long long last_inbound_activity = started_at;" in ring_media_loop_body
+    assert ring_media_loop_body.count("last_inbound_activity = monotonic_ms();") >= 5
+    assert "RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
+    assert "RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
+    assert ring_media_loop_body.index("now - last_inbound_activity") < (
+        ring_media_loop_body.index("if (now >= next_sip_keepalive)")
+    )
     assert "send_app_audio_silence_payload_type(" in ring_media_loop_body
     assert (
         "bridge->ring_srtp_state == srtp && !ring_talkback_recent_locked(bridge, now)"
@@ -140,7 +149,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "!ring_session && !home_call_session && !start_media_session" in rtsp_body
     assert "return bridge->ring_call_active && !bridge->ring_call_stop;" in media_bridge
     assert "return (bridge->home_call_started || bridge->home_call_active) && !bridge->home_call_stop;" in media_bridge
-    assert "request_ring_answer_if_active(&g_bridge, g_bridge.rtsp_audio_enabled)" in rtsp_body
+    assert "ring_session_active(&g_bridge)" in rtsp_body
+    assert "request_ring_answer_if_active(&g_bridge, g_bridge.rtsp_audio_enabled)" not in rtsp_body
     answer_request_body = media_bridge[
         media_bridge.index("static bool request_ring_answer_if_active") :
         media_bridge.index("static bool stop_ring_call_if_active")
@@ -149,9 +159,9 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "active && !bridge->ring_answered" in answer_request_body
     assert "bridge->ring_answer_requested = true;" in media_bridge
     assert rtsp_body.index("request_home_call_media_if_active") < rtsp_body.index(
-        "request_ring_answer_if_active"
+        "ring_session_active"
     )
-    assert rtsp_body.index("request_ring_answer_if_active") < rtsp_body.index(
+    assert rtsp_body.index("ring_session_active") < rtsp_body.index(
         "if (!ring_session && !home_call_session && !start_media_session(&g_bridge))"
     )
     assert (

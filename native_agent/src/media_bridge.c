@@ -62,6 +62,8 @@
 #define RING_RETRY_SECONDS 5
 #define RING_EARLY_MEDIA_DELAY_MS 300
 #define RING_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)
+#define RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS 300000
+#define RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS 30000
 #define HOME_CALL_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)
 
 static bool read_sip_domain(char *domain, size_t domain_len);
@@ -1651,6 +1653,15 @@ static bool request_ring_answer_if_active(media_bridge_t *bridge, bool audio) {
     return active;
 }
 
+static bool ring_session_active(media_bridge_t *bridge) {
+    bool active;
+
+    pthread_mutex_lock(&bridge->mutex);
+    active = ring_call_active_locked(bridge);
+    pthread_mutex_unlock(&bridge->mutex);
+    return active;
+}
+
 static bool home_call_active_locked(const media_bridge_t *bridge) {
     return (bridge->home_call_started || bridge->home_call_active) && !bridge->home_call_stop;
 }
@@ -1732,7 +1743,9 @@ static void ring_media_loop(
     long long next_audio = 0;
     long long next_rtcp = 0;
     long long next_stun = 0;
-    long long next_sip_keepalive = monotonic_ms() + ((long long)APP_SIP_KEEPALIVE_SECONDS * 1000LL);
+    long long started_at = monotonic_ms();
+    long long last_inbound_activity = started_at;
+    long long next_sip_keepalive = started_at + ((long long)APP_SIP_KEEPALIVE_SECONDS * 1000LL);
     uint32_t video_ssrc = 0;
     char message[SIP_BUFFER_SIZE];
     bool remote_ended = false;
@@ -1781,6 +1794,7 @@ static void ring_media_loop(
             c300x_video_bridge_ring_media_started(bridge->video, 1);
             c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
             answered = true;
+            last_inbound_activity = monotonic_ms();
         }
 
         fd_set readfds;
@@ -1813,6 +1827,7 @@ static void ring_media_loop(
                     break;
                 }
                 if (n > 0 && strncmp(message, "\r\n\r\n", 4) != 0) {
+                    last_inbound_activity = monotonic_ms();
                     if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
                         send_sip_ok_response(sip_fd, message);
                         remote_ended = true;
@@ -1822,20 +1837,33 @@ static void ring_media_loop(
                 }
             }
             if (audio_fd >= 0 && FD_ISSET(audio_fd, &readfds)) {
+                last_inbound_activity = monotonic_ms();
                 drain_ring_srtp_socket(bridge, audio_fd, srtp->audio_in, false, true, NULL);
             }
             if (audio_rtcp_fd >= 0 && FD_ISSET(audio_rtcp_fd, &readfds)) {
+                last_inbound_activity = monotonic_ms();
                 drain_ring_srtp_socket(bridge, audio_rtcp_fd, srtp->audio_in, true, true, NULL);
             }
             if (video_fd >= 0 && FD_ISSET(video_fd, &readfds)) {
+                last_inbound_activity = monotonic_ms();
                 drain_ring_srtp_socket(bridge, video_fd, srtp->video_in, false, false, &video_ssrc);
             }
             if (video_rtcp_fd >= 0 && FD_ISSET(video_rtcp_fd, &readfds)) {
+                last_inbound_activity = monotonic_ms();
                 drain_ring_srtp_socket(bridge, video_rtcp_fd, srtp->video_in, true, false, NULL);
             }
         }
 
         long long now = monotonic_ms();
+        if (
+            now - last_inbound_activity >= (
+                answered
+                    ? RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS
+                    : RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS
+            )
+        ) {
+            break;
+        }
         if (now >= next_sip_keepalive) {
             (void)send_all(sip_fd, "\r\n\r\n", 4);
             next_sip_keepalive = now + ((long long)APP_SIP_KEEPALIVE_SECONDS * 1000LL);
@@ -4719,7 +4747,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             send_rtsp_response(fd, 200, cseq, headers, NULL);
         } else if (strcmp(method, "PLAY") == 0) {
             bool home_call_session = request_home_call_media_if_active(&g_bridge, g_bridge.rtsp_audio_enabled);
-            bool ring_session = !home_call_session && request_ring_answer_if_active(&g_bridge, g_bridge.rtsp_audio_enabled);
+            bool ring_session = !home_call_session && ring_session_active(&g_bridge);
             if (!ring_session && !home_call_session && !start_media_session(&g_bridge)) {
                 send_rtsp_response(fd, 500, cseq, NULL, NULL);
                 break;

@@ -126,6 +126,21 @@ def _status_is_home_call_media_active(status: dict[str, Any]) -> bool:
     )
 
 
+def _status_is_unanswered_ring_call(status: dict[str, Any]) -> bool:
+    """Return true for ring early media before HA has answered the call."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
+    return (
+        (owner == "ring" or bool(bridge.get("ring_call_active") or bridge.get("ring_media_active")))
+        and not bool(
+            bridge.get("ring_answer_requested")
+            or bridge.get("ring_answered")
+            or bridge.get("ring_audio_active")
+        )
+    )
+
+
 def _home_call_payload(data: dict[str, Any]) -> dict[str, Any]:
     payload = data.get("home_call")
     if isinstance(payload, dict):
@@ -858,6 +873,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 home_call_audio_only = True
             else:
                 stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
+                ring_status = {
+                    "media_owner": self._video_owner,
+                    "bridge": self._bridge_status,
+                }
                 ring_call_active = (
                     self._video_owner == "ring"
                     or bool(self._bridge_status.get("ring_call_active"))
@@ -865,15 +884,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
                 session.ring_call = ring_call_active
                 home_call_audio_only = wants_audio and _status_is_home_call_media_active(
-                    {
-                        "media_owner": self._video_owner,
-                        "bridge": self._bridge_status,
-                    }
+                    ring_status
                 )
-                session.ring_preview = (
-                    not wants_audio
-                    and ring_call_active
-                )
+                session.ring_preview = _status_is_unanswered_ring_call(ring_status)
 
             if home_call_audio_only:
                 audio_track = _new_restarting_rtsp_audio_track(
@@ -1044,7 +1057,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         with suppress(Exception):
             await session.peer.close()
 
-        if not self._webrtc_sessions and stop_media and not session.ring_preview:
+        if session.ring_preview:
+            with suppress(Exception):
+                session.ring_preview = _status_is_unanswered_ring_call(
+                    await self._async_refresh_video_status(apply_status=False)
+                )
+
+        if (
+            not self._webrtc_sessions
+            and stop_media
+            and not session.ring_preview
+            and not session.ring_call
+        ):
             if session.owner == "home_call":
                 with suppress(Exception):
                     await self._entry.runtime_data.api.async_stop_home_call()

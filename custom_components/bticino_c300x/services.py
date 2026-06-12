@@ -512,7 +512,7 @@ class _C300XServiceHandlers:
         announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
         include_audio = bool(call.data.get(_ATTR_INCLUDE_AUDIO, True))
         await _async_ensure_ring_capture_not_busy(entry)
-        if include_audio:
+        if include_audio or announcement_path is not None:
             await _raise_agent_command_failed(
                 entry.runtime_data.api.async_answer_doorbell_call(audio=True)
             )

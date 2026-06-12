@@ -6343,7 +6343,10 @@ static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime
 {
     return runtime != NULL
         && runtime->smartphone_forwarding_mode_known
-        && runtime->smartphone_forwarding_mode_code == 0;
+        && (
+            runtime->smartphone_forwarding_mode_code == 0
+            || runtime->smartphone_forwarding_mode_code == 1
+        );
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)

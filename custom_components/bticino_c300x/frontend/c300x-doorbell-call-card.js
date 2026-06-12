@@ -638,10 +638,10 @@ class C300XDoorbellCallCard extends HTMLElement {
       if (action === "answer") {
         this._answeringDoorbell = true;
         try {
+          await this._answerDoorbellCall();
           if (this._ringPreviewActive && this._pc) {
             this._closePeer(true, { keepMediaElement: true });
           }
-          await this._answerDoorbellCall();
           this._doorbellAnswered = true;
           await this._startTalkback();
         } finally {

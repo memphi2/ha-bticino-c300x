@@ -41,8 +41,8 @@ Assistant Ring Calls, HA-side Ring Call capture diagnostics, local Whisper
 transcription from the retained raw WAV, and an optional strict phrase-match
 door unlock evaluation service.
 
-The 1.0.0 line adds the three app-like media workflows that users expect from a
-video door station:
+The core media workflows are the app-like controls users expect from a video
+door station:
 
 - **On-demand**: open the door camera from Home Assistant when nobody is
   ringing.
@@ -376,6 +376,11 @@ on-demand C300X doorbell video session. The
 media session. Use the stop service or card hang-up action; pausing a generic
 camera card may not immediately close the native media session.
 
+For normal use, answer Ring Calls from the bundled doorstation card. The lower
+level `bticino_c300x.answer_doorbell_call` and
+`bticino_c300x.hangup_doorbell_call` services are available for automations,
+but they still need a browser, recorder or other media consumer for playback.
+
 Smartphone forwarding has three modes:
 
 - `enabled`: the original all-smartphones forwarding path is active, and Home
@@ -390,6 +395,12 @@ Smartphone forwarding has three modes:
 The `in-house-only` mode requires the native agent update, the Home Assistant
 media user patch, the in-house binary patch and the in-house QML patch. The
 C300X display label is localized in English, German, French and Italian.
+
+Ring Call capture is a diagnostic/automation workflow, not the normal dashboard
+view. It answers the active Ring Call, records a short MP4 to `/media/c300x/`
+by default, keeps raw WAV work files below `/config/c300x/` by default, then
+hangs up. Capture cannot run while the doorstation card, another browser, or
+another RTSP client is already connected to the same Ring Call.
 
 The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
 loads it automatically when the integration is set up. Add it from the card

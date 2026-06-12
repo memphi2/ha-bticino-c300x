@@ -227,6 +227,11 @@ The integration can register these services, depending on capabilities:
 - `bticino_c300x.stair_light`
 - `bticino_c300x.activate_doorbell_video`
 - `bticino_c300x.stop_doorbell_video`
+- `bticino_c300x.answer_doorbell_call`
+- `bticino_c300x.hangup_doorbell_call`
+- `bticino_c300x.capture_doorbell_call`
+- `bticino_c300x.run_ring_wyoming_analysis`
+- `bticino_c300x.evaluate_ring_analysis`
 - `bticino_c300x.start_home_call`
 - `bticino_c300x.stop_home_call`
 - `bticino_c300x.reboot`
@@ -301,6 +306,11 @@ The `bticino_c300x.capture_doorbell_call` service can answer an active Ring Call
 and write a short local MP4 plus a raw mono WAV for analysis. Runtime files are
 kept below `/media/c300x/`, `/config/c300x/` or `/config/www/c300x/` and must
 not be committed.
+
+Default paths are user-facing and local: MP4 clips go to `/media/c300x/`, raw
+WAV work files go to `/config/c300x/`, and Wyoming/decision JSON defaults go to
+`/config/c300x/analysis/`. Capture is exclusive; close the doorstation card or
+any other RTSP client before running it.
 
 Use `bticino_c300x.run_ring_wyoming_analysis` to transcribe the newest retained
 raw WAV with a local Wyoming Whisper service. This does not use cloud AI and

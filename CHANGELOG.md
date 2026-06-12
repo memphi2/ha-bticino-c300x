@@ -8,8 +8,9 @@
   dedicated Home Assistant media user and device patches applied, the C300X can
   route doorbell Ring Calls to Home Assistant without forwarding them to all
   smartphones.
-- Adds HA-side Ring Call capture diagnostics that keep a raw mono WAV next to
-  the captured MP4 for local speech analysis.
+- Adds HA-side Ring Call capture diagnostics. MP4 clips default to
+  `/media/c300x/`, while retained raw WAV work files default to `/config/c300x/`
+  for local speech analysis.
 - Adds local Wyoming Whisper transcription for the newest retained Ring Call raw
   WAV without requiring image analysis or cloud AI.
 - Adds an optional strict phrase-match evaluation service that can unlock the

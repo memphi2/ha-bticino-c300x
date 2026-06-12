@@ -144,7 +144,7 @@ answer_doorbell_call:
         text:
     audio:
       name: Enable audio
-      description: Request the C300X audio path when answering the ring call.
+      description: Request the C300X audio path when answering the ring call. Keep this enabled for normal Ring Call playback and talkback.
       required: false
       default: true
       selector:

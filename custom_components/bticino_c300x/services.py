@@ -508,7 +508,7 @@ class _C300XServiceHandlers:
         """Capture a short C300X doorbell ring-call clip on Home Assistant."""
 
         entry = _entry_for_call(self._hass, call)
-        _ensure_doorbell_video_supported(entry)
+        _ensure_doorbell_call_supported(entry)
         announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
         include_audio = bool(call.data.get(_ATTR_INCLUDE_AUDIO, True))
         await _async_ensure_ring_capture_not_busy(entry)

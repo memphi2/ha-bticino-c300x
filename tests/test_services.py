@@ -574,7 +574,10 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         api = _FakeApi()
         entry = _FakeEntry(
             _FakeRuntimeData(
-                capabilities={"doorbell_video": {"supported": True}},
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
                 api=api,
             ),
             data={CONF_VIDEO_ENABLED: True},
@@ -690,7 +693,10 @@ def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> 
         api.doorbell_video_status = {"bridge": {"clients": 1}}
         entry = _FakeEntry(
             _FakeRuntimeData(
-                capabilities={"doorbell_video": {"supported": True}},
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
                 api=api,
             ),
             data={CONF_VIDEO_ENABLED: True},
@@ -727,7 +733,10 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         api = _FakeApi()
         entry = _FakeEntry(
             _FakeRuntimeData(
-                capabilities={"doorbell_video": {"supported": True}},
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
                 api=api,
             ),
             data={CONF_VIDEO_ENABLED: True},
@@ -758,7 +767,10 @@ def test_capture_doorbell_call_preserves_capture_error_when_hangup_fails(
         api.hangup_doorbell_call_error = RuntimeError("hangup failed")
         entry = _FakeEntry(
             _FakeRuntimeData(
-                capabilities={"doorbell_video": {"supported": True}},
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
                 api=api,
             ),
             data={CONF_VIDEO_ENABLED: True},

@@ -346,6 +346,9 @@
     "home_call_not_available": {
       "message": "Zuhause-Anruf ist nicht aktiviert oder wird vom installierten C300X-Device-Agent nicht unterstuetzt."
     },
+    "ring_capture_busy": {
+      "message": "Die C300X-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
+    },
     "entry_id_required": {
       "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Eintraege existieren."
     },

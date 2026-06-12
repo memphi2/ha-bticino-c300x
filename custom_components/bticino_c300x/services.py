@@ -286,6 +286,30 @@ async def _raise_agent_command_failed(awaitable: Awaitable[Any]) -> None:
         raise service_validation_error("agent_command_failed") from err
 
 
+def _doorbell_video_client_count(status: dict[str, Any]) -> int:
+    """Return active RTSP clients reported by the native video bridge."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    clients = 0
+    for value in (status.get("clients"), bridge.get("clients")):
+        try:
+            clients = max(clients, int(value))
+        except (TypeError, ValueError):
+            continue
+    return max(0, clients)
+
+
+async def _async_ensure_ring_capture_not_busy(entry: Any) -> None:
+    """Reject HA-side capture while another RTSP client owns the bridge."""
+
+    try:
+        status = await entry.runtime_data.api.async_doorbell_video_status()
+    except Exception as err:
+        raise service_validation_error("agent_command_failed") from err
+    if _doorbell_video_client_count(status) > 0:
+        raise service_validation_error("ring_capture_busy")
+
+
 async def _latest_video_message_id_for_entry(entry: Any) -> str:
     """Return the newest stored video-message id, refreshing once if needed."""
 
@@ -487,6 +511,7 @@ class _C300XServiceHandlers:
         _ensure_doorbell_video_supported(entry)
         announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
         include_audio = bool(call.data.get(_ATTR_INCLUDE_AUDIO, True))
+        await _async_ensure_ring_capture_not_busy(entry)
         if include_audio:
             await _raise_agent_command_failed(
                 entry.runtime_data.api.async_answer_doorbell_call(audio=True)

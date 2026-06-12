@@ -346,6 +346,9 @@
     "home_call_not_available": {
       "message": "La chiamata casa non è abilitata o non è supportata dal device agent C300X installato."
     },
+    "ring_capture_busy": {
+      "message": "La registrazione della chiamata C300X è occupata perché un altro client video è già connesso."
+    },
     "entry_id_required": {
       "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
     },

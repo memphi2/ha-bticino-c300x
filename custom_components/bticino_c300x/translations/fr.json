@@ -346,6 +346,9 @@
     "home_call_not_available": {
       "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installe."
     },
+    "ring_capture_busy": {
+      "message": "La capture d'appel C300X est occupee, car un autre client video est deja connecte."
+    },
     "entry_id_required": {
       "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
     },

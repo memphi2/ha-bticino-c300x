@@ -346,6 +346,9 @@
     "home_call_not_available": {
       "message": "Home call is not enabled or is not supported by the installed C300X device agent."
     },
+    "ring_capture_busy": {
+      "message": "C300X ring capture is busy because another video client is already connected."
+    },
     "entry_id_required": {
       "message": "Entry ID is required when more than one BTicino C300X entry exists."
     },

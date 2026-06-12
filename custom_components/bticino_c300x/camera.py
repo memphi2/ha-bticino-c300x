@@ -44,6 +44,13 @@ from .const import (
 from .device_user import media_user_attribute
 from .entity import C300XEntity, entry_config_value, supports_capability
 from .event_payload import agent_event_key
+from .media_status import (
+    home_call_payload as _home_call_payload,
+    status_is_call_media_active as _status_is_call_media_active,
+    status_is_external_media_active as _status_is_external_media_active,
+    status_is_home_call_media_active as _status_is_home_call_media_active,
+    status_is_unanswered_ring_call as _status_is_unanswered_ring_call,
+)
 from .video import (
     doorbell_camera_unique_id,
     optional_string,
@@ -96,62 +103,6 @@ def _preload_dns_mdns_modules(
         mdns_rdclass = int(dns_rdataclass.IN) | _MDNS_CACHE_FLUSH_BIT
         for rdtype in (dns_rdatatype.A, dns_rdatatype.AAAA):
             dns_rdata.get_rdata_class(mdns_rdclass, rdtype)
-
-
-def _status_is_call_media_active(status: dict[str, Any]) -> bool:
-    """Return true when the native bridge is already serving call media."""
-
-    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
-    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
-    return owner in {"ring", "home_call"} or bool(
-        bridge.get("ring_call_active") or bridge.get("ring_media_active")
-        or bridge.get("home_call_running") or bridge.get("home_call_active")
-    )
-
-
-def _status_is_external_media_active(status: dict[str, Any]) -> bool:
-    """Return true while the native agent sees a non-HA doorbell media window."""
-
-    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
-    return bool(status.get("external_media_active") or bridge.get("external_media_active"))
-
-
-def _status_is_home_call_media_active(status: dict[str, Any]) -> bool:
-    """Return true when the native bridge is serving an audio-only home call."""
-
-    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
-    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
-    return owner == "home_call" or bool(
-        bridge.get("home_call_running") or bridge.get("home_call_active")
-    )
-
-
-def _status_is_unanswered_ring_call(status: dict[str, Any]) -> bool:
-    """Return true for ring early media before HA has answered the call."""
-
-    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
-    owner = str(status.get("media_owner") or bridge.get("media_owner") or "").lower()
-    return (
-        (owner == "ring" or bool(bridge.get("ring_call_active") or bridge.get("ring_media_active")))
-        and not bool(
-            bridge.get("ring_answer_requested")
-            or bridge.get("ring_answered")
-            or bridge.get("ring_audio_active")
-        )
-    )
-
-
-def _home_call_payload(data: dict[str, Any]) -> dict[str, Any]:
-    payload = data.get("home_call")
-    if isinstance(payload, dict):
-        return payload
-    nested = data.get("data")
-    if isinstance(nested, dict):
-        payload = nested.get("home_call")
-        if isinstance(payload, dict):
-            return payload
-        return nested
-    return {}
 
 
 def _load_aiortc_modules() -> SimpleNamespace:

@@ -9,6 +9,7 @@
 #include "mqtt_bridge.h"
 #include "recent_events.h"
 #include "sha256.h"
+#include "smartphone_forwarding.h"
 #include "string_util.h"
 #include "video_rtsp.h"
 
@@ -6231,43 +6232,9 @@ static int parse_openwebnet_address_event(
     return address_is_valid(address);
 }
 
-static const char *smartphone_mode_from_code(int code)
-{
-    if (code == 0) {
-        return "enabled";
-    }
-    if (code == 1) {
-        return "in-house-only";
-    }
-    if (code == 2) {
-        return "blocked";
-    }
-    return NULL;
-}
-
-static int smartphone_code_from_reply(const char *reply, int *code)
-{
-    int parsed = -1;
-
-    if (reply == NULL || code == NULL) {
-        return 0;
-    }
-    if (
-        sscanf(reply, "*#8**37*%d##", &parsed) != 1
-        && sscanf(reply, "*#8**#37*%d##", &parsed) != 1
-    ) {
-        return 0;
-    }
-    if (smartphone_mode_from_code(parsed) == NULL) {
-        return 0;
-    }
-    *code = parsed;
-    return 1;
-}
-
 static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
 {
-    if (runtime == NULL || smartphone_mode_from_code(code) == NULL) {
+    if (runtime == NULL || c300x_smartphone_mode_from_code(code) == NULL) {
         return;
     }
     runtime->smartphone_forwarding_mode_known = 1;
@@ -6277,7 +6244,7 @@ static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, i
 static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int code)
 {
     if (runtime == NULL) {
-        return smartphone_mode_from_code(code) != NULL;
+        return c300x_smartphone_mode_from_code(code) != NULL;
     }
     if (!runtime->smartphone_forwarding_mode_known) {
         remember_smartphone_forwarding_mode(runtime, code);
@@ -6333,7 +6300,7 @@ static void refresh_smartphone_forwarding_mode(
     if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
         return;
     }
-    if (smartphone_code_from_reply(reply, &code)) {
+    if (c300x_smartphone_code_from_reply(reply, &code)) {
         remember_smartphone_forwarding_mode(runtime, code);
         sync_ring_receiver_for_forwarding(runtime);
     }
@@ -6392,8 +6359,8 @@ static int map_openwebnet_event(
         c300x_copy_string(type, type_len, muted ? "ringer.muted" : "ringer.unmuted");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"muted\":%s}", raw_json, muted ? "true" : "false");
     }
-    if (smartphone_code_from_reply(msg, &code)) {
-        const char *mode = smartphone_mode_from_code(code);
+    if (c300x_smartphone_code_from_reply(msg, &code)) {
+        const char *mode = c300x_smartphone_mode_from_code(code);
         size_t used = 0;
         int changed = note_smartphone_forwarding_changed(runtime, code);
         sync_ring_receiver_for_forwarding(runtime);
@@ -7101,7 +7068,7 @@ static void api_state(
         video_available = video_status.enabled;
     }
     if (runtime != NULL && runtime->smartphone_forwarding_mode_known) {
-        smartphone_forwarding = smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
+        smartphone_forwarding = c300x_smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
     }
     if (config->video_enabled) {
         video_path = config->video_rtsp_video_path;
@@ -8056,8 +8023,8 @@ static const char *smartphone_mode_from_reply(const char *reply)
 {
     int code;
 
-    if (smartphone_code_from_reply(reply, &code)) {
-        return smartphone_mode_from_code(code);
+    if (c300x_smartphone_code_from_reply(reply, &code)) {
+        return c300x_smartphone_mode_from_code(code);
     }
     return NULL;
 }
@@ -8453,7 +8420,7 @@ static void handle_smartphone_get(
     if (mode == NULL) {
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
     } else {
-        if (smartphone_code_from_reply(reply, &code)) {
+        if (c300x_smartphone_code_from_reply(reply, &code)) {
             remember_smartphone_forwarding_mode(runtime, code);
             sync_ring_receiver_for_forwarding(runtime);
         }
@@ -8498,7 +8465,7 @@ static void handle_smartphone_post(
         return;
     }
     readback = smartphone_mode_from_reply(reply);
-    if (smartphone_code_from_reply(reply, &readback_code)) {
+    if (c300x_smartphone_code_from_reply(reply, &readback_code)) {
         remember_smartphone_forwarding_mode(runtime, readback_code);
         sync_ring_receiver_for_forwarding(runtime);
     }

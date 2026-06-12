@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Stop doorbell video"
       },
-      "ensure_homeassistant_user": {
-        "name": "Create Home Assistant media user"
-      },
       "delete_latest_voice_memo": {
         "name": "Delete latest voice memo"
       }
@@ -252,6 +249,9 @@
           "warning": "Warning",
           "error": "Error"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Device agent diagnostics"
       },
       "device_cpu": {
         "name": "Device CPU"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Legacy MQTT bridge"
       },
-      "smartphone_forwarding": {
-        "name": "Smartphone forwarding"
+      "homeassistant_user_patch": {
+        "name": "Home Assistant user patch"
       }
     }
   },
@@ -345,6 +345,9 @@
     },
     "home_call_not_available": {
       "message": "Home call is not enabled or is not supported by the installed C300X device agent."
+    },
+    "ring_capture_busy": {
+      "message": "C300X ring capture is busy because another video client is already connected."
     },
     "entry_id_required": {
       "message": "Entry ID is required when more than one BTicino C300X entry exists."
@@ -388,11 +391,11 @@
         "step": {
           "confirm": {
             "title": "Update C300X device agent",
-            "description": "Home Assistant will upload the packaged native agent through the currently configured maintenance API. SSH credentials are not needed. Active GUI and firewall patches are checked read-only first and refreshed only if they were already active and the packaged patch source changed.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nGUI patch status: {qml_patch_status}\nReason: {reason}"
+            "description": "Home Assistant will upload the packaged native agent through the currently configured maintenance API. SSH credentials are not needed. Active GUI and firewall patches are checked read-only first and refreshed only if they were already active and the packaged patch source changed. If you use in-house-only Ring Calls, also verify the Home Assistant user / in-house binary patch in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nGUI patch status: {qml_patch_status}\nReason: {reason}"
           },
           "ssh_install": {
             "title": "Reinstall C300X device agent over SSH",
-            "description": "This installed agent cannot update itself yet. Home Assistant will use these one-time SSH credentials to install the packaged agent, then refresh only active GUI and firewall patches when the packaged patch source changed. The SSH credentials are not stored.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nGUI patch status: {qml_patch_status}\nReason: {reason}",
+            "description": "This installed agent cannot update itself yet. Home Assistant will use these one-time SSH credentials to install the packaged agent, then refresh only active GUI and firewall patches when the packaged patch source changed. The SSH credentials are not stored. If you use in-house-only Ring Calls, also verify the Home Assistant user / in-house binary patch in the integration options after the update.\n\nInstalled: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackaged: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nUpdate path: {update_path}\nGUI patch status: {qml_patch_status}\nReason: {reason}",
             "data": {
               "bootstrap_ssh_username": "SSH username",
               "bootstrap_ssh_password": "SSH password"

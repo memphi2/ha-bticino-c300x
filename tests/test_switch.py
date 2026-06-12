@@ -29,6 +29,10 @@ if "homeassistant.components.switch" not in sys.modules:
         "homeassistant.const",
         types.ModuleType("homeassistant.const"),
     )
+    exceptions = sys.modules.setdefault(
+        "homeassistant.exceptions",
+        types.ModuleType("homeassistant.exceptions"),
+    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -66,11 +70,15 @@ if "homeassistant.components.switch" not in sys.modules:
     class EntityCategory:  # pragma: no cover - import-time stub only
         CONFIG = "config"
 
+    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+        pass
+
     switch.SwitchEntity = SwitchEntity
     config_entries.ConfigEntry = ConfigEntry
     const.EntityCategory = EntityCategory
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
+    exceptions.HomeAssistantError = HomeAssistantError
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
@@ -93,6 +101,7 @@ from custom_components.bticino_c300x.api import (
 from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XFirewallPatchSwitch,
     C300XGuiFunctionPatchSwitch,
+    C300XHomeAssistantUserPatchSwitch,
     C300XIpv6FirewallPatchSwitch,
     C300XLegacyMqttBridgeSwitch,
     C300XMaintenanceNoAuthSwitch,
@@ -101,7 +110,6 @@ from custom_components.bticino_c300x.switch import (  # noqa: E402
     C300XNativeMqttBridgeSwitch,
     C300XNoAuthSwitch,
     C300XRingerMuteSwitch,
-    C300XSmartphoneForwardingSwitch,
     _async_refresh_initial_states,
     async_setup_entry,
 )
@@ -128,6 +136,7 @@ class _FakeApi:
         self.ipv6_firewall_config_enabled = True
         self.ipv6_firewall_enable_sets: list[bool] = []
         self.auth_config_reads = 0
+        self.device_user_status_reads = 0
         self.no_auth_sets: list[tuple[bool, str | None, str | None, bool | None]] = []
         self.maintenance_no_auth_sets: list[bool] = []
         self.mdns_sets: list[bool] = []
@@ -285,6 +294,15 @@ class _FakeApi:
             "ipv6_firewall_enabled": self.ipv6_firewall_config_enabled,
         }
 
+    async def async_device_user_status(self) -> dict[str, Any]:
+        self.device_user_status_reads += 1
+        return {
+            "homeassistant_user_present": True,
+            "routes_consistent": True,
+            "inhouse_binary_patch_applied": True,
+            "inhouse_qml_patch_applied": True,
+        }
+
     async def async_set_no_auth_enabled(
         self,
         enabled: bool,
@@ -431,6 +449,7 @@ class _FakeRuntimeData:
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
+    device_user_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -440,70 +459,6 @@ class _FakeEntry:
     data: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
-
-
-def test_smartphone_forwarding_refresh_uses_active_read_only_status() -> None:
-    entry = _FakeEntry()
-    entity = C300XSmartphoneForwardingSwitch(entry)  # type: ignore[arg-type]
-
-    asyncio.run(entity.async_update())
-
-    assert entry.runtime_data.api.active_smartphone_reads == 1
-    assert entry.runtime_data.api.cached_smartphone_reads == 0
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
-
-
-def test_smartphone_forwarding_event_updates_switch_state() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "mode": "enabled",
-            }
-        )
-    )
-
-    assert entity.is_on is True
-    assert entity.extra_state_attributes == {"mode": 0, "state": "enabled"}
-
-
-def test_smartphone_forwarding_event_supports_numeric_state_only_payload() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "state": "blocked",
-                "mode": None,
-            }
-        )
-    )
-
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
-
-
-def test_smartphone_forwarding_event_supports_numeric_mode_only_payload() -> None:
-    entity = C300XSmartphoneForwardingSwitch(_FakeEntry())  # type: ignore[arg-type]
-
-    entity._handle_agent_event(
-        SimpleNamespace(
-            data={
-                "entry_id": "entry-1",
-                "event_type": "smartphone_forwarding_changed",
-                "mode": 1,
-            }
-        )
-    )
-
-    assert entity.is_on is False
-    assert entity.extra_state_attributes == {"mode": 1, "state": "in-house-only"}
 
 
 def test_ringer_unmuted_event_updates_switch_state() -> None:
@@ -542,6 +497,18 @@ def test_maintenance_ssh_switch_stops_ssh() -> None:
 
     assert entry.runtime_data.api.ssh_sets == [False]
     assert entity.is_on is False
+
+
+def test_homeassistant_user_patch_refreshes_before_hass_is_bound() -> None:
+    entry = _FakeEntry()
+    entity = C300XHomeAssistantUserPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entry.runtime_data.api.device_user_status_reads == 1
+    assert entry.runtime_data.device_user_status["homeassistant_user_present"] is True
+    assert entity.available is True
+    assert entity.is_on is True
 
 
 def test_gui_function_patch_switch_uses_read_only_status() -> None:

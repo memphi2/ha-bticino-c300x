@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v1.0.2-0366d6?style=flat-square)](.github/release-notes/v1.0.2.md)
+[![Release](https://img.shields.io/badge/release-v1.1.0-0366d6?style=flat-square)](.github/release-notes/v1.1.0.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,7 +20,7 @@ no fake Home Assistant entities.
 
 ## Status
 
-- Current release line: `1.0.2`
+- Current release line: `1.1.0`
 - Home Assistant requirement: `2026.5.0` or newer
 - IoT class: `local_push`
 - HACS type: custom integration with `zip_release`
@@ -36,18 +36,19 @@ Assistant device: doorbell events, camera, talkback, door unlock, stair light,
 ringer/forwarding controls, messages and optional display pages, all without a
 polling controller or a Node.js runtime on the C300X.
 
-The 1.0.2 release fixes the managed C300X firewall patch so reboot-persistent
-firewall rules open the API, RTSP and talkback RTP ports needed by the app-like
-media workflows.
+The 1.1.0 release adds the tested `in-house-only` forwarding mode for Home
+Assistant Ring Calls, HA-side Ring Call capture diagnostics, local Whisper
+transcription from the retained raw WAV, and an optional strict phrase-match
+door unlock evaluation service.
 
-The 1.0.0 line adds the three app-like media workflows that users expect from a
-video door station:
+The core media workflows are the app-like controls users expect from a video
+door station:
 
 - **On-demand**: open the door camera from Home Assistant when nobody is
   ringing.
-- **Ring Call**: when someone rings and smartphone forwarding is enabled,
-  answer the real incoming door call from Home Assistant with video, device
-  audio and talkback.
+- **Ring Call**: when someone rings and smartphone forwarding is `enabled` or
+  `in-house-only`, answer the real incoming door call from Home Assistant with
+  video, device audio and talkback.
 - **Home Call**: call the C300X from Home Assistant as an audio-only in-house
   call.
 
@@ -77,16 +78,19 @@ yet, do that first. Rooting and firmware patching are outside this repository.
   browser or mobile app has microphone access over HTTPS or Home Assistant
   Cloud.
 - Audio-only Home Call from Home Assistant to the C300X.
+- Tested `in-house-only` smartphone forwarding mode for routing Ring Calls to
+  Home Assistant without forwarding them to all smartphones.
 - Door unlock and stair-light actions.
-- Ringer mute, smartphone forwarding, answering machine and message support.
+- Ringer mute, three-state smartphone forwarding, answering machine and message
+  support.
 - Video-message playback/delete, voice-memo playback/delete and text-memo
   visibility/delete.
 - Optional C300X display pages for Alarmo and a dynamic Home Assistant board.
 - Multilingual C300X display labels with German, French, Italian and English
   text.
 - Optional mDNS bootstrap discovery for Home Assistant Zeroconf.
-- Low-noise diagnostics for connection state, write counters and device
-  metrics.
+- Low-noise diagnostics: compact normal status plus a disabled-by-default
+  detailed device-agent diagnostics entity.
 - Original C300X Quick Actions can be exposed as Home Assistant buttons when the
   installed agent has a safe address or command for them.
 
@@ -164,13 +168,16 @@ Exact entities depend on the capabilities reported by your installed agent.
 | `event` | Standard doorbell ring event, optional diagnostic device-event stream |
 | `binary_sensor` | Home Call active state |
 | `button` | Door unlock, stair light, reboot, reload GUI, remove device agent, delete latest memo/message |
-| `switch` | Ringer mute, smartphone forwarding, answering machine, SSH maintenance, noAuth bootstrap, mDNS, GUI patch, firewall patches |
-| `sensor` | Device agent status, doorbell state, message/memo counters, optional device metrics |
+| `select` | Three-state smartphone forwarding mode |
+| `switch` | Ringer mute, answering machine, SSH maintenance, noAuth bootstrap, mDNS, GUI patch, firewall patches |
+| `sensor` | Device agent status, doorbell state, message/memo counters, optional device metrics and disabled detailed agent diagnostics |
 
 The integration also registers services for door unlock, stair light, Alarmo
 commands, dashboard actions, Home Call start/stop, latest video-message
 playback/delete, latest voice-memo playback/delete, latest text-memo
-write/delete and explicit doorbell-video start/stop for automations.
+write/delete, explicit doorbell-video start/stop, Ring Call answer/hang-up,
+Ring Call capture, local Wyoming transcription and strict phrase-match
+evaluation for automations.
 
 ## Installation
 
@@ -304,11 +311,15 @@ The feature step lets you enable only what you need:
 - Stair-light address
 - Optional maintenance controls
 
-The GUI patch is explicit. Normal Home Assistant startup must not patch the
-device UI. When enabled, the patch process backs up original QML files once,
-renders the target files, compares byte-for-byte, writes only changed files,
-remounts the root filesystem writable only for the final copy, and returns it to
-read-only immediately afterwards.
+Device patches are explicit. Normal Home Assistant startup must not patch the
+device UI or firmware files. The optional GUI patch changes only the C300X
+display QML needed for display pages. The Home Assistant media user patch is
+separate and, for `in-house-only`, includes the device-side binary patch that
+routes the in-house forwarding path to Home Assistant.
+
+When a patch is enabled, the agent backs up original files first, compares
+byte-for-byte, writes only changed files, remounts the root filesystem writable
+only for the final copy, and returns it to read-only immediately afterwards.
 
 ### 6. After setup
 
@@ -356,10 +367,10 @@ There are three user-facing media workflows:
 
 - **On-demand**: press play in the doorstation card when nobody is ringing.
   Home Assistant starts the normal C300X camera path and opens video/audio.
-- **Ring Call**: when someone rings and smartphone forwarding is enabled, the
-  agent reports the real incoming call/media state. Press **Answer** in Home
-  Assistant to take over that call through the app-like Home Assistant workflow,
-  with video, device audio and microphone talkback.
+- **Ring Call**: when someone rings and smartphone forwarding is `enabled` or
+  `in-house-only`, the agent reports the real incoming call/media state. Press
+  **Answer** in Home Assistant to take over that call through the app-like Home
+  Assistant workflow, with video, device audio and microphone talkback.
 - **Home Call**: the Home Call card starts an audio-only call from Home
   Assistant to the C300X. It is intentionally separate from doorbell/ring media.
 
@@ -369,18 +380,38 @@ on-demand C300X doorbell video session. The
 media session. Use the stop service or card hang-up action; pausing a generic
 camera card may not immediately close the native media session.
 
-When smartphone forwarding is `blocked`, the C300X still emits a doorbell ring
-event but does not deliver a real SIP ring call to the Home Assistant media
-user. In that state the card does not show **Answer**; use **Stream** for
-on-demand viewing. A separate HA-only `in-house only` ring mode is planned for a
-future release and is not enabled silently by 1.0.0.
+For normal use, answer Ring Calls from the bundled doorstation card. The lower
+level `bticino_c300x.answer_doorbell_call` and
+`bticino_c300x.hangup_doorbell_call` services are available for automations,
+but they still need a browser, recorder or other media consumer for playback.
+
+Smartphone forwarding has three modes:
+
+- `enabled`: the original all-smartphones forwarding path is active, and Home
+  Assistant can answer the real Ring Call when the Home Assistant media user is
+  registered.
+- `in-house-only`: the patched C300X forwards the Ring Call to the in-house
+  route used by Home Assistant, without forwarding it to all smartphones.
+- `blocked`: the C300X still emits a doorbell ring event, but it does not
+  deliver a real SIP Ring Call to the Home Assistant media user. In that state
+  the card does not show **Answer**; use **Stream** for on-demand viewing.
+
+The `in-house-only` mode requires the native agent update, the Home Assistant
+media user patch, the in-house binary patch and the in-house QML patch. The
+C300X display label is localized in English, German, French and Italian.
+
+Ring Call capture is a diagnostic/automation workflow, not the normal dashboard
+view. It answers the active Ring Call, records a short MP4 to `/media/c300x/`
+by default, keeps raw WAV work files below `/config/c300x/` by default, then
+hangs up. Capture cannot run while the doorstation card, another browser, or
+another RTSP client is already connected to the same Ring Call.
 
 The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
 loads it automatically when the integration is set up. Add it from the card
 picker or YAML. The visual editor is localized in English, German, French and
-Italian. The card links related entities by the same config entry, so multiple
-C300X devices can each use their own camera/state entities without a manual
-`state_entity` field.
+Italian. The setup repair writes the matching Doorbell state and Home Call state
+entities into generated cards, and the editor lets you select them explicitly
+for renamed or localized entities.
 
 Dashboard example:
 
@@ -424,7 +455,8 @@ C300X doorstation card. The notification does not auto-answer the call; it
 opens the card so the user can press **Answer** and start talkback with
 microphone permission. The doorstation card can answer only a real Ring Call
 reported by the agent, so keep mobile push notifications gated behind
-`switch.bticino_c300x_smartphone_forwarding` when forwarding is disabled.
+`select.bticino_c300x_smartphone_forwarding_mode` and notify only when the
+mode is `enabled` or `in-house-only`.
 
 Basic shared automation:
 
@@ -450,9 +482,10 @@ action:
         sequence:
           - choose:
               - conditions:
-                  - condition: state
-                    entity_id: switch.bticino_c300x_smartphone_forwarding
-                    state: "on"
+                  - condition: template
+                    value_template: >-
+                      {{ states("select.bticino_c300x_smartphone_forwarding_mode")
+                         in ["enabled", "in-house-only"] }}
                 sequence:
                   - service: notify.mobile_app_phone
                     data:
@@ -669,7 +702,9 @@ The integration is designed for low idle cost:
 - doorstation media starts on demand
 - display bridge config is updated only when it differs
 - QML patching is explicit and writes only changed files
-- diagnostics expose write counters so idle writes are visible
+- the normal agent status stays compact
+- detailed device-agent diagnostics, including write counters, are disabled by
+  default and should be enabled only for support or audits
 
 Optional system metrics are disabled by default and should be enabled only when
 you actually want device diagnostics.
@@ -707,6 +742,7 @@ Useful maintenance controls can include:
 - reboot button
 - GUI reload button
 - GUI patch switch
+- Home Assistant user / in-house binary patch switch
 - IPv4/IPv6 firewall patch switches
 - mDNS bootstrap switch
 - noAuth bootstrap switches

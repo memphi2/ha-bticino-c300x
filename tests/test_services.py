@@ -42,6 +42,12 @@ class _ServiceCall:  # pragma: no cover - import-time stub only
 
 
 class _ServiceValidationError(Exception):  # pragma: no cover - import-time stub only
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args)
+        self.translation_key = kwargs.get("translation_key")
+
+
+class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
     pass
 
 
@@ -66,6 +72,11 @@ exceptions.ServiceValidationError = getattr(
     exceptions,
     "ServiceValidationError",
     _ServiceValidationError,
+)
+exceptions.HomeAssistantError = getattr(
+    exceptions,
+    "HomeAssistantError",
+    _HomeAssistantError,
 )
 config_validation.string = str
 config_validation.entity_id = str
@@ -97,12 +108,17 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_VIDEO_ENABLED,
     DOMAIN,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
+    SERVICE_ANSWER_DOORBELL_CALL,
+    SERVICE_CAPTURE_DOORBELL_CALL,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
+    SERVICE_EVALUATE_RING_ANALYSIS,
+    SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
     SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_RUN_RING_WYOMING_ANALYSIS,
     SERVICE_START_HOME_CALL,
     SERVICE_STOP_DOORBELL_VIDEO,
     SERVICE_STOP_HOME_CALL,
@@ -143,15 +159,19 @@ class _FakeServices:
     def __init__(self) -> None:
         self.registered: set[tuple[str, str]] = set()
         self.handlers: dict[tuple[str, str], Any] = {}
+        self.schemas: dict[tuple[str, str], Any] = {}
 
     def async_register(self, domain: str, service: str, *args: Any, **_kwargs: Any) -> None:
         self.registered.add((domain, service))
         if args:
             self.handlers[(domain, service)] = args[0]
+        if "schema" in _kwargs:
+            self.schemas[(domain, service)] = _kwargs["schema"]
 
     def async_remove(self, domain: str, service: str) -> None:
         self.registered.discard((domain, service))
         self.handlers.pop((domain, service), None)
+        self.schemas.pop((domain, service), None)
 
 
 class _FakeHass:
@@ -165,6 +185,12 @@ class _FakeApi:
     def __init__(self) -> None:
         self.activate_video_calls: list[bool] = []
         self.stop_video_calls = 0
+        self.doorbell_video_status: dict[str, Any] = {"bridge": {"clients": 0}}
+        self.doorbell_video_status_calls = 0
+        self.answer_doorbell_call_calls: list[bool] = []
+        self.hangup_doorbell_call_calls = 0
+        self.hangup_doorbell_call_error: Exception | None = None
+        self.capture_doorbell_call_calls = 0
         self.activation_calls: list[str] = []
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
@@ -176,6 +202,24 @@ class _FakeApi:
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_video_calls += 1
+        return {"ok": True}
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.doorbell_video_status_calls += 1
+        return self.doorbell_video_status
+
+    async def async_answer_doorbell_call(self, audio: bool = True) -> dict[str, Any]:
+        self.answer_doorbell_call_calls.append(audio)
+        return {"ok": True, "audio": audio}
+
+    async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+        self.hangup_doorbell_call_calls += 1
+        if self.hangup_doorbell_call_error is not None:
+            raise self.hangup_doorbell_call_error
+        return {"ok": True}
+
+    async def async_capture_doorbell_call(self) -> dict[str, Any]:
+        self.capture_doorbell_call_calls += 1
         return {"ok": True}
 
     async def async_start_home_call(
@@ -479,6 +523,328 @@ def test_stop_doorbell_video_service_calls_agent_api() -> None:
         await handler(types.SimpleNamespace(data={}))
 
         assert api.stop_video_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_answer_doorbell_call_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_call": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_ANSWER_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={"audio": False}))
+
+        assert api.answer_doorbell_call_calls == [False]
+
+    asyncio.run(_run())
+
+
+def test_hangup_doorbell_call_service_calls_agent_api() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_call": {"supported": True}},
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_HANGUP_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(
+            types.SimpleNamespace(
+                data={
+                    "output_path": "/media/c300x/test.mp4",
+                    "duration_seconds": 3,
+                    "include_audio": True,
+                    "wav_output_dir": "/config/c300x/analysis",
+                    "announcement_path": "/media/c300x/announce.wav",
+                }
+            )
+        )
+
+        assert calls == [
+            {
+                "args": (hass, entry),
+                "kwargs": {
+                    "output_path": "/media/c300x/test.mp4",
+                    "wav_output_dir": "/config/c300x/analysis",
+                    "duration_seconds": 3,
+                    "include_audio": True,
+                    "announcement_path": "/media/c300x/announce.wav",
+                },
+            }
+        ]
+        assert api.capture_doorbell_call_calls == 0
+        assert api.doorbell_video_status_calls == 1
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+
+        capture_schema = hass.services.schemas[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        assert capture_schema(
+            {
+                "output_path": "/media/c300x/test.mp4",
+                "duration_seconds": 3,
+                "include_audio": "true",
+                "wav_output_dir": "/config/c300x/analysis",
+                "announcement_path": "/config/www/c300x/announce.wav",
+            }
+        ) == {
+            "output_path": "/media/c300x/test.mp4",
+            "duration_seconds": 3,
+            "include_audio": True,
+            "wav_output_dir": "/config/c300x/analysis",
+            "announcement_path": "/config/www/c300x/announce.wav",
+        }
+
+        wyoming_schema = hass.services.schemas[(DOMAIN, SERVICE_RUN_RING_WYOMING_ANALYSIS)]
+        assert wyoming_schema(
+            {
+                "wyoming_host": "core-whisper",
+                "wyoming_port": "10300",
+                "wav_path": "/config/c300x/latest.raw.wav",
+                "result_path": "/config/c300x/analysis/result.json",
+                "language": "de",
+                "expected_phrase": "open",
+            }
+        ) == {
+            "wyoming_host": "core-whisper",
+            "wyoming_port": 10300,
+            "wav_path": "/config/c300x/latest.raw.wav",
+            "result_path": "/config/c300x/analysis/result.json",
+            "language": "de",
+            "expected_phrase": "open",
+        }
+
+        evaluate_schema = hass.services.schemas[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)]
+        assert evaluate_schema(
+            {
+                "result_path": "/config/c300x/analysis/result.json",
+                "decision_path": "/config/c300x/analysis/decision.json",
+                "expected_phrase": "open",
+                "unlock_on_match": "false",
+                "lock_id": "default",
+            }
+        ) == {
+            "result_path": "/config/c300x/analysis/result.json",
+            "decision_path": "/config/c300x/analysis/decision.json",
+            "expected_phrase": "open",
+            "unlock_on_match": False,
+            "lock_id": "default",
+        }
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        api.doorbell_video_status = {"bridge": {"clients": 1}}
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "ring_capture_busy"
+        else:
+            raise AssertionError("busy ring capture was not rejected")
+
+        assert calls == []
+        assert api.doorbell_video_status_calls == 1
+        assert api.answer_doorbell_call_calls == []
+        assert api.hangup_doorbell_call_calls == 0
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_answers_audio_capture_without_announcement(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert api.doorbell_video_status_calls == 1
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_answers_announcement_without_capture_audio(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(
+            types.SimpleNamespace(
+                data={
+                    "include_audio": False,
+                    "announcement_path": "/media/c300x/announce.wav",
+                }
+            )
+        )
+
+        assert calls == [
+            {
+                "args": (hass, entry),
+                "kwargs": {
+                    "output_path": None,
+                    "wav_output_dir": None,
+                    "duration_seconds": 5,
+                    "include_audio": False,
+                    "announcement_path": "/media/c300x/announce.wav",
+                },
+            }
+        ]
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_preserves_capture_error_when_hangup_fails(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        api.hangup_doorbell_call_error = RuntimeError("hangup failed")
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        capture_error = RuntimeError("capture failed")
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            raise capture_error
+
+        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except RuntimeError as err:
+            assert err is capture_error
+        else:
+            raise AssertionError("capture failure was swallowed")
+
+        assert api.hangup_doorbell_call_calls == 1
 
     asyncio.run(_run())
 

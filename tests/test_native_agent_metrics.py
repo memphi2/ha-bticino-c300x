@@ -145,7 +145,7 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
 
     assert "int smartphone_forwarding_mode_known;" in text
     assert "int smartphone_forwarding_mode_code;" in text
-    assert "smartphone_code_from_reply(msg, &code)" in event_body
+    assert "c300x_smartphone_code_from_reply(msg, &code)" in event_body
     assert "note_smartphone_forwarding_changed(runtime, code)" in event_body
     assert "return 0;" in note_body
     assert "runtime->smartphone_forwarding_mode_code == code" in note_body

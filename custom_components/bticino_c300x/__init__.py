@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 else:
     BticinoC300XConfigEntry = Any
 
-BASE_PLATFORMS = ("binary_sensor", "button", "event", "sensor", "switch")
+BASE_PLATFORMS = ("binary_sensor", "button", "event", "sensor", "select", "switch")
 CAMERA_PLATFORM = "camera"
 _LOGGER = logging.getLogger(__name__)
 _GUI_DEPENDENT_ENTITY_KEYS = (
@@ -460,8 +460,11 @@ async def _async_sync_device_user(
 def _device_user_needs_ensure(status: dict[str, Any]) -> bool:
     """Return true when the dedicated HA media user is absent or incomplete."""
 
-    return status.get("homeassistant_user_present") is not True or (
-        status.get("routes_consistent") is not True
+    return (
+        status.get("homeassistant_user_present") is not True
+        or status.get("routes_consistent") is not True
+        or status.get("inhouse_binary_patch_applied") is not True
+        or status.get("inhouse_qml_patch_applied") is not True
     )
 
 

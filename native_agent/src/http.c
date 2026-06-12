@@ -3,11 +3,13 @@
 #include "c300x_agent.h"
 #include "device_user.h"
 #include "http_util.h"
+#include "inhouse_patch.h"
 #include "memo_store.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
 #include "recent_events.h"
 #include "sha256.h"
+#include "smartphone_forwarding.h"
 #include "string_util.h"
 #include "video_rtsp.h"
 
@@ -77,6 +79,7 @@
 #define C300X_FLEXISIP_INIT_BACKUP "/etc/init.d/flexisipsh_bak"
 #define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
+#define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
 
 enum listener_kind {
     LISTENER_API = 1,
@@ -346,12 +349,26 @@ static void handle_display_bridge_event_post(
     const struct request *request
 );
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime);
-static void handle_device_user_get(int client_fd);
+static void handle_device_user_get(int client_fd, const struct c300x_config *config);
 static void handle_device_user_ensure(
     int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const struct request *request
+);
+static void handle_device_user_restore(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+);
+static int run_command_capture(
+    const char *program,
+    const char *argument,
+    char *out,
+    size_t out_len,
+    int timeout_ms,
+    int *exit_code
 );
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
@@ -561,6 +578,11 @@ static int read_bounded_text_file(
     char *out,
     size_t out_len,
     int *truncated
+);
+static void resolve_device_firmware(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
 );
 static int confirm_matches(const struct request *request, const char *expected);
 
@@ -1545,6 +1567,82 @@ static int read_bounded_text_file(
         out[--read_len] = '\0';
     }
     return read_len > 0;
+}
+
+static int firmware_version_is_safe(const char *value, size_t len)
+{
+    if (len == 0 || len >= C300X_MAX_VERSION_LEN) {
+        return 0;
+    }
+    for (size_t index = 0; index < len; index++) {
+        unsigned char ch = (unsigned char)value[index];
+        if (
+            (ch >= '0' && ch <= '9')
+            || (ch >= 'A' && ch <= 'Z')
+            || (ch >= 'a' && ch <= 'z')
+            || ch == '.'
+            || ch == '-'
+            || ch == '_'
+        ) {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+static int read_firmware_from_webserver_db(char *out, size_t out_len)
+{
+    char document[4096];
+    int truncated = 0;
+    const char *start;
+    const char *end;
+    const char *open_tag = "<ver_webserver>";
+    const char *close_tag = "</ver_webserver>";
+    size_t len;
+
+    if (!read_bounded_text_file(C300X_FIRMWARE_INFO_XML, document, sizeof(document), &truncated) || truncated) {
+        return 0;
+    }
+    start = strstr(document, open_tag);
+    if (start == NULL) {
+        return 0;
+    }
+    start += strlen(open_tag);
+    end = strstr(start, close_tag);
+    if (end == NULL || end <= start) {
+        return 0;
+    }
+    while (start < end && isspace((unsigned char)*start)) {
+        start++;
+    }
+    while (end > start && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    len = (size_t)(end - start);
+    if (!firmware_version_is_safe(start, len) || len >= out_len) {
+        return 0;
+    }
+    memcpy(out, start, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static void resolve_device_firmware(
+    const struct c300x_config *config,
+    char *out,
+    size_t out_len
+)
+{
+    if (out_len == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (config != NULL && config->device_firmware[0] != '\0') {
+        c300x_copy_string(out, out_len, config->device_firmware);
+        return;
+    }
+    (void)read_firmware_from_webserver_db(out, out_len);
 }
 
 static int path_parent_inplace(char *path)
@@ -3665,15 +3763,52 @@ static void handle_ui_media_closed(
 }
 
 static void device_user_status_body(
+    const struct c300x_config *config,
     const struct c300x_device_user_status *status,
     char *body,
     size_t body_len
 )
 {
+    struct c300x_inhouse_binary_patch_status binary_status;
+    char qml_output[4096];
+    char qml_state[32] = "unknown";
+    int qml_patched = 0;
+    int qml_available = 0;
     char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
     char account_label_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_LABEL_LEN)];
     char source_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_SOURCE_LEN)];
+    char binary_state_json[C300X_JSON_QUOTED_LEN(C300X_INHOUSE_PATCH_STATE_LEN)];
+    char binary_hash_json[C300X_JSON_QUOTED_LEN(C300X_INHOUSE_PATCH_HASH_LEN)];
+    char binary_backup_hash_json[C300X_JSON_QUOTED_LEN(C300X_INHOUSE_PATCH_HASH_LEN)];
+    char binary_error_json[C300X_JSON_QUOTED_LEN(C300X_INHOUSE_PATCH_ERROR_LEN)];
+    char qml_state_json[C300X_JSON_QUOTED_LEN(sizeof(qml_state))];
 
+    memset(&binary_status, 0, sizeof(binary_status));
+    (void)c300x_inhouse_binary_patch_read_status(&binary_status);
+    if (
+        config != NULL
+        && access(config->maintenance_qml_patch_script, X_OK) == 0
+        && run_command_capture(
+            config->maintenance_qml_patch_script,
+            "status",
+            qml_output,
+            sizeof(qml_output),
+            10000,
+            NULL
+        )
+    ) {
+        char *start = (char *)trim_ascii(qml_output);
+        if (start[0] == '{') {
+            qml_available = 1;
+            json_string_field(start, "inhouse_state", qml_state, sizeof(qml_state));
+            if (qml_state[0] == '\0') {
+                c300x_copy_string(qml_state, sizeof(qml_state), "unknown");
+            }
+            if (!json_bool_field(start, "inhouse_patched", &qml_patched)) {
+                qml_patched = 0;
+            }
+        }
+    }
     json_string(status->error, error_json, sizeof(error_json));
     json_string(status->account_label, account_label_json, sizeof(account_label_json));
     json_string(
@@ -3681,6 +3816,11 @@ static void device_user_status_body(
         source_json,
         sizeof(source_json)
     );
+    json_string(binary_status.state, binary_state_json, sizeof(binary_state_json));
+    json_string(binary_status.file_sha256, binary_hash_json, sizeof(binary_hash_json));
+    json_string(binary_status.backup_sha256, binary_backup_hash_json, sizeof(binary_backup_hash_json));
+    json_string(binary_status.error, binary_error_json, sizeof(binary_error_json));
+    json_string(qml_state, qml_state_json, sizeof(qml_state_json));
     snprintf(
         body,
         body_len,
@@ -3699,6 +3839,16 @@ static void device_user_status_body(
         "\"writable_files_present\":%s,"
         "\"media_identity_available\":%s,"
         "\"routes_consistent\":%s,"
+        "\"inhouse_binary_patch_supported\":%s,"
+        "\"inhouse_binary_patch_applied\":%s,"
+        "\"inhouse_binary_patch_state\":%s,"
+        "\"inhouse_binary_patch_backup_present\":%s,"
+        "\"inhouse_binary_patch_sha256\":%s,"
+        "\"inhouse_binary_patch_backup_sha256\":%s,"
+        "\"inhouse_binary_patch_error\":%s,"
+        "\"inhouse_qml_patch_available\":%s,"
+        "\"inhouse_qml_patch_applied\":%s,"
+        "\"inhouse_qml_patch_state\":%s,"
         "\"account_label\":%s,"
         "\"media_identity_source\":%s,"
         "\"error\":%s"
@@ -3716,19 +3866,29 @@ static void device_user_status_body(
         status->writable_files_present ? "true" : "false",
         status->media_identity_available ? "true" : "false",
         status->routes_consistent ? "true" : "false",
+        binary_status.supported ? "true" : "false",
+        binary_status.patched ? "true" : "false",
+        binary_state_json,
+        binary_status.backup_present ? "true" : "false",
+        binary_hash_json,
+        binary_backup_hash_json,
+        binary_error_json,
+        qml_available ? "true" : "false",
+        qml_patched ? "true" : "false",
+        qml_state_json,
         account_label_json,
         source_json,
         error_json
     );
 }
 
-static void handle_device_user_get(int client_fd)
+static void handle_device_user_get(int client_fd, const struct c300x_config *config)
 {
     struct c300x_device_user_status status;
     char body[4096];
 
     (void)c300x_device_user_read_status(&status);
-    device_user_status_body(&status, body, sizeof(body));
+    device_user_status_body(config, &status, body, sizeof(body));
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -3743,6 +3903,7 @@ static void handle_device_user_ensure(
     char error[C300X_DEVICE_USER_ERROR_LEN] = "";
     char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
     char account_label[C300X_DEVICE_USER_LABEL_LEN] = "";
+    struct c300x_inhouse_binary_patch_status binary_status;
     char body[4096];
 
     if (!maintenance_authorized(config, request)) {
@@ -3765,8 +3926,87 @@ static void handle_device_user_ensure(
         send_json(client_fd, 500, "Internal Server Error", body);
         return;
     }
+    if (!c300x_inhouse_binary_patch_apply(&binary_status, error, sizeof(error))) {
+        json_string(error, error_json, sizeof(error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"inhouse_binary_patch_failed\",\"detail\":%s}\n",
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
+        return;
+    }
+    if (
+        access(config->maintenance_qml_patch_script, X_OK) != 0
+        || !run_command_capture(
+            config->maintenance_qml_patch_script,
+            "inhouse-apply",
+            body,
+            sizeof(body),
+            10000,
+            NULL
+        )
+        || ((char *)trim_ascii(body))[0] != '{'
+    ) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"inhouse_qml_patch_failed\"}\n");
+        return;
+    }
     record_agent_write(config, runtime, "device_user", "ensure_homeassistant_user");
-    device_user_status_body(&status, body, sizeof(body));
+    (void)c300x_device_user_read_status(&status);
+    device_user_status_body(config, &status, body, sizeof(body));
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_device_user_restore(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct c300x_inhouse_binary_patch_status binary_status;
+    struct c300x_device_user_status status;
+    char error[C300X_DEVICE_USER_ERROR_LEN] = "";
+    char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
+    char body[4096];
+
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    if (!confirm_matches(request, "restore_hass_user_patch")) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    if (
+        access(config->maintenance_qml_patch_script, X_OK) == 0
+        && !run_command_capture(
+            config->maintenance_qml_patch_script,
+            "inhouse-restore",
+            body,
+            sizeof(body),
+            10000,
+            NULL
+        )
+    ) {
+        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"inhouse_qml_restore_failed\"}\n");
+        return;
+    }
+    if (!c300x_inhouse_binary_patch_restore(&binary_status, error, sizeof(error))) {
+        json_string(error, error_json, sizeof(error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"inhouse_binary_restore_failed\",\"detail\":%s}\n",
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
+        return;
+    }
+    record_agent_write(config, runtime, "device_user", "restore_homeassistant_user_patch");
+    (void)c300x_device_user_read_status(&status);
+    device_user_status_body(config, &status, body, sizeof(body));
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -5992,43 +6232,9 @@ static int parse_openwebnet_address_event(
     return address_is_valid(address);
 }
 
-static const char *smartphone_mode_from_code(int code)
-{
-    if (code == 0) {
-        return "enabled";
-    }
-    if (code == 1) {
-        return "in-house-only";
-    }
-    if (code == 2) {
-        return "blocked";
-    }
-    return NULL;
-}
-
-static int smartphone_code_from_reply(const char *reply, int *code)
-{
-    int parsed = -1;
-
-    if (reply == NULL || code == NULL) {
-        return 0;
-    }
-    if (
-        sscanf(reply, "*#8**37*%d##", &parsed) != 1
-        && sscanf(reply, "*#8**#37*%d##", &parsed) != 1
-    ) {
-        return 0;
-    }
-    if (smartphone_mode_from_code(parsed) == NULL) {
-        return 0;
-    }
-    *code = parsed;
-    return 1;
-}
-
 static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
 {
-    if (runtime == NULL || smartphone_mode_from_code(code) == NULL) {
+    if (runtime == NULL || c300x_smartphone_mode_from_code(code) == NULL) {
         return;
     }
     runtime->smartphone_forwarding_mode_known = 1;
@@ -6038,7 +6244,7 @@ static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, i
 static int note_smartphone_forwarding_changed(struct agent_runtime *runtime, int code)
 {
     if (runtime == NULL) {
-        return smartphone_mode_from_code(code) != NULL;
+        return c300x_smartphone_mode_from_code(code) != NULL;
     }
     if (!runtime->smartphone_forwarding_mode_known) {
         remember_smartphone_forwarding_mode(runtime, code);
@@ -6094,7 +6300,7 @@ static void refresh_smartphone_forwarding_mode(
     if (!c300x_openwebnet_send(config, "*#8**37##", reply, sizeof(reply), error, sizeof(error))) {
         return;
     }
-    if (smartphone_code_from_reply(reply, &code)) {
+    if (c300x_smartphone_code_from_reply(reply, &code)) {
         remember_smartphone_forwarding_mode(runtime, code);
         sync_ring_receiver_for_forwarding(runtime);
     }
@@ -6104,7 +6310,10 @@ static int smartphone_forwarding_allows_ring_receiver(const struct agent_runtime
 {
     return runtime != NULL
         && runtime->smartphone_forwarding_mode_known
-        && runtime->smartphone_forwarding_mode_code == 0;
+        && (
+            runtime->smartphone_forwarding_mode_code == 0
+            || runtime->smartphone_forwarding_mode_code == 1
+        );
 }
 
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime)
@@ -6150,8 +6359,8 @@ static int map_openwebnet_event(
         c300x_copy_string(type, type_len, muted ? "ringer.muted" : "ringer.unmuted");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"muted\":%s}", raw_json, muted ? "true" : "false");
     }
-    if (smartphone_code_from_reply(msg, &code)) {
-        const char *mode = smartphone_mode_from_code(code);
+    if (c300x_smartphone_code_from_reply(msg, &code)) {
+        const char *mode = c300x_smartphone_mode_from_code(code);
         size_t used = 0;
         int changed = note_smartphone_forwarding_changed(runtime, code);
         sync_ring_receiver_for_forwarding(runtime);
@@ -6206,6 +6415,21 @@ static int map_openwebnet_event(
     return 0;
 }
 
+static int doorbell_media_closed_is_answer_transition(struct agent_runtime *runtime)
+{
+    struct c300x_video_status status;
+
+    if (runtime == NULL || runtime->video == NULL) {
+        return 0;
+    }
+    c300x_video_status(runtime->video, &status);
+    return (
+        status.ring_audio_active
+        || status.ring_answer_requested
+        || status.ring_answered
+    );
+}
+
 static void handle_udp_event(
     int udp_fd,
     const struct c300x_config *config,
@@ -6257,6 +6481,12 @@ static void handle_udp_event(
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
+        if (
+            strcmp(type, "doorbell.media.closed") == 0
+            && doorbell_media_closed_is_answer_transition(runtime)
+        ) {
+            return;
+        }
         dispatch_event(config, runtime, type, data, 30);
     }
 }
@@ -6670,6 +6900,7 @@ static void api_capabilities(
     char device_id[64];
     char device_id_json[128];
     char device_model[128];
+    char firmware_value[C300X_MAX_VERSION_LEN];
     char device_firmware[384];
     char stair_address[128];
     char lock_id[128];
@@ -6701,7 +6932,8 @@ static void api_capabilities(
     json_escape_string(config->video_rtsp_path, audio_path, sizeof(audio_path));
     json_escape_string(config->video_rtsp_recorder_path, recorder_path, sizeof(recorder_path));
     json_escape_string(config->device_model, device_model, sizeof(device_model));
-    json_escape_string(config->device_firmware, device_firmware, sizeof(device_firmware));
+    resolve_device_firmware(config, firmware_value, sizeof(firmware_value));
+    json_escape_string(firmware_value, device_firmware, sizeof(device_firmware));
     json_escape_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
     json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
     json_escape_string(config->lock_name, lock_name, sizeof(lock_name));
@@ -6716,6 +6948,7 @@ static void api_capabilities(
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
         "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
+        "\"doorbell_call\":{\"supported\":%s,\"answer\":true,\"hangup\":true,\"status\":true,\"capture\":false},"
         "\"home_call\":{\"supported\":%s,\"audio_codec\":\"%s\",\"rtp_proxy_supported\":true,\"max_duration_seconds\":%d},"
         "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
@@ -6747,6 +6980,7 @@ static void api_capabilities(
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_CODEC,
         C300X_TALKBACK_RTP_PAYLOAD_TYPE,
+        config->video_enabled ? "true" : "false",
         config->video_enabled ? "true" : "false",
         C300X_TALKBACK_CODEC,
         C300X_HOME_CALL_MAX_DURATION_SECONDS,
@@ -6834,7 +7068,7 @@ static void api_state(
         video_available = video_status.enabled;
     }
     if (runtime != NULL && runtime->smartphone_forwarding_mode_known) {
-        smartphone_forwarding = smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
+        smartphone_forwarding = c300x_smartphone_mode_from_code(runtime->smartphone_forwarding_mode_code);
     }
     if (config->video_enabled) {
         video_path = config->video_rtsp_video_path;
@@ -6917,6 +7151,8 @@ static void handle_doorbell_video_get(
     int ring_call_active = 0;
     int ring_media_active = 0;
     int ring_audio_active = 0;
+    int ring_answer_requested = 0;
+    int ring_answered = 0;
     int home_call_running = 0;
     int home_call_active = 0;
     int home_call_answered = 0;
@@ -6967,6 +7203,8 @@ static void handle_doorbell_video_get(
         ring_call_active = video_status.ring_call_active;
         ring_media_active = video_status.ring_media_active;
         ring_audio_active = video_status.ring_audio_active;
+        ring_answer_requested = video_status.ring_answer_requested;
+        ring_answered = video_status.ring_answered;
         home_call_running = video_status.home_call_running;
         home_call_active = video_status.home_call_active;
         home_call_answered = video_status.home_call_answered;
@@ -7030,6 +7268,8 @@ static void handle_doorbell_video_get(
         "\"ring_call_active\":%s,"
         "\"ring_media_active\":%s,"
         "\"ring_audio_active\":%s,"
+        "\"ring_answer_requested\":%s,"
+        "\"ring_answered\":%s,"
         "\"home_call_running\":%s,"
         "\"home_call_active\":%s,"
         "\"home_call_answered\":%s,"
@@ -7081,6 +7321,8 @@ static void handle_doorbell_video_get(
         ring_call_active ? "true" : "false",
         ring_media_active ? "true" : "false",
         ring_audio_active ? "true" : "false",
+        ring_answer_requested ? "true" : "false",
+        ring_answered ? "true" : "false",
         home_call_running ? "true" : "false",
         home_call_active ? "true" : "false",
         home_call_answered ? "true" : "false",
@@ -7181,6 +7423,148 @@ static void handle_doorbell_video_stop(int client_fd, struct agent_runtime *runt
         c300x_video_stop(runtime->video);
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+}
+
+static void handle_doorbell_call_get(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime
+)
+{
+    char body[2048];
+    struct c300x_video_status video_status;
+    int ring_receiver_running = 0;
+    int ring_registered = 0;
+    int active = 0;
+    int early_media_active = 0;
+    int audio_active = 0;
+    int answer_requested = 0;
+    int answered = 0;
+    int can_answer = 0;
+    int can_hangup = 0;
+    int bridge_open_fds = 0;
+    int bridge_active_threads = 0;
+    char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
+    char last_error_quoted[(C300X_MAX_ERROR_LEN * 6) + 3];
+    const char *last_error_json = "null";
+
+    json_string("idle", media_owner_json, sizeof(media_owner_json));
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_status(runtime->video, &video_status);
+        ring_receiver_running = video_status.ring_receiver_running;
+        ring_registered = video_status.ring_registered;
+        active = video_status.ring_call_active;
+        early_media_active = video_status.ring_media_active;
+        audio_active = video_status.ring_audio_active;
+        answer_requested = video_status.ring_answer_requested;
+        answered = video_status.ring_answered;
+        can_answer = video_status.ring_call_active && !video_status.ring_answered;
+        can_hangup = video_status.ring_call_active || video_status.ring_media_active;
+        bridge_open_fds = video_status.bridge_open_fds;
+        bridge_active_threads = video_status.bridge_active_threads;
+        json_string(video_status.media_owner, media_owner_json, sizeof(media_owner_json));
+        last_error_json = json_string_or_null(
+            video_status.last_error,
+            last_error_quoted,
+            sizeof(last_error_quoted)
+        );
+    }
+
+    snprintf(
+        body,
+        sizeof(body),
+        "{"
+        "\"ok\":true,"
+        "\"supported\":%s,"
+        "\"active\":%s,"
+        "\"early_media_active\":%s,"
+        "\"audio_active\":%s,"
+        "\"answer_requested\":%s,"
+        "\"answered\":%s,"
+        "\"can_answer\":%s,"
+        "\"can_hangup\":%s,"
+        "\"media_owner\":%s,"
+        "\"ring_receiver_running\":%s,"
+        "\"ring_registered\":%s,"
+        "\"capture_supported\":false,"
+        "\"open_fds\":%d,"
+        "\"active_threads\":%d,"
+        "\"last_error\":%s"
+        "}\n",
+        config->video_enabled ? "true" : "false",
+        active ? "true" : "false",
+        early_media_active ? "true" : "false",
+        audio_active ? "true" : "false",
+        answer_requested ? "true" : "false",
+        answered ? "true" : "false",
+        can_answer ? "true" : "false",
+        can_hangup ? "true" : "false",
+        media_owner_json,
+        ring_receiver_running ? "true" : "false",
+        ring_registered ? "true" : "false",
+        bridge_open_fds,
+        bridge_active_threads,
+        last_error_json
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_doorbell_call_answer(
+    int client_fd,
+    struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    int audio = 1;
+    struct c300x_video_status video_status;
+    char body[1024];
+
+    if (runtime == NULL || runtime->video == NULL) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
+        return;
+    }
+    (void)json_bool_field(request->body, "audio", &audio);
+    if (!c300x_video_doorbell_call_answer(runtime->video, audio)) {
+        c300x_video_status(runtime->video, &video_status);
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"ring_call_not_active\",\"ring_call_active\":%s,\"ring_media_active\":%s,\"answered\":%s}\n",
+            video_status.ring_call_active ? "true" : "false",
+            video_status.ring_media_active ? "true" : "false",
+            video_status.ring_answered ? "true" : "false"
+        );
+        send_json(client_fd, 409, "Conflict", body);
+        return;
+    }
+    c300x_video_status(runtime->video, &video_status);
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"audio\":%s,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
+        audio ? "true" : "false",
+        video_status.ring_answer_requested ? "true" : "false",
+        video_status.ring_answered ? "true" : "false"
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_doorbell_call_hangup(int client_fd, struct agent_runtime *runtime)
+{
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_doorbell_call_hangup(runtime->video);
+    }
+    send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
+}
+
+static void handle_doorbell_call_capture(int client_fd)
+{
+    send_json(
+        client_fd,
+        501,
+        "Not Implemented",
+        "{\"ok\":false,\"error\":\"capture_not_supported\",\"capture_supported\":false}\n"
+    );
 }
 
 static void handle_home_call_get(
@@ -7639,8 +8023,8 @@ static const char *smartphone_mode_from_reply(const char *reply)
 {
     int code;
 
-    if (smartphone_code_from_reply(reply, &code)) {
-        return smartphone_mode_from_code(code);
+    if (c300x_smartphone_code_from_reply(reply, &code)) {
+        return c300x_smartphone_mode_from_code(code);
     }
     return NULL;
 }
@@ -8036,7 +8420,7 @@ static void handle_smartphone_get(
     if (mode == NULL) {
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
     } else {
-        if (smartphone_code_from_reply(reply, &code)) {
+        if (c300x_smartphone_code_from_reply(reply, &code)) {
             remember_smartphone_forwarding_mode(runtime, code);
             sync_ring_receiver_for_forwarding(runtime);
         }
@@ -8081,7 +8465,7 @@ static void handle_smartphone_post(
         return;
     }
     readback = smartphone_mode_from_reply(reply);
-    if (smartphone_code_from_reply(reply, &readback_code)) {
+    if (c300x_smartphone_code_from_reply(reply, &readback_code)) {
         remember_smartphone_forwarding_mode(runtime, readback_code);
         sync_ring_receiver_for_forwarding(runtime);
     }
@@ -11328,7 +11712,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/device-user") == 0) {
-        handle_device_user_get(client_fd);
+        handle_device_user_get(client_fd, config);
         return;
     }
 
@@ -11386,6 +11770,26 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/stop") == 0) {
         handle_doorbell_video_stop(client_fd, runtime);
+        return;
+    }
+    if (
+        strcmp(request->method, "GET") == 0
+        && (strcmp(request->path, "/api/v1/calls/doorbell") == 0
+            || strcmp(request->path, "/api/v1/calls/doorbell/status") == 0)
+    ) {
+        handle_doorbell_call_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/answer") == 0) {
+        handle_doorbell_call_answer(client_fd, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/hangup") == 0) {
+        handle_doorbell_call_hangup(client_fd, runtime);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/calls/doorbell/actions/capture") == 0) {
+        handle_doorbell_call_capture(client_fd);
         return;
     }
     if (
@@ -11542,6 +11946,10 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/device-user/actions/ensure-homeassistant") == 0) {
         handle_device_user_ensure(client_fd, config, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/device-user/actions/restore-homeassistant-patch") == 0) {
+        handle_device_user_restore(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/mqtt/actions/migrate-legacy") == 0) {

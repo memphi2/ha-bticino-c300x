@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -23,7 +24,6 @@ from homeassistant.helpers.dispatcher import (
 
 from .action import ActionValidationError
 from .agent_diagnostics import async_refresh_agent_diagnostics
-from .api import C300XAgentApiResponseError, normalize_text_memo_text
 from .capabilities import (
     answering_machine_message_delete_supported,
     capability_is_supported,
@@ -36,18 +36,22 @@ from .capabilities import (
 from .const import (
     CONF_MAINTENANCE_TOKEN,
     DOMAIN,
-    MAX_HOME_CALL_DURATION_SECONDS,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
     SERVICE_ALARM_COMMAND,
+    SERVICE_ANSWER_DOORBELL_CALL,
+    SERVICE_CAPTURE_DOORBELL_CALL,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VIDEO_MESSAGE,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
+    SERVICE_EVALUATE_RING_ANALYSIS,
+    SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
     SERVICE_REBOOT,
     SERVICE_RELOAD_GUI,
     SERVICE_RUN_ACTION,
     SERVICE_RUN_DEVICE_ACTIVATION,
+    SERVICE_RUN_RING_WYOMING_ANALYSIS,
     SERVICE_STAIR_LIGHT,
     SERVICE_START_HOME_CALL,
     SERVICE_STOP_DOORBELL_VIDEO,
@@ -73,22 +77,111 @@ from .memos import (
 )
 from .message_refresh import async_answering_machine_messages, async_memos
 from .qml_patch import async_refresh_qml_patch_status
-from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
+from .ring_ai import async_run_wyoming_ring_analysis
+from .ring_capture import async_capture_doorbell_ring_call
+from .ring_decision import async_evaluate_ring_analysis
+from .service_schema import (
+    ATTR_ACTION_ID as _ATTR_ACTION_ID,
+)
+from .service_schema import (
+    ATTR_ACTIVATION_ID as _ATTR_ACTIVATION_ID,
+)
+from .service_schema import (
+    ATTR_ADDRESS as _ATTR_ADDRESS,
+)
+from .service_schema import (
+    ATTR_ANNOUNCEMENT_PATH as _ATTR_ANNOUNCEMENT_PATH,
+)
+from .service_schema import (
+    ATTR_AUDIO as _ATTR_AUDIO,
+)
+from .service_schema import (
+    ATTR_CODE as _ATTR_CODE,
+)
+from .service_schema import (
+    ATTR_COMMAND as _ATTR_COMMAND,
+)
+from .service_schema import (
+    ATTR_DECISION_PATH as _ATTR_DECISION_PATH,
+)
+from .service_schema import (
+    ATTR_DURATION_SECONDS as _ATTR_DURATION_SECONDS,
+)
+from .service_schema import (
+    ATTR_ENTRY_ID as _ATTR_ENTRY_ID,
+)
+from .service_schema import (
+    ATTR_EXPECTED_PHRASE as _ATTR_EXPECTED_PHRASE,
+)
+from .service_schema import (
+    ATTR_FORCE as _ATTR_FORCE,
+)
+from .service_schema import (
+    ATTR_INCLUDE_AUDIO as _ATTR_INCLUDE_AUDIO,
+)
+from .service_schema import (
+    ATTR_LANGUAGE as _ATTR_LANGUAGE,
+)
+from .service_schema import (
+    ATTR_LOCK_ID as _ATTR_LOCK_ID,
+)
+from .service_schema import (
+    ATTR_MEDIA_PLAYER_ENTITY_ID as _ATTR_MEDIA_PLAYER_ENTITY_ID,
+)
+from .service_schema import (
+    ATTR_OUTPUT_PATH as _ATTR_OUTPUT_PATH,
+)
+from .service_schema import (
+    ATTR_READ as _ATTR_READ,
+)
+from .service_schema import (
+    ATTR_RESULT_PATH as _ATTR_RESULT_PATH,
+)
+from .service_schema import (
+    ATTR_TEXT as _ATTR_TEXT,
+)
+from .service_schema import (
+    ATTR_UNLOCK_ON_MATCH as _ATTR_UNLOCK_ON_MATCH,
+)
+from .service_schema import (
+    ATTR_WAV_OUTPUT_DIR as _ATTR_WAV_OUTPUT_DIR,
+)
+from .service_schema import (
+    ATTR_WAV_PATH as _ATTR_WAV_PATH,
+)
+from .service_schema import (
+    ATTR_WYOMING_HOST as _ATTR_WYOMING_HOST,
+)
+from .service_schema import (
+    ATTR_WYOMING_PORT as _ATTR_WYOMING_PORT,
+)
+from .service_schema import (
+    activation_id as _activation_id,
+)
+from .service_schema import (
+    boolean_service_value as _boolean_service_value,
+)
+from .service_schema import (
+    capture_duration_seconds as _capture_duration_seconds,
+)
+from .service_schema import (
+    home_call_duration_seconds as _home_call_duration_seconds,
+)
+from .service_schema import (
+    lock_id as _lock_id,
+)
+from .service_schema import (
+    stair_light_address as _stair_light_address,
+)
+from .service_schema import (
+    text_memo_text as _text_memo_text,
+)
+from .service_schema import (
+    wyoming_port as _wyoming_port,
+)
 from .video_messages import latest_video_message_id, video_message_media_source_id
 
-_ATTR_ACTION_ID = "action_id"
-_ATTR_ACTIVATION_ID = "activation_id"
-_ATTR_ADDRESS = "address"
-_ATTR_AUDIO = "audio"
-_ATTR_CODE = "code"
-_ATTR_COMMAND = "command"
-_ATTR_ENTRY_ID = "entry_id"
-_ATTR_FORCE = "force"
-_ATTR_DURATION_SECONDS = "duration_seconds"
-_ATTR_LOCK_ID = "lock_id"
-_ATTR_MEDIA_PLAYER_ENTITY_ID = "media_player_entity_id"
-_ATTR_READ = "read"
-_ATTR_TEXT = "text"
+_LOGGER = logging.getLogger(__name__)
 _BASE_SERVICES_MARKER = "__services_registered"
 _GUI_REQUIRED_SERVICES_MARKER = "__gui_required_services_registered"
 _GUI_REQUIRED_SERVICES_LISTENER_MARKER = "__gui_required_services_listener"
@@ -99,20 +192,6 @@ _DELETE_SERVICE_NAMES = (
 )
 type _ServiceHandler = Callable[[ServiceCall], Awaitable[None]]
 type _EntrySupport = Callable[[Any], bool]
-
-
-def _boolean_service_value(value: Any) -> bool:
-    """Validate service booleans without relying on HA-private helper names."""
-
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on", "enable", "enabled"}:
-            return True
-        if lowered in {"0", "false", "no", "off", "disable", "disabled"}:
-            return False
-    raise vol.Invalid("expected boolean")
 
 
 def _entry_for_call(hass: HomeAssistant, call: ServiceCall):
@@ -126,45 +205,6 @@ def _entry_for_call(hass: HomeAssistant, call: ServiceCall):
     if len(entries) != 1:
         raise service_validation_error("entry_id_required")
     return entries[0]
-
-
-def _stair_light_address(value: str) -> str:
-    """Validate service-level OpenWebNet stair-light address input."""
-
-    address = cv.string(value).strip()
-    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
-        raise vol.Invalid("invalid staircase light address")
-    return address
-
-
-def _lock_id(value: str) -> str:
-    """Validate service-level C300X lock id input."""
-
-    lock_id = cv.string(value).strip()
-    if not LOCK_ID_RE.fullmatch(lock_id):
-        raise vol.Invalid("invalid lock id")
-    return lock_id
-
-
-def _activation_id(value: str) -> str:
-    """Validate service-level C300X activation id input."""
-
-    activation_id = cv.string(value).strip()
-    if not ACTIVATION_ID_RE.fullmatch(activation_id):
-        raise vol.Invalid("invalid activation id")
-    return activation_id
-
-
-def _home_call_duration_seconds(value: Any) -> int:
-    """Validate optional home-call duration."""
-
-    try:
-        duration_seconds = int(value)
-    except (TypeError, ValueError) as err:
-        raise vol.Invalid("invalid duration seconds") from err
-    if duration_seconds < 0 or duration_seconds > MAX_HOME_CALL_DURATION_SECONDS:
-        raise vol.Invalid("invalid duration seconds")
-    return duration_seconds
 
 
 def _ensure_maintenance_action(entry, action: str) -> None:
@@ -191,6 +231,18 @@ def _ensure_doorbell_video_supported(entry: Any) -> None:
         raise service_validation_error("doorbell_video_not_available")
 
 
+def _ensure_doorbell_call_supported(entry: Any) -> None:
+    """Reject ring-call control unless HA and the agent expose it."""
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    if not (
+        entry_video_enabled(entry)
+        and capability_is_supported(capabilities, "doorbell_call")
+    ):
+        raise service_validation_error("doorbell_video_not_available")
+
+
 def _ensure_home_call_supported(entry: Any) -> None:
     """Reject in-house home-call actions unless HA and the agent expose them."""
 
@@ -210,15 +262,6 @@ def _ensure_text_memo_write_supported(entry: Any) -> None:
     capabilities = getattr(runtime_data, "capabilities", {})
     if not memo_text_write_supported(capabilities):
         raise service_validation_error("text_memo_write_not_supported")
-
-
-def _text_memo_text(value: Any) -> str:
-    """Validate service-level text memo content."""
-
-    try:
-        return normalize_text_memo_text(value)
-    except C300XAgentApiResponseError as err:
-        raise vol.Invalid(str(err)) from err
 
 
 async def _async_ensure_gui_function_patch(entry) -> None:
@@ -241,6 +284,30 @@ async def _raise_agent_command_failed(awaitable: Awaitable[Any]) -> None:
         await awaitable
     except Exception as err:
         raise service_validation_error("agent_command_failed") from err
+
+
+def _doorbell_video_client_count(status: dict[str, Any]) -> int:
+    """Return active RTSP clients reported by the native video bridge."""
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    clients = 0
+    for value in (status.get("clients"), bridge.get("clients")):
+        try:
+            clients = max(clients, int(value))
+        except (TypeError, ValueError):
+            continue
+    return max(0, clients)
+
+
+async def _async_ensure_ring_capture_not_busy(entry: Any) -> None:
+    """Reject HA-side capture while another RTSP client owns the bridge."""
+
+    try:
+        status = await entry.runtime_data.api.async_doorbell_video_status()
+    except Exception as err:
+        raise service_validation_error("agent_command_failed") from err
+    if _doorbell_video_client_count(status) > 0:
+        raise service_validation_error("ring_capture_busy")
 
 
 async def _latest_video_message_id_for_entry(entry: Any) -> str:
@@ -415,6 +482,93 @@ class _C300XServiceHandlers:
         _ensure_doorbell_video_supported(entry)
         await _raise_agent_command_failed(
             entry.runtime_data.api.async_stop_doorbell_video()
+        )
+
+    async def async_answer_doorbell_call(self, call: ServiceCall) -> None:
+        """Answer the active C300X doorbell ring call through the agent."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_answer_doorbell_call(
+                audio=bool(call.data.get(_ATTR_AUDIO, True))
+            )
+        )
+
+    async def async_hangup_doorbell_call(self, call: ServiceCall) -> None:
+        """Hang up the active C300X doorbell ring call through the agent."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_call_supported(entry)
+        await _raise_agent_command_failed(
+            entry.runtime_data.api.async_hangup_doorbell_call()
+        )
+
+    async def async_capture_doorbell_call(self, call: ServiceCall) -> None:
+        """Capture a short C300X doorbell ring-call clip on Home Assistant."""
+
+        entry = _entry_for_call(self._hass, call)
+        _ensure_doorbell_call_supported(entry)
+        announcement_path = call.data.get(_ATTR_ANNOUNCEMENT_PATH)
+        include_audio = bool(call.data.get(_ATTR_INCLUDE_AUDIO, True))
+        await _async_ensure_ring_capture_not_busy(entry)
+        if include_audio or announcement_path is not None:
+            await _raise_agent_command_failed(
+                entry.runtime_data.api.async_answer_doorbell_call(audio=True)
+            )
+        capture_error: Exception | None = None
+        try:
+            await async_capture_doorbell_ring_call(
+                self._hass,
+                entry,
+                output_path=call.data.get(_ATTR_OUTPUT_PATH),
+                wav_output_dir=call.data.get(_ATTR_WAV_OUTPUT_DIR),
+                duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
+                include_audio=include_audio,
+                announcement_path=announcement_path,
+            )
+        except Exception as err:
+            capture_error = err
+            raise
+        finally:
+            try:
+                await entry.runtime_data.api.async_hangup_doorbell_call()
+            except Exception as err:
+                if capture_error is not None:
+                    _LOGGER.warning(
+                        "C300X doorbell capture failed and hangup also failed",
+                        exc_info=err,
+                    )
+                else:
+                    raise service_validation_error("agent_command_failed") from err
+
+    async def async_run_ring_wyoming_analysis(self, call: ServiceCall) -> None:
+        """Transcribe the latest C300X ring raw WAV through Wyoming Whisper."""
+
+        await async_run_wyoming_ring_analysis(
+            self._hass,
+            wyoming_host=call.data[_ATTR_WYOMING_HOST],
+            wyoming_port=call.data.get(_ATTR_WYOMING_PORT, 10300),
+            wav_path=call.data.get(_ATTR_WAV_PATH),
+            result_path=call.data.get(_ATTR_RESULT_PATH),
+            language=call.data.get(_ATTR_LANGUAGE),
+            expected_phrase=call.data.get(_ATTR_EXPECTED_PHRASE),
+        )
+
+    async def async_evaluate_ring_analysis(self, call: ServiceCall) -> None:
+        """Evaluate a local C300X ring-analysis result and optionally unlock."""
+
+        decision = await async_evaluate_ring_analysis(
+            self._hass,
+            result_path=call.data.get(_ATTR_RESULT_PATH),
+            decision_path=call.data.get(_ATTR_DECISION_PATH),
+            expected_phrase=call.data.get(_ATTR_EXPECTED_PHRASE),
+        )
+        if not (decision.matched and call.data.get(_ATTR_UNLOCK_ON_MATCH, False)):
+            return
+        entry = _entry_for_call(self._hass, call)
+        await _raise_agent_command_failed(
+            async_unlock_door(self._hass, entry, call.data.get(_ATTR_LOCK_ID, "default"))
         )
 
     async def async_start_home_call(self, call: ServiceCall) -> None:
@@ -642,6 +796,63 @@ def _register_base_services(
             SERVICE_STOP_DOORBELL_VIDEO,
             handlers.async_stop_doorbell_video,
             vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_ANSWER_DOORBELL_CALL,
+            handlers.async_answer_doorbell_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_AUDIO, default=True): _boolean_service_value,
+                }
+            ),
+        ),
+        (
+            SERVICE_HANGUP_DOORBELL_CALL,
+            handlers.async_hangup_doorbell_call,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+        (
+            SERVICE_CAPTURE_DOORBELL_CALL,
+            handlers.async_capture_doorbell_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_OUTPUT_PATH): cv.string,
+                    vol.Optional(_ATTR_DURATION_SECONDS, default=5): _capture_duration_seconds,
+                    vol.Optional(_ATTR_INCLUDE_AUDIO, default=True): _boolean_service_value,
+                    vol.Optional(_ATTR_WAV_OUTPUT_DIR): cv.string,
+                    vol.Optional(_ATTR_ANNOUNCEMENT_PATH): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_RUN_RING_WYOMING_ANALYSIS,
+            handlers.async_run_ring_wyoming_analysis,
+            vol.Schema(
+                {
+                    vol.Required(_ATTR_WYOMING_HOST): cv.string,
+                    vol.Optional(_ATTR_WYOMING_PORT, default=10300): _wyoming_port,
+                    vol.Optional(_ATTR_WAV_PATH): cv.string,
+                    vol.Optional(_ATTR_RESULT_PATH): cv.string,
+                    vol.Optional(_ATTR_LANGUAGE): cv.string,
+                    vol.Optional(_ATTR_EXPECTED_PHRASE): cv.string,
+                }
+            ),
+        ),
+        (
+            SERVICE_EVALUATE_RING_ANALYSIS,
+            handlers.async_evaluate_ring_analysis,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_RESULT_PATH): cv.string,
+                    vol.Optional(_ATTR_DECISION_PATH): cv.string,
+                    vol.Optional(_ATTR_EXPECTED_PHRASE): cv.string,
+                    vol.Optional(_ATTR_UNLOCK_ON_MATCH, default=False): _boolean_service_value,
+                    vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
+                }
+            ),
         ),
         (
             SERVICE_START_HOME_CALL,

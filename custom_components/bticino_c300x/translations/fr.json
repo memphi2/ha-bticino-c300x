@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Arreter la camera de sonnette"
       },
-      "ensure_homeassistant_user": {
-        "name": "Creer l'utilisateur media Home Assistant"
-      },
       "delete_latest_voice_memo": {
         "name": "Supprimer le dernier memo vocal"
       }
@@ -252,6 +249,9 @@
           "warning": "Avertissement",
           "error": "Erreur"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Diagnostics de l'agent appareil"
       },
       "device_cpu": {
         "name": "CPU appareil"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Bridge MQTT legacy"
       },
-      "smartphone_forwarding": {
-        "name": "Renvoi smartphone"
+      "homeassistant_user_patch": {
+        "name": "Patch utilisateur Home Assistant"
       }
     }
   },
@@ -345,6 +345,9 @@
     },
     "home_call_not_available": {
       "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installe."
+    },
+    "ring_capture_busy": {
+      "message": "La capture d'appel C300X est occupee, car un autre client video est deja connecte."
     },
     "entry_id_required": {
       "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
@@ -388,11 +391,11 @@
         "step": {
           "confirm": {
             "title": "Mettre a jour l'agent C300X",
-            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs GUI et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}"
+            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs GUI et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change. Si vous utilisez les appels Ring Call in-house-only, verifiez aussi le patch utilisateur Home Assistant / binaire in-house dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}"
           },
           "ssh_install": {
             "title": "Reinstaller l'agent C300X via SSH",
-            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs GUI et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}",
+            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs GUI et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes. Si vous utilisez les appels Ring Call in-house-only, verifiez aussi le patch utilisateur Home Assistant / binaire in-house dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}",
             "data": {
               "bootstrap_ssh_username": "Utilisateur SSH",
               "bootstrap_ssh_password": "Mot de passe SSH"

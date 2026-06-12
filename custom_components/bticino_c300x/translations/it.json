@@ -199,9 +199,6 @@
       "stop_doorbell_video": {
         "name": "Ferma videocamera campanello"
       },
-      "ensure_homeassistant_user": {
-        "name": "Crea utente media Home Assistant"
-      },
       "delete_latest_voice_memo": {
         "name": "Elimina ultimo memo vocale"
       }
@@ -252,6 +249,9 @@
           "warning": "Avviso",
           "error": "Errore"
         }
+      },
+      "agent_diagnostics": {
+        "name": "Diagnostica agente dispositivo"
       },
       "device_cpu": {
         "name": "CPU dispositivo"
@@ -325,8 +325,8 @@
       "legacy_mqtt_bridge": {
         "name": "Bridge MQTT legacy"
       },
-      "smartphone_forwarding": {
-        "name": "Inoltro smartphone"
+      "homeassistant_user_patch": {
+        "name": "Patch utente Home Assistant"
       }
     }
   },
@@ -345,6 +345,9 @@
     },
     "home_call_not_available": {
       "message": "La chiamata casa non è abilitata o non è supportata dal device agent C300X installato."
+    },
+    "ring_capture_busy": {
+      "message": "La registrazione della chiamata C300X è occupata perché un altro client video è già connesso."
     },
     "entry_id_required": {
       "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
@@ -388,11 +391,11 @@
         "step": {
           "confirm": {
             "title": "Aggiorna device agent C300X",
-            "description": "Home Assistant carichera il native agent incluso tramite l'API di manutenzione configurata. Non sono necessarie credenziali SSH. Le patch GUI e firewall attive vengono controllate in sola lettura e aggiornate solo se erano gia attive e la sorgente patch inclusa e cambiata.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch GUI: {qml_patch_status}\nMotivo: {reason}"
+            "description": "Home Assistant carichera il native agent incluso tramite l'API di manutenzione configurata. Non sono necessarie credenziali SSH. Le patch GUI e firewall attive vengono controllate in sola lettura e aggiornate solo se erano gia attive e la sorgente patch inclusa e cambiata. Se usi Ring Call in-house-only, verifica anche la patch utente Home Assistant / binaria in-house nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch GUI: {qml_patch_status}\nMotivo: {reason}"
           },
           "ssh_install": {
             "title": "Reinstalla device agent C300X via SSH",
-            "description": "Questo agent installato non puo ancora aggiornarsi da solo. Home Assistant usera queste credenziali SSH una tantum per installare l'agent incluso, poi aggiornera solo le patch GUI e firewall attive quando la sorgente patch inclusa e cambiata. Le credenziali SSH non vengono salvate.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch GUI: {qml_patch_status}\nMotivo: {reason}",
+            "description": "Questo agent installato non puo ancora aggiornarsi da solo. Home Assistant usera queste credenziali SSH una tantum per installare l'agent incluso, poi aggiornera solo le patch GUI e firewall attive quando la sorgente patch inclusa e cambiata. Le credenziali SSH non vengono salvate. Se usi Ring Call in-house-only, verifica anche la patch utente Home Assistant / binaria in-house nelle opzioni dell'integrazione dopo l'aggiornamento.\n\nInstallato: {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nIncluso: {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nPercorso update: {update_path}\nStato patch GUI: {qml_patch_status}\nMotivo: {reason}",
             "data": {
               "bootstrap_ssh_username": "Nome utente SSH",
               "bootstrap_ssh_password": "Password SSH"

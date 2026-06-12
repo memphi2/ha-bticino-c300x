@@ -119,7 +119,8 @@ def test_video_default_is_webrtc_on_demand_with_persistent_rtsp_listener() -> No
     )
     assert "_attr_frontend_stream_type = \"web_rtc\"" in camera_text
     assert "async_handle_async_webrtc_offer" in camera_text
-    assert "async_activate_doorbell_video(audio=True)" in camera_text
+    assert "async_activate_doorbell_video(audio=audio)" in camera_text
+    assert "self._build_stream_url(audio=True)" in camera_text
     assert 'rtsp_describe(rtsp_port, "/doorbell-video")' in smoke_text
     assert '"/api/v1/video/doorbell/actions/activate"' in smoke_text
     assert '"/api/v1/video/doorbell/actions/stop"' in smoke_text

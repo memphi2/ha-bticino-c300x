@@ -59,6 +59,7 @@ if "homeassistant.components.sensor" not in sys.modules:
 
     class SensorDeviceClass:  # pragma: no cover - import-time stub only
         ENUM = "enum"
+        TIMESTAMP = "timestamp"
         TEMPERATURE = "temperature"
         DURATION = "duration"
 
@@ -134,6 +135,7 @@ from custom_components.bticino_c300x.const import (
 )
 from custom_components.bticino_c300x.doorbell_state import normalize_doorbell_state
 from custom_components.bticino_c300x.sensor import (
+    C300XAgentDiagnosticsSensor,
     C300XAgentStatusSensor,
     C300XDeviceCpuSensor,
     C300XDeviceLoadSensor,
@@ -381,7 +383,6 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
     assert entity.extra_state_attributes == {
         "reason": "agent_ok",
         "agent_version": "0.2.0",
-        "implementation": "native-c",
         "api_version": "1",
         "model": "C300X",
         "connection_state": "connected",
@@ -390,6 +391,50 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
         "reconnect_count": 0,
+    }
+
+
+def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_write_count": 2,
+                "last_write_at": 1770000000,
+                "last_write_reason": "updated",
+                "last_write_class": "config",
+                "last_wake_reason": "api",
+                "loop_iterations": 10,
+                "poll_wakeups": 4,
+                "last_poll_timeout_ms": 5000,
+                "last_poll_count": 6,
+                "open_fd_count": 9,
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "recent_event_count": 4,
+                "recent_event_capacity": 16,
+                "display_bridge_registered": True,
+                "display_bridge_disabled": False,
+                "home_assistant_connected_this_run": True,
+                "home_assistant_last_seen_at": 1770000010,
+                "ui_event_revision": 7,
+                "video_running": False,
+                "video_media_starting": True,
+                "video_call_active": True,
+                "video_clients": 1,
+                "video_bridge_open_fds": 2,
+                "video_bridge_active_threads": 1,
+                "flexisip_backup_available": True,
+                "flexisip_restart_marker": True,
+                "flexisip_backup_marker": False,
+                "flexisip_reference_state": "legacy_mqtt_patch",
+            },
+        )
+    )
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity._attr_entity_registry_enabled_default is False
+    assert entity.extra_state_attributes == {
         "agent_write_count": 2,
         "last_write_at": 1770000000,
         "last_write_reason": "updated",
@@ -413,12 +458,12 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "home_assistant_connected_this_run": True,
         "home_assistant_last_seen_at": 1770000010,
         "ui_event_revision": 7,
-        "video_running": None,
-        "video_media_starting": None,
-        "video_call_active": None,
-        "video_clients": None,
-        "video_bridge_open_fds": None,
-        "video_bridge_active_threads": None,
+        "video_running": False,
+        "video_media_starting": True,
+        "video_call_active": True,
+        "video_clients": 1,
+        "video_bridge_open_fds": 2,
+        "video_bridge_active_threads": 1,
         "flexisip_backup_available": True,
         "flexisip_restart_marker": True,
         "flexisip_backup_marker": False,
@@ -506,14 +551,14 @@ def test_agent_status_sensor_updates_on_agent_info_signal() -> None:
     assert entity.wrote_state is True
 
 
-def test_agent_status_sensor_refreshes_safe_write_diagnostics() -> None:
+def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
     async def _run() -> None:
         entry = _FakeEntry(
             runtime_data=_FakeRuntimeData(
                 capabilities={"diagnostics": {"supported": True, "writes": True}},
             )
         )
-        entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+        entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
 
         await entity.async_update()
 
@@ -561,6 +606,7 @@ def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:
 
 
 def test_system_metric_sensors_are_disabled_by_default() -> None:
+    assert C300XAgentDiagnosticsSensor._attr_entity_registry_enabled_default is False
     assert C300XDeviceCpuSensor._attr_entity_registry_enabled_default is False
     assert C300XDeviceLoadSensor._attr_entity_registry_enabled_default is False
     assert C300XDeviceMemorySensor._attr_entity_registry_enabled_default is False

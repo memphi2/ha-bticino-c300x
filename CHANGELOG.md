@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.1.0 - 2026-06-11
+
+### Added
+
+- Adds the tested `in-house-only` smartphone forwarding mode. With the
+  dedicated Home Assistant media user and device patches applied, the C300X can
+  route doorbell Ring Calls to Home Assistant without forwarding them to all
+  smartphones.
+- Adds HA-side Ring Call capture diagnostics. MP4 clips default to
+  `/media/c300x/`, while retained raw WAV work files default to `/config/c300x/`
+  for local speech analysis.
+- Adds local Wyoming Whisper transcription for the newest retained Ring Call raw
+  WAV without requiring image analysis or cloud AI.
+- Adds an optional strict phrase-match evaluation service that can unlock the
+  configured C300X door only when explicitly requested with `unlock_on_match`.
+
+### Changed
+
+- Updates the packaged native C300X device agent to `1.1.0`.
+- Reduces Ring Call capture audio distortion risk by removing dynamic
+  normalization and keeping only moderate gain plus limiting for the MP4 audio
+  track. The raw WAV remains unfiltered for Whisper.
+- Splits detailed device-agent runtime diagnostics into a disabled-by-default
+  diagnostic entity. The normal device-agent status entity now stays compact,
+  and diagnostic push events are subscribed only when that entity is enabled.
+- Improves doorstation card ICE handling for non-local frontend access.
+- Normalizes smartphone forwarding state handling around the new three-state
+  select entity and removes obsolete forwarding switch leftovers.
+
+### Fixed
+
+- Hardens event-registration repair sync so a repair issue update cannot break
+  device-agent event subscription setup.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating so the new services are registered.
+- Update the native C300X device agent from Home Assistant so the new forwarding
+  mode, binary patch support, QML labels and capture APIs are installed.
+- Ring Call MP4 captures, retained WAV files and local analysis JSON are local
+  runtime artifacts and must stay outside the repository.
+
 ## v1.0.2 - 2026-06-08
 
 ### Fixed

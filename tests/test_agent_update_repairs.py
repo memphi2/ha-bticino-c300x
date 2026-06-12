@@ -399,10 +399,14 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             platform: str,
             unique_id: str,
         ) -> str | None:
-            assert domain == "camera"
             assert platform == "bticino_c300x"
-            assert unique_id == "entry-1_doorbell_camera"
-            return "camera.bticino_c300x_doorbell_camera"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            if domain == "sensor" and unique_id == "entry-1_doorbell_state":
+                return "sensor.bticino_c300x_tuerklingel_status"
+            if domain == "binary_sensor" and unique_id == "entry-1_home_call_active":
+                return "binary_sensor.bticino_c300x_hausanruf_aktiv"
+            return None
 
     class FakeLovelaceDashboard:
         mode = "storage"
@@ -454,16 +458,19 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
             "mode": "home_call",
+            "home_call_entity": "binary_sensor.bticino_c300x_hausanruf_aktiv",
             "name": "C300X Home Call",
             "grid_options": {"columns": 6, "rows": 1},
         },
         {
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
+            "doorbell_state_entity": "sensor.bticino_c300x_tuerklingel_status",
             "grid_options": {"columns": 12, "rows": 7},
         },
     ]
-    assert "state_entity" not in str(cards)
+    assert "'state_entity':" not in str(cards)
+    assert "home_call_entity" in str(cards)
 
 
 def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
@@ -482,10 +489,14 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
             platform: str,
             unique_id: str,
         ) -> str | None:
-            assert domain == "camera"
             assert platform == "bticino_c300x"
-            assert unique_id == "entry-1_doorbell_camera"
-            return "camera.bticino_c300x_doorbell_camera"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            if domain == "sensor" and unique_id == "entry-1_doorbell_state":
+                return "sensor.bticino_c300x_tuerklingel_status"
+            if domain == "binary_sensor" and unique_id == "entry-1_home_call_active":
+                return "binary_sensor.bticino_c300x_hausanruf_aktiv"
+            return None
 
     class FakeLovelaceDashboard:
         mode = "storage"
@@ -583,7 +594,15 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
     assert [card["mode"] for card in view["sections"][0]["cards"][:1]] == [
         "home_call"
     ]
+    assert (
+        view["sections"][0]["cards"][0]["home_call_entity"]
+        == "binary_sensor.bticino_c300x_hausanruf_aktiv"
+    )
     assert view["sections"][0]["cards"][1]["type"] == "custom:c300x-doorbell-call-card"
+    assert (
+        view["sections"][0]["cards"][1]["doorbell_state_entity"]
+        == "sensor.bticino_c300x_tuerklingel_status"
+    )
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:

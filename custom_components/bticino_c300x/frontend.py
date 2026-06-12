@@ -24,13 +24,21 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
     """Register the bundled Lovelace card frontend module."""
 
     domain_data: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
+    module_version = await _async_frontend_asset_version(
+        hass,
+        DOORBELL_CALL_CARD_FILENAME,
+    )
+    metadata_version = await _async_frontend_asset_version(
+        hass,
+        DOORBELL_CALL_CARD_METADATA_FILENAME,
+    )
     module_url = (
         f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_FILENAME}"
-        f"?v={_frontend_asset_version(DOORBELL_CALL_CARD_FILENAME)}"
+        f"?v={module_version}"
     )
     metadata_url = (
         f"{FRONTEND_URL_PATH}/{DOORBELL_CALL_CARD_METADATA_FILENAME}"
-        f"?v={_frontend_asset_version(DOORBELL_CALL_CARD_METADATA_FILENAME)}"
+        f"?v={metadata_version}"
     )
     previous_module_url = domain_data.get(DATA_FRONTEND_MODULE_URL)
     previous_metadata_url = domain_data.get(DATA_FRONTEND_METADATA_URL)
@@ -131,6 +139,15 @@ async def _async_ensure_lovelace_resource(
         if isinstance(duplicate_id, str):
             with suppress(collection.ItemNotFound):
                 await async_delete_item(duplicate_id)
+
+
+async def _async_frontend_asset_version(
+    hass: HomeAssistant,
+    filename: str = DOORBELL_CALL_CARD_FILENAME,
+) -> str:
+    """Return the frontend asset hash without blocking the event loop."""
+
+    return await hass.async_add_executor_job(_frontend_asset_version, filename)
 
 
 def _frontend_asset_version(filename: str = DOORBELL_CALL_CARD_FILENAME) -> str:

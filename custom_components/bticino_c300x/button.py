@@ -32,7 +32,6 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
-from .device_user import homeassistant_account_label
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .event_payload import agent_event_key
 from .executor import async_trigger_stair_light, async_unlock_door
@@ -81,8 +80,6 @@ async def async_setup_entry(
     entities.append(C300XRemoveAgentButton(entry))
     entities.append(C300XRestartAgentButton(entry))
     entities.append(C300XReloadGuiButton(entry))
-    if entry_video_enabled(entry) and supports_capability(entry, "device_user"):
-        entities.append(C300XEnsureHomeAssistantUserButton(entry))
     if entry_device_ui_enabled_or_patch_active(entry):
         if answering_machine_message_delete_supported(capabilities):
             entities.append(C300XDeleteLatestVideoMessageButton(entry))
@@ -322,46 +319,6 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
             ) from err
         except C300XAgentApiError as err:
             raise HomeAssistantError("C300X GUI reload command failed") from err
-
-
-class C300XEnsureHomeAssistantUserButton(C300XMaintenanceButton):
-    """Button that creates or repairs the dedicated Home Assistant media user."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_translation_key = "ensure_homeassistant_user"
-    _maintenance_action = "device_user_ensure"
-
-    def __init__(self, entry: ConfigEntry) -> None:
-        super().__init__(entry, "ensure_homeassistant_user")
-
-    @property
-    def available(self) -> bool:
-        """Return true when device-user setup can be controlled."""
-
-        return (
-            super().available
-            and entry_video_enabled(self._entry)
-            and supports_capability(self._entry, "device_user")
-        )
-
-    async def async_press(self) -> None:
-        """Create or repair the dedicated Home Assistant media user."""
-
-        try:
-            status = await self._entry.runtime_data.api.async_ensure_homeassistant_user(
-                account_label=homeassistant_account_label(self.hass)
-            )
-        except C300XAgentApiUnsupportedError as err:
-            raise HomeAssistantError(
-                "The installed C300X device agent does not support device-user setup"
-            ) from err
-        except C300XAgentApiError as err:
-            raise HomeAssistantError("C300X device-user setup failed") from err
-        self._entry.runtime_data.device_user_status = status
-        from .repair_issues import async_sync_entry_repair_issues
-
-        async_sync_entry_repair_issues(self.hass, self._entry)
-        await async_refresh_agent_diagnostics(self.hass, self._entry)
 
 
 class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):

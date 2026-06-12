@@ -25,8 +25,25 @@ def test_services_yaml_exposes_doorbell_video_activation() -> None:
 
     assert "activate_doorbell_video" in sections
     assert "stop_doorbell_video" in sections
+    assert "answer_doorbell_call" in sections
+    assert "hangup_doorbell_call" in sections
+    assert "capture_doorbell_call" in sections
     assert "\n    audio:\n" in sections["activate_doorbell_video"]
+    assert "\n    audio:\n" in sections["answer_doorbell_call"]
     assert "call-end action" in sections["stop_doorbell_video"]
+    assert "/media/c300x/" in sections["capture_doorbell_call"]
+    assert "\n    output_path:\n" in sections["capture_doorbell_call"]
+    assert "\n    duration_seconds:\n" in sections["capture_doorbell_call"]
+    assert "\n    include_audio:\n" in sections["capture_doorbell_call"]
+    assert "\n    wav_output_dir:\n" in sections["capture_doorbell_call"]
+    assert "\n    announcement_path:\n" in sections["capture_doorbell_call"]
+    assert "run_ring_wyoming_analysis" in sections
+    assert "\n    wyoming_host:\n" in sections["run_ring_wyoming_analysis"]
+    assert "\n    wav_path:\n" in sections["run_ring_wyoming_analysis"]
+    assert "/config/c300x/analysis/result.json" in sections["run_ring_wyoming_analysis"]
+    assert "evaluate_ring_analysis" in sections
+    assert "\n    unlock_on_match:\n" in sections["evaluate_ring_analysis"]
+    assert "/config/c300x/analysis/decision.json" in sections["evaluate_ring_analysis"]
 
 
 def test_services_yaml_exposes_home_call_controls() -> None:

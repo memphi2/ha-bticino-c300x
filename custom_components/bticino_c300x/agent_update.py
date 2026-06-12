@@ -12,7 +12,7 @@ from .const import DOMAIN
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 BUNDLE_MANIFEST = COMPONENT_DIR / "device_agent" / "bundle.json"
-UPLOAD_CHUNK_SIZE = 4096
+UPLOAD_CHUNK_SIZE = 2048
 
 UPDATE_STATE_UP_TO_DATE = "up_to_date"
 UPDATE_STATE_UPDATE_AVAILABLE = "update_available"

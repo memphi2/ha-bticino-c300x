@@ -311,11 +311,15 @@ The feature step lets you enable only what you need:
 - Stair-light address
 - Optional maintenance controls
 
-The GUI patch is explicit. Normal Home Assistant startup must not patch the
-device UI. When enabled, the patch process backs up original QML files once,
-renders the target files, compares byte-for-byte, writes only changed files,
-remounts the root filesystem writable only for the final copy, and returns it to
-read-only immediately afterwards.
+Device patches are explicit. Normal Home Assistant startup must not patch the
+device UI or firmware files. The optional GUI patch changes only the C300X
+display QML needed for display pages. The Home Assistant media user patch is
+separate and, for `in-house-only`, includes the device-side binary patch that
+routes the in-house forwarding path to Home Assistant.
+
+When a patch is enabled, the agent backs up original files first, compares
+byte-for-byte, writes only changed files, remounts the root filesystem writable
+only for the final copy, and returns it to read-only immediately afterwards.
 
 ### 6. After setup
 
@@ -738,6 +742,7 @@ Useful maintenance controls can include:
 - reboot button
 - GUI reload button
 - GUI patch switch
+- Home Assistant user / in-house binary patch switch
 - IPv4/IPv6 firewall patch switches
 - mDNS bootstrap switch
 - noAuth bootstrap switches

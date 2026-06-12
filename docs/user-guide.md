@@ -137,13 +137,18 @@ Common options:
 - Optional mDNS bootstrap discovery.
 - Optional maintenance actions.
 
-The GUI patch is explicit. It is not applied by normal Home Assistant startup.
-The patch writes only changed QML files, keeps one original backup, and restores
-the root filesystem to read-only after the final copy.
+Device patches are explicit. They are not applied by normal Home Assistant
+startup. The GUI patch changes only C300X display QML for display pages. The
+Home Assistant media user patch is separate and, for `in-house-only`, includes
+the device-side binary patch that routes the in-house forwarding path to Home
+Assistant. Patches write only changed files, keep one original backup, and
+restore the root filesystem to read-only after the final copy.
 
 Keep these options disabled unless you need them:
 
 - GUI patching, when you do not use the C300X display pages.
+- Home Assistant user / in-house binary patching, when you do not use
+  Home Assistant as a media user or `in-house-only` Ring Calls.
 - IPv4/IPv6 firewall patching, unless the device firewall blocks the selected
   ports.
 - SSH maintenance, except during recovery or manual work.
@@ -563,7 +568,8 @@ delivered.
 ## Removal
 
 1. Use the `Remove device agent` maintenance button when available.
-2. Confirm that GUI/firewall patches are restored and SSH remains reachable.
+2. Confirm that GUI, Home Assistant user/binary and firewall patches are
+   restored where applicable, and SSH remains reachable.
 3. Remove the Home Assistant integration entry.
 4. For manual HA installs, remove `/config/custom_components/bticino_c300x/`.
 

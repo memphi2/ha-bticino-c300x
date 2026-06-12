@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,11 @@ from custom_components.bticino_c300x.ring_capture import (
     _rtsp_url_from_status,
     async_capture_doorbell_ring_call,
 )
-from custom_components.bticino_c300x.ring_talkback import _create_speex_encoder
+from custom_components.bticino_c300x.ring_talkback import (
+    _create_speex_encoder,
+    _open_talkback_socket,
+    _talkback_host_for_socket,
+)
 
 
 @dataclass
@@ -134,6 +139,49 @@ def test_rtsp_url_brackets_ipv6_host() -> None:
         _rtsp_url_from_status(entry, {"recorder_stream_path": "/doorbell"})
         == "rtsp://[fe80::1%25wlan0]:6554/doorbell"
     )
+
+
+def test_talkback_socket_supports_ipv6_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[int, int, int]] = []
+
+    class _FakeSocket:
+        def __init__(self, family: int, socktype: int, proto: int) -> None:
+            calls.append((family, socktype, proto))
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    def _getaddrinfo(host: str, port: int, **kwargs: Any) -> list[tuple[Any, ...]]:
+        assert host == "fe80::1%wlan0"
+        assert port == 40004
+        assert kwargs == {"type": socket.SOCK_DGRAM}
+        return [
+            (
+                socket.AF_INET6,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("fe80::1", 40004, 0, 2),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_talkback.socket.getaddrinfo",
+        _getaddrinfo,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_talkback.socket.socket",
+        _FakeSocket,
+    )
+
+    sock, target = _open_talkback_socket("[fe80::1%25wlan0]")
+
+    assert _talkback_host_for_socket("[fe80::1%25wlan0]") == "fe80::1%wlan0"
+    assert calls == [(socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP)]
+    assert target == ("fe80::1", 40004, 0, 2)
+    sock.close()
+    assert sock.closed is True
 
 
 def test_capture_output_path_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:

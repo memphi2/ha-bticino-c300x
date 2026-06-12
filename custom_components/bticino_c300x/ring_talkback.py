@@ -72,8 +72,7 @@ def _play_announcement_sync(host: str, source: Path) -> None:
     timestamp = random.randrange(0, 2**32)
     ssrc = random.randrange(1, 2**32)
     marker = True
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    target = (host, _TALKBACK_RTP_PORT)
+    sock, target = _open_talkback_socket(host)
     encoder = _create_speex_encoder(av)
     encoder.sample_rate = _TALKBACK_SAMPLE_RATE
     encoder.layout = "mono"
@@ -151,7 +150,7 @@ def _send_talkback_silence_preroll(
     av_module: Any,
     encoder: Any,
     sock: socket.socket,
-    target: tuple[str, int],
+    target: tuple[Any, ...],
     sequence: int,
     timestamp: int,
     ssrc: int,
@@ -179,11 +178,41 @@ def _send_talkback_silence_preroll(
     return sequence, timestamp, marker
 
 
+def _talkback_host_for_socket(host: str) -> str:
+    """Return the agent host in a form accepted by socket APIs."""
+
+    host = str(host or "").strip()
+    if host.startswith("[") and "]" in host:
+        host = host[1 : host.index("]")]
+    return host.replace("%25", "%")
+
+
+def _open_talkback_socket(host: str) -> tuple[socket.socket, tuple[Any, ...]]:
+    """Open a UDP talkback socket for IPv4 or IPv6 agent hosts."""
+
+    try:
+        infos = socket.getaddrinfo(
+            _talkback_host_for_socket(host),
+            _TALKBACK_RTP_PORT,
+            type=socket.SOCK_DGRAM,
+        )
+    except OSError as err:
+        raise HomeAssistantError("C300X talkback target could not be resolved") from err
+
+    last_error: Exception | None = None
+    for family, socktype, proto, _canonname, target in infos:
+        try:
+            return socket.socket(family, socktype, proto), target
+        except OSError as err:
+            last_error = err
+    raise HomeAssistantError("C300X talkback socket could not be opened") from last_error
+
+
 def _send_ready_talkback_frames(
     encoder: Any,
     fifo: Any,
     sock: socket.socket,
-    target: tuple[str, int],
+    target: tuple[Any, ...],
     sequence: int,
     timestamp: int,
     ssrc: int,
@@ -210,7 +239,7 @@ def _send_encoded_talkback_frame(
     encoder: Any,
     frame: Any,
     sock: socket.socket,
-    target: tuple[str, int],
+    target: tuple[Any, ...],
     sequence: int,
     timestamp: int,
     ssrc: int,

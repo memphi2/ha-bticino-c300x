@@ -995,7 +995,9 @@ restore_inhouse_changed_count() {
 }
 
 restore_inhouse_patch_files() {
-    restore_file "Components/Settings/CallBlockPopup.qml"
+    if [ -e "$BACKUP_DIR/Components/Settings/CallBlockPopup.qml" ] || inhouse_partial_patch_present; then
+        restore_file "Components/Settings/CallBlockPopup.qml"
+    fi
 }
 
 restore_core_patch_files() {
@@ -1005,12 +1007,14 @@ restore_core_patch_files() {
 restore_all_changed_count() {
     feature_changed_count="$(restore_changed_count)"
     core_changed_count="$(restore_core_changed_count)"
-    printf '%s\n' "$((feature_changed_count + core_changed_count))"
+    inhouse_changed_count="$(restore_inhouse_changed_count)"
+    printf '%s\n' "$((feature_changed_count + core_changed_count + inhouse_changed_count))"
 }
 
 restore_all_patch_files() {
     restore_patch_files
     restore_core_patch_files
+    restore_inhouse_patch_files
 }
 
 case "$ACTION" in

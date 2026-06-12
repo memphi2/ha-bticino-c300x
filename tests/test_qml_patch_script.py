@@ -349,19 +349,22 @@ def test_qml_core_status_detects_missing_call_end_hook(tmp_path: Path) -> None:
     assert status["core_patched"] is None
 
 
-def test_qml_restore_all_removes_feature_and_core_patches(tmp_path: Path) -> None:
+def test_qml_restore_all_removes_feature_core_and_inhouse_patches(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"
     gui_dir.mkdir()
     _write_original_gui(gui_dir)
 
     _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "inhouse-apply")
     status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "restore-all")
 
     assert status["state"] == "original"
     assert status["patched"] is False
     assert status["core_state"] == "original"
     assert status["core_patched"] is False
+    assert status["inhouse_state"] == "original"
+    assert status["inhouse_patched"] is False
     assert (gui_dir / "MainApp.qml").read_text() == ORIGINAL_MAIN_APP
     assert (gui_dir / "HomePage.qml").read_text() == ORIGINAL_HOME_PAGE
     assert (gui_dir / "MemoPage.qml").read_text() == ORIGINAL_MEMO_PAGE

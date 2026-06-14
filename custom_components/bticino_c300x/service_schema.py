@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.helpers import config_validation as cv
 
 from .api import C300XAgentApiResponseError, normalize_text_memo_text
 from .const import MAX_HOME_CALL_DURATION_SECONDS
@@ -26,6 +25,7 @@ ATTR_OUTPUT_PATH = "output_path"
 ATTR_INCLUDE_AUDIO = "include_audio"
 ATTR_WAV_OUTPUT_DIR = "wav_output_dir"
 ATTR_ANNOUNCEMENT_PATH = "announcement_path"
+ATTR_CAPTURE_PATH = "capture_path"
 ATTR_WAV_PATH = "wav_path"
 ATTR_RESULT_PATH = "result_path"
 ATTR_WYOMING_HOST = "wyoming_host"
@@ -55,7 +55,7 @@ def boolean_service_value(value: Any) -> bool:
 def stair_light_address(value: str) -> str:
     """Validate service-level OpenWebNet stair-light address input."""
 
-    address = cv.string(value).strip()
+    address = _service_string(value).strip()
     if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
         raise vol.Invalid("invalid staircase light address")
     return address
@@ -64,7 +64,7 @@ def stair_light_address(value: str) -> str:
 def lock_id(value: str) -> str:
     """Validate service-level C300X lock id input."""
 
-    value = cv.string(value).strip()
+    value = _service_string(value).strip()
     if not LOCK_ID_RE.fullmatch(value):
         raise vol.Invalid("invalid lock id")
     return value
@@ -73,7 +73,7 @@ def lock_id(value: str) -> str:
 def activation_id(value: str) -> str:
     """Validate service-level C300X activation id input."""
 
-    value = cv.string(value).strip()
+    value = _service_string(value).strip()
     if not ACTIVATION_ID_RE.fullmatch(value):
         raise vol.Invalid("invalid activation id")
     return value
@@ -122,3 +122,9 @@ def text_memo_text(value: Any) -> str:
         return normalize_text_memo_text(value)
     except C300XAgentApiResponseError as err:
         raise vol.Invalid(str(err)) from err
+
+
+def _service_string(value: Any) -> str:
+    if value is None:
+        raise vol.Invalid("string value is None")
+    return str(value)

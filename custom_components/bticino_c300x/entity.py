@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -92,7 +94,7 @@ def _agent_info_string(entry: ConfigEntry, key: str) -> str | None:
 
     runtime_data = getattr(entry, "runtime_data", None)
     agent_info = getattr(runtime_data, "agent_info", {})
-    if not isinstance(agent_info, dict):
+    if not isinstance(agent_info, Mapping):
         return None
     value = agent_info.get(key)
     if value is None:

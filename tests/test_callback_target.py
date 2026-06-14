@@ -50,6 +50,10 @@ def test_callback_address_type(address: str, expected: str) -> None:
     assert callback_address_type(ipaddress.ip_address(address)) == expected
 
 
+def test_callback_address_type_accepts_missing_address() -> None:
+    assert callback_address_type(None) is None
+
+
 def test_callback_host_needs_rewrite_for_mdns_and_link_local() -> None:
     assert callback_host_needs_rewrite("homeassistant.local") is True
     assert callback_host_needs_rewrite("fe80::1") is True

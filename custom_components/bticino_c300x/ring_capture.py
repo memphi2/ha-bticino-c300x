@@ -4,27 +4,55 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
+import threading
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .camera_media.rtsp_policy import (
+    RtspConsumer,
+    decide_rtsp_admission,
+    rtsp_resource_snapshot_from_status,
+)
+from .camera_media.rtsp_url import (
+    agent_host_for_socket as _agent_host_for_socket_value,
+)
+from .camera_media.rtsp_url import (
+    agent_host_for_url as _agent_host_for_url_value,
+)
+from .camera_media.rtsp_url import (
+    normalize_rtsp_path as _normalize_rtsp_path_value,
+)
+from .camera_media.state_machine import (
+    derive_media_state,
+    media_state_input_from_video_status,
+)
 from .const import (
     CONF_AGENT_HOST,
+    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
+    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
 )
 from .entry_config import entry_config_value
 from .ring_talkback import (
-    async_play_announcement_when_ready as _async_play_announcement_when_ready,
+    async_keep_talkback_alive_when_ready as _async_keep_talkback_alive_when_ready,
 )
 
 _RTSP_READY_TIMEOUT_SECONDS = 5.0
-_CAPTURE_WORK_DIR = Path("/config/c300x/ring/capture")
+_CAPTURE_WORK_DIR = Path("/config/c300x")
+_CAPTURE_FRAME_COUNT = 3
+_CAPTURE_FRAME_START_SECONDS = 1.0
+_CAPTURE_FRAME_END_MARGIN_SECONDS = 0.2
+DEFAULT_RING_CAPTURE_METADATA_GLOB = "/config/c300x/*.capture.json"
 
 
 async def async_capture_doorbell_ring_call(
@@ -44,7 +72,9 @@ async def async_capture_doorbell_ring_call(
     work_dir = _capture_work_dir(hass, wav_output_dir)
     announcement = await _async_announcement_input_path(hass, announcement_path)
     status = await entry.runtime_data.api.async_doorbell_video_status()
+    raise_if_ring_capture_blocked(status)
     rtsp_url = _rtsp_url_from_status(entry, status, include_audio=include_audio)
+    audio_gain_db = _capture_audio_gain_db(entry)
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
@@ -56,34 +86,136 @@ async def async_capture_doorbell_ring_call(
             work_dir=work_dir,
             duration_seconds=duration,
             include_audio=include_audio,
+            audio_gain_db=audio_gain_db,
         )
     )
-    announcement_task = (
+    talkback_stop = threading.Event()
+    talkback_task = (
         asyncio.create_task(
-            _async_play_announcement_when_ready(
+            _async_keep_talkback_alive_when_ready(
                 entry,
                 _agent_host(entry),
                 announcement,
+                talkback_stop,
             )
         )
-        if announcement is not None
+        if include_audio or announcement is not None
         else None
     )
     try:
         await capture_task
-        if announcement_task is not None:
-            if announcement_task.done():
-                await announcement_task
+        if talkback_task is not None:
+            talkback_stop.set()
+            if talkback_task.done():
+                await talkback_task
             else:
-                announcement_task.cancel()
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(talkback_task, timeout=2.0)
+            if not talkback_task.done():
+                talkback_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await announcement_task
+                    await talkback_task
+        await _async_write_capture_metadata(
+            hass,
+            _capture_metadata_path(work_dir),
+            _capture_metadata_payload(
+                capture_id=uuid4().hex,
+                target=target,
+                work_dir=work_dir,
+                rtsp_url=rtsp_url,
+                status=status,
+                duration_seconds=duration,
+                include_audio=include_audio,
+                announcement_used=announcement is not None,
+            ),
+        )
     finally:
-        if announcement_task is not None and not announcement_task.done():
-            announcement_task.cancel()
+        talkback_stop.set()
+        if talkback_task is not None and not talkback_task.done():
+            talkback_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await announcement_task
+                await talkback_task
     return target
+
+
+def _capture_metadata_path(work_dir: Path) -> Path:
+    """Return the local metadata path for one C300X ring capture."""
+
+    return work_dir / "latest.capture.json"
+
+
+def _capture_raw_audio_path(work_dir: Path) -> Path:
+    return work_dir / "latest.raw.wav"
+
+
+def _capture_processed_audio_path(work_dir: Path) -> Path:
+    return work_dir / "latest.processed.wav"
+
+
+def _capture_frame_path(work_dir: Path, index: int) -> Path:
+    return work_dir / f"frame_{index:02d}.jpg"
+
+
+def _capture_metadata_payload(
+    *,
+    capture_id: str,
+    target: Path,
+    work_dir: Path,
+    rtsp_url: str,
+    status: Mapping[str, Any],
+    duration_seconds: int,
+    include_audio: bool,
+    announcement_used: bool,
+) -> dict[str, Any]:
+    bridge = status.get("bridge")
+    bridge_status = bridge if isinstance(bridge, Mapping) else {}
+    payload: dict[str, Any] = {
+        "capture_id": capture_id,
+        "created_at": datetime.now(UTC).isoformat(),
+        "kind": "doorbell_ring_capture",
+        "output_path": str(target),
+        "metadata_path": str(_capture_metadata_path(work_dir)),
+        "duration_seconds": duration_seconds,
+        "include_audio": include_audio,
+        "announcement_used": announcement_used,
+        "rtsp_path": urlsplit(rtsp_url).path,
+        "video_owner": status.get("video_owner") or bridge_status.get("media_owner"),
+        "media_state": status.get("media_state"),
+        "ring_call_active": bool(
+            status.get("ring_call_active") or bridge_status.get("ring_call_active")
+        ),
+        "ring_media_active": bool(
+            status.get("ring_media_active") or bridge_status.get("ring_media_active")
+        ),
+        "frames": [
+            str(_capture_frame_path(work_dir, index))
+            for index in range(1, _CAPTURE_FRAME_COUNT + 1)
+        ],
+    }
+    if include_audio:
+        payload["raw_wav_path"] = str(_capture_raw_audio_path(work_dir))
+        payload["processed_wav_path"] = str(
+            _capture_processed_audio_path(work_dir)
+        )
+    return payload
+
+
+def raise_if_ring_capture_blocked(status: Mapping[str, Any]) -> None:
+    """Reject capture when factual media state or RTSP policy blocks it."""
+
+    media_decision = derive_media_state(media_state_input_from_video_status(status))
+    decision = decide_rtsp_admission(
+        RtspConsumer.CAPTURE,
+        rtsp_resource_snapshot_from_status(status),
+    )
+    if decision.allowed and not media_decision.capture_blocked:
+        return
+    reason = (
+        f"media_state_{media_decision.state.value}"
+        if media_decision.capture_blocked
+        else decision.reason
+    )
+    raise HomeAssistantError(f"C300X ring capture busy: {reason}")
 
 
 def _validate_duration(value: Any) -> int:
@@ -125,7 +257,7 @@ def _capture_work_dir(hass: Any, wav_output_dir: str | None = None) -> Path:
     target = (
         Path(config.path("c300x"))
         if config is not None and hasattr(config, "path")
-        else _CAPTURE_WORK_DIR.parent.parent
+        else _CAPTURE_WORK_DIR
     )
     return _safe_c300x_path(hass, target, "capture work directory")
 
@@ -199,7 +331,7 @@ def _resolve_root(path: Path) -> Path:
 
 def _rtsp_url_from_status(
     entry: Any,
-    status: dict[str, Any],
+    status: Mapping[str, Any],
     *,
     include_audio: bool = False,
 ) -> str:
@@ -219,23 +351,33 @@ def _agent_host(entry: Any) -> str:
     return host
 
 
+def _capture_audio_gain_db(entry: Any) -> float:
+    """Return configured ring capture audio gain in dB."""
+
+    try:
+        gain = float(
+            entry_config_value(
+                entry,
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            )
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    return min(12.0, max(-12.0, gain))
+
+
 def _agent_host_for_socket(host: str) -> str:
-    if host.startswith("[") and "]" in host:
-        host = host[1 : host.index("]")]
-    return host.replace("%25", "%")
+    return _agent_host_for_socket_value(host)
 
 
 def _agent_host_for_url(host: str) -> str:
-    host = _agent_host_for_socket(host)
-    if ":" in host and not host.startswith("["):
-        host = host.replace("%", "%25")
-        return f"[{host}]"
-    return host
+    return _agent_host_for_url_value(host)
 
 
 def _capture_stream_path(
     entry: Any,
-    status: dict[str, Any],
+    status: Mapping[str, Any],
     *,
     include_audio: bool = False,
 ) -> str:
@@ -254,8 +396,7 @@ def _capture_stream_path(
 
 
 def _normalize_rtsp_path(value: Any) -> str:
-    path = str(value or "").strip() or DEFAULT_VIDEO_STREAM_PATH
-    return path if path.startswith("/") else f"/{path}"
+    return _normalize_rtsp_path_value(value, default_path=DEFAULT_VIDEO_STREAM_PATH)
 
 
 async def _async_wait_rtsp_ready(rtsp_url: str) -> None:
@@ -311,6 +452,23 @@ async def _async_mkdir(hass: Any, path: Path) -> None:
     await asyncio.to_thread(path.mkdir, parents=True, exist_ok=True)
 
 
+async def _async_write_capture_metadata(
+    hass: Any,
+    path: Path,
+    payload: dict[str, Any],
+) -> None:
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+    def _write() -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    if hasattr(hass, "async_add_executor_job"):
+        await hass.async_add_executor_job(_write)
+        return
+    await asyncio.to_thread(_write)
+
+
 async def _async_run_ffmpeg(
     rtsp_url: str,
     target: Path,
@@ -318,10 +476,11 @@ async def _async_run_ffmpeg(
     work_dir: Path | None = None,
     duration_seconds: int,
     include_audio: bool,
+    audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
 ) -> None:
     audio_dir = work_dir or target.parent
-    raw_audio_target = audio_dir / target.with_suffix(".raw.wav").name
-    processed_audio_target = audio_dir / target.with_suffix(".processed.wav").name
+    raw_audio_target = _capture_raw_audio_path(audio_dir)
+    processed_audio_target = _capture_processed_audio_path(audio_dir)
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -360,7 +519,7 @@ async def _async_run_ffmpeg(
                 (
                     "aresample=48000:async=1:first_pts=0,"
                     "pan=stereo|c0=c0|c1=c0,"
-                    "volume=6dB,"
+                    f"volume={audio_gain_db:g}dB,"
                     "alimiter=limit=0.95"
                 ),
                 "-ac",
@@ -398,6 +557,57 @@ async def _async_run_ffmpeg(
     )
     if include_audio:
         await _async_extract_processed_audio_wav(target, processed_audio_target)
+    await _async_extract_capture_frames(
+        target,
+        audio_dir,
+        duration_seconds=duration_seconds,
+    )
+
+
+def _capture_frame_offsets(duration_seconds: int) -> tuple[float, float, float]:
+    """Return stable still-frame offsets for the captured MP4."""
+
+    duration = max(0.1, float(duration_seconds))
+    first = (
+        _CAPTURE_FRAME_START_SECONDS
+        if duration > _CAPTURE_FRAME_START_SECONDS
+        else max(0.1, duration / 2)
+    )
+    last = max(first, duration - _CAPTURE_FRAME_END_MARGIN_SECONDS)
+    middle = first + ((last - first) / 2)
+    return (first, middle, last)
+
+
+async def _async_extract_capture_frames(
+    source: Path,
+    output_dir: Path,
+    *,
+    duration_seconds: int,
+) -> None:
+    """Extract analysis still frames from a captured MP4."""
+
+    for index, offset in enumerate(_capture_frame_offsets(duration_seconds), start=1):
+        target = _capture_frame_path(output_dir, index)
+        await _async_run_ffmpeg_command(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(source),
+                "-ss",
+                f"{offset:.3f}",
+                "-frames:v",
+                "1",
+                "-q:v",
+                "2",
+                str(target),
+            ],
+            command_timeout=10,
+            error_prefix="C300X frame extraction failed",
+        )
 
 
 async def _async_extract_processed_audio_wav(source: Path, target: Path) -> None:

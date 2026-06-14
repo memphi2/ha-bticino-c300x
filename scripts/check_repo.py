@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_HOME_ASSISTANT_VERSION = "2026.5.0"
-CURRENT_RELEASE_VERSION = "1.1.0"
+CURRENT_RELEASE_VERSION = "1.2.0"
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
 TEXT_SUFFIXES = {
     ".c",
@@ -82,6 +82,7 @@ REQUIRED_PATHS = [
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
     "scripts/check_typing.py",
+    "scripts/verify_media_reference_flow.py",
     "scripts/smoke_ha.py",
     "requirements-dev.txt",
     "hacs.json",
@@ -158,6 +159,7 @@ def main() -> int:
     failures.extend(check_github_automation())
     failures.extend(check_python_runtime())
     failures.extend(check_quality_scale())
+    failures.extend(check_media_reference_flow())
     failures.extend(check_python_compile())
     failures.extend(check_native_agent())
     if failures:
@@ -561,6 +563,27 @@ def check_quality_scale() -> list[str]:
         return []
     output = "\n".join(part for part in (result.stdout, result.stderr) if part)
     return [line.removeprefix("FAIL: ") for line in output.splitlines() if line]
+
+
+def check_media_reference_flow() -> list[str]:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "verify_media_reference_flow.py"),
+            "--fixtures",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+    return [
+        f"media reference flow gate failed: {line}"
+        for line in output.splitlines()
+        if line
+    ]
 
 
 def is_ignored(path: Path) -> bool:

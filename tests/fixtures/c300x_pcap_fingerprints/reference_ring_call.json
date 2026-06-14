@@ -1,0 +1,64 @@
+{
+  "ha_reference": {
+    "answer_action": "/api/v1/calls/doorbell/actions/answer",
+    "answered_rtsp_path": "/doorbell",
+    "hangup_action": "/api/v1/calls/doorbell/actions/hangup",
+    "preview_rtsp_path": "/doorbell-video"
+  },
+  "media_phases": [
+    {
+      "direction": "device_to_client",
+      "name": "preview_video",
+      "payload_type": 96,
+      "size": "large"
+    },
+    {
+      "direction": "bidirectional",
+      "name": "answered_audio_talkback",
+      "payload_type": 96,
+      "size": "small"
+    }
+  ],
+  "mode": "ring_call",
+  "native_ring_sdp": {
+    "answer_audio_active": true,
+    "audio": {
+      "codecs": [
+        "speex/8000",
+        "telephone-event/8000"
+      ],
+      "crypto_suites": [
+        "AES_CM_128_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "96",
+        "101"
+      ]
+    },
+    "early_audio_active": false,
+    "early_media_delay_ms": 300,
+    "video": {
+      "codecs": [
+        "H264/90000"
+      ],
+      "crypto_suites": [
+        "AES_CM_128_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "96"
+      ]
+    }
+  },
+  "schema_version": 1,
+  "sip_sequence": [
+    "INVITE",
+    "100",
+    "180",
+    "183",
+    "200",
+    "ACK",
+    "BYE",
+    "200"
+  ],
+  "source": "synthetic_contract_fixture"
+}

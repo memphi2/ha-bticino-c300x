@@ -22,9 +22,23 @@ from .api import (
     C300XAgentApi,
     C300XAgentApiConnectionError,
     C300XAgentApiError,
+    C300XAgentApiUnsupportedError,
     build_agent_base_url,
 )
 from .callback_url import normalize_callback_base_url
+from .config_audio import audio_gain_db, audio_gain_db_or_default
+from .config_schemas import (
+    reconfigure_connection_schema as _reconfigure_connection_schema,
+)
+from .config_schemas import (
+    reconfigure_features_schema as _reconfigure_features_schema,
+)
+from .config_schemas import (
+    setup_features_schema as _setup_features_schema,
+)
+from .config_schemas import (
+    stair_light_address as _stair_light_address,
+)
 from .const import (
     ALARM_DOMAIN,
     CONF_ACTIONS,
@@ -43,9 +57,11 @@ from .const import (
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
+    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -54,7 +70,9 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
+    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_NAME,
+    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
@@ -74,7 +92,7 @@ from .device_installer import (
 )
 from .entry_config import entry_config_value
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
-from .validation_patterns import ENTITY_OBJECT_ID_RE, STAIR_LIGHT_ADDRESS_RE
+from .validation_patterns import ENTITY_OBJECT_ID_RE
 
 _QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
 _QML_PATCH_STATUS_UNKNOWN = "unknown"
@@ -96,7 +114,9 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DEVICE_ACTIVATION_MODE,
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         CONF_DEVICE_UI_ENABLED,
+        CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_MAINTENANCE_TOKEN,
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
         CONF_VIDEO_ENABLED,
         CONF_VIDEO_PORT,
         CONF_VIDEO_STREAM_PATH,
@@ -1046,110 +1066,6 @@ def _normalize_discovery_host(host: str) -> str:
     return host.strip().lower().rstrip(".")
 
 
-def _setup_features_schema(
-    default_video_enabled: bool,
-    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
-    *,
-    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
-) -> vol.Schema:
-    """Return the initial setup feature schema."""
-
-    fields: dict[Any, Any] = {
-        vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
-    }
-    if default_video_enabled:
-        fields[
-            vol.Optional(
-                CONF_CREATE_HOMEASSISTANT_USER,
-                default=default_create_homeassistant_user,
-            )
-        ] = bool
-    fields.update(
-        {
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_MODE,
-                default=default_device_activation_mode,
-            ): vol.In(DEVICE_ACTIVATION_MODES),
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                default=default_device_activation_stair_light_address,
-            ): str,
-        }
-    )
-    return vol.Schema(fields)
-
-
-def _reconfigure_connection_schema(
-    default_agent_host: str,
-    default_agent_port: int,
-    default_agent_token: str,
-    default_maintenance_token: str,
-    default_callback_base_url: str,
-) -> vol.Schema:
-    """Return the reconfigure connection schema."""
-
-    return vol.Schema(
-        {
-            vol.Required(CONF_AGENT_HOST, default=default_agent_host): str,
-            vol.Optional(CONF_AGENT_PORT, default=default_agent_port): int,
-            vol.Required(CONF_AGENT_TOKEN, default=default_agent_token): str,
-            vol.Optional(
-                CONF_MAINTENANCE_TOKEN,
-                default=default_maintenance_token,
-            ): str,
-            _optional_suggested(
-                CONF_CALLBACK_BASE_URL,
-                default_callback_base_url,
-            ): str,
-            vol.Optional(CONF_ROTATE_SHARED_SECRET, default=False): bool,
-        }
-    )
-
-
-def _reconfigure_features_schema(
-    default_video_enabled: bool,
-    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
-    *,
-    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
-) -> vol.Schema:
-    """Return the reconfigure feature schema."""
-
-    fields: dict[Any, Any] = {
-        vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
-    }
-    if default_video_enabled:
-        fields[
-            vol.Optional(
-                CONF_CREATE_HOMEASSISTANT_USER,
-                default=default_create_homeassistant_user,
-            )
-        ] = bool
-    fields.update(
-        {
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_MODE,
-                default=default_device_activation_mode,
-            ): vol.In(DEVICE_ACTIVATION_MODES),
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                default=default_device_activation_stair_light_address,
-            ): str,
-        }
-    )
-    return vol.Schema(fields)
-
-
-def _stair_light_address(value: Any) -> str:
-    """Validate the OpenWebNet address segment used by the stair light command."""
-
-    address = str(value or "").strip()
-    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
-        raise vol.Invalid("invalid staircase light address")
-    return address
-
-
 def _device_activation_mode(value: Any) -> str:
     """Validate the configured C300X device activation address mode."""
 
@@ -1368,6 +1284,30 @@ def _feature_input(
         except vol.Invalid:
             errors[CONF_DASHBOARD_ENTITIES] = "invalid_dashboard_entities"
     media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
+    if media_enabled:
+        try:
+            doorstation_audio_gain_db = audio_gain_db(
+                user_input.get(
+                    CONF_DOORSTATION_AUDIO_GAIN_DB,
+                    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+                )
+            )
+        except vol.Invalid:
+            errors[CONF_DOORSTATION_AUDIO_GAIN_DB] = "invalid_audio_gain"
+            doorstation_audio_gain_db = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+        try:
+            ring_capture_audio_gain_db = audio_gain_db(
+                user_input.get(
+                    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+                    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+                )
+            )
+        except vol.Invalid:
+            errors[CONF_RING_CAPTURE_AUDIO_GAIN_DB] = "invalid_audio_gain"
+            ring_capture_audio_gain_db = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    else:
+        doorstation_audio_gain_db = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+        ring_capture_audio_gain_db = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     return (
         {
             CONF_ALARM_ENTITY_ID: alarm_entity_id,
@@ -1396,6 +1336,16 @@ def _feature_input(
                 )
                 if media_enabled
                 else False
+            ),
+            CONF_DOORSTATION_AUDIO_GAIN_DB: (
+                doorstation_audio_gain_db
+                if media_enabled
+                else DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+            ),
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: (
+                ring_capture_audio_gain_db
+                if media_enabled
+                else DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
             ),
             CONF_VIDEO_PORT: int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
             CONF_VIDEO_STREAM_PATH: str(
@@ -1480,6 +1430,12 @@ async def _async_agent_ready_for_setup(
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
     setup_data = await api.async_validate_setup()
+    try:
+        await api.async_self_test()
+    except C300XAgentApiUnsupportedError:
+        pass
+    except C300XAgentApiError:
+        pass
     await api.async_list_event_subscriptions()
     return setup_data
 
@@ -1558,32 +1514,30 @@ def _options_features_schema(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         DEFAULT_STAIR_LIGHT_ADDRESS,
     )
-    fields: dict[Any, Any] = {
-        vol.Optional(
-            CONF_VIDEO_ENABLED,
-            default=default_video_enabled,
-        ): bool,
-    }
-    if default_video_enabled:
-        fields[
-            vol.Optional(
-                CONF_CREATE_HOMEASSISTANT_USER,
-                default=default_create_homeassistant_user,
-            )
-        ] = bool
-    fields.update(
-        {
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_MODE,
-                default=default_device_activation_mode,
-            ): vol.In(DEVICE_ACTIVATION_MODES),
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                default=default_device_activation_stair_light_address,
-            ): str,
-        }
+    default_doorstation_audio_gain_db = audio_gain_db_or_default(
+        _config_default(
+            config_entry,
+            CONF_DOORSTATION_AUDIO_GAIN_DB,
+            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+        ),
+        DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     )
-    return vol.Schema(fields)
+    default_ring_capture_audio_gain_db = audio_gain_db_or_default(
+        _config_default(
+            config_entry,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        ),
+        DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    )
+    return _reconfigure_features_schema(
+        default_video_enabled,
+        default_device_activation_mode,
+        default_device_activation_stair_light_address,
+        default_create_homeassistant_user=bool(default_create_homeassistant_user),
+        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
+        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+    )
 
 
 def _dashboard_schema(
@@ -1685,6 +1639,22 @@ def _current_feature_options(
             CONF_VIDEO_STREAM_PATH,
             DEFAULT_VIDEO_STREAM_PATH,
         ),
+        CONF_DOORSTATION_AUDIO_GAIN_DB: audio_gain_db_or_default(
+            _config_default(
+                config_entry,
+                CONF_DOORSTATION_AUDIO_GAIN_DB,
+                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+            ),
+            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+        ),
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: audio_gain_db_or_default(
+            _config_default(
+                config_entry,
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            ),
+            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        ),
         CONF_CREATE_HOMEASSISTANT_USER: bool(
             _config_default(
                 config_entry,
@@ -1742,6 +1712,12 @@ def _reconfigure_features_schema_from_current(
         current[CONF_DEVICE_ACTIVATION_MODE],
         current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS],
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
+        default_doorstation_audio_gain_db=float(
+            current[CONF_DOORSTATION_AUDIO_GAIN_DB]
+        ),
+        default_ring_capture_audio_gain_db=float(
+            current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
+        ),
     )
 
 
@@ -1778,6 +1754,17 @@ def _feature_input_defaults(
     data.setdefault(
         CONF_VIDEO_STREAM_PATH,
         defaults.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH),
+    )
+    data.setdefault(
+        CONF_DOORSTATION_AUDIO_GAIN_DB,
+        defaults.get(CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB),
+    )
+    data.setdefault(
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+        defaults.get(
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        ),
     )
     data.setdefault(
         CONF_DEVICE_UI_ENABLED,

@@ -67,18 +67,22 @@ if "homeassistant.components.select" not in sys.modules:
     sys.modules["homeassistant.components.select"] = select
     sys.modules["homeassistant.helpers.config_validation"] = config_validation
 
+from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.select import (  # noqa: E402
     C300XSmartphoneForwardingModeSelect,
 )
 
 
 class _FakeApi:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_status: bool = False) -> None:
         self.active_reads = 0
         self.selected: list[str] = []
+        self.fail_status = fail_status
 
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         self.active_reads += 1
+        if self.fail_status:
+            raise C300XAgentApiError("offline")
         return {"mode": 2, "state": "blocked"}
 
     async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
@@ -112,6 +116,16 @@ def test_smartphone_forwarding_select_refreshes_active_status() -> None:
     assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
 
 
+def test_smartphone_forwarding_select_marks_unavailable_on_api_error() -> None:
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=_FakeApi(fail_status=True)))
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.current_option is None
+
+
 def test_smartphone_forwarding_select_sets_three_state_mode() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
@@ -137,3 +151,30 @@ def test_smartphone_forwarding_event_updates_select_state() -> None:
 
     assert entity.current_option == "in-house-only"
     assert entity.extra_state_attributes == {"mode": 1, "state": "in-house-only"}
+
+
+def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:
+    entity = C300XSmartphoneForwardingModeSelect(_FakeEntry())  # type: ignore[arg-type]
+
+    entity._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": "other-entry",
+                "event_type": "smartphone_forwarding_changed",
+                "mode": 1,
+            }
+        )
+    )
+    entity._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": "entry-1",
+                "event_type": "doorbell_pressed",
+                "mode": 1,
+            }
+        )
+    )
+    entity._apply_status({"mode": 99, "state": "not-a-mode"})
+
+    assert entity.current_option is None
+    assert entity.extra_state_attributes == {"mode": 99, "state": "not-a-mode"}

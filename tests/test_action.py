@@ -35,6 +35,30 @@ def test_parse_actions_json_validates_shape() -> None:
     }
 
 
+def test_parse_actions_json_rejects_invalid_json_and_allows_empty_input() -> None:
+    assert parse_actions_json(None) == {}
+    assert parse_actions_json(" ") == {}
+    with pytest.raises(ActionValidationError, match="actions JSON is invalid"):
+        parse_actions_json("{")
+
+
+def test_validate_action_map_allows_none_and_optional_none_dicts() -> None:
+    assert validate_action_map(None) == {}
+    actions = validate_action_map(
+        {
+            "entry_light": {
+                "domain": "light",
+                "service": "toggle",
+                "data": None,
+                "target": None,
+            }
+        }
+    )
+
+    assert actions["entry_light"]["data"] == {}
+    assert actions["entry_light"]["target"] == {}
+
+
 def test_validate_action_map_allows_target() -> None:
     actions = validate_action_map(
         {
@@ -87,6 +111,7 @@ def test_validate_action_map_allows_dashboard_metadata() -> None:
     "value",
     [
         [],
+        {"ok": []},
         {"bad id": {"domain": "light", "service": "toggle"}},
         {"ok": {"domain": "Light", "service": "toggle"}},
         {"ok": {"domain": "light", "service": "toggle-now"}},
@@ -105,6 +130,13 @@ def test_validate_action_map_allows_dashboard_metadata() -> None:
                 "domain": "light",
                 "service": "toggle",
                 "dashboard": {"state_entity_id": "bad id"},
+            }
+        },
+        {
+            "ok": {
+                "domain": "light",
+                "service": "toggle",
+                "dashboard": {"order": "last"},
             }
         },
     ],
@@ -131,3 +163,5 @@ def test_alarm_service_for_command(command: str, service: str) -> None:
 def test_alarm_service_for_command_rejects_unknown_command() -> None:
     with pytest.raises(ActionValidationError):
         alarm_service_for_command("panic")
+    with pytest.raises(ActionValidationError):
+        alarm_service_for_command(None)

@@ -89,6 +89,7 @@ helpers.selector = None
 sys.modules.pop("homeassistant.helpers.selector", None)
 
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
+    BticinoC300XOptionsFlow,
     BticinoC300XConfigFlow,
     _agent_host,
     _alarm_entity_id,
@@ -140,11 +141,18 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_UI_ENABLED,
+    CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
+    CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+    CONF_ROTATE_SHARED_SECRET,
+    CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
+    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_STREAM_PATH,
     DEVICE_ACTIVATION_MODE_AUTO,
@@ -176,6 +184,10 @@ def test_probe_agent_requires_event_subscription_endpoint(
             calls.append("capabilities")
             return {"device_id": "c300x-test"}
 
+        async def async_self_test(self) -> dict[str, object]:
+            calls.append("self_test")
+            return {"ok": True, "checks": {}}
+
         async def async_list_event_subscriptions(self) -> dict[str, object]:
             calls.append("subscriptions")
             raise C300XAgentApiConnectionError("device agent returned HTTP 404")
@@ -197,6 +209,7 @@ def test_probe_agent_requires_event_subscription_endpoint(
     assert calls == [
         "api:http://c300x.local:8091:agent-token",
         "capabilities",
+        "self_test",
         "subscriptions",
     ]
 
@@ -489,6 +502,8 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in features
 
 
@@ -503,6 +518,8 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_VIDEO_PORT not in result
     assert CONF_VIDEO_STREAM_PATH not in result
     assert CONF_DEVICE_UI_ENABLED not in result
@@ -571,6 +588,8 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
     assert data[CONF_VIDEO_PORT] == 6554
     assert data[CONF_VIDEO_STREAM_PATH] == DEFAULT_VIDEO_STREAM_PATH
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
 def test_initial_feature_input_defaults_video_enabled() -> None:
@@ -579,6 +598,8 @@ def test_initial_feature_input_defaults_video_enabled() -> None:
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
 def test_feature_input_can_disable_homeassistant_user_creation() -> None:
@@ -586,6 +607,8 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
         {
             CONF_VIDEO_ENABLED: True,
             CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: -12,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 12,
         },
         default_video_enabled=True,
     )
@@ -593,6 +616,26 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -12
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 12
+
+
+def test_feature_input_rejects_audio_gain_outside_supported_range() -> None:
+    data, errors = _feature_input(
+        {
+            CONF_VIDEO_ENABLED: True,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: -12.5,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 12.5,
+        },
+        default_video_enabled=True,
+    )
+
+    assert errors == {
+        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+    }
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
 def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None:
@@ -600,6 +643,8 @@ def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None
         {
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: True,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: 99,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: -99,
         },
         default_video_enabled=True,
     )
@@ -607,6 +652,8 @@ def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is False
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
 def test_feature_input_keeps_selected_gui_features() -> None:
@@ -1136,6 +1183,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
             CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: -3.5,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 4.5,
             CONF_VIDEO_PORT: 6555,
             CONF_VIDEO_STREAM_PATH: "/custom-video",
             CONF_DEVICE_UI_ENABLED: True,
@@ -1167,6 +1216,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == -3.5
+    assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 4.5
     assert CONF_VIDEO_PORT not in features
     assert CONF_VIDEO_STREAM_PATH not in features
     assert CONF_DEVICE_UI_ENABLED not in features
@@ -1180,6 +1231,8 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert _current_feature_options(entry)[CONF_VIDEO_STREAM_PATH] == "/custom-video"
     assert _current_feature_options(entry)[CONF_DEVICE_UI_ENABLED] is True
     assert _current_feature_options(entry)[CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert _current_feature_options(entry)[CONF_DOORSTATION_AUDIO_GAIN_DB] == -3.5
+    assert _current_feature_options(entry)[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 4.5
     assert _current_feature_options(entry)[CONF_ACTIONS] == {
         "standby": {"domain": "button", "service": "press"}
     }
@@ -1202,6 +1255,8 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
         CONF_DASHBOARD_PREVENT_RETURN: False,
         CONF_VIDEO_PORT: 6555,
         CONF_VIDEO_STREAM_PATH: "/custom-video",
+        CONF_DOORSTATION_AUDIO_GAIN_DB: -2.5,
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: 5.5,
     }
 
     prepared = _feature_input_defaults(
@@ -1220,6 +1275,8 @@ def test_reconfigure_hidden_gui_fields_keep_existing_actions() -> None:
     assert feature_data[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert feature_data[CONF_VIDEO_PORT] == 6555
     assert feature_data[CONF_VIDEO_STREAM_PATH] == "/custom-video"
+    assert feature_data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -2.5
+    assert feature_data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 5.5
     assert feature_data[CONF_ACTIONS] == defaults[CONF_ACTIONS]
     assert feature_data[CONF_DASHBOARD_PREVENT_RETURN] is False
 
@@ -1248,6 +1305,8 @@ def test_options_features_schema_excludes_dashboard_fields() -> None:
 
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
     assert CONF_ACTIONS_JSON not in result
@@ -1306,7 +1365,12 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     assert CONF_DASHBOARD_ENTITIES not in disabled_keys
     assert CONF_ACTIONS_JSON not in disabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
-    assert enabled_keys[:2] == [CONF_VIDEO_ENABLED, CONF_CREATE_HOMEASSISTANT_USER]
+    assert enabled_keys[:4] == [
+        CONF_VIDEO_ENABLED,
+        CONF_CREATE_HOMEASSISTANT_USER,
+        CONF_DOORSTATION_AUDIO_GAIN_DB,
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+    ]
     assert CONF_DEVICE_UI_ENABLED not in enabled_keys
     assert CONF_ALARM_ENTITY_ID not in enabled_keys
     assert CONF_WEATHER_ENTITY_ID not in enabled_keys
@@ -1412,6 +1476,196 @@ def test_qml_patch_status_placeholder_refreshes_agent_once() -> None:
     assert api.calls == 1
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entry.runtime_data.qml_patch_status_updated_at is not None
+
+
+def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
+    entry = SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "old-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "old-token",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: "",
+            CONF_VIDEO_ENABLED: False,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_ALARM_ENTITY_ID: "",
+            CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
+            CONF_ACTIONS: {},
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_VIDEO_PORT: 6554,
+            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_DEVICE_UI_ENABLED: False,
+        },
+        options={},
+        runtime_data=None,
+    )
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
+        "type": "create_entry",
+        **kwargs,
+    }
+
+    connection_form = asyncio.run(
+        flow.async_step_connection(
+            {
+                CONF_AGENT_HOST: "agent.local",
+                CONF_AGENT_PORT: 8092,
+                CONF_AGENT_TOKEN: "agent-token",
+                CONF_MAINTENANCE_TOKEN: "maintenance-token",
+                CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+            }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_CREATE_HOMEASSISTANT_USER: False,
+                CONF_DOORSTATION_AUDIO_GAIN_DB: -1.5,
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
+                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1",
+            }
+        )
+    )
+    result = asyncio.run(
+        flow.async_step_dashboard(
+            {
+                CONF_DEVICE_UI_ENABLED: True,
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_WEATHER_ENTITY_ID: "weather.home",
+                CONF_DASHBOARD_ENTITIES: ["switch.entry"],
+                CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
+                CONF_DASHBOARD_PREVENT_RETURN: True,
+            }
+        )
+    )
+
+    assert connection_form["step_id"] == "features"
+    assert dashboard_form["step_id"] == "dashboard"
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_AGENT_HOST] == "agent.local"
+    assert result["data"][CONF_AGENT_PORT] == 8092
+    assert result["data"][CONF_VIDEO_ENABLED] is True
+    assert result["data"][CONF_CREATE_HOMEASSISTANT_USER] is False
+    assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == -1.5
+    assert result["data"][CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 2.5
+    assert result["data"][CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
+    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert result["data"][CONF_DEVICE_UI_ENABLED] is True
+    assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"
+    assert result["data"][CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
+    assert result["data"][CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert result["data"][CONF_ACTIONS] == {
+        "standby": {
+            "data": {},
+            "domain": "button",
+            "service": "press",
+            "target": {},
+        }
+    }
+
+
+def test_options_flow_invalid_connection_stays_on_connection_page() -> None:
+    entry = SimpleNamespace(data={}, options={}, runtime_data=None)
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_connection(
+            {
+                CONF_AGENT_HOST: "",
+                CONF_AGENT_PORT: 8091,
+                CONF_AGENT_TOKEN: "",
+                CONF_MAINTENANCE_TOKEN: "",
+                CONF_CALLBACK_BASE_URL: "",
+            }
+        )
+    )
+
+    assert result["step_id"] == "connection"
+    assert result["errors"] == {CONF_AGENT_HOST: "invalid_agent_host"}
+
+
+def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    option_updates: list[dict[str, object]] = []
+    calls: list[str] = []
+    entry = SimpleNamespace(
+        unique_id="c300x-stable-id",
+        options={
+            CONF_AGENT_HOST: "old-option.local",
+            CONF_VIDEO_ENABLED: False,
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            "keep": "value",
+        },
+    )
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_update_entry=lambda target, **kwargs: option_updates.append(
+                kwargs["options"]
+            )
+        )
+    )
+    flow._reconfigure_connection = {
+        CONF_AGENT_HOST: "agent.local",
+        CONF_AGENT_PORT: 8091,
+        CONF_AGENT_TOKEN: "agent-token",
+        CONF_MAINTENANCE_TOKEN: "maintenance-token",
+        CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+        CONF_ROTATE_SHARED_SECRET: True,
+    }
+    flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
+
+    async def async_set_unique_id(unique_id: str, **_kwargs: object) -> None:
+        calls.append(f"unique:{unique_id}")
+
+    def abort_if_unique_id_mismatch() -> None:
+        calls.append("mismatch_check")
+
+    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+        assert target is entry
+        return {"type": "abort", "data_updates": data_updates}
+
+    secret_values = iter(["shared-secret", "event-secret"])
+    monkeypatch.setattr(
+        config_flow_module.secrets,
+        "token_urlsafe",
+        lambda _length: next(secret_values),
+    )
+    flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
+    flow._abort_if_unique_id_mismatch = abort_if_unique_id_mismatch  # type: ignore[method-assign]
+    flow.async_update_and_abort = update_and_abort  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow._async_finish_reconfigure(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_CREATE_HOMEASSISTANT_USER: True,
+                CONF_DEVICE_UI_ENABLED: False,
+            }
+        )
+    )
+
+    assert calls == ["unique:c300x-stable-id", "mismatch_check"]
+    assert option_updates == [
+        {
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            "keep": "value",
+        }
+    ]
+    assert result["data_updates"][CONF_AGENT_HOST] == "agent.local"
+    assert result["data_updates"][CONF_VIDEO_ENABLED] is True
+    assert result["data_updates"][CONF_SHARED_SECRET] == "shared-secret"
+    assert result["data_updates"][CONF_EVENT_WEBHOOK_TOKEN] == "event-secret"
+    assert CONF_ROTATE_SHARED_SECRET not in result["data_updates"]
 
 
 class _FakeQmlPatchApi:

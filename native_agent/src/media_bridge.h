@@ -26,7 +26,7 @@ bool c300x_media_home_call_start(
 void c300x_media_home_call_stop(struct c300x_video *video);
 void c300x_media_session_stop(struct c300x_video *video);
 bool c300x_media_session_keepalive(struct c300x_video *video, bool audio);
-bool c300x_media_ring_call_answer(struct c300x_video *video, bool audio);
+bool c300x_media_ring_call_answer(struct c300x_video *video);
 void c300x_media_ring_call_hangup(struct c300x_video *video);
 bool c300x_media_talkback_running(const struct c300x_video *video);
 bool c300x_media_ring_call_active(const struct c300x_video *video);

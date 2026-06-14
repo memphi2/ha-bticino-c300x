@@ -10,7 +10,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-MINIMUM_COVERAGE = 35
+MINIMUM_COVERAGE = 85
 
 
 def main() -> int:

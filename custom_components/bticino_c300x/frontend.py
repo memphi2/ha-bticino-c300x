@@ -46,7 +46,7 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         from homeassistant.components.http import StaticPathConfig
 
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIR), True)]
+            [StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIR), False)]
         )
         _register_frontend_module_url(
             hass,

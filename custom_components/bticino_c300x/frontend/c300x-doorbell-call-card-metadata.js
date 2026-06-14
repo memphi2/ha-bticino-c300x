@@ -1,12 +1,6 @@
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
 const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
-const C300X_DOORBELL_STATE_OBJECT_ID = "bticino_c300x_doorbell_state";
-const C300X_DOORBELL_STATE_UNIQUE_SUFFIX = "_doorbell_state";
-const C300X_DOORBELL_STATE_TRANSLATION_KEY = "doorbell_state";
-const C300X_HOME_CALL_OBJECT_ID = "bticino_c300x_home_call_active";
-const C300X_HOME_CALL_UNIQUE_SUFFIX = "_home_call_active";
-const C300X_HOME_CALL_TRANSLATION_KEY = "home_call_active";
 const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
 
 const C300X_METADATA_TRANSLATIONS = {
@@ -67,35 +61,6 @@ function c300xMetadataStubConfig(entity) {
   };
 }
 
-function c300xMetadataRegistryEntity(hass, entityId, uniqueSuffix, translationKey) {
-  const entity = hass?.entities?.[entityId] || {};
-  const uniqueId = entity.unique_id || entity.uniqueId || "";
-  return entity.translation_key === translationKey
-    || entity.translationKey === translationKey
-    || (uniqueSuffix && uniqueId.endsWith(uniqueSuffix));
-}
-
-function c300xMetadataRelatedCamera(hass, entityId, suffix) {
-  if (suffix !== null) {
-    return c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID, suffix);
-  }
-  const entryId = hass?.entities?.[entityId]?.config_entry_id;
-  const entities = hass?.entities || {};
-  if (entryId) {
-    for (const candidateId of Object.keys(entities)) {
-      const [domain, objectId] = candidateId.split(".");
-      if (
-        entities[candidateId]?.config_entry_id === entryId
-        && domain === "camera"
-        && objectId?.startsWith(C300X_CAMERA_OBJECT_ID)
-      ) {
-        return candidateId;
-      }
-    }
-  }
-  return c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID);
-}
-
 function c300xMetadataEntitySuggestion(hass, entityId) {
   const [domain, objectId] = entityId.split(".");
   if (!domain || !objectId) {
@@ -124,56 +89,6 @@ function c300xMetadataEntitySuggestion(hass, entityId) {
         },
       },
     ];
-  }
-
-  if (domain === "sensor") {
-    const suffix = c300xMetadataObjectSuffix(objectId, C300X_DOORBELL_STATE_OBJECT_ID);
-    if (
-      suffix === null
-      && !c300xMetadataRegistryEntity(
-        hass,
-        entityId,
-        C300X_DOORBELL_STATE_UNIQUE_SUFFIX,
-        C300X_DOORBELL_STATE_TRANSLATION_KEY,
-      )
-    ) {
-      return null;
-    }
-    return {
-      config: {
-        type: C300X_CARD_TYPE,
-        ...c300xMetadataStubConfig(
-          c300xMetadataRelatedCamera(hass, entityId, suffix),
-        ),
-        doorbell_state_entity: entityId,
-      },
-    };
-  }
-
-  if (domain === "binary_sensor") {
-    const suffix = c300xMetadataObjectSuffix(objectId, C300X_HOME_CALL_OBJECT_ID);
-    if (
-      suffix === null
-      && !c300xMetadataRegistryEntity(
-        hass,
-        entityId,
-        C300X_HOME_CALL_UNIQUE_SUFFIX,
-        C300X_HOME_CALL_TRANSLATION_KEY,
-      )
-    ) {
-      return null;
-    }
-    return {
-      label: c300xMetadataLocalize(hass, "home_call"),
-      config: {
-        type: C300X_CARD_TYPE,
-        ...c300xMetadataStubConfig(
-          c300xMetadataRelatedCamera(hass, entityId, suffix),
-        ),
-        mode: "home_call",
-        home_call_entity: entityId,
-      },
-    };
   }
 
   return null;

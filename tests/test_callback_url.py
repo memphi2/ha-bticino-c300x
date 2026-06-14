@@ -80,12 +80,22 @@ helpers.entity = helpers_entity
 from custom_components.bticino_c300x import callback_url as callback_url_module
 from custom_components.bticino_c300x.callback_url import (
     _preferred_source_ip,
+    _route_candidates,
+    _select_non_link_local_source_ip,
+    _source_ip_is_usable,
     _replace_url_host,
     apply_callback_base_url,
     async_generate_agent_callback_url,
+    async_rewrite_link_local_callback_url,
+    async_suggest_callback_base_url,
     normalize_callback_base_url,
 )
-from custom_components.bticino_c300x.const import CONF_CALLBACK_BASE_URL
+from custom_components.bticino_c300x.const import (
+    CONF_AGENT_HOST,
+    CONF_AGENT_PORT,
+    CONF_CALLBACK_BASE_URL,
+    DEFAULT_AGENT_PORT,
+)
 
 TEST_NET_IPV4 = "203.0.113.20"
 TEST_NET_IPV6 = "2001:db8::10"
@@ -111,6 +121,17 @@ class _FakeHass:
 
 def test_preferred_source_ip_uses_ipv4_before_ipv6() -> None:
     assert _preferred_source_ip([TEST_NET_IPV6, TEST_NET_IPV4]) == TEST_NET_IPV4
+    assert _preferred_source_ip([]) is None
+    assert _preferred_source_ip(["not-an-ip", TEST_NET_IPV6]) == TEST_NET_IPV6
+
+
+def test_source_ip_is_usable_rejects_non_routable_values() -> None:
+    assert _source_ip_is_usable(TEST_NET_IPV4)
+    assert _source_ip_is_usable(TEST_NET_IPV6)
+    assert not _source_ip_is_usable("not-an-ip")
+    assert not _source_ip_is_usable("127.0.0.1")
+    assert not _source_ip_is_usable("0.0.0.0")
+    assert not _source_ip_is_usable("fe80::1")
 
 
 def test_replace_url_host_brackets_ipv6() -> None:
@@ -118,6 +139,10 @@ def test_replace_url_host_brackets_ipv6() -> None:
         callback_url_module.urlsplit("http://homeassistant.local:8123/api/webhook/x"),
         TEST_NET_IPV6,
     ) == f"http://[{TEST_NET_IPV6}]:8123/api/webhook/x"
+    assert _replace_url_host(
+        callback_url_module.urlsplit("http://homeassistant.local/api/webhook/x"),
+        "ha.local",
+    ) == "http://ha.local/api/webhook/x"
 
 
 def test_normalize_callback_base_url_accepts_plain_http_endpoint() -> None:
@@ -207,3 +232,218 @@ def test_agent_callback_url_uses_configured_base_before_route_rewrite() -> None:
     parsed = callback_url_module.urlsplit(result)
     assert parsed.hostname == "192.0.2.10"
     assert parsed.path.endswith("/event-hook")
+
+
+def test_suggest_callback_base_url_uses_configured_value_without_probe() -> None:
+    result = asyncio.run(
+        async_suggest_callback_base_url(
+            _FakeHass(),  # type: ignore[arg-type]
+            _FakeEntry(options={CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123"}),
+        )
+    )
+
+    assert result == "http://192.0.2.10:8123"
+
+
+def test_suggest_callback_base_url_probes_agent_route(monkeypatch) -> None:
+    probed: list[tuple[str, int]] = []
+
+    def route_source(host: str, port: int) -> str:
+        probed.append((host, port))
+        return TEST_NET_IPV4
+
+    monkeypatch.setattr(
+        callback_url_module,
+        "_select_non_link_local_source_ip",
+        route_source,
+    )
+
+    result = asyncio.run(
+        async_suggest_callback_base_url(
+            _FakeHass(),  # type: ignore[arg-type]
+            _FakeEntry(data={CONF_AGENT_HOST: TEST_NET_IPV4, CONF_AGENT_PORT: "bad"}),
+        )
+    )
+
+    assert result == f"http://{TEST_NET_IPV4}:8123"
+    assert probed == [(TEST_NET_IPV4, DEFAULT_AGENT_PORT)]
+
+
+def test_suggest_callback_base_url_returns_empty_for_invalid_config_or_no_route(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        callback_url_module,
+        "_select_non_link_local_source_ip",
+        lambda *_args: None,
+    )
+
+    assert (
+        asyncio.run(
+            async_suggest_callback_base_url(
+                _FakeHass(),  # type: ignore[arg-type]
+                _FakeEntry(data={CONF_AGENT_HOST: ""}),
+            )
+        )
+        == ""
+    )
+    assert (
+        asyncio.run(
+            async_suggest_callback_base_url(
+                _FakeHass(),  # type: ignore[arg-type]
+                _FakeEntry(
+                    data={CONF_AGENT_HOST: TEST_NET_IPV4},
+                    options={CONF_CALLBACK_BASE_URL: "bad"},
+                ),
+            )
+        )
+        == ""
+    )
+
+
+def test_rewrite_link_local_callback_url_uses_route_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        callback_url_module,
+        "_select_non_link_local_source_ip",
+        lambda _host, _port: TEST_NET_IPV4,
+    )
+
+    result = asyncio.run(
+        async_rewrite_link_local_callback_url(
+            _FakeHass(),  # type: ignore[arg-type]
+            _FakeEntry(),
+            "http://homeassistant.local:8123/api/webhook/x",
+        )
+    )
+
+    assert result == f"http://{TEST_NET_IPV4}:8123/api/webhook/x"
+
+
+def test_rewrite_link_local_callback_url_keeps_non_rewritable_or_unroutable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        callback_url_module,
+        "_select_non_link_local_source_ip",
+        lambda *_args: None,
+    )
+
+    assert (
+        asyncio.run(
+            async_rewrite_link_local_callback_url(
+                _FakeHass(),  # type: ignore[arg-type]
+                _FakeEntry(),
+                "http://192.0.2.10:8123/api/webhook/x",
+            )
+        )
+        == "http://192.0.2.10:8123/api/webhook/x"
+    )
+    assert (
+        asyncio.run(
+            async_rewrite_link_local_callback_url(
+                _FakeHass(),  # type: ignore[arg-type]
+                _FakeEntry(data={CONF_AGENT_HOST: ""}),
+                "http://homeassistant.local:8123/api/webhook/x",
+            )
+        )
+        == "http://homeassistant.local:8123/api/webhook/x"
+    )
+    assert (
+        asyncio.run(
+            async_rewrite_link_local_callback_url(
+                _FakeHass(),  # type: ignore[arg-type]
+                _FakeEntry(data={CONF_AGENT_HOST: "c300x.local", CONF_AGENT_PORT: "bad"}),
+                "http://homeassistant.local:8123/api/webhook/x",
+            )
+        )
+        == "http://homeassistant.local:8123/api/webhook/x"
+    )
+
+
+def test_route_candidates_normalizes_ipv6_zone_and_handles_resolution_errors(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    def fake_getaddrinfo(host, port, **_kwargs):  # noqa: ANN001
+        calls.append((host, port))
+        return [(1, 2, 3, "", ("target", port))]
+
+    monkeypatch.setattr(callback_url_module.socket, "getaddrinfo", fake_getaddrinfo)
+
+    assert _route_candidates("[fe80::1%25eth0]", 8091) == [
+        (1, 2, 3, "", ("target", 8091))
+    ]
+    assert calls == [("fe80::1%eth0", 8091)]
+
+    monkeypatch.setattr(
+        callback_url_module.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("dns")),
+    )
+    assert _route_candidates("bad", 8091) == []
+
+
+def test_select_non_link_local_source_ip_uses_socket_route(monkeypatch) -> None:
+    monkeypatch.setattr(
+        callback_url_module,
+        "_route_candidates",
+        lambda _host, _port: [
+            (1, 2, 3, "", ("target", 8091)),
+            (1, 2, 3, "", ("target2", 8091)),
+        ],
+    )
+    sockets = [
+        _FakeRouteSocket(OSError("connect")),
+        _FakeRouteSocket(None, ("192.0.2.44", 55000)),
+    ]
+    monkeypatch.setattr(
+        callback_url_module.socket,
+        "socket",
+        lambda *_args: sockets.pop(0),
+    )
+
+    assert _select_non_link_local_source_ip("c300x.local", 8091) == "192.0.2.44"
+
+
+def test_select_non_link_local_source_ip_rejects_unusable_route_sources(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        callback_url_module,
+        "_route_candidates",
+        lambda _host, _port: [(1, 2, 3, "", ("target", 8091))],
+    )
+    monkeypatch.setattr(
+        callback_url_module.socket,
+        "socket",
+        lambda *_args: _FakeRouteSocket(None, ("127.0.0.1", 55000)),
+    )
+
+    assert _select_non_link_local_source_ip("c300x.local", 8091) is None
+
+
+class _FakeRouteSocket:
+    def __init__(
+        self,
+        connect_error: OSError | None,
+        source: tuple[str, int] = ("127.0.0.1", 0),
+    ) -> None:
+        self._connect_error = connect_error
+        self._source = source
+
+    def __enter__(self) -> _FakeRouteSocket:
+        return self
+
+    def __exit__(self, *_args) -> None:  # noqa: ANN002
+        return None
+
+    def settimeout(self, _timeout: float) -> None:
+        return None
+
+    def connect(self, _sockaddr: tuple) -> None:
+        if self._connect_error is not None:
+            raise self._connect_error
+
+    def getsockname(self) -> tuple[str, int]:
+        return self._source

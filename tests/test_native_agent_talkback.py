@@ -22,19 +22,19 @@ def test_native_agent_talkback_matches_c300x_speex_backchannel() -> None:
     assert 'inet_pton(AF_INET, "127.0.0.1", &target.sin_addr)' in media_bridge
     assert "forward_ring_talkback_packet(bridge, packet, n)" in media_bridge
     assert "forward_home_call_talkback_packet(bridge, packet, n)" in media_bridge
-    assert "forward_app_talkback_packet(bridge, packet, n)" in media_bridge
+    assert "forward_ondemand_talkback_packet(bridge, packet, n)" in media_bridge
     assert "RING_AUDIO_PAYLOAD_TYPE" in media_bridge
-    assert "APP_AUDIO_PAYLOAD_TYPE" in media_bridge[
+    assert "MEDIA_AUDIO_PAYLOAD_TYPE" in media_bridge[
         media_bridge.index("static bool forward_home_call_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
-    assert "APP_AUDIO_PAYLOAD_TYPE" in media_bridge[
-        media_bridge.index("static bool forward_app_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+    assert "MEDIA_AUDIO_PAYLOAD_TYPE" in media_bridge[
+        media_bridge.index("static bool forward_ondemand_talkback_packet") :
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
     assert "protect_and_send_srtp(" in media_bridge[
         media_bridge.index("static bool forward_ring_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
     assert '\\"talkback_supported\\":true' in http
     assert '\\"talkback_running\\":%s' in http
@@ -181,17 +181,31 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
     )
+    register_body = media_bridge[
+        media_bridge.index("static bool register_rtsp_client_locked") :
+        media_bridge.index("static rtsp_client_slot_t *rtsp_client_slot_locked")
+    ]
     client_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
         media_bridge.index("static int create_rtsp_listener")
     ]
 
-    assert "busy = g_bridge.client_fd >= 0 && g_bridge.client_fd != fd;" in client_body
+    assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)" in register_body
+    assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
+    assert "bool accepted = register_rtsp_client_locked(&g_bridge, fd, &slot_index);" in client_body
     assert "send_rtsp_response(fd, 453" in client_body
-    assert client_body.index("if (!busy)") < client_body.index("g_bridge.client_fd = fd;")
-    assert client_body.index("if (busy)") < client_body.index(
+    assert client_body.index("if (!accepted)") < client_body.index(
         "c300x_video_bridge_client_connected"
     )
+    assert "bool shared_client = rtsp_client_count_locked(&g_bridge) > 1;" in client_body
+    assert "ring_preview_sharing_allowed_locked(&g_bridge)" in client_body
+    assert "ring_answer_stream_sharing_allowed_locked(&g_bridge)" in client_body
+    assert "&& preview_path" in client_body
+    assert "&& !wants_audio" in client_body
+    assert "&& wants_audio" in client_body
+    assert "&& !preview_path" in client_body
+    assert "shutdown_ring_preview_clients_except_locked(&g_bridge, slot_index)" in client_body
+    assert "if (!allow_shared_path)" in client_body
 
 
 def test_native_agent_rtsp_listener_lifecycle_closes_stale_fds() -> None:
@@ -214,8 +228,8 @@ def test_native_agent_rtsp_listener_lifecycle_closes_stale_fds() -> None:
     assert start_body.index("close_fd_if_open(&g_bridge.listen_fd);") < start_body.index(
         "g_bridge.listen_fd = -1;"
     )
-    assert start_body.index("close_fd_if_open(&g_bridge.client_fd);") < start_body.index(
-        "g_bridge.client_fd = -1;"
+    assert start_body.index("close_all_rtsp_clients_locked(&g_bridge);") < start_body.index(
+        "g_bridge.config = config;"
     )
     assert "bool should_close = true;" in thread_body
     assert "if (bridge->listen_fd == server_fd)" in thread_body
@@ -223,9 +237,11 @@ def test_native_agent_rtsp_listener_lifecycle_closes_stale_fds() -> None:
     assert stop_body.index("g_bridge.listen_fd = -1;") < stop_body.index(
         "pthread_mutex_unlock(&g_bridge.mutex);"
     )
-    assert stop_body.index("g_bridge.client_fd = -1;") < stop_body.index(
+    assert stop_body.index("shutdown_all_rtsp_clients_locked(&g_bridge);") < stop_body.index(
         "pthread_mutex_unlock(&g_bridge.mutex);"
     )
+    assert "while (g_bridge.rtsp_client_threads > 0)" in stop_body
+    assert "pthread_cond_wait(&g_bridge.ready_cond, &g_bridge.mutex);" in stop_body
 
 
 def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
@@ -250,16 +266,16 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=nortpproxy:yes\\r\\n"' in setup_body
-    assert '"User-Agent: " APP_USER_AGENT "\\r\\n"' in setup_body
+    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
     assert '"Contact: <sip:%s;transport=%s>' in setup_body
-    assert "APP_AUDIO_RTP_PORT 26986" in media_bridge
-    assert "APP_AUDIO_RTCP_PORT 26987" in media_bridge
-    assert "APP_VIDEO_RTP_PORT 28772" in media_bridge
-    assert "APP_VIDEO_RTCP_PORT 28773" in media_bridge
+    assert "MEDIA_AUDIO_RTP_PORT 26986" in media_bridge
+    assert "MEDIA_AUDIO_RTCP_PORT 26987" in media_bridge
+    assert "MEDIA_VIDEO_RTP_PORT 28772" in media_bridge
+    assert "MEDIA_VIDEO_RTCP_PORT 28773" in media_bridge
     assert "generate_sdes_key(audio_key_raw" in setup_body
-    assert "memcpy(bridge->app_audio_srtp_key, audio_key_raw" in setup_body
+    assert "memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw" in setup_body
     assert "start_bt_av_media(bridge)" in media_bridge
-    assert "APP_MEDIA_RENEW_SECONDS" in media_bridge
+    assert "MEDIA_RENEW_SECONDS" in media_bridge
     assert '"sip:webrtc@' not in media_bridge
     assert "dummykey" not in media_bridge
     assert '"sip:c300x@127.0.0.1"' not in media_bridge
@@ -280,8 +296,8 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
     )
-    app_media_body = media_bridge[
-        media_bridge.index("static void *app_media_thread") :
+    ondemand_media_body = media_bridge[
+        media_bridge.index("static void *ondemand_media_thread") :
         media_bridge.index("static bool send_sip_setup")
     ]
 
@@ -292,23 +308,27 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert '"crypto_policy_set_rtcp_default"' in media_bridge
     assert "crypto_policy_set_aes_cm_128_hmac_sha1_80" not in media_bridge
     assert "policy.ssrc.type = 3" in media_bridge
-    assert "APP_AUDIO_PACKET_MS 20" in media_bridge
-    assert "APP_AUDIO_PAYLOAD_TYPE 98" in media_bridge
-    assert "#define APP_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)" in media_bridge
-    assert "bridge->app_srtp_state = &srtp;" in app_media_body
-    assert "send_app_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in app_media_body
-    assert "app_talkback_recent_locked(bridge, now)" in app_media_body
-    assert "forward_app_talkback_packet" in media_bridge
-    assert "bridge->app_target_audio_port" in media_bridge[
-        media_bridge.index("static bool forward_app_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+    assert "MEDIA_AUDIO_PACKET_MS 20" in media_bridge
+    assert "MEDIA_AUDIO_PAYLOAD_TYPE 98" in media_bridge
+    assert "#define MEDIA_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert "bridge->ondemand_srtp_state = &srtp;" in ondemand_media_body
+    assert 'c300x_video_bridge_set_error(bridge->video, "ondemand_media_no_fds")' in ondemand_media_body
+    assert ondemand_media_body.index("if (max_fd < 0)") < ondemand_media_body.index(
+        "select(max_fd + 1"
+    )
+    assert "send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in ondemand_media_body
+    assert "ondemand_talkback_recent_locked(bridge, now)" in ondemand_media_body
+    assert "forward_ondemand_talkback_packet" in media_bridge
+    assert "bridge->ondemand_target_audio_port" in media_bridge[
+        media_bridge.index("static bool forward_ondemand_talkback_packet") :
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
-    assert "bridge->app_last_talkback_ms = monotonic_ms();" in media_bridge[
-        media_bridge.index("static bool forward_app_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+    assert "bridge->ondemand_last_talkback_ms = monotonic_ms();" in media_bridge[
+        media_bridge.index("static bool forward_ondemand_talkback_packet") :
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
-    assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio" in app_media_body
-    assert "send_srtcp_receiver_report(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body
-    assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in app_media_body
+    assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio" in ondemand_media_body
+    assert "send_srtcp_receiver_report(video_rtcp_fd, target_video_port + 1, srtp.video" in ondemand_media_body
+    assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in ondemand_media_body
     assert "send_rtcp_receiver_report(" not in media_bridge
     assert "send_rtcp_pli(" not in media_bridge

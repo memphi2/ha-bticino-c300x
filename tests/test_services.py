@@ -1,10 +1,15 @@
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import asyncio
 import sys
 import types
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 homeassistant = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
 homeassistant.__path__ = []
@@ -103,11 +108,13 @@ sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.entity"] = entity
 
 from custom_components.bticino_c300x import services as service_module  # noqa: E402
+from custom_components.bticino_c300x.action import ActionValidationError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
     CONF_VIDEO_ENABLED,
     DOMAIN,
     SERVICE_ACTIVATE_DOORBELL_VIDEO,
+    SERVICE_ALARM_COMMAND,
     SERVICE_ANSWER_DOORBELL_CALL,
     SERVICE_CAPTURE_DOORBELL_CALL,
     SERVICE_DELETE_LATEST_TEXT_MEMO,
@@ -117,15 +124,34 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_HANGUP_DOORBELL_CALL,
     SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
     SERVICE_PLAY_LATEST_VOICE_MEMO,
+    SERVICE_REBOOT,
+    SERVICE_RELOAD_GUI,
+    SERVICE_RUN_ACTION,
     SERVICE_RUN_DEVICE_ACTIVATION,
     SERVICE_RUN_RING_WYOMING_ANALYSIS,
+    SERVICE_STAIR_LIGHT,
     SERVICE_START_HOME_CALL,
     SERVICE_STOP_DOORBELL_VIDEO,
     SERVICE_STOP_HOME_CALL,
+    SERVICE_UNLOCK_DOOR,
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
 from custom_components.bticino_c300x.services import async_setup_services  # noqa: E402
+from custom_components.bticino_c300x.use_cases import (
+    common as common_use_cases,  # noqa: E402
+)
+from custom_components.bticino_c300x.use_cases import (
+    device_actions as device_action_use_cases,  # noqa: E402
+)
+from custom_components.bticino_c300x.use_cases import (
+    ring_analysis as ring_analysis_use_cases,  # noqa: E402
+)
+from custom_components.bticino_c300x.use_cases import (
+    ring_capture as ring_capture_use_cases,  # noqa: E402
+)
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass
@@ -133,6 +159,8 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     api: Any = None
+    answering_machine_messages: dict[str, Any] = field(default_factory=dict)
+    answering_machine_messages_updated_at: Any = None
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: Any = None
 
@@ -160,6 +188,7 @@ class _FakeServices:
         self.registered: set[tuple[str, str]] = set()
         self.handlers: dict[tuple[str, str], Any] = {}
         self.schemas: dict[tuple[str, str], Any] = {}
+        self.calls: list[tuple[str, str, dict[str, Any], bool]] = []
 
     def async_register(self, domain: str, service: str, *args: Any, **_kwargs: Any) -> None:
         self.registered.add((domain, service))
@@ -173,6 +202,16 @@ class _FakeServices:
         self.handlers.pop((domain, service), None)
         self.schemas.pop((domain, service), None)
 
+    async def async_call(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        *,
+        blocking: bool,
+    ) -> None:
+        self.calls.append((domain, service, data, blocking))
+
 
 class _FakeHass:
     def __init__(self, entries: list[_FakeEntry]) -> None:
@@ -185,7 +224,10 @@ class _FakeApi:
     def __init__(self) -> None:
         self.activate_video_calls: list[bool] = []
         self.stop_video_calls = 0
-        self.doorbell_video_status: dict[str, Any] = {"bridge": {"clients": 0}}
+        self.doorbell_video_status: dict[str, Any] = {
+            "media_owner": "idle",
+            "bridge": {"media_owner": "idle", "clients": 0},
+        }
         self.doorbell_video_status_calls = 0
         self.answer_doorbell_call_calls: list[bool] = []
         self.hangup_doorbell_call_calls = 0
@@ -195,6 +237,10 @@ class _FakeApi:
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
         self.text_memo_calls: list[dict[str, Any]] = []
+        self.reboot_calls = 0
+        self.reload_gui_calls = 0
+        self.deleted_video_message_ids: list[str] = []
+        self.deleted_memo_ids: list[str] = []
 
     async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
         self.activate_video_calls.append(audio)
@@ -208,9 +254,9 @@ class _FakeApi:
         self.doorbell_video_status_calls += 1
         return self.doorbell_video_status
 
-    async def async_answer_doorbell_call(self, audio: bool = True) -> dict[str, Any]:
-        self.answer_doorbell_call_calls.append(audio)
-        return {"ok": True, "audio": audio}
+    async def async_answer_doorbell_call(self) -> dict[str, Any]:
+        self.answer_doorbell_call_calls.append(True)
+        return {"ok": True, "audio": True}
 
     async def async_hangup_doorbell_call(self) -> dict[str, Any]:
         self.hangup_doorbell_call_calls += 1
@@ -244,18 +290,56 @@ class _FakeApi:
         self.text_memo_calls.append({"text": text, "read": read})
         return {"ok": True, "id": "text/memo_1"}
 
-    async def async_memos(self) -> dict[str, Any]:
+    async def async_reboot(self) -> dict[str, Any]:
+        self.reboot_calls += 1
+        return {"ok": True}
+
+    async def async_reload_gui(self) -> dict[str, Any]:
+        self.reload_gui_calls += 1
+        return {"ok": True}
+
+    async def async_delete_answering_machine_message(
+        self,
+        message_id: str,
+    ) -> dict[str, Any]:
+        self.deleted_video_message_ids.append(message_id)
+        return {"ok": True}
+
+    async def async_delete_memo(self, memo_id: str) -> dict[str, Any]:
+        self.deleted_memo_ids.append(memo_id)
+        return {"ok": True}
+
+    async def async_answering_machine_messages(self) -> dict[str, Any]:
         return {
             "available": True,
             "total": 1,
+            "messages": [
+                {
+                    "id": "video_1",
+                    "date": 1,
+                    "has_video": True,
+                }
+            ],
+        }
+
+    async def async_memos(self) -> dict[str, Any]:
+        return {
+            "available": True,
+            "total": 2,
             "text_total": 1,
-            "voice_total": 0,
+            "voice_total": 1,
             "memos": [
                 {
                     "id": "text/memo_1",
                     "kind": "text",
                     "read": False,
                     "text": "new memo",
+                },
+                {
+                    "id": "voice/voice_1.wav",
+                    "kind": "voice",
+                    "read": False,
+                    "has_audio": True,
                 }
             ],
         }
@@ -295,6 +379,130 @@ def test_delete_services_are_registered_when_device_ui_is_enabled() -> None:
     asyncio.run(_run())
 
 
+def test_all_documented_services_are_registered_when_capabilities_allow_them() -> None:
+    async def _run() -> None:
+        capabilities = {
+            "answering_machine": {
+                "supported": True,
+                "messages": {"supported": True, "delete": True},
+            },
+            "memos": {"supported": True, "delete": True},
+        }
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities=capabilities,
+                qml_patch_status={"available": True, "patched": True},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+
+        documented_services = set(_services_yaml().keys())
+        registered_services = {
+            service
+            for domain, service in hass.services.registered
+            if domain == DOMAIN
+        }
+        assert registered_services == documented_services
+
+    asyncio.run(_run())
+
+
+def test_all_registered_service_schemas_accept_documented_payload_shapes() -> None:
+    async def _run() -> None:
+        capabilities = {
+            "answering_machine": {
+                "supported": True,
+                "messages": {"supported": True, "delete": True},
+            },
+            "memos": {"supported": True, "delete": True},
+        }
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities=capabilities,
+                qml_patch_status={"available": True, "patched": True},
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+
+        samples: dict[str, dict[str, Any]] = {
+            SERVICE_RUN_ACTION: {"entry_id": "entry-id", "action_id": "door_open"},
+            SERVICE_RUN_DEVICE_ACTIVATION: {"activation_id": "scene_1"},
+            SERVICE_ALARM_COMMAND: {
+                "command": "disarm",
+                "code": "1234",
+                "force": "true",
+            },
+            SERVICE_STAIR_LIGHT: {"address": "20#1"},
+            SERVICE_UNLOCK_DOOR: {"lock_id": "default"},
+            SERVICE_ACTIVATE_DOORBELL_VIDEO: {"audio": "false"},
+            SERVICE_STOP_DOORBELL_VIDEO: {"entry_id": "entry-id"},
+            SERVICE_ANSWER_DOORBELL_CALL: {"entry_id": "entry-id"},
+            SERVICE_HANGUP_DOORBELL_CALL: {"entry_id": "entry-id"},
+            SERVICE_CAPTURE_DOORBELL_CALL: {
+                "output_path": "/media/c300x/test.mp4",
+                "duration_seconds": "3",
+                "include_audio": "true",
+                "wav_output_dir": "/config/c300x",
+                "announcement_path": "/config/www/c300x/announce.wav",
+            },
+            SERVICE_RUN_RING_WYOMING_ANALYSIS: {
+                "wyoming_host": "core-whisper",
+                "wyoming_port": "10300",
+                "capture_path": "/config/c300x/latest.capture.json",
+                "wav_path": "/config/c300x/latest.raw.wav",
+                "result_path": "/config/c300x/analysis/result.json",
+                "language": "de",
+                "expected_phrase": "open",
+            },
+            SERVICE_EVALUATE_RING_ANALYSIS: {
+                "result_path": "/config/c300x/analysis/result.json",
+                "decision_path": "/config/c300x/analysis/decision.json",
+                "capture_path": "/config/c300x/latest.capture.json",
+                "expected_phrase": "open",
+                "unlock_on_match": "false",
+                "lock_id": "default",
+            },
+            SERVICE_START_HOME_CALL: {"duration_seconds": "0"},
+            SERVICE_STOP_HOME_CALL: {"entry_id": "entry-id"},
+            SERVICE_REBOOT: {"entry_id": "entry-id"},
+            SERVICE_RELOAD_GUI: {"entry_id": "entry-id"},
+            SERVICE_PLAY_LATEST_VIDEO_MESSAGE: {
+                "media_player_entity_id": "media_player.living_room",
+            },
+            SERVICE_PLAY_LATEST_VOICE_MEMO: {
+                "media_player_entity_id": "media_player.living_room",
+            },
+            SERVICE_WRITE_TEXT_MEMO: {"text": "hello", "read": "yes"},
+            SERVICE_DELETE_LATEST_VIDEO_MESSAGE: {"entry_id": "entry-id"},
+            SERVICE_DELETE_LATEST_TEXT_MEMO: {"entry_id": "entry-id"},
+            SERVICE_DELETE_LATEST_VOICE_MEMO: {"entry_id": "entry-id"},
+        }
+
+        documented_services = set(_services_yaml().keys())
+        assert set(samples) == documented_services
+        for service_name, payload in samples.items():
+            schema = hass.services.schemas[(DOMAIN, service_name)]
+            validated = schema(payload)
+            for field_name in payload:
+                assert field_name in validated
+
+        assert hass.services.schemas[(DOMAIN, SERVICE_ALARM_COMMAND)](
+            {"command": "disarm", "force": "true"}
+        )["force"] is True
+        assert hass.services.schemas[(DOMAIN, SERVICE_ACTIVATE_DOORBELL_VIDEO)](
+            {"audio": "false"}
+        )["audio"] is False
+        assert hass.services.schemas[(DOMAIN, SERVICE_WRITE_TEXT_MEMO)](
+            {"text": "hello", "read": "yes"}
+        )["read"] is True
+
+    asyncio.run(_run())
+
+
 def test_delete_services_require_enabled_device_ui_option() -> None:
     async def _run() -> None:
         capabilities = {
@@ -327,6 +535,14 @@ def test_delete_services_require_enabled_device_ui_option() -> None:
         assert (DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO) not in hass.services.registered
 
     asyncio.run(_run())
+
+
+def _services_yaml() -> dict[str, Any]:
+    return yaml.safe_load(
+        (ROOT / "custom_components" / "bticino_c300x" / "services.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 def test_delete_services_require_agent_delete_capabilities() -> None:
@@ -485,6 +701,636 @@ def test_service_setup_tolerates_not_loaded_entries_without_runtime_data() -> No
     asyncio.run(_run())
 
 
+def test_service_entry_lookup_requires_entry_id_for_multiple_entries() -> None:
+    async def _run() -> None:
+        hass = _FakeHass(
+            [
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="one"),
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="two"),
+            ]
+        )
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION)]
+
+        try:
+            await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "entry_id_required"
+        else:
+            raise AssertionError("missing entry id was accepted")
+
+        try:
+            await handler(
+                types.SimpleNamespace(
+                    data={"entry_id": "missing", "activation_id": "scene_1"}
+                )
+            )
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "unknown_entry"
+        else:
+            raise AssertionError("unknown entry id was accepted")
+
+    asyncio.run(_run())
+
+
+def test_service_entry_lookup_accepts_explicit_entry_id() -> None:
+    async def _run() -> None:
+        api_one = _FakeApi()
+        api_two = _FakeApi()
+        hass = _FakeHass(
+            [
+                _FakeEntry(_FakeRuntimeData(api=api_one), entry_id="one"),
+                _FakeEntry(_FakeRuntimeData(api=api_two), entry_id="two"),
+            ]
+        )
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_RUN_DEVICE_ACTIVATION)]
+        await handler(
+            types.SimpleNamespace(
+                data={"entry_id": "two", "activation_id": "scene_1"}
+            )
+        )
+
+        assert api_one.activation_calls == []
+        assert api_two.activation_calls == ["scene_1"]
+
+    asyncio.run(_run())
+
+
+def test_base_executor_services_call_expected_helpers(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    async def _action(*args: Any, **kwargs: Any) -> None:
+        calls.append(("action", args, kwargs))
+
+    async def _alarm(*args: Any, **kwargs: Any) -> None:
+        calls.append(("alarm", args, kwargs))
+
+    async def _stair(*args: Any, **kwargs: Any) -> None:
+        calls.append(("stair", args, kwargs))
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", args, kwargs))
+
+    monkeypatch.setattr(device_action_use_cases, "async_execute_action", _action)
+    monkeypatch.setattr(device_action_use_cases, "async_execute_alarm_command", _alarm)
+    monkeypatch.setattr(device_action_use_cases, "async_trigger_stair_light", _stair)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_RUN_ACTION)](
+            types.SimpleNamespace(data={"action_id": "entry_light"})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_ALARM_COMMAND)](
+            types.SimpleNamespace(data={"command": "disarm", "code": "1234", "force": True})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_STAIR_LIGHT)](
+            types.SimpleNamespace(data={"address": "10"})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_UNLOCK_DOOR)](
+            types.SimpleNamespace(data={"lock_id": "main"})
+        )
+
+    asyncio.run(_run())
+
+    assert [call[0] for call in calls] == ["action", "alarm", "stair", "unlock"]
+    assert calls[0][1][2] == "entry_light"
+    assert calls[1][1][2:] == ("disarm", "1234")
+    assert calls[1][2] == {"force": True}
+    assert calls[2][1][2] == "10"
+    assert calls[3][1][2] == "main"
+
+
+def test_action_and_alarm_services_translate_executor_errors(monkeypatch) -> None:  # noqa: ANN001
+    action_error: Exception | None = ActionValidationError("bad")
+    alarm_error: Exception | None = ActionValidationError("bad")
+
+    async def _action(*_args: Any, **_kwargs: Any) -> None:
+        if action_error is not None:
+            raise action_error
+
+    async def _alarm(*_args: Any, **_kwargs: Any) -> None:
+        if alarm_error is not None:
+            raise alarm_error
+
+    monkeypatch.setattr(device_action_use_cases, "async_execute_action", _action)
+    monkeypatch.setattr(device_action_use_cases, "async_execute_alarm_command", _alarm)
+
+    async def _run() -> None:
+        nonlocal action_error, alarm_error
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_RUN_ACTION)](
+                types.SimpleNamespace(data={"action_id": "entry_light"})
+            )
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "invalid_action_id"
+        else:
+            raise AssertionError("action validation error was not translated")
+
+        action_error = KeyError("entry_light")
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_RUN_ACTION)](
+                types.SimpleNamespace(data={"action_id": "entry_light"})
+            )
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "unknown_action"
+        else:
+            raise AssertionError("unknown action was not translated")
+
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_ALARM_COMMAND)](
+                types.SimpleNamespace(data={"command": "bad"})
+            )
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "invalid_alarm_command"
+        else:
+            raise AssertionError("alarm validation error was not translated")
+
+        alarm_error = ValueError("missing")
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_ALARM_COMMAND)](
+                types.SimpleNamespace(data={"command": "disarm"})
+            )
+        except exceptions.ServiceValidationError as err:
+            assert getattr(err, "translation_key", None) == "alarm_not_configured"
+        else:
+            raise AssertionError("alarm config error was not translated")
+
+    asyncio.run(_run())
+
+
+def test_maintenance_services_require_supported_token() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=api,
+                capabilities={
+                    "maintenance": {
+                        "supported": True,
+                        "reboot": True,
+                        "gui_reload": True,
+                    }
+                },
+            ),
+            data={"maintenance_token": "token"},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_REBOOT)](
+            types.SimpleNamespace(data={})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_RELOAD_GUI)](
+            types.SimpleNamespace(data={})
+        )
+
+        assert api.reboot_calls == 1
+        assert api.reload_gui_calls == 1
+
+        entry.data = {}
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_REBOOT)](
+                types.SimpleNamespace(data={})
+            )
+        except exceptions.ServiceValidationError as err:
+            assert (
+                getattr(err, "translation_key", None)
+                == "maintenance_action_not_supported"
+            )
+        else:
+            raise AssertionError("maintenance command without token was accepted")
+
+    asyncio.run(_run())
+
+
+def test_latest_media_services_call_media_player() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=_FakeApi(),
+                answering_machine_messages={
+                    "messages": [
+                        {
+                            "id": "video_1",
+                            "date": 1,
+                            "has_video": True,
+                        }
+                    ]
+                },
+                memos={
+                    "memos": [
+                        {
+                            "id": "voice/voice_1.wav",
+                            "kind": "voice",
+                            "date": "2026-01-01T00:00:00",
+                            "has_audio": True,
+                        }
+                    ]
+                },
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_PLAY_LATEST_VIDEO_MESSAGE)](
+            types.SimpleNamespace(data={"media_player_entity_id": "media_player.room"})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_PLAY_LATEST_VOICE_MEMO)](
+            types.SimpleNamespace(data={"media_player_entity_id": "media_player.room"})
+        )
+
+        assert len(hass.services.calls) == 2
+        assert hass.services.calls[0][0:2] == ("media_player", "play_media")
+        assert hass.services.calls[0][2]["media_content_type"] == "video"
+        assert hass.services.calls[1][2]["media_content_type"] == "music"
+
+    asyncio.run(_run())
+
+
+def test_analysis_services_call_helpers(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def _wyoming(_hass: Any, **kwargs: Any) -> None:
+        calls.append(("wyoming", kwargs))
+
+    async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
+        calls.append(("evaluate", kwargs))
+        return types.SimpleNamespace(matched=True)
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", {"args": args, **kwargs}))
+
+    monkeypatch.setattr(ring_analysis_use_cases, "async_run_wyoming_ring_analysis", _wyoming)
+    monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_RUN_RING_WYOMING_ANALYSIS)](
+            types.SimpleNamespace(
+                data={
+                    "wyoming_host": "localhost",
+                    "wyoming_port": 10300,
+                    "capture_path": "/config/c300x/latest.capture.json",
+                    "wav_path": "/config/c300x/latest.raw.wav",
+                    "result_path": "/config/c300x/result.json",
+                    "language": "de",
+                    "expected_phrase": "open",
+                }
+            )
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)](
+            types.SimpleNamespace(
+                data={
+                    "result_path": "/config/c300x/result.json",
+                    "decision_path": "/config/c300x/decision.json",
+                    "capture_path": "/config/c300x/latest.capture.json",
+                    "expected_phrase": "open",
+                    "unlock_on_match": True,
+                    "lock_id": "default",
+                }
+            )
+        )
+
+    asyncio.run(_run())
+
+    assert calls[0] == (
+        "wyoming",
+        {
+            "wyoming_host": "localhost",
+            "wyoming_port": 10300,
+            "capture_path": "/config/c300x/latest.capture.json",
+            "wav_path": "/config/c300x/latest.raw.wav",
+            "result_path": "/config/c300x/result.json",
+            "language": "de",
+            "expected_phrase": "open",
+        },
+    )
+    assert calls[1] == (
+        "evaluate",
+        {
+            "result_path": "/config/c300x/result.json",
+            "decision_path": "/config/c300x/decision.json",
+            "capture_path": "/config/c300x/latest.capture.json",
+            "expected_phrase": "open",
+            "require_capture": True,
+        },
+    )
+    assert calls[2][0] == "unlock"
+    assert calls[2][1]["args"][2] == "default"
+
+
+def test_evaluate_ring_analysis_does_not_unlock_without_match(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
+        calls.append(("evaluate", kwargs))
+        return types.SimpleNamespace(matched=False)
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", {"args": args, **kwargs}))
+
+    monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)](
+            types.SimpleNamespace(
+                data={
+                    "result_path": "/config/c300x/result.json",
+                    "decision_path": "/config/c300x/decision.json",
+                    "capture_path": "/config/c300x/latest.capture.json",
+                    "expected_phrase": "open",
+                    "unlock_on_match": True,
+                    "lock_id": "default",
+                }
+            )
+        )
+
+    asyncio.run(_run())
+
+    assert calls == [
+        (
+            "evaluate",
+            {
+                "result_path": "/config/c300x/result.json",
+                "decision_path": "/config/c300x/decision.json",
+                "capture_path": "/config/c300x/latest.capture.json",
+                "expected_phrase": "open",
+                "require_capture": True,
+            },
+        )
+    ]
+
+
+def test_evaluate_ring_analysis_resolves_entry_only_after_match(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
+        calls.append(("evaluate", kwargs))
+        return types.SimpleNamespace(matched=False)
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", {"args": args, **kwargs}))
+
+    monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+
+    async def _run() -> None:
+        hass = _FakeHass(
+            [
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="one"),
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="two"),
+            ]
+        )
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)](
+            types.SimpleNamespace(
+                data={
+                    "result_path": "/config/c300x/result.json",
+                    "decision_path": "/config/c300x/decision.json",
+                    "capture_path": "/config/c300x/latest.capture.json",
+                    "expected_phrase": "open",
+                    "unlock_on_match": True,
+                    "lock_id": "default",
+                }
+            )
+        )
+
+    asyncio.run(_run())
+
+    assert calls == [
+        (
+            "evaluate",
+            {
+                "result_path": "/config/c300x/result.json",
+                "decision_path": "/config/c300x/decision.json",
+                "capture_path": "/config/c300x/latest.capture.json",
+                "expected_phrase": "open",
+                "require_capture": True,
+            },
+        )
+    ]
+
+
+def test_evaluate_ring_analysis_marks_capture_after_successful_unlock(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
+        calls.append(("evaluate", kwargs))
+        return types.SimpleNamespace(matched=True, capture_id="capture-1")
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", {"args": args, **kwargs}))
+
+    async def _mark(_hass: Any, capture_id: str | None) -> None:
+        calls.append(("mark", {"capture_id": capture_id}))
+
+    monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+    monkeypatch.setattr(ring_analysis_use_cases, "async_mark_ring_capture_used", _mark)
+
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(api=_FakeApi()))
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)](
+            types.SimpleNamespace(
+                data={
+                    "result_path": "/config/c300x/result.json",
+                    "decision_path": "/config/c300x/decision.json",
+                    "capture_path": "/config/c300x/latest.capture.json",
+                    "expected_phrase": "open",
+                    "unlock_on_match": True,
+                    "lock_id": "default",
+                }
+            )
+        )
+
+    asyncio.run(_run())
+
+    assert calls[0] == (
+        "evaluate",
+        {
+            "result_path": "/config/c300x/result.json",
+            "decision_path": "/config/c300x/decision.json",
+            "capture_path": "/config/c300x/latest.capture.json",
+            "expected_phrase": "open",
+            "require_capture": True,
+        },
+    )
+    assert calls[1][0] == "unlock"
+    assert calls[2] == ("mark", {"capture_id": "capture-1"})
+
+
+def test_evaluate_ring_analysis_does_not_consume_capture_when_entry_is_missing(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
+        calls.append(("evaluate", kwargs))
+        return types.SimpleNamespace(matched=True, capture_id="capture-1")
+
+    async def _unlock(*args: Any, **kwargs: Any) -> None:
+        calls.append(("unlock", {"args": args, **kwargs}))
+
+    async def _mark(_hass: Any, capture_id: str | None) -> None:
+        calls.append(("mark", {"capture_id": capture_id}))
+
+    monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
+    monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
+    monkeypatch.setattr(ring_analysis_use_cases, "async_mark_ring_capture_used", _mark)
+
+    async def _run() -> None:
+        hass = _FakeHass(
+            [
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="one"),
+                _FakeEntry(_FakeRuntimeData(api=_FakeApi()), entry_id="two"),
+            ]
+        )
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        try:
+            await hass.services.handlers[(DOMAIN, SERVICE_EVALUATE_RING_ANALYSIS)](
+                types.SimpleNamespace(
+                    data={
+                        "result_path": "/config/c300x/result.json",
+                        "decision_path": "/config/c300x/decision.json",
+                        "capture_path": "/config/c300x/latest.capture.json",
+                        "expected_phrase": "open",
+                        "unlock_on_match": True,
+                        "lock_id": "default",
+                    }
+                )
+            )
+        except Exception as err:
+            assert getattr(err, "translation_key", None) == "entry_id_required"
+        else:
+            raise AssertionError("entry_id_required was not raised")
+
+    asyncio.run(_run())
+
+    assert calls == [
+        (
+            "evaluate",
+            {
+                "result_path": "/config/c300x/result.json",
+                "decision_path": "/config/c300x/decision.json",
+                "capture_path": "/config/c300x/latest.capture.json",
+                "expected_phrase": "open",
+                "require_capture": True,
+            },
+        )
+    ]
+
+
+def test_delete_services_call_agent_and_refresh_cache(monkeypatch) -> None:  # noqa: ANN001
+    dispatcher_calls: list[tuple[Any, ...]] = []
+    diagnostics_refreshes: list[str] = []
+
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_dispatcher_send",
+        lambda *args: dispatcher_calls.append(args),
+    )
+
+    async def _refresh_diagnostics(_hass: Any, entry: Any) -> None:
+        diagnostics_refreshes.append(entry.entry_id)
+
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_refresh_agent_diagnostics",
+        _refresh_diagnostics,
+    )
+
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                api=api,
+                capabilities={
+                    "answering_machine": {
+                        "supported": True,
+                        "messages": {
+                            "supported": True,
+                            "delete": True,
+                        },
+                    },
+                    "memos": {
+                        "supported": True,
+                        "delete": True,
+                    },
+                },
+                qml_patch_status={"available": True, "patched": True},
+                answering_machine_messages={
+                    "messages": [
+                        {
+                            "id": "video_1",
+                            "date": 1,
+                            "has_video": True,
+                        }
+                    ]
+                },
+                memos={
+                    "memos": [
+                        {
+                            "id": "text/memo_1",
+                            "kind": "text",
+                            "date": "2026-01-01T00:00:00",
+                        },
+                        {
+                            "id": "voice/voice_1.wav",
+                            "kind": "voice",
+                            "date": "2026-01-01T00:00:00",
+                            "has_audio": True,
+                        },
+                    ]
+                },
+            )
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        await hass.services.handlers[(DOMAIN, SERVICE_DELETE_LATEST_VIDEO_MESSAGE)](
+            types.SimpleNamespace(data={})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_DELETE_LATEST_TEXT_MEMO)](
+            types.SimpleNamespace(data={})
+        )
+        await hass.services.handlers[(DOMAIN, SERVICE_DELETE_LATEST_VOICE_MEMO)](
+            types.SimpleNamespace(data={})
+        )
+
+        assert api.deleted_video_message_ids == ["video_1"]
+        assert api.deleted_memo_ids == ["text/memo_1", "voice/voice_1.wav"]
+
+    asyncio.run(_run())
+
+    assert len(dispatcher_calls) == 3
+    assert diagnostics_refreshes == ["entry-id", "entry-id", "entry-id"]
+
+
 def test_activate_doorbell_video_service_calls_agent_api() -> None:
     async def _run() -> None:
         api = _FakeApi()
@@ -541,9 +1387,9 @@ def test_answer_doorbell_call_service_calls_agent_api() -> None:
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_ANSWER_DOORBELL_CALL)]
-        await handler(types.SimpleNamespace(data={"audio": False}))
+        await handler(types.SimpleNamespace(data={}))
 
-        assert api.answer_doorbell_call_calls == [False]
+        assert api.answer_doorbell_call_calls == [True]
 
     asyncio.run(_run())
 
@@ -588,7 +1434,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         async def _capture(*args: Any, **kwargs: Any) -> None:
             calls.append({"args": args, "kwargs": kwargs})
 
-        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
@@ -598,7 +1444,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                     "output_path": "/media/c300x/test.mp4",
                     "duration_seconds": 3,
                     "include_audio": True,
-                    "wav_output_dir": "/config/c300x/analysis",
+                    "wav_output_dir": "/config/c300x",
                     "announcement_path": "/media/c300x/announce.wav",
                 }
             )
@@ -609,7 +1455,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                 "args": (hass, entry),
                 "kwargs": {
                     "output_path": "/media/c300x/test.mp4",
-                    "wav_output_dir": "/config/c300x/analysis",
+                    "wav_output_dir": "/config/c300x",
                     "duration_seconds": 3,
                     "include_audio": True,
                     "announcement_path": "/media/c300x/announce.wav",
@@ -637,14 +1483,14 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
                 "output_path": "/media/c300x/test.mp4",
                 "duration_seconds": 3,
                 "include_audio": "true",
-                "wav_output_dir": "/config/c300x/analysis",
+                "wav_output_dir": "/config/c300x",
                 "announcement_path": "/config/www/c300x/announce.wav",
             }
         ) == {
             "output_path": "/media/c300x/test.mp4",
             "duration_seconds": 3,
             "include_audio": True,
-            "wav_output_dir": "/config/c300x/analysis",
+            "wav_output_dir": "/config/c300x",
             "announcement_path": "/config/www/c300x/announce.wav",
         }
 
@@ -653,6 +1499,7 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
             {
                 "wyoming_host": "core-whisper",
                 "wyoming_port": "10300",
+                "capture_path": "/config/c300x/latest.capture.json",
                 "wav_path": "/config/c300x/latest.raw.wav",
                 "result_path": "/config/c300x/analysis/result.json",
                 "language": "de",
@@ -661,6 +1508,7 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
         ) == {
             "wyoming_host": "core-whisper",
             "wyoming_port": 10300,
+            "capture_path": "/config/c300x/latest.capture.json",
             "wav_path": "/config/c300x/latest.raw.wav",
             "result_path": "/config/c300x/analysis/result.json",
             "language": "de",
@@ -672,6 +1520,7 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
             {
                 "result_path": "/config/c300x/analysis/result.json",
                 "decision_path": "/config/c300x/analysis/decision.json",
+                "capture_path": "/config/c300x/latest.capture.json",
                 "expected_phrase": "open",
                 "unlock_on_match": "false",
                 "lock_id": "default",
@@ -679,6 +1528,7 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
         ) == {
             "result_path": "/config/c300x/analysis/result.json",
             "decision_path": "/config/c300x/analysis/decision.json",
+            "capture_path": "/config/c300x/latest.capture.json",
             "expected_phrase": "open",
             "unlock_on_match": False,
             "lock_id": "default",
@@ -707,7 +1557,7 @@ def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> 
         async def _capture(*args: Any, **kwargs: Any) -> None:
             calls.append({"args": args, "kwargs": kwargs})
 
-        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
@@ -719,6 +1569,107 @@ def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> 
             raise AssertionError("busy ring capture was not rejected")
 
         assert calls == []
+        assert api.doorbell_video_status_calls == 1
+        assert api.answer_doorbell_call_calls == []
+        assert api.hangup_doorbell_call_calls == 0
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_allows_shared_ring_preview(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        api.doorbell_video_status = {
+            "bridge": {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "clients": 1,
+                "max_clients": 2,
+                "ring_preview_sharing": True,
+            }
+        }
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert len(calls) == 1
+        assert api.doorbell_video_status_calls == 1
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_video_only_keeps_ring_available(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        api.doorbell_video_status = {
+            "bridge": {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "clients": 1,
+                "max_clients": 2,
+                "ring_preview_sharing": True,
+            }
+        }
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={"include_audio": False}))
+
+        assert calls == [
+            {
+                "args": (hass, entry),
+                "kwargs": {
+                    "output_path": None,
+                    "wav_output_dir": None,
+                    "duration_seconds": 5,
+                    "include_audio": False,
+                    "announcement_path": None,
+                },
+            }
+        ]
         assert api.doorbell_video_status_calls == 1
         assert api.answer_doorbell_call_calls == []
         assert api.hangup_doorbell_call_calls == 0
@@ -746,7 +1697,7 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         async def _capture(*_args: Any, **_kwargs: Any) -> None:
             return None
 
-        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
@@ -780,7 +1731,7 @@ def test_capture_doorbell_call_service_answers_announcement_without_capture_audi
         async def _capture(*args: Any, **kwargs: Any) -> None:
             calls.append({"args": args, "kwargs": kwargs})
 
-        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
@@ -833,7 +1784,7 @@ def test_capture_doorbell_call_preserves_capture_error_when_hangup_fails(
         async def _capture(*_args: Any, **_kwargs: Any) -> None:
             raise capture_error
 
-        monkeypatch.setattr(service_module, "async_capture_doorbell_ring_call", _capture)
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]

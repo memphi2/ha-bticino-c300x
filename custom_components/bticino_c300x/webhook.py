@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from hmac import compare_digest
 from typing import Any
@@ -56,6 +56,7 @@ from .executor import (
     async_trigger_stair_light,
 )
 from .forwarding import forwarding_state_from_value
+from .media_watchdog import handle_runtime_cpu_metrics_changed
 from .video import (
     optional_string,
     resolve_doorbell_camera_entity_id,
@@ -458,6 +459,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
                 context.hass,
                 context.entry,
                 context.event_state,
+                context.data,
                 doorbell_state,
             )
         )
@@ -570,6 +572,7 @@ def _apply_system_metrics_event(
         _LOGGER.debug("Ignoring invalid C300X system metrics event payload")
         return
     entry.runtime_data.system_metrics_updated_at = dt_util.utcnow()
+    handle_runtime_cpu_metrics_changed(hass, entry)
     async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
 
 
@@ -577,10 +580,11 @@ def _doorbell_event_data(
     hass: HomeAssistant,
     entry: ConfigEntry,
     event_state: C300XEventState,
+    source: Mapping[str, Any] | None,
     doorbell_state: str | None,
 ) -> dict[str, Any]:
     event_data = {
-        **_video_event_data(hass, entry, event_state),
+        **_video_event_data(hass, entry, event_state, source),
     }
     if doorbell_state is not None:
         event_data["doorbell"] = doorbell_state
@@ -591,8 +595,14 @@ def _video_event_data(
     hass: HomeAssistant,
     entry: ConfigEntry,
     event_state: C300XEventState,
+    source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     camera_entity_id = resolve_doorbell_camera_entity_id(hass, entry)
+    video = (
+        source.get("video")
+        if isinstance(source, Mapping) and isinstance(source.get("video"), Mapping)
+        else {}
+    )
     stream_path = safe_stream_path(
         event_state.video_stream_path
         or entry_config_value(entry, CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
@@ -602,6 +612,20 @@ def _video_event_data(
         "video_window_available": bool(event_state.video_window_available),
         "stream_path": stream_path,
     }
+    for key in (
+        "audio_stream_path",
+        "recorder_stream_path",
+        "media_owner",
+        "video_owner",
+        "external_media_active",
+        "external_owner",
+        "last_block_reason",
+    ):
+        if key in video:
+            event_data[key] = video[key]
+    bridge = video.get("bridge")
+    if isinstance(bridge, Mapping):
+        event_data["bridge"] = dict(bridge)
     if camera_entity_id is not None:
         event_data["camera_entity_id"] = camera_entity_id
     return event_data

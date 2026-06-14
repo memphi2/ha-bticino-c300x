@@ -393,7 +393,7 @@ static int parse_users_file(
     char *ha_aor,
     size_t ha_aor_len,
     int *c300x_present,
-    int *app_present,
+    int *fallback_present,
     int *ha_present
 )
 {
@@ -408,8 +408,8 @@ static int parse_users_file(
     if (c300x_present != NULL) {
         *c300x_present = 0;
     }
-    if (app_present != NULL) {
-        *app_present = 0;
+    if (fallback_present != NULL) {
+        *fallback_present = 0;
     }
     if (ha_present != NULL) {
         *ha_present = 0;
@@ -443,8 +443,8 @@ static int parse_users_file(
                     if (ha_aor != NULL && ha_aor[0] == '\0') {
                         (void)copy_checked(ha_aor, ha_aor_len, token);
                     }
-                } else if (app_present != NULL) {
-                    *app_present = 1;
+                } else if (fallback_present != NULL) {
+                    *fallback_present = 1;
                 }
             }
         }
@@ -848,7 +848,7 @@ static int read_status_from_buffers(
         ha_aor,
         sizeof(ha_aor),
         &status->c300x_user_present,
-        &status->app_user_present,
+        &status->fallback_user_present,
         &status->homeassistant_user_present
     );
     status->domain_present = device_domain[0] != '\0' || read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain));
@@ -862,7 +862,7 @@ static int read_status_from_buffers(
     status->route_ext_homeassistant_present = route_has_homeassistant(route_ext->data);
     status->route_conf_homeassistant_present = route_has_homeassistant(route_conf->data);
     status->media_identity_available = (
-        status->homeassistant_user_present || status->app_user_present
+        status->homeassistant_user_present || status->fallback_user_present
     ) && status->c300x_user_present;
     status->routes_consistent = status->homeassistant_user_present
         ? (
@@ -877,7 +877,7 @@ static int read_status_from_buffers(
             sizeof(status->media_identity_source),
             "homeassistant"
         );
-    } else if (status->app_user_present && status->c300x_user_present) {
+    } else if (status->fallback_user_present && status->c300x_user_present) {
         snprintf(
             status->media_identity_source,
             sizeof(status->media_identity_source),
@@ -952,7 +952,7 @@ int c300x_device_user_media_identity(
     struct file_buffer users;
     char device_domain[128];
     char ha_aor[256];
-    char app_aor[256];
+    char fallback_aor[256];
     char host[128];
     const char *selected_aor;
     char error[C300X_DEVICE_USER_ERROR_LEN] = "";
@@ -965,7 +965,7 @@ int c300x_device_user_media_identity(
     memset(&users, 0, sizeof(users));
     device_domain[0] = '\0';
     ha_aor[0] = '\0';
-    app_aor[0] = '\0';
+    fallback_aor[0] = '\0';
     if (!read_file_buffer(FLEXISIP_USERS_FILE, &users, error, sizeof(error))) {
         return 0;
     }
@@ -991,8 +991,8 @@ int c300x_device_user_media_identity(
                 (void)copy_checked(device_domain, sizeof(device_domain), token_host);
             } else if (user_is_homeassistant(user) && ha_aor[0] == '\0') {
                 (void)copy_checked(ha_aor, sizeof(ha_aor), token);
-            } else if (app_aor[0] == '\0') {
-                (void)copy_checked(app_aor, sizeof(app_aor), token);
+            } else if (fallback_aor[0] == '\0') {
+                (void)copy_checked(fallback_aor, sizeof(fallback_aor), token);
             }
         }
         if (line_end == NULL) {
@@ -1000,7 +1000,7 @@ int c300x_device_user_media_identity(
         }
         cursor = line_end + 1;
     }
-    selected_aor = ha_aor[0] != '\0' ? ha_aor : app_aor;
+    selected_aor = ha_aor[0] != '\0' ? ha_aor : fallback_aor;
     if (
         selected_aor[0] != '\0'
         && split_sip_aor(selected_aor, identity->from_user, sizeof(identity->from_user), host, sizeof(host))
@@ -1039,7 +1039,7 @@ int c300x_device_user_ensure_homeassistant(
     char digest[33];
     char user_line[512];
     int c300x_present = 0;
-    int app_present = 0;
+    int fallback_present = 0;
     int ha_present = 0;
     int users_changed = 0;
     int accounts_changed = 0;
@@ -1072,10 +1072,10 @@ int c300x_device_user_ensure_homeassistant(
         ha_aor,
         sizeof(ha_aor),
         &c300x_present,
-        &app_present,
+        &fallback_present,
         &ha_present
     );
-    (void)app_present;
+    (void)fallback_present;
     if (!c300x_present || device_domain[0] == '\0') {
         if (!read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain))) {
             set_error(error, error_len, "device_domain_missing");

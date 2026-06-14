@@ -15,7 +15,7 @@ struct c300x_device_user_status {
     int supported;
     int domain_present;
     int c300x_user_present;
-    int app_user_present;
+    int fallback_user_present;
     int homeassistant_user_present;
     int accounts_homeassistant_present;
     int route_int_homeassistant_present;

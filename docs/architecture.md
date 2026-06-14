@@ -27,7 +27,7 @@ Responsibilities:
 - Local `/api/v1` HTTP API with bearer auth.
 - Push callbacks for ring/lock/call/ringer/forwarding/video-message/memo events.
 - OpenWebNet command execution.
-- Optional app-like doorstation media module.
+- Optional local media doorstation media module.
 - Optional display bridge endpoint for QML dashboard requests.
 
 ### Device QML UI

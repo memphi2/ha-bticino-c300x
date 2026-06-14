@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 if "homeassistant.components.camera" not in sys.modules:
     homeassistant = types.ModuleType("homeassistant")
     components = types.ModuleType("homeassistant.components")
@@ -89,25 +91,36 @@ try:
 except ImportError:  # pragma: no cover - only used by the lightweight stub fallback
     ha_async_get_image = None
 
+from homeassistant.exceptions import HomeAssistantError
+
 from custom_components.bticino_c300x import camera as camera_module
+from custom_components.bticino_c300x import media_watchdog
 from custom_components.bticino_c300x.camera import (
-    DOORSTATION_AUDIO_GAIN,
     STILL_IMAGE_BYTES,
     STILL_IMAGE_CONTENT_TYPE,
     TALKBACK_CODEC,
     TALKBACK_RTP_PAYLOAD_TYPE,
     C300XDoorbellCamera,
-    _apply_audio_gain,
-    _filter_link_local_sdp_candidates,
     _NativeWebRTCSession,
-    _new_restarting_rtsp_audio_track,
-    _new_restarting_rtsp_tracks,
     _preload_dns_mdns_modules,
-    _status_is_home_call_media_active,
 )
+from custom_components.bticino_c300x.camera_media import talkback as talkback_module
+from custom_components.bticino_c300x.camera_media.state_machine import MediaState
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 dispatcher_signals: list[tuple[str, str]] = []
+
+
+def _stub_rtsp_ready(
+    camera: C300XDoorbellCamera,
+    ready_urls: list[str] | None = None,
+) -> None:
+    async def _wait_for_rtsp_ready(stream_url: str, **_kwargs: Any) -> None:
+        if ready_urls is not None:
+            ready_urls.append(stream_url)
+
+    camera._async_wait_for_rtsp_ready = _wait_for_rtsp_ready  # type: ignore[method-assign]
+    camera._rtsp_orchestrator.async_wait_for_rtsp_ready = _wait_for_rtsp_ready  # type: ignore[method-assign]
 
 
 @dataclass
@@ -121,6 +134,7 @@ class _FakeApi:
     def __init__(self) -> None:
         self.activate_calls: list[bool] = []
         self.stop_calls = 0
+        self.hangup_calls = 0
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
         self.home_call_status_calls = 0
@@ -148,6 +162,10 @@ class _FakeApi:
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_calls += 1
+        return {"ok": True}
+
+    async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+        self.hangup_calls += 1
         return {"ok": True}
 
     async def async_home_call_status(self) -> dict[str, Any]:
@@ -182,6 +200,8 @@ class _FakeRuntimeData:
     connection_state: Any = field(
         default_factory=lambda: SimpleNamespace(available=True),
     )
+    agent_cpu_watchdog: Any = field(default_factory=media_watchdog.AgentCpuWatchdog)
+    agent_cpu_watchdog_task: Any = None
 
 
 def _webrtc_message_value(message: Any, key: str) -> Any:
@@ -402,113 +422,6 @@ def test_doorbell_camera_forwards_ice_candidate_after_remote_description() -> No
     assert peer.candidates[0].sdpMLineIndex == 0
 
 
-def test_doorbell_camera_mirrors_ha_ice_servers_for_cloud_webrtc() -> None:
-    class _AiortcIceServer:
-        def __init__(
-            self,
-            urls: str | list[str],
-            username: str | None = None,
-            credential: str | None = None,
-        ) -> None:
-            self.urls = urls
-            self.username = username
-            self.credential = credential
-
-    class _AiortcConfiguration:
-        def __init__(self, iceServers: list[_AiortcIceServer]) -> None:
-            self.iceServers = iceServers
-
-    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-    camera.async_get_webrtc_client_configuration = lambda: SimpleNamespace(
-        configuration=SimpleNamespace(
-            ice_servers=[
-                SimpleNamespace(
-                    urls=["turn:relay.example:3478"],
-                    username="cloud-user",
-                    credential="cloud-credential",
-                ),
-                SimpleNamespace(urls=["stun:stun.home-assistant.io:3478"]),
-            ]
-        )
-    )
-
-    config = camera._webrtc_server_configuration(
-        SimpleNamespace(
-            RTCConfiguration=_AiortcConfiguration,
-            RTCIceServer=_AiortcIceServer,
-        )
-    )
-
-    assert [server.urls for server in config.iceServers] == [
-        ["turn:relay.example:3478"],
-        ["stun:stun.home-assistant.io:3478"],
-    ]
-    assert config.iceServers[0].username == "cloud-user"
-    assert config.iceServers[0].credential == "cloud-credential"
-
-
-def test_doorbell_camera_prefers_browser_audio_codecs_for_webrtc() -> None:
-    class _Codec:
-        def __init__(self, mime_type: str) -> None:
-            self.mimeType = mime_type
-
-    class _Sender:
-        @staticmethod
-        def getCapabilities(kind: str) -> SimpleNamespace:  # noqa: N802
-            if kind == "video":
-                return SimpleNamespace(
-                    codecs=[_Codec("video/VP8"), _Codec("video/H264")]
-                )
-            return SimpleNamespace(
-                codecs=[
-                    _Codec("audio/G722"),
-                    _Codec("audio/opus"),
-                    _Codec("audio/PCMU"),
-                ]
-            )
-
-    class _Transceiver:
-        def __init__(self, kind: str) -> None:
-            self.kind = kind
-            self.preferences: list[str] = []
-
-        def setCodecPreferences(self, codecs: list[_Codec]) -> None:  # noqa: N802
-            self.preferences = [codec.mimeType for codec in codecs]
-
-    video = _Transceiver("video")
-    audio = _Transceiver("audio")
-    peer = SimpleNamespace(getTransceivers=lambda: [video, audio])
-    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-
-    camera._prefer_webrtc_codecs(peer, SimpleNamespace(RTCRtpSender=_Sender))
-
-    assert video.preferences == ["video/H264", "video/VP8"]
-    assert audio.preferences == ["audio/opus", "audio/PCMU", "audio/G722"]
-
-
-def test_webrtc_answer_filters_link_local_candidates_when_relay_exists() -> None:
-    sdp = (
-        "v=0\r\n"
-        "a=candidate:1 1 udp 2130706431 fe80::1 5000 typ host\r\n"
-        "a=candidate:2 1 udp 2130706431 ha-local.local 5001 typ host\r\n"
-        "a=candidate:3 1 udp 1677729535 192.0.2.10 5002 typ relay\r\n"
-        "a=end-of-candidates\r\n"
-    )
-
-    filtered = _filter_link_local_sdp_candidates(sdp)
-
-    assert "fe80::1" not in filtered
-    assert "ha-local.local" not in filtered
-    assert "192.0.2.10" in filtered
-    assert filtered.endswith("\r\n")
-
-
-def test_webrtc_answer_keeps_link_local_candidates_when_no_alternative_exists() -> None:
-    sdp = "v=0\r\na=candidate:1 1 udp 2130706431 fe80::1 5000 typ host\r\n"
-
-    assert _filter_link_local_sdp_candidates(sdp) == sdp
-
-
 def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     entry = _FakeEntry()
     entry.runtime_data.device_user_status = {
@@ -519,7 +432,7 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     camera._video_window_available = True
     camera._video_owner = "ring"
     camera._external_media_active = True
-    camera._external_owner = "app"
+    camera._external_owner = "external_client"
     camera._last_video_block_reason = "external_session_active"
     camera._bridge_status = {
         "rtsp_port": 6554,
@@ -534,10 +447,12 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     attrs = camera.extra_state_attributes
 
     assert attrs == {
+        "media_state": "unknown",
+        "media_primary_action": "refresh",
         "video_window_available": True,
         "video_owner": "ring",
         "external_media_active": True,
-        "external_owner": "app",
+        "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
         "talkback_supported": True,
         "media_user": {
@@ -560,6 +475,78 @@ def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
     assert camera._attr_is_streaming is True
     assert camera._audio_stream_path == "/doorbell"
     assert camera._recorder_stream_path == "/doorbell-recorder"
+
+
+def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:
+    class _IdleApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "available": True,
+                "window_available": False,
+                "media_owner": "idle",
+                "stream_path": "/doorbell-video",
+                "audio_stream_path": "/doorbell",
+                "recorder_stream_path": "/doorbell-recorder",
+                "bridge": {
+                    "clients": 0,
+                    "media_owner": "idle",
+                    "running": True,
+                    "audio_codec": "speex/8000",
+                    "talkback_supported": True,
+                    "talkback_running": True,
+                    "talkback_payload_type": 97,
+                    "talkback_codec": "speex/8000",
+                },
+            }
+
+    class _FakeBus:
+        def async_listen(self, *_args: Any):
+            return lambda: None
+
+    class _FakeHass:
+        bus = _FakeBus()
+
+    entry = _FakeEntry()
+    entry.runtime_data.api = _IdleApi()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = _FakeHass()  # type: ignore[assignment]
+    camera.async_on_remove = lambda _remove: None  # type: ignore[method-assign]
+    camera.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+
+    asyncio.run(camera.async_added_to_hass())
+
+    assert camera._last_media_state is MediaState.IDLE
+    assert camera._last_media_decision.primary_action == "start_stream"
+    assert camera.extra_state_attributes["media_primary_action"] == "start_stream"
+
+
+def test_doorbell_camera_closed_event_clears_stale_ring_facts() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    camera._video_owner = "ring"
+    camera._video_window_available = True
+    camera._attr_is_streaming = True
+    camera._bridge_status = {
+        "media_owner": "ring",
+        "media_active": True,
+        "ring_call_active": True,
+        "ring_media_active": True,
+        "ring_audio_active": True,
+        "ring_answer_requested": True,
+        "ring_answered": True,
+        "ring_hangup_requested": True,
+        "unanswered_ring_call": True,
+        "call_active": True,
+        "clients": 1,
+    }
+
+    camera._clear_video_window()
+
+    assert camera._last_media_state is MediaState.IDLE
+    assert camera._last_media_decision.primary_action == "start_stream"
+    assert camera._bridge_status["ring_audio_active"] is False
+    assert camera._bridge_status["ring_answered"] is False
+    assert camera._bridge_status["unanswered_ring_call"] is False
+    assert camera._bridge_status["clients"] == 0
 
 
 def test_doorbell_camera_does_not_expose_talkback_session_state() -> None:
@@ -633,6 +620,47 @@ def test_doorbell_camera_closing_one_of_multiple_webrtc_sessions_keeps_agent_sta
     assert camera.extra_state_attributes["video_window_available"] is True
 
 
+def test_doorbell_camera_cpu_watchdog_closes_local_webrtc_sessions() -> None:
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _Hass:
+        def __init__(self) -> None:
+            self.tasks: list[asyncio.Task] = []
+
+        def async_create_task(self, coro: Any) -> asyncio.Task:
+            task = asyncio.create_task(coro)
+            self.tasks.append(task)
+            return task
+
+    async def _run() -> tuple[_FakeApi, C300XDoorbellCamera, _Peer]:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera.hass = _Hass()  # type: ignore[assignment]
+        peer = _Peer()
+        camera._webrtc_sessions["session-1"] = _NativeWebRTCSession(peer)
+        entry.runtime_data.agent_cpu_watchdog.tripped = True
+        entry.runtime_data.agent_cpu_watchdog.last_percent = 96.0
+        entry.runtime_data.agent_cpu_watchdog.last_reason = "agent_cpu_high"
+
+        camera._handle_system_metrics_changed(entry.entry_id)
+        await asyncio.gather(*camera.hass.tasks)
+        return api, camera, peer
+
+    api, camera, peer = asyncio.run(_run())
+
+    assert api.stop_calls == 0
+    assert camera._webrtc_sessions == {}
+    assert peer.closed is True
+    assert camera._agent_cpu_watchdog.tripped is True
+    assert camera._agent_cpu_watchdog.last_percent == 96.0
+
+
 def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
@@ -646,50 +674,28 @@ def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -
 def test_doorbell_camera_stream_source_warms_video_once() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> str:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            return await camera.stream_source()
-        finally:
-            server.close()
-            await server.wait_closed()
+        return await camera.stream_source()
 
     source = asyncio.run(_run())
 
-    assert source.startswith("rtsp://127.0.0.1:")
-    assert source.endswith("/doorbell-video")
+    assert source == "rtsp://127.0.0.1:6554/doorbell-video"
     assert entry.runtime_data.api.activate_calls == [False]
 
 
 def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> str:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            return await camera._async_prepare_rtsp_stream(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        return await camera._async_prepare_rtsp_stream(audio=True)
 
     source = asyncio.run(_run())
 
-    assert source.startswith("rtsp://127.0.0.1:")
-    assert source.endswith("/doorbell")
+    assert source == "rtsp://127.0.0.1:6554/doorbell"
     assert entry.runtime_data.api.activate_calls == [True]
 
 
@@ -712,25 +718,14 @@ def test_doorbell_camera_uses_active_ring_media_without_on_demand_activation() -
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> str:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            return await camera._async_prepare_rtsp_stream(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        return await camera._async_prepare_rtsp_stream(audio=True)
 
     source = asyncio.run(_run())
 
-    assert source.startswith("rtsp://127.0.0.1:")
-    assert source.endswith("/doorbell")
+    assert source == "rtsp://127.0.0.1:6554/doorbell"
     assert api.activate_calls == []
 
 
@@ -771,25 +766,14 @@ def test_doorbell_camera_waits_for_ring_call_after_external_event(
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> str:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            return await camera._async_prepare_rtsp_stream(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        return await camera._async_prepare_rtsp_stream(audio=True)
 
     source = asyncio.run(_run())
 
-    assert source.startswith("rtsp://127.0.0.1:")
-    assert source.endswith("/doorbell")
+    assert source == "rtsp://127.0.0.1:6554/doorbell"
     assert api.status_calls == 2
     assert api.activate_calls == []
 
@@ -816,27 +800,85 @@ def test_doorbell_camera_ring_reader_restart_does_not_restart_on_demand() -> Non
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> None:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            await camera._async_restart_video_reader(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        await camera._async_restart_video_reader(audio=True)
 
     asyncio.run(_run())
 
     assert api.activate_calls == []
 
 
-def test_doorbell_camera_uses_active_home_call_media_without_on_demand_activation() -> None:
+def test_doorbell_camera_rtsp_policy_blocks_second_on_demand_browser() -> None:
+    class _BusyOnDemandApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "agent"
+            status["window_available"] = True
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "agent",
+                "clients": 1,
+            }
+            return status
+
+    api = _BusyOnDemandApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._webrtc_sessions["first"] = SimpleNamespace(player=object())  # type: ignore[assignment]
+    _stub_rtsp_ready(camera)
+
+    async def _run() -> None:
+        await camera._async_prepare_rtsp_stream(audio=True)
+
+    with pytest.raises(Exception, match="rtsp_consumer_active"):
+        asyncio.run(_run())
+
+    assert api.activate_calls == []
+    assert camera._last_video_block_reason == "rtsp_consumer_active"
+
+
+def test_doorbell_camera_rtsp_policy_allows_second_ring_preview_when_agent_shares() -> None:
+    class _SharedRingPreviewApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "ring"
+            status["window_available"] = True
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "unanswered_ring_call": True,
+                "clients": 1,
+                "max_clients": 2,
+                "ring_preview_sharing": True,
+            }
+            return status
+
+    api = _SharedRingPreviewApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._webrtc_sessions["first"] = SimpleNamespace(player=object())  # type: ignore[assignment]
+    _stub_rtsp_ready(camera)
+
+    async def _run() -> str:
+        return await camera._async_prepare_rtsp_stream(audio=True)
+
+    source = asyncio.run(_run())
+
+    assert source == "rtsp://127.0.0.1:6554/doorbell"
+    assert api.activate_calls == []
+
+
+def test_doorbell_camera_blocks_doorbell_rtsp_while_home_call_is_active() -> None:
     class _HomeCallApi(_FakeApi):
         async def async_doorbell_video_status(self) -> dict[str, Any]:
             status = await super().async_doorbell_video_status()
@@ -856,26 +898,16 @@ def test_doorbell_camera_uses_active_home_call_media_without_on_demand_activatio
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> str:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            return await camera._async_prepare_rtsp_stream(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        return await camera._async_prepare_rtsp_stream(audio=True)
 
-    source = asyncio.run(_run())
+    with pytest.raises(HomeAssistantError, match="home_call_active"):
+        asyncio.run(_run())
 
-    assert source.startswith("rtsp://127.0.0.1:")
-    assert source.endswith("/doorbell")
     assert api.activate_calls == []
+    assert camera.extra_state_attributes["last_video_block_reason"] == "home_call_active"
 
 
 def test_doorbell_camera_home_call_reader_restart_does_not_restart_on_demand() -> None:
@@ -901,20 +933,10 @@ def test_doorbell_camera_home_call_reader_restart_does_not_restart_on_demand() -
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> None:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
-        )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            await camera._async_restart_video_reader(audio=True)
-        finally:
-            server.close()
-            await server.wait_closed()
+        await camera._async_restart_video_reader(audio=True)
 
     asyncio.run(_run())
 
@@ -949,86 +971,18 @@ def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
         runtime_data=_FakeRuntimeData(api=api),
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
 
     async def _run() -> None:
-        server = await asyncio.start_server(
-            _rtsp_options_server,
-            "127.0.0.1",
-            0,
+        await asyncio.gather(
+            camera._async_prepare_rtsp_stream(audio=True),
+            camera._async_prepare_rtsp_stream(audio=True),
         )
-        port = server.sockets[0].getsockname()[1]
-        entry.data["video_port"] = port
-        try:
-            await asyncio.gather(
-                camera._async_prepare_rtsp_stream(audio=True),
-                camera._async_prepare_rtsp_stream(audio=True),
-            )
-        finally:
-            server.close()
-            await server.wait_closed()
 
     asyncio.run(_run())
 
     assert api.activate_calls == [True, True]
     assert api.max_active_activate_calls == 1
-
-
-def test_doorbell_camera_detects_audio_webrtc_offer() -> None:
-    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-
-    assert camera._offer_has_audio("v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n")
-    assert camera._offer_accepts_incoming_audio(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
-    )
-    assert camera._offer_accepts_incoming_audio(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
-    )
-    assert camera._offer_accepts_incoming_audio(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
-    )
-    assert not camera._offer_accepts_incoming_audio(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
-    )
-    assert not camera._offer_accepts_incoming_audio(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
-    )
-    assert not camera._offer_has_audio("v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n")
-
-    assert camera._offer_can_send_microphone(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
-    )
-    assert camera._offer_can_send_microphone(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
-    )
-    assert camera._offer_can_send_microphone(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
-    )
-    assert not camera._offer_can_send_microphone(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
-    )
-    assert not camera._offer_can_send_microphone(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
-    )
-
-
-def test_doorbell_camera_uses_audio_whenever_offer_accepts_incoming_audio() -> None:
-    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-
-    assert camera._offer_should_use_audio_stream(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\n"
-    )
-    assert camera._offer_should_use_audio_stream(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
-    )
-    assert camera._offer_should_use_audio_stream(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
-    )
-    assert not camera._offer_should_use_audio_stream(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n"
-    )
-    assert not camera._offer_should_use_audio_stream(
-        "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=inactive\r\n"
-    )
 
 
 def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> None:
@@ -1119,7 +1073,7 @@ def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> N
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera.hass = _FakeHass()
     camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
-    camera._async_wait_for_rtsp_ready = _wait_for_rtsp_ready  # type: ignore[method-assign]
+    _stub_rtsp_ready(camera, ready_urls)
 
     offer = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
 
@@ -1291,29 +1245,6 @@ def test_doorbell_camera_home_call_wait_ignores_pre_answer_running_state(
     assert camera._bridge_status["home_call_target_audio_port"] == 20290
 
 
-def test_doorbell_camera_builds_speex_talkback_rtp_packet() -> None:
-    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-
-    packet = camera._build_talkback_rtp_packet(
-        b"speex-payload",
-        sequence=7,
-        timestamp=8000,
-        ssrc=1234,
-        marker=True,
-    )
-
-    version, marker_payload, sequence, timestamp, ssrc = struct.unpack(
-        "!BBHII",
-        packet[:12],
-    )
-    assert version == 0x80
-    assert marker_payload == 0x80 | TALKBACK_RTP_PAYLOAD_TYPE
-    assert sequence == 7
-    assert timestamp == 8000
-    assert ssrc == 1234
-    assert packet[12:] == b"speex-payload"
-
-
 def test_doorbell_camera_forwards_browser_audio_as_talkback_rtp(monkeypatch) -> None:  # noqa: ANN001
     class _MediaStreamError(Exception):
         pass
@@ -1368,11 +1299,21 @@ def test_doorbell_camera_forwards_browser_audio_as_talkback_rtp(monkeypatch) -> 
         def resample(self, frame: Any) -> list[Any]:
             return [frame]
 
+    class _FakeSocket:
+        def __init__(self, family: int, socktype: int, proto: int) -> None:
+            self.family = family
+            self.socktype = socktype
+            self.proto = proto
+            self.blocking: bool | None = None
+            self.closed = False
+
+        def setblocking(self, value: bool) -> None:
+            self.blocking = value
+
+        def close(self) -> None:
+            self.closed = True
+
     async def _run() -> tuple[bytes, _NativeWebRTCSession, dict[str, Any]]:
-        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp.bind(("127.0.0.1", 0))
-        udp.setblocking(False)
-        monkeypatch.setattr(camera_module, "TALKBACK_RTP_PORT", udp.getsockname()[1])
         entry = _FakeEntry(data={"agent_host": "127.0.0.1"})
         camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
         camera._bridge_status = {"talkback_supported": True}
@@ -1384,19 +1325,64 @@ def test_doorbell_camera_forwards_browser_audio_as_talkback_rtp(monkeypatch) -> 
             MediaStreamError=_MediaStreamError,
         )
         loop = asyncio.get_running_loop()
-        try:
-            task = asyncio.create_task(
-                camera._async_forward_talkback_audio(
-                    _FakeTrack(),
-                    aiortc_modules,
-                    "session-1",
+        sent_packets: list[tuple[bytes, tuple[Any, ...]]] = []
+        fake_sockets: list[_FakeSocket] = []
+        socket_family = socket.AF_INET
+        socket_type = socket.SOCK_DGRAM
+        talkback_port = talkback_module.TALKBACK_RTP_PORT
+
+        async def _getaddrinfo(
+            host: str,
+            port: int,
+            *,
+            type: int,
+        ) -> list[tuple[Any, ...]]:
+            assert host == "127.0.0.1"
+            assert port == talkback_port
+            assert type == socket_type
+            return [
+                (
+                    socket_family,
+                    socket_type,
+                    0,
+                    "",
+                    ("192.0.2.60", port),
                 )
+            ]
+
+        def _socket(family: int, socktype: int, proto: int) -> _FakeSocket:
+            sock = _FakeSocket(family, socktype, proto)
+            fake_sockets.append(sock)
+            return sock
+
+        async def _sock_sendto(
+            sock: _FakeSocket,
+            data: bytes,
+            target: tuple[Any, ...],
+        ) -> None:
+            assert sock is fake_sockets[0]
+            sent_packets.append((data, target))
+
+        monkeypatch.setattr(loop, "getaddrinfo", _getaddrinfo)
+        monkeypatch.setattr(loop, "sock_sendto", _sock_sendto)
+        monkeypatch.setattr(talkback_module.socket, "socket", _socket)
+
+        task = asyncio.create_task(
+            camera._async_forward_talkback_audio(
+                _FakeTrack(),
+                aiortc_modules,
+                "session-1",
             )
-            packet, _addr = await asyncio.wait_for(loop.sock_recvfrom(udp, 2048), 1)
-            await asyncio.wait_for(task, 1)
-            return packet, session, camera.extra_state_attributes
-        finally:
-            udp.close()
+        )
+        await asyncio.wait_for(task, 1)
+        assert camera._talkback_last_error is None
+        assert len(fake_sockets) == 1
+        assert fake_sockets[0].blocking is False
+        assert fake_sockets[0].closed is True
+        assert len(sent_packets) == 1
+        packet, target = sent_packets[0]
+        assert target == ("192.0.2.60", talkback_port)
+        return packet, session, camera.extra_state_attributes
 
     packet, session, attrs = asyncio.run(_run())
     version, marker_payload, sequence, _timestamp, _ssrc = struct.unpack(
@@ -1432,139 +1418,46 @@ def test_doorbell_camera_keeps_talkback_host_errors_out_of_attributes() -> None:
     assert "talkback_last_error" not in attrs
 
 
-def test_restarting_rtsp_tracks_share_one_audio_video_reader() -> None:
-    opened_urls: list[str] = []
-
-    class _Frame:
-        pts: int | None = None
-        time_base: object | None = None
-
-    class _SourceTrack:
-        def __init__(self, kind: str) -> None:
-            self.kind = kind
-            self.stopped = False
-
-        async def recv(self) -> _Frame:
-            return _Frame()
-
-        def stop(self) -> None:
-            self.stopped = True
-
-    class _VideoTrack:
-        kind = "video"
-
-        async def next_timestamp(self) -> tuple[int, str]:
-            return 1, "1/90000"
-
-        def stop(self) -> None:
-            pass
-
-    class _AudioTrack:
-        kind = "audio"
-
-        def stop(self) -> None:
-            pass
-
-    class _MediaPlayer:
-        def __init__(self, url: str, options: dict[str, str]) -> None:
-            opened_urls.append(url)
-            self.video = _SourceTrack("video")
-            self.audio = _SourceTrack("audio")
-
-    class _Hass:
-        async def async_add_executor_job(self, func: Any) -> Any:
-            return func()
-
-    async def _run() -> tuple[_Frame, _Frame]:
-        media, video_track, audio_track = _new_restarting_rtsp_tracks(
-            SimpleNamespace(),
-            _VideoTrack,
-            _AudioTrack,
-            Exception,
-            _MediaPlayer,
-            _Hass(),  # type: ignore[arg-type]
-            "rtsp://agent.local:6554/doorbell",
-            lambda: None,
-        )
-        try:
-            return await video_track.recv(), await audio_track.recv()
-        finally:
-            media.stop()
-
-    video_frame, audio_frame = asyncio.run(_run())
-
-    assert opened_urls == ["rtsp://agent.local:6554/doorbell"]
-    assert video_frame.pts == 1
-    assert video_frame.time_base == "1/90000"
-    assert audio_frame.pts is None
-
-
-def test_restarting_rtsp_audio_track_accepts_home_call_audio_only_reader() -> None:
-    opened_urls: list[str] = []
-
-    class _Frame:
-        pass
-
-    class _SourceTrack:
-        def __init__(self, kind: str) -> None:
-            self.kind = kind
-            self.stopped = False
-
-        async def recv(self) -> _Frame:
-            return _Frame()
-
-        def stop(self) -> None:
-            self.stopped = True
-
-    class _AudioTrack:
-        kind = "audio"
-
-        def stop(self) -> None:
-            pass
-
-    class _MediaPlayer:
-        def __init__(self, url: str, options: dict[str, str]) -> None:
-            opened_urls.append(url)
-            self.video = None
-            self.audio = _SourceTrack("audio")
-
-    class _Hass:
-        async def async_add_executor_job(self, func: Any) -> Any:
-            return func()
-
-    async def _run() -> _Frame:
-        audio_track = _new_restarting_rtsp_audio_track(
-            _AudioTrack,
-            Exception,
-            _MediaPlayer,
-            _Hass(),  # type: ignore[arg-type]
-            "rtsp://agent.local:6554/doorbell",
-            lambda: None,
-        )
-        try:
-            return await audio_track.recv()
-        finally:
-            audio_track.stop()
-
-    frame = asyncio.run(_run())
-
-    assert opened_urls == ["rtsp://agent.local:6554/doorbell"]
-    assert isinstance(frame, _Frame)
-
-
 def test_doorbell_camera_detects_home_call_media_for_audio_only() -> None:
-    assert _status_is_home_call_media_active(
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert camera._derive_media_decision(
         {"media_owner": "home_call", "bridge": {}}
-    )
-    assert _status_is_home_call_media_active(
+    ).state is MediaState.HOME_CALL_STARTING
+    assert camera._derive_media_decision(
         {"bridge": {"media_owner": "home_call"}}
-    )
-    assert _status_is_home_call_media_active(
+    ).state is MediaState.HOME_CALL_STARTING
+    assert camera._derive_media_decision(
         {"bridge": {"home_call_active": True}}
-    )
-    assert not _status_is_home_call_media_active(
+    ).state is MediaState.HOME_CALL_RINGING
+    assert camera._derive_media_decision(
+        {"bridge": {"home_call_answered": True}}
+    ).state is MediaState.HOME_CALL_ACTIVE
+    assert camera._derive_media_decision(
         {"media_owner": "ring", "bridge": {"ring_call_active": True}}
-    )
+    ).state is MediaState.RING_PENDING
+    assert camera._derive_media_decision(
+        {
+            "media_owner": "ring",
+            "bridge": {
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "ring_audio_active": True,
+            },
+        }
+    ).state is MediaState.RING_ACTIVE
+
+
+def test_doorbell_camera_ignores_home_call_rtsp_cooldown_for_doorbell_state() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    camera._last_rtsp_error = "ConnectionRefusedError"
+    camera._rtsp_unavailable_until = 999999999.0
+    camera._rtsp_cooldown_scope = "home_call"
+
+    decision = camera._derive_media_decision({"media_owner": "idle", "bridge": {}})
+
+    assert decision.state is MediaState.IDLE
+    assert decision.primary_action.value == "start_stream"
 
 
 def test_doorbell_camera_stream_url_brackets_ipv6_host() -> None:
@@ -1661,6 +1554,129 @@ def test_doorbell_camera_does_not_mark_external_view_as_ha_available() -> None:
     assert camera._attr_is_streaming is False
 
 
+def test_doorbell_camera_updates_derived_media_state_from_video_status() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": True,
+            "media_owner": "agent",
+            "bridge": {"media_owner": "agent"},
+        }
+    )
+    assert camera._last_media_state is MediaState.ON_DEMAND_ACTIVE
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": False,
+            "media_owner": "external_media",
+            "external_media_active": True,
+            "external_owner": "smartphone",
+            "bridge": {
+                "media_owner": "external_media",
+                "external_media_active": True,
+            },
+        }
+    )
+    assert camera._last_media_state is MediaState.EXTERNAL_MEDIA_ACTIVE
+
+
+def test_doorbell_camera_updates_derived_media_state_from_agent_clients() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": False,
+            "media_owner": "idle",
+            "bridge": {"media_owner": "idle", "clients": 1},
+        }
+    )
+
+    assert camera._last_media_state is MediaState.RTSP_BUSY
+    assert camera._last_media_decision.capture_blocked is True
+
+
+def test_doorbell_camera_keeps_capabilities_permissive_until_agent_reports_them() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": True,
+            "media_owner": "agent",
+            "bridge": {"media_owner": "agent"},
+        }
+    )
+
+    assert camera._last_media_state is MediaState.ON_DEMAND_ACTIVE
+
+
+def test_doorbell_camera_uses_known_capability_facts_in_state_machine() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.capabilities = {"doorbell_video": {"supported": False}}
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": True,
+            "media_owner": "agent",
+            "bridge": {"media_owner": "agent"},
+        }
+    )
+
+    assert camera._last_media_state is MediaState.UNKNOWN
+    assert camera._last_media_decision.webrtc_keepalive_allowed is False
+
+
+def test_doorbell_camera_updates_derived_media_state_from_home_call_status() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._apply_home_call_status(
+        {
+            "available": True,
+            "running": True,
+            "active": True,
+            "answered": True,
+            "rtp_proxy": True,
+        }
+    )
+
+    assert camera._last_media_state is MediaState.HOME_CALL_ACTIVE
+
+
+def test_doorbell_camera_updates_derived_media_state_from_ring_event() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    event = SimpleNamespace(
+        data={
+            "entry_id": entry.entry_id,
+            "event_key": "doorbell_view_requested",
+            "video_window_available": True,
+            "video_available": True,
+            "stream_path": "/doorbell-video",
+            "media_owner": "ring",
+            "bridge": {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+            },
+        }
+    )
+
+    camera._handle_agent_event(event)
+
+    assert camera._last_media_state is MediaState.RING_PREVIEW_ACTIVE
+    assert camera._last_media_decision.primary_action == "answer_ring"
+
+
 def test_doorbell_camera_keeps_agent_video_until_close_event() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
@@ -1707,6 +1723,7 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     assert camera._attr_is_streaming is False
     assert camera._bridge_status["media_owner"] == "idle"
     assert camera._bridge_status["external_media_active"] is False
+    assert camera._last_media_state is MediaState.IDLE
 
 
 def test_doorbell_camera_closes_ring_webrtc_session_on_video_closed_event() -> None:
@@ -1947,50 +1964,6 @@ def test_doorbell_camera_does_not_infer_runtime_video_window() -> None:
 
     assert attrs["video_window_available"] is False
     assert "video_active_until" not in attrs
-
-
-def test_doorbell_audio_gain_is_applied_to_decoded_webrtc_frames() -> None:
-    import numpy as np
-
-    class _FakeFormat:
-        name = "s16"
-
-    class _FakeLayout:
-        name = "mono"
-
-    class _FakeAudioFrame:
-        format = _FakeFormat()
-        layout = _FakeLayout()
-        sample_rate = 8000
-        pts = 160
-        time_base = "time-base"
-
-        def __init__(self, samples: Any) -> None:
-            self.samples = samples
-
-        def to_ndarray(self) -> Any:
-            return self.samples
-
-    class _FakeAudioFrameFactory:
-        @staticmethod
-        def from_ndarray(samples: Any, *, format: str, layout: str) -> Any:
-            assert format == "s16"
-            assert layout == "mono"
-            return _FakeAudioFrame(samples)
-
-    frame = _FakeAudioFrame(np.array([[1000, -1000, 20000]], dtype=np.int16))
-
-    boosted = _apply_audio_gain(
-        SimpleNamespace(AudioFrame=_FakeAudioFrameFactory),
-        frame,
-        DOORSTATION_AUDIO_GAIN,
-    )
-
-    assert boosted is not frame
-    assert boosted.to_ndarray().tolist() == [[3000, -3000, 32767]]
-    assert boosted.sample_rate == frame.sample_rate
-    assert boosted.pts == frame.pts
-    assert boosted.time_base == frame.time_base
 
 
 async def _rtsp_options_server(

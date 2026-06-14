@@ -7,6 +7,7 @@
 #include "c300x_agent.h"
 
 #define C300X_VIDEO_MAX_POLL_FDS 10
+#define C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS 2
 #define C300X_TALKBACK_RTP_PORT 40004
 #define C300X_TALKBACK_RTP_PAYLOAD_TYPE 97
 #define C300X_TALKBACK_CODEC "speex/8000"
@@ -17,6 +18,7 @@ struct c300x_video_status {
     int running;
     int call_active;
     int clients;
+    int max_clients;
     int media_starting;
     int stream_audio;
     int talkback_running;
@@ -69,7 +71,7 @@ void c300x_video_destroy(struct c300x_video *video);
 void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enabled);
 int c300x_video_activate(struct c300x_video *video, int include_audio);
 void c300x_video_stop(struct c300x_video *video);
-int c300x_video_doorbell_call_answer(struct c300x_video *video, int include_audio);
+int c300x_video_doorbell_call_answer(struct c300x_video *video);
 void c300x_video_doorbell_call_hangup(struct c300x_video *video);
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds);
 void c300x_video_home_call_stop(struct c300x_video *video);

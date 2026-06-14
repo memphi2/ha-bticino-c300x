@@ -76,15 +76,29 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "home_assistant_last_seen_at",
     "ui_event_revision",
     "video_running",
+    "video_rtsp_server_running",
     "video_media_starting",
     "video_call_active",
     "video_clients",
+    "video_bridge_running",
+    "video_bridge_media_active",
+    "video_bridge_stop_in_progress",
     "video_bridge_open_fds",
     "video_bridge_active_threads",
+    "ring_receiver_running",
+    "ring_registered",
+    "ring_call_active",
+    "ring_media_active",
+    "home_call_running",
+    "home_call_active",
     "flexisip_backup_available",
     "flexisip_restart_marker",
     "flexisip_backup_marker",
     "flexisip_reference_state",
+)
+_SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
+    "agent_diagnostics_updated_by",
+    "agent_diagnostics_change_reason",
 )
 
 
@@ -174,9 +188,15 @@ def _agent_write_diagnostics(entry: ConfigEntry) -> dict | None:
     if not hasattr(entry, "runtime_data"):
         return None
     diagnostics = getattr(entry.runtime_data, "agent_diagnostics", {})
-    if not isinstance(diagnostics, dict):
+    if not isinstance(diagnostics, Mapping):
         return None
-    return {key: diagnostics.get(key) for key in _SAFE_AGENT_DIAGNOSTIC_KEYS}
+    return {
+        **{key: diagnostics.get(key) for key in _SAFE_AGENT_DIAGNOSTIC_KEYS},
+        **{
+            key: getattr(entry.runtime_data, key, None)
+            for key in _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS
+        },
+    }
 
 
 def _connection_diagnostics(runtime: Any | None) -> dict[str, Any] | None:

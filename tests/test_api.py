@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 import pytest
+from aiohttp import ClientError
 
+from custom_components.bticino_c300x.agent_contracts import (
+    AgentDiagnosticsStatus,
+    AuthConfigStatus,
+    CapabilityPayload,
+    DoorbellVideoStatus,
+    FirewallStatus,
+    HomeCallStatus,
+    RingCallStatus,
+    SelfTestStatus,
+)
 from custom_components.bticino_c300x.api import (
     C300XAgentApi,
     C300XAgentApiConnectionError,
@@ -30,6 +42,7 @@ from custom_components.bticino_c300x.api import (
     normalize_mqtt_status,
     normalize_qml_patch_status,
     normalize_ringer,
+    normalize_self_test,
     normalize_smartphone_forwarding,
     normalize_smartphone_forwarding_mode,
     normalize_ssh_status,
@@ -103,6 +116,16 @@ class _QueuedSession:
         return _FakeResponse(status=status, text=text)
 
 
+class _RaisingSession:
+    def __init__(self, exception: Exception) -> None:
+        self.requests: list[dict[str, object]] = []
+        self._exception = exception
+
+    def request(self, *args: object, **kwargs: object) -> _FakeResponse:
+        self.requests.append({"args": args, "kwargs": kwargs})
+        raise self._exception
+
+
 def test_build_agent_base_url_defaults_to_http() -> None:
     assert build_agent_base_url("agent.local", 8080) == (
         "http://agent.local:8080"
@@ -135,6 +158,7 @@ def test_validate_setup_uses_native_agent_version() -> None:
 
     setup = asyncio.run(api.async_validate_setup())
 
+    assert isinstance(setup, CapabilityPayload)
     assert setup["version"] == "0.2.0"
     assert setup["implementation"] == "native-c"
     assert setup["api_version"] == "1"
@@ -142,6 +166,104 @@ def test_validate_setup_uses_native_agent_version() -> None:
     assert setup["model"] == "C300X"
     assert setup["capabilities"] == {"doorbell_events": True}
     assert session.requests[0]["kwargs"]["timeout"] == 2.0
+
+
+def test_validate_setup_rejects_non_object_capabilities() -> None:
+    session = _FakeSession("[]")
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiResponseError):
+        asyncio.run(api.async_validate_setup())
+
+
+def test_json_request_rejects_invalid_json() -> None:
+    session = _FakeSession("not json")
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiResponseError, match="invalid JSON"):
+        asyncio.run(api.async_state())
+
+
+@pytest.mark.parametrize(
+    ("exception", "message"),
+    [
+        (TimeoutError(), "timed out"),
+        (ClientError("connection lost"), "connection lost"),
+    ],
+)
+def test_json_request_wraps_transport_errors(
+    exception: Exception,
+    message: str,
+) -> None:
+    session = _RaisingSession(exception)
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError, match=message):
+        asyncio.run(api.async_state())
+
+
+def test_byte_request_reports_unsupported_endpoint() -> None:
+    session = _FakeSession(
+        '{"error": "missing"}',
+        response_status=404,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiUnsupportedError, match="missing"):
+        asyncio.run(api.async_memo_audio("voice/memo_1"))
+
+
+def test_byte_request_reports_http_error() -> None:
+    session = _FakeSession(
+        '{"message": "media failed"}',
+        response_status=503,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError, match="media failed"):
+        asyncio.run(api.async_memo_audio("voice/memo_1"))
+
+
+@pytest.mark.parametrize(
+    ("exception", "message"),
+    [
+        (TimeoutError(), "timed out"),
+        (ClientError("connection reset"), "connection reset"),
+    ],
+)
+def test_byte_request_wraps_transport_errors(
+    exception: Exception,
+    message: str,
+) -> None:
+    session = _RaisingSession(exception)
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError, match=message):
+        asyncio.run(api.async_memo_audio("voice/memo_1"))
 
 
 def test_configure_display_bridge_registers_runtime_webhook() -> None:
@@ -227,6 +349,243 @@ def test_notify_display_bridge_event_posts_topic() -> None:
     assert request["kwargs"]["timeout"] == 2.0
 
 
+@pytest.mark.parametrize(
+    ("method_name", "args", "kwargs", "expected_path", "expected_json"),
+    [
+        (
+            "async_create_text_memo",
+            ("hello",),
+            {"read": True},
+            "/api/v1/memos/text/actions/create",
+            {"text_b64": "aGVsbG8=", "read": True},
+        ),
+        (
+            "async_delete_memo",
+            ("text/memo_1",),
+            {},
+            "/api/v1/memos/actions/delete",
+            {"id": "text/memo_1"},
+        ),
+        (
+            "async_stop_doorbell_video",
+            (),
+            {},
+            "/api/v1/video/doorbell/actions/stop",
+            None,
+        ),
+        (
+            "async_answer_doorbell_call",
+            (),
+            {},
+            "/api/v1/calls/doorbell/actions/answer",
+            None,
+        ),
+        (
+            "async_hangup_doorbell_call",
+            (),
+            {},
+            "/api/v1/calls/doorbell/actions/hangup",
+            None,
+        ),
+        (
+            "async_capture_doorbell_call",
+            (),
+            {},
+            "/api/v1/calls/doorbell/actions/capture",
+            None,
+        ),
+        (
+            "async_start_home_call",
+            (),
+            {"duration_seconds": 9},
+            "/api/v1/calls/home/actions/start",
+            {"duration_seconds": 9},
+        ),
+        (
+            "async_stop_home_call",
+            (),
+            {},
+            "/api/v1/calls/home/actions/stop",
+            None,
+        ),
+        (
+            "async_migrate_legacy_mqtt_to_native",
+            (),
+            {},
+            "/api/v1/maintenance/mqtt/actions/migrate-legacy",
+            {"confirm": "migrate_legacy_mqtt"},
+        ),
+        (
+            "async_restore_homeassistant_user_patch",
+            (),
+            {},
+            "/api/v1/maintenance/device-user/actions/restore-homeassistant-patch",
+            {"confirm": "restore_hass_user_patch"},
+        ),
+    ],
+)
+def test_api_command_methods_use_expected_endpoint_and_payload(
+    method_name: str,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    expected_path: str,
+    expected_json: dict[str, object] | None,
+) -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    result = asyncio.run(getattr(api, method_name)(*args, **kwargs))
+
+    if "ok" in result:
+        assert result["ok"] is True
+    assert calls[0][0] == "POST"
+    assert calls[0][1] == expected_path
+    if expected_json is None:
+        assert "json_data" not in calls[0][2]
+    else:
+        assert calls[0][2]["json_data"] == expected_json
+
+
+def test_api_maintenance_auth_methods_include_safe_payloads_and_headers() -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        return {
+            "no_auth": False,
+            "api_token_configured": True,
+            "maintenance_token_configured": True,
+            "maintenance_enabled": True,
+            "maintenance_no_auth_allowed": True,
+            "mdns_enabled": True,
+            "firewall_enabled": True,
+            "ipv6_firewall_enabled": True,
+        }
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    status = asyncio.run(api.async_auth_config_status())
+
+    assert isinstance(status, AuthConfigStatus)
+    assert status["maintenance_enabled"] is True
+    assert asyncio.run(
+        api.async_set_no_auth_enabled(
+            True,
+            api_token="api",
+            maintenance_token="maint",
+            maintenance_no_auth_allowed=True,
+        )
+    )["no_auth"] is False
+    assert asyncio.run(api.async_set_mdns_enabled(False))["mdns_enabled"] is True
+    assert asyncio.run(
+        api.async_configure_device_activations(
+            enabled=True,
+            auto_discover=False,
+            stair_light_address="22",
+        )
+    )["maintenance_enabled"] is True
+    assert asyncio.run(api.async_set_ipv6_firewall_enabled(True))["ipv6_firewall_enabled"] is True
+    assert asyncio.run(api.async_set_firewall_enabled(True))["firewall_enabled"] is True
+    assert asyncio.run(api.async_set_maintenance_no_auth_allowed(True))[
+        "maintenance_no_auth_allowed"
+    ] is True
+
+    assert calls[0] == (
+        "GET",
+        "/api/v1/maintenance/auth",
+        {"extra_headers": {HEADER_MAINTENANCE_TOKEN: "maintenance-token"}},
+    )
+    posted_payloads = [call[2]["json_data"] for call in calls[1:]]
+    assert posted_payloads == [
+        {
+            "noAuth": True,
+            "apiToken": "api",
+            "maintenanceToken": "maint",
+            "maintenanceNoAuthAllowed": True,
+        },
+        {"mdnsEnabled": False},
+        {
+            "activationsEnabled": True,
+            "activationsAutoDiscover": False,
+            "activationStairLightAddress": "22",
+        },
+        {"ipv6FirewallEnabled": True, "maintenanceEnabled": True},
+        {"firewallEnabled": True, "maintenanceEnabled": True},
+        {"maintenanceNoAuthAllowed": True, "maintenanceEnabled": True},
+    ]
+
+
+def test_api_update_upload_encodes_chunks_and_uses_long_timeout() -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+        timeout=5,
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    asyncio.run(
+        api.async_prepare_agent_update(bundle_hash="sha256:abc", agent_version="1.2.0")
+    )
+    asyncio.run(
+        api.async_upload_agent_update_chunk(
+            path="bin/agent",
+            sha256="sha256:file",
+            mode="0755",
+            offset=3,
+            data=b"abc",
+            final=True,
+        )
+    )
+    asyncio.run(api.async_apply_agent_update(bundle_hash="sha256:abc"))
+    asyncio.run(api.async_normalize_agent_config())
+    asyncio.run(api.async_ensure_homeassistant_user(account_label="Home Assistant Test"))
+
+    assert calls[0][1] == "/api/v1/maintenance/update/prepare"
+    assert calls[1][2]["json_data"] == {
+        "path": "bin/agent",
+        "sha256": "sha256:file",
+        "mode": "0755",
+        "offset": 3,
+        "data": "YWJj",
+        "final": True,
+    }
+    assert calls[1][2]["request_timeout"] == 20.0
+    assert calls[2][2]["json_data"] == {
+        "bundle_hash": "sha256:abc",
+        "confirm": "update_agent",
+    }
+    assert calls[3][2]["json_data"] == {"confirm": "normalize_config"}
+    assert calls[4][2]["json_data"] == {
+        "confirm": "ensure_homeassistant_user",
+        "account_label": "Home Assistant Test",
+    }
+
+
 def test_display_bridge_callback_fingerprint_is_stable() -> None:
     assert display_bridge_callback_fingerprint(
         True,
@@ -282,6 +641,52 @@ def test_agent_http_error_includes_safe_error_name() -> None:
                 shared_secret="shared-secret",
             )
         )
+
+
+@pytest.mark.parametrize(
+    "response_text",
+    [
+        "not json",
+        "[]",
+        '{"message": "   "}',
+    ],
+)
+def test_agent_http_error_omits_unusable_detail(response_text: str) -> None:
+    session = _FakeSession(response_text, response_status=500)
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(
+        C300XAgentApiConnectionError,
+        match="device agent returned HTTP 500$",
+    ):
+        asyncio.run(api.async_state())
+
+
+def test_agent_http_error_compacts_long_detail() -> None:
+    session = _FakeSession(
+        '{"ok": false, "error": "'
+        "very "
+        + ("long " * 40)
+        + 'error"}',
+        response_status=500,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError) as err:
+        asyncio.run(api.async_state())
+
+    message = str(err.value)
+    assert message.startswith("device agent returned HTTP 500: very long")
+    assert message.endswith("...")
+    assert "\n" not in message
 
 
 def test_mqtt_status_uses_maintenance_endpoint_and_hides_broker_secret() -> None:
@@ -992,7 +1397,10 @@ def test_firewall_status_uses_maintenance_endpoint() -> None:
         maintenance_token="maintenance-token",
     )
 
-    assert asyncio.run(api.async_firewall_status())["patched"] is True
+    status = asyncio.run(api.async_firewall_status())
+
+    assert isinstance(status, FirewallStatus)
+    assert status["patched"] is True
     request = session.requests[0]
     assert request["args"] == (
         "GET",
@@ -1049,7 +1457,10 @@ def test_ipv6_firewall_methods_use_separate_maintenance_endpoint() -> None:
         maintenance_token="maintenance-token",
     )
 
-    assert asyncio.run(api.async_ipv6_firewall_status())["family"] == "ipv6"
+    status = asyncio.run(api.async_ipv6_firewall_status())
+
+    assert isinstance(status, FirewallStatus)
+    assert status["family"] == "ipv6"
     assert asyncio.run(api.async_apply_ipv6_firewall())["patched"] is True
     assert asyncio.run(api.async_restore_ipv6_firewall())["patched"] is True
     assert [request["args"] for request in session.requests] == [
@@ -1185,7 +1596,10 @@ def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_diagnostics())["agent_write_count"] == 2
+    status = asyncio.run(api.async_diagnostics())
+
+    assert isinstance(status, AgentDiagnosticsStatus)
+    assert status["agent_write_count"] == 2
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/diagnostics",
@@ -1198,7 +1612,7 @@ def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
 def test_device_user_status_requests_read_only_endpoint() -> None:
     session = _FakeSession(
         '{"ok": true, "supported": true, "homeassistant_user_present": false, '
-        '"app_user_present": true, "media_identity_available": true, '
+        '"fallback_user_present": true, "media_identity_available": true, '
         '"routes_consistent": false}'
     )
     api = C300XAgentApi(
@@ -1211,7 +1625,7 @@ def test_device_user_status_requests_read_only_endpoint() -> None:
 
     assert status["supported"] is True
     assert status["homeassistant_user_present"] is False
-    assert status["app_user_present"] is True
+    assert status["fallback_user_present"] is True
     assert status["media_identity_available"] is True
     assert status["routes_consistent"] is False
     assert session.requests[0]["args"] == (
@@ -1221,6 +1635,37 @@ def test_device_user_status_requests_read_only_endpoint() -> None:
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
     }
+
+
+def test_self_test_requests_read_only_endpoint() -> None:
+    session = _FakeSession(
+        '{"api_version":"1.1","agent_version":"1.2.0","firmware_family":"1.7.x",'
+        '"ok":false,"checks":{"startup":{"ok":false,"reason":"startup_link_missing"}}}'
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    status = asyncio.run(api.async_self_test())
+
+    assert isinstance(status, SelfTestStatus)
+    assert status.ok is False
+    assert status.checks["startup"].reason == "startup_link_missing"
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/self-test",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+    assert session.requests[0]["kwargs"]["timeout"] == 2.0
+
+
+def test_normalize_self_test_rejects_non_object() -> None:
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_self_test([])
 
 
 def test_ensure_homeassistant_user_sends_maintenance_confirmation() -> None:
@@ -1349,9 +1794,10 @@ def test_doorbell_video_status_uses_reference_status_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_doorbell_video_status())["stream_path"] == (
-        "/doorbell-video"
-    )
+    status = asyncio.run(api.async_doorbell_video_status())
+
+    assert isinstance(status, DoorbellVideoStatus)
+    assert status["stream_path"] == "/doorbell-video"
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/video/doorbell/status",
@@ -1420,6 +1866,7 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
 
     status = asyncio.run(api.async_doorbell_call_status())
 
+    assert isinstance(status, RingCallStatus)
     assert status["active"] is True
     assert status["can_answer"] is True
     assert status["capture_supported"] is False
@@ -1438,7 +1885,7 @@ def test_answer_doorbell_call_requests_authenticated_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_answer_doorbell_call(audio=True)) == {
+    assert asyncio.run(api.async_answer_doorbell_call()) == {
         "ok": True,
         "audio": True,
         "answer_requested": True,
@@ -1450,7 +1897,7 @@ def test_answer_doorbell_call_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
     }
-    assert session.requests[0]["kwargs"]["json"] == {"audio": True}
+    assert session.requests[0]["kwargs"]["json"] is None
 
 
 def test_hangup_doorbell_call_requests_authenticated_endpoint() -> None:
@@ -1503,7 +1950,10 @@ def test_home_call_status_requests_authenticated_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_home_call_status())["target_audio_port"] == 41528
+    status = asyncio.run(api.async_home_call_status())
+
+    assert isinstance(status, HomeCallStatus)
+    assert status["target_audio_port"] == 41528
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/calls/home/status",
@@ -1556,6 +2006,17 @@ def test_stop_home_call_requests_authenticated_endpoint() -> None:
 def test_normalize_ssh_status_accepts_running_flag() -> None:
     assert normalize_ssh_status({"running": "true"})["running"] is True
     assert normalize_ssh_status({"enabled": False})["running"] is False
+    assert normalize_ssh_status({"running": "disabled"})["running"] is False
+    assert normalize_ssh_status({"running": "maybe"}) == {
+        "running": None,
+        "enabled": None,
+        "raw": {"running": "maybe"},
+    }
+    assert normalize_ssh_status({"raw": "missing"}) == {
+        "running": None,
+        "enabled": None,
+        "raw": {"raw": "missing"},
+    }
 
 
 def test_normalize_qml_patch_status_derives_state() -> None:
@@ -1571,6 +2032,23 @@ def test_normalize_qml_patch_status_derives_state() -> None:
         "raw": {"patched": True},
     }
     assert normalize_qml_patch_status({"state": "original"})["patched"] is False
+    assert normalize_qml_patch_status({"state": "applied"})["patched"] is True
+    assert normalize_qml_patch_status({"state": "restored"})["patched"] is False
+    assert normalize_qml_patch_status({"patched": False})["state"] == "original"
+    assert normalize_qml_patch_status({})["state"] == "unknown"
+    detailed = normalize_qml_patch_status(
+        {
+            "state": "patched",
+            "core_patched": "yes",
+            "backup_available": "no",
+            "core_backup_available": "bad",
+            "gui_running": "enabled",
+        }
+    )
+    assert detailed["core_patched"] is True
+    assert detailed["backup_available"] is False
+    assert detailed["core_backup_available"] is None
+    assert detailed["gui_running"] is True
     partial = normalize_qml_patch_status({"state": "partial", "patched": None})
     assert partial["state"] == "partial"
     assert partial["patched"] is None
@@ -1593,6 +2071,7 @@ def test_normalize_firewall_status_derives_patched_state() -> None:
     }
     assert normalize_firewall_status({"state": "missing"})["patched"] is False
     assert normalize_firewall_status({"state": "partial"})["patched"] is None
+    assert normalize_firewall_status({"api_port": "bad"})["api_port"] is None
 
 
 def test_normalize_auth_config_status_accepts_camel_case_no_auth() -> None:
@@ -1609,7 +2088,7 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "supported": True,
         "domain_present": True,
         "c300x_user_present": True,
-        "app_user_present": False,
+        "fallback_user_present": False,
         "homeassistant_user_present": True,
         "accounts_homeassistant_present": True,
         "route_int_homeassistant_present": True,
@@ -1639,7 +2118,7 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "supported": True,
         "domain_present": True,
         "c300x_user_present": True,
-        "app_user_present": False,
+        "fallback_user_present": False,
         "homeassistant_user_present": True,
         "accounts_homeassistant_present": True,
         "route_int_homeassistant_present": True,
@@ -1892,6 +2371,37 @@ def test_normalize_memo_id_rejects_paths_or_unknown_kind() -> None:
             normalize_memo_id(value)
 
 
+@pytest.mark.parametrize(
+    ("normalizer", "message"),
+    [
+        (normalize_doorbell_video, "doorbell video"),
+        (normalize_doorbell_call, "doorbell call"),
+        (normalize_home_call, "home call"),
+        (normalize_activations, "activations"),
+        (normalize_system_metrics, "system metrics"),
+        (normalize_agent_diagnostics, "diagnostics"),
+        (normalize_device_user_status, "device user status"),
+        (normalize_auth_config_status, "auth config"),
+        (normalize_ssh_status, "SSH status"),
+        (normalize_qml_patch_status, "QML patch status"),
+        (normalize_firewall_status, "firewall status"),
+        (normalize_mqtt_status, "MQTT status"),
+        (normalize_legacy_mqtt_status, "legacy MQTT status"),
+        (normalize_smartphone_forwarding, "smartphone-forwarding"),
+        (normalize_ringer, "ringer"),
+        (normalize_answering_machine, "answering-machine"),
+        (normalize_answering_machine_messages, "answering-machine messages"),
+        (normalize_memos, "memos"),
+    ],
+)
+def test_normalizers_reject_non_object_payloads(
+    normalizer: Callable[[object], object],
+    message: str,
+) -> None:
+    with pytest.raises(C300XAgentApiResponseError, match=message):
+        normalizer([])
+
+
 def test_normalize_video_message_id_rejects_paths() -> None:
     assert normalize_video_message_id("message-1_2") == "message-1_2"
     for value in ("", "../message_1", "message/1", "message 1"):
@@ -1918,6 +2428,115 @@ def test_smartphone_forwarding_cached_status_uses_agent_state_endpoint() -> None
         "GET",
         "http://agent.local:8080/api/v1/state",
     )
+
+
+def test_normalize_smartphone_forwarding_mode_accepts_known_values() -> None:
+    assert normalize_smartphone_forwarding_mode(" Enabled ") == "enabled"
+
+
+def test_smartphone_forwarding_status_falls_back_to_state_endpoint() -> None:
+    session = _QueuedSession(
+        [
+            (404, '{"error": "not_found"}'),
+            (200, '{"state": {"smartphone_forwarding": "enabled"}}'),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_smartphone_forwarding_status())["state"] == "enabled"
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/smartphone-forwarding"),
+        ("GET", "http://agent.local:8080/api/v1/state"),
+    ]
+
+
+def test_state_returns_empty_dict_for_non_object_agent_state() -> None:
+    session = _FakeSession("[]")
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_state()) == {}
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/state",
+    )
+
+
+def test_ringer_status_falls_back_to_state_endpoint() -> None:
+    session = _QueuedSession(
+        [
+            (500, '{"error": "ringer_unavailable"}'),
+            (200, '{"state": {"ringer_muted": true}}'),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_ringer_status())["muted"] is True
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/ringer"),
+        ("GET", "http://agent.local:8080/api/v1/state"),
+    ]
+
+
+def test_answering_machine_status_falls_back_to_state_endpoint() -> None:
+    session = _QueuedSession(
+        [
+            (500, '{"error": "answering_machine_unavailable"}'),
+            (200, '{"state": {"answering_machine_enabled": false}}'),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_answering_machine_status())["enabled"] is False
+    assert [request["args"] for request in session.requests] == [
+        ("GET", "http://agent.local:8080/api/v1/answering-machine"),
+        ("GET", "http://agent.local:8080/api/v1/state"),
+    ]
+
+
+def test_ringer_and_answering_machine_setters_post_payloads() -> None:
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+    calls: list[tuple[str, str, dict[str, object]]] = []
+
+    async def request_json(
+        method: str,
+        path: str,
+        **request_kwargs: object,
+    ) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        if path == "/api/v1/ringer":
+            return {"muted": request_kwargs["json_data"]["muted"]}  # type: ignore[index]
+        return {"enabled": request_kwargs["json_data"]["enabled"]}  # type: ignore[index]
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    assert asyncio.run(api.async_set_ringer_muted(True))["muted"] is True
+    assert asyncio.run(api.async_set_answering_machine_enabled(False))[
+        "enabled"
+    ] is False
+    assert calls == [
+        ("POST", "/api/v1/ringer", {"json_data": {"muted": True}}),
+        ("POST", "/api/v1/answering-machine", {"json_data": {"enabled": False}}),
+    ]
 
 
 def test_normalize_stair_light_address_accepts_address() -> None:
@@ -1954,9 +2573,15 @@ def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
         {
             "supported": True,
             "items": [
+                [],
                 {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
                 {"id": "broken/path", "name": "Broken", "executable": True},
-                {"id": "unknown", "name": "Unknown", "type": "bad"},
+                {
+                    "id": "unknown",
+                    "name": "Unknown",
+                    "type": "bad",
+                    "addressMode": "bad",
+                },
             ],
         }
     ) == {
@@ -1986,9 +2611,15 @@ def test_normalize_activations_hides_incomplete_or_invalid_items() -> None:
         "raw": {
             "supported": True,
             "items": [
+                [],
                 {"id": "scene_1", "name": "", "type": "scenario", "executable": True},
                 {"id": "broken/path", "name": "Broken", "executable": True},
-                {"id": "unknown", "name": "Unknown", "type": "bad"},
+                {
+                    "id": "unknown",
+                    "name": "Unknown",
+                    "type": "bad",
+                    "addressMode": "bad",
+                },
             ],
         },
     }
@@ -2184,11 +2815,21 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
             "home_assistant_last_seen_at": "1770000010",
             "ui_event_revision": "7",
             "video_running": True,
+            "video_rtsp_server_running": True,
             "video_media_starting": False,
             "video_call_active": True,
             "video_clients": "1",
+            "video_bridge_running": True,
+            "video_bridge_media_active": True,
+            "video_bridge_stop_in_progress": False,
             "video_bridge_open_fds": "5",
             "video_bridge_active_threads": "2",
+            "ring_receiver_running": True,
+            "ring_registered": True,
+            "ring_call_active": False,
+            "ring_media_active": False,
+            "home_call_running": False,
+            "home_call_active": False,
             "flexisip_backup_available": True,
             "flexisip_restart_marker": False,
             "flexisip_backup_marker": True,
@@ -2219,11 +2860,21 @@ def test_normalize_agent_diagnostics_removes_unusable_values() -> None:
     assert normalized["home_assistant_last_seen_at"] == 1770000010
     assert normalized["ui_event_revision"] == 7
     assert normalized["video_running"] is True
+    assert normalized["video_rtsp_server_running"] is True
     assert normalized["video_media_starting"] is False
     assert normalized["video_call_active"] is True
     assert normalized["video_clients"] == 1
+    assert normalized["video_bridge_running"] is True
+    assert normalized["video_bridge_media_active"] is True
+    assert normalized["video_bridge_stop_in_progress"] is False
     assert normalized["video_bridge_open_fds"] == 5
     assert normalized["video_bridge_active_threads"] == 2
+    assert normalized["ring_receiver_running"] is True
+    assert normalized["ring_registered"] is True
+    assert normalized["ring_call_active"] is False
+    assert normalized["ring_media_active"] is False
+    assert normalized["home_call_running"] is False
+    assert normalized["home_call_active"] is False
     assert normalized["flexisip_backup_available"] is True
     assert normalized["flexisip_restart_marker"] is False
     assert normalized["flexisip_backup_marker"] is True
@@ -2253,6 +2904,22 @@ def test_normalize_smartphone_forwarding_from_numeric_agent_state() -> None:
         "mode": 2,
         "state": "blocked",
         "raw": {"state": {"smartphone_forwarding": 2}},
+    }
+
+
+def test_normalize_smartphone_forwarding_handles_missing_agent_state() -> None:
+    assert normalize_smartphone_forwarding({"state": {}}) == {
+        "mode": None,
+        "state": "unknown",
+        "raw": {"state": {}},
+    }
+
+
+def test_normalize_smartphone_forwarding_accepts_legacy_enabled_flag() -> None:
+    assert normalize_smartphone_forwarding({"enabled": False, "raw": "legacy"}) == {
+        "mode": 2,
+        "state": "blocked",
+        "raw": "legacy",
     }
 
 
@@ -2311,6 +2978,24 @@ def test_normalize_ringer_accepts_string_state() -> None:
         "muted": False,
         "raw": {"state": {"ringer_muted": "off"}},
     }
+    assert normalize_ringer({"muted": "muted"}) == {
+        "muted": True,
+        "raw": {"muted": "muted"},
+    }
+
+
+def test_normalize_ringer_accepts_unknown_state() -> None:
+    assert normalize_ringer({"muted": None, "raw": "state"}) == {
+        "muted": None,
+        "raw": "state",
+    }
+
+
+def test_normalize_ringer_treats_unknown_string_as_boolean() -> None:
+    assert normalize_ringer({"muted": "unknown"}) == {
+        "muted": True,
+        "raw": {"muted": "unknown"},
+    }
 
 
 def test_normalize_answering_machine_from_agent_state() -> None:
@@ -2331,6 +3016,12 @@ def test_normalize_answering_machine_from_command_response() -> None:
         "status_fields": [],
         "raw": "*#8**40*0*0##",
     }
+    assert normalize_answering_machine({"enabled": "disabled"}) == {
+        "enabled": False,
+        "greeting_message_enabled": None,
+        "status_fields": [],
+        "raw": {"enabled": "disabled"},
+    }
 
 
 def test_normalize_answering_machine_keeps_greeting_status() -> None:
@@ -2346,6 +3037,24 @@ def test_normalize_answering_machine_keeps_greeting_status() -> None:
         "greeting_message_enabled": False,
         "status_fields": ["1", "0", "0153", "1", "25"],
         "raw": "*#8**40*1*0*0153*1*25##",
+    }
+
+
+def test_normalize_answering_machine_accepts_unknown_state() -> None:
+    assert normalize_answering_machine({"enabled": None}) == {
+        "enabled": None,
+        "greeting_message_enabled": None,
+        "status_fields": [],
+        "raw": {"enabled": None},
+    }
+
+
+def test_normalize_answering_machine_treats_unknown_string_as_boolean() -> None:
+    assert normalize_answering_machine({"enabled": "unknown"}) == {
+        "enabled": True,
+        "greeting_message_enabled": None,
+        "status_fields": [],
+        "raw": {"enabled": "unknown"},
     }
 
 
@@ -2410,6 +3119,32 @@ def test_normalize_answering_machine_messages() -> None:
                 }
             ],
         },
+    }
+
+
+def test_normalize_answering_machine_messages_drops_invalid_entries() -> None:
+    assert normalize_answering_machine_messages(
+        {"messages": [[], {"id": ""}, {"id": "message_1"}]}
+    ) == {
+        "available": True,
+        "total": 1,
+        "unread": 0,
+        "read": 0,
+        "newest_at": None,
+        "messages": [
+            {
+                "id": "message_1",
+                "read": None,
+                "date": None,
+                "unix_time": None,
+                "iso_time": None,
+                "has_thumbnail": False,
+                "has_video": False,
+                "media_mime_type": None,
+                "media_size": None,
+            }
+        ],
+        "raw": {"messages": [[], {"id": ""}, {"id": "message_1"}]},
     }
 
 
@@ -2516,5 +3251,50 @@ def test_normalize_memos() -> None:
                     "audio_size": "12",
                 },
             ],
+        },
+    }
+
+
+def test_normalize_memos_drops_invalid_entries_and_counts_remaining() -> None:
+    assert normalize_memos(
+        {
+            "memos": [
+                [],
+                {"id": "", "kind": "text"},
+                {"id": "video/memo_1", "kind": "video"},
+                {"id": "text/memo_1", "kind": "text"},
+            ]
+        }
+    ) == {
+        "available": True,
+        "total": 1,
+        "text_total": 1,
+        "voice_total": 0,
+        "unread": 0,
+        "read": 0,
+        "newest_at": None,
+        "memos": [
+            {
+                "id": "text/memo_1",
+                "kind": "text",
+                "read": None,
+                "date": None,
+                "unix_time": None,
+                "iso_time": None,
+                "has_text": False,
+                "has_audio": False,
+                "audio_mime_type": None,
+                "audio_size": None,
+                "text": None,
+                "text_truncated": False,
+            }
+        ],
+        "raw": {
+            "memos": [
+                [],
+                {"id": "", "kind": "text"},
+                {"id": "video/memo_1", "kind": "video"},
+                {"id": "text/memo_1", "kind": "text"},
+            ]
         },
     }

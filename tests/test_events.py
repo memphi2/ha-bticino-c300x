@@ -294,9 +294,9 @@ class _FakeBus:
 
         return _cancel
 
-    def fire(self, event_type: str) -> None:
+    def fire(self, event_type: str, data: dict[str, Any] | None = None) -> None:
         for callback in list(self.listeners.get(event_type, [])):
-            callback(types.SimpleNamespace(event_type=event_type, data={}))
+            callback(types.SimpleNamespace(event_type=event_type, data=data or {}))
 
 
 @dataclass
@@ -540,45 +540,57 @@ def test_filter_events_for_active_entities_keeps_metric_event_for_active_metric_
                 ("sensor", "device_cpu"),
                 ("sensor", "device_load"),
                 ("sensor", "device_temperature"),
+                ("camera", "doorbell_camera"),
             }
         ),
     ) == ["system.metrics_changed"]
 
 
-def test_filter_events_for_active_entities_skips_metric_event_when_sensors_disabled() -> None:
-    assert (
-        _filter_events_for_active_entities(
-            ["system.metrics_changed"],
-            "entry-1",
-            _FakeEntityRegistry(
-                disabled={
-                    ("sensor", "device_cpu"),
-                    ("sensor", "device_load"),
-                    ("sensor", "device_memory"),
-                    ("sensor", "device_temperature"),
-                }
-            ),
-        )
-        == []
-    )
+def test_filter_events_for_active_entities_keeps_metric_event_for_active_camera_watchdog() -> None:
+    assert _filter_events_for_active_entities(
+        ["system.metrics_changed"],
+        "entry-1",
+        _FakeEntityRegistry(
+            disabled={
+                ("sensor", "device_cpu"),
+                ("sensor", "device_load"),
+                ("sensor", "device_memory"),
+                ("sensor", "device_temperature"),
+            }
+        ),
+    ) == ["system.metrics_changed"]
 
 
-def test_filter_events_for_active_entities_skips_missing_default_disabled_metrics() -> None:
-    assert (
-        _filter_events_for_active_entities(
-            ["system.metrics_changed"],
-            "entry-1",
-            _FakeEntityRegistry(
-                missing={
-                    ("sensor", "device_cpu"),
-                    ("sensor", "device_load"),
-                    ("sensor", "device_memory"),
-                    ("sensor", "device_temperature"),
-                }
-            ),
-        )
-        == []
-    )
+def test_filter_events_for_active_entities_keeps_metric_event_for_safety_watchdog() -> None:
+    assert _filter_events_for_active_entities(
+        ["system.metrics_changed"],
+        "entry-1",
+        _FakeEntityRegistry(
+            disabled={
+                ("camera", "doorbell_camera"),
+                ("sensor", "device_cpu"),
+                ("sensor", "device_load"),
+                ("sensor", "device_memory"),
+                ("sensor", "device_temperature"),
+            }
+        ),
+    ) == ["system.metrics_changed"]
+
+
+def test_filter_events_for_active_entities_keeps_missing_metrics_for_safety_watchdog() -> None:
+    assert _filter_events_for_active_entities(
+        ["system.metrics_changed"],
+        "entry-1",
+        _FakeEntityRegistry(
+            missing={
+                ("camera", "doorbell_camera"),
+                ("sensor", "device_cpu"),
+                ("sensor", "device_load"),
+                ("sensor", "device_memory"),
+                ("sensor", "device_temperature"),
+            }
+        ),
+    ) == ["system.metrics_changed"]
 
 
 def test_filter_events_for_active_entities_skips_missing_default_disabled_diagnostics() -> None:
@@ -1088,6 +1100,72 @@ def test_event_registration_recomputes_when_entity_registry_changes() -> None:
         ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
     ]
     assert api.delete_calls == ["sub-a"]
+
+
+def test_event_registration_ignores_unrelated_entity_registry_changes() -> None:
+    api = _FakeApi(
+        [{"subscription": {"id": "sub-a"}}],
+        subscription_lists=[
+            [],
+            [
+                {
+                    "id": "sub-a",
+                    "callback_url": "http://localhost:8123/webhook/event-hook",
+                    "token_fingerprint": event_token_fingerprint("event-token"),
+                    "events": ["agent.restarted"],
+                }
+            ],
+        ],
+    )
+    hass = _FakeHass()
+    fake_dispatcher.signals.clear()
+    fake_scheduler.reset()
+    active_event_sets = [["agent.restarted"], []]
+    original_active_events = events_module._active_events_for_capabilities
+    events_module._active_events_for_capabilities = lambda *args: active_event_sets.pop(0)
+    try:
+        async def run() -> None:
+            unregister = await async_start_agent_event_registration(
+                hass,
+                _FakeEntry(),  # type: ignore[arg-type]
+                api,
+                {},
+                _FakeConnectionState(),
+            )
+            await asyncio.sleep(0)
+            assert unregister is not None
+            hass.bus.fire(
+                "entity_registry_updated",
+                {"platform": "other_domain", "config_entry_id": "other-entry"},
+            )
+            assert not [
+                call
+                for call in fake_scheduler.calls
+                if call.delay == events_module._ENTITY_REGISTRY_REFRESH_SECONDS
+                and not call.canceled
+            ]
+            hass.bus.fire(
+                "entity_registry_updated",
+                {"platform": "bticino_c300x", "config_entry_id": "entry-1"},
+            )
+            refresh_calls = [
+                call
+                for call in fake_scheduler.calls
+                if call.delay == events_module._ENTITY_REGISTRY_REFRESH_SECONDS
+                and not call.canceled
+            ]
+            assert len(refresh_calls) == 1
+            await refresh_calls[0].callback()
+            await asyncio.sleep(0)
+            unregister()
+
+        asyncio.run(run())
+    finally:
+        events_module._active_events_for_capabilities = original_active_events
+
+    assert api.subscription_calls == [
+        ("http://localhost:8123/webhook/event-hook", "event-token", ["agent.restarted"]),
+    ]
 
 
 def test_async_start_agent_event_registration_updates_token_mismatch() -> None:

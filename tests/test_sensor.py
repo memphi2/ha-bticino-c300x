@@ -157,6 +157,14 @@ class _FakeApi:
         self.answering_machine_messages_calls = 0
         self.memos_calls = 0
         self.diagnostics_calls = 0
+        self.doorbell_video_status_calls = 0
+        self.doorbell_video_status: dict[str, Any] = {
+            "available": True,
+            "media_owner": "idle",
+            "window_available": False,
+            "external_media_active": False,
+            "bridge": {"clients": 0},
+        }
 
     async def async_system_metrics(self) -> dict[str, Any]:
         self.metrics_calls += 1
@@ -271,20 +279,37 @@ class _FakeApi:
             "home_assistant_last_seen_at": 1770000010,
             "ui_event_revision": 7,
             "video_running": False,
+            "video_rtsp_server_running": True,
             "video_media_starting": False,
             "video_call_active": False,
             "video_clients": 0,
+            "video_bridge_running": True,
+            "video_bridge_media_active": False,
+            "video_bridge_stop_in_progress": False,
             "video_bridge_open_fds": 1,
             "video_bridge_active_threads": 1,
+            "ring_receiver_running": False,
+            "ring_registered": False,
+            "ring_call_active": False,
+            "ring_media_active": False,
+            "home_call_running": False,
+            "home_call_active": False,
             "raw": {},
         }
 
     async def async_state(self) -> dict[str, Any]:
         return {"doorbell": "view_requested"}
 
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.doorbell_video_status_calls += 1
+        return self.doorbell_video_status
+
 
 class _FakeHass:
     data: dict[str, Any] = {}
+
+    def __init__(self) -> None:
+        self.bus = types.SimpleNamespace(async_listen=lambda *_args: (lambda: None))
 
     def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
         return asyncio.create_task(coro)
@@ -328,6 +353,8 @@ class _FakeRuntimeData:
     memos_refresh_task: asyncio.Task[Any] | None = None
     agent_diagnostics: dict[str, Any] = field(default_factory=dict)
     agent_diagnostics_updated_at: Any = None
+    agent_diagnostics_updated_by: str | None = None
+    agent_diagnostics_change_reason: str | None = None
     agent_update_state: Any = None
 
 
@@ -391,7 +418,16 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
         "reconnect_count": 0,
+        "media_watchdog_trigger_count": 0,
     }
+
+
+def test_agent_status_sensor_reports_media_watchdog_trigger_count() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.agent_cpu_watchdog = types.SimpleNamespace(trigger_count=3)
+    entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.extra_state_attributes["media_watchdog_trigger_count"] == 3
 
 
 def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
@@ -419,11 +455,21 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
                 "home_assistant_last_seen_at": 1770000010,
                 "ui_event_revision": 7,
                 "video_running": False,
+                "video_rtsp_server_running": True,
                 "video_media_starting": True,
                 "video_call_active": True,
                 "video_clients": 1,
+                "video_bridge_running": True,
+                "video_bridge_media_active": True,
+                "video_bridge_stop_in_progress": False,
                 "video_bridge_open_fds": 2,
                 "video_bridge_active_threads": 1,
+                "ring_receiver_running": True,
+                "ring_registered": True,
+                "ring_call_active": False,
+                "ring_media_active": False,
+                "home_call_running": False,
+                "home_call_active": False,
                 "flexisip_backup_available": True,
                 "flexisip_restart_marker": True,
                 "flexisip_backup_marker": False,
@@ -434,12 +480,21 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
 
     assert entity._attr_entity_registry_enabled_default is False
+    assert entity._attr_device_class == "enum"
+    assert entity.native_value == "doorbell_call_active"
     assert entity.extra_state_attributes == {
+        "status_reason": "native_doorbell_call_active",
+        "change_reason": None,
+        "updated_at": None,
+        "updated_by": None,
         "agent_write_count": 2,
         "last_write_at": 1770000000,
         "last_write_reason": "updated",
         "last_write_class": "config",
         "qml_patch_last_action": None,
+        "media_watchdog_trigger_count": 0,
+        "media_watchdog_last_reason": None,
+        "media_watchdog_last_percent": None,
         "last_wake_reason": "api",
         "loop_iterations": 10,
         "poll_wakeups": 4,
@@ -459,16 +514,132 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
         "home_assistant_last_seen_at": 1770000010,
         "ui_event_revision": 7,
         "video_running": False,
+        "video_rtsp_server_running": True,
         "video_media_starting": True,
         "video_call_active": True,
         "video_clients": 1,
+        "video_bridge_running": True,
+        "video_bridge_media_active": True,
+        "video_bridge_stop_in_progress": False,
         "video_bridge_open_fds": 2,
         "video_bridge_active_threads": 1,
+        "ring_receiver_running": True,
+        "ring_registered": True,
+        "ring_call_active": False,
+        "ring_media_active": False,
+        "home_call_running": False,
+        "home_call_active": False,
         "flexisip_backup_available": True,
         "flexisip_restart_marker": True,
         "flexisip_backup_marker": False,
         "flexisip_reference_state": "legacy_mqtt_patch",
     }
+
+
+def test_agent_diagnostics_sensor_reports_idle_despite_historical_writes() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_write_count": 2,
+                "last_write_at": 1770000000,
+                "last_write_reason": "updated",
+                "last_write_class": "config",
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_clients": 0,
+                "video_bridge_open_fds": 0,
+                "video_bridge_active_threads": 0,
+            },
+        )
+    )
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "idle"
+    assert entity.extra_state_attributes["status_reason"] == "native_agent_idle"
+    assert entity.extra_state_attributes["agent_write_count"] == 2
+
+
+def test_agent_diagnostics_sensor_reports_installation_and_subscription_issues() -> None:
+    repair_entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": False,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+            },
+        )
+    )
+    repair_entity = C300XAgentDiagnosticsSensor(repair_entry)  # type: ignore[arg-type]
+
+    assert repair_entity.native_value == "repair_required"
+    assert repair_entity.extra_state_attributes["status_reason"] == (
+        "agent_installation_needs_repair"
+    )
+
+    subscription_entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 0,
+                "home_assistant_connected_this_run": True,
+            },
+        )
+    )
+    subscription_entity = C300XAgentDiagnosticsSensor(subscription_entry)  # type: ignore[arg-type]
+
+    assert subscription_entity.native_value == "subscription_missing"
+    assert subscription_entity.extra_state_attributes["status_reason"] == (
+        "ha_event_subscription_missing"
+    )
+
+
+def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> None:
+    offline_entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            connection_state=_FakeConnectionState(available=False),
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+            },
+        )
+    )
+    offline_entity = C300XAgentDiagnosticsSensor(offline_entry)  # type: ignore[arg-type]
+
+    assert offline_entity.native_value == "agent_offline"
+    assert offline_entity.extra_state_attributes["status_reason"] == (
+        "agent_connection_unavailable"
+    )
+
+    watchdog_entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+            },
+        )
+    )
+    watchdog_entry.runtime_data.agent_cpu_watchdog = types.SimpleNamespace(
+        tripped=True,
+        trigger_count=2,
+        last_reason="agent_cpu_high_95.0_percent_300s",
+        last_percent=95.0,
+    )
+    watchdog_entity = C300XAgentDiagnosticsSensor(watchdog_entry)  # type: ignore[arg-type]
+
+    assert watchdog_entity.native_value == "media_watchdog_tripped"
+    assert watchdog_entity.extra_state_attributes["status_reason"] == (
+        "sustained_high_cpu_media_watchdog"
+    )
+    assert watchdog_entity.extra_state_attributes["media_watchdog_trigger_count"] == 2
+    assert watchdog_entity.extra_state_attributes["media_watchdog_last_percent"] == 95.0
 
 
 def test_agent_status_sensor_reports_connection_errors() -> None:
@@ -559,13 +730,18 @@ def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
             )
         )
         entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()  # type: ignore[assignment]
 
         await entity.async_update()
 
         attrs = entity.extra_state_attributes
         assert entry.runtime_data.api.diagnostics_calls == 1
+        assert entity.native_value == "media_resources_open"
         assert attrs["agent_write_count"] == 2
         assert attrs["last_write_reason"] == "updated"
+        assert attrs["change_reason"] == "api_refresh"
+        assert attrs["updated_at"] == entry.runtime_data.agent_diagnostics_updated_at
+        assert attrs["updated_by"] == "api_refresh"
         assert attrs["qml_patch_last_action"] == "apply"
         assert attrs["accepted_clients"] == 3
         assert attrs["video_running"] is False
@@ -891,6 +1067,51 @@ def test_doorbell_state_sensor_does_not_infer_state_from_runtime_video_window() 
     entity._state = "idle"
 
     assert entity.native_value == "idle"
+
+
+def test_doorbell_state_sensor_initializes_idle_from_agent_media_state() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.native_value == "idle"
+    assert entry.runtime_data.api.doorbell_video_status_calls == 1
+    assert entity.available is True
+
+
+def test_doorbell_state_sensor_writes_initial_idle_when_added_to_hass() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
+
+    asyncio.run(entity.async_added_to_hass())
+
+    assert entity.native_value == "idle"
+    assert entity.wrote_state is True
+    assert entry.runtime_data.api.doorbell_video_status_calls == 1
+
+
+def test_doorbell_state_sensor_does_not_clear_active_ring_from_status_refresh() -> None:
+    api = _FakeApi()
+    api.doorbell_video_status = {
+        "available": True,
+        "media_owner": "ring",
+        "window_available": True,
+        "bridge": {
+            "ring_call_active": True,
+            "ring_media_active": True,
+            "unanswered_ring_call": True,
+        },
+    }
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity._state = "ringing"
+
+    asyncio.run(entity.async_update())
+
+    assert entity.native_value == "ringing"
+    assert entry.runtime_data.api.doorbell_video_status_calls == 1
 
 
 def test_doorbell_state_accepts_only_agent_canonical_values() -> None:

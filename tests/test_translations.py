@@ -37,6 +37,29 @@ def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
         assert set(DOORBELL_STATES) <= set(translated_states)
 
 
+def test_smartphone_forwarding_select_translates_internal_options() -> None:
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        translated_states = _path_value(
+            _load_json(path),
+            "entity",
+            "select",
+            "smartphone_forwarding_mode",
+            "state",
+        )
+        assert {
+            "enabled",
+            "in-house-only",
+            "blocked",
+        } <= set(translated_states)
+        assert translated_states["in-house-only"] != "in-house-only"
+
+
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
     """Validate HA can render the agent-update repair flow."""
 

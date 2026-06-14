@@ -119,6 +119,7 @@ from custom_components.bticino_c300x.button import (
     C300XRemoveAgentButton,
     C300XRestartAgentButton,
     C300XStopDoorbellVideoButton,
+    _activation_icon,
     async_setup_entry,
 )
 from custom_components.bticino_c300x.capabilities import (
@@ -165,6 +166,7 @@ class _FakeMemoApi:
         self.firewall_actions: list[str] = []
         self.activation_calls: list[str] = []
         self.remove_agent_calls = 0
+        self.reboot_calls = 0
         self.restart_agent_calls = 0
         self.reload_gui_calls = 0
         self.stop_video_calls = 0
@@ -314,6 +316,10 @@ class _FakeMemoApi:
     async def async_restart_agent(self) -> dict[str, Any]:
         self.restart_agent_calls += 1
         return {"ok": True, "action": "restart_agent", "scheduled": True}
+
+    async def async_reboot(self) -> dict[str, Any]:
+        self.reboot_calls += 1
+        return {"ok": True, "action": "reboot", "scheduled": True}
 
     async def async_apply_firewall(self) -> dict[str, Any]:
         self.firewall_actions.append("apply")
@@ -793,6 +799,26 @@ def test_restart_agent_button_calls_maintenance_api() -> None:
         assert api.restart_agent_calls == 1
 
     asyncio.run(_run())
+
+
+def test_reboot_button_calls_maintenance_api() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        button = C300XRebootButton(entry)  # type: ignore[arg-type]
+
+        await button.async_press()
+
+        assert api.reboot_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_activation_icon_maps_known_and_unknown_types() -> None:
+    assert _activation_icon("light") == "mdi:lightbulb-on"
+    assert _activation_icon("stair_light") == "mdi:lightbulb-on"
+    assert _activation_icon("scenario") == "mdi:play-box"
+    assert _activation_icon("unknown") == "mdi:gesture-tap-button"
 
 
 def test_memo_delete_support_requires_agent_capability() -> None:
@@ -1379,6 +1405,64 @@ def test_delete_latest_text_memo_button_is_unavailable_when_store_unavailable() 
             qml_patch_status={"available": True, "patched": True},
             memos={"available": False, "memos": []},
         )
+    )
+    entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+
+    assert entity.available is False
+
+
+def test_delete_latest_memo_attributes_handle_non_dict_store() -> None:
+    entry = _FakeEntry(
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"memos": {"supported": True, "delete": True}},
+            qml_patch_status={"available": True, "patched": True},
+        ),
+    )
+    entry.runtime_data.memos = []  # type: ignore[assignment]
+    entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+
+    assert entity.extra_state_attributes == {
+        "kind": "text",
+        "has_memo": False,
+        "total": None,
+        "latest_memo_id": None,
+    }
+
+
+def test_delete_latest_video_attributes_handle_non_dict_store() -> None:
+    entry = _FakeEntry(
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "answering_machine": {
+                    "supported": True,
+                    "messages": {"supported": True, "delete": True},
+                }
+            },
+            qml_patch_status={"available": True, "patched": True},
+        ),
+    )
+    entry.runtime_data.answering_machine_messages = []  # type: ignore[assignment]
+    entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+
+    assert entity.extra_state_attributes == {
+        "has_message": False,
+        "total": None,
+        "unread": None,
+        "latest_message_id": None,
+    }
+
+
+def test_gui_required_delete_button_unavailable_when_agent_connection_is_down() -> None:
+    entry = _FakeEntry(
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"memos": {"supported": True, "delete": True}},
+            connection_state=_FakeConnectionState(available=False),
+            qml_patch_status={"available": True, "patched": True},
+            memos={"available": True, "memos": []},
+        ),
     )
     entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
 

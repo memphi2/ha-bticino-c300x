@@ -34,6 +34,10 @@ from custom_components.bticino_c300x.device_installer import (  # noqa: E402
 )
 
 
+async def _to_thread_inline(func: Any, /, *args: Any, **kwargs: Any) -> Any:
+    return func(*args, **kwargs)
+
+
 def test_bootstrap_device_config_generates_token_auth_without_noauth() -> None:
     config = json.loads(
         _device_config_json(
@@ -239,6 +243,7 @@ def test_bootstrap_install_uses_python_ssh_client(
         "_connect_device_client",
         lambda _request: fake_client,
     )
+    monkeypatch.setattr(device_installer.asyncio, "to_thread", _to_thread_inline)
 
     result = asyncio.run(
         async_install_device_agent(
@@ -355,6 +360,7 @@ def test_bootstrap_install_fails_when_startup_link_is_missing(
         "_connect_device_client",
         lambda _request: FakeSshClient(),
     )
+    monkeypatch.setattr(device_installer.asyncio, "to_thread", _to_thread_inline)
 
     try:
         asyncio.run(

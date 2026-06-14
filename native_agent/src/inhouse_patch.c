@@ -25,14 +25,23 @@
 #define BT_ANSWERING_MACHINE_PATH "/home/bticino/bin/bt_answering_machine"
 #define BT_ANSWERING_MACHINE_BACKUP "/home/bticino/cfg/extra/c300x-device-file-backups/original/home/bticino/bin/bt_answering_machine"
 #define BT_ANSWERING_MACHINE_STOCK_SHA256 "605a808f1ed0c826c06bbf1eb4131b9198007a7ab822e7541a6666e79816c810"
-#define BT_ANSWERING_MACHINE_PATCHED_SHA256 "8f6e45d4c5f94bab74fa1dc8bd9ce06ca76a3a499dc664a9c6dbd934943e1c13"
+
+#define ARRAY_LEN(values) (sizeof(values) / sizeof((values)[0]))
+
+struct binary_write {
+    size_t offset;
+    const unsigned char *data;
+    size_t len;
+};
 
 struct binary_patch {
     const char *name;
     size_t offset;
-    const unsigned char *original;
-    const unsigned char *patched;
-    size_t len;
+    size_t range_len;
+    const char *expected_range_sha256;
+    const char *patched_range_sha256;
+    const struct binary_write *writes;
+    size_t write_count;
 };
 
 #ifdef __arm__
@@ -50,47 +59,84 @@ static int inhouse_stat_path(const char *path, C300X_INHOUSE_STAT_STRUCT *status
 #endif
 }
 
-static const unsigned char PATCH_0_ORIG[] = {0x02,0x30,0xd0,0xe3,0x00,0x80,0xa0,0xe1,0x2f,0x00,0x00,0x1a};
-static const unsigned char PATCH_0_NEW[] = {0x02,0x00,0x50,0xe3,0x00,0x80,0xa0,0xe1,0x2f,0x00,0x00,0x8a};
-static const unsigned char PATCH_1_ORIG[] = {0x02,0x50,0xd0,0xe3,0x01,0x50,0xa0,0x13,0x01,0x00,0x00,0x0a,0x05,0x00,0xa0,0xe1};
-static const unsigned char PATCH_1_NEW[] = {0x02,0x00,0x50,0xe3,0x00,0x50,0xa0,0x93,0x01,0x00,0x00,0x9a,0x01,0x00,0xa0,0xe3};
-static const unsigned char PATCH_2_ORIG[] = {0x3a,0xff,0x2f,0xe1};
-static const unsigned char PATCH_2_NEW[] = {0x00,0x00,0xa0,0xe1};
-static const unsigned char PATCH_3_ORIG[] = {0xb4,0xb3,0x84,0xe5};
-static const unsigned char PATCH_3_NEW[] = {0x00,0x00,0xa0,0xe1};
-static const unsigned char PATCH_4_ORIG[] = {0x06,0x20,0xa0,0xe1,0x04,0x10,0xa0,0xe1,0x0b,0x00,0xa0,0xe1,0x7b,0x5e,0xff,0xeb};
-static const unsigned char PATCH_4_NEW[] = {0x00,0x00,0xa0,0xe1,0x00,0x00,0xa0,0xe1,0x00,0x00,0xa0,0xe1,0x00,0x00,0xa0,0xe1};
-static const unsigned char PATCH_5_ORIG[] = {0x6c,0x62,0x00,0x00};
-static const unsigned char PATCH_5_NEW[] = {0x8c,0x78,0x00,0x00};
-static const unsigned char PATCH_6_ORIG[] = {
-    0x7c,0x21,0x9f,0xe5,0x7c,0x31,0x9f,0xe5,0x02,0x90,0x96,0xe7,
-    0x03,0x60,0x96,0xe7,0x04,0x30,0x99,0xe5,0x00,0x20,0x96,0xe5,
-    0x01,0x00,0x13,0xe3,0xc3,0x00,0x82,0xe0,0x00,0xa0,0x99,0xe5,
-    0xc3,0x30,0x92,0x17,0x5c,0x21,0x9f,0xe5,0x0a,0xa0,0x93,0x17,
-    0x02,0x20,0x8f,0xe0,0x02,0x10,0xa0,0xe3,0x3a,0xff,0x2f,0xe1
+static const unsigned char PATCH_0_WRITE_0[] = {0x00,0x50};
+static const unsigned char PATCH_0_WRITE_1[] = {0x8a};
+static const struct binary_write PATCH_0_WRITES[] = {
+    {1, PATCH_0_WRITE_0, sizeof(PATCH_0_WRITE_0)},
+    {11, PATCH_0_WRITE_1, sizeof(PATCH_0_WRITE_1)},
 };
-static const unsigned char PATCH_6_NEW[] = {
+static const unsigned char PATCH_1_WRITE_0[] = {0x00,0x50};
+static const unsigned char PATCH_1_WRITE_1[] = {0x00};
+static const unsigned char PATCH_1_WRITE_2[] = {0x93};
+static const unsigned char PATCH_1_WRITE_3[] = {0x9a,0x01};
+static const unsigned char PATCH_1_WRITE_4[] = {0xe3};
+static const struct binary_write PATCH_1_WRITES[] = {
+    {1, PATCH_1_WRITE_0, sizeof(PATCH_1_WRITE_0)},
+    {4, PATCH_1_WRITE_1, sizeof(PATCH_1_WRITE_1)},
+    {7, PATCH_1_WRITE_2, sizeof(PATCH_1_WRITE_2)},
+    {11, PATCH_1_WRITE_3, sizeof(PATCH_1_WRITE_3)},
+    {15, PATCH_1_WRITE_4, sizeof(PATCH_1_WRITE_4)},
+};
+static const unsigned char PATCH_2_WRITE_0[] = {0x00,0x00,0xa0};
+static const struct binary_write PATCH_2_WRITES[] = {
+    {0, PATCH_2_WRITE_0, sizeof(PATCH_2_WRITE_0)},
+};
+static const unsigned char PATCH_3_WRITE_0[] = {0x00,0x00,0xa0,0xe1};
+static const struct binary_write PATCH_3_WRITES[] = {
+    {0, PATCH_3_WRITE_0, sizeof(PATCH_3_WRITE_0)},
+};
+static const unsigned char PATCH_4_WRITE_0[] = {0x00,0x00};
+static const unsigned char PATCH_4_WRITE_1[] = {0x00,0x00};
+static const unsigned char PATCH_4_WRITE_2[] = {0x00};
+static const unsigned char PATCH_4_WRITE_3[] = {0x00,0x00,0xa0,0xe1};
+static const struct binary_write PATCH_4_WRITES[] = {
+    {0, PATCH_4_WRITE_0, sizeof(PATCH_4_WRITE_0)},
+    {4, PATCH_4_WRITE_1, sizeof(PATCH_4_WRITE_1)},
+    {8, PATCH_4_WRITE_2, sizeof(PATCH_4_WRITE_2)},
+    {12, PATCH_4_WRITE_3, sizeof(PATCH_4_WRITE_3)},
+};
+static const unsigned char PATCH_5_WRITE_0[] = {0x8c,0x78};
+static const struct binary_write PATCH_5_WRITES[] = {
+    {0, PATCH_5_WRITE_0, sizeof(PATCH_5_WRITE_0)},
+};
+static const unsigned char PATCH_6_WRITE_0[] = {
     0x01,0x00,0x58,0xe3,0x05,0x00,0x00,0x1a,0x70,0x21,0x9f,0xe5,
     0x78,0x11,0x9f,0xe5,0x02,0x20,0x8f,0xe0,0x01,0x10,0x8f,0xe0,
-    0x05,0x00,0xa0,0xe1,0x6c,0xc3,0xff,0xeb,0x5c,0x21,0x9f,0xe5,
-    0x5c,0x31,0x9f,0xe5,0x02,0x90,0x96,0xe7,0x03,0x60,0x96,0xe7,
-    0x00,0x00,0xa0,0xe1,0x00,0x00,0xa0,0xe1,0x00,0x00,0xa0,0xe1
+    0x05
 };
-static const unsigned char PATCH_7_ORIG[] = {0x30,0x1e,0x01,0x00};
-static const unsigned char PATCH_7_NEW[] = {0x48,0x54,0x01,0x00};
-static const unsigned char PATCH_8_ORIG[] = {0x64,0x3e,0x01,0x00};
-static const unsigned char PATCH_8_NEW[] = {0x48,0x3e,0x01,0x00};
+static const unsigned char PATCH_6_WRITE_1[] = {
+    0xa0,0xe1,0x6c,0xc3,0xff,0xeb,0x5c,0x21,0x9f
+};
+static const unsigned char PATCH_6_WRITE_2[] = {
+    0x5c,0x31,0x9f,0xe5,0x02,0x90,0x96,0xe7,0x03,0x60,0x96,0xe7,
+    0x00,0x00,0xa0,0xe1,0x00,0x00
+};
+static const unsigned char PATCH_6_WRITE_3[] = {0xe1,0x00,0x00,0xa0};
+static const struct binary_write PATCH_6_WRITES[] = {
+    {0, PATCH_6_WRITE_0, sizeof(PATCH_6_WRITE_0)},
+    {26, PATCH_6_WRITE_1, sizeof(PATCH_6_WRITE_1)},
+    {36, PATCH_6_WRITE_2, sizeof(PATCH_6_WRITE_2)},
+    {55, PATCH_6_WRITE_3, sizeof(PATCH_6_WRITE_3)},
+};
+static const unsigned char PATCH_7_WRITE_0[] = {0x48,0x54};
+static const struct binary_write PATCH_7_WRITES[] = {
+    {0, PATCH_7_WRITE_0, sizeof(PATCH_7_WRITE_0)},
+};
+static const unsigned char PATCH_8_WRITE_0[] = {0x48};
+static const struct binary_write PATCH_8_WRITES[] = {
+    {0, PATCH_8_WRITE_0, sizeof(PATCH_8_WRITE_0)},
+};
 
 static const struct binary_patch PATCHES[] = {
-    {"allow_dimension_37_values", 0x282f8, PATCH_0_ORIG, PATCH_0_NEW, sizeof(PATCH_0_ORIG)},
-    {"allow_disable_remote_values", 0xda04, PATCH_1_ORIG, PATCH_1_NEW, sizeof(PATCH_1_ORIG)},
-    {"suppress_inhouse_disabled_log", 0x35fe0, PATCH_2_ORIG, PATCH_2_NEW, sizeof(PATCH_2_ORIG)},
-    {"keep_disable_remote", 0x35ff4, PATCH_3_ORIG, PATCH_3_NEW, sizeof(PATCH_3_ORIG)},
-    {"preserve_route_mode", 0x36000, PATCH_4_ORIG, PATCH_4_NEW, sizeof(PATCH_4_ORIG)},
-    {"route_disable_remote_to_int", 0x363d8, PATCH_5_ORIG, PATCH_5_NEW, sizeof(PATCH_5_ORIG)},
-    {"runtime_inhouse_route_int", 0x28420, PATCH_6_ORIG, PATCH_6_NEW, sizeof(PATCH_6_ORIG)},
-    {"runtime_route_target", 0x285a0, PATCH_7_ORIG, PATCH_7_NEW, sizeof(PATCH_7_ORIG)},
-    {"runtime_route_link", 0x285ac, PATCH_8_ORIG, PATCH_8_NEW, sizeof(PATCH_8_ORIG)},
+    {"patch_range_0", 0x282f8, 12, "ed451a5b137b7b59ebfd3f4bb8ff6598a18abce58603b72eed97f50b8d6391b8", "59e44ff04f935f33e91e44d52771e6188e7a50c735c07b54f236087a818925d7", PATCH_0_WRITES, ARRAY_LEN(PATCH_0_WRITES)},
+    {"patch_range_1", 0xda04, 16, "cad698e029e49e8557fa4259c816e318021875a348f0d2b967ed1579fce8439b", "9bf52da965bdf744685e93b31353826af7bc74bc1fc3248d91f3b89f493444fe", PATCH_1_WRITES, ARRAY_LEN(PATCH_1_WRITES)},
+    {"patch_range_2", 0x35fe0, 4, "85a84a4f037c33de92504a8958803d3ca0aa78d17145ea83a7683d3f2fcc2547", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_2_WRITES, ARRAY_LEN(PATCH_2_WRITES)},
+    {"patch_range_3", 0x35ff4, 4, "4954ed54e1284656fc34df4acf32b7bb7239c20a64300e0d7698c727e1de8391", "71b1548a3867fe8e62a860f8010becb36b0386c9e97d552809cebccb9d93881d", PATCH_3_WRITES, ARRAY_LEN(PATCH_3_WRITES)},
+    {"patch_range_4", 0x36000, 16, "52c4701f0ebe03e78c0fed564727560fa0fc58e477656da7c254df341da5a55f", "801b48661d2b117e9d4c1065f5b27b8e68938ac8efaf47e5a1db1211d495f592", PATCH_4_WRITES, ARRAY_LEN(PATCH_4_WRITES)},
+    {"patch_range_5", 0x363d8, 4, "578b7e8e1392acf5b7a042f27140fdff16d967de87b359c4629374f363061deb", "588247adc40731e7dac725b7c418ce8dedc2a7318e61f12836086f31d5d41520", PATCH_5_WRITES, ARRAY_LEN(PATCH_5_WRITES)},
+    {"patch_range_6", 0x28420, 60, "4a113f9e80b59325c236497a1f60eb4c25ecfc818d846bc838d30d7a9d153d48", "16f1f5712d28c39b0e2ddf193b57ea53b9d8f498d42cee86625f2ff2792eef5c", PATCH_6_WRITES, ARRAY_LEN(PATCH_6_WRITES)},
+    {"patch_range_7", 0x285a0, 4, "c77ead30bd3f6cae55371b8695c71e4c28de7b2006d3f17cd0a2629cdc98a5df", "27d18ebd92839189526cb6345d7f2d5e043d7551446dd60407975ef0e46e5cc4", PATCH_7_WRITES, ARRAY_LEN(PATCH_7_WRITES)},
+    {"patch_range_8", 0x285ac, 4, "a883b9c4475398a5852aaf4ef0b4cbd8bd0557c4206c4d8bafd69832c8d56a47", "a828ca69c6e94a3592c35b9989123858720ac9b114514e040d53a604f87e1d6d", PATCH_8_WRITES, ARRAY_LEN(PATCH_8_WRITES)},
 };
 
 static void set_error(char *error, size_t error_len, const char *message)
@@ -253,10 +299,50 @@ static int read_file(const char *path, unsigned char **data, size_t *len)
     return 1;
 }
 
+static int patch_range_matches(
+    const unsigned char *data,
+    size_t len,
+    const struct binary_patch *patch,
+    const char *expected_sha256
+)
+{
+    char digest[C300X_INHOUSE_PATCH_HASH_LEN];
+
+    if (patch->offset + patch->range_len > len) {
+        return 0;
+    }
+    if (!c300x_sha256_bytes_hex(data + patch->offset, patch->range_len, digest, sizeof(digest))) {
+        return 0;
+    }
+    return strcmp(digest, expected_sha256) == 0;
+}
+
+static int all_patch_ranges_match(
+    const unsigned char *data,
+    size_t len,
+    int patched
+)
+{
+    for (size_t index = 0; index < ARRAY_LEN(PATCHES); index++) {
+        const struct binary_patch *patch = &PATCHES[index];
+        const char *expected_sha256 = patched
+            ? patch->patched_range_sha256
+            : patch->expected_range_sha256;
+
+        if (!patch_range_matches(data, len, patch, expected_sha256)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int c300x_inhouse_binary_patch_read_status(
     struct c300x_inhouse_binary_patch_status *status
 )
 {
+    unsigned char *data = NULL;
+    size_t len = 0;
+
     memset(status, 0, sizeof(*status));
     status->supported = 1;
     if (!c300x_sha256_file_hex(BT_ANSWERING_MACHINE_PATH, status->file_sha256, sizeof(status->file_sha256))) {
@@ -268,15 +354,27 @@ int c300x_inhouse_binary_patch_read_status(
         status->backup_present = 1;
         (void)c300x_sha256_file_hex(BT_ANSWERING_MACHINE_BACKUP, status->backup_sha256, sizeof(status->backup_sha256));
     }
-    if (strcmp(status->file_sha256, BT_ANSWERING_MACHINE_PATCHED_SHA256) == 0) {
-        status->patched = 1;
-        c300x_copy_string(status->state, sizeof(status->state), "patched");
-        return 1;
-    }
     if (strcmp(status->file_sha256, BT_ANSWERING_MACHINE_STOCK_SHA256) == 0) {
         c300x_copy_string(status->state, sizeof(status->state), "stock");
         return 1;
     }
+    if (!read_file(BT_ANSWERING_MACHINE_PATH, &data, &len)) {
+        c300x_copy_string(status->state, sizeof(status->state), "unsupported");
+        set_status_error(status, "binary_read_failed");
+        return 0;
+    }
+    if (all_patch_ranges_match(data, len, 1)) {
+        status->patched = 1;
+        c300x_copy_string(status->state, sizeof(status->state), "patched");
+        free(data);
+        return 1;
+    }
+    if (all_patch_ranges_match(data, len, 0)) {
+        c300x_copy_string(status->state, sizeof(status->state), "stock");
+        free(data);
+        return 1;
+    }
+    free(data);
     c300x_copy_string(status->state, sizeof(status->state), "unsupported");
     set_status_error(status, "unsupported_binary_hash");
     return 1;
@@ -292,7 +390,6 @@ int c300x_inhouse_binary_patch_apply(
     size_t len = 0;
     C300X_INHOUSE_STAT_STRUCT original_stat;
     mode_t original_mode;
-    char digest[C300X_INHOUSE_PATCH_HASH_LEN];
     FILE *fp;
 
     if (!c300x_inhouse_binary_patch_read_status(status)) {
@@ -321,12 +418,25 @@ int c300x_inhouse_binary_patch_apply(
     }
     for (size_t index = 0; index < sizeof(PATCHES) / sizeof(PATCHES[0]); index++) {
         const struct binary_patch *patch = &PATCHES[index];
-        if (patch->offset + patch->len > len || memcmp(data + patch->offset, patch->original, patch->len) != 0) {
+        if (!patch_range_matches(data, len, patch, patch->expected_range_sha256)) {
             free(data);
             set_error(error, error_len, patch->name);
             return 0;
         }
-        memcpy(data + patch->offset, patch->patched, patch->len);
+        for (size_t write_index = 0; write_index < patch->write_count; write_index++) {
+            const struct binary_write *write = &patch->writes[write_index];
+            if (write->offset + write->len > patch->range_len) {
+                free(data);
+                set_error(error, error_len, patch->name);
+                return 0;
+            }
+            memcpy(data + patch->offset + write->offset, write->data, write->len);
+        }
+        if (!patch_range_matches(data, len, patch, patch->patched_range_sha256)) {
+            free(data);
+            set_error(error, error_len, patch->name);
+            return 0;
+        }
     }
     if (!remount_root("rw")) {
         free(data);
@@ -360,11 +470,11 @@ int c300x_inhouse_binary_patch_apply(
     if (!remount_root_ro_or_error(error, error_len)) {
         return 0;
     }
-    if (!c300x_sha256_file_hex(BT_ANSWERING_MACHINE_PATH, digest, sizeof(digest)) || strcmp(digest, BT_ANSWERING_MACHINE_PATCHED_SHA256) != 0) {
-        set_error(error, error_len, "patched_hash_mismatch");
+    if (!c300x_inhouse_binary_patch_read_status(status) || !status->patched) {
+        set_error(error, error_len, "patched_ranges_mismatch");
         return 0;
     }
-    return c300x_inhouse_binary_patch_read_status(status);
+    return 1;
 }
 
 int c300x_inhouse_binary_patch_restore(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
@@ -31,9 +33,11 @@ FRONTEND_CARD_SETUP_HINT_ISSUE = "frontend_card_setup_hint"
 AGENT_CAPABILITY_MISMATCH_ISSUE = "agent_capability_mismatch"
 DEVICE_AGENT_UPDATE_REQUIRED_ISSUE = "device_agent_update_required"
 DEVICE_AGENT_STARTUP_DISABLED_ISSUE = "device_agent_startup_disabled"
+DEVICE_AGENT_SELF_TEST_FAILED_ISSUE = "device_agent_self_test_failed"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
+MEDIA_WATCHDOG_TIMEOUT_ISSUE = "media_watchdog_timeout"
 ALL_REPAIR_ISSUES = frozenset(
     {
         INVALID_ACTION_MAP_ISSUE,
@@ -42,9 +46,11 @@ ALL_REPAIR_ISSUES = frozenset(
         AGENT_CAPABILITY_MISMATCH_ISSUE,
         DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
         DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
+        DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         DEVICE_USER_REQUIRED_ISSUE,
+        MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     }
 )
 
@@ -68,6 +74,7 @@ def async_sync_entry_repair_issues(
     _sync_agent_capability_issue(hass, entry)
     _sync_device_agent_update_issue(hass, entry)
     _sync_device_agent_startup_issue(hass, entry)
+    _sync_device_agent_self_test_issue(hass, entry)
     _sync_unsupported_callback_url_issue(hass, entry)
     _sync_device_core_qml_hook_issue(hass, entry)
     _sync_device_user_issue(hass, entry)
@@ -98,6 +105,31 @@ def async_delete_repair_issue(
         hass=hass,
         domain=DOMAIN,
         issue_id=repair_issue_id(issue_type, entry_id),
+    )
+
+
+@callback
+def async_create_media_watchdog_issue(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    reason: str,
+    cpu_percent: float | None,
+    duration_seconds: int,
+) -> None:
+    """Create a Repairs issue after HA stopped media because of device CPU load."""
+
+    cpu_text = "unknown" if cpu_percent is None else f"{cpu_percent:.1f}"
+    _create_issue(
+        hass,
+        entry,
+        MEDIA_WATCHDOG_TIMEOUT_ISSUE,
+        severity=ir.IssueSeverity.ERROR,
+        placeholders={
+            "reason": reason,
+            "cpu_percent": cpu_text,
+            "duration_seconds": str(duration_seconds),
+        },
     )
 
 
@@ -196,7 +228,7 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> 
 def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     diagnostics = getattr(runtime_data, "agent_diagnostics", None)
-    if not isinstance(diagnostics, dict):
+    if not isinstance(diagnostics, Mapping):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -218,6 +250,70 @@ def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: ConfigEntry) ->
     )
 
 
+def _sync_device_agent_self_test_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    if connection_state is not None and not getattr(connection_state, "available", True):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
+        )
+        return
+    status = getattr(runtime_data, "self_test_status", None)
+    if not isinstance(status, Mapping) or status.get("ok") is not False:
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
+        )
+        return
+    checks = status.get("checks")
+    failed: list[str] = []
+    reasons: list[str] = []
+    actions: list[str] = []
+    if isinstance(checks, Mapping):
+        for name, check in checks.items():
+            if isinstance(check, Mapping) and check.get("ok") is False:
+                check_name = str(name)
+                reason = check.get("reason")
+                reason_text = reason if isinstance(reason, str) else ""
+                if _self_test_failure_is_optional_ipv6_only(
+                    check_name,
+                    reason_text,
+                    checks,
+                ):
+                    continue
+                failed.append(check_name)
+                if reason_text:
+                    reasons.append(
+                        f"{check_name}: {_self_test_reason_text(check_name, reason_text)}"
+                    )
+                    action = _self_test_repair_action(check_name, reason_text)
+                    if action and action not in actions:
+                        actions.append(action)
+    if not failed:
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
+        )
+        return
+    _create_issue(
+        hass,
+        entry,
+        DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        placeholders={
+            "failed_checks": ", ".join(failed) if failed else "unknown",
+            "reasons": "; ".join(reasons) if reasons else "unknown",
+            "actions": "; ".join(actions)
+            if actions
+            else "Check the C300X device-agent diagnostic entities and reload the integration after fixing the device-agent setup.",
+        },
+    )
+
+
 def _sync_unsupported_callback_url_issue(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -234,6 +330,78 @@ def _sync_unsupported_callback_url_issue(
         is_fixable=True,
         placeholders=callback_problem,
     )
+
+
+def _self_test_reason_text(check_name: str, reason: str) -> str:
+    """Return a readable self-test reason while keeping the native reason code."""
+
+    descriptions = {
+        "config_missing": "the device-agent configuration is missing",
+        "ipv4_media_ports_missing": "the required IPv4 media firewall patch is missing",
+        "ipv6_media_ports_missing": "the optional IPv6 media firewall patch is missing",
+        "media_ports_open_ipv6_optional_missing": "the required IPv4 media ports are open and only the optional IPv6 firewall patch is missing",
+        "talkback_rtp_firewall_missing": "UDP talkback port 40004 is not open through the required firewall patch",
+        "video_runtime_unavailable": "the device-agent video runtime is unavailable",
+        "rtsp_server_not_running": "the device-agent RTSP server is not running",
+        "rtsp_config_missing": "the RTSP port or stream path is missing",
+        "media_identity_missing": "no usable C300X media identity is configured",
+        "homeassistant_routes_inconsistent": "the Home Assistant media-user route files are inconsistent",
+        "inhouse_binary_status_failed": "the Home Assistant only binary routing patch status could not be read",
+        "inhouse_binary_patch_missing": "the Home Assistant only binary routing patch is missing",
+        "inhouse_qml_status_unavailable": "the Home Assistant only display label patch status is unavailable",
+        "inhouse_qml_status_failed": "the Home Assistant only display label patch status command failed",
+        "inhouse_qml_patch_missing": "the Home Assistant only display label patch is missing",
+        "agent_init_script_missing": "the device-agent startup script is missing",
+        "startup_link_missing": "the device-agent startup link is missing",
+    }
+    text = descriptions.get(reason, "the device-agent reported an unknown setup problem")
+    return f"{text} ({reason})"
+
+
+def _self_test_failure_is_optional_ipv6_only(
+    check_name: str,
+    reason: str,
+    checks: Mapping,
+) -> bool:
+    """Return true for old-agent self-test failures caused only by optional IPv6."""
+
+    if reason in {
+        "ipv6_media_ports_missing",
+        "media_ports_open_ipv6_optional_missing",
+    }:
+        return check_name == "firewall"
+    if check_name != "talkback_rtp" or reason != "talkback_rtp_firewall_missing":
+        return False
+    firewall = checks.get("firewall")
+    if not isinstance(firewall, Mapping):
+        return False
+    return firewall.get("reason") in {
+        "ipv6_media_ports_missing",
+        "media_ports_open_ipv6_optional_missing",
+    }
+
+
+def _self_test_repair_action(check_name: str, reason: str) -> str | None:
+    """Return a user-facing next step for one failed self-test check."""
+
+    if check_name == "firewall":
+        if reason == "ipv4_media_ports_missing":
+            return "Turn on or apply the C300X Firewall switch, then reload the integration."
+        if reason == "ipv6_media_ports_missing":
+            return "IPv6 is optional; only turn on or apply the C300X IPv6 Firewall switch if this HA instance reaches the device over IPv6."
+    if check_name == "talkback_rtp" and reason == "talkback_rtp_firewall_missing":
+        return "Apply the C300X Firewall switch so UDP talkback port 40004 is open for HA."
+    if check_name == "rtsp":
+        return "Check that doorbell video is enabled and restart or update the C300X device agent if RTSP is not running."
+    if check_name == "homeassistant_user":
+        return "Open the integration options and run the Home Assistant media-user setup."
+    if check_name == "inhouse_patch":
+        return "Open the integration options and repair the Home Assistant media-user / Home Assistant only setup."
+    if check_name == "startup":
+        return "Run the device-agent repair/update action to recreate the startup link."
+    if check_name == "capabilities":
+        return "Update or reconfigure the C300X device agent, then reload the integration."
+    return None
 
 
 def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -436,9 +604,11 @@ def _registry_entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
 def _frontend_card_setup_repair_handled(entry: ConfigEntry) -> bool:
     """Return true when this Lovelace card repair generation was handled."""
 
+    data_version = entry.data.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
+    options_version = entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
     return (
-        entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
-        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+        data_version == FRONTEND_CARD_SETUP_REPAIR_VERSION
+        or options_version == FRONTEND_CARD_SETUP_REPAIR_VERSION
     )
 
 
@@ -455,8 +625,8 @@ def _mark_frontend_card_setup_dismissed(
         return
     config_entries.async_update_entry(
         entry,
-        options={
-            **dict(entry.options),
+        data={
+            **dict(entry.data),
             CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
             CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
                 FRONTEND_CARD_SETUP_REPAIR_VERSION

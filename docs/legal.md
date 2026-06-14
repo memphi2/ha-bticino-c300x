@@ -43,7 +43,7 @@ cd64c8c333ae2cfde2f32a8681054c1a5755a2edafadec1183501cd774088834
 The repository must not contain:
 
 - BTicino/Legrand firmware images or extracted firmware trees.
-- Android APKs or extracted app payloads.
+- Android APKs or extracted mobile-application payloads.
 - Local device backups.
 - Runtime artifacts, network traces, logs with private data, or local secrets.
 - Generated native build artifacts except the explicit release-bundle agent

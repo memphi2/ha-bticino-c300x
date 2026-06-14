@@ -2,6 +2,7 @@
 #include "activation_discovery.h"
 #include "c300x_agent.h"
 #include "device_user.h"
+#include "event_payload.h"
 #include "http_util.h"
 #include "inhouse_patch.h"
 #include "memo_store.h"
@@ -11,6 +12,8 @@
 #include "sha256.h"
 #include "smartphone_forwarding.h"
 #include "string_util.h"
+#include "system_metrics_watchdog.h"
+#include "self_test.h"
 #include "video_rtsp.h"
 
 #include <arpa/inet.h>
@@ -80,7 +83,15 @@
 #define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
-
+#define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
+    c300x_system_metrics_cpu_watchdog_apply( \
+        (runtime)->video, \
+        (sample)->has_cpu_usage, \
+        (sample)->cpu_usage_percent, \
+        (now), \
+        &(runtime)->system_metrics_high_cpu_since, \
+        &(runtime)->system_metrics_cpu_watchdog_tripped_at \
+    )
 enum listener_kind {
     LISTENER_API = 1,
     LISTENER_UI = 2
@@ -186,29 +197,6 @@ struct voicemail_runtime {
     unsigned long long last_signature;
 };
 
-struct system_metrics_sample {
-    long cpu_count;
-    unsigned long long cpu_total_jiffies;
-    unsigned long long cpu_idle_jiffies;
-    int has_cpu_jiffies;
-    int has_cpu_usage;
-    double cpu_usage_percent;
-    double load_1m;
-    double load_5m;
-    double load_15m;
-    double load_1m_percent;
-    double load_5m_percent;
-    double load_15m_percent;
-    int has_memory;
-    long memory_total_kb;
-    long memory_available_kb;
-    long memory_used_kb;
-    double memory_usage_percent;
-    int has_temperature;
-    double temperature_c;
-    char temperature_source[C300X_MAX_PATH_LEN];
-};
-
 struct agent_runtime {
     const struct c300x_config *config;
     struct subscription subscriptions[C300X_MAX_SUBSCRIPTIONS];
@@ -249,6 +237,8 @@ struct agent_runtime {
     int system_metrics_dispatched_initialized;
     time_t system_metrics_next_sample_at;
     time_t system_metrics_last_dispatched_at;
+    time_t system_metrics_high_cpu_since;
+    time_t system_metrics_cpu_watchdog_tripped_at;
     int smartphone_forwarding_mode_known;
     int smartphone_forwarding_mode_code;
     int ringer_muted_known;
@@ -415,13 +405,12 @@ static int system_metrics_watch_active(
     const struct c300x_config *config,
     const struct agent_runtime *runtime
 );
+static int system_metrics_monitor_active(const struct c300x_config *config);
 static const char *json_string(const char *value, char *out, size_t out_len);
 static void json_string_field(const char *body, const char *field, char *out, size_t out_len);
 static int json_bool_field(const char *body, const char *field, int *out);
 static int json_int_field(const char *body, const char *field, int *out);
 static int constant_time_equal(const char *left, size_t left_len, const char *right);
-static int metric_changed_percent(double previous, double current, int threshold_percent);
-static int metric_changed_points(double previous, double current, int threshold_points);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
@@ -3829,7 +3818,7 @@ static void device_user_status_body(
         "\"supported\":%s,"
         "\"domain_present\":%s,"
         "\"c300x_user_present\":%s,"
-        "\"app_user_present\":%s,"
+        "\"fallback_user_present\":%s,"
         "\"homeassistant_user_present\":%s,"
         "\"accounts_homeassistant_present\":%s,"
         "\"route_int_homeassistant_present\":%s,"
@@ -3856,7 +3845,7 @@ static void device_user_status_body(
         status->supported ? "true" : "false",
         status->domain_present ? "true" : "false",
         status->c300x_user_present ? "true" : "false",
-        status->app_user_present ? "true" : "false",
+        status->fallback_user_present ? "true" : "false",
         status->homeassistant_user_present ? "true" : "false",
         status->accounts_homeassistant_present ? "true" : "false",
         status->route_int_homeassistant_present ? "true" : "false",
@@ -3915,17 +3904,6 @@ static void handle_device_user_ensure(
         return;
     }
     json_string_field(request->body, "account_label", account_label, sizeof(account_label));
-    if (!c300x_device_user_ensure_homeassistant(&status, account_label, error, sizeof(error))) {
-        json_string(error, error_json, sizeof(error_json));
-        snprintf(
-            body,
-            sizeof(body),
-            "{\"ok\":false,\"error\":\"device_user_update_failed\",\"detail\":%s}\n",
-            error_json
-        );
-        send_json(client_fd, 500, "Internal Server Error", body);
-        return;
-    }
     if (!c300x_inhouse_binary_patch_apply(&binary_status, error, sizeof(error))) {
         json_string(error, error_json, sizeof(error_json));
         snprintf(
@@ -3937,20 +3915,40 @@ static void handle_device_user_ensure(
         send_json(client_fd, 500, "Internal Server Error", body);
         return;
     }
-    if (
-        access(config->maintenance_qml_patch_script, X_OK) != 0
-        || !run_command_capture(
-            config->maintenance_qml_patch_script,
-            "inhouse-apply",
+    if (!c300x_device_user_ensure_homeassistant(&status, account_label, error, sizeof(error))) {
+        json_string(error, error_json, sizeof(error_json));
+        snprintf(
             body,
             sizeof(body),
-            10000,
-            NULL
-        )
-        || ((char *)trim_ascii(body))[0] != '{'
-    ) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"inhouse_qml_patch_failed\"}\n");
+            "{\"ok\":false,\"error\":\"device_user_update_failed\",\"detail\":%s}\n",
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
         return;
+    }
+    {
+        char *qml_body;
+        int qml_ok = 0;
+
+        if (
+            access(config->maintenance_qml_patch_script, X_OK) != 0
+            || !run_command_capture(
+                config->maintenance_qml_patch_script,
+                "inhouse-apply",
+                body,
+                sizeof(body),
+                10000,
+                NULL
+            )
+        ) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"inhouse_qml_patch_failed\"}\n");
+            return;
+        }
+        qml_body = (char *)trim_ascii(body);
+        if (qml_body[0] != '{' || !json_bool_field(qml_body, "ok", &qml_ok) || !qml_ok) {
+            send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"inhouse_qml_patch_failed\"}\n");
+            return;
+        }
     }
     record_agent_write(config, runtime, "device_user", "ensure_homeassistant_user");
     (void)c300x_device_user_read_status(&status);
@@ -4020,19 +4018,26 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
     char video_external_owner[C300X_JSON_QUOTED_LEN(32)];
     char video_last_block_reason[C300X_JSON_QUOTED_LEN(64)];
     struct c300x_video_status video_status;
+    int video_media_running;
     int open_fd_count = count_open_fds();
     int flexisip_backup_available = path_exists(C300X_FLEXISIP_INIT_BACKUP);
     int flexisip_restart_marker = flexisip_restart_marker_present();
     int flexisip_backup_marker = flexisip_backup_marker_present();
     int agent_init_script_present = access(C300X_AGENT_INIT_SCRIPT, X_OK) == 0;
     int agent_init_link_ok = agent_init_link_matches();
-    char body[3584];
+    char body[4096];
 
     json_string(runtime->last_write_class, last_write_class, sizeof(last_write_class));
     json_string(runtime->last_write_reason, last_write_reason, sizeof(last_write_reason));
     json_string(runtime->last_wake_reason, last_wake_reason, sizeof(last_wake_reason));
     json_string(runtime->qml_patch_last_action, qml_patch_last_action, sizeof(qml_patch_last_action));
     c300x_video_status(runtime->video, &video_status);
+    video_media_running = (
+        video_status.call_active
+        || video_status.bridge_media_active
+        || video_status.ring_media_active
+        || video_status.home_call_active
+    );
     json_string(video_status.media_owner, video_media_owner, sizeof(video_media_owner));
     json_string(video_status.external_owner, video_external_owner, sizeof(video_external_owner));
     json_string(video_status.last_block_reason, video_last_block_reason, sizeof(video_last_block_reason));
@@ -4065,6 +4070,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"home_assistant_last_seen_at\":%ld,"
             "\"ui_event_revision\":%lu,"
             "\"video_running\":%s,"
+            "\"video_rtsp_server_running\":%s,"
             "\"video_media_starting\":%s,"
             "\"video_call_active\":%s,"
             "\"video_clients\":%d,"
@@ -4072,8 +4078,17 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"video_external_media_active\":%s,"
             "\"video_external_owner\":%s,"
             "\"video_last_block_reason\":%s,"
+            "\"video_bridge_running\":%s,"
+            "\"video_bridge_media_active\":%s,"
+            "\"video_bridge_stop_in_progress\":%s,"
             "\"video_bridge_open_fds\":%d,"
             "\"video_bridge_active_threads\":%d,"
+            "\"ring_receiver_running\":%s,"
+            "\"ring_registered\":%s,"
+            "\"ring_call_active\":%s,"
+            "\"ring_media_active\":%s,"
+            "\"home_call_running\":%s,"
+            "\"home_call_active\":%s,"
             "\"flexisip_backup_available\":%s,"
             "\"flexisip_restart_marker\":%s,"
             "\"flexisip_backup_marker\":%s,"
@@ -4101,6 +4116,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             runtime->home_assistant_connected_this_run ? "true" : "false",
             (long)runtime->home_assistant_last_seen_at,
             runtime->ui_event_revision,
+            video_media_running ? "true" : "false",
             video_status.running ? "true" : "false",
             video_status.media_starting ? "true" : "false",
             video_status.call_active ? "true" : "false",
@@ -4109,8 +4125,17 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             video_status.external_media_active ? "true" : "false",
             video_external_owner,
             video_last_block_reason,
+            video_status.bridge_running ? "true" : "false",
+            video_status.bridge_media_active ? "true" : "false",
+            video_status.bridge_stop_in_progress ? "true" : "false",
             video_status.bridge_open_fds,
             video_status.bridge_active_threads,
+            video_status.ring_receiver_running ? "true" : "false",
+            video_status.ring_registered ? "true" : "false",
+            video_status.ring_call_active ? "true" : "false",
+            video_status.ring_media_active ? "true" : "false",
+            video_status.home_call_running ? "true" : "false",
+            video_status.home_call_active ? "true" : "false",
             flexisip_backup_available ? "true" : "false",
             flexisip_restart_marker ? "true" : "false",
             flexisip_backup_marker ? "true" : "false",
@@ -5614,107 +5639,6 @@ static void handle_subscription_delete(
     send_json(client_fd, 404, "Not Found", "{\"ok\":false}\n");
 }
 
-static int doorbell_event_needs_video_status(const char *event_type)
-{
-    return event_type != NULL && (
-        strcmp(event_type, "doorbell.pressed") == 0
-        || strcmp(event_type, "doorbell.view_requested") == 0
-        || strcmp(event_type, "doorbell.media.closed") == 0
-    );
-}
-
-static const char *doorbell_state_for_event(const char *event_type)
-{
-    if (event_type == NULL) {
-        return "idle";
-    }
-    if (strcmp(event_type, "doorbell.pressed") == 0) {
-        return "ringing";
-    }
-    if (strcmp(event_type, "doorbell.view_requested") == 0) {
-        return "view_requested";
-    }
-    return "idle";
-}
-
-static int build_doorbell_event_video_json(
-    const struct c300x_config *config,
-    struct c300x_video *video,
-    char *out,
-    size_t out_len
-)
-{
-    struct c300x_video_status status;
-    char stream_path[C300X_MAX_PATH_JSON_LEN];
-    int available;
-    int window_available;
-    int external_media_active;
-    int written;
-
-    if (config == NULL || video == NULL || out == NULL) {
-        return 0;
-    }
-    c300x_video_status(video, &status);
-    available = (
-        !status.home_call_running
-        && !status.home_call_active
-        && (
-            status.ring_call_active
-            || status.ring_media_active
-            || status.bridge_media_active
-            || status.call_active
-        )
-    );
-    window_available = config->video_enabled && available;
-    external_media_active = status.external_media_active && !available;
-    json_escape_string(config->video_rtsp_video_path, stream_path, sizeof(stream_path));
-    written = snprintf(
-        out,
-        out_len,
-        "{"
-        "\"available\":%s,"
-        "\"window_available\":%s,"
-        "\"stream_path\":\"%s\","
-        "\"external_media_active\":%s"
-        "}",
-        (config->video_enabled && available && !external_media_active) ? "true" : "false",
-        window_available ? "true" : "false",
-        stream_path,
-        external_media_active ? "true" : "false"
-    );
-    return written >= 0 && (size_t)written < out_len;
-}
-
-static int build_doorbell_event_state_json(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *event_type,
-    char *out,
-    size_t out_len
-)
-{
-    char doorbell_state_json[32];
-    char video_json[2048];
-    int has_video;
-    int written;
-
-    if (out == NULL || out_len == 0) {
-        return 0;
-    }
-    json_string(
-        doorbell_state_for_event(event_type),
-        doorbell_state_json,
-        sizeof(doorbell_state_json)
-    );
-    has_video = runtime != NULL
-        && runtime->video != NULL
-        && build_doorbell_event_video_json(config, runtime->video, video_json, sizeof(video_json));
-    written = has_video
-        ? snprintf(out, out_len, "\"doorbell\":%s,\"video\":%s", doorbell_state_json, video_json)
-        : snprintf(out, out_len, "\"doorbell\":%s", doorbell_state_json);
-    return written >= 0 && (size_t)written < out_len;
-}
-
 static void build_event_data_json(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
@@ -5730,10 +5654,10 @@ static void build_event_data_json(
     size_t used = 0;
 
     if (
-        !doorbell_event_needs_video_status(event_type)
-        || !build_doorbell_event_state_json(
+        !c300x_event_payload_needs_doorbell_state(event_type)
+        || !c300x_event_payload_build_doorbell_state(
             config,
-            runtime,
+            runtime != NULL ? runtime->video : NULL,
             event_type,
             doorbell_json,
             sizeof(doorbell_json)
@@ -5891,9 +5815,13 @@ static int system_metrics_watch_active(
     const struct agent_runtime *runtime
 )
 {
-    return config->system_metrics_enabled
-        && config->system_metrics_watch
+    return system_metrics_monitor_active(config)
         && has_matching_subscription(runtime, "system.metrics_changed");
+}
+
+static int system_metrics_monitor_active(const struct c300x_config *config)
+{
+    return config->system_metrics_enabled && config->system_metrics_watch;
 }
 
 static int timeout_until_ms(time_t now, time_t due)
@@ -5916,49 +5844,6 @@ static int min_timeout_ms(int current, int candidate)
         return candidate;
     }
     return current;
-}
-
-static int system_metrics_changed(
-    const struct c300x_config *config,
-    const struct system_metrics_sample *previous,
-    const struct system_metrics_sample *current
-)
-{
-    if (
-        previous->has_cpu_usage != current->has_cpu_usage
-        || (
-            current->has_cpu_usage
-            && metric_changed_points(previous->cpu_usage_percent, current->cpu_usage_percent, config->system_metrics_change_percent)
-        )
-    ) {
-        return 1;
-    }
-    if (
-        metric_changed_points(previous->load_1m_percent, current->load_1m_percent, config->system_metrics_change_percent)
-        || metric_changed_points(previous->load_5m_percent, current->load_5m_percent, config->system_metrics_change_percent)
-        || metric_changed_points(previous->load_15m_percent, current->load_15m_percent, config->system_metrics_change_percent)
-    ) {
-        return 1;
-    }
-    if (previous->has_memory != current->has_memory) {
-        return 1;
-    }
-    if (
-        current->has_memory
-        && metric_changed_points(previous->memory_usage_percent, current->memory_usage_percent, config->system_metrics_change_percent)
-    ) {
-        return 1;
-    }
-    if (previous->has_temperature != current->has_temperature) {
-        return 1;
-    }
-    if (
-        current->has_temperature
-        && metric_changed_percent(previous->temperature_c, current->temperature_c, config->system_metrics_change_percent)
-    ) {
-        return 1;
-    }
-    return 0;
 }
 
 static int event_requests_metrics_refresh(const char *event_type)
@@ -6108,7 +5993,7 @@ static void system_metrics_init(
 )
 {
     time_t now = time(NULL);
-    if (!system_metrics_watch_active(config, runtime)) {
+    if (!system_metrics_monitor_active(config)) {
         runtime->system_metrics_next_sample_at = now + config->system_metrics_heartbeat_seconds;
         return;
     }
@@ -6150,6 +6035,7 @@ static void system_metrics_dispatch_now(
     runtime->system_metrics_last = sample;
     runtime->system_metrics_initialized = 1;
     runtime->system_metrics_next_sample_at = now + config->system_metrics_sample_interval_seconds;
+    SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
     if (!system_metrics_json(&sample, 0, metrics_json, sizeof(metrics_json))) {
         return;
     }
@@ -6172,7 +6058,7 @@ static void system_metrics_dispatch_if_due(
     int heartbeat_due;
     int changed;
 
-    if (!system_metrics_watch_active(config, runtime)) {
+    if (!system_metrics_monitor_active(config)) {
         runtime->system_metrics_next_sample_at = now + config->system_metrics_heartbeat_seconds;
         return;
     }
@@ -6184,14 +6070,24 @@ static void system_metrics_dispatch_if_due(
     if (!runtime->system_metrics_initialized) {
         runtime->system_metrics_last = sample;
         runtime->system_metrics_initialized = 1;
+        SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
         return;
     }
 
     runtime->system_metrics_last = sample;
+    SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
+    if (!has_matching_subscription(runtime, "system.metrics_changed")) {
+        return;
+    }
     heartbeat_due = runtime->system_metrics_last_dispatched_at <= 0
         || now - runtime->system_metrics_last_dispatched_at >= config->system_metrics_heartbeat_seconds;
     changed = !runtime->system_metrics_dispatched_initialized
-        || system_metrics_changed(config, &runtime->system_metrics_last_dispatched, &sample);
+        || c300x_system_metrics_changed(
+            config,
+            &runtime->system_metrics_last_dispatched,
+            &sample
+        )
+        || (sample.has_cpu_usage && sample.cpu_usage_percent >= 90.0);
     if (!heartbeat_due && !changed) {
         return;
     }
@@ -7137,6 +7033,7 @@ static void handle_doorbell_video_get(
     int running = 0;
     int call_active = 0;
     int clients = 0;
+    int max_clients = 1;
     int media_starting = 0;
     int stream_audio = 0;
     int talkback_running = 0;
@@ -7189,6 +7086,7 @@ static void handle_doorbell_video_get(
         running = video_status.running;
         call_active = video_status.call_active;
         clients = video_status.clients;
+        max_clients = video_status.max_clients > 0 ? video_status.max_clients : 1;
         media_starting = video_status.media_starting;
         stream_audio = video_status.stream_audio;
         talkback_running = video_status.talkback_running;
@@ -7284,6 +7182,8 @@ static void handle_doorbell_video_get(
         "\"active_threads\":%d,"
         "\"call_active\":%s,"
         "\"clients\":%d,"
+        "\"max_clients\":%d,"
+        "\"ring_preview_sharing\":%s,"
         "\"media_starting\":%s,"
         "\"audio_enabled\":%s,"
         "\"bt_media_start_attempts\":%llu,"
@@ -7337,6 +7237,8 @@ static void handle_doorbell_video_get(
         bridge_active_threads,
         call_active ? "true" : "false",
         clients,
+        max_clients,
+        max_clients > 1 ? "true" : "false",
         media_starting ? "true" : "false",
         stream_audio ? "true" : "false",
         bt_media_start_attempts,
@@ -7515,16 +7417,15 @@ static void handle_doorbell_call_answer(
     const struct request *request
 )
 {
-    int audio = 1;
     struct c300x_video_status video_status;
     char body[1024];
 
+    (void)request;
     if (runtime == NULL || runtime->video == NULL) {
         send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"video_unavailable\"}\n");
         return;
     }
-    (void)json_bool_field(request->body, "audio", &audio);
-    if (!c300x_video_doorbell_call_answer(runtime->video, audio)) {
+    if (!c300x_video_doorbell_call_answer(runtime->video)) {
         c300x_video_status(runtime->video, &video_status);
         snprintf(
             body,
@@ -7541,8 +7442,7 @@ static void handle_doorbell_call_answer(
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"audio\":%s,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
-        audio ? "true" : "false",
+        "{\"ok\":true,\"audio\":true,\"answer_requested\":%s,\"answered\":%s,\"media_owner\":\"ring\"}\n",
         video_status.ring_answer_requested ? "true" : "false",
         video_status.ring_answered ? "true" : "false"
     );
@@ -7836,37 +7736,6 @@ static int read_memory_metrics(
     *used_kb = total - available;
     *usage_percent = ((double)*used_kb / (double)total) * 100.0;
     return 1;
-}
-
-static double double_abs(double value)
-{
-    return value < 0.0 ? -value : value;
-}
-
-static int metric_changed_percent(double previous, double current, int threshold_percent)
-{
-    double threshold = (double)threshold_percent;
-    double diff = double_abs(current - previous);
-    double baseline = double_abs(previous);
-
-    if (threshold_percent <= 0) {
-        return diff > 0.0;
-    }
-    if (baseline < 0.001) {
-        return diff >= threshold;
-    }
-    return ((diff / baseline) * 100.0) >= threshold;
-}
-
-static int metric_changed_points(double previous, double current, int threshold_points)
-{
-    double threshold = (double)threshold_points;
-    double diff = double_abs(current - previous);
-
-    if (threshold_points <= 0) {
-        return diff > 0.0;
-    }
-    return diff >= threshold;
 }
 
 static int read_system_metrics_sample(
@@ -11665,6 +11534,10 @@ static void handle_api_request(
         api_capabilities(client_fd, config, runtime);
         return;
     }
+    if (request->method[0]=='G'&&!strcmp(request->path, "/api/v1/self-test")) {
+        c300x_self_test_send_response(client_fd, config, runtime?runtime->video:NULL);
+        return;
+    }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/state") == 0) {
         api_state(client_fd, config, runtime);
         return;
@@ -12651,7 +12524,7 @@ int c300x_run(struct c300x_config *config)
                 c300x_video_poll_timeout_ms(video)
             );
         }
-        if (system_metrics_watch_active(config, runtime)) {
+        if (system_metrics_monitor_active(config)) {
             poll_timeout_ms = min_timeout_ms(
                 poll_timeout_ms,
                 timeout_until_ms(now, runtime->system_metrics_next_sample_at)
@@ -12757,7 +12630,7 @@ int c300x_run(struct c300x_config *config)
         c300x_mdns_announce_if_due(&mdns, config, time(NULL));
         c300x_mqtt_tick(&runtime->mqtt, config, time(NULL));
         handle_mqtt_commands(config, runtime);
-        if (system_metrics_watch_active(config, runtime)) {
+        if (system_metrics_monitor_active(config)) {
             system_metrics_dispatch_if_due(config, runtime, time(NULL));
         }
     }

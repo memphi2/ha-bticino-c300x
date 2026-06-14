@@ -1,0 +1,88 @@
+{
+  "answer": {
+    "audio": {
+      "codecs": [
+        "speex/8000",
+        "telephone-event/8000"
+      ],
+      "crypto_suites": [
+        "AES_CM_128_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "98",
+        "100"
+      ]
+    },
+    "video": {
+      "codecs": [
+        "H264/90000"
+      ],
+      "crypto_suites": [
+        "AES_CM_128_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "98"
+      ]
+    }
+  },
+  "mode": "on_demand",
+  "offer": {
+    "audio": {
+      "codecs": [
+        "opus/48000/2",
+        "speex/16000",
+        "speex/8000",
+        "telephone-event/48000",
+        "telephone-event/16000",
+        "telephone-event/8000"
+      ],
+      "crypto_suites": [
+        "AEAD_AES_128_GCM",
+        "AES_CM_128_HMAC_SHA1_80",
+        "AEAD_AES_256_GCM",
+        "AES_256_CM_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "96",
+        "97",
+        "98",
+        "0",
+        "8",
+        "101",
+        "99",
+        "100"
+      ]
+    },
+    "video": {
+      "codecs": [
+        "AV1/90000",
+        "VP8/90000",
+        "H264/90000",
+        "H265/90000"
+      ],
+      "crypto_suites": [
+        "AEAD_AES_128_GCM",
+        "AES_CM_128_HMAC_SHA1_80",
+        "AEAD_AES_256_GCM",
+        "AES_256_CM_HMAC_SHA1_80"
+      ],
+      "payloads": [
+        "96",
+        "97",
+        "98",
+        "99"
+      ]
+    }
+  },
+  "schema_version": 1,
+  "sip_sequence": [
+    "INVITE",
+    "100",
+    "180",
+    "200",
+    "ACK",
+    "BYE",
+    "200"
+  ],
+  "source": "synthetic_contract_fixture"
+}

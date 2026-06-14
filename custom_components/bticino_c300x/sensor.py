@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from asyncio import Task
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,10 +24,16 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import (
     C300XAgentApiError,
     normalize_answering_machine_messages,
     normalize_memos,
+)
+from .camera_media.state_machine import (
+    MediaState,
+    derive_media_state,
+    media_state_input_from_video_status,
 )
 from .capabilities import (
     answering_machine_messages_supported,
@@ -96,11 +103,21 @@ _AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
 )
 _AGENT_VIDEO_DIAGNOSTIC_KEYS = (
     "video_running",
+    "video_rtsp_server_running",
     "video_media_starting",
     "video_call_active",
     "video_clients",
+    "video_bridge_running",
+    "video_bridge_media_active",
+    "video_bridge_stop_in_progress",
     "video_bridge_open_fds",
     "video_bridge_active_threads",
+    "ring_receiver_running",
+    "ring_registered",
+    "ring_call_active",
+    "ring_media_active",
+    "home_call_running",
+    "home_call_active",
 )
 _AGENT_FLEXISIP_DIAGNOSTIC_KEYS = (
     "flexisip_backup_available",
@@ -108,10 +125,30 @@ _AGENT_FLEXISIP_DIAGNOSTIC_KEYS = (
     "flexisip_backup_marker",
     "flexisip_reference_state",
 )
+_AGENT_DIAGNOSTICS_STATUS_OPTIONS = (
+    "unknown",
+    "agent_offline",
+    "agent_reconnecting",
+    "repair_required",
+    "subscription_missing",
+    "media_watchdog_tripped",
+    "external_media_active",
+    "media_stopping",
+    "home_call_active",
+    "home_call_starting",
+    "ring_media_active",
+    "ring_call_active",
+    "doorbell_call_active",
+    "media_starting",
+    "doorbell_media_active",
+    "rtsp_busy",
+    "media_resources_open",
+    "idle",
+)
 
 
 def _agent_diagnostic_attributes(
-    diagnostics: dict[str, Any],
+    diagnostics: Mapping[str, Any],
     keys: tuple[str, ...],
 ) -> dict[str, Any]:
     """Return selected non-sensitive diagnostic attributes."""
@@ -122,7 +159,7 @@ def _agent_diagnostic_attributes(
     return attrs
 
 
-def _agent_info_attributes(agent_info: dict[str, Any]) -> dict[str, Any]:
+def _agent_info_attributes(agent_info: Mapping[str, Any]) -> dict[str, Any]:
     """Return non-sensitive device-agent metadata for the status sensor."""
 
     version = agent_info.get("version")
@@ -138,7 +175,7 @@ def _agent_info_attributes(agent_info: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _poll_wakeups_per_loop(diagnostics: dict[str, Any]) -> float | None:
+def _poll_wakeups_per_loop(diagnostics: Mapping[str, Any]) -> float | None:
     """Return a compact poll wakeup ratio for idle diagnostics."""
 
     loop_iterations = diagnostics.get("loop_iterations")
@@ -224,6 +261,12 @@ class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
+    def _connection_state_value(self) -> str:
+        state = self._entry.runtime_data.connection_state
+        if not state.available:
+            return "disconnected"
+        return state.connection_state
+
 
 class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
     """Aggregated device-agent health status."""
@@ -256,6 +299,13 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
                 self._handle_agent_info_changed,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_SYSTEM_METRICS_CHANGED,
+                self._handle_system_metrics_changed,
+            )
+        )
 
     @property
     def native_value(self) -> str:
@@ -286,6 +336,11 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
+            "media_watchdog_trigger_count": getattr(
+                getattr(self._entry.runtime_data, "agent_cpu_watchdog", None),
+                "trigger_count",
+                0,
+            ),
         }
         if update_state is not None:
             attrs.update(
@@ -297,12 +352,6 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
                 }
             )
         return attrs
-
-    def _connection_state_value(self) -> str:
-        state = self._entry.runtime_data.connection_state
-        if not state.available:
-            return "disconnected"
-        return state.connection_state
 
     def _agent_update_required(self) -> bool:
         update_state = getattr(self._entry.runtime_data, "agent_update_state", None)
@@ -323,12 +372,18 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 
+    @callback
+    def _handle_system_metrics_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
+
 
 class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
     """Detailed device-agent runtime diagnostics."""
 
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_device_class = SensorDeviceClass.ENUM
     _attr_entity_registry_enabled_default = False
+    _attr_options = list(_AGENT_DIAGNOSTICS_STATUS_OPTIONS)
     _attr_translation_key = "agent_diagnostics"
 
     def __init__(self, entry: ConfigEntry) -> None:
@@ -340,22 +395,50 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
         await self._async_refresh_diagnostics(write_state=False)
 
     @property
-    def native_value(self) -> datetime | None:
-        """Return when detailed diagnostics were last refreshed."""
+    def native_value(self) -> str:
+        """Return the summarized detailed diagnostics status."""
 
-        return self._entry.runtime_data.agent_diagnostics_updated_at
+        return _agent_diagnostics_status(
+            self._entry.runtime_data.agent_diagnostics,
+            connection_state=self._connection_state_value(),
+            media_watchdog=getattr(
+                self._entry.runtime_data,
+                "agent_cpu_watchdog",
+                None,
+            ),
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed non-sensitive agent diagnostics."""
 
         diagnostics = self._entry.runtime_data.agent_diagnostics
+        media_watchdog = getattr(self._entry.runtime_data, "agent_cpu_watchdog", None)
         return {
+            "status_reason": _agent_diagnostics_status_reason(self.native_value),
+            "change_reason": getattr(
+                self._entry.runtime_data,
+                "agent_diagnostics_change_reason",
+                None,
+            ),
+            "updated_at": self._entry.runtime_data.agent_diagnostics_updated_at,
+            "updated_by": getattr(
+                self._entry.runtime_data,
+                "agent_diagnostics_updated_by",
+                None,
+            ),
             "agent_write_count": diagnostics.get("agent_write_count"),
             "last_write_at": diagnostics.get("last_write_at"),
             "last_write_reason": diagnostics.get("last_write_reason"),
             "last_write_class": diagnostics.get("last_write_class"),
             "qml_patch_last_action": diagnostics.get("qml_patch_last_action"),
+            "media_watchdog_trigger_count": getattr(
+                media_watchdog,
+                "trigger_count",
+                0,
+            ),
+            "media_watchdog_last_reason": getattr(media_watchdog, "last_reason", None),
+            "media_watchdog_last_percent": getattr(media_watchdog, "last_percent", None),
             **_agent_diagnostic_attributes(
                 diagnostics,
                 _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
@@ -388,14 +471,85 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
             self.async_write_ha_state()
 
     async def _async_refresh_diagnostics(self, *, write_state: bool = True) -> None:
-        try:
-            diagnostics = await self._entry.runtime_data.api.async_diagnostics()
-        except C300XAgentApiError:
-            return
-        self._entry.runtime_data.agent_diagnostics = diagnostics
-        self._entry.runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
-        if write_state:
+        diagnostics = await async_refresh_agent_diagnostics(self.hass, self._entry)
+        if diagnostics is not None and write_state:
             self.async_write_ha_state()
+
+
+def _agent_diagnostics_status(
+    diagnostics: Mapping[str, Any],
+    *,
+    connection_state: str = "connected",
+    media_watchdog: Any | None = None,
+) -> str:
+    """Return a compact readable status for detailed diagnostics."""
+
+    if connection_state == "disconnected":
+        return "agent_offline"
+    if connection_state == "reconnecting":
+        return "agent_reconnecting"
+    if not diagnostics:
+        return "unknown"
+    if diagnostics.get("agent_init_script_present") is False or diagnostics.get(
+        "agent_init_link_ok"
+    ) is False:
+        return "repair_required"
+    if diagnostics.get("subscription_count") == 0 or diagnostics.get(
+        "home_assistant_connected_this_run"
+    ) is False:
+        return "subscription_missing"
+    if getattr(media_watchdog, "tripped", False):
+        return "media_watchdog_tripped"
+    if diagnostics.get("video_external_media_active"):
+        return "external_media_active"
+    if diagnostics.get("video_bridge_stop_in_progress"):
+        return "media_stopping"
+    if diagnostics.get("home_call_active"):
+        return "home_call_active"
+    if diagnostics.get("home_call_running"):
+        return "home_call_starting"
+    if diagnostics.get("ring_media_active"):
+        return "ring_media_active"
+    if diagnostics.get("ring_call_active"):
+        return "ring_call_active"
+    if diagnostics.get("video_call_active"):
+        return "doorbell_call_active"
+    if diagnostics.get("video_media_starting"):
+        return "media_starting"
+    if diagnostics.get("video_bridge_media_active"):
+        return "doorbell_media_active"
+    if diagnostics.get("video_clients"):
+        return "rtsp_busy"
+    if diagnostics.get("video_bridge_open_fds") or diagnostics.get(
+        "video_bridge_active_threads"
+    ):
+        return "media_resources_open"
+    return "idle"
+
+
+def _agent_diagnostics_status_reason(status: str) -> str:
+    """Return a stable operator-facing reason for the diagnostics status."""
+
+    return {
+        "unknown": "diagnostics_not_loaded",
+        "agent_offline": "agent_connection_unavailable",
+        "agent_reconnecting": "agent_connection_reconnecting",
+        "repair_required": "agent_installation_needs_repair",
+        "subscription_missing": "ha_event_subscription_missing",
+        "media_watchdog_tripped": "sustained_high_cpu_media_watchdog",
+        "external_media_active": "device_reports_external_media_owner",
+        "media_stopping": "native_bridge_stop_in_progress",
+        "home_call_active": "native_home_call_audio_active",
+        "home_call_starting": "native_home_call_starting",
+        "ring_media_active": "native_ring_media_active",
+        "ring_call_active": "native_ring_call_active",
+        "doorbell_call_active": "native_doorbell_call_active",
+        "media_starting": "native_media_starting",
+        "doorbell_media_active": "native_doorbell_media_active",
+        "rtsp_busy": "native_rtsp_client_connected",
+        "media_resources_open": "native_media_resources_still_open",
+        "idle": "native_agent_idle",
+    }.get(status, "diagnostics_status_unknown")
 
 
 class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
@@ -426,6 +580,11 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
             **media_user_attributes(self._entry),
         }
 
+    async def async_update(self) -> None:
+        """Initialize the doorbell state from authoritative agent media status."""
+
+        await self._async_refresh_from_agent_status(write_state=False)
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to doorbell push events."""
 
@@ -436,6 +595,27 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
                 self._handle_agent_event,
             )
         )
+        await self._async_refresh_from_agent_status(write_state=True)
+
+    async def _async_refresh_from_agent_status(self, *, write_state: bool) -> None:
+        """Apply the safe idle state from the native media state machine."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_doorbell_video_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        decision = derive_media_state(media_state_input_from_video_status(status))
+        if decision.state is not MediaState.IDLE:
+            return
+        if self._state == DOORBELL_STATE_IDLE:
+            self._attr_available = True
+            return
+        self._state = DOORBELL_STATE_IDLE
+        self._last_event_at = None
+        self._attr_available = True
+        if write_state:
+            self.async_write_ha_state()
 
     @callback
     def _handle_agent_event(self, event) -> None:
@@ -965,4 +1145,3 @@ async def _async_refresh_initial_memos(entry: ConfigEntry) -> None:
             "available": False,
         }
         entry.runtime_data.memos_updated_at = datetime.now(UTC)
-

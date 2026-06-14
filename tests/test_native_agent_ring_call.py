@@ -26,16 +26,37 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
         media_bridge.index("static void ring_media_loop") :
         media_bridge.index("static void handle_ring_invite")
     ]
+    ring_preview_share_body = media_bridge[
+        media_bridge.index("static bool ring_preview_sharing_allowed_locked") :
+        media_bridge.index("static int rtsp_client_count_locked")
+    ]
+    ring_talkback_body = media_bridge[
+        media_bridge.index("static bool forward_ring_talkback_packet") :
+        media_bridge.index("static bool forward_home_call_talkback_packet")
+    ]
+    talkback_proxy_body = media_bridge[
+        media_bridge.index("static void *talkback_proxy_thread") :
+        media_bridge.index("static bool create_rtp_socket")
+    ]
 
     assert "#define RING_AUDIO_RTP_PORT 17030" in media_bridge
     assert "#define RING_AUDIO_RTCP_PORT 17031" in media_bridge
     assert "#define RING_VIDEO_RTP_PORT 16718" in media_bridge
     assert "#define RING_VIDEO_RTCP_PORT 16719" in media_bridge
     assert "#define RING_AUDIO_PAYLOAD_TYPE 96" in media_bridge
-    assert "#define RING_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert "#define RING_EARLY_MEDIA_DELAY_MS 300" in media_bridge
+    assert "#define RING_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
     assert "#define RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS 300000" in media_bridge
     assert "#define RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS 30000" in media_bridge
     assert "#define RTSP_AUDIO_PAYLOAD_TYPE 110" in media_bridge
+    assert "bridge->ring_call_active" in ring_preview_share_body
+    assert "bridge->ring_media_active" in ring_preview_share_body
+    assert "!bridge->ring_audio_active" in ring_preview_share_body
+    assert "!bridge->ring_answered" in ring_preview_share_body
+    assert "!bridge->ring_call_stop" in ring_preview_share_body
+    assert "static bool ring_answer_stream_sharing_allowed_locked" in ring_preview_share_body
+    assert "(bridge->ring_answer_requested || bridge->ring_answered)" in ring_preview_share_body
+    assert "static bool rtsp_client_sharing_allowed_locked" in ring_preview_share_body
     assert "strstr(message, \"sip:alluser@\")" in ring_thread_body
     assert ring_invite_body.index('100, "Trying"') < ring_invite_body.index(
         '180, "Ringing"'
@@ -55,6 +76,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert ring_invite_body.index('183, "Session progress"') < (
         ring_invite_body.index("bridge->ring_media_active = true;")
     )
+    assert ring_invite_body.index('183, "Session progress"') < (
+        ring_invite_body.index("c300x_video_bridge_ring_media_started(bridge->video, 0)")
+    )
     assert "build_ring_sdp(sdp_early" in ring_invite_body
     assert "build_ring_sdp(sdp_answer" in ring_invite_body
     assert "bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;" in ring_invite_body
@@ -66,7 +90,7 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert '"a=recvonly\\r\\n"' in media_bridge
     assert "parse_sdp_sdes_key(invite, \"\\r\\nm=audio \"" in ring_invite_body
     assert "parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
-    assert "app_srtp_init_inbound(&srtp" in ring_invite_body
+    assert "media_srtp_init_inbound(&srtp" in ring_invite_body
     assert "srtp_unprotect" in media_bridge
     assert "forward_rtsp_packet(bridge, packet, packet_len, audio)" in media_bridge
     assert (
@@ -74,8 +98,13 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
         in media_bridge
     )
     assert "if (answer_requested && !answered)" in ring_media_loop_body
+    assert "shutdown_ring_preview_clients_locked(bridge);" not in ring_media_loop_body
     assert 'send_ring_response(bridge, sip_fd, invite, 200, "Ok"' in ring_media_loop_body
+    assert ring_media_loop_body.index('send_ring_response(bridge, sip_fd, invite, 200, "Ok"') < (
+        ring_media_loop_body.index("bridge->ring_answered = true;")
+    )
     assert "bridge->ring_audio_active = true;" in ring_media_loop_body
+    assert "pthread_cond_broadcast(&bridge->ready_cond);" in ring_media_loop_body
     assert "c300x_video_bridge_ring_media_started(bridge->video, 1)" in ring_media_loop_body
     assert "long long last_inbound_activity = started_at;" in ring_media_loop_body
     assert ring_media_loop_body.count("last_inbound_activity = monotonic_ms();") >= 5
@@ -84,17 +113,20 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert ring_media_loop_body.index("now - last_inbound_activity") < (
         ring_media_loop_body.index("if (now >= next_sip_keepalive)")
     )
-    assert "send_app_audio_silence_payload_type(" in ring_media_loop_body
+    assert "send_media_audio_silence_payload_type(" in ring_media_loop_body
     assert (
         "bridge->ring_srtp_state == srtp && !ring_talkback_recent_locked(bridge, now)"
         in ring_media_loop_body
     )
     assert "RING_AUDIO_PAYLOAD_TYPE" in ring_media_loop_body
     assert "bridge->ring_last_talkback_ms = 0;" in ring_invite_body
-    assert "bridge->ring_last_talkback_ms = monotonic_ms();" in media_bridge[
-        media_bridge.index("static bool forward_ring_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
-    ]
+    assert "bridge->ring_last_talkback_ms = monotonic_ms();" in ring_talkback_body
+    assert "return ring_active;" in ring_talkback_body
+    assert "protect_and_send_srtp(" in ring_talkback_body
+    assert "TALKBACK_TARGET_PORT" not in ring_talkback_body
+    assert talkback_proxy_body.index("!forward_ring_talkback_packet") < (
+        talkback_proxy_body.index("(void)sendto(target_fd")
+    )
 
 
 def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
@@ -120,16 +152,20 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         media_bridge,
     ) is None
     assert '"ha-bticino-c300x:sip-instance:"' in media_bridge
-    assert "c300x_sha256_strings3(APP_INSTANCE_UUID_NAMESPACE, mode, seed, digest)" in media_bridge
-    assert 'bridge_instance_uuid(bridge, bridge->app_instance_uuid, "ondemand"' in media_bridge
-    assert 'bridge_instance_uuid(bridge, bridge->ring_app_instance_uuid, "ring"' in media_bridge
-    assert 'bridge_instance_uuid(bridge, bridge->home_call_app_instance_uuid, "home_call"' in media_bridge
+    assert "c300x_sha256_strings3(MEDIA_INSTANCE_UUID_NAMESPACE, mode, seed, digest)" in media_bridge
+    assert 'bridge_instance_uuid(bridge, bridge->ondemand_instance_uuid, "ondemand"' in media_bridge
+    assert 'bridge_instance_uuid(bridge, bridge->ring_instance_uuid, "ring"' in media_bridge
+    assert 'bridge_instance_uuid(bridge, bridge->home_call_instance_uuid, "home_call"' in media_bridge
     assert "ring_forwarding_allows_registration" not in setup_body
     assert "ring_forwarding_allows_registration" not in start_body
-    assert "bridge_instance_uuid(bridge, bridge->app_instance_uuid" in setup_body
+    assert "bridge_instance_uuid(bridge, bridge->ondemand_instance_uuid" in setup_body
     assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=rtpmap:96 AV1/90000\\r\\n"' in setup_body
+    assert setup_body.count('"a=crypto:1 AEAD_AES_128_GCM inline:%s\\r\\n"') >= 2
+    assert setup_body.count('"a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
+    assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
+    assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert "start_bt_av_media(bridge)" in media_bridge
     assert "request_ring_answer_if_active" not in start_body
     assert "sdp_audio_video" in rtsp_body
@@ -229,7 +265,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     ]
     home_call_talkback_body = media_bridge[
         media_bridge.index("static bool forward_home_call_talkback_packet") :
-        media_bridge.index("static void drain_app_media_socket")
+        media_bridge.index("static void drain_ondemand_media_socket")
     ]
     drain_home_call_body = media_bridge[
         media_bridge.index("static void drain_home_call_srtp_socket") :
@@ -246,11 +282,15 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
 
     assert "#define HOME_CALL_AUDIO_RTP_PORT 45544" in media_bridge
     assert "#define HOME_CALL_AUDIO_RTCP_PORT 45545" in media_bridge
-    assert "#define HOME_CALL_TALKBACK_SILENCE_GRACE_MS (APP_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert "#define HOME_CALL_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
     assert "HOME_CALL_APP_INSTANCE_UUID" not in media_bridge
-    assert "bridge->home_call_app_instance_uuid" in media_bridge
+    assert "bridge->home_call_instance_uuid" in media_bridge
     assert "INVITE sip:%s SIP/2.0\\r\\n" in media_bridge
     assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in home_call_body
+    assert '"a=crypto:1 AEAD_AES_128_GCM inline:%s\\r\\n"' in home_call_body
+    assert '"a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\\r\\n"' in home_call_body
+    assert '"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"' in home_call_body
+    assert '"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"' in home_call_body
     assert '"m=video' not in home_call_body
     assert '"s=BTicino Home Call\\r\\n"' in rtsp_home_call_sdp
     assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_home_call_sdp
@@ -262,7 +302,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
         in home_call_body
     )
     assert "bridge->home_call_rtp_proxy = target_audio_port != 7078;" in home_call_body
-    assert "send_app_audio_silence(audio_fd, target_audio_port" in home_call_body
+    assert "send_media_audio_silence(audio_fd, target_audio_port" in home_call_body
     assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1" in home_call_body
     assert "start_bt_av_media" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
@@ -273,7 +313,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
         "packet[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);"
         in drain_home_call_body
     )
-    assert "APP_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
+    assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
     assert "bridge->home_call_last_talkback_ms = monotonic_ms();" in home_call_talkback_body
 
@@ -308,7 +348,7 @@ def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     assert '"To: <sip:%s>\\r\\n"' in cancel_body
     assert '"From: <sip:%s>;tag=%s\\r\\n"' in cancel_body
     assert '"CSeq: 21 CANCEL\\r\\n"' in cancel_body
-    assert '"User-Agent: " APP_USER_AGENT' not in cancel_body
+    assert '"User-Agent: " MEDIA_SIP_USER_AGENT' not in cancel_body
     assert "drain_home_call_stop_responses(fd, \"CANCEL\", true)" in ringing_loop
     assert "send_home_call_cancel(" in ringing_loop
     assert "send_sip_bye(" not in ringing_loop
@@ -333,16 +373,16 @@ def test_native_agent_home_call_ack_and_bye_match_app_headers() -> None:
     ]
 
     assert '"CSeq: %d ACK\\r\\n"' in ack_body
-    assert '"User-Agent: " APP_USER_AGENT "\\r\\n"' in ack_body
+    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in ack_body
     assert ack_body.index('"CSeq: %d ACK\\r\\n"') < ack_body.index(
-        '"User-Agent: " APP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert '"BYE %s SIP/2.0\\r\\n"' in bye_body
     assert '"CSeq: 22 BYE\\r\\n"' in bye_body
-    assert '"User-Agent: " APP_USER_AGENT "\\r\\n"' in bye_body
+    assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in bye_body
     assert bye_body.index('"CSeq: 22 BYE\\r\\n"') < bye_body.index(
-        '"User-Agent: " APP_USER_AGENT "\\r\\n"'
+        '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"'
     )
 
     assert 'strcmp(cseq_method, stop_method) == 0' in stop_drain_body
@@ -463,6 +503,10 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     ):
         assert f"int {field};" in video_header
         assert f'\\"{field}\\":%s' in http
+    assert "int max_clients;" in video_header
+    assert '\\"max_clients\\":%d' in http
+    assert '\\"ring_preview_sharing\\":%s' in http
+    assert "status->max_clients = rtsp_client_sharing_allowed_locked(&g_bridge)" in media_bridge
     for field, marker in (
         ("home_call_target_audio_port", "%d"),
         ("home_call_rtp_packets", "%llu"),
@@ -535,18 +579,18 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
 
     assert "int ring_answer_requested;" in video_header
     assert "int ring_answered;" in video_header
-    assert "bool c300x_media_ring_call_answer(struct c300x_video *video, bool audio);" in media_header
+    assert "bool c300x_media_ring_call_answer(struct c300x_video *video);" in media_header
     assert "void c300x_media_ring_call_hangup(struct c300x_video *video);" in media_header
-    assert "int c300x_video_doorbell_call_answer(struct c300x_video *video, int include_audio);" in video_header
+    assert "int c300x_video_doorbell_call_answer(struct c300x_video *video);" in video_header
     assert "void c300x_video_doorbell_call_hangup(struct c300x_video *video);" in video_header
-    assert "request_ring_answer_if_active(&g_bridge, audio)" in answer_bridge_body
+    assert "request_ring_answer_if_active(&g_bridge)" in answer_bridge_body
     assert "send_ring_response" not in answer_bridge_body
     assert "build_ring_sdp" not in answer_bridge_body
     assert "c300x_media_session_stop(video);" in hangup_bridge_body
     assert "stop_ring_call_if_active" not in hangup_bridge_body
-    assert "c300x_media_ring_call_answer(video, include_audio != 0)" in answer_video_body
+    assert "c300x_media_ring_call_answer(video)" in answer_video_body
     assert "c300x_media_ring_call_hangup(video);" in hangup_video_body
-    assert "c300x_video_doorbell_call_answer(runtime->video, audio)" in answer_http_body
+    assert "c300x_video_doorbell_call_answer(runtime->video)" in answer_http_body
     assert '\\"ring_call_not_active\\"' in answer_http_body
     assert "c300x_video_doorbell_call_hangup(runtime->video);" in hangup_http_body
     for path in (
@@ -563,8 +607,12 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
 
 def test_native_agent_doorbell_events_include_device_media_state() -> None:
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    event_payload = (ROOT / "native_agent" / "src" / "event_payload.c").read_text(
+        encoding="utf-8"
+    )
     state_body = http[
-        http.index("static int doorbell_event_needs_video_status") :
+        http.index("static void dispatch_event_internal")
+        - 1000 :
         http.index("static void dispatch_event_internal")
     ]
     dispatch_body = http[
@@ -572,27 +620,35 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         http.index("static void dispatch_event(", http.index("static void dispatch_event_internal"))
     ]
 
-    assert 'strcmp(event_type, "doorbell.pressed") == 0' in state_body
-    assert 'strcmp(event_type, "doorbell.view_requested") == 0' in state_body
-    assert 'strcmp(event_type, "doorbell.media.closed") == 0' in state_body
-    assert "status.ring_call_active" in state_body
-    assert "status.ring_media_active" in state_body
-    assert "status.bridge_media_active" in state_body
-    assert "status.call_active" in state_body
-    assert "external_media_active = status.external_media_active && !available;" in state_body
+    assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload
+    assert 'strcmp(event_type, "doorbell.view_requested") == 0' in event_payload
+    assert 'strcmp(event_type, "doorbell.media.closed") == 0' in event_payload
+    assert "status.ring_call_active" in event_payload
+    assert "status.ring_media_active" in event_payload
+    assert "status.ring_receiver_running" in event_payload
+    assert "status.ring_registered" in event_payload
+    assert 'ring_owner ? "ring" : status.media_owner' in event_payload
+    assert "unanswered_ring_call" in event_payload
+    assert "status.bridge_media_active" in event_payload
+    assert "status.call_active" in event_payload
+    assert "external_media_active = status.external_media_active && !available;" in event_payload
     for field in (
         "available",
         "window_available",
         "stream_path",
+        "audio_stream_path",
+        "recorder_stream_path",
+        "media_owner",
         "external_media_active",
+        "bridge",
     ):
-        assert f'\\"{field}\\":' in state_body
-    assert '\\"doorbell\\":%s' in state_body
-    assert 'doorbell_state_for_event(event_type)' in state_body
+        assert f'\\"{field}\\":' in event_payload
+    assert '\\"doorbell\\":%s' in event_payload
+    assert 'doorbell_state_for_event(event_type)' in event_payload
     assert "size_t used = 0;" in state_body
-    assert "build_doorbell_event_state_json" in state_body
-    assert "has_video = runtime != NULL" in state_body
-    assert 'snprintf(out, out_len, "\\"doorbell\\":%s", doorbell_state_json)' in state_body
+    assert "c300x_event_payload_build_doorbell_state" in state_body
+    assert "runtime != NULL ? runtime->video : NULL" in state_body
+    assert "c300x_event_payload_needs_doorbell_state" in state_body
     assert dispatch_body.index(
         "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
     ) < dispatch_body.index("build_event_data_json(")

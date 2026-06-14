@@ -6,7 +6,9 @@ import asyncio
 import random
 import socket
 import struct
+import threading
 import time
+from collections.abc import Mapping
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -31,12 +33,29 @@ async def async_play_announcement_when_ready(
     await _async_play_announcement(host, source)
 
 
+async def async_keep_talkback_alive_when_ready(
+    entry: Any,
+    host: str,
+    source: Path | None,
+    stop_event: threading.Event,
+) -> None:
+    """Wait for ring-call talkback, optionally play an announcement, then keep it alive."""
+
+    await _async_wait_talkback_ready(entry)
+    try:
+        await asyncio.to_thread(_keep_talkback_alive_sync, host, source, stop_event)
+    except HomeAssistantError:
+        raise
+    except Exception as err:
+        raise HomeAssistantError("C300X talkback keepalive failed") from err
+
+
 async def _async_wait_talkback_ready(entry: Any) -> None:
     deadline = asyncio.get_running_loop().time() + _TALKBACK_READY_TIMEOUT_SECONDS
-    last_status: dict[str, Any] | None = None
+    last_status: Mapping[str, Any] | None = None
     while asyncio.get_running_loop().time() < deadline:
         status = await entry.runtime_data.api.async_doorbell_call_status()
-        last_status = status if isinstance(status, dict) else None
+        last_status = status if isinstance(status, Mapping) else None
         if (
             last_status is not None
             and last_status.get("answered") is True
@@ -61,6 +80,16 @@ async def _async_play_announcement(host: str, source: Path) -> None:
 
 
 def _play_announcement_sync(host: str, source: Path) -> None:
+    stop_event = threading.Event()
+    stop_event.set()
+    _keep_talkback_alive_sync(host, source, stop_event)
+
+
+def _keep_talkback_alive_sync(
+    host: str,
+    source: Path | None,
+    stop_event: threading.Event,
+) -> None:
     try:
         import av
         from av.audio.fifo import AudioFifo
@@ -97,19 +126,34 @@ def _play_announcement_sync(host: str, source: Path) -> None:
             ssrc,
             marker,
         )
-        with av.open(str(source)) as container:
-            audio_stream = next(
-                (stream for stream in container.streams if stream.type == "audio"),
-                None,
-            )
-            if audio_stream is None:
-                raise HomeAssistantError("C300X announcement file has no audio stream")
-            for frame in container.decode(audio_stream):
-                for resampled in resampler.resample(frame):
-                    fifo.write(resampled)
-                    sequence, timestamp, marker = _send_ready_talkback_frames(
+        if source is not None:
+            with av.open(str(source)) as container:
+                audio_stream = next(
+                    (stream for stream in container.streams if stream.type == "audio"),
+                    None,
+                )
+                if audio_stream is None:
+                    raise HomeAssistantError("C300X announcement file has no audio stream")
+                for frame in container.decode(audio_stream):
+                    for resampled in resampler.resample(frame):
+                        fifo.write(resampled)
+                        sequence, timestamp, marker = _send_ready_talkback_frames(
+                            encoder,
+                            fifo,
+                            sock,
+                            target,
+                            sequence,
+                            timestamp,
+                            ssrc,
+                            marker,
+                        )
+                while fifo.samples:
+                    frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
+                    if frame is None:
+                        break
+                    sequence, timestamp, marker = _send_encoded_talkback_frame(
                         encoder,
-                        fifo,
+                        frame,
                         sock,
                         target,
                         sequence,
@@ -117,20 +161,18 @@ def _play_announcement_sync(host: str, source: Path) -> None:
                         ssrc,
                         marker,
                     )
-            while fifo.samples:
-                frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
-                if frame is None:
-                    break
-                sequence, timestamp, marker = _send_encoded_talkback_frame(
-                    encoder,
-                    frame,
-                    sock,
-                    target,
-                    sequence,
-                    timestamp,
-                    ssrc,
-                    marker,
-                )
+        while not stop_event.is_set():
+            frame = _new_silence_frame(av)
+            sequence, timestamp, marker = _send_encoded_talkback_frame(
+                encoder,
+                frame,
+                sock,
+                target,
+                sequence,
+                timestamp,
+                ssrc,
+                marker,
+            )
         for packet in encoder.encode(None):
             payload = bytes(packet)
             if not payload:
@@ -146,6 +188,17 @@ def _play_announcement_sync(host: str, source: Path) -> None:
         sock.close()
 
 
+def _new_silence_frame(av_module: Any) -> Any:
+    frame = av_module.AudioFrame(
+        format="s16",
+        layout="mono",
+        samples=_TALKBACK_FRAME_SAMPLES,
+    )
+    frame.sample_rate = _TALKBACK_SAMPLE_RATE
+    frame.planes[0].update(bytes(frame.planes[0].buffer_size))
+    return frame
+
+
 def _send_talkback_silence_preroll(
     av_module: Any,
     encoder: Any,
@@ -158,13 +211,7 @@ def _send_talkback_silence_preroll(
 ) -> tuple[int, int, bool]:
     frames = int(_ANNOUNCEMENT_PREROLL_SECONDS * _TALKBACK_SAMPLE_RATE / _TALKBACK_FRAME_SAMPLES)
     for _ in range(frames):
-        frame = av_module.AudioFrame(
-            format="s16",
-            layout="mono",
-            samples=_TALKBACK_FRAME_SAMPLES,
-        )
-        frame.sample_rate = _TALKBACK_SAMPLE_RATE
-        frame.planes[0].update(bytes(frame.planes[0].buffer_size))
+        frame = _new_silence_frame(av_module)
         sequence, timestamp, marker = _send_encoded_talkback_frame(
             encoder,
             frame,

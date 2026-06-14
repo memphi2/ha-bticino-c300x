@@ -4,11 +4,23 @@ from __future__ import annotations
 
 import json
 from base64 import b64encode
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote
 
 from aiohttp import ClientError, ClientSession
 
+from .agent_contracts import (
+    AgentDiagnosticsStatus,
+    AuthConfigStatus,
+    CapabilityPayload,
+    DoorbellVideoStatus,
+    FirewallStatus,
+    HomeCallStatus,
+    RingCallStatus,
+    SelfTestStatus,
+)
+from .agent_contracts.self_test import normalize_self_test_contract
 from .const import (
     DEFAULT_AGENT_PORT,
     HEADER_MAINTENANCE_TOKEN,
@@ -61,7 +73,7 @@ class C300XAgentApi:
         self._maintenance_token = maintenance_token
         self._timeout = timeout
 
-    async def async_validate_setup(self) -> dict[str, Any]:
+    async def async_validate_setup(self) -> CapabilityPayload:
         """Return agent/device metadata from `/api/v1/capabilities`."""
 
         data = await self._request_json(
@@ -73,16 +85,18 @@ class C300XAgentApi:
             raise C300XAgentApiResponseError("capabilities returned non-object JSON")
         agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
         device = data.get("device") if isinstance(data.get("device"), dict) else {}
-        return {
-            "version": agent.get("version") or data.get("api_version"),
-            "agent": agent,
-            "implementation": agent.get("implementation"),
-            "api_version": data.get("api_version"),
-            "device_id": device.get("id"),
-            "model": device.get("model"),
-            "firmware": device.get("firmware"),
-            "capabilities": data.get("capabilities", {}),
-        }
+        capabilities = data.get("capabilities")
+        return CapabilityPayload(
+            raw=data,
+            version=_optional_string(agent.get("version") or data.get("api_version")),
+            agent=agent,
+            implementation=_optional_string(agent.get("implementation")),
+            api_version=_optional_string(data.get("api_version")),
+            device_id=_optional_string(device.get("id")),
+            model=_optional_string(device.get("model")),
+            firmware=_optional_string(device.get("firmware")),
+            capabilities=capabilities if isinstance(capabilities, dict) else {},
+        )
 
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         """Return smartphone forwarding status."""
@@ -252,7 +266,7 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
-    async def async_doorbell_video_status(self) -> dict[str, Any]:
+    async def async_doorbell_video_status(self) -> DoorbellVideoStatus:
         """Return doorbell video availability and bridge status."""
 
         data = await self._request_json("GET", "/api/v1/video/doorbell/status")
@@ -290,19 +304,18 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
-    async def async_doorbell_call_status(self) -> dict[str, Any]:
+    async def async_doorbell_call_status(self) -> RingCallStatus:
         """Return the native doorbell ring-call control status."""
 
         data = await self._request_json("GET", "/api/v1/calls/doorbell/status")
         return normalize_doorbell_call(data)
 
-    async def async_answer_doorbell_call(self, audio: bool = True) -> dict[str, Any]:
-        """Request app-like answering of the active doorbell ring call."""
+    async def async_answer_doorbell_call(self) -> dict[str, Any]:
+        """Request local media answering of the active doorbell ring call."""
 
         data = await self._request_json(
             "POST",
             "/api/v1/calls/doorbell/actions/answer",
-            json_data={"audio": bool(audio)},
         )
         return _ok_response(data)
 
@@ -324,7 +337,7 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
-    async def async_home_call_status(self) -> dict[str, Any]:
+    async def async_home_call_status(self) -> HomeCallStatus:
         """Return the in-house home-call status."""
 
         data = await self._request_json("GET", "/api/v1/calls/home/status")
@@ -460,7 +473,7 @@ class C300XAgentApi:
             raise C300XAgentApiResponseError("display bridge event returned non-object JSON")
         return data
 
-    async def async_diagnostics(self) -> dict[str, Any]:
+    async def async_diagnostics(self) -> AgentDiagnosticsStatus:
         """Return non-sensitive runtime diagnostics from the device agent."""
 
         data = await self._request_json("GET", "/api/v1/diagnostics")
@@ -468,13 +481,23 @@ class C300XAgentApi:
             raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
         return normalize_agent_diagnostics(data)
 
+    async def async_self_test(self) -> SelfTestStatus:
+        """Return the read-only device-agent architecture self-test."""
+
+        data = await self._request_json(
+            "GET",
+            "/api/v1/self-test",
+            request_timeout=_SETUP_TIMEOUT,
+        )
+        return normalize_self_test(data)
+
     async def async_device_user_status(self) -> dict[str, Any]:
         """Return non-sensitive Flexisip device-user status."""
 
         data = await self._request_json("GET", "/api/v1/device-user")
         return normalize_device_user_status(data)
 
-    async def async_auth_config_status(self) -> dict[str, Any]:
+    async def async_auth_config_status(self) -> AuthConfigStatus:
         """Return bootstrap/auth configuration status without exposing token values."""
 
         data = await self._request_json(
@@ -491,7 +514,7 @@ class C300XAgentApi:
         api_token: str | None = None,
         maintenance_token: str | None = None,
         maintenance_no_auth_allowed: bool | None = None,
-    ) -> dict[str, Any]:
+    ) -> AuthConfigStatus:
         """Enable or disable the agent bootstrap noAuth mode."""
 
         payload: dict[str, Any] = {"noAuth": enabled}
@@ -509,7 +532,7 @@ class C300XAgentApi:
         )
         return normalize_auth_config_status(data)
 
-    async def async_set_mdns_enabled(self, enabled: bool) -> dict[str, Any]:
+    async def async_set_mdns_enabled(self, enabled: bool) -> AuthConfigStatus:
         """Enable or disable bootstrap mDNS discovery in the device agent."""
 
         data = await self._request_json(
@@ -526,7 +549,7 @@ class C300XAgentApi:
         enabled: bool,
         auto_discover: bool,
         stair_light_address: str,
-    ) -> dict[str, Any]:
+    ) -> AuthConfigStatus:
         """Configure native-agent C300X activation discovery."""
 
         payload: dict[str, Any] = {
@@ -545,7 +568,7 @@ class C300XAgentApi:
         )
         return normalize_auth_config_status(data)
 
-    async def async_set_ipv6_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+    async def async_set_ipv6_firewall_enabled(self, enabled: bool) -> AuthConfigStatus:
         """Enable or disable the IPv6 firewall maintenance endpoint."""
 
         payload: dict[str, Any] = {"ipv6FirewallEnabled": bool(enabled)}
@@ -559,7 +582,7 @@ class C300XAgentApi:
         )
         return normalize_auth_config_status(data)
 
-    async def async_set_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+    async def async_set_firewall_enabled(self, enabled: bool) -> AuthConfigStatus:
         """Enable or disable the IPv4 firewall maintenance endpoint."""
 
         payload: dict[str, Any] = {"firewallEnabled": bool(enabled)}
@@ -842,7 +865,7 @@ class C300XAgentApi:
         )
         return _ok_response(data)
 
-    async def async_firewall_status(self) -> dict[str, Any]:
+    async def async_firewall_status(self) -> FirewallStatus:
         """Return C300X persistent firewall rule state through the maintenance API."""
 
         data = await self._request_json(
@@ -852,7 +875,7 @@ class C300XAgentApi:
         )
         return normalize_firewall_status(data)
 
-    async def async_apply_firewall(self) -> dict[str, Any]:
+    async def async_apply_firewall(self) -> FirewallStatus:
         """Apply the persistent C300X API firewall rule."""
 
         data = await self._request_json(
@@ -863,7 +886,7 @@ class C300XAgentApi:
         )
         return normalize_firewall_status(data)
 
-    async def async_restore_firewall(self) -> dict[str, Any]:
+    async def async_restore_firewall(self) -> FirewallStatus:
         """Remove the persistent C300X API firewall rule."""
 
         data = await self._request_json(
@@ -874,7 +897,7 @@ class C300XAgentApi:
         )
         return normalize_firewall_status(data)
 
-    async def async_ipv6_firewall_status(self) -> dict[str, Any]:
+    async def async_ipv6_firewall_status(self) -> FirewallStatus:
         """Return C300X persistent IPv6 firewall rule state."""
 
         data = await self._request_json(
@@ -884,7 +907,7 @@ class C300XAgentApi:
         )
         return normalize_firewall_status(data)
 
-    async def async_apply_ipv6_firewall(self) -> dict[str, Any]:
+    async def async_apply_ipv6_firewall(self) -> FirewallStatus:
         """Apply the persistent C300X IPv6 API firewall rules."""
 
         data = await self._request_json(
@@ -895,7 +918,7 @@ class C300XAgentApi:
         )
         return normalize_firewall_status(data)
 
-    async def async_restore_ipv6_firewall(self) -> dict[str, Any]:
+    async def async_restore_ipv6_firewall(self) -> FirewallStatus:
         """Remove the persistent C300X IPv6 API firewall rules."""
 
         data = await self._request_json(
@@ -1193,29 +1216,29 @@ def _normalize_pattern_value(
     return normalized
 
 
-def normalize_doorbell_video(data: Any) -> dict[str, Any]:
+def normalize_doorbell_video(data: Any) -> DoorbellVideoStatus:
     """Normalize device-agent doorbell video status responses."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("doorbell video returned non-object JSON")
     bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
-    return {
-        "available": bool(data.get("available")),
-        "window_available": bool(data.get("window_available")),
-        "stream_path": data.get("stream_path"),
-        "audio_stream_path": data.get("audio_stream_path"),
-        "recorder_stream_path": data.get("recorder_stream_path"),
-        "media_owner": _optional_string(bridge.get("media_owner")) or "unknown",
-        "external_media_active": _optional_bool(bridge.get("external_media_active"))
+    return DoorbellVideoStatus(
+        raw=data,
+        available=bool(data.get("available")),
+        window_available=bool(data.get("window_available")),
+        stream_path=_optional_string(data.get("stream_path")),
+        audio_stream_path=_optional_string(data.get("audio_stream_path")),
+        recorder_stream_path=_optional_string(data.get("recorder_stream_path")),
+        media_owner=_optional_string(bridge.get("media_owner")) or "unknown",
+        external_media_active=_optional_bool(bridge.get("external_media_active"))
         is True,
-        "external_owner": _optional_string(bridge.get("external_owner")),
-        "last_block_reason": _optional_string(bridge.get("last_block_reason")),
-        "bridge": bridge,
-        "raw": data,
-    }
+        external_owner=_optional_string(bridge.get("external_owner")),
+        last_block_reason=_optional_string(bridge.get("last_block_reason")),
+        bridge=bridge,
+    )
 
 
-def _doorbell_video_has_ring_call(data: dict[str, Any]) -> bool:
+def _doorbell_video_has_ring_call(data: Mapping[str, Any]) -> bool:
     """Return true while the native bridge owns a doorbell ring call."""
 
     bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
@@ -1225,49 +1248,49 @@ def _doorbell_video_has_ring_call(data: dict[str, Any]) -> bool:
     )
 
 
-def normalize_doorbell_call(data: Any) -> dict[str, Any]:
+def normalize_doorbell_call(data: Any) -> RingCallStatus:
     """Normalize device-agent doorbell ring-call control status responses."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("doorbell call returned non-object JSON")
-    return {
-        "supported": bool(data.get("supported")),
-        "active": bool(data.get("active")),
-        "early_media_active": bool(data.get("early_media_active")),
-        "audio_active": bool(data.get("audio_active")),
-        "answer_requested": bool(data.get("answer_requested")),
-        "answered": bool(data.get("answered")),
-        "can_answer": bool(data.get("can_answer")),
-        "can_hangup": bool(data.get("can_hangup")),
-        "media_owner": _optional_string(data.get("media_owner")) or "unknown",
-        "ring_receiver_running": bool(data.get("ring_receiver_running")),
-        "ring_registered": bool(data.get("ring_registered")),
-        "capture_supported": bool(data.get("capture_supported")),
-        "open_fds": _optional_int(data.get("open_fds"), 0) or 0,
-        "active_threads": _optional_int(data.get("active_threads"), 0) or 0,
-        "last_error": _optional_string(data.get("last_error")),
-        "raw": data,
-    }
+    return RingCallStatus(
+        raw=data,
+        supported=bool(data.get("supported")),
+        active=bool(data.get("active")),
+        early_media_active=bool(data.get("early_media_active")),
+        audio_active=bool(data.get("audio_active")),
+        answer_requested=bool(data.get("answer_requested")),
+        answered=bool(data.get("answered")),
+        can_answer=bool(data.get("can_answer")),
+        can_hangup=bool(data.get("can_hangup")),
+        media_owner=_optional_string(data.get("media_owner")) or "unknown",
+        ring_receiver_running=bool(data.get("ring_receiver_running")),
+        ring_registered=bool(data.get("ring_registered")),
+        capture_supported=bool(data.get("capture_supported")),
+        open_fds=_optional_int(data.get("open_fds"), 0) or 0,
+        active_threads=_optional_int(data.get("active_threads"), 0) or 0,
+        last_error=_optional_string(data.get("last_error")),
+    )
 
 
-def normalize_home_call(data: Any) -> dict[str, Any]:
+def normalize_home_call(data: Any) -> HomeCallStatus:
     """Normalize device-agent in-house home-call status responses."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("home call returned non-object JSON")
-    return {
-        "available": bool(data.get("available")),
-        "running": bool(data.get("running")),
-        "active": bool(data.get("active")),
-        "answered": bool(data.get("answered")),
-        "rtp_proxy": bool(data.get("rtp_proxy")),
-        "target_audio_port": _optional_int(data.get("target_audio_port")),
-        "rtp_packets": _optional_int(data.get("rtp_packets"), 0) or 0,
-        "rtcp_packets": _optional_int(data.get("rtcp_packets"), 0) or 0,
-        "max_duration_seconds": _optional_int(data.get("max_duration_seconds")),
-        "last_error": _optional_string(data.get("last_error")),
-        "raw": data,
-    }
+    return HomeCallStatus(
+        raw=data,
+        available=bool(data.get("available")),
+        running=bool(data.get("running")),
+        active=bool(data.get("active")),
+        answered=bool(data.get("answered")),
+        rtp_proxy=bool(data.get("rtp_proxy")),
+        target_audio_port=_optional_int(data.get("target_audio_port")),
+        rtp_packets=_optional_int(data.get("rtp_packets"), 0) or 0,
+        rtcp_packets=_optional_int(data.get("rtcp_packets"), 0) or 0,
+        max_duration_seconds=_optional_int(data.get("max_duration_seconds")),
+        last_error=_optional_string(data.get("last_error")),
+    )
 
 
 def normalize_activations(data: Any) -> dict[str, Any]:
@@ -1314,68 +1337,78 @@ def normalize_system_metrics(data: Any) -> dict[str, Any]:
     }
 
 
-def normalize_agent_diagnostics(data: Any) -> dict[str, Any]:
+def normalize_agent_diagnostics(data: Any) -> AgentDiagnosticsStatus:
     """Normalize non-sensitive agent diagnostics."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
-    return {
-        "agent_write_count": _optional_int(data.get("agent_write_count")) or 0,
-        "last_write_at": _optional_int(data.get("last_write_at")),
-        "last_write_reason": _optional_string(data.get("last_write_reason")),
-        "last_write_class": _optional_string(data.get("last_write_class")),
-        "qml_patch_last_action": _optional_string(data.get("qml_patch_last_action")),
-        "loop_iterations": _optional_int(data.get("loop_iterations")),
-        "poll_wakeups": _optional_int(data.get("poll_wakeups")),
-        "accepted_clients": _optional_int(data.get("accepted_clients")),
-        "last_wake_reason": _optional_string(data.get("last_wake_reason")),
-        "last_poll_timeout_ms": _optional_int(data.get("last_poll_timeout_ms")),
-        "last_poll_count": _optional_int(data.get("last_poll_count")),
-        "open_fd_count": _optional_int(data.get("open_fd_count")),
-        "agent_init_script_present": _optional_bool(
-            data.get("agent_init_script_present")
-        ),
-        "agent_init_link_ok": _optional_bool(data.get("agent_init_link_ok")),
-        "subscription_count": _optional_int(data.get("subscription_count")),
-        "recent_event_count": _optional_int(data.get("recent_event_count")),
-        "recent_event_capacity": _optional_int(data.get("recent_event_capacity")),
-        "display_bridge_registered": _optional_bool(
-            data.get("display_bridge_registered")
-        ),
-        "display_bridge_disabled": _optional_bool(data.get("display_bridge_disabled")),
-        "home_assistant_connected_this_run": _optional_bool(
+    return AgentDiagnosticsStatus(
+        raw=data,
+        agent_write_count=_optional_int(data.get("agent_write_count")) or 0,
+        last_write_at=_optional_int(data.get("last_write_at")),
+        last_write_reason=_optional_string(data.get("last_write_reason")),
+        last_write_class=_optional_string(data.get("last_write_class")),
+        qml_patch_last_action=_optional_string(data.get("qml_patch_last_action")),
+        loop_iterations=_optional_int(data.get("loop_iterations")),
+        poll_wakeups=_optional_int(data.get("poll_wakeups")),
+        accepted_clients=_optional_int(data.get("accepted_clients")),
+        last_wake_reason=_optional_string(data.get("last_wake_reason")),
+        last_poll_timeout_ms=_optional_int(data.get("last_poll_timeout_ms")),
+        last_poll_count=_optional_int(data.get("last_poll_count")),
+        open_fd_count=_optional_int(data.get("open_fd_count")),
+        agent_init_script_present=_optional_bool(data.get("agent_init_script_present")),
+        agent_init_link_ok=_optional_bool(data.get("agent_init_link_ok")),
+        subscription_count=_optional_int(data.get("subscription_count")),
+        recent_event_count=_optional_int(data.get("recent_event_count")),
+        recent_event_capacity=_optional_int(data.get("recent_event_capacity")),
+        display_bridge_registered=_optional_bool(data.get("display_bridge_registered")),
+        display_bridge_disabled=_optional_bool(data.get("display_bridge_disabled")),
+        home_assistant_connected_this_run=_optional_bool(
             data.get("home_assistant_connected_this_run")
         ),
-        "home_assistant_last_seen_at": _optional_int(
+        home_assistant_last_seen_at=_optional_int(
             data.get("home_assistant_last_seen_at")
         ),
-        "ui_event_revision": _optional_int(data.get("ui_event_revision")),
-        "video_running": _optional_bool(data.get("video_running")),
-        "video_media_starting": _optional_bool(data.get("video_media_starting")),
-        "video_call_active": _optional_bool(data.get("video_call_active")),
-        "video_clients": _optional_int(data.get("video_clients")),
-        "video_media_owner": _optional_string(data.get("video_media_owner")),
-        "video_external_media_active": _optional_bool(
+        ui_event_revision=_optional_int(data.get("ui_event_revision")),
+        video_running=_optional_bool(data.get("video_running")),
+        video_rtsp_server_running=_optional_bool(
+            data.get("video_rtsp_server_running")
+        ),
+        video_media_starting=_optional_bool(data.get("video_media_starting")),
+        video_call_active=_optional_bool(data.get("video_call_active")),
+        video_clients=_optional_int(data.get("video_clients")),
+        video_media_owner=_optional_string(data.get("video_media_owner")),
+        video_external_media_active=_optional_bool(
             data.get("video_external_media_active")
         ),
-        "video_external_owner": _optional_string(data.get("video_external_owner")),
-        "video_last_block_reason": _optional_string(
-            data.get("video_last_block_reason")
+        video_external_owner=_optional_string(data.get("video_external_owner")),
+        video_last_block_reason=_optional_string(data.get("video_last_block_reason")),
+        video_bridge_running=_optional_bool(data.get("video_bridge_running")),
+        video_bridge_media_active=_optional_bool(data.get("video_bridge_media_active")),
+        video_bridge_stop_in_progress=_optional_bool(
+            data.get("video_bridge_stop_in_progress")
         ),
-        "video_bridge_open_fds": _optional_int(data.get("video_bridge_open_fds")),
-        "video_bridge_active_threads": _optional_int(
+        video_bridge_open_fds=_optional_int(data.get("video_bridge_open_fds")),
+        video_bridge_active_threads=_optional_int(
             data.get("video_bridge_active_threads")
         ),
-        "flexisip_backup_available": _optional_bool(
-            data.get("flexisip_backup_available")
-        ),
-        "flexisip_restart_marker": _optional_bool(data.get("flexisip_restart_marker")),
-        "flexisip_backup_marker": _optional_bool(data.get("flexisip_backup_marker")),
-        "flexisip_reference_state": _optional_string(
-            data.get("flexisip_reference_state")
-        ),
-        "raw": data,
-    }
+        ring_receiver_running=_optional_bool(data.get("ring_receiver_running")),
+        ring_registered=_optional_bool(data.get("ring_registered")),
+        ring_call_active=_optional_bool(data.get("ring_call_active")),
+        ring_media_active=_optional_bool(data.get("ring_media_active")),
+        home_call_running=_optional_bool(data.get("home_call_running")),
+        home_call_active=_optional_bool(data.get("home_call_active")),
+        flexisip_backup_available=_optional_bool(data.get("flexisip_backup_available")),
+        flexisip_restart_marker=_optional_bool(data.get("flexisip_restart_marker")),
+        flexisip_backup_marker=_optional_bool(data.get("flexisip_backup_marker")),
+        flexisip_reference_state=_optional_string(data.get("flexisip_reference_state")),
+    )
+
+
+def normalize_self_test(data: Any) -> SelfTestStatus:
+    """Normalize device-agent self-test status."""
+
+    return normalize_self_test_contract(data, C300XAgentApiResponseError)
 
 
 def normalize_device_user_status(data: Any) -> dict[str, Any]:
@@ -1388,7 +1421,7 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         "supported": _optional_bool(data.get("supported")) is True,
         "domain_present": _optional_bool(data.get("domain_present")) is True,
         "c300x_user_present": _optional_bool(data.get("c300x_user_present")) is True,
-        "app_user_present": _optional_bool(data.get("app_user_present")) is True,
+        "fallback_user_present": _optional_bool(data.get("fallback_user_present")) is True,
         "homeassistant_user_present": _optional_bool(
             data.get("homeassistant_user_present")
         )
@@ -1454,7 +1487,7 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
     }
 
 
-def normalize_auth_config_status(data: Any) -> dict[str, Any]:
+def normalize_auth_config_status(data: Any) -> AuthConfigStatus:
     """Normalize bootstrap/auth configuration status."""
 
     if not isinstance(data, dict):
@@ -1462,27 +1495,25 @@ def normalize_auth_config_status(data: Any) -> dict[str, Any]:
     no_auth = _optional_bool(data.get("noAuth"))
     if no_auth is None:
         no_auth = _optional_bool(data.get("no_auth"))
-    return {
-        "no_auth": bool(no_auth),
-        "restart_required": _optional_bool(data.get("restart_required")) is True,
-        "api_token_configured": bool(data.get("api_token_configured")),
-        "maintenance_token_configured": bool(data.get("maintenance_token_configured")),
-        "maintenance_enabled": _optional_bool(data.get("maintenance_enabled")),
-        "maintenance_no_auth_allowed": _optional_bool(
+    return AuthConfigStatus(
+        raw=data,
+        no_auth=bool(no_auth),
+        restart_required=_optional_bool(data.get("restart_required")) is True,
+        api_token_configured=bool(data.get("api_token_configured")),
+        maintenance_token_configured=bool(data.get("maintenance_token_configured")),
+        maintenance_enabled=_optional_bool(data.get("maintenance_enabled")),
+        maintenance_no_auth_allowed=_optional_bool(
             data.get("maintenance_no_auth_allowed")
         ),
-        "mdns_enabled": _optional_bool(data.get("mdns_enabled")),
-        "firewall_enabled": _optional_bool(data.get("firewall_enabled")),
-        "ipv6_firewall_enabled": _optional_bool(data.get("ipv6_firewall_enabled")),
-        "activations_enabled": _optional_bool(data.get("activations_enabled")),
-        "activations_auto_discover": _optional_bool(
-            data.get("activations_auto_discover")
-        ),
-        "activation_stair_light_address": _optional_string(
+        mdns_enabled=_optional_bool(data.get("mdns_enabled")),
+        firewall_enabled=_optional_bool(data.get("firewall_enabled")),
+        ipv6_firewall_enabled=_optional_bool(data.get("ipv6_firewall_enabled")),
+        activations_enabled=_optional_bool(data.get("activations_enabled")),
+        activations_auto_discover=_optional_bool(data.get("activations_auto_discover")),
+        activation_stair_light_address=_optional_string(
             data.get("activation_stair_light_address")
         ),
-        "raw": data,
-    }
+    )
 
 
 def normalize_ssh_status(data: Any) -> dict[str, Any]:
@@ -1542,7 +1573,7 @@ def normalize_qml_patch_status(data: Any) -> dict[str, Any]:
     }
 
 
-def normalize_firewall_status(data: Any) -> dict[str, Any]:
+def normalize_firewall_status(data: Any) -> FirewallStatus:
     """Normalize maintenance firewall status responses."""
 
     if not isinstance(data, dict):
@@ -1553,20 +1584,20 @@ def normalize_firewall_status(data: Any) -> dict[str, Any]:
         patched = True
     elif patched is None and state in {"original", "missing"}:
         patched = False
-    return {
-        "available": data.get("available", True) is not False,
-        "state": state,
-        "patched": patched,
-        "family": _optional_string(data.get("family")),
-        "exists": _optional_bool(data.get("exists")),
-        "backup_available": _optional_bool(data.get("backup_available")),
-        "api_port": _optional_int(data.get("api_port")),
-        "rtsp_port": _optional_int(data.get("rtsp_port")),
-        "talkback_rtp_port": _optional_int(data.get("talkback_rtp_port")),
-        "media_ports_enabled": _optional_bool(data.get("media_ports_enabled")),
-        "changed_files": _optional_int(data.get("changed_files")),
-        "raw": data,
-    }
+    return FirewallStatus(
+        raw=data,
+        available=data.get("available", True) is not False,
+        state=state,
+        patched=patched,
+        family=_optional_string(data.get("family")),
+        exists=_optional_bool(data.get("exists")),
+        backup_available=_optional_bool(data.get("backup_available")),
+        api_port=_optional_int(data.get("api_port")),
+        rtsp_port=_optional_int(data.get("rtsp_port")),
+        talkback_rtp_port=_optional_int(data.get("talkback_rtp_port")),
+        media_ports_enabled=_optional_bool(data.get("media_ports_enabled")),
+        changed_files=_optional_int(data.get("changed_files")),
+    )
 
 
 def normalize_mqtt_status(data: Any) -> dict[str, Any]:

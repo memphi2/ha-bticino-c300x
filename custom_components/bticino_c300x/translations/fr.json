@@ -43,6 +43,8 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
         }
@@ -80,6 +82,8 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
         }
@@ -114,6 +118,7 @@
       "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
       "required": "Ce champ est obligatoire."
     }
   },
@@ -139,6 +144,8 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
         }
@@ -162,7 +169,8 @@
       "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
       "invalid_callback_base_url": "Saisissez une URL callback HTTP locale de Home Assistant joignable par le C300X, ou laissez vide.",
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
-      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide."
+      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB."
     }
   },
   "entity": {
@@ -238,7 +246,12 @@
     },
     "select": {
       "smartphone_forwarding_mode": {
-        "name": "Mode renvoi smartphone"
+        "name": "Mode renvoi smartphone",
+        "state": {
+          "enabled": "Renvoyer aux smartphones",
+          "in-house-only": "Home Assistant uniquement",
+          "blocked": "Ne pas renvoyer"
+        }
       }
     },
     "sensor": {
@@ -251,7 +264,27 @@
         }
       },
       "agent_diagnostics": {
-        "name": "Diagnostics de l'agent appareil"
+        "name": "Diagnostics de l'agent appareil",
+        "state": {
+          "unknown": "Diagnostics non charges",
+          "agent_offline": "Agent hors ligne",
+          "agent_reconnecting": "Reconnexion",
+          "repair_required": "Reparation requise",
+          "subscription_missing": "Abonnement manquant",
+          "media_watchdog_tripped": "Watchdog CPU actif",
+          "external_media_active": "Media externe actif",
+          "media_stopping": "Arret media",
+          "home_call_active": "Appel domicile actif",
+          "home_call_starting": "Appel domicile demarre",
+          "ring_media_active": "Media sonnette actif",
+          "ring_call_active": "Appel sonnette actif",
+          "doorbell_call_active": "Appel video sonnette actif",
+          "media_starting": "Media demarre",
+          "doorbell_media_active": "Media sonnette actif",
+          "rtsp_busy": "RTSP occupe",
+          "media_resources_open": "Ressources media ouvertes",
+          "idle": "Inactif"
+        }
       },
       "device_cpu": {
         "name": "CPU appareil"
@@ -391,11 +424,11 @@
         "step": {
           "confirm": {
             "title": "Mettre a jour l'agent C300X",
-            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs GUI et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change. Si vous utilisez les appels Ring Call in-house-only, verifiez aussi le patch utilisateur Home Assistant / binaire in-house dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}"
+            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs GUI et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / routage binaire dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}"
           },
           "ssh_install": {
             "title": "Reinstaller l'agent C300X via SSH",
-            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs GUI et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes. Si vous utilisez les appels Ring Call in-house-only, verifiez aussi le patch utilisateur Home Assistant / binaire in-house dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}",
+            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs GUI et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / routage binaire dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch GUI : {qml_patch_status}\nRaison : {reason}",
             "data": {
               "bootstrap_ssh_username": "Utilisateur SSH",
               "bootstrap_ssh_password": "Mot de passe SSH"
@@ -416,13 +449,17 @@
       "title": "L'agent C300X ne demarre pas apres redemarrage",
       "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de demarrage du peripherique est manquant ou invalide. Apres le prochain redemarrage du C300X, l'agent cessera de fonctionner a nouveau. Lancez la reparation/mise a jour de l'agent ou reinstallez l'agent via SSH pour recreer le lien de demarrage."
     },
+    "device_agent_self_test_failed": {
+      "title": "Le self-test de l'agent C300X signale un probleme",
+      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un controle d'architecture en echec. Controles en echec : {failed_checks}. Raisons : {reasons}. Action conseillee : {actions}. Aucune reparation automatique n'a ete executee. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
+    },
     "device_core_qml_hook_required": {
       "title": "Hook media core C300X manquant",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Appliquer le hook media core C300X",
-            "description": "Home Assistant appliquera uniquement le hook QML EventManager minimal necessaire pour detecter la fermeture d'une session media par l'ecran C300X ou l'app. C'est separe du patch GUI dashboard optionnel.\n\nEtat actuel du hook core : {qml_patch_status}"
+            "description": "Home Assistant appliquera uniquement le hook QML EventManager minimal necessaire pour detecter la fermeture d'une session media par l'ecran C300X ou un autre client media. C'est separe du patch GUI dashboard optionnel.\n\nEtat actuel du hook core : {qml_patch_status}"
           }
         },
         "error": {
@@ -441,7 +478,7 @@
         "step": {
           "confirm": {
             "title": "Creer l'utilisateur media Home Assistant",
-            "description": "Home Assistant demandera a l'agent appareil de creer ou reparer l'utilisateur media C300X dedie `homeassistant`. Les utilisateurs app existants sont conserves. L'agent ecrit uniquement l'etat utilisateur et routage necessaire sur l'appareil."
+            "description": "Home Assistant demandera a l'agent appareil de creer ou reparer l'utilisateur media C300X dedie `homeassistant`. Les utilisateurs media existants sont conserves. L'agent ecrit uniquement l'etat utilisateur et routage necessaire sur l'appareil."
           }
         },
         "error": {
@@ -459,6 +496,10 @@
     "missing_alarm_entity": {
       "title": "L'entite d'alarme C300X configuree est manquante",
       "description": "{entry_title} reference {entity_id}, mais Home Assistant ne connait pas cette entite. Choisissez une entite alarm_control_panel existante dans les options ou videz le reglage d'alarme."
+    },
+    "media_watchdog_timeout": {
+      "title": "Le watchdog media C300X a arrete une session en forte charge",
+      "description": "{entry_title} a signale une charge CPU soutenue de l'appareil pendant au moins {duration_seconds} secondes ({cpu_percent}%). Home Assistant a ferme ses sessions media C300X actives afin de ne pas maintenir l'appareil sous charge. Raison : {reason}."
     },
     "frontend_card_setup_hint": {
       "title": "Ajouter la carte Lovelace C300X",

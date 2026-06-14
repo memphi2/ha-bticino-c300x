@@ -24,6 +24,26 @@ def test_latest_video_message_prefers_newest_video_entry() -> None:
     )
 
 
+def test_latest_video_message_returns_empty_metadata_without_video() -> None:
+    messages = {"total": 0, "unread": 0, "read": 0, "messages": []}
+
+    assert latest_video_message_id(messages) is None
+    assert latest_video_message_attributes(messages, "entry 1") == {
+        "has_message": False,
+        "total": 0,
+        "unread": 0,
+        "read": 0,
+        "latest_message_id": None,
+        "latest_message_at": None,
+        "media_mime_type": None,
+        "media_size": None,
+        "media_content_id": None,
+        "media_url": None,
+        "playback_mime_type": None,
+        "original_media_url": None,
+    }
+
+
 def test_video_message_media_ids_are_ha_local() -> None:
     assert video_message_media_source_id("entry 1", "message_1") == (
         "media-source://bticino_c300x/entry%201/message_1"

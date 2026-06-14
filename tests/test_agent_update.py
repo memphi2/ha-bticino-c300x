@@ -6,6 +6,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from custom_components.bticino_c300x import agent_update
 from custom_components.bticino_c300x.agent_update import (
     UPDATE_STATE_INCOMPATIBLE,
@@ -16,6 +18,7 @@ from custom_components.bticino_c300x.agent_update import (
     agent_update_repair_placeholders,
     async_apply_packaged_agent_update,
     compare_agent_bundle,
+    load_packaged_bundle_metadata,
 )
 
 
@@ -48,6 +51,20 @@ def test_compare_agent_bundle_detects_missing_bundle() -> None:
 
     assert state.state == UPDATE_STATE_UNKNOWN
     assert state.reason == "bundle_missing"
+
+
+def test_load_packaged_bundle_metadata_rejects_missing_invalid_and_non_object(
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "missing.json"
+    invalid = tmp_path / "invalid.json"
+    non_object = tmp_path / "non-object.json"
+    invalid.write_text("{", encoding="utf-8")
+    non_object.write_text("[]", encoding="utf-8")
+
+    assert load_packaged_bundle_metadata(missing) is None
+    assert load_packaged_bundle_metadata(invalid) is None
+    assert load_packaged_bundle_metadata(non_object) is None
 
 
 def test_compare_agent_bundle_requires_self_update_support() -> None:
@@ -105,6 +122,43 @@ def test_compare_agent_bundle_detects_version_mismatch() -> None:
     assert state.self_update_repair_supported
 
 
+def test_compare_agent_bundle_detects_version_and_api_metadata_problems() -> None:
+    missing_version = compare_agent_bundle(
+        {"api_version": "1", "agent": {"self_update_supported": True}},
+        {"api_version": "1", "bundle_hash": "sha256:abc"},
+    )
+    api_mismatch = compare_agent_bundle(
+        {
+            "version": "0.3.1",
+            "api_version": "1",
+            "agent": {"self_update_supported": True},
+        },
+        {"agent_version": "0.3.1", "api_version": "2", "bundle_hash": "sha256:abc"},
+    )
+    hash_mismatch = compare_agent_bundle(
+        {
+            "version": "0.3.1",
+            "api_version": "1",
+            "agent": {
+                "bundle_hash": "sha256:installed",
+                "self_update_supported": True,
+            },
+        },
+        {
+            "agent_version": "0.3.1",
+            "api_version": "1",
+            "bundle_hash": "sha256:available",
+        },
+    )
+
+    assert missing_version.state == UPDATE_STATE_UNKNOWN
+    assert missing_version.reason == "version_missing"
+    assert api_mismatch.state == UPDATE_STATE_INCOMPATIBLE
+    assert api_mismatch.reason == "api_version_mismatch"
+    assert hash_mismatch.state == UPDATE_STATE_UPDATE_AVAILABLE
+    assert hash_mismatch.reason == "bundle_hash_mismatch"
+
+
 def test_compare_agent_bundle_repairs_missing_installed_manifest() -> None:
     state = compare_agent_bundle(
         {
@@ -142,6 +196,36 @@ def test_agent_update_repair_placeholders_include_hashes_path_and_patch_status()
     assert placeholders["available_bundle_hash"] == "sha256:avail"
     assert placeholders["update_path"] == "self-update"
     assert placeholders["qml_patch_status"] == "patched"
+
+
+def test_agent_update_repair_placeholders_report_no_update_path() -> None:
+    placeholders = agent_update_repair_placeholders(
+        AgentUpdateState(
+            state=UPDATE_STATE_UP_TO_DATE,
+            installed_version="1.1.0",
+            available_version="1.1.0",
+        )
+    )
+
+    assert placeholders["update_path"] == "none"
+
+
+def test_agent_update_repair_placeholders_cover_unknown_and_patch_boolean_states() -> None:
+    unknown = agent_update_repair_placeholders(None, object())
+    patched = agent_update_repair_placeholders(
+        None,
+        type("Runtime", (), {"qml_patch_status": {"patched": True}})(),
+    )
+    original = agent_update_repair_placeholders(
+        None,
+        type("Runtime", (), {"qml_patch_status": {"patched": False}})(),
+    )
+
+    assert unknown["installed_version"] == "unknown"
+    assert unknown["update_path"] == "unknown"
+    assert unknown["qml_patch_status"] == "unknown"
+    assert patched["qml_patch_status"] == "patched"
+    assert original["qml_patch_status"] == "original"
 
 
 class FakeUpdateApi:
@@ -285,3 +369,139 @@ def test_apply_packaged_agent_update_uses_legacy_safe_upload_chunks(
     assert all(len(upload["data"]) <= 2048 for upload in payload_uploads)
     assert [upload["offset"] for upload in payload_uploads] == [0, 2048, 4096]
     assert payload_uploads[-1]["final"] is True
+
+
+def test_apply_packaged_agent_update_rejects_missing_or_incomplete_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    manifest = tmp_path / "bticino_c300x" / "device_agent" / "bundle.json"
+    manifest.parent.mkdir(parents=True)
+    monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest)
+
+    with pytest.raises(RuntimeError, match="bundle is missing"):
+        asyncio.run(async_apply_packaged_agent_update(FakeHass(), FakeUpdateApi()))
+
+    manifest.write_text(
+        json.dumps({"agent_version": "1.1.0", "bundle_hash": "sha256:bundle"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="metadata is incomplete"):
+        asyncio.run(async_apply_packaged_agent_update(FakeHass(), FakeUpdateApi()))
+
+
+def test_apply_packaged_agent_update_rejects_invalid_file_entries(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    component = tmp_path / "bticino_c300x"
+    manifest = component / "device_agent" / "bundle.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "agent_version": "1.1.0",
+                "api_version": "1",
+                "bundle_hash": "sha256:bundle",
+                "files": [None],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(agent_update, "COMPONENT_DIR", component)
+    monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest)
+
+    with pytest.raises(RuntimeError, match="file entry is invalid"):
+        asyncio.run(async_apply_packaged_agent_update(FakeHass(), FakeUpdateApi()))
+
+
+def test_apply_packaged_agent_update_rejects_invalid_bundle_file_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    component = tmp_path / "bticino_c300x"
+    manifest = component / "device_agent" / "bundle.json"
+    manifest.parent.mkdir(parents=True)
+    monkeypatch.setattr(agent_update, "COMPONENT_DIR", component)
+    monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest)
+
+    manifest.write_text(
+        json.dumps(
+            {
+                "agent_version": "1.1.0",
+                "api_version": "1",
+                "bundle_hash": "sha256:bundle",
+                "files": [
+                    {"path": "../bad", "sha256": "sha256:bad", "mode": "700"}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="file path is invalid"):
+        asyncio.run(async_apply_packaged_agent_update(FakeHass(), FakeUpdateApi()))
+
+    manifest.write_text(
+        json.dumps(
+            {
+                "agent_version": "1.1.0",
+                "api_version": "1",
+                "bundle_hash": "sha256:bundle",
+                "files": [
+                    {
+                        "path": "device_agent/scripts/missing.sh",
+                        "sha256": "sha256:missing",
+                        "mode": "700",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="file path is invalid"):
+        asyncio.run(async_apply_packaged_agent_update(FakeHass(), FakeUpdateApi()))
+
+
+def test_apply_packaged_agent_update_uploads_empty_files(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    component = tmp_path / "bticino_c300x"
+    payload = component / "device_agent" / "scripts" / "empty.sh"
+    manifest = component / "device_agent" / "bundle.json"
+    payload.parent.mkdir(parents=True)
+    payload.write_bytes(b"")
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "agent_version": "1.1.0",
+                "api_version": "1",
+                "bundle_hash": "sha256:bundle",
+                "files": [
+                    {
+                        "path": "device_agent/scripts/empty.sh",
+                        "sha256": sha256(b"").hexdigest(),
+                        "mode": "700",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    api = FakeUpdateApi()
+
+    monkeypatch.setattr(agent_update, "COMPONENT_DIR", component)
+    monkeypatch.setattr(agent_update, "BUNDLE_MANIFEST", manifest)
+
+    asyncio.run(async_apply_packaged_agent_update(FakeHass(), api))
+
+    empty_upload = next(
+        payload
+        for name, payload in api.calls
+        if name == "upload" and payload["path"] == "device_agent/scripts/empty.sh"
+    )
+    assert empty_upload["data"] == b""
+    assert empty_upload["offset"] == 0
+    assert empty_upload["final"] is True

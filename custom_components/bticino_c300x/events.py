@@ -265,8 +265,10 @@ class _AgentEventRegistration:
             self._register,
         )
 
-    def _schedule_registry_refresh(self, now: Any = None) -> None:
+    def _schedule_registry_refresh(self, event: Any = None) -> None:
         if self._stopped or self._registry_refresh_cancel is not None:
+            return
+        if not _entity_registry_update_affects_entry(event, self._entry):
             return
         self._registry_refresh_cancel = async_call_later(
             self._hass,
@@ -311,6 +313,19 @@ def _async_listen_entity_registry_updates(
     return async_listen(event_type, callback)
 
 
+def _entity_registry_update_affects_entry(event: Any, entry: ConfigEntry) -> bool:
+    """Return false only when a registry update is clearly unrelated."""
+
+    data = getattr(event, "data", None)
+    if not isinstance(data, dict):
+        return True
+    platform = data.get("platform")
+    if isinstance(platform, str) and platform != DOMAIN:
+        return False
+    config_entry_id = data.get("config_entry_id")
+    return not (isinstance(config_entry_id, str) and config_entry_id != entry.entry_id)
+
+
 def _active_events_for_capabilities(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -332,9 +347,11 @@ def _active_events_for_capabilities(
 
 
 _EVENT_ENTITY_CONSUMER = ("event", "agent_event")
+_INTERNAL_SAFETY_EVENTS = frozenset({"system.metrics_changed"})
 _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
     {
         _EVENT_ENTITY_CONSUMER,
+        ("camera", "doorbell_camera"),
         ("sensor", "agent_diagnostics"),
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
@@ -345,6 +362,7 @@ _DEFAULT_DISABLED_EVENT_CONSUMERS = frozenset(
 _EVENT_CONSUMERS: dict[str, tuple[tuple[str, str], ...]] = {
     "agent.diagnostics_changed": (("sensor", "agent_diagnostics"),),
     "system.metrics_changed": (
+        ("camera", "doorbell_camera"),
         ("sensor", "device_cpu"),
         ("sensor", "device_load"),
         ("sensor", "device_memory"),
@@ -405,6 +423,9 @@ def _filter_events_for_active_entities(
     )
     active_events: list[str] = []
     for event in events:
+        if event in _INTERNAL_SAFETY_EVENTS:
+            active_events.append(event)
+            continue
         ha_event_type = HA_EVENT_TYPES.get(event)
         visible_in_event_entity = (
             ha_event_type is not None and ha_event_type not in EVENT_ENTITY_EXCLUDED_TYPES

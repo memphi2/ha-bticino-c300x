@@ -19,10 +19,17 @@ def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
     assert "struct system_metrics_sample system_metrics_last_dispatched;" in text
     assert "int system_metrics_dispatched_initialized;" in text
     assert (
-        "system_metrics_changed(config, &runtime->system_metrics_last_dispatched, &sample)"
+        "c300x_system_metrics_changed(\n"
+        "            config,\n"
+        "            &runtime->system_metrics_last_dispatched,\n"
+        "            &sample\n"
+        "        )"
         in text
     )
-    assert "metric_changed_points(previous->memory_usage_percent" in text
+    watchdog = (
+        ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
+    ).read_text(encoding="utf-8")
+    assert "metric_changed_points(" in watchdog
 
 
 def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
@@ -33,7 +40,10 @@ def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
 
     assert "read_memory_metrics(" in sample_body
     assert text.count("read_memory_metrics(") == 2
-    assert "static int metric_changed_points(" in text
+    watchdog = (
+        ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
+    ).read_text(encoding="utf-8")
+    assert "static int metric_changed_points(" in watchdog
 
 
 def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> None:
@@ -43,7 +53,7 @@ def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> No
     ].split("static int map_openwebnet_event", maxsplit=1)[0]
 
     assert (
-        "if (!system_metrics_watch_active(config, runtime)) {\n"
+        "if (!system_metrics_monitor_active(config)) {\n"
         "        runtime->system_metrics_next_sample_at = now + "
         "config->system_metrics_heartbeat_seconds;\n"
         "        return;\n"
@@ -55,22 +65,57 @@ def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> No
     )
 
 
-def test_native_agent_metrics_does_not_wake_for_metrics_without_subscribers() -> None:
+def test_native_agent_metrics_monitor_wakes_without_subscribers_for_safety() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     poll_body = _c300x_run_loop_body(text)
 
-    assert "if (system_metrics_watch_active(config, runtime))" in poll_body
+    assert "if (system_metrics_monitor_active(config))" in poll_body
 
 
-def test_native_agent_metrics_dispatch_loop_is_subscriber_gated() -> None:
+def test_native_agent_metrics_dispatch_loop_runs_internal_monitor() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
 
     assert (
-        "if (system_metrics_watch_active(config, runtime)) {\n"
+        "if (system_metrics_monitor_active(config)) {\n"
         "            system_metrics_dispatch_if_due(config, runtime, time(NULL));\n"
         "        }"
         in text
     )
+
+
+def test_native_agent_metrics_push_high_cpu_samples_for_watchdog() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    dispatch_body = text.split("static void system_metrics_dispatch_if_due", maxsplit=1)[
+        1
+    ].split("static int map_openwebnet_event", maxsplit=1)[0]
+
+    assert "|| (sample.has_cpu_usage && sample.cpu_usage_percent >= 90.0)" in dispatch_body
+    assert (
+        "if (!has_matching_subscription(runtime, \"system.metrics_changed\")) {\n"
+        "        return;\n"
+        "    }"
+        in dispatch_body
+    )
+    assert dispatch_body.index(
+        "SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now)"
+    ) < dispatch_body.index(
+        "if (!has_matching_subscription(runtime, \"system.metrics_changed\"))"
+    )
+
+
+def test_native_agent_metrics_cpu_watchdog_stops_owned_media_only() -> None:
+    text = (
+        ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
+    ).read_text(encoding="utf-8")
+
+    assert "#define C300X_SYSTEM_METRICS_CPU_WATCHDOG_PERCENT 90.0" in text
+    assert "#define C300X_SYSTEM_METRICS_CPU_WATCHDOG_SECONDS 300" in text
+    assert "*high_cpu_since = now;" in text
+    assert "*tripped_at = now;" in text
+    assert "c300x_video_doorbell_call_hangup(video);" in text
+    assert "c300x_video_home_call_stop(video);" in text
+    assert "c300x_video_stop(video);" in text
+    assert "!status.external_media_active" in text
 
 
 def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> None:
@@ -94,14 +139,14 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
     )
 
 
-def test_native_agent_metrics_does_not_sample_at_start_without_subscribers() -> None:
+def test_native_agent_metrics_initializes_internal_monitor_without_subscribers() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     init_body = text.split("static void system_metrics_init", maxsplit=1)[1].split(
         "static void system_metrics_mark_dispatched",
         maxsplit=1,
     )[0]
 
-    assert init_body.index("system_metrics_watch_active") < init_body.index(
+    assert init_body.index("system_metrics_monitor_active") < init_body.index(
         "read_system_metrics_sample"
     )
 
@@ -262,6 +307,18 @@ def test_native_agent_runtime_diagnostics_are_memory_only_until_requested() -> N
     assert "count_open_fds()" in diagnostics_body
     assert text.count("count_open_fds()") == 1
     assert '\\"open_fd_count\\":%d' in diagnostics_body
+    assert "int video_media_running;" in diagnostics_body
+    assert "video_media_running = (" in diagnostics_body
+    assert '\\"video_rtsp_server_running\\":%s' in diagnostics_body
+    assert (
+        diagnostics_body.index('"\\"video_running\\":%s,"')
+        < diagnostics_body.index('"\\"video_rtsp_server_running\\":%s,"')
+        < diagnostics_body.index('"\\"video_media_starting\\":%s,"')
+    )
+    assert (
+        diagnostics_body.index('video_media_running ? "true" : "false",')
+        < diagnostics_body.index('video_status.running ? "true" : "false",')
+    )
     assert '\\"video_bridge_active_threads\\":%d' in diagnostics_body
 
 

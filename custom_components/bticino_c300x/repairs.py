@@ -70,8 +70,6 @@ from .repair_issues import (
 _AGENT_UPDATE_RESTART_SETTLE_SECONDS = 1.0
 _DOORBELL_CALL_CARD_TYPE = "custom:c300x-doorbell-call-card"
 _DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
-_DOORBELL_STATE_UNIQUE_ID_SUFFIX = "doorbell_state"
-_HOME_CALL_ACTIVE_UNIQUE_ID_SUFFIX = "home_call_active"
 _LOVELACE_DASHBOARD_FIELD = "dashboard_path"
 _LOVELACE_DEFAULT_DASHBOARD_VALUE = "__default__"
 _LOVELACE_VIEW_FIELD = "view_path"
@@ -282,8 +280,6 @@ async def _async_setup_lovelace_cards(
     camera_entity_id = _resolve_doorbell_camera_entity_id(hass, entry)
     if camera_entity_id is None:
         raise _LovelaceCardSetupError("camera_entity_missing")
-    doorbell_state_entity_id = _resolve_doorbell_state_entity_id(hass, entry)
-    home_call_entity_id = _resolve_home_call_entity_id(hass, entry)
 
     dashboard_path, dashboard = _storage_lovelace_dashboard(hass, dashboard_path)
     try:
@@ -312,16 +308,7 @@ async def _async_setup_lovelace_cards(
 
     config_changed = any(
         (
-            _set_home_call_entity_on_existing_cards(
-                view,
-                camera_entity_id,
-                home_call_entity_id,
-            ),
-            _set_doorbell_state_entity_on_existing_cards(
-                view,
-                camera_entity_id,
-                doorbell_state_entity_id,
-            ),
+            _remove_state_entity_overrides_from_existing_cards(view, camera_entity_id),
             config_changed,
         )
     )
@@ -332,9 +319,9 @@ async def _async_setup_lovelace_cards(
 
     cards = _cards_for_view(view)
     if not _dashboard_has_c300x_card(view, camera_entity_id, "home_call"):
-        cards.append(_home_call_card(camera_entity_id, home_call_entity_id))
+        cards.append(_home_call_card(camera_entity_id))
     if not _dashboard_has_c300x_card(view, camera_entity_id, "doorbell_call"):
-        cards.append(_doorbell_card(camera_entity_id, doorbell_state_entity_id))
+        cards.append(_doorbell_card(camera_entity_id))
 
     await dashboard.async_save(config)
     return _lovelace_dashboard_path(dashboard_path, view_path)
@@ -391,26 +378,6 @@ def _resolve_doorbell_camera_entity_id(hass: HomeAssistant, entry: Any) -> str |
         hass,
         "camera",
         f"{entry.entry_id}_{_DOORBELL_CAMERA_UNIQUE_ID_SUFFIX}",
-    )
-
-
-def _resolve_home_call_entity_id(hass: HomeAssistant, entry: Any) -> str | None:
-    """Resolve the home-call active entity for a config entry."""
-
-    return _resolve_registry_entity_id(
-        hass,
-        "binary_sensor",
-        f"{entry.entry_id}_{_HOME_CALL_ACTIVE_UNIQUE_ID_SUFFIX}",
-    )
-
-
-def _resolve_doorbell_state_entity_id(hass: HomeAssistant, entry: Any) -> str | None:
-    """Resolve the doorbell state entity for a config entry."""
-
-    return _resolve_registry_entity_id(
-        hass,
-        "sensor",
-        f"{entry.entry_id}_{_DOORBELL_STATE_UNIQUE_ID_SUFFIX}",
     )
 
 
@@ -563,15 +530,12 @@ def _dashboard_has_c300x_card(
     return False
 
 
-def _set_home_call_entity_on_existing_cards(
+def _remove_state_entity_overrides_from_existing_cards(
     config: dict[str, Any],
     camera_entity_id: str,
-    home_call_entity_id: str | None,
 ) -> bool:
-    """Set the explicit Home Call state entity on existing generated cards."""
+    """Remove obsolete state-entity overrides from generated C300X cards."""
 
-    if home_call_entity_id is None:
-        return False
     changed = False
     for card in _iter_lovelace_cards(config):
         if not isinstance(card, dict):
@@ -580,36 +544,10 @@ def _set_home_call_entity_on_existing_cards(
             continue
         if card.get("entity") != camera_entity_id:
             continue
-        if str(card.get("mode") or "doorbell_call") != "home_call":
-            continue
-        if card.get("home_call_entity") != home_call_entity_id:
-            card["home_call_entity"] = home_call_entity_id
-            changed = True
-    return changed
-
-
-def _set_doorbell_state_entity_on_existing_cards(
-    config: dict[str, Any],
-    camera_entity_id: str,
-    doorbell_state_entity_id: str | None,
-) -> bool:
-    """Set the explicit Doorbell state entity on existing generated cards."""
-
-    if doorbell_state_entity_id is None:
-        return False
-    changed = False
-    for card in _iter_lovelace_cards(config):
-        if not isinstance(card, dict):
-            continue
-        if card.get("type") != _DOORBELL_CALL_CARD_TYPE:
-            continue
-        if card.get("entity") != camera_entity_id:
-            continue
-        if str(card.get("mode") or "doorbell_call") != "doorbell_call":
-            continue
-        if card.get("doorbell_state_entity") != doorbell_state_entity_id:
-            card["doorbell_state_entity"] = doorbell_state_entity_id
-            changed = True
+        for key in ("home_call_entity", "doorbell_state_entity"):
+            if key in card:
+                del card[key]
+                changed = True
     return changed
 
 
@@ -629,36 +567,28 @@ def _iter_lovelace_cards(value: Any):
 
 def _home_call_card(
     camera_entity_id: str,
-    home_call_entity_id: str | None = None,
 ) -> dict[str, Any]:
     """Return the generated Home Call Lovelace card config."""
 
-    card = {
+    return {
         "type": _DOORBELL_CALL_CARD_TYPE,
         "entity": camera_entity_id,
         "mode": "home_call",
         "name": "C300X Home Call",
         "grid_options": {"columns": 6, "rows": 1},
     }
-    if home_call_entity_id is not None:
-        card["home_call_entity"] = home_call_entity_id
-    return card
 
 
 def _doorbell_card(
     camera_entity_id: str,
-    doorbell_state_entity_id: str | None = None,
 ) -> dict[str, Any]:
     """Return the generated Doorbell / On-demand Lovelace card config."""
 
-    card = {
+    return {
         "type": _DOORBELL_CALL_CARD_TYPE,
         "entity": camera_entity_id,
         "grid_options": {"columns": 12, "rows": 7},
     }
-    if doorbell_state_entity_id is not None:
-        card["doorbell_state_entity"] = doorbell_state_entity_id
-    return card
 
 
 def _lovelace_dashboard_path(
@@ -821,15 +751,17 @@ def _frontend_card_setup_placeholders(entry: Any) -> dict[str, str]:
 def _mark_frontend_card_setup_dismissed(hass: HomeAssistant, entry: Any) -> None:
     """Persist that the Lovelace card setup hint has been handled."""
 
+    data_version = entry.data.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
+    options_version = entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
     if (
-        entry.options.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
-        == FRONTEND_CARD_SETUP_REPAIR_VERSION
+        data_version == FRONTEND_CARD_SETUP_REPAIR_VERSION
+        or options_version == FRONTEND_CARD_SETUP_REPAIR_VERSION
     ):
         return
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            **dict(entry.options),
+        data={
+            **dict(entry.data),
             CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
             CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
                 FRONTEND_CARD_SETUP_REPAIR_VERSION

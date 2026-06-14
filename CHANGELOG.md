@@ -1,16 +1,69 @@
 # Changelog
 
+## v1.2.0 - 2026-06-13
+
+### Changed
+
+- Updates the packaged native C300X device agent to `1.2.0`.
+- Uses one shared media-state model for on-demand camera video, Ring Calls,
+  Home Call and external media. This makes the doorstation card, camera entity
+  and media services agree on whether a call can be answered, streamed, stopped
+  or captured.
+- Adds configurable audio gain for live doorstation audio and Ring Call
+  captures in the integration options.
+- Adds a local microphone mute control to the bundled media card. New calls
+  still start with the microphone enabled; the button only mutes the current
+  browser microphone track.
+- Keeps Ring Call capture analysis files on stable overwritten paths below
+  `/config/c300x/` and ties local transcription/phrase-match decisions to a
+  fresh capture id before optional unlock automation can run.
+- Keeps bundled doorstation and Home Call cards on the same camera-derived
+  media state, so localized or renamed Doorbell/Home Call state entities no
+  longer have to be selected manually for normal setups.
+- Improves the detailed device-agent diagnostics entity with a readable
+  `status`, the reason for the latest change and the source that updated it.
+- Adds media safety handling for sustained high device CPU load so Home
+  Assistant can close local media sessions and raise a repair issue instead of
+  keeping a stuck stream alive.
+
+### Fixed
+
+- Reduces unnecessary Home Assistant state writes by ignoring unchanged
+  device-agent diagnostic push payloads.
+- Keeps Ring Call capture and announcement playback from timing out after the
+  device agent already reports that audio is ready.
+- Blocks Ring Call capture with a clear busy state when the same Ring Call media
+  path is already used by the doorstation card, another browser or another RTSP
+  client.
+- Improves Ring Call talkback keepalive reliability during capture and
+  announcement playback.
+- Keeps Ring Call preview, answer and hang-up handling aligned with the current
+  native agent while preserving the public services and Lovelace card type.
+- Resets stale Ring Call media state after close events so the card does not
+  stay on **Hang Up** after the call has ended.
+- Hardens Home Assistant media-user setup so failed Home Assistant only binary
+  routing or display patch steps are reported as setup failures instead of
+  leaving a silently partial state.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant before testing media
+  features so the packaged 1.2.0 agent and bundle metadata are installed.
+- Hard-reload the browser or Home Assistant mobile app WebView if a dashboard
+  still uses an old cached Lovelace card.
+
 ## v1.1.0 - 2026-06-11
 
 ### Added
 
-- Adds the tested `in-house-only` smartphone forwarding mode. With the
-  dedicated Home Assistant media user and device patches applied, the C300X can
-  route doorbell Ring Calls to Home Assistant without forwarding them to all
+- Adds the tested **Home Assistant only** forwarding mode. With the dedicated
+  Home Assistant media user and device patches applied, the C300X can route
+  doorbell Ring Calls to Home Assistant without forwarding them to all
   smartphones.
 - Adds HA-side Ring Call capture diagnostics. MP4 clips default to
-  `/media/c300x/`, while retained raw WAV work files default to `/config/c300x/`
-  for local speech analysis.
+  `/media/c300x/`, while retained WAV/JPEG capture files default to
+  `/config/c300x/`.
 - Adds local Wyoming Whisper transcription for the newest retained Ring Call raw
   WAV without requiring image analysis or cloud AI.
 - Adds an optional strict phrase-match evaluation service that can unlock the
@@ -50,7 +103,7 @@
   reported in issue #12: active firewall patches now also initialize the live
   IPv4/IPv6 firewall rules immediately, without requiring a C300X reboot.
 - Fixes the managed C300X firewall patch so reboot-persistent IPv4 and IPv6
-  rules open the API, RTSP and talkback RTP ports required by the app-like media
+  rules open the API, RTSP and talkback RTP ports required by the local media
   workflows.
 - Refreshes already active firewall patches during native-agent updates when the
   packaged firewall patch source changes.
@@ -81,13 +134,13 @@
 - The native C300X device agent is unchanged from `1.0.0`; this is a Home
   Assistant frontend/repair hotfix.
 - After updating, restart Home Assistant and hard-reload the browser or mobile
-  app WebView so the old Lovelace card module is not reused from frontend cache.
+  frontend WebView so the old Lovelace card module is not reused from frontend cache.
 
 ## v1.0.0 - 2026-06-07
 
 ### Added
 
-- Adds the three app-like media workflows: on-demand camera, real doorbell Ring
+- Adds the three local media workflows: on-demand camera, real doorbell Ring
   Call answer/hang-up with video, device audio and talkback, and audio-only Home
   Call.
 - Adds the dedicated Home Assistant media-user flow so video, Ring Call and Home
@@ -160,7 +213,7 @@
 
 ### Fixed
 
-- Corrects Home Call stop while still ringing to match app-like call handling.
+- Corrects Home Call stop while still ringing to match local media call handling.
 - Clears stale doorbell media state on closed media windows and TTL fallback.
 - Keeps the Home Assistant video availability state focused on HA-usable video
   instead of any unrelated external media session.
@@ -185,7 +238,7 @@
 ### Changed
 
 - Updates the native C300X device agent to `0.6.0`.
-- Adds a brand-new app-like doorbell streaming path for the on-demand live
+- Adds a brand-new local media doorbell streaming path for the on-demand live
   view.
 - Opens the Home Assistant camera as video-only by default so browsers can
   autoplay the live view. Interactive media sessions can still request audio
@@ -278,7 +331,7 @@
 - Device-agent bundles use deterministic file hashes so unchanged payloads,
   scripts, GUI files and firewall patches are skipped instead of rewritten.
 - Update and maintenance paths refresh only patches that are already active.
-- The doorbell camera path stays on the app-like on-demand media path and
+- The doorbell camera path stays on the local media on-demand media path and
   remains independent from the legacy MQTT runtime.
 - Native-agent runtime buffers and MQTT status handling are sized for the C300X
   environment, and the ARMHF stack budget is enforced in CI.

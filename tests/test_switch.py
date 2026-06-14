@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 if "homeassistant.components.switch" not in sys.modules:
     homeassistant = sys.modules.setdefault(
         "homeassistant",
@@ -99,6 +101,7 @@ from custom_components.bticino_c300x.api import (
     C300XAgentApiUnsupportedError,  # noqa: E402
 )
 from custom_components.bticino_c300x.switch import (  # noqa: E402
+    C300XAnsweringMachineSwitch,
     C300XFirewallPatchSwitch,
     C300XGuiFunctionPatchSwitch,
     C300XHomeAssistantUserPatchSwitch,
@@ -120,6 +123,11 @@ class _FakeApi:
         self.active_smartphone_reads = 0
         self.cached_smartphone_reads = 0
         self.ringer_reads = 0
+        self.ringer_sets: list[bool] = []
+        self.ringer_status_error = False
+        self.answering_machine_reads = 0
+        self.answering_machine_sets: list[bool] = []
+        self.answering_machine_status_error = False
         self.ssh_reads = 0
         self.ssh_sets: list[bool] = []
         self.qml_patch_status_reads = 0
@@ -137,6 +145,8 @@ class _FakeApi:
         self.ipv6_firewall_enable_sets: list[bool] = []
         self.auth_config_reads = 0
         self.device_user_status_reads = 0
+        self.device_user_actions: list[str] = []
+        self.device_user_status_error = False
         self.no_auth_sets: list[tuple[bool, str | None, str | None, bool | None]] = []
         self.maintenance_no_auth_sets: list[bool] = []
         self.mdns_sets: list[bool] = []
@@ -159,7 +169,23 @@ class _FakeApi:
 
     async def async_ringer_status(self) -> dict[str, Any]:
         self.ringer_reads += 1
+        if self.ringer_status_error:
+            raise C300XAgentApiConnectionError("offline")
         return {"muted": False}
+
+    async def async_set_ringer_muted(self, muted: bool) -> dict[str, Any]:
+        self.ringer_sets.append(muted)
+        return {"muted": muted}
+
+    async def async_answering_machine_status(self) -> dict[str, Any]:
+        self.answering_machine_reads += 1
+        if self.answering_machine_status_error:
+            raise C300XAgentApiConnectionError("offline")
+        return {"enabled": True, "greeting_message_enabled": False}
+
+    async def async_set_answering_machine_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.answering_machine_sets.append(enabled)
+        return {"enabled": enabled, "greeting_message_enabled": False}
 
     async def async_ssh_status(self) -> dict[str, Any]:
         self.ssh_reads += 1
@@ -296,11 +322,45 @@ class _FakeApi:
 
     async def async_device_user_status(self) -> dict[str, Any]:
         self.device_user_status_reads += 1
+        if self.device_user_status_error:
+            raise C300XAgentApiConnectionError("offline")
         return {
             "homeassistant_user_present": True,
             "routes_consistent": True,
             "inhouse_binary_patch_applied": True,
             "inhouse_qml_patch_applied": True,
+        }
+
+    async def async_ensure_homeassistant_user(
+        self,
+        *,
+        account_label: str | None = None,
+    ) -> dict[str, Any]:
+        self.device_user_actions.append(f"ensure:{account_label or ''}")
+        return {
+            "homeassistant_user_present": True,
+            "routes_consistent": True,
+            "media_identity_available": True,
+            "media_identity_source": "homeassistant",
+            "inhouse_binary_patch_applied": True,
+            "inhouse_binary_patch_state": "patched",
+            "inhouse_binary_patch_backup_present": True,
+            "inhouse_qml_patch_applied": True,
+            "inhouse_qml_patch_state": "patched",
+            "account_label": account_label,
+        }
+
+    async def async_restore_homeassistant_user_patch(self) -> dict[str, Any]:
+        self.device_user_actions.append("restore")
+        return {
+            "homeassistant_user_present": True,
+            "routes_consistent": True,
+            "media_identity_available": True,
+            "media_identity_source": "fallback",
+            "inhouse_binary_patch_applied": False,
+            "inhouse_binary_patch_state": "original",
+            "inhouse_qml_patch_applied": False,
+            "inhouse_qml_patch_state": "original",
         }
 
     async def async_set_no_auth_enabled(
@@ -471,6 +531,71 @@ def test_ringer_unmuted_event_updates_switch_state() -> None:
     assert entity.is_on is False
 
 
+def test_ringer_switch_refreshes_and_updates_mute_state() -> None:
+    entry = _FakeEntry()
+    entity = C300XRingerMuteSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_turn_on())
+    asyncio.run(entity.async_turn_off())
+
+    assert entry.runtime_data.api.ringer_reads == 1
+    assert entry.runtime_data.api.ringer_sets == [True, False]
+    assert entity.is_on is False
+    assert entity.available is True
+
+
+def test_ringer_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.api.ringer_status_error = True
+    entity = C300XRingerMuteSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.is_on is None
+
+
+def test_ringer_event_ignores_foreign_or_unrelated_updates() -> None:
+    entity = C300XRingerMuteSwitch(_FakeEntry())  # type: ignore[arg-type]
+    entity._muted = True
+
+    entity._handle_agent_event(
+        SimpleNamespace(data={"entry_id": "other", "event_type": "ringer_unmuted"})
+    )
+    entity._handle_agent_event(
+        SimpleNamespace(data={"entry_id": "entry-1", "event_type": "doorbell_pressed"})
+    )
+
+    assert entity.is_on is True
+
+
+def test_answering_machine_switch_refreshes_and_updates_state() -> None:
+    entry = _FakeEntry()
+    entity = C300XAnsweringMachineSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_turn_off())
+    asyncio.run(entity.async_turn_on())
+
+    assert entry.runtime_data.api.answering_machine_reads == 1
+    assert entry.runtime_data.api.answering_machine_sets == [False, True]
+    assert entity.is_on is True
+    assert entity.extra_state_attributes == {"greeting_message_enabled": False}
+    assert entity.available is True
+
+
+def test_answering_machine_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.api.answering_machine_status_error = True
+    entity = C300XAnsweringMachineSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.is_on is None
+
+
 def test_maintenance_ssh_switch_refreshes_running_state() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -509,6 +634,60 @@ def test_homeassistant_user_patch_refreshes_before_hass_is_bound() -> None:
     assert entry.runtime_data.device_user_status["homeassistant_user_present"] is True
     assert entity.available is True
     assert entity.is_on is True
+
+
+def test_homeassistant_user_patch_applies_and_restores_with_hass_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = _FakeEntry()
+    entity = C300XHomeAssistantUserPatchSwitch(entry)  # type: ignore[arg-type]
+    entity.hass = SimpleNamespace(config=SimpleNamespace(location_name="Test"))
+    repair_calls: list[str] = []
+    repair_issues = types.ModuleType("custom_components.bticino_c300x.repair_issues")
+    repair_issues.async_sync_entry_repair_issues = (
+        lambda hass, entry: repair_calls.append("repair")
+    )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.bticino_c300x.repair_issues",
+        repair_issues,
+    )
+
+    async def refresh_diagnostics(hass: object, entry: object) -> None:
+        repair_calls.append("diagnostics")
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.switch.async_refresh_agent_diagnostics",
+        refresh_diagnostics,
+    )
+
+    asyncio.run(entity.async_turn_on())
+    assert entry.runtime_data.api.device_user_actions == [
+        "ensure:Home Assistant Test"
+    ]
+    assert entity.is_on is True
+    assert entity.extra_state_attributes["media_identity_source"] == "homeassistant"
+
+    asyncio.run(entity.async_turn_off())
+    assert entry.runtime_data.api.device_user_actions == [
+        "ensure:Home Assistant Test",
+        "restore",
+    ]
+    assert entity.is_on is False
+    assert entity.extra_state_attributes["media_identity_source"] == "fallback"
+    assert repair_calls == ["repair", "diagnostics", "repair", "diagnostics"]
+
+
+def test_homeassistant_user_patch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry()
+    entry.runtime_data.api.device_user_status_error = True
+    entity = C300XHomeAssistantUserPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert entity.is_on is None
 
 
 def test_gui_function_patch_switch_uses_read_only_status() -> None:

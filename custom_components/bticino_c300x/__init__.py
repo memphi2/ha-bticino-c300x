@@ -243,6 +243,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         await _async_configure_display_bridge(hass, entry, api)
         await _async_sync_device_ui_patch(entry)
         await _async_sync_device_user(hass, entry)
+        await _async_refresh_self_test(entry)
     _async_remove_stale_gui_dependent_entities(hass, entry)
     async_sync_entry_repair_issues(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -472,6 +473,23 @@ def _entry_create_homeassistant_user(entry: BticinoC300XConfigEntry) -> bool:
     """Return whether setup should create/repair the dedicated media user."""
 
     return bool(_entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, True))
+
+
+async def _async_refresh_self_test(entry: BticinoC300XConfigEntry) -> None:
+    """Refresh the read-only device-agent architecture self-test."""
+
+    try:
+        entry.runtime_data.self_test_status = await entry.runtime_data.api.async_self_test()
+        entry.runtime_data.self_test_status_updated_at = datetime.now(UTC)
+    except C300XAgentApiUnsupportedError:
+        _LOGGER.debug("C300X device agent does not support self-test status")
+        entry.runtime_data.self_test_status = {}
+        entry.runtime_data.self_test_status_updated_at = None
+    except C300XAgentApiError as err:
+        _LOGGER.warning(
+            "C300X device-agent self-test failed: %s",
+            compact_error_text(err),
+        )
 
 
 async def _async_configure_device_activations(

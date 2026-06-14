@@ -21,8 +21,17 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    assert path.stat().st_size <= 436_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_800
+    assert path.stat().st_size <= 433_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 12_680
+
+
+def test_native_agent_event_payload_module_stays_small() -> None:
+    """Keep the event payload extraction from growing into another HTTP module."""
+
+    path = ROOT / "native_agent" / "src" / "event_payload.c"
+
+    assert path.stat().st_size <= 9_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 300
 
 
 def test_large_python_modules_stay_within_interim_budget() -> None:
@@ -31,7 +40,7 @@ def test_large_python_modules_stay_within_interim_budget() -> None:
     oversized = [
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "custom_components" / "bticino_c300x").glob("*.py")
-        if path.stat().st_size > 76_500
+        if path.stat().st_size > 74_500
     ]
 
     assert oversized == []

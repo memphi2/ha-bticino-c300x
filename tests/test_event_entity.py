@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# ruff: noqa: E402, I001
+
+import asyncio
 import sys
 import types
 from dataclasses import dataclass, field
@@ -106,12 +109,20 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 
 from homeassistant.const import EntityCategory  # noqa: E402
-
+from custom_components.bticino_c300x.agent_contracts import CapabilityPayload  # noqa: E402
+from custom_components.bticino_c300x.const import (  # noqa: E402
+    DASHBOARD_ENTITY_STAIR_LIGHT,
+    EVENT_ACTION_RECEIVED,
+    EVENT_AGENT_EVENT_RECEIVED,
+)
 from custom_components.bticino_c300x.entity import C300XEntity  # noqa: E402
 from custom_components.bticino_c300x.event import (  # noqa: E402
     C300XDeviceAgentEventEntity,
     C300XDoorbellEventEntity,
     _display_event_types,
+    _language,
+    _nested_dict_value,
+    async_setup_entry,
 )
 
 
@@ -136,6 +147,7 @@ class _FakeRuntimeData:
     event_state: _FakeEventState = field(default_factory=_FakeEventState)
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
     agent_info: dict[str, Any] = field(default_factory=dict)
+    capabilities: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -145,14 +157,85 @@ class _FakeEntry:
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
 
+class _FakeBus:
+    def __init__(self) -> None:
+        self.listeners: list[tuple[str, Any]] = []
+
+    def async_listen(self, event_type: str, callback: Any) -> Any:
+        self.listeners.append((event_type, callback))
+        return lambda: None
+
+
+class _FakeHass:
+    def __init__(self, language: str = "en") -> None:
+        self.bus = _FakeBus()
+        self.config = SimpleNamespace(language=language)
+
+
 def test_device_event_entity_is_diagnostic_disabled_by_default() -> None:
     assert C300XDeviceAgentEventEntity._attr_entity_category == EntityCategory.DIAGNOSTIC
     assert C300XDeviceAgentEventEntity._attr_entity_registry_enabled_default is False
 
 
+def test_async_setup_entry_adds_supported_event_entities() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "doorbell_events": {"supported": True},
+                "stair_light": {"supported": True},
+            }
+        )
+    )
+    added: list[Any] = []
+
+    asyncio.run(async_setup_entry(None, entry, added.extend))  # type: ignore[arg-type]
+
+    assert [type(entity) for entity in added] == [
+        C300XDoorbellEventEntity,
+        C300XDeviceAgentEventEntity,
+    ]
+    assert "stair_light_activated" in added[1]._attr_event_types
+
+
+def test_async_setup_entry_keeps_always_registered_agent_events() -> None:
+    added: list[Any] = []
+
+    asyncio.run(
+        async_setup_entry(  # type: ignore[arg-type]
+            None,
+            _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={})),
+            added.extend,
+        )
+    )
+
+    assert [type(entity) for entity in added] == [C300XDeviceAgentEventEntity]
+    assert "agent_restarted" in added[0]._attr_event_types
+
+
 def test_device_info_uses_c300x_firmware_as_software_version() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(agent_info={"firmware": "1.7.19"}),
+    )
+    entity = C300XEntity(entry, "test")  # type: ignore[arg-type]
+
+    assert entity.device_info["sw_version"] == "1.7.19"
+
+
+def test_device_info_uses_typed_setup_firmware_as_software_version() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_info=CapabilityPayload(
+                raw={"api_version": "1"},
+                version="1.2.0",
+                agent={"version": "1.2.0"},
+                implementation="native-c",
+                api_version="1",
+                device_id="device",
+                model="C300X",
+                firmware="1.7.19",
+                capabilities={},
+            ),
+        ),
     )
     entity = C300XEntity(entry, "test")  # type: ignore[arg-type]
 
@@ -220,6 +303,53 @@ def test_doorbell_event_entity_triggers_standard_ring_event() -> None:
     assert entity.extra_state_attributes["video_available"] is True
 
 
+def test_event_entities_register_bus_listeners() -> None:
+    doorbell = C300XDoorbellEventEntity(_FakeEntry())  # type: ignore[arg-type]
+    doorbell.hass = _FakeHass()
+    device = C300XDeviceAgentEventEntity(  # type: ignore[arg-type]
+        _FakeEntry(),
+        ["doorbell_pressed", "stair_light_activated"],
+    )
+    device.hass = _FakeHass()
+
+    asyncio.run(doorbell.async_added_to_hass())
+    asyncio.run(device.async_added_to_hass())
+
+    assert doorbell.hass.bus.listeners == [
+        (EVENT_AGENT_EVENT_RECEIVED, doorbell._handle_agent_event)
+    ]
+    assert device.hass.bus.listeners == [
+        (EVENT_AGENT_EVENT_RECEIVED, device._handle_agent_event),
+        (EVENT_ACTION_RECEIVED, device._handle_action_event),
+    ]
+
+
+def test_doorbell_event_entity_ignores_other_entries_keys_and_duplicates() -> None:
+    entity = C300XDoorbellEventEntity(_FakeEntry())  # type: ignore[arg-type]
+    entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
+    valid_event = SimpleNamespace(
+        data={
+            "entry_id": "entry-1",
+            "event_at": "2026-05-31T12:00:00+00:00",
+            "event_key": "doorbell_pressed",
+        }
+    )
+
+    entity._handle_agent_event(SimpleNamespace(data={**valid_event.data, "entry_id": "x"}))
+    entity._handle_agent_event(
+        SimpleNamespace(data={**valid_event.data, "event_key": "doorbell_media_closed"})
+    )
+    assert not hasattr(entity, "triggered_event")
+
+    entity._handle_agent_event(valid_event)
+    entity.triggered_event = ("unchanged", {})
+    entity.wrote_state = False
+    entity._handle_agent_event(valid_event)
+
+    assert entity.triggered_event == ("unchanged", {})
+    assert entity.wrote_state is False
+
+
 def test_device_event_entity_ignores_unregistered_event_type() -> None:
     entity = C300XDeviceAgentEventEntity(
         _FakeEntry(),  # type: ignore[arg-type]
@@ -240,8 +370,85 @@ def test_device_event_entity_ignores_unregistered_event_type() -> None:
     assert not hasattr(entity, "wrote_state")
 
 
+def test_device_event_entity_filters_entry_duplicate_and_action_events() -> None:
+    entity = C300XDeviceAgentEventEntity(  # type: ignore[arg-type]
+        _FakeEntry(),
+        ["stair_light_activated"],
+    )
+    entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
+
+    entity._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": "other",
+                "event_at": "2026-06-13T12:00:00+00:00",
+                "event_key": "stair_light_activated",
+            }
+        )
+    )
+    assert not hasattr(entity, "triggered_event")
+
+    entity._handle_action_event(
+        SimpleNamespace(
+            data={
+                "entry_id": "entry-1",
+                "action_id": DASHBOARD_ENTITY_STAIR_LIGHT,
+            }
+        )
+    )
+    assert entity.triggered_event[0] == "stair_light_activated"
+    entity.triggered_event = ("unchanged", {})
+    entity.wrote_state = False
+    entity._write_event_data(
+        {
+            "entry_id": "entry-1",
+            "event_at": entity._last_event_at,
+            "event_key": "stair_light_activated",
+        }
+    )
+    assert entity.triggered_event == ("unchanged", {})
+    assert entity.wrote_state is False
+
+    entity._handle_action_event(
+        SimpleNamespace(data={"entry_id": "entry-1", "action_id": "unsupported"})
+    )
+    assert entity.triggered_event == ("unchanged", {})
+
+
+def test_device_event_attributes_use_nested_message_counters() -> None:
+    entity = C300XDeviceAgentEventEntity(  # type: ignore[arg-type]
+        _FakeEntry(),
+        ["answering_machine_messages_changed"],
+    )
+    entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
+
+    entity._write_event_data(
+        {
+            "entry_id": "entry-1",
+            "event_at": "2026-06-13T12:00:00+00:00",
+            "event_key": "answering_machine_messages_changed",
+            "voicemail": {"total": 4, "unread": 2},
+            "memos": {"total": 3, "text_total": 1, "voice_total": 2},
+        }
+    )
+
+    attrs = entity.extra_state_attributes
+    assert attrs["voicemail_total"] == 4
+    assert attrs["voicemail_unread"] == 2
+    assert attrs["memos_total"] == 3
+    assert attrs["memos_text_total"] == 1
+    assert attrs["memos_voice_total"] == 2
+
+
 def test_display_event_types_remain_stable_for_ha_state_translations() -> None:
     assert _display_event_types(["door_unlock_started", "ringer_unmuted"], "de") == [
         "door_unlock_started",
         "ringer_unmuted",
     ]
+
+
+def test_language_and_nested_dict_helpers_handle_missing_data() -> None:
+    assert _language(None) is None
+    assert _language(SimpleNamespace(config=SimpleNamespace(language="de"))) == "de"
+    assert _nested_dict_value({"parent": {"child": 3}}, "parent", "child") == 3
+    assert _nested_dict_value({"parent": []}, "parent", "child") is None

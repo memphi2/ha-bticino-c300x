@@ -188,12 +188,50 @@ int c300x_sha256_strings3(
     return 1;
 }
 
-int c300x_sha256_file_hex(const char *path, char *out, size_t out_len)
+static int sha256_digest_hex(
+    const unsigned char digest[C300X_SHA256_DIGEST_LEN],
+    char *out,
+    size_t out_len
+)
 {
     static const char hex[] = "0123456789abcdef";
+
+    if (out_len < 65) {
+        return 0;
+    }
+    for (size_t index = 0; index < C300X_SHA256_DIGEST_LEN; index++) {
+        out[index * 2] = hex[(digest[index] >> 4) & 0x0fU];
+        out[index * 2 + 1] = hex[digest[index] & 0x0fU];
+    }
+    out[64] = '\0';
+    return 1;
+}
+
+int c300x_sha256_bytes_hex(
+    const unsigned char *data,
+    size_t len,
+    char *out,
+    size_t out_len
+)
+{
+    struct sha256_context context;
+    unsigned char digest[C300X_SHA256_DIGEST_LEN];
+
+    if (data == NULL || out == NULL) {
+        return 0;
+    }
+    out[0] = '\0';
+    sha256_init(&context);
+    sha256_update(&context, data, len);
+    sha256_final(&context, digest);
+    return sha256_digest_hex(digest, out, out_len);
+}
+
+int c300x_sha256_file_hex(const char *path, char *out, size_t out_len)
+{
     struct sha256_context context;
     unsigned char buffer[4096];
-    unsigned char digest[32];
+    unsigned char digest[C300X_SHA256_DIGEST_LEN];
     FILE *file;
     size_t read_len;
 
@@ -215,10 +253,5 @@ int c300x_sha256_file_hex(const char *path, char *out, size_t out_len)
     }
     fclose(file);
     sha256_final(&context, digest);
-    for (size_t index = 0; index < sizeof(digest); index++) {
-        out[index * 2] = hex[(digest[index] >> 4) & 0x0fU];
-        out[index * 2 + 1] = hex[digest[index] & 0x0fU];
-    }
-    out[64] = '\0';
-    return 1;
+    return sha256_digest_hex(digest, out, out_len);
 }

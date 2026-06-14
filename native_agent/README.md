@@ -64,6 +64,7 @@ tokens are configured also closes the noAuth maintenance window.
 Authenticated (bearer token):
 
 - `GET /api/v1/capabilities`
+- `GET /api/v1/self-test`
 - `GET /api/v1/state`
 - `GET /api/v1/events/recent`
 - `GET /api/v1/events/subscriptions`
@@ -161,6 +162,12 @@ patch state and the core media-hook state.
 verify that idle operation stays write-free.
 Firewall apply/restore writes are reported with `last_write_class=firewall`;
 IPv6 firewall writes use `last_write_class=ipv6_firewall`.
+
+`/api/v1/self-test` is a read-only architecture contract endpoint. It aggregates
+capabilities, firewall media-port state, RTSP bridge readiness, talkback RTP
+readiness, Home Assistant media-user routing, in-house patch status, and startup
+link state. The endpoint reports `ok` plus per-check reasons and must not write
+files, patch the device, restart services, or start media. See `API.md`.
 
 `systemMetrics` defaults to agent-side sampling every 30 seconds. It pushes
 updates only when the value differs from the last HA push by the configured

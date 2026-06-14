@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -11,6 +11,7 @@ from .callback_target import (
     callback_url_host_type,
     callback_url_scheme,
 )
+from .media_watchdog import AgentCpuWatchdog
 
 
 @dataclass(slots=True)
@@ -154,7 +155,7 @@ def _connection_stage_from_reason(reason: str) -> str:
 
     if reason == "event_subscription_registration":
         return "event_subscription"
-    if reason.endswith("Error") or reason.endswith("Timeout"):
+    if reason.endswith(("Error", "Timeout")):
         return "agent_api"
     return reason or "unknown"
 
@@ -205,6 +206,8 @@ class BticinoC300XRuntimeData:
     loaded_platforms: tuple[str, ...]
     system_metrics: dict[str, Any] = field(default_factory=dict)
     system_metrics_updated_at: datetime | None = None
+    agent_cpu_watchdog: AgentCpuWatchdog = field(default_factory=AgentCpuWatchdog)
+    agent_cpu_watchdog_task: Any | None = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: datetime | None = None
     answering_machine_messages_refresh_task: Any | None = None
@@ -216,12 +219,16 @@ class BticinoC300XRuntimeData:
     qml_patch_status_updated_at: datetime | None = None
     device_user_status: dict[str, Any] = field(default_factory=dict)
     device_user_status_updated_at: datetime | None = None
+    self_test_status: Mapping[str, Any] = field(default_factory=dict)
+    self_test_status_updated_at: datetime | None = None
     display_bridge_diagnostics: C300XCallbackDiagnostics = field(
         default_factory=C300XCallbackDiagnostics
     )
     qml_patch_diagnostics: C300XOperationDiagnostics = field(
         default_factory=C300XOperationDiagnostics
     )
-    agent_diagnostics: dict[str, Any] = field(default_factory=dict)
+    agent_diagnostics: Mapping[str, Any] = field(default_factory=dict)
     agent_diagnostics_updated_at: datetime | None = None
+    agent_diagnostics_updated_by: str | None = None
+    agent_diagnostics_change_reason: str | None = None
     agent_update_state: Any | None = None

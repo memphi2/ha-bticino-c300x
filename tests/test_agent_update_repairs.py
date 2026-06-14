@@ -192,6 +192,8 @@ class FakeConfigEntries:
         return True
 
     def async_update_entry(self, entry: Any, **kwargs: Any) -> None:
+        if "data" in kwargs:
+            entry.data = kwargs["data"]
         if "options" in kwargs:
             entry.options = kwargs["options"]
 
@@ -296,9 +298,9 @@ def test_frontend_card_repair_can_be_ignored() -> None:
     result = asyncio.run(flow.async_step_ignore())
 
     assert result == {"type": "create_entry", "data": {"ignored": True}}
-    assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
+    assert entry.data[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
     assert (
-        entry.options[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
+        entry.data[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
         == FRONTEND_CARD_SETUP_REPAIR_VERSION
     )
     assert IGNORED_ISSUES == [
@@ -306,11 +308,15 @@ def test_frontend_card_repair_can_be_ignored() -> None:
     ]
 
 
-def test_callback_url_repair_flow_stores_valid_override_and_reloads() -> None:
+def test_callback_url_repair_flow_stores_valid_override_and_reloads(monkeypatch) -> None:
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     entry.data = {"agent_host": "192.0.2.60", "agent_port": 8091}
     hass = FakeHass(entry)
     flow = CallbackUrlRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.callback_url._select_non_link_local_source_ip",
+        lambda *_args: "192.0.2.10",
+    )
 
     def show_form(**kwargs: Any) -> dict[str, Any]:
         return {"type": "form", **kwargs}
@@ -458,19 +464,18 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
             "mode": "home_call",
-            "home_call_entity": "binary_sensor.bticino_c300x_hausanruf_aktiv",
             "name": "C300X Home Call",
             "grid_options": {"columns": 6, "rows": 1},
         },
         {
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
-            "doorbell_state_entity": "sensor.bticino_c300x_tuerklingel_status",
             "grid_options": {"columns": 12, "rows": 7},
         },
     ]
     assert "'state_entity':" not in str(cards)
-    assert "home_call_entity" in str(cards)
+    assert "home_call_entity" not in str(cards)
+    assert "doorbell_state_entity" not in str(cards)
 
 
 def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
@@ -580,9 +585,9 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
         "type": "create_entry",
         "data": {"dashboard_path": "/dashboard-test/door"},
     }
-    assert entry.options[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
+    assert entry.data[CONF_FRONTEND_CARD_SETUP_DISMISSED] is True
     assert (
-        entry.options[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
+        entry.data[CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION]
         == FRONTEND_CARD_SETUP_REPAIR_VERSION
     )
     assert default_dashboard.config == {"views": []}
@@ -594,15 +599,9 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
     assert [card["mode"] for card in view["sections"][0]["cards"][:1]] == [
         "home_call"
     ]
-    assert (
-        view["sections"][0]["cards"][0]["home_call_entity"]
-        == "binary_sensor.bticino_c300x_hausanruf_aktiv"
-    )
+    assert "home_call_entity" not in view["sections"][0]["cards"][0]
     assert view["sections"][0]["cards"][1]["type"] == "custom:c300x-doorbell-call-card"
-    assert (
-        view["sections"][0]["cards"][1]["doorbell_state_entity"]
-        == "sensor.bticino_c300x_tuerklingel_status"
-    )
+    assert "doorbell_state_entity" not in view["sections"][0]["cards"][1]
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:

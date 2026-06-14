@@ -147,7 +147,7 @@ def assert_rtsp_udp_preserves_ipv4_mapped_peers(binary: Path) -> None:
         "rtsp_peer_ipv4_address",
         "IN6_IS_ADDR_V4MAPPED",
         "peer6->sin6_addr.s6_addr[12]",
-        "rtsp_peer_ipv4_address(peer, &g_bridge.udp_client.sin_addr)",
+        "rtsp_peer_ipv4_address(peer, &slot->udp_client.sin_addr)",
     )
     if any(item not in content for item in required):
         raise AssertionError("RTSP UDP peer handling must preserve IPv4-mapped IPv6 clients")
@@ -534,6 +534,7 @@ def run_smoke(
             read_only_actions = (
                 ("health", lambda: api_get(api_port, "/api/v1/health", authorized=False)),
                 ("capabilities", lambda: api_get(api_port, "/api/v1/capabilities")),
+                ("self-test", lambda: api_get(api_port, "/api/v1/self-test")),
                 ("diagnostics", lambda: api_get(api_port, "/api/v1/diagnostics")),
                 ("auth status", lambda: maintenance_get(api_port, "/api/v1/maintenance/auth")),
                 ("mqtt status", lambda: maintenance_get(api_port, "/api/v1/maintenance/mqtt")),
@@ -673,6 +674,21 @@ def run_smoke(
             assert_json_field(capabilities, "api_version", "1")
             assert_json_field(capabilities["device"], "model", "C300X")
             assert_json_field(capabilities["device"], "firmware", "1.7.19")
+            self_test = api_get(api_port, "/api/v1/self-test")
+            assert_json_field(self_test, "api_version", "1.1")
+            assert_json_field(self_test, "agent_version", "1.2.0")
+            assert_json_field(self_test, "firmware_family", "1.7.x")
+            for check_name in (
+                "capabilities",
+                "firewall",
+                "rtsp",
+                "talkback_rtp",
+                "homeassistant_user",
+                "inhouse_patch",
+                "startup",
+            ):
+                if check_name not in self_test["checks"]:
+                    raise AssertionError(f"self-test missing {check_name}")
             assert_json_field(
                 capabilities["capabilities"]["locks"]["locks"][0],
                 "name",
@@ -943,6 +959,21 @@ def run_smoke(
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_class", "firewall")
             assert_json_field(diagnostics, "last_write_reason", "apply")
+            self_test = api_get(api_port, "/api/v1/self-test")
+            assert_json_field(self_test["checks"]["firewall"], "ok", True)
+            assert_json_field(
+                self_test["checks"]["firewall"],
+                "reason",
+                "media_ports_open_ipv6_optional_missing",
+            )
+            assert_json_field(self_test["checks"]["firewall"], "ipv6_state", "original")
+            assert_json_field(self_test["checks"]["firewall"], "ipv6_enabled", True)
+            assert_json_field(self_test["checks"]["talkback_rtp"], "ok", True)
+            assert_json_field(
+                self_test["checks"]["talkback_rtp"],
+                "reason",
+                "talkback_rtp_ready",
+            )
             runtime_lines_before = len(firewall_runtime_log.read_text(encoding="utf-8").splitlines())
             assert_json_field(
                 maintenance_post(

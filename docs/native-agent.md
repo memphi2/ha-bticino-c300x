@@ -69,7 +69,7 @@ Key sections:
 - `events`: callback store and timeout
 - `maintenance`: gated SSH/reboot/GUI-reload commands
 - `systemMetrics`: optional low-frequency push updates for load and temperature
-- `video`: optional app-like doorstation media support
+- `video`: optional local media doorstation media support
 - `displayBridge`: optional dashboard proxy for QML
 
 Callback URLs for event subscriptions and the display bridge must use a local
@@ -154,8 +154,8 @@ The QML patch and GUI reload maintenance paths are intentionally narrow: the
 agent can only run the configured local UI helper with fixed `status`, `apply`,
 `restore`, or `reload` arguments. The patch is a complete device-GUI function
 patch, not just two extra pages: it wires MainApp navigation, transforms the
-original-device HomePage for unread memo/video-message badges, transforms the
-original-device MemoPage for external-delete refresh, installs the project-owned
+device HomePage for unread memo/video-message badges, transforms the
+device MemoPage for external-delete refresh, installs the project-owned
 Alarmo/Home Assistant pages, and installs the local QML JavaScript bridge.
 Original GUI files are backed up under
 `/home/bticino/cfg/extra/c300x-device-file-backups/original`; generated agent

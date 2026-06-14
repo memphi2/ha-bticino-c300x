@@ -227,7 +227,13 @@ def _preferred_source_ip(candidates: list[str]) -> str | None:
                 return value
         except ValueError:
             continue
-    return unique[0]
+    for value in unique:
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            continue
+        return value
+    return None
 
 
 def _replace_url_host(parts: SplitResult, host: str) -> str:

@@ -115,7 +115,7 @@ activate_doorbell_video:
         text:
     audio:
       name: Enable audio
-      description: Request the C300X audio path together with video. Required for browser or mobile-app talkback.
+      description: Request the C300X audio path together with video. Required for browser or Home Assistant mobile frontend talkback.
       required: false
       default: true
       selector:
@@ -134,7 +134,7 @@ stop_doorbell_video:
 
 answer_doorbell_call:
   name: Answer C300X doorbell call
-  description: Request app-like answering of the active C300X doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
+  description: Request local media answering of the active C300X doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
   fields:
     entry_id:
       name: Entry ID
@@ -142,13 +142,6 @@ answer_doorbell_call:
       required: false
       selector:
         text:
-    audio:
-      name: Enable audio
-      description: Request the C300X audio path when answering the ring call. Keep this enabled for normal Ring Call playback and talkback.
-      required: false
-      default: true
-      selector:
-        boolean:
 
 hangup_doorbell_call:
   name: Hang up C300X doorbell call
@@ -163,7 +156,7 @@ hangup_doorbell_call:
 
 capture_doorbell_call:
   name: Capture C300X doorbell call
-  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV work files default to /config/c300x/.
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV and JPEG capture files default to /config/c300x/.
   fields:
     entry_id:
       name: Entry ID
@@ -195,8 +188,8 @@ capture_doorbell_call:
       selector:
         boolean:
     wav_output_dir:
-      name: WAV output directory
-      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for the raw and processed WAV files. Defaults to /config/c300x/.
+      name: Capture file directory
+      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for latest.raw.wav, latest.processed.wav, frame_01.jpg, frame_02.jpg, frame_03.jpg, and latest.capture.json. Defaults to /config/c300x/. Existing files are overwritten.
       required: false
       selector:
         text:
@@ -209,7 +202,7 @@ capture_doorbell_call:
 
 run_ring_wyoming_analysis:
   name: Transcribe C300X ring audio with Wyoming Whisper
-  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to the newest *.raw.wav below /config/c300x/.
+  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to /config/c300x/latest.capture.json and its latest.raw.wav; without capture metadata it falls back to the newest *.raw.wav directly below /config/c300x/.
   fields:
     wyoming_host:
       name: Wyoming host
@@ -227,9 +220,15 @@ run_ring_wyoming_analysis:
           min: 1
           max: 65535
           mode: box
+    capture_path:
+      name: Capture metadata path
+      description: Optional capture metadata JSON below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/latest.capture.json when present.
+      required: false
+      selector:
+        text:
     wav_path:
       name: WAV path
-      description: Optional mono WAV path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the newest *.raw.wav below /config/c300x/.
+      description: Optional mono WAV path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the capture metadata raw WAV, normally /config/c300x/latest.raw.wav.
       required: false
       selector:
         text:
@@ -274,6 +273,12 @@ evaluate_ring_analysis:
       required: false
       selector:
         text:
+    capture_path:
+      name: Capture metadata path
+      description: Optional capture metadata JSON below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the capture_path recorded in the result JSON.
+      required: false
+      selector:
+        text:
     expected_phrase:
       name: Expected phrase
       description: Exact spoken phrase to match when the result JSON does not provide phrase_match.
@@ -296,7 +301,7 @@ evaluate_ring_analysis:
 
 start_home_call:
   name: Start C300X home call
-  description: Start an app-like in-house call to the C300X through the local device agent.
+  description: Start a local media in-house call to the C300X through the local device agent.
   fields:
     entry_id:
       name: Entry ID
@@ -316,7 +321,7 @@ start_home_call:
 
 stop_home_call:
   name: Stop C300X home call
-  description: Stop the active app-like in-house call through the local device agent.
+  description: Stop the active local media in-house call through the local device agent.
   fields:
     entry_id:
       name: Entry ID

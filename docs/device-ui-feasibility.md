@@ -7,7 +7,7 @@ A native C300X QML dashboard is feasible and integrated through local loopback c
 ## Supported model
 
 - QML page patch on the C300X GUI.
-- Original-device QML pages are transformed on the device instead of vendored
+- Device QML pages are transformed on the device instead of copied
   into the repository.
 - Dashboard payload/actions served by native agent `displayBridge`.
 - Alarm panel flow through Home Assistant `alarm_control_panel` services.

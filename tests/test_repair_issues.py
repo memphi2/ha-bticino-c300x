@@ -94,14 +94,17 @@ from custom_components.bticino_c300x.data import (  # noqa: E402
 )
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
+    DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
     DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
+    MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
+    async_create_media_watchdog_issue,
     async_sync_entry_repair_issues,
     repair_issue_id,
 )
@@ -121,6 +124,7 @@ class FakeRuntimeData:
     agent_diagnostics: dict[str, Any] | None = None
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     device_user_status: dict[str, Any] = field(default_factory=dict)
+    self_test_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -165,6 +169,8 @@ class FakeEntityRegistry:
 @dataclass(slots=True)
 class FakeConfigEntries:
     def async_update_entry(self, entry: Any, **kwargs: Any) -> None:
+        if "data" in kwargs:
+            entry.data = kwargs["data"]
         if "options" in kwargs:
             entry.options = kwargs["options"]
 
@@ -272,6 +278,28 @@ def test_frontend_card_setup_hint_created_after_legacy_dismissal() -> None:
 
 
 def test_frontend_card_setup_hint_cleared_after_current_repair_handled() -> None:
+    entry = FakeEntry(
+        data={
+            CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: (
+                FRONTEND_CARD_SETUP_REPAIR_VERSION
+            ),
+        },
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+    assert CREATED_ISSUES == {}
+
+
+def test_frontend_card_setup_hint_cleared_after_current_options_marker() -> None:
     entry = FakeEntry(
         options={
             CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
@@ -479,6 +507,80 @@ def test_agent_startup_link_ok_clears_repair_issue() -> None:
     )
 
 
+def test_failed_self_test_creates_non_fixable_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "firewall": {
+                        "ok": False,
+                        "reason": "ipv4_media_ports_missing",
+                    },
+                    "rtsp": {"ok": True, "reason": "rtsp_ready"},
+                },
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is False
+    assert issue["translation_key"] == DEVICE_AGENT_SELF_TEST_FAILED_ISSUE
+    assert issue["translation_placeholders"]["failed_checks"] == "firewall"
+    assert "ipv4_media_ports_missing" in issue["translation_placeholders"]["reasons"]
+    assert "C300X Firewall switch" in issue["translation_placeholders"]["actions"]
+
+
+def test_failed_self_test_ignores_optional_ipv6_firewall_only() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "firewall": {
+                        "ok": False,
+                        "reason": "ipv6_media_ports_missing",
+                    },
+                    "talkback_rtp": {
+                        "ok": False,
+                        "reason": "talkback_rtp_firewall_missing",
+                    },
+                },
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
+def test_ok_self_test_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            self_test_status={
+                "ok": True,
+                "checks": {"firewall": {"ok": True, "reason": "media_ports_open"}},
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
 def test_missing_core_qml_hook_creates_fixable_repair_issue() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
@@ -578,7 +680,7 @@ def test_missing_device_user_media_identity_creates_repair_issue() -> None:
                 },
             },
             device_user_status={
-                "app_user_present": False,
+                "fallback_user_present": False,
                 "homeassistant_user_present": False,
                 "media_identity_available": False,
                 "routes_consistent": False,
@@ -601,7 +703,7 @@ def test_device_user_app_fallback_without_homeassistant_user_clears_issue() -> N
         runtime_data=FakeRuntimeData(
             capabilities={"doorbell_video": {"supported": True}},
             device_user_status={
-                "app_user_present": True,
+                "fallback_user_present": True,
                 "homeassistant_user_present": False,
                 "media_identity_available": True,
                 "routes_consistent": False,
@@ -627,7 +729,7 @@ def test_homeassistant_user_with_incomplete_routes_creates_repair_issue() -> Non
                 },
             },
             device_user_status={
-                "app_user_present": True,
+                "fallback_user_present": True,
                 "homeassistant_user_present": True,
                 "media_identity_available": True,
                 "routes_consistent": False,
@@ -684,3 +786,23 @@ def test_clean_callback_url_clears_repair_issue() -> None:
         repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, entry.entry_id)
         in DELETED_ISSUES
     )
+
+
+def test_media_watchdog_creates_error_repair_issue() -> None:
+    entry = FakeEntry()
+
+    async_create_media_watchdog_issue(
+        FakeHass(),
+        entry,
+        reason="agent_cpu_high_95.0_percent_300s",
+        cpu_percent=95.0,
+        duration_seconds=300,
+    )
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(MEDIA_WATCHDOG_TIMEOUT_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == issue_registry.IssueSeverity.ERROR
+    assert issue["translation_key"] == MEDIA_WATCHDOG_TIMEOUT_ISSUE
+    assert issue["translation_placeholders"]["cpu_percent"] == "95.0"
+    assert issue["translation_placeholders"]["duration_seconds"] == "300"

@@ -72,6 +72,20 @@ def test_agent_event_display_data_translates_technical_event_value_to_french() -
     assert data["event"] == "Ouverture porte demarree"
 
 
+def test_agent_event_display_data_uses_localized_italian_label() -> None:
+    data = agent_event_display_data(
+        {
+            "event_key": "door_unlock_started",
+            "event_label_it": "Evento personalizzato",
+            "event_label_en": "Custom event",
+        },
+        "it",
+    )
+
+    assert data["event"] == "Evento personalizzato"
+    assert data["event_type_key"] == "door_unlock_started"
+
+
 def test_agent_event_key_converts_dot_notation() -> None:
     data = {
         "event_type": "door_unlock.started",
@@ -95,3 +109,8 @@ def test_action_event_display_data_maps_stair_light_action() -> None:
 
 def test_action_event_key_maps_door_unlock_action() -> None:
     assert action_event_key({"action_id": "door_unlock"}) == "door_unlock_started"
+
+
+def test_action_event_display_data_ignores_unknown_actions() -> None:
+    assert action_event_key({"action_id": 123}) is None
+    assert action_event_display_data({"action_id": "unknown"}) == {}

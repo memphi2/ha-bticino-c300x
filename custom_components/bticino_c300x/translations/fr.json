@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BTicino C300X",
+        "description": "Saisissez d'abord l'adresse du C300X. Si l'agent natif n'est pas joignable, Home Assistant peut guider une installation unique de l'agent avant de demander les tokens et options.",
+        "data": {
+          "name": "Nom",
+          "agent_host": "Hote de l'agent appareil",
+          "agent_port": "Port HTTP de l'agent appareil",
+          "callback_base_url": "Override URL de base callback (optionnel)"
+        },
+        "data_description": {
+          "callback_base_url": "Laissez vide pour les installations normales. A utiliser seulement si Home Assistant genere une URL callback que le C300X ne peut pas joindre, par exemple avec frontend HTTPS/reverse proxy, homeassistant.local ou IPv6 link-local. Doit etre une URL HTTP locale, par exemple http://IP_LOCALE_HA:8123."
+        }
+      },
+      "agent_missing": {
+        "title": "Agent natif introuvable",
+        "description": "Home Assistant n'a pas pu joindre l'agent natif C300X a l'adresse configuree. Vous pouvez installer maintenant l'agent inclus ou continuer pour configurer manuellement un agent deja installe.",
+        "data": {
+          "bootstrap_install_agent": "Installer l'agent natif sur le C300X"
+        }
+      },
+      "bootstrap_install": {
+        "title": "Installer l'agent C300X natif",
+        "description": "Cette etape ecrit l'agent natif, la configuration de tokens generee, le script de demarrage et les fichiers de support display sur le C300X via SSH. Les identifiants SSH ne sont utilises que pour cette installation et ne sont pas stockes.",
+        "data": {
+          "bootstrap_ssh_username": "Utilisateur SSH C300X",
+          "bootstrap_ssh_password": "Mot de passe SSH C300X"
+        }
+      },
+      "agent_auth": {
+        "title": "Identifiants de l'agent appareil",
+        "description": "Saisissez les tokens de l'agent natif joignable. Laissez le token API vide uniquement tant que l'agent est encore en mode bootstrap noAuth.",
+        "data": {
+          "agent_token": "Token API de l'agent appareil",
+          "maintenance_token": "Token maintenance de l'agent appareil"
+        }
+      },
+      "user_features": {
+        "title": "Fonctions BTicino C300X",
+        "description": "Selectionnez les fonctions media et appareil Home Assistant exposees par cette installation C300X.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "user_dashboard": {
+        "title": "Dashboard display C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "data": {
+          "device_ui_enabled": "Appliquer le patch display",
+          "alarm_entity_id": "Entite Alarmo",
+          "weather_entity_id": "Entite meteo",
+          "dashboard_entities": "Entites du tableau de bord",
+          "dashboard_entity_name_display": "Nom de l'entite dashboard",
+          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
+          "actions_json": "JSON de la liste autorisee des actions dashboard",
+          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer BTicino C300X",
+        "description": "Mettez a jour la connexion a l'agent, le token maintenance ou renouvelez les identifiants webhook.",
+        "data": {
+          "agent_host": "Hote de l'agent appareil",
+          "agent_port": "Port HTTP de l'agent appareil",
+          "agent_token": "Token API de l'agent appareil",
+          "maintenance_token": "Token maintenance de l'agent appareil",
+          "callback_base_url": "Override URL de base callback (optionnel)",
+          "rotate_shared_secret": "Renouveler le secret partage"
+        },
+        "data_description": {
+          "callback_base_url": "Laissez vide pour les installations normales. A utiliser seulement si Home Assistant genere une URL callback que le C300X ne peut pas joindre, par exemple avec frontend HTTPS/reverse proxy, homeassistant.local ou IPv6 link-local. Doit etre une URL HTTP locale, par exemple http://IP_LOCALE_HA:8123."
+        }
+      },
+      "reconfigure_features": {
+        "title": "Reconfigurer les fonctions BTicino C300X",
+        "description": "Mettez a jour les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "reconfigure_dashboard": {
+        "title": "Reconfigurer le dashboard display C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "data": {
+          "device_ui_enabled": "Appliquer le patch display",
+          "alarm_entity_id": "Entite Alarmo",
+          "weather_entity_id": "Entite meteo",
+          "dashboard_entities": "Entites du tableau de bord",
+          "dashboard_entity_name_display": "Nom de l'entite dashboard",
+          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
+          "actions_json": "JSON de la liste autorisee des actions dashboard",
+          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "BTicino C300X est deja configure.",
+      "reconfigure_successful": "BTicino C300X a ete reconfigure. Mettez a jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvele les identifiants."
+    },
+    "error": {
+      "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
+      "device_install_failed": "L'installation SSH a echoue. Verifiez l'acces SSH et reessayez.",
+      "device_install_verify_failed": "L'installation est terminee, mais l'agent natif ne repond pas avec le token genere.",
+      "invalid_agent_port": "Saisissez un port valide pour l'agent appareil.",
+      "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
+      "invalid_callback_base_url": "Saisissez une URL callback HTTP locale de Home Assistant joignable par le C300X, ou laissez vide.",
+      "invalid_device_host": "Saisissez l'adresse du C300X.",
+      "installer_dependency_missing": "La dependance Python SSH de Home Assistant n'est pas encore chargee. Redemarrez Home Assistant apres l'installation ou la mise a jour de l'integration.",
+      "invalid_ssh_password": "Saisissez le mot de passe SSH du C300X.",
+      "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
+      "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
+      "required": "Ce champ est obligatoire."
+    }
+  },
+  "options": {
+    "step": {
+      "connection": {
+        "title": "Connexion BTicino C300X",
+        "description": "Configurez la connexion locale a l'agent appareil et le token de maintenance.",
+        "data": {
+          "agent_host": "Hote de l'agent appareil",
+          "agent_port": "Port HTTP de l'agent appareil",
+          "agent_token": "Token API de l'agent appareil",
+          "maintenance_token": "Token maintenance de l'agent appareil",
+          "callback_base_url": "Override URL de base callback (optionnel)"
+        },
+        "data_description": {
+          "callback_base_url": "Laissez vide pour les installations normales. A utiliser seulement si Home Assistant genere une URL callback que le C300X ne peut pas joindre, par exemple avec frontend HTTPS/reverse proxy, homeassistant.local ou IPv6 link-local. Doit etre une URL HTTP locale, par exemple http://IP_LOCALE_HA:8123."
+        }
+      },
+      "features": {
+        "title": "Fonctions BTicino C300X",
+        "description": "Configurez les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "data": {
+          "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
+          "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier"
+        }
+      },
+      "dashboard": {
+        "title": "Dashboard display C300X",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "data": {
+          "device_ui_enabled": "Appliquer le patch display",
+          "alarm_entity_id": "Entite Alarmo",
+          "weather_entity_id": "Entite meteo",
+          "dashboard_entities": "Entites du tableau de bord",
+          "dashboard_entity_name_display": "Nom de l'entite dashboard",
+          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
+          "actions_json": "JSON de la liste autorisee des actions dashboard",
+          "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
+        }
+      }
+    },
+    "error": {
+      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide.",
+      "invalid_actions": "Le JSON de la liste autorisee d'actions est invalide.",
+      "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
+      "invalid_callback_base_url": "Saisissez une URL callback HTTP locale de Home Assistant joignable par le C300X, ou laissez vide.",
+      "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "home_call_active": {
+        "name": "Appel domicile actif"
+      }
+    },
+    "button": {
+      "delete_latest_video_message": {
+        "name": "Supprimer le dernier message video"
+      },
+      "delete_latest_text_memo": {
+        "name": "Supprimer le dernier memo texte"
+      },
+      "door_unlock": {
+        "name": "Ouvrir la porte"
+      },
+      "reboot": {
+        "name": "Redemarrer"
+      },
+      "remove_agent": {
+        "name": "Supprimer l'agent appareil"
+      },
+      "restart_agent": {
+        "name": "Redemarrer l'agent appareil"
+      },
+      "reload_gui": {
+        "name": "Recharger l'interface appareil"
+      },
+      "stair_light": {
+        "name": "Lumiere d'escalier"
+      },
+      "stop_doorbell_video": {
+        "name": "Arreter la camera de sonnette"
+      },
+      "delete_latest_voice_memo": {
+        "name": "Supprimer le dernier memo vocal"
+      }
+    },
+    "camera": {
+      "doorbell_camera": {
+        "name": "Camera de sonnette"
+      }
+    },
+    "event": {
+      "doorbell_event": {
+        "name": "Evenement de sonnette",
+        "state": {
+          "ring": "Sonnerie"
+        }
+      },
+      "agent_event": {
+        "name": "Evenement appareil",
+        "state": {
+          "agent_restarted": "Agent appareil redemarre",
+          "answering_machine_messages_changed": "Messages video mis a jour",
+          "call_ended": "Appel termine",
+          "call_started": "Appel demarre",
+          "door_unlock_ended": "Ouverture porte terminee",
+          "door_unlock_started": "Ouverture porte demarree",
+          "doorbell_media_closed": "Flux camera de sonnette termine",
+          "doorbell_pressed": "Sonnette appuyee",
+          "doorbell_view_requested": "Vue camera de sonnette demandee",
+          "memos_changed": "Memos mis a jour",
+          "ringer_muted": "Sonnerie coupee",
+          "ringer_unmuted": "Sonnerie activee",
+          "smartphone_forwarding_changed": "Renvoi smartphone modifie",
+          "stair_light_activated": "Lumiere d'escalier activee",
+          "activation_executed": "Activation appareil executee"
+        }
+      }
+    },
+    "select": {
+      "smartphone_forwarding_mode": {
+        "name": "Mode renvoi smartphone",
+        "state": {
+          "enabled": "Renvoyer aux smartphones",
+          "in-house-only": "Home Assistant uniquement",
+          "blocked": "Ne pas renvoyer"
+        }
+      }
+    },
+    "sensor": {
+      "agent_status": {
+        "name": "Etat de l'agent appareil",
+        "state": {
+          "ok": "OK",
+          "warning": "Avertissement",
+          "error": "Erreur"
+        }
+      },
+      "agent_diagnostics": {
+        "name": "Diagnostics de l'agent appareil",
+        "state": {
+          "unknown": "Diagnostics non charges",
+          "agent_offline": "Agent hors ligne",
+          "agent_reconnecting": "Reconnexion",
+          "repair_required": "Reparation requise",
+          "subscription_missing": "Abonnement manquant",
+          "display_event_watchdog": "Watchdog evenements display actif",
+          "media_watchdog_tripped": "Watchdog CPU actif",
+          "external_media_active": "Media externe actif",
+          "media_stopping": "Arret media",
+          "home_call_active": "Appel domicile actif",
+          "home_call_starting": "Appel domicile demarre",
+          "ring_media_active": "Media sonnette actif",
+          "ring_call_active": "Appel sonnette actif",
+          "doorbell_call_active": "Appel video sonnette actif",
+          "media_starting": "Media demarre",
+          "doorbell_media_active": "Media sonnette actif",
+          "rtsp_busy": "RTSP occupe",
+          "media_resources_open": "Ressources media ouvertes",
+          "idle": "Inactif"
+        }
+      },
+      "device_cpu": {
+        "name": "CPU appareil"
+      },
+      "device_load": {
+        "name": "Charge appareil"
+      },
+      "device_memory": {
+        "name": "Memoire appareil"
+      },
+      "device_temperature": {
+        "name": "Temperature appareil"
+      },
+      "voicemail_messages": {
+        "name": "Messages video"
+      },
+      "text_memos": {
+        "name": "Memos texte"
+      },
+      "voice_memos": {
+        "name": "Memos vocaux"
+      },
+      "doorbell_state": {
+        "name": "Etat sonnette",
+        "state": {
+          "idle": "Inactif",
+          "ringing": "Sonne",
+          "view_requested": "Vue camera active",
+          "view_requeste": "Vue camera active",
+          "pressed": "Sonnette appuyee",
+          "ring": "Sonne",
+          "doorbell_pressed": "Sonnette appuyee",
+          "doorbell_view_requested": "Vue camera active",
+          "doorbell_media_closed": "Flux camera termine",
+          "media_closed": "Flux camera termine",
+          "closed": "Flux camera termine"
+        }
+      }
+    },
+    "switch": {
+      "answering_machine": {
+        "name": "Repondeur"
+      },
+      "ringer_mute": {
+        "name": "Sonnerie muette"
+      },
+      "maintenance_ssh": {
+        "name": "SSH"
+      },
+      "maintenance_no_auth": {
+        "name": "Agent noAuth"
+      },
+      "maintenance_no_auth_access": {
+        "name": "Maintenance noAuth agent"
+      },
+      "maintenance_mdns_discovery": {
+        "name": "Decouverte mDNS agent"
+      },
+      "gui_function_patch": {
+        "name": "Display patch"
+      },
+      "firewall_patch": {
+        "name": "Patch pare-feu API"
+      },
+      "ipv6_firewall_patch": {
+        "name": "Patch pare-feu IPv6"
+      },
+      "native_mqtt_bridge": {
+        "name": "Bridge MQTT natif"
+      },
+      "legacy_mqtt_bridge": {
+        "name": "Bridge MQTT legacy"
+      },
+      "homeassistant_user_patch": {
+        "name": "Patch utilisateur Home Assistant"
+      }
+    }
+  },
+  "exceptions": {
+    "alarm_not_configured": {
+      "message": "Aucune entite alarm_control_panel n'est configuree."
+    },
+    "agent_command_failed": {
+      "message": "La commande de l'agent C300X a echoue ou n'est pas prise en charge par l'agent installe."
+    },
+    "gui_function_patch_required": {
+      "message": "Cette action necessite le patch display C300X. Activez et appliquez d'abord le patch display dans les options de l'integration."
+    },
+    "doorbell_video_not_available": {
+      "message": "La video de sonnette n'est pas activee ou n'est pas prise en charge par l'agent C300X installe."
+    },
+    "home_call_not_available": {
+      "message": "L'appel domicile n'est pas active ou n'est pas pris en charge par l'agent C300X installe."
+    },
+    "ring_capture_busy": {
+      "message": "La capture d'appel C300X est occupee, car un autre client video est deja connecte."
+    },
+    "entry_id_required": {
+      "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
+    },
+    "invalid_action_id": {
+      "message": "L'ID d'action est invalide."
+    },
+    "invalid_alarm_command": {
+      "message": "La commande d'alarme est invalide."
+    },
+    "invalid_lock_id": {
+      "message": "L'ID de verrou est invalide."
+    },
+    "maintenance_action_not_supported": {
+      "message": "L'action de maintenance de l'agent C300X n'est pas prise en charge, pas activee, ou aucun token de maintenance n'est configure."
+    },
+    "video_message_not_available": {
+      "message": "Aucun message video C300X n'est disponible."
+    },
+    "text_memo_not_available": {
+      "message": "Aucun memo texte C300X n'est disponible."
+    },
+    "unknown_action": {
+      "message": "L'ID d'action {action_id} n'est pas configure."
+    },
+    "unknown_entry": {
+      "message": "L'entree BTicino C300X selectionnee n'existe pas."
+    },
+    "voice_memo_not_available": {
+      "message": "Aucun memo vocal C300X n'est disponible."
+    }
+  },
+  "issues": {
+    "agent_capability_mismatch": {
+      "title": "Les capacites de l'agent C300X sont manquantes",
+      "description": "L'agent C300X configure pour {entry_title} a repondu sans capacites utilisables. Mettez a jour ou reconfigurez l'agent local, puis rechargez l'integration."
+    },
+    "device_agent_update_required": {
+      "title": "Mise a jour de l'agent C300X requise",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Mettre a jour l'agent C300X",
+            "description": "Home Assistant televerse l'agent natif package via l'API de maintenance actuellement configuree. Les identifiants SSH ne sont pas necessaires. Les patchs display et pare-feu actifs sont d'abord verifies en lecture seule et rafraichis uniquement s'ils etaient deja actifs et si la source de patch packagee a change. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / patch de routage dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch display : {qml_patch_status}\nRaison : {reason}"
+          },
+          "ssh_install": {
+            "title": "Reinstaller l'agent C300X via SSH",
+            "description": "Cet agent installe ne peut pas encore se mettre a jour lui-meme. Home Assistant utilisera ces identifiants SSH temporaires pour installer l'agent package, puis rafraichira uniquement les patchs display et pare-feu actifs si la source de patch packagee a change. Les identifiants SSH ne sont pas stockes. Si vous utilisez les appels Ring Call Home Assistant uniquement, verifiez aussi le patch utilisateur media Home Assistant / patch de routage dans les options de l'integration apres la mise a jour.\n\nInstalle : {installed_version} (API {installed_api_version}, bundle {installed_bundle_hash})\nPackage : {available_version} (API {available_api_version}, bundle {available_bundle_hash})\nChemin de mise a jour : {update_path}\nEtat du patch display : {qml_patch_status}\nRaison : {reason}",
+            "data": {
+              "bootstrap_ssh_username": "Utilisateur SSH",
+              "bootstrap_ssh_password": "Mot de passe SSH"
+            }
+          }
+        },
+        "error": {
+          "ssh_install_failed": "La reparation par SSH a echoue. Verifiez l'acces SSH et reessayez.",
+          "update_failed": "La mise a jour de l'agent a echoue. Verifiez que l'acces maintenance est actif et reessayez.",
+          "update_verify_failed": "La mise a jour a ete envoyee, mais l'agent signale encore un bundle plus ancien ou incompatible."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    },
+    "device_agent_startup_disabled": {
+      "title": "L'agent C300X ne demarre pas apres redemarrage",
+      "description": "{entry_title} peut joindre l'agent C300X maintenant, mais le lien de demarrage du peripherique est manquant ou invalide. Apres le prochain redemarrage du C300X, l'agent cessera de fonctionner a nouveau. Lancez la reparation/mise a jour de l'agent ou reinstallez l'agent via SSH pour recreer le lien de demarrage."
+    },
+    "device_agent_self_test_failed": {
+      "title": "Le self-test de l'agent C300X signale un probleme",
+      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un controle d'architecture en echec. Controles en echec : {failed_checks}. Raisons : {reasons}. Action conseillee : {actions}. Aucune reparation automatique n'a ete executee. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
+    },
+    "device_agent_ui_event_watchdog": {
+      "title": "Le watcher d'evenements display C300X a ete protege",
+      "description": "{entry_title} a detecte trop de watchers d'evenements display C300X simultanes. L'agent a refuse le watcher supplementaire pour eviter une boucle de polling locale qui peut surcharger le C300X. Watchers actifs : {waiters}/{capacity}. Watchers refuses : {overflows}. Rechargez la GUI display C300X depuis l'integration si le dashboard ou les memos de l'ecran ne se mettent plus a jour, puis actualisez les diagnostics."
+    },
+    "device_core_qml_hook_required": {
+      "title": "Hook media core C300X manquant",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Appliquer le hook media core C300X",
+            "description": "Home Assistant appliquera uniquement le hook media core minimal necessaire pour detecter la fermeture d'une session media par l'ecran C300X ou un autre client media. C'est separe du patch display dashboard optionnel.\n\nEtat actuel du hook core : {qml_patch_status}"
+          }
+        },
+        "error": {
+          "core_patch_failed": "L'application du hook media core a echoue. Verifiez l'acces maintenance et reessayez.",
+          "core_patch_verify_failed": "L'action du hook media core a ete executee, mais l'agent n'a pas confirme l'etat patche."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee.",
+          "core_patch_unsupported": "L'agent appareil C300X installe ne prend pas en charge l'application du hook media core."
+        }
+      }
+    },
+    "device_user_required": {
+      "title": "Configuration utilisateur media C300X requise",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Creer l'utilisateur media Home Assistant",
+            "description": "Home Assistant demandera a l'agent appareil de creer ou reparer l'utilisateur media C300X dedie `homeassistant`. Les utilisateurs media existants sont conserves. L'agent ecrit uniquement l'etat utilisateur et routage necessaire sur l'appareil."
+          }
+        },
+        "error": {
+          "device_user_setup_failed": "La configuration utilisateur appareil a echoue. Verifiez l'acces maintenance et reessayez."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    },
+    "invalid_action_map": {
+      "title": "La liste d'actions dashboard C300X est invalide",
+      "description": "La liste d'actions de {entry_title} ne peut pas etre analysee : {error}. Corrigez la carte d'actions configuree, puis rechargez l'integration."
+    },
+    "missing_alarm_entity": {
+      "title": "L'entite d'alarme C300X configuree est manquante",
+      "description": "{entry_title} reference {entity_id}, mais Home Assistant ne connait pas cette entite. Choisissez une entite alarm_control_panel existante dans les options ou videz le reglage d'alarme."
+    },
+    "media_watchdog_timeout": {
+      "title": "Le watchdog media C300X a arrete une session en forte charge",
+      "description": "{entry_title} a signale une charge CPU soutenue de l'appareil pendant au moins {duration_seconds} secondes ({cpu_percent}%). Home Assistant a ferme ses sessions media C300X actives afin de ne pas maintenir l'appareil sous charge. Raison : {reason}."
+    },
+    "frontend_card_setup_hint": {
+      "title": "Ajouter la carte Lovelace C300X",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Configurer les cartes Lovelace C300X",
+            "description": "Home Assistant peut ajouter les cartes C300X recommandees a {dashboard_path}, ou vous pouvez ignorer cette indication.",
+            "menu_options": {
+              "confirm": "Creer les cartes",
+              "ignore": "Ignorer cette indication"
+            }
+          },
+          "confirm": {
+            "title": "Creer les cartes Lovelace C300X",
+            "description": "Home Assistant ajoutera une vue C300X a un dashboard Lovelace en mode storage. La vue contient une carte Sonnette / a la demande et une carte Home Call pour {entry_title}.",
+            "data": {
+              "dashboard_path": "Dashboard",
+              "view_path": "Chemin de la vue"
+            }
+          }
+        },
+        "error": {
+          "camera_entity_missing": "Home Assistant n'a pas trouve l'entite camera C300X pour cette entree de configuration.",
+          "lovelace_config_invalid": "La configuration du dashboard Lovelace selectionne n'est pas modifiable au format attendu.",
+          "lovelace_storage_unavailable": "Aucun dashboard Lovelace en mode storage n'est disponible. Les dashboards YAML doivent etre modifies manuellement.",
+          "lovelace_unavailable": "Lovelace n'est pas encore disponible."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    },
+    "unsupported_callback_url": {
+      "title": "L'URL callback C300X n'est pas utilisable par l'agent appareil",
+      "fix_flow": {
+        "step": {
+          "configure": {
+            "title": "Configurer l'URL callback locale",
+            "description": "Saisissez une URL de base HTTP locale de Home Assistant que le C300X peut joindre directement. Utilisez cela seulement si Home Assistant a genere une URL callback injoignable, par exemple HTTPS, homeassistant.local, loopback ou IPv6 link-local.\n\nValeur suggeree : {suggested_callback_base_url}",
+            "data": {
+              "callback_base_url": "URL de base callback HTTP locale"
+            }
+          }
+        },
+        "error": {
+          "invalid_callback_base_url": "Saisissez une URL HTTP locale joignable par le C300X, par exemple http://IP_LOCALE_HA:8123."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    }
+  }
+}

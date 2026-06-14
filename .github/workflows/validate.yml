@@ -1,0 +1,70 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install Python validation tools
+        run: python -m pip install --upgrade pip -r requirements-dev.txt
+      - name: Install native agent toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+      - name: Repository checks
+        run: python scripts/check_repo.py
+      - name: Native agent ARMHF checks
+        run: |
+          make -C native_agent armhf-stack-check
+          if [ -n "${C300X_DEVICE_SYSROOT:-}" ] && [ -d "$C300X_DEVICE_SYSROOT/lib" ]; then
+            make -C native_agent armhf-abi-check
+          else
+            echo "Skipping ARMHF ABI check: C300X_DEVICE_SYSROOT is not available on this runner."
+          fi
+      - name: Quality scale checks
+        run: python scripts/check_quality_scale.py
+      - name: Ruff
+        run: ruff check .
+      - name: Python tests
+        run: python -m pytest
+      - name: Python coverage ratchet
+        run: python scripts/check_coverage.py
+      - name: Python typing ratchet
+        run: python scripts/check_typing.py
+
+  dependabot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Dependabot configuration
+        run: |
+          test -f .github/dependabot.yml
+          grep -F 'package-ecosystem: "github-actions"' .github/dependabot.yml
+          grep -F 'package-ecosystem: "pip"' .github/dependabot.yml
+
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+          # The integration uses zip_release; these checks need the release asset,
+          # so branch/PR validation covers the remaining HACS repository gates.
+          ignore: hacsjson integration_manifest
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@master

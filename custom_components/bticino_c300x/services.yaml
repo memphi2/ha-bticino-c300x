@@ -1,0 +1,447 @@
+run_action:
+  name: Run C300X action
+  description: Run one configured C300X action by its allowlisted action id.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    action_id:
+      name: Action ID
+      description: Configured action id to run.
+      required: true
+      selector:
+        text:
+
+run_device_activation:
+  name: Run C300X device activation
+  description: Run one configured original C300X Quick Action or activation through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    activation_id:
+      name: Activation ID
+      description: Configured C300X activation id reported by the device agent.
+      required: true
+      selector:
+        text:
+
+alarm_command:
+  name: Send C300X alarm command
+  description: Send an alarm command to the configured alarm control panel entity.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    command:
+      name: Command
+      description: Alarm command to execute.
+      required: true
+      selector:
+        select:
+          options:
+            - arm_away
+            - arm_home
+            - arm_night
+            - arm_vacation
+            - disarm
+    code:
+      name: Code
+      description: Optional alarm code. The integration never stores this value.
+      required: false
+      selector:
+        text:
+          type: password
+    force:
+      name: Bypass open sensors
+      description: Force arming through Alarmo when open sensors block the selected arm mode.
+      required: false
+      default: false
+      selector:
+        boolean:
+
+stair_light:
+  name: Activate C300X stair light
+  description: Activate the staircase light through the configured C300X device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    address:
+      name: Stair light address
+      description: Optional OpenWebNet staircase-light address. Defaults to the configured integration address.
+      required: false
+      selector:
+        text:
+
+unlock_door:
+  name: Unlock C300X door
+  description: Unlock a configured C300X door through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    lock_id:
+      name: Lock ID
+      description: Optional C300X lock id reported by the device agent. Defaults to default.
+      required: false
+      selector:
+        text:
+
+activate_doorbell_video:
+  name: Activate C300X doorbell video
+  description: Start or renew the C300X doorbell video session through the local device agent. Use this from automations to pre-warm the camera when the doorbell rings.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    audio:
+      name: Enable audio
+      description: Request the C300X audio path together with video. Required for browser or Home Assistant mobile frontend talkback.
+      required: false
+      default: true
+      selector:
+        boolean:
+
+stop_doorbell_video:
+  name: Stop C300X doorbell video
+  description: Stop the active C300X doorbell video session through the local device agent. Use this from cards and ring automations as the call-end action.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+answer_doorbell_call:
+  name: Answer C300X doorbell call
+  description: Request local media answering of the active C300X doorbell ring call through the local device agent. Media playback still needs a browser, recorder, or future headless capture consumer.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+hangup_doorbell_call:
+  name: Hang up C300X doorbell call
+  description: Hang up the active C300X doorbell ring call through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+capture_doorbell_call:
+  name: Capture C300X doorbell call
+  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV and JPEG capture files default to /config/c300x/.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    output_path:
+      name: Output path
+      description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
+      required: false
+      selector:
+        text:
+    duration_seconds:
+      name: Duration
+      description: Capture duration in seconds.
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: slider
+    include_audio:
+      name: Include audio
+      description: Include the C300X audio track when available.
+      required: false
+      default: true
+      selector:
+        boolean:
+    wav_output_dir:
+      name: Capture file directory
+      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for latest.raw.wav, latest.processed.wav, frame_01.jpg, frame_02.jpg, frame_03.jpg, and latest.capture.json. Defaults to /config/c300x/. Existing files are overwritten.
+      required: false
+      selector:
+        text:
+    announcement_path:
+      name: Announcement path
+      description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing.
+      required: false
+      selector:
+        text:
+
+run_ring_wyoming_analysis:
+  name: Transcribe C300X ring audio with Wyoming Whisper
+  description: Transcribe an existing C300X ring raw WAV file with a local Wyoming Whisper service and write a JSON result. Defaults to /config/c300x/latest.capture.json and its latest.raw.wav; without capture metadata it falls back to the newest *.raw.wav directly below /config/c300x/.
+  fields:
+    wyoming_host:
+      name: Wyoming host
+      description: Hostname or IP address of the Wyoming Whisper service, for example core-whisper.
+      required: true
+      selector:
+        text:
+    wyoming_port:
+      name: Wyoming port
+      description: Wyoming Whisper TCP port.
+      required: false
+      default: 10300
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    capture_path:
+      name: Capture metadata path
+      description: Optional capture metadata JSON below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/latest.capture.json when present.
+      required: false
+      selector:
+        text:
+    wav_path:
+      name: WAV path
+      description: Optional mono WAV path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the capture metadata raw WAV, normally /config/c300x/latest.raw.wav.
+      required: false
+      selector:
+        text:
+    result_path:
+      name: Result path
+      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
+      required: false
+      selector:
+        text:
+    language:
+      name: Language
+      description: Optional language hint for Whisper, for example de or en.
+      required: false
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Optional phrase to compare exactly against the transcript.
+      required: false
+      selector:
+        text:
+
+evaluate_ring_analysis:
+  name: Evaluate C300X ring analysis
+  description: Evaluate a local C300X ring transcription JSON result and optionally unlock the door only on a strict phrase match. This service does not run AI itself.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists. Required only when unlock on match is enabled and more than one entry exists.
+      required: false
+      selector:
+        text:
+    result_path:
+      name: Result path
+      description: JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
+      required: false
+      selector:
+        text:
+    decision_path:
+      name: Decision path
+      description: JSON decision path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/decision.json.
+      required: false
+      selector:
+        text:
+    capture_path:
+      name: Capture metadata path
+      description: Optional capture metadata JSON below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to the capture_path recorded in the result JSON.
+      required: false
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Exact spoken phrase to match when the result JSON does not provide phrase_match.
+      required: false
+      selector:
+        text:
+    unlock_on_match:
+      name: Unlock on match
+      description: Unlock the configured C300X door only when the phrase matches. Defaults to false.
+      required: false
+      default: false
+      selector:
+        boolean:
+    lock_id:
+      name: Lock ID
+      description: Optional C300X lock id reported by the device agent. Defaults to default.
+      required: false
+      selector:
+        text:
+
+start_home_call:
+  name: Start C300X home call
+  description: Start a local media in-house call to the C300X through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    duration_seconds:
+      name: Duration seconds
+      description: Optional maximum call duration. Set 0 or leave empty to keep the call active until stopped or ended remotely.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 3600
+          mode: box
+
+stop_home_call:
+  name: Stop C300X home call
+  description: Stop the active local media in-house call through the local device agent.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+reboot:
+  name: Reboot C300X
+  description: Schedule a C300X reboot through the local device-agent maintenance API.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+reload_gui:
+  name: Reload C300X GUI
+  description: Reload the C300X graphical interface through the local device-agent maintenance API.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+play_latest_video_message:
+  name: Play latest C300X video message
+  description: Play the latest stored C300X answering-machine video message on a media player.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    media_player_entity_id:
+      name: Media player
+      description: Media player entity that should play the latest video message.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+play_latest_voice_memo:
+  name: Play latest C300X voice memo
+  description: Play the latest stored C300X manual voice memo on a media player.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    media_player_entity_id:
+      name: Media player
+      description: Media player entity that should play the latest voice memo.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+write_text_memo:
+  name: Write C300X text memo
+  description: Create a local manual text memo on the C300X. The memo is written only when this service is called.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+    text:
+      name: Text
+      description: Memo text to store on the C300X. Maximum 512 UTF-8 bytes.
+      required: true
+      selector:
+        text:
+          multiline: true
+    read:
+      name: Mark as read
+      description: Store the memo as already read. Leave disabled for a normal unread memo.
+      required: false
+      default: false
+      selector:
+        boolean:
+
+delete_latest_video_message:
+  name: Delete latest C300X video message
+  description: Delete the latest stored C300X answering-machine video message. Requires the C300X Display patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+delete_latest_text_memo:
+  name: Delete latest C300X text memo
+  description: Delete the latest stored C300X manual text memo. Requires the C300X Display patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:
+
+delete_latest_voice_memo:
+  name: Delete latest C300X voice memo
+  description: Delete the latest stored C300X manual voice memo. Requires the C300X Display patch.
+  fields:
+    entry_id:
+      name: Entry ID
+      description: Optional config entry id when more than one C300X entry exists.
+      required: false
+      selector:
+        text:

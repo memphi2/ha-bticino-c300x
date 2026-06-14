@@ -1,0 +1,166 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "apiPort": 8091,
+    "uiPort": 8090,
+    "allowLan": false
+  },
+  "api": {
+    "token": "",
+    "noAuth": true
+  },
+  "device": {
+    "model": "C300X",
+    "firmware": "",
+    "stairLightDefaultAddress": "10"
+  },
+  "openwebnet": {
+    "host": "127.0.0.1",
+    "port": 20000,
+    "timeoutMs": 3000
+  },
+  "activations": {
+    "enabled": true,
+    "autoDiscover": true,
+    "discoveryRoots": [
+      "/home/bticino/cfg/extra/47",
+      "/home/bticino/cfg/extra",
+      "/home/bticino/cfg"
+    ],
+    "items": []
+  },
+  "locks": {
+    "releaseDelayMs": 2000,
+    "items": {
+      "default": {
+        "name": "Main door",
+        "address": "20"
+      }
+    }
+  },
+  "maintenance": {
+    "enabled": true,
+    "adminToken": "",
+    "sshStart": {
+      "enabled": false
+    },
+    "reboot": {
+      "enabled": false,
+      "delayMs": 500
+    },
+    "agentRemove": {
+      "enabled": false,
+      "script": "/home/bticino/cfg/extra/c300x-native-agent/remove_agent.sh"
+    },
+    "guiReload": {
+      "enabled": false,
+      "script": ""
+    },
+    "qmlPatch": {
+      "enabled": false,
+      "script": ""
+    },
+    "firewall": {
+      "enabled": false,
+      "path": "/etc/network/if-pre-up.d/iptables",
+      "backupPath": "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables"
+    },
+    "ipv6Firewall": {
+      "enabled": false,
+      "path": "/etc/network/if-pre-up.d/iptables6",
+      "backupPath": "/home/bticino/cfg/extra/c300x-device-file-backups/original/etc/network/if-pre-up.d/iptables6"
+    },
+    "allowNoAuth": true
+  },
+  "mdns": {
+    "enabled": true,
+    "name": "BTicino C300X"
+  },
+  "events": {
+    "callbackTimeoutMs": 2500,
+    "udp": {
+      "enabled": true,
+      "group": "239.255.76.67",
+      "port": 7667
+    }
+  },
+  "mqtt": {
+    "enabled": false,
+    "host": "",
+    "port": 1883,
+    "username": "",
+    "password": "",
+    "clientId": "c300x-native-agent",
+    "commandHost": "127.0.0.1",
+    "commandPort": 30006,
+    "topics": {
+      "command": "Bticino/rx",
+      "event": "Bticino/tx",
+      "jsonEvent": "",
+      "status": "Bticino/start_date",
+      "availability": "Bticino/LastWillT"
+    },
+    "qos": 0,
+    "keepaliveSeconds": 120,
+    "reconnectInitialSeconds": 30,
+    "reconnectMaxSeconds": 600
+  },
+  "answeringMachine": {
+    "messages": {
+      "enabled": true,
+      "root": "/home/bticino/cfg/extra/47/messages",
+      "watch": true,
+      "maxMessages": 64
+    }
+  },
+  "memos": {
+    "enabled": true,
+    "textRoot": "/home/bticino/cfg/extra/47/memos_text",
+    "voiceRoot": "/home/bticino/cfg/extra/47/memos_voice",
+    "watch": true,
+    "maxMemos": 64
+  },
+  "systemMetrics": {
+    "enabled": true,
+    "watch": true,
+    "sampleIntervalSeconds": 30,
+    "heartbeatSeconds": 600,
+    "changePercent": 5
+  },
+  "video": {
+    "enabled": false,
+    "av": {
+      "host": "127.0.0.1",
+      "port": 30007,
+      "timeoutMs": 5000,
+      "highResolution": true
+    },
+    "sip": {
+      "from": "webrtc",
+      "to": "c300x",
+      "domain": "",
+      "devaddr": "20",
+      "localIp": "127.0.0.1",
+      "localPort": 5060,
+      "useTcp": true,
+      "debug": false
+    },
+    "rtsp": {
+      "port": 6554,
+      "path": "/doorbell",
+      "videoPath": "/doorbell-video",
+      "recorderPath": "/doorbell-recorder",
+      "username": "",
+      "password": "",
+      "keepAliveMs": 7500,
+      "rtpPortStart": 10000,
+      "rtpPortCount": 100
+    }
+  },
+  "displayBridge": {
+    "enabled": true,
+    "homeAssistant": {
+      "requestTimeoutMs": 3000
+    }
+  }
+}

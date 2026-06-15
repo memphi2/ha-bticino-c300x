@@ -94,6 +94,7 @@ from custom_components.bticino_c300x.data import (  # noqa: E402
 )
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
+    ALL_REPAIR_ISSUES,
     DEVICE_AGENT_SELF_TEST_FAILED_ISSUE,
     DEVICE_AGENT_STARTUP_DISABLED_ISSUE,
     DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE,
@@ -105,7 +106,11 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
+    _self_test_failure_is_optional_ipv6_only,
+    _self_test_repair_action,
+    async_clear_entry_repair_issues,
     async_create_media_watchdog_issue,
+    async_delete_repair_issue,
     async_sync_entry_repair_issues,
     repair_issue_id,
 )
@@ -219,6 +224,19 @@ def test_valid_action_map_clears_repair_issue() -> None:
 
     assert repair_issue_id(INVALID_ACTION_MAP_ISSUE, entry.entry_id) in DELETED_ISSUES
     assert CREATED_ISSUES == {}
+
+
+def test_clear_and_delete_repair_issue_helpers_ignore_unknown_types() -> None:
+    hass = FakeHass()
+
+    async_delete_repair_issue(hass, "entry-1", "unknown")
+    assert DELETED_ISSUES == []
+
+    async_clear_entry_repair_issues(hass, "entry-1")
+
+    assert set(DELETED_ISSUES) == {
+        repair_issue_id(issue_type, "entry-1") for issue_type in ALL_REPAIR_ISSUES
+    }
 
 
 def test_missing_alarm_entity_creates_repair_issue() -> None:
@@ -597,6 +615,44 @@ def test_failed_self_test_ignores_optional_ipv6_firewall_only() -> None:
         repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
         in DELETED_ISSUES
     )
+
+
+def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
+    checks = {
+        "firewall": {"ok": False, "reason": "ipv6_media_ports_missing"},
+    }
+
+    assert (
+        _self_test_failure_is_optional_ipv6_only(
+            "talkback_rtp",
+            "talkback_rtp_firewall_missing",
+            checks,
+        )
+        is True
+    )
+    assert (
+        _self_test_failure_is_optional_ipv6_only(
+            "talkback_rtp",
+            "unknown",
+            checks,
+        )
+        is False
+    )
+    assert "doorbell video is enabled" in _self_test_repair_action("rtsp", "failed")
+    assert "media-user setup" in _self_test_repair_action(
+        "homeassistant_user",
+        "missing",
+    )
+    assert "media-user setup" in _self_test_repair_action(
+        "device_routing",
+        "missing",
+    )
+    assert "startup link" in _self_test_repair_action("startup", "missing")
+    assert "Update or reconfigure" in _self_test_repair_action(
+        "capabilities",
+        "missing",
+    )
+    assert _self_test_repair_action("unknown", "missing") is None
 
 
 def test_ok_self_test_clears_repair_issue() -> None:

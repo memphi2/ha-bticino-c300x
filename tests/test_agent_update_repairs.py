@@ -63,6 +63,7 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
 
+from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_UI_ENABLED,
@@ -75,9 +76,15 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
     _LOVELACE_DASHBOARD_FIELD,
     _LOVELACE_VIEW_FIELD,
+    DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+    DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
+    DEVICE_USER_REQUIRED_ISSUE,
+    FRONTEND_CARD_SETUP_HINT_ISSUE,
+    UNSUPPORTED_CALLBACK_URL_ISSUE,
     CallbackUrlRepairFlow,
     DeviceAgentUpdateRepairFlow,
     DeviceCoreQmlHookRepairFlow,
+    DeviceUserRepairFlow,
     FrontendCardSetupRepairFlow,
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
@@ -87,6 +94,7 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _async_verify_agent_after_update,
     _ExternalPatchChanges,
     _ExternalPatchState,
+    async_create_fix_flow,
 )
 
 
@@ -104,6 +112,7 @@ class FakePatchApi:
             "patched": True,
             "state": "patched",
         }
+        self.device_user_status = {"homeassistant_user_present": True}
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         self.calls.append("qml_status")
@@ -147,6 +156,14 @@ class FakePatchApi:
         self.calls.append("apply_ipv6_firewall")
         return {"available": True, "patched": True, "state": "patched"}
 
+    async def async_ensure_homeassistant_user(
+        self,
+        *,
+        account_label: str,
+    ) -> dict[str, Any]:
+        self.calls.append(f"ensure_homeassistant_user:{account_label}")
+        return self.device_user_status
+
 
 class FakeUpdateVerifyApi:
     def __init__(self) -> None:
@@ -170,6 +187,7 @@ class FakeRuntimeData:
     api: FakePatchApi
     capabilities: dict[str, Any] = field(default_factory=dict)
     agent_info: dict[str, Any] = field(default_factory=dict)
+    device_user_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     agent_update_state: Any = None
@@ -205,6 +223,7 @@ class FakeConfigEntries:
 class FakeHass:
     def __init__(self, entry: Any) -> None:
         self.config_entries = FakeConfigEntries(entry)
+        self.config = types.SimpleNamespace(location_name="HA Test")
         self.data: dict[Any, Any] = {}
 
     async def async_add_executor_job(self, target, *args):  # noqa: ANN001
@@ -227,6 +246,49 @@ class FakeAgentUpdateState:
 
 def setup_function() -> None:
     IGNORED_ISSUES.clear()
+
+
+def test_create_fix_flow_routes_known_issues() -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+
+    cases = (
+        (DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, DeviceAgentUpdateRepairFlow),
+        (UNSUPPORTED_CALLBACK_URL_ISSUE, CallbackUrlRepairFlow),
+        (DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, DeviceCoreQmlHookRepairFlow),
+        (DEVICE_USER_REQUIRED_ISSUE, DeviceUserRepairFlow),
+        (FRONTEND_CARD_SETUP_HINT_ISSUE, FrontendCardSetupRepairFlow),
+    )
+
+    for issue_type, expected_type in cases:
+        flow = asyncio.run(
+            async_create_fix_flow(
+                hass,  # type: ignore[arg-type]
+                f"{issue_type}_entry-1",
+                {"issue_type": issue_type, "entry_id": "entry-1"},
+            )
+        )
+
+        assert isinstance(flow, expected_type)
+
+
+def test_create_fix_flow_rejects_unknown_or_incomplete_issue_data() -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+
+    for data in (None, {}, {"issue_type": DEVICE_USER_REQUIRED_ISSUE}):
+        try:
+            asyncio.run(
+                async_create_fix_flow(
+                    hass,  # type: ignore[arg-type]
+                    "unknown",
+                    data,  # type: ignore[arg-type]
+                )
+            )
+        except ValueError as err:
+            assert "unknown repair issue" in str(err)
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError("unknown repair issue was accepted")
 
 
 def test_repair_flow_init_ignores_internal_flow_data() -> None:
@@ -393,6 +455,61 @@ def test_core_qml_hook_repair_flow_applies_only_core_patch() -> None:
     assert result["type"] == "create_entry"
     assert api.calls == ["apply_qml_core", "qml_status"]
     assert entry.runtime_data.qml_patch_status["core_state"] == "patched"
+
+
+def test_device_user_repair_flow_creates_user_and_clears_issue() -> None:
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    def create_entry(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+
+    form = asyncio.run(flow.async_step_confirm())
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert form == {"type": "form", "step_id": "confirm"}
+    assert result == {"type": "create_entry", "data": {}}
+    assert api.calls == ["ensure_homeassistant_user:Home Assistant HA Test"]
+    assert entry.runtime_data.device_user_status == api.device_user_status
+
+
+def test_device_user_repair_flow_reports_agent_failures() -> None:
+    class FailingDeviceUserApi(FakePatchApi):
+        async def async_ensure_homeassistant_user(
+            self,
+            *,
+            account_label: str,
+        ) -> dict[str, Any]:
+            self.calls.append(f"ensure_homeassistant_user:{account_label}")
+            raise C300XAgentApiError("failed")
+
+    api = FailingDeviceUserApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+    hass = FakeHass(entry)
+    hass.config.location_name = "HA Test"
+    flow = DeviceUserRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {
+        "type": "form",
+        "step_id": "confirm",
+        "errors": {"base": "device_user_setup_failed"},
+    }
 
 
 def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:

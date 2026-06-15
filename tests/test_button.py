@@ -109,15 +109,21 @@ if "homeassistant.components.button" not in sys.modules:
     sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
+from custom_components.bticino_c300x.api_errors import (  # noqa: E402
+    C300XAgentApiError,
+    C300XAgentApiUnsupportedError,
+)
 from custom_components.bticino_c300x.button import (
     C300XDeleteLatestTextMemoButton,  # noqa: E402
     C300XDeleteLatestVideoMessageButton,
     C300XDeleteLatestVoiceMemoButton,
     C300XDeviceActivationButton,
+    C300XDoorUnlockButton,
     C300XRebootButton,
     C300XReloadGuiButton,
     C300XRemoveAgentButton,
     C300XRestartAgentButton,
+    C300XStairLightButton,
     C300XStopDoorbellVideoButton,
     _activation_icon,
     async_setup_entry,
@@ -348,6 +354,64 @@ class _FakeMemoApi:
         }
 
 
+class _FailingMemoApi(_FakeMemoApi):
+    def __init__(self, method: str, error: Exception) -> None:
+        super().__init__()
+        self._method = method
+        self._error = error
+
+    def _maybe_raise(self, method: str) -> None:
+        if self._method == method:
+            raise self._error
+
+    async def async_activations(self) -> dict[str, Any]:
+        self._maybe_raise("activations")
+        return await super().async_activations()
+
+    async def async_run_device_activation(self, activation_id: str) -> dict[str, Any]:
+        self._maybe_raise("run_device_activation")
+        return await super().async_run_device_activation(activation_id)
+
+    async def async_stop_doorbell_video(self) -> dict[str, Any]:
+        self._maybe_raise("stop_doorbell_video")
+        return await super().async_stop_doorbell_video()
+
+    async def async_reboot(self) -> dict[str, Any]:
+        self._maybe_raise("reboot")
+        return await super().async_reboot()
+
+    async def async_remove_agent(self) -> dict[str, Any]:
+        self._maybe_raise("remove_agent")
+        return await super().async_remove_agent()
+
+    async def async_restart_agent(self) -> dict[str, Any]:
+        self._maybe_raise("restart_agent")
+        return await super().async_restart_agent()
+
+    async def async_reload_gui(self) -> dict[str, Any]:
+        self._maybe_raise("reload_gui")
+        return await super().async_reload_gui()
+
+    async def async_memos(self) -> dict[str, Any]:
+        self._maybe_raise("memos")
+        return await super().async_memos()
+
+    async def async_answering_machine_messages(self) -> dict[str, Any]:
+        self._maybe_raise("answering_machine_messages")
+        return await super().async_answering_machine_messages()
+
+    async def async_delete_memo(self, memo_id: str) -> dict[str, Any]:
+        self._maybe_raise("delete_memo")
+        return await super().async_delete_memo(memo_id)
+
+    async def async_delete_answering_machine_message(
+        self,
+        message_id: str,
+    ) -> dict[str, Any]:
+        self._maybe_raise("delete_answering_machine_message")
+        return await super().async_delete_answering_machine_message(message_id)
+
+
 @dataclass
 class _FakeConnectionState:
     available: bool = True
@@ -574,6 +638,64 @@ def test_activation_buttons_are_created_from_agent_discovery() -> None:
     asyncio.run(_run())
 
 
+def test_activation_discovery_ignores_agent_failures() -> None:
+    async def _run() -> None:
+        for error in (
+            C300XAgentApiUnsupportedError("unsupported"),
+            C300XAgentApiError("failed"),
+        ):
+            entry = _FakeEntry(
+                runtime_data=_FakeRuntimeData(
+                    capabilities={"activations": {"supported": True}},
+                    api=_FailingMemoApi("activations", error),
+                )
+            )
+            entities: list[Any] = []
+
+            await async_setup_entry(
+                _FakeHass(),  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                entities.extend,
+            )
+
+            assert not any(
+                isinstance(entity, C300XDeviceActivationButton) for entity in entities
+            )
+            assert entry.runtime_data.activations == {
+                "available": False,
+                "supported": False,
+                "items": [],
+            }
+
+    asyncio.run(_run())
+
+
+def test_device_activation_button_translates_agent_errors() -> None:
+    async def _run() -> None:
+        for error in (
+            C300XAgentApiUnsupportedError("unsupported"),
+            C300XAgentApiError("failed"),
+        ):
+            entry = _FakeEntry(
+                runtime_data=_FakeRuntimeData(
+                    api=_FailingMemoApi("run_device_activation", error)
+                )
+            )
+            button = C300XDeviceActivationButton(
+                entry,  # type: ignore[arg-type]
+                {"id": "front_lock", "name": "Front lock", "executable": True},
+            )
+
+            try:
+                await button.async_press()
+            except exceptions.HomeAssistantError:
+                pass
+            else:
+                raise AssertionError("activation agent error was not translated")
+
+    asyncio.run(_run())
+
+
 def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
     async def _run() -> None:
         api = _FakeMemoApi()
@@ -606,6 +728,29 @@ def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
     asyncio.run(_run())
 
 
+def test_stop_doorbell_video_button_translates_agent_errors() -> None:
+    async def _run() -> None:
+        for error in (
+            C300XAgentApiUnsupportedError("unsupported"),
+            C300XAgentApiError("failed"),
+        ):
+            entry = _FakeEntry(
+                runtime_data=_FakeRuntimeData(
+                    api=_FailingMemoApi("stop_doorbell_video", error)
+                )
+            )
+            button = C300XStopDoorbellVideoButton(entry)  # type: ignore[arg-type]
+
+            try:
+                await button.async_press()
+            except exceptions.HomeAssistantError:
+                pass
+            else:
+                raise AssertionError("stop-video agent error was not translated")
+
+    asyncio.run(_run())
+
+
 def test_stop_doorbell_video_button_requires_enabled_video() -> None:
     async def _run() -> None:
         entry = _FakeEntry(
@@ -626,6 +771,54 @@ def test_stop_doorbell_video_button_requires_enabled_video() -> None:
         assert not any(
             isinstance(entity, C300XStopDoorbellVideoButton) for entity in entities
         )
+
+    asyncio.run(_run())
+
+
+def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        for button_class, patched_name, expected_call in [
+            (C300XStairLightButton, "async_trigger_stair_light", "stair"),
+            (C300XDoorUnlockButton, "async_unlock_door", "unlock"),
+        ]:
+            for error in (
+                C300XAgentApiUnsupportedError("unsupported"),
+                C300XAgentApiError("failed"),
+            ):
+                calls: list[str] = []
+
+                def _make_failing(
+                    target_calls: list[str],
+                    call_name: str,
+                    raised_error: Exception,
+                ) -> Any:
+                    async def _failing(*_args: Any, **_kwargs: Any) -> None:
+                        target_calls.append(call_name)
+                        raise raised_error
+
+                    return _failing
+
+                monkeypatch.setattr(
+                    "custom_components.bticino_c300x.button." + patched_name,
+                    _make_failing(calls, expected_call, error),
+                )
+                entry = _FakeEntry()
+                if button_class is C300XDoorUnlockButton:
+                    button = button_class(  # type: ignore[call-arg]
+                        entry,  # type: ignore[arg-type]
+                        "default",
+                        "Front door",
+                    )
+                else:
+                    button = button_class(entry)  # type: ignore[call-arg,arg-type]
+                button.hass = _FakeHass()
+
+                try:
+                    await button.async_press()
+                except exceptions.HomeAssistantError:
+                    assert calls == [expected_call]
+                else:
+                    raise AssertionError("executor agent error was not translated")
 
     asyncio.run(_run())
 
@@ -810,6 +1003,35 @@ def test_reboot_button_calls_maintenance_api() -> None:
         await button.async_press()
 
         assert api.reboot_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_maintenance_buttons_translate_agent_errors() -> None:
+    async def _run() -> None:
+        button_cases = [
+            (C300XRebootButton, "reboot"),
+            (C300XRemoveAgentButton, "remove_agent"),
+            (C300XRestartAgentButton, "restart_agent"),
+            (C300XReloadGuiButton, "reload_gui"),
+        ]
+        for button_class, method in button_cases:
+            for error in (
+                C300XAgentApiUnsupportedError("unsupported"),
+                C300XAgentApiError("failed"),
+            ):
+                entry = _FakeEntry(
+                    runtime_data=_FakeRuntimeData(api=_FailingMemoApi(method, error))
+                )
+                button = button_class(entry)  # type: ignore[call-arg,arg-type]
+                button.hass = _FakeHass()
+
+                try:
+                    await button.async_press()
+                except exceptions.HomeAssistantError:
+                    pass
+                else:
+                    raise AssertionError(f"{method} agent error was not translated")
 
     asyncio.run(_run())
 
@@ -1181,6 +1403,88 @@ def test_delete_latest_text_memo_button_noops_when_missing_memo() -> None:
     asyncio.run(_run())
 
 
+def test_delete_latest_text_memo_button_translates_refresh_failure() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=_FailingMemoApi("memos", C300XAgentApiError("failed")),
+                capabilities={"memos": {"supported": True, "delete": True}},
+                qml_patch_status={"available": True, "patched": True},
+                memos={"available": True, "memos": []},
+            ),
+        )
+        entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+
+        try:
+            await entity.async_press()
+        except exceptions.HomeAssistantError:
+            assert entity.available is False
+        else:
+            raise AssertionError("memo refresh failure was not translated")
+
+    asyncio.run(_run())
+
+
+def test_delete_latest_buttons_translate_delete_failures() -> None:
+    async def _run() -> None:
+        cases = [
+            (
+                C300XDeleteLatestTextMemoButton,
+                "delete_memo",
+                _FakeRuntimeData(
+                    api=_FailingMemoApi("delete_memo", C300XAgentApiError("failed")),
+                    capabilities={"memos": {"supported": True, "delete": True}},
+                    qml_patch_status={"available": True, "patched": True},
+                    memos={
+                        "available": True,
+                        "text_total": 1,
+                        "memos": [{"id": "text/memo_1", "kind": "text"}],
+                    },
+                ),
+            ),
+            (
+                C300XDeleteLatestVideoMessageButton,
+                "delete_answering_machine_message",
+                _FakeRuntimeData(
+                    api=_FailingMemoApi(
+                        "delete_answering_machine_message",
+                        C300XAgentApiUnsupportedError("unsupported"),
+                    ),
+                    capabilities={
+                        "answering_machine": {
+                            "supported": True,
+                            "messages": {"supported": True, "delete": True},
+                        }
+                    },
+                    qml_patch_status={"available": True, "patched": True},
+                    answering_machine_messages={
+                        "available": True,
+                        "total": 1,
+                        "messages": [{"id": "message_1", "has_video": True}],
+                    },
+                ),
+            ),
+        ]
+        for button_class, _method, runtime_data in cases:
+            entry = _FakeEntry(
+                options={CONF_DEVICE_UI_ENABLED: True},
+                runtime_data=runtime_data,
+            )
+            button = button_class(entry)  # type: ignore[call-arg,arg-type]
+            button.hass = _FakeHass()
+
+            try:
+                await button.async_press()
+            except exceptions.HomeAssistantError:
+                pass
+            else:
+                raise AssertionError("delete failure was not translated")
+
+    asyncio.run(_run())
+
+
 def test_delete_latest_text_memo_button_ignores_stale_refresh_failure() -> None:
     entry = _FakeEntry(
         options={CONF_DEVICE_UI_ENABLED: True},
@@ -1312,6 +1616,46 @@ def test_delete_latest_video_button_stays_available_before_cache_warmup() -> Non
     entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
 
     assert entity.available is True
+
+
+def test_delete_latest_video_button_update_sets_availability() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                api=_FakeMemoApi(
+                    refreshed_video_messages={
+                        "available": False,
+                        "messages": [],
+                    }
+                ),
+            ),
+        )
+        entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+
+        await entity.async_update()
+
+        assert entity.available is False
+
+    asyncio.run(_run())
+
+
+def test_delete_latest_video_button_update_handles_refresh_failure() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                api=_FailingMemoApi(
+                    "answering_machine_messages",
+                    C300XAgentApiError("failed"),
+                ),
+            ),
+        )
+        entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+
+        await entity.async_update()
+
+        assert entity.available is False
+
+    asyncio.run(_run())
 
 
 def test_delete_latest_memo_button_refreshes_from_agent_event_without_sensor() -> None:

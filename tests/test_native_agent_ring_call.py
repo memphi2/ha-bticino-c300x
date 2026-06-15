@@ -128,9 +128,11 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "pthread_cond_broadcast(&bridge->ready_cond);" in ring_media_loop_body
     assert "c300x_video_bridge_ring_media_started(bridge->video, 1)" in ring_media_loop_body
     assert "long long last_inbound_activity = started_at;" in ring_media_loop_body
+    assert "rtsp_clients = rtsp_client_count_locked(bridge);" in ring_media_loop_body
     assert ring_media_loop_body.count("last_inbound_activity = monotonic_ms();") >= 5
     assert "RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
     assert "RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
+    assert "(!answered || rtsp_clients <= 0)" in ring_media_loop_body
     assert ring_media_loop_body.index("now - last_inbound_activity") < (
         ring_media_loop_body.index("if (now >= next_sip_keepalive)")
     )

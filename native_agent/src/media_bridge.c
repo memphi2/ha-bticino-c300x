@@ -1990,6 +1990,7 @@ static void ring_media_loop(
         int video_rtcp_fd;
         int target_audio_port;
         int target_video_port;
+        int rtsp_clients;
 
         pthread_mutex_lock(&bridge->mutex);
         stop = bridge->ring_call_stop || bridge->ring_stop;
@@ -2002,6 +2003,7 @@ static void ring_media_loop(
         video_rtcp_fd = bridge->ring_video_rtcp_fd;
         target_audio_port = bridge->ring_target_audio_port;
         target_video_port = bridge->ring_target_video_port;
+        rtsp_clients = rtsp_client_count_locked(bridge);
         pthread_mutex_unlock(&bridge->mutex);
 
         if (stop) {
@@ -2086,6 +2088,8 @@ static void ring_media_loop(
 
         long long now = monotonic_ms();
         if (
+            (!answered || rtsp_clients <= 0)
+            &&
             now - last_inbound_activity >= (
                 answered
                     ? RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS

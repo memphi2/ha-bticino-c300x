@@ -485,6 +485,7 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
     assert entity.native_value == "doorbell_call_active"
     assert entity.extra_state_attributes == {
         "status_reason": "native_doorbell_call_active",
+        "recommended_action": "use_doorstation_card_stop_when_finished",
         "change_reason": None,
         "updated_at": None,
         "updated_by": None,
@@ -562,6 +563,7 @@ def test_agent_diagnostics_sensor_reports_idle_despite_historical_writes() -> No
 
     assert entity.native_value == "idle"
     assert entity.extra_state_attributes["status_reason"] == "native_agent_idle"
+    assert entity.extra_state_attributes["recommended_action"] == "no_action_needed"
     assert entity.extra_state_attributes["agent_write_count"] == 2
 
 
@@ -582,6 +584,9 @@ def test_agent_diagnostics_sensor_reports_installation_and_subscription_issues()
     assert repair_entity.extra_state_attributes["status_reason"] == (
         "agent_installation_needs_repair"
     )
+    assert repair_entity.extra_state_attributes["recommended_action"] == (
+        "run_device_agent_repair_or_update"
+    )
 
     subscription_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -598,6 +603,9 @@ def test_agent_diagnostics_sensor_reports_installation_and_subscription_issues()
     assert subscription_entity.native_value == "subscription_missing"
     assert subscription_entity.extra_state_attributes["status_reason"] == (
         "ha_event_subscription_missing"
+    )
+    assert subscription_entity.extra_state_attributes["recommended_action"] == (
+        "reload_integration_after_agent_is_online"
     )
 
 
@@ -618,6 +626,9 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
     assert offline_entity.native_value == "agent_offline"
     assert offline_entity.extra_state_attributes["status_reason"] == (
         "agent_connection_unavailable"
+    )
+    assert offline_entity.extra_state_attributes["recommended_action"] == (
+        "check_agent_reachability_and_token"
     )
 
     watchdog_entry = _FakeEntry(
@@ -642,6 +653,9 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
     assert watchdog_entity.extra_state_attributes["status_reason"] == (
         "sustained_high_cpu_media_watchdog"
     )
+    assert watchdog_entity.extra_state_attributes["recommended_action"] == (
+        "stop_live_media_reload_display_gui_and_check_device_load"
+    )
 
     ui_event_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -661,6 +675,9 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
     assert ui_event_entity.native_value == "display_event_watchdog"
     assert ui_event_entity.extra_state_attributes["status_reason"] == (
         "display_ui_event_watchdog_triggered"
+    )
+    assert ui_event_entity.extra_state_attributes["recommended_action"] == (
+        "reload_c300x_display_gui_then_refresh_diagnostics"
     )
     assert watchdog_entity.extra_state_attributes["media_watchdog_trigger_count"] == 2
     assert watchdog_entity.extra_state_attributes["media_watchdog_last_percent"] == 95.0

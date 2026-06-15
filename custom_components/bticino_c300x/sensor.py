@@ -418,8 +418,10 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
 
         diagnostics = self._entry.runtime_data.agent_diagnostics
         media_watchdog = getattr(self._entry.runtime_data, "agent_cpu_watchdog", None)
+        status = self.native_value
         return {
-            "status_reason": _agent_diagnostics_status_reason(self.native_value),
+            "status_reason": _agent_diagnostics_status_reason(status),
+            "recommended_action": _agent_diagnostics_recommended_action(status),
             "change_reason": getattr(
                 self._entry.runtime_data,
                 "agent_diagnostics_change_reason",
@@ -564,6 +566,32 @@ def _agent_diagnostics_status_reason(status: str) -> str:
         "media_resources_open": "native_media_resources_still_open",
         "idle": "native_agent_idle",
     }.get(status, "diagnostics_status_unknown")
+
+
+def _agent_diagnostics_recommended_action(status: str) -> str:
+    """Return the next useful operator action for the diagnostics status."""
+
+    return {
+        "unknown": "refresh_agent_diagnostics",
+        "agent_offline": "check_agent_reachability_and_token",
+        "agent_reconnecting": "wait_for_reconnect_or_check_network",
+        "repair_required": "run_device_agent_repair_or_update",
+        "subscription_missing": "reload_integration_after_agent_is_online",
+        "display_event_watchdog": "reload_c300x_display_gui_then_refresh_diagnostics",
+        "media_watchdog_tripped": "stop_live_media_reload_display_gui_and_check_device_load",
+        "external_media_active": "close_external_media_client_or_wait_until_idle",
+        "media_stopping": "wait_for_native_media_stop_to_finish",
+        "home_call_active": "hang_up_home_call_when_finished",
+        "home_call_starting": "wait_for_home_call_or_hang_up",
+        "ring_media_active": "answer_or_hang_up_ring_call",
+        "ring_call_active": "answer_or_hang_up_ring_call",
+        "doorbell_call_active": "use_doorstation_card_stop_when_finished",
+        "media_starting": "wait_for_media_start_or_stop_doorbell_video",
+        "doorbell_media_active": "use_doorstation_card_stop_when_finished",
+        "rtsp_busy": "close_other_viewers_or_capture_before_retrying",
+        "media_resources_open": "stop_media_and_refresh_diagnostics",
+        "idle": "no_action_needed",
+    }.get(status, "check_device_agent_diagnostics")
 
 
 class C300XDoorbellStateSensor(C300XEntity, SensorEntity):

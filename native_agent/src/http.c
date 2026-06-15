@@ -3707,7 +3707,6 @@ static void device_user_status_body(
     int qml_available = 0;
     char error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_ERROR_LEN)];
     char account_label_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_LABEL_LEN)];
-    char source_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_USER_SOURCE_LEN)];
     char routing_state_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_ROUTING_STATE_LEN)];
     char routing_error_json[C300X_JSON_QUOTED_LEN(C300X_DEVICE_ROUTING_ERROR_LEN)];
     char qml_state_json[C300X_JSON_QUOTED_LEN(sizeof(qml_state))];
@@ -3740,11 +3739,6 @@ static void device_user_status_body(
     }
     json_string(status->error, error_json, sizeof(error_json));
     json_string(status->account_label, account_label_json, sizeof(account_label_json));
-    json_string(
-        status->media_identity_source,
-        source_json,
-        sizeof(source_json)
-    );
     json_string(routing_status.state, routing_state_json, sizeof(routing_state_json));
     json_string(routing_status.error, routing_error_json, sizeof(routing_error_json));
     json_string(qml_state, qml_state_json, sizeof(qml_state_json));
@@ -3755,8 +3749,6 @@ static void device_user_status_body(
         "\"ok\":true,"
         "\"supported\":%s,"
         "\"domain_present\":%s,"
-        "\"c300x_user_present\":%s,"
-        "\"fallback_user_present\":%s,"
         "\"homeassistant_user_present\":%s,"
         "\"accounts_homeassistant_present\":%s,"
         "\"route_int_homeassistant_present\":%s,"
@@ -3775,13 +3767,10 @@ static void device_user_status_body(
         "\"media_user_label_applied\":%s,"
         "\"media_user_label_state\":%s,"
         "\"account_label\":%s,"
-        "\"media_identity_source\":%s,"
         "\"error\":%s"
         "}\n",
         status->supported ? "true" : "false",
         status->domain_present ? "true" : "false",
-        status->c300x_user_present ? "true" : "false",
-        status->fallback_user_present ? "true" : "false",
         status->homeassistant_user_present ? "true" : "false",
         status->accounts_homeassistant_present ? "true" : "false",
         status->route_int_homeassistant_present ? "true" : "false",
@@ -3800,7 +3789,6 @@ static void device_user_status_body(
         qml_patched ? "true" : "false",
         qml_state_json,
         account_label_json,
-        source_json,
         error_json
     );
 }

@@ -1611,8 +1611,8 @@ def test_agent_diagnostics_requests_authenticated_endpoint() -> None:
 
 def test_device_user_status_requests_read_only_endpoint() -> None:
     session = _FakeSession(
-        '{"ok": true, "supported": true, "homeassistant_user_present": false, '
-        '"fallback_user_present": true, "media_identity_available": true, '
+        '{"ok": true, "supported": true, "homeassistant_user_present": true, '
+        '"media_identity_available": true, '
         '"routes_consistent": false}'
     )
     api = C300XAgentApi(
@@ -1624,8 +1624,7 @@ def test_device_user_status_requests_read_only_endpoint() -> None:
     status = asyncio.run(api.async_device_user_status())
 
     assert status["supported"] is True
-    assert status["homeassistant_user_present"] is False
-    assert status["fallback_user_present"] is True
+    assert status["homeassistant_user_present"] is True
     assert status["media_identity_available"] is True
     assert status["routes_consistent"] is False
     assert session.requests[0]["args"] == (
@@ -1702,7 +1701,6 @@ def test_ensure_homeassistant_user_can_send_account_label() -> None:
     session = _FakeSession(
         '{"ok": true, "supported": true, "homeassistant_user_present": true, '
         '"account_label": "Home Assistant Test", '
-        '"media_identity_source": "homeassistant", '
         '"media_identity_available": true, "routes_consistent": true}'
     )
     api = C300XAgentApi(
@@ -1717,7 +1715,6 @@ def test_ensure_homeassistant_user_can_send_account_label() -> None:
     )
 
     assert status["account_label"] == "Home Assistant Test"
-    assert status["media_identity_source"] == "homeassistant"
     assert session.requests[0]["kwargs"]["json"] == {
         "confirm": "ensure_homeassistant_user",
         "account_label": "Home Assistant Test",
@@ -2091,8 +2088,6 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "route_int": "<sip:alluser@private-device.example.invalid> <sip:private>",
         "digest": "0123456789abcdef0123456789abcdef",
         "domain_present": True,
-        "c300x_user_present": True,
-        "fallback_user_present": False,
         "homeassistant_user_present": True,
         "accounts_homeassistant_present": True,
         "route_int_homeassistant_present": True,
@@ -2111,7 +2106,6 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "media_user_label_applied": True,
         "media_user_label_state": "patched",
         "account_label": "Home Assistant Test",
-        "media_identity_source": "homeassistant",
         "error": "",
     }
 
@@ -2121,8 +2115,6 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "available": True,
         "supported": True,
         "domain_present": True,
-        "c300x_user_present": True,
-        "fallback_user_present": False,
         "homeassistant_user_present": True,
         "accounts_homeassistant_present": True,
         "route_int_homeassistant_present": True,
@@ -2141,14 +2133,11 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
         "media_user_label_applied": True,
         "media_user_label_state": "patched",
         "account_label": "Home Assistant Test",
-        "media_identity_source": "homeassistant",
         "error": None,
         "raw": {
             "ok": True,
             "supported": True,
             "domain_present": True,
-            "c300x_user_present": True,
-            "fallback_user_present": False,
             "homeassistant_user_present": True,
             "accounts_homeassistant_present": True,
             "route_int_homeassistant_present": True,
@@ -2166,7 +2155,6 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
             "media_user_label_available": True,
             "media_user_label_applied": True,
             "media_user_label_state": "patched",
-            "media_identity_source": "homeassistant",
             "error": "",
         },
     }

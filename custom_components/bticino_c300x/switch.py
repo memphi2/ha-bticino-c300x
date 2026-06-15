@@ -105,7 +105,6 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             "homeassistant_user_present",
             "routes_consistent",
             "media_identity_available",
-            "media_identity_source",
             "device_routing_state",
             "device_routing_backup_present",
             "device_routing_error",

@@ -814,7 +814,6 @@ def test_missing_device_user_media_identity_creates_repair_issue() -> None:
                 },
             },
             device_user_status={
-                "fallback_user_present": False,
                 "homeassistant_user_present": False,
                 "media_identity_available": False,
                 "routes_consistent": False,
@@ -828,16 +827,18 @@ def test_missing_device_user_media_identity_creates_repair_issue() -> None:
     assert issue["severity"] == "error"
     assert issue["is_fixable"] is True
     assert issue["translation_key"] == DEVICE_USER_REQUIRED_ISSUE
-    assert issue["translation_placeholders"]["reason"] == "media_identity_missing"
+    assert issue["translation_placeholders"]["reason"] == "homeassistant_user_missing"
 
 
-def test_device_user_app_fallback_without_homeassistant_user_clears_issue() -> None:
+def test_device_user_without_homeassistant_user_creates_repair_issue() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
-            capabilities={"doorbell_video": {"supported": True}},
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {"supported": True, "device_user_ensure": True},
+            },
             device_user_status={
-                "fallback_user_present": True,
                 "homeassistant_user_present": False,
                 "media_identity_available": True,
                 "routes_consistent": False,
@@ -847,8 +848,9 @@ def test_device_user_app_fallback_without_homeassistant_user_clears_issue() -> N
 
     async_sync_entry_repair_issues(FakeHass(), entry)
 
-    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
-    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["severity"] == "error"
+    assert issue["translation_placeholders"]["reason"] == "homeassistant_user_missing"
 
 
 def test_homeassistant_user_with_incomplete_routes_creates_repair_issue() -> None:
@@ -863,7 +865,6 @@ def test_homeassistant_user_with_incomplete_routes_creates_repair_issue() -> Non
                 },
             },
             device_user_status={
-                "fallback_user_present": True,
                 "homeassistant_user_present": True,
                 "media_identity_available": True,
                 "routes_consistent": False,

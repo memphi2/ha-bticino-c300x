@@ -493,7 +493,7 @@ int c300x_self_test_json(
         } else if (user_status.homeassistant_user_present) {
             user_reason = "homeassistant_user_ok";
         } else {
-            user_reason = "fallback_media_identity";
+            user_reason = "homeassistant_user_missing";
         }
 
         routing_read_ok = c300x_device_routing_read_status(&routing_status);

@@ -1342,8 +1342,6 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         "available": bool(data.get("ok", True)),
         "supported": _optional_bool(data.get("supported")) is True,
         "domain_present": _optional_bool(data.get("domain_present")) is True,
-        "c300x_user_present": _optional_bool(data.get("c300x_user_present")) is True,
-        "fallback_user_present": _optional_bool(data.get("fallback_user_present")) is True,
         "homeassistant_user_present": _optional_bool(
             data.get("homeassistant_user_present")
         )
@@ -1403,7 +1401,6 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
             data.get("media_user_label_state")
         ),
         "account_label": _optional_string(data.get("account_label")),
-        "media_identity_source": _optional_string(data.get("media_identity_source")),
         "error": _optional_string(data.get("error")),
         "raw": _safe_device_user_raw(data),
     }
@@ -1414,8 +1411,6 @@ _SAFE_DEVICE_USER_RAW_KEYS = frozenset(
         "ok",
         "supported",
         "domain_present",
-        "c300x_user_present",
-        "fallback_user_present",
         "homeassistant_user_present",
         "accounts_homeassistant_present",
         "route_int_homeassistant_present",
@@ -1433,7 +1428,6 @@ _SAFE_DEVICE_USER_RAW_KEYS = frozenset(
         "media_user_label_available",
         "media_user_label_applied",
         "media_user_label_state",
-        "media_identity_source",
         "error",
     }
 )

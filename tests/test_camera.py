@@ -434,7 +434,7 @@ def test_doorbell_camera_forwards_ice_candidate_after_remote_description() -> No
 def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     entry = _FakeEntry()
     entry.runtime_data.device_user_status = {
-        "media_identity_source": "homeassistant",
+        "homeassistant_user_present": True,
         "account_label": "Home Assistant Test",
     }
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
@@ -463,12 +463,11 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "external_media_active": True,
         "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
-        "talkback_supported": True,
-        "media_user": {
-            "source": "homeassistant",
-            "account": "homeassistant",
-            "label": "Home Assistant Test",
-        },
+            "talkback_supported": True,
+            "media_user": {
+                "account": "homeassistant",
+                "label": "Home Assistant Test",
+            },
     }
 
 

@@ -9,13 +9,10 @@
 #define C300X_DEVICE_USER_LABEL "Home Assistant"
 #define C300X_DEVICE_USER_ERROR_LEN C300X_MAX_ERROR_LEN
 #define C300X_DEVICE_USER_LABEL_LEN 96
-#define C300X_DEVICE_USER_SOURCE_LEN 32
 
 struct c300x_device_user_status {
     int supported;
     int domain_present;
-    int c300x_user_present;
-    int fallback_user_present;
     int homeassistant_user_present;
     int accounts_homeassistant_present;
     int route_int_homeassistant_present;
@@ -26,7 +23,6 @@ struct c300x_device_user_status {
     int media_identity_available;
     int routes_consistent;
     char account_label[C300X_DEVICE_USER_LABEL_LEN];
-    char media_identity_source[C300X_DEVICE_USER_SOURCE_LEN];
     char error[C300X_DEVICE_USER_ERROR_LEN];
 };
 

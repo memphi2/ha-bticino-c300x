@@ -526,7 +526,9 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         return
 
     reason = None
-    if status.get("homeassistant_user_present") is True and status.get("routes_consistent") is not True:
+    if status.get("homeassistant_user_present") is not True:
+        reason = "homeassistant_user_missing"
+    elif status.get("routes_consistent") is not True:
         reason = "homeassistant_routes_inconsistent"
     elif status.get("media_identity_available") is not True:
         reason = "media_identity_missing"

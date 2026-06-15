@@ -341,7 +341,6 @@ class _FakeApi:
             "homeassistant_user_present": True,
             "routes_consistent": True,
             "media_identity_available": True,
-            "media_identity_source": "homeassistant",
             "device_routing_applied": True,
             "device_routing_state": "patched",
             "device_routing_backup_present": True,
@@ -353,10 +352,9 @@ class _FakeApi:
     async def async_restore_homeassistant_media_user_setup(self) -> dict[str, Any]:
         self.device_user_actions.append("restore")
         return {
-            "homeassistant_user_present": True,
-            "routes_consistent": True,
-            "media_identity_available": True,
-            "media_identity_source": "fallback",
+            "homeassistant_user_present": False,
+            "routes_consistent": False,
+            "media_identity_available": False,
             "device_routing_applied": False,
             "device_routing_state": "original",
             "media_user_label_applied": False,
@@ -667,7 +665,7 @@ def test_homeassistant_media_user_setup_applies_and_restores_with_hass_bound(
         "ensure:Home Assistant Test"
     ]
     assert entity.is_on is True
-    assert entity.extra_state_attributes["media_identity_source"] == "homeassistant"
+    assert entity.extra_state_attributes["media_identity_available"] is True
 
     asyncio.run(entity.async_turn_off())
     assert entry.runtime_data.api.device_user_actions == [
@@ -675,7 +673,7 @@ def test_homeassistant_media_user_setup_applies_and_restores_with_hass_bound(
         "restore",
     ]
     assert entity.is_on is False
-    assert entity.extra_state_attributes["media_identity_source"] == "fallback"
+    assert entity.extra_state_attributes["media_identity_available"] is False
     assert repair_calls == ["repair", "diagnostics", "repair", "diagnostics"]
 
 

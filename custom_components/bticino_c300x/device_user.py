@@ -24,17 +24,12 @@ def media_user_attributes(entry: ConfigEntry) -> dict[str, Any]:
     status = getattr(entry.runtime_data, "device_user_status", {})
     if not isinstance(status, dict) or not status:
         return {}
-    source = str(status.get("media_identity_source") or "").strip()
-    attributes: dict[str, Any] = {}
-    if source:
-        attributes["media_user_source"] = source
-    if source == "homeassistant":
-        attributes["media_user_account"] = "homeassistant"
-        label = str(status.get("account_label") or "").strip()
-        if label:
-            attributes["media_user_label"] = label
-    elif source in {"existing_user_fallback", "unavailable"}:
-        attributes["media_user_account"] = source
+    if status.get("homeassistant_user_present") is not True:
+        return {}
+    attributes: dict[str, Any] = {"media_user_account": "homeassistant"}
+    label = str(status.get("account_label") or "").strip()
+    if label:
+        attributes["media_user_label"] = label
     return attributes
 
 
@@ -43,8 +38,6 @@ def media_user_attribute(entry: ConfigEntry) -> dict[str, Any]:
 
     attributes = media_user_attributes(entry)
     media_user: dict[str, Any] = {}
-    if source := attributes.get("media_user_source"):
-        media_user["source"] = source
     if account := attributes.get("media_user_account"):
         media_user["account"] = account
     if label := attributes.get("media_user_label"):

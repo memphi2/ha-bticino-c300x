@@ -406,15 +406,13 @@ def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
                     fprintf(stderr, "ensure failed: %s\\n", error);
                     return 10;
                 }}
-                if (!status.homeassistant_user_present || status.c300x_user_present || !status.media_identity_available) {{
+                if (!status.homeassistant_user_present || !status.media_identity_available) {{
                     fprintf(
                         stderr,
-                        "unexpected status after ensure: ha=%d c300x=%d media=%d domain=%d source=%s error=%s\\n",
+                        "unexpected status after ensure: ha=%d media=%d domain=%d error=%s\\n",
                         status.homeassistant_user_present,
-                        status.c300x_user_present,
                         status.media_identity_available,
                         status.domain_present,
-                        status.media_identity_source,
                         status.error
                     );
                     return 11;

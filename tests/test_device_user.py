@@ -26,44 +26,26 @@ def test_homeassistant_account_label_uses_location_name_when_specific() -> None:
 def test_media_user_attributes_exposes_safe_homeassistant_label_only() -> None:
     entry = _entry(
         {
-            "media_identity_source": "homeassistant",
+            "homeassistant_user_present": True,
             "account_label": " Home Assistant Test ",
             "account_id": "private-id",
         }
     )
 
     assert media_user_attributes(entry) == {
-        "media_user_source": "homeassistant",
         "media_user_account": "homeassistant",
         "media_user_label": "Home Assistant Test",
     }
     assert media_user_attribute(entry) == {
         "media_user": {
-            "source": "homeassistant",
             "account": "homeassistant",
             "label": "Home Assistant Test",
         }
     }
 
 
-def test_media_user_attributes_reports_fallback_accounts_without_details() -> None:
-    assert media_user_attributes(
-        _entry({"media_identity_source": "existing_user_fallback"})
-    ) == {
-        "media_user_source": "existing_user_fallback",
-        "media_user_account": "existing_user_fallback",
-    }
-    assert media_user_attributes(_entry({"media_identity_source": "unavailable"})) == {
-        "media_user_source": "unavailable",
-        "media_user_account": "unavailable",
-    }
-
-
 def test_media_user_attributes_ignores_empty_or_unknown_status() -> None:
     assert media_user_attributes(_entry(None)) == {}
     assert media_user_attributes(_entry({})) == {}
-    assert media_user_attributes(_entry({"media_identity_source": ""})) == {}
-    assert media_user_attributes(_entry({"media_identity_source": "fallback"})) == {
-        "media_user_source": "fallback"
-    }
-    assert media_user_attribute(_entry({"media_identity_source": ""})) == {}
+    assert media_user_attributes(_entry({"homeassistant_user_present": False})) == {}
+    assert media_user_attribute(_entry({"homeassistant_user_present": False})) == {}

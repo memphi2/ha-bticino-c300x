@@ -1,0 +1,143 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "home_call_active": {
+        "default": "mdi:phone-in-talk"
+      }
+    },
+    "button": {
+      "delete_latest_video_message": {
+        "default": "mdi:video-minus"
+      },
+      "delete_latest_text_memo": {
+        "default": "mdi:trash-can-outline"
+      },
+      "door_unlock": {
+        "default": "mdi:door-open"
+      },
+      "reboot": {
+        "default": "mdi:restart-alert"
+      },
+      "remove_agent": {
+        "default": "mdi:delete-alert"
+      },
+      "reload_gui": {
+        "default": "mdi:refresh"
+      },
+      "stair_light": {
+        "default": "mdi:stairs"
+      },
+      "stop_doorbell_video": {
+        "default": "mdi:phone-hangup"
+      },
+      "delete_latest_voice_memo": {
+        "default": "mdi:trash-can-outline"
+      }
+    },
+    "camera": {
+      "doorbell_camera": {
+        "default": "mdi:cctv"
+      }
+    },
+    "event": {
+      "doorbell_event": {
+        "default": "mdi:doorbell-video"
+      },
+      "agent_event": {
+        "default": "mdi:bell-ring-outline"
+      }
+    },
+    "select": {
+      "smartphone_forwarding_mode": {
+        "default": "mdi:cellphone-arrow-down"
+      }
+    },
+    "sensor": {
+      "device_cpu": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "device_load": {
+        "default": "mdi:gauge"
+      },
+      "device_memory": {
+        "default": "mdi:memory"
+      },
+      "device_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "voicemail_messages": {
+        "default": "mdi:video-box"
+      },
+      "text_memos": {
+        "default": "mdi:text-box-outline"
+      },
+      "voice_memos": {
+        "default": "mdi:microphone-message"
+      }
+    },
+    "switch": {
+      "answering_machine": {
+        "default": "mdi:voicemail"
+      },
+      "ringer_mute": {
+        "default": "mdi:bell-off"
+      },
+      "maintenance_ssh": {
+        "default": "mdi:console-network"
+      },
+      "maintenance_no_auth": {
+        "default": "mdi:shield-key-outline"
+      },
+      "maintenance_no_auth_access": {
+        "default": "mdi:shield-lock-open-outline"
+      },
+      "maintenance_mdns_discovery": {
+        "default": "mdi:access-point-network"
+      },
+      "gui_function_patch": {
+        "default": "mdi:application-cog"
+      },
+      "firewall_patch": {
+        "default": "mdi:shield-check"
+      },
+      "ipv6_firewall_patch": {
+        "default": "mdi:shield-link-variant"
+      },
+      "homeassistant_media_user_setup": {
+        "default": "mdi:account-wrench"
+      }
+    }
+  },
+  "services": {
+    "alarm_command": {
+      "service": "mdi:shield-lock"
+    },
+    "run_action": {
+      "service": "mdi:play"
+    },
+    "reboot": {
+      "service": "mdi:restart-alert"
+    },
+    "play_latest_video_message": {
+      "service": "mdi:play-box"
+    },
+    "play_latest_voice_memo": {
+      "service": "mdi:play-circle"
+    },
+    "delete_latest_video_message": {
+      "service": "mdi:video-minus"
+    },
+    "delete_latest_text_memo": {
+      "service": "mdi:trash-can-outline"
+    },
+    "unlock_door": {
+      "service": "mdi:door-open"
+    },
+    "stair_light": {
+      "service": "mdi:stairs"
+    },
+    "delete_latest_voice_memo": {
+      "service": "mdi:trash-can-outline"
+    }
+  }
+}

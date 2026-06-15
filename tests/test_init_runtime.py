@@ -344,6 +344,20 @@ def test_configure_device_activations_updates_only_when_needed() -> None:
     assert unsupported.configured == []
 
 
+def test_configure_device_activations_ignores_agent_errors() -> None:
+    entry = _entry(
+        options={
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "77",
+        }
+    )
+    api = _ActivationApi({}, error=integration.C300XAgentApiError)
+
+    asyncio.run(integration._async_configure_device_activations(entry, api))
+
+    assert api.configured == []
+
+
 def test_configure_display_bridge_registers_and_clears_callback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -376,6 +390,74 @@ def test_configure_display_bridge_registers_and_clears_callback(
     assert api.configured == [(False, "", "")]
 
 
+def test_configure_display_bridge_skips_matching_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import custom_components.bticino_c300x.callback_url as callback_url
+    from custom_components.bticino_c300x.api import (
+        display_bridge_callback_fingerprint,
+    )
+
+    async def generate_callback_url(_hass: Any, _entry: Any, webhook_id: str) -> str:
+        return f"https://ha.local/{webhook_id}"
+
+    monkeypatch.setattr(callback_url, "async_generate_agent_callback_url", generate_callback_url)
+    entry = _entry(
+        data={
+            CONF_WEBHOOK_ID: "webhook-id",
+            CONF_SHARED_SECRET: "secret",
+        },
+        options={CONF_DEVICE_UI_ENABLED: True},
+    )
+    expected_hash = display_bridge_callback_fingerprint(
+        True,
+        "https://ha.local/webhook-id",
+        "secret",
+    )
+    entry.runtime_data = SimpleNamespace(
+        display_bridge_diagnostics=C300XCallbackDiagnostics()
+    )
+    api = _DisplayBridgeApi(
+        {"configured": True, "callback_hash": expected_hash}
+    )
+
+    asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+
+    assert api.configured == []
+    assert entry.runtime_data.display_bridge_diagnostics.last_error is None
+
+
+def test_configure_display_bridge_records_agent_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import custom_components.bticino_c300x.callback_url as callback_url
+
+    async def generate_callback_url(_hass: Any, _entry: Any, webhook_id: str) -> str:
+        return f"https://ha.local/{webhook_id}"
+
+    monkeypatch.setattr(callback_url, "async_generate_agent_callback_url", generate_callback_url)
+    for error in (
+        integration.C300XAgentApiUnsupportedError("unsupported"),
+        integration.C300XAgentApiError("failed"),
+    ):
+        entry = _entry(
+            data={
+                CONF_WEBHOOK_ID: "webhook-id",
+                CONF_SHARED_SECRET: "secret",
+            },
+            options={CONF_DEVICE_UI_ENABLED: True},
+        )
+        entry.runtime_data = SimpleNamespace(
+            display_bridge_diagnostics=C300XCallbackDiagnostics()
+        )
+        api = _DisplayBridgeApi({}, error=error)
+
+        asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+
+        assert api.configured == []
+        assert entry.runtime_data.display_bridge_diagnostics.last_error is not None
+
+
 def test_sync_device_user_ensures_missing_media_user() -> None:
     entry = _entry(
         options={
@@ -402,6 +484,117 @@ def test_sync_device_user_ensures_missing_media_user() -> None:
     }
 
 
+def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:
+    for entry in (
+        _entry(options={CONF_VIDEO_ENABLED: False}),
+        _entry(options={CONF_VIDEO_ENABLED: True}),
+    ):
+        entry.runtime_data = SimpleNamespace(
+            capabilities={}
+            if entry.options.get(CONF_VIDEO_ENABLED)
+            else {"device_user": {"supported": True}},
+            api=_DeviceUserApi({"homeassistant_user_present": False}),
+            device_user_status={},
+            device_user_status_updated_at=None,
+        )
+        hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+
+        asyncio.run(integration._async_sync_device_user(hass, entry))
+
+        assert entry.runtime_data.api.ensure_labels == []
+        assert entry.runtime_data.device_user_status == {}
+
+
+def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
+    entry = _entry(
+        options={
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
+        }
+    )
+    status = {
+        "homeassistant_user_present": True,
+        "routes_consistent": True,
+        "device_routing_applied": True,
+        "media_user_label_applied": True,
+    }
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=_DeviceUserApi(status),
+        device_user_status={},
+        device_user_status_updated_at=None,
+    )
+    hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+
+    asyncio.run(integration._async_sync_device_user(hass, entry))
+
+    assert entry.runtime_data.api.ensure_labels == []
+    assert entry.runtime_data.device_user_status == status
+    assert entry.runtime_data.device_user_status_updated_at is not None
+
+
+def test_sync_device_user_ignores_agent_failures() -> None:
+    for error in (
+        integration.C300XAgentApiUnsupportedError("unsupported"),
+        integration.C300XAgentApiError("failed"),
+    ):
+        entry = _entry(
+            options={
+                CONF_VIDEO_ENABLED: True,
+                CONF_CREATE_HOMEASSISTANT_USER: True,
+            }
+        )
+        entry.runtime_data = SimpleNamespace(
+            capabilities={"device_user": {"supported": True}},
+            api=_DeviceUserApi({"homeassistant_user_present": False}, error=error),
+            device_user_status={},
+            device_user_status_updated_at=None,
+        )
+        hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+
+        asyncio.run(integration._async_sync_device_user(hass, entry))
+
+        assert entry.runtime_data.device_user_status == {}
+
+
+def test_refresh_self_test_updates_or_clears_status() -> None:
+    async def _run() -> None:
+        entry = _entry()
+        entry.runtime_data = SimpleNamespace(
+            api=_SelfTestApi({"ok": True, "checks": {"firewall": {"ok": True}}}),
+            self_test_status={},
+            self_test_status_updated_at=None,
+        )
+
+        await integration._async_refresh_self_test(entry)
+
+        assert entry.runtime_data.self_test_status == {
+            "ok": True,
+            "checks": {"firewall": {"ok": True}},
+        }
+        assert entry.runtime_data.self_test_status_updated_at is not None
+
+        entry.runtime_data.api = _SelfTestApi(
+            {},
+            error=integration.C300XAgentApiUnsupportedError("unsupported"),
+        )
+        await integration._async_refresh_self_test(entry)
+
+        assert entry.runtime_data.self_test_status == {}
+        assert entry.runtime_data.self_test_status_updated_at is None
+
+        entry.runtime_data.api = _SelfTestApi(
+            {},
+            error=integration.C300XAgentApiError("failed"),
+        )
+        await integration._async_refresh_self_test(entry)
+
+        assert entry.runtime_data.self_test_status == {}
+        assert entry.runtime_data.self_test_status_updated_at is None
+
+    asyncio.run(_run())
+
+
 def test_sync_device_ui_patch_refreshes_status(monkeypatch: pytest.MonkeyPatch) -> None:
     import custom_components.bticino_c300x.qml_patch as qml_patch
 
@@ -420,6 +613,39 @@ def test_sync_device_ui_patch_refreshes_status(monkeypatch: pytest.MonkeyPatch) 
 
     assert entry.runtime_data.qml_patch_status == {"applied": True}
     assert entry.runtime_data.qml_patch_diagnostics.last_error is None
+
+
+def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+
+    async def refresh_qml_patch_status(_entry: Any) -> dict[str, bool]:
+        raise integration.C300XAgentApiError("failed")
+
+    monkeypatch.setattr(qml_patch, "async_refresh_qml_patch_status", refresh_qml_patch_status)
+
+    unsupported_entry = _entry()
+    unsupported_entry.runtime_data = SimpleNamespace(
+        capabilities={},
+        qml_patch_diagnostics=C300XOperationDiagnostics(),
+        qml_patch_status={"old": True},
+    )
+    asyncio.run(integration._async_sync_device_ui_patch(unsupported_entry))
+    assert unsupported_entry.runtime_data.qml_patch_status == {}
+
+    failed_entry = _entry()
+    failed_entry.runtime_data = SimpleNamespace(
+        capabilities={"maintenance": {"supported": True, "qml_status": True}},
+        qml_patch_diagnostics=C300XOperationDiagnostics(),
+        qml_patch_status={"old": True},
+    )
+    asyncio.run(integration._async_sync_device_ui_patch(failed_entry))
+    assert failed_entry.runtime_data.qml_patch_status == {"old": True}
+    assert (
+        failed_entry.runtime_data.qml_patch_diagnostics.last_error
+        == "C300XAgentApiError: failed"
+    )
 
 
 def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -470,6 +696,71 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     unsubscribe()
     assert state_unsubs == ["state"]
     assert dispatch_unsubs == ["dispatch"]
+
+
+def test_display_bridge_tracking_skips_when_disabled_or_unconfigured() -> None:
+    assert (
+        integration._async_track_display_bridge_updates(
+            "hass",
+            _entry(options={CONF_DEVICE_UI_ENABLED: False}),
+        )
+        is None
+    )
+    assert (
+        integration._async_track_display_bridge_updates(
+            "hass",
+            _entry(options={CONF_DEVICE_UI_ENABLED: True}),
+        )
+        is None
+    )
+
+
+def test_display_bridge_notify_skips_offline_entries() -> None:
+    jobs: list[Any] = []
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(
+        connection_state=SimpleNamespace(available=False),
+    )
+    hass = SimpleNamespace(add_job=lambda *args: jobs.append(args))
+
+    integration._async_schedule_display_bridge_notify(hass, entry)
+
+    assert jobs == []
+
+
+def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> None:  # noqa: ANN001
+    import homeassistant.helpers.entity_registry as entity_registry
+
+    class FakeRegistry:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def async_get_entity_id(
+            self,
+            platform: str,
+            domain: str,
+            unique_id: str,
+        ) -> str | None:
+            assert domain == DOMAIN
+            if unique_id.endswith("delete_latest_text_memo"):
+                return f"{platform}.delete_latest_text_memo"
+            return None
+
+        def async_remove(self, entity_id: str) -> None:
+            self.removed.append(entity_id)
+
+    registry = FakeRegistry()
+    state_removed: list[str] = []
+    monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
+    hass = SimpleNamespace(
+        states=SimpleNamespace(async_remove=lambda entity_id: state_removed.append(entity_id))
+    )
+    entry = _entry(options={CONF_DEVICE_UI_ENABLED: False})
+
+    integration._async_remove_stale_gui_dependent_entities(hass, entry)
+
+    assert registry.removed == ["button.delete_latest_text_memo"]
+    assert state_removed == ["button.delete_latest_text_memo"]
 
 
 def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
@@ -569,11 +860,14 @@ class _ActivationApi:
 
 
 class _DisplayBridgeApi:
-    def __init__(self, status: dict[str, Any]) -> None:
+    def __init__(self, status: dict[str, Any], *, error: Exception | None = None) -> None:
         self._status = status
+        self._error = error
         self.configured: list[tuple[bool, str, str]] = []
 
     async def async_display_bridge_status(self) -> dict[str, Any]:
+        if self._error is not None:
+            raise self._error
         return self._status
 
     async def async_configure_display_bridge(
@@ -587,11 +881,14 @@ class _DisplayBridgeApi:
 
 
 class _DeviceUserApi:
-    def __init__(self, status: dict[str, Any]) -> None:
+    def __init__(self, status: dict[str, Any], *, error: Exception | None = None) -> None:
         self._status = status
+        self._error = error
         self.ensure_labels: list[str] = []
 
     async def async_device_user_status(self) -> dict[str, Any]:
+        if self._error is not None:
+            raise self._error
         return self._status
 
     async def async_ensure_homeassistant_user(self, *, account_label: str) -> dict[str, Any]:
@@ -602,6 +899,22 @@ class _DeviceUserApi:
             "device_routing_applied": True,
             "media_user_label_applied": True,
         }
+
+
+class _SelfTestApi:
+    def __init__(
+        self,
+        status: dict[str, Any],
+        *,
+        error: Exception | None = None,
+    ) -> None:
+        self._status = status
+        self._error = error
+
+    async def async_self_test(self) -> dict[str, Any]:
+        if self._error is not None:
+            raise self._error
+        return self._status
 
 
 class _SetupApi:

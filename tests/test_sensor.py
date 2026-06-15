@@ -719,6 +719,109 @@ def test_agent_diagnostics_sensor_options_include_display_event_watchdog() -> No
     assert state in entity._attr_options
 
 
+def test_agent_diagnostics_sensor_reports_all_operator_statuses() -> None:
+    base = {
+        "agent_init_script_present": True,
+        "agent_init_link_ok": True,
+        "subscription_count": 1,
+        "home_assistant_connected_this_run": True,
+    }
+    cases = [
+        ({}, "unknown", "diagnostics_not_loaded", "refresh_agent_diagnostics"),
+        (
+            {**base, "video_external_media_active": True},
+            "external_media_active",
+            "device_reports_external_media_owner",
+            "close_external_media_client_or_wait_until_idle",
+        ),
+        (
+            {**base, "video_bridge_stop_in_progress": True},
+            "media_stopping",
+            "native_bridge_stop_in_progress",
+            "wait_for_native_media_stop_to_finish",
+        ),
+        (
+            {**base, "home_call_active": True},
+            "home_call_active",
+            "native_home_call_audio_active",
+            "hang_up_home_call_when_finished",
+        ),
+        (
+            {**base, "home_call_running": True},
+            "home_call_starting",
+            "native_home_call_starting",
+            "wait_for_home_call_or_hang_up",
+        ),
+        (
+            {**base, "ring_media_active": True},
+            "ring_media_active",
+            "native_ring_media_active",
+            "answer_or_hang_up_ring_call",
+        ),
+        (
+            {**base, "ring_call_active": True},
+            "ring_call_active",
+            "native_ring_call_active",
+            "answer_or_hang_up_ring_call",
+        ),
+        (
+            {**base, "video_media_starting": True},
+            "media_starting",
+            "native_media_starting",
+            "wait_for_media_start_or_stop_doorbell_video",
+        ),
+        (
+            {**base, "video_bridge_media_active": True},
+            "doorbell_media_active",
+            "native_doorbell_media_active",
+            "use_doorstation_card_stop_when_finished",
+        ),
+        (
+            {**base, "video_clients": 1},
+            "rtsp_busy",
+            "native_rtsp_client_connected",
+            "close_other_viewers_or_capture_before_retrying",
+        ),
+    ]
+
+    for diagnostics, status, reason, action in cases:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(agent_diagnostics=diagnostics)
+        )
+        entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+        assert entity.native_value == status
+        assert entity.extra_state_attributes["status_reason"] == reason
+        assert entity.extra_state_attributes["recommended_action"] == action
+        assert status in entity._attr_options
+
+
+def test_agent_diagnostics_sensor_reports_reconnecting_operator_status() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            connection_state=_FakeConnectionState(
+                available=True,
+                connection_state="reconnecting",
+            ),
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+            },
+        )
+    )
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "agent_reconnecting"
+    assert entity.extra_state_attributes["status_reason"] == (
+        "agent_connection_reconnecting"
+    )
+    assert entity.extra_state_attributes["recommended_action"] == (
+        "wait_for_reconnect_or_check_network"
+    )
+
+
 def test_agent_status_sensor_reports_connection_errors() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(

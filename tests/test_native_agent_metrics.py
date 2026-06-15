@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import textwrap
 from pathlib import Path
@@ -281,6 +282,208 @@ def test_native_agent_device_user_removes_only_homeassistant_from_external_route
                 }
                 return 0;
             }
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    compile_result = subprocess.run(
+        [
+            "gcc",
+            "-std=c11",
+            "-D_DEFAULT_SOURCE",
+            "-D_POSIX_C_SOURCE=200809L",
+            "-I.",
+            str(test_source),
+            "-o",
+            str(test_binary),
+        ],
+        cwd=ROOT / "native_agent",
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compile_result.returncode == 0, compile_result.stderr
+
+    run_result = subprocess.run(
+        [str(test_binary)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert run_result.returncode == 0, run_result.stderr
+
+
+def test_native_agent_device_user_bootstraps_local_only_flexisip_files(
+    tmp_path: Path,
+) -> None:
+    flexisip_dir = tmp_path / "etc" / "flexisip"
+    users_dir = flexisip_dir / "users"
+    flexisip_config = tmp_path / "home" / "bticino" / "cfg" / "flexisip.conf"
+    domain_file = flexisip_dir / "domain-registration.conf"
+    users_file = users_dir / "users.db.txt"
+    accounts_file = users_dir / "accounts.txt"
+    route_int = users_dir / "route_int.conf"
+    route_ext = users_dir / "route_ext.conf"
+    route_conf = users_dir / "route.conf"
+    test_source = tmp_path / "device_user_bootstrap_test.c"
+    test_binary = tmp_path / "device_user_bootstrap_test"
+
+    flexisip_dir.mkdir(parents=True)
+    flexisip_config.parent.mkdir(parents=True)
+    flexisip_config.write_text(
+        "[module::Registrar]\n"
+        "reg-domains=local-device.example\n"
+        "[module::Authentication]\n"
+        "auth-domains=ignored.example\n",
+        encoding="utf-8",
+    )
+    test_source.write_text(
+        textwrap.dedent(
+            f'''
+            #include <stdio.h>
+            #include <stdlib.h>
+            #include <string.h>
+            #include <unistd.h>
+
+            #define FLEXISIP_CONFIG_FILE {json.dumps(str(flexisip_config))}
+            #define FLEXISIP_DOMAIN_FILE {json.dumps(str(domain_file))}
+            #define FLEXISIP_USERS_DIR {json.dumps(str(users_dir))}
+            #define FLEXISIP_USERS_FILE {json.dumps(str(users_file))}
+            #define FLEXISIP_ACCOUNTS_FILE {json.dumps(str(accounts_file))}
+            #define FLEXISIP_ROUTE_INT_FILE {json.dumps(str(route_int))}
+            #define FLEXISIP_ROUTE_EXT_FILE {json.dumps(str(route_ext))}
+            #define FLEXISIP_ROUTE_ACTIVE_FILE {json.dumps(str(route_conf))}
+
+            #include "src/string_util.c"
+            #include "src/device_user.c"
+
+            static char *read_all(const char *path)
+            {{
+                FILE *fp = fopen(path, "rb");
+                long len;
+                char *data;
+
+                if (fp == NULL) {{
+                    return NULL;
+                }}
+                if (fseek(fp, 0, SEEK_END) != 0) {{
+                    fclose(fp);
+                    return NULL;
+                }}
+                len = ftell(fp);
+                if (len < 0 || fseek(fp, 0, SEEK_SET) != 0) {{
+                    fclose(fp);
+                    return NULL;
+                }}
+                data = calloc((size_t)len + 1, 1);
+                if (data == NULL) {{
+                    fclose(fp);
+                    return NULL;
+                }}
+                if (fread(data, 1, (size_t)len, fp) != (size_t)len && ferror(fp)) {{
+                    free(data);
+                    fclose(fp);
+                    return NULL;
+                }}
+                fclose(fp);
+                return data;
+            }}
+
+            int main(void)
+            {{
+                struct c300x_device_user_status status;
+                struct c300x_device_user_identity identity;
+                char error[128] = {{0}};
+                char *users;
+                char *accounts;
+                char *internal_route;
+                char *external_route;
+                char link_target[512] = {{0}};
+                ssize_t link_len;
+
+                if (!c300x_device_user_ensure_homeassistant(&status, "Home Assistant Lab", error, sizeof(error))) {{
+                    fprintf(stderr, "ensure failed: %s\\n", error);
+                    return 10;
+                }}
+                if (!status.homeassistant_user_present || status.c300x_user_present || !status.media_identity_available) {{
+                    fprintf(
+                        stderr,
+                        "unexpected status after ensure: ha=%d c300x=%d media=%d domain=%d source=%s error=%s\\n",
+                        status.homeassistant_user_present,
+                        status.c300x_user_present,
+                        status.media_identity_available,
+                        status.domain_present,
+                        status.media_identity_source,
+                        status.error
+                    );
+                    return 11;
+                }}
+                if (!status.route_int_homeassistant_present || status.route_ext_homeassistant_present || !status.routes_consistent) {{
+                    fprintf(stderr, "unexpected route status after ensure\\n");
+                    return 12;
+                }}
+                users = read_all(FLEXISIP_USERS_FILE);
+                accounts = read_all(FLEXISIP_ACCOUNTS_FILE);
+                internal_route = read_all(FLEXISIP_ROUTE_INT_FILE);
+                external_route = read_all(FLEXISIP_ROUTE_EXT_FILE);
+                if (users == NULL || accounts == NULL || internal_route == NULL || external_route == NULL) {{
+                    fprintf(stderr, "missing generated flexisip files\\n");
+                    return 13;
+                }}
+                if (
+                    strstr(users, "version:1\\n") == NULL
+                    || strstr(users, "homeassistant-") == NULL
+                    || strstr(users, "@local-device.example md5:") == NULL
+                    || strstr(users, "c300x@local-device.example") != NULL
+                ) {{
+                    fprintf(stderr, "unexpected users file: %s\\n", users);
+                    return 14;
+                }}
+                if (strcmp(accounts, "Home Assistant Lab|homeassistant\\n") != 0) {{
+                    fprintf(stderr, "unexpected accounts file: %s\\n", accounts);
+                    return 15;
+                }}
+                if (
+                    strstr(internal_route, "<sip:alluser@local-device.example> <sip:homeassistant-") == NULL
+                    || strstr(internal_route, "@local-device.example>") == NULL
+                ) {{
+                    fprintf(stderr, "unexpected route_int file: %s\\n", internal_route);
+                    return 16;
+                }}
+                if (strstr(external_route, "homeassistant") != NULL) {{
+                    fprintf(stderr, "homeassistant leaked to route_ext: %s\\n", external_route);
+                    return 17;
+                }}
+                link_len = readlink(FLEXISIP_ROUTE_ACTIVE_FILE, link_target, sizeof(link_target) - 1);
+                if (link_len <= 0 || strcmp(link_target, FLEXISIP_ROUTE_INT_FILE) != 0) {{
+                    fprintf(stderr, "route.conf does not point to route_int\\n");
+                    return 18;
+                }}
+                if (!c300x_device_user_media_identity(NULL, &identity)) {{
+                    fprintf(stderr, "media identity unavailable\\n");
+                    return 19;
+                }}
+                if (
+                    strcmp(identity.domain, "local-device.example") != 0
+                    || strncmp(identity.from_user, "homeassistant-", 14) != 0
+                    || strcmp(identity.to_aor, "c300x@local-device.example") != 0
+                ) {{
+                    fprintf(
+                        stderr,
+                        "unexpected identity: domain=%s from=%s to=%s\\n",
+                        identity.domain,
+                        identity.from_user,
+                        identity.to_aor
+                    );
+                    return 20;
+                }}
+                free(users);
+                free(accounts);
+                free(internal_route);
+                free(external_route);
+                return 0;
+            }}
             '''
         ),
         encoding="utf-8",

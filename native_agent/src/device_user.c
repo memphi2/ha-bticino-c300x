@@ -22,13 +22,30 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef FLEXISIP_CONFIG_FILE
+#define FLEXISIP_CONFIG_FILE "/home/bticino/cfg/flexisip.conf"
+#endif
+#ifndef FLEXISIP_DOMAIN_FILE
 #define FLEXISIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
+#endif
+#ifndef FLEXISIP_USERS_DIR
 #define FLEXISIP_USERS_DIR "/etc/flexisip/users"
+#endif
+#ifndef FLEXISIP_USERS_FILE
 #define FLEXISIP_USERS_FILE "/etc/flexisip/users/users.db.txt"
+#endif
+#ifndef FLEXISIP_ACCOUNTS_FILE
 #define FLEXISIP_ACCOUNTS_FILE "/etc/flexisip/users/accounts.txt"
+#endif
+#ifndef FLEXISIP_ROUTE_INT_FILE
 #define FLEXISIP_ROUTE_INT_FILE "/etc/flexisip/users/route_int.conf"
+#endif
+#ifndef FLEXISIP_ROUTE_EXT_FILE
 #define FLEXISIP_ROUTE_EXT_FILE "/etc/flexisip/users/route_ext.conf"
+#endif
+#ifndef FLEXISIP_ROUTE_ACTIVE_FILE
 #define FLEXISIP_ROUTE_ACTIVE_FILE "/etc/flexisip/users/route.conf"
+#endif
 #define DEVICE_USER_MAX_FILE_SIZE 8192
 #define DEVICE_USER_UUID_LEN 37
 
@@ -131,6 +148,45 @@ static int read_first_line(const char *path, char *out, size_t out_len)
     return out[0] != '\0' && sip_string_is_safe(out);
 }
 
+static int read_flexisip_config_domain(char *out, size_t out_len)
+{
+    FILE *fp = fopen(FLEXISIP_CONFIG_FILE, "r");
+    char line[512];
+    char candidate[128] = "";
+
+    if (out == NULL || out_len == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    if (fp == NULL) {
+        return 0;
+    }
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        const char *value = NULL;
+        if (strncmp(line, "reg-domains=", 12) == 0) {
+            value = line + 12;
+        } else if (candidate[0] == '\0' && strncmp(line, "auth-domains=", 13) == 0) {
+            value = line + 13;
+        } else if (candidate[0] == '\0' && strncmp(line, "aliases=", 8) == 0) {
+            value = line + 8;
+        }
+        if (value == NULL) {
+            continue;
+        }
+        size_t len = strcspn(value, " \t\r\n,;");
+        if (len == 0 || len >= sizeof(candidate)) {
+            continue;
+        }
+        memcpy(candidate, value, len);
+        candidate[len] = '\0';
+        if (sip_string_is_safe(candidate) && strncmp(line, "reg-domains=", 12) == 0) {
+            break;
+        }
+    }
+    fclose(fp);
+    return copy_checked(out, out_len, candidate) && sip_string_is_safe(out);
+}
+
 static int split_sip_aor(
     const char *aor,
     char *user,
@@ -189,6 +245,41 @@ static int first_token(char *line, char *out, size_t out_len)
     memcpy(out, start, len);
     out[len] = '\0';
     return sip_string_is_safe(out);
+}
+
+static int first_users_file_domain(const char *content, char *host, size_t host_len)
+{
+    const char *cursor = content != NULL ? content : "";
+
+    if (host == NULL || host_len == 0) {
+        return 0;
+    }
+    host[0] = '\0';
+    while (*cursor != '\0') {
+        char line[512];
+        char token[256];
+        char user[128];
+        const char *line_end = strchr(cursor, '\n');
+        size_t line_len = line_end != NULL ? (size_t)(line_end - cursor) : strlen(cursor);
+
+        if (line_len >= sizeof(line)) {
+            line_len = sizeof(line) - 1;
+        }
+        memcpy(line, cursor, line_len);
+        line[line_len] = '\0';
+        if (
+            first_token(line, token, sizeof(token))
+            && strchr(token, '@') != NULL
+            && split_sip_aor(token, user, sizeof(user), host, host_len)
+        ) {
+            return 1;
+        }
+        if (line_end == NULL) {
+            break;
+        }
+        cursor = line_end + 1;
+    }
+    return 0;
 }
 
 static int user_is_homeassistant(const char *user)
@@ -312,6 +403,80 @@ static int write_file_atomic(
     if (rename(tmp_path, path) != 0) {
         unlink(tmp_path);
         set_error(error, error_len, "rename_failed");
+        return 0;
+    }
+    return 1;
+}
+
+static int ensure_users_dir(char *error, size_t error_len)
+{
+    C300X_DEVICE_USER_STAT_STRUCT st;
+
+    if (device_user_stat_path(FLEXISIP_USERS_DIR, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            return 1;
+        }
+        set_error(error, error_len, "users_dir_not_directory");
+        return 0;
+    }
+    if (errno != ENOENT) {
+        set_error(error, error_len, "users_dir_stat_failed");
+        return 0;
+    }
+    if (mkdir(FLEXISIP_USERS_DIR, 0755) != 0 && errno != EEXIST) {
+        set_error(error, error_len, "users_dir_create_failed");
+        return 0;
+    }
+    return 1;
+}
+
+static int init_missing_file_buffer(
+    struct file_buffer *buffer,
+    const char *content,
+    int *changed,
+    char *error,
+    size_t error_len
+)
+{
+    size_t len;
+
+    if (buffer->exists) {
+        return 1;
+    }
+    if (content == NULL) {
+        content = "";
+    }
+    len = strlen(content);
+    buffer->data = calloc(len + 1, 1);
+    if (buffer->data == NULL) {
+        set_error(error, error_len, "out_of_memory");
+        return 0;
+    }
+    memcpy(buffer->data, content, len);
+    buffer->len = len;
+    buffer->mode = 0644;
+    buffer->exists = 1;
+    *changed = 1;
+    return 1;
+}
+
+static int ensure_active_route_link(
+    const struct file_buffer *route_conf,
+    char *error,
+    size_t error_len
+)
+{
+    C300X_DEVICE_USER_STAT_STRUCT st;
+
+    if (route_conf->exists || device_user_lstat_path(FLEXISIP_ROUTE_ACTIVE_FILE, &st) == 0) {
+        return 1;
+    }
+    if (errno != ENOENT) {
+        set_error(error, error_len, "route_conf_lstat_failed");
+        return 0;
+    }
+    if (symlink(FLEXISIP_ROUTE_INT_FILE, FLEXISIP_ROUTE_ACTIVE_FILE) != 0 && errno != EEXIST) {
+        set_error(error, error_len, "route_conf_link_failed");
         return 0;
     }
     return 1;
@@ -971,7 +1136,10 @@ static int read_status_from_buffers(
         &status->fallback_user_present,
         &status->homeassistant_user_present
     );
-    status->domain_present = device_domain[0] != '\0' || read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain));
+    status->domain_present = device_domain[0] != '\0'
+        || first_users_file_domain(users->data, device_domain, sizeof(device_domain))
+        || read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain))
+        || read_flexisip_config_domain(device_domain, sizeof(device_domain));
     status->accounts_homeassistant_present = accounts_has_homeassistant(accounts->data);
     (void)homeassistant_account_label(
         accounts->data,
@@ -981,9 +1149,8 @@ static int read_status_from_buffers(
     status->route_int_homeassistant_present = route_has_homeassistant(route_int->data);
     status->route_ext_homeassistant_present = route_has_homeassistant(route_ext->data);
     status->route_conf_homeassistant_present = route_has_homeassistant(route_conf->data);
-    status->media_identity_available = (
-        status->homeassistant_user_present || status->fallback_user_present
-    ) && status->c300x_user_present;
+    status->media_identity_available = status->domain_present
+        && (status->homeassistant_user_present || status->fallback_user_present);
     status->routes_consistent = status->homeassistant_user_present
         ? (
             status->accounts_homeassistant_present
@@ -991,13 +1158,13 @@ static int read_status_from_buffers(
             && !status->route_ext_homeassistant_present
         )
         : 1;
-    if (status->homeassistant_user_present && status->c300x_user_present) {
+    if (status->homeassistant_user_present && status->domain_present) {
         snprintf(
             status->media_identity_source,
             sizeof(status->media_identity_source),
             "homeassistant"
         );
-    } else if (status->fallback_user_present && status->c300x_user_present) {
+    } else if (status->fallback_user_present && status->domain_present) {
         snprintf(
             status->media_identity_source,
             sizeof(status->media_identity_source),
@@ -1181,8 +1348,14 @@ int c300x_device_user_ensure_homeassistant(
     ) {
         goto cleanup;
     }
-    if (!users.exists || !route_int.exists || !route_ext.exists) {
-        set_error(error, error_len, "flexisip_files_missing");
+    if (
+        !ensure_users_dir(error, error_len)
+        || !init_missing_file_buffer(&users, "version:1\n", &users_changed, error, error_len)
+        || !init_missing_file_buffer(&accounts, "", &accounts_changed, error, error_len)
+        || !init_missing_file_buffer(&route_int, "", &route_int_changed, error, error_len)
+        || !init_missing_file_buffer(&route_ext, "", &route_ext_changed, error, error_len)
+        || !ensure_active_route_link(&route_conf, error, error_len)
+    ) {
         goto cleanup;
     }
     parse_users_file(
@@ -1195,9 +1368,14 @@ int c300x_device_user_ensure_homeassistant(
         &fallback_present,
         &ha_present
     );
+    (void)c300x_present;
     (void)fallback_present;
-    if (!c300x_present || device_domain[0] == '\0') {
-        if (!read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain))) {
+    if (device_domain[0] == '\0') {
+        if (
+            !first_users_file_domain(users.data, device_domain, sizeof(device_domain))
+            && !read_first_line(FLEXISIP_DOMAIN_FILE, device_domain, sizeof(device_domain))
+            && !read_flexisip_config_domain(device_domain, sizeof(device_domain))
+        ) {
             set_error(error, error_len, "device_domain_missing");
             goto cleanup;
         }

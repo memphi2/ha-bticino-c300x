@@ -49,6 +49,7 @@ def test_openwebnet_and_activation_id_validators_strip_valid_values() -> None:
     ("validator", "value", "message"),
     [
         (stair_light_address, "12*34", "invalid staircase light address"),
+        (stair_light_address, None, "string value is None"),
         (lock_id, "front lock", "invalid lock id"),
         (activation_id, "gate.1", "invalid activation id"),
     ],

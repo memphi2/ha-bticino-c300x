@@ -70,6 +70,7 @@ if "homeassistant.components.select" not in sys.modules:
 from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.select import (  # noqa: E402
     C300XSmartphoneForwardingModeSelect,
+    async_setup_entry,
 )
 
 
@@ -92,7 +93,9 @@ class _FakeApi:
 
 @dataclass
 class _FakeRuntimeData:
-    capabilities: dict[str, Any] = field(default_factory=dict)
+    capabilities: dict[str, Any] = field(
+        default_factory=lambda: {"smartphone_forwarding": {"supported": True}}
+    )
     api: _FakeApi = field(default_factory=_FakeApi)
 
 
@@ -116,6 +119,30 @@ def test_smartphone_forwarding_select_refreshes_active_status() -> None:
     assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
 
 
+def test_select_setup_adds_supported_entities_after_initial_refresh() -> None:
+    entry = _FakeEntry()
+    added: list[list[Any]] = []
+
+    asyncio.run(async_setup_entry("hass", entry, added.append))  # type: ignore[arg-type]
+
+    assert len(added) == 1
+    assert len(added[0]) == 1
+    entity = added[0][0]
+    assert isinstance(entity, C300XSmartphoneForwardingModeSelect)
+    assert entry.runtime_data.api.active_reads == 1
+    assert entity.current_option == "Blocked"
+
+
+def test_select_setup_skips_unsupported_forwarding_capability() -> None:
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={}))
+    added: list[list[Any]] = []
+
+    asyncio.run(async_setup_entry("hass", entry, added.append))  # type: ignore[arg-type]
+
+    assert added == []
+    assert entry.runtime_data.api.active_reads == 0
+
+
 def test_smartphone_forwarding_select_marks_unavailable_on_api_error() -> None:
     entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=_FakeApi(fail_status=True)))
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
@@ -134,6 +161,16 @@ def test_smartphone_forwarding_select_sets_three_state_mode() -> None:
 
     assert entry.runtime_data.api.selected == ["homeassistant"]
     assert entity.current_option == "Home Assistant"
+
+
+def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_select_option("invalid"))
+
+    assert entry.runtime_data.api.selected == []
+    assert entity.current_option is None
 
 
 def test_smartphone_forwarding_select_accepts_raw_mode_for_automation() -> None:
@@ -161,6 +198,27 @@ def test_smartphone_forwarding_event_updates_select_state() -> None:
 
     assert entity.current_option == "Home Assistant"
     assert entity.extra_state_attributes == {"mode": 1, "state": "homeassistant"}
+
+
+def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:
+    listeners: list[tuple[str, Any]] = []
+    removers: list[Any] = []
+    entity = C300XSmartphoneForwardingModeSelect(_FakeEntry())  # type: ignore[arg-type]
+    entity.hass = SimpleNamespace(
+        bus=SimpleNamespace(
+            async_listen=lambda event_type, callback: listeners.append(
+                (event_type, callback)
+            )
+            or "unsub"
+        )
+    )
+    entity.async_on_remove = removers.append  # type: ignore[method-assign]
+
+    asyncio.run(entity.async_added_to_hass())
+
+    assert listeners == [("bticino_c300x_agent_event_received", entity._handle_agent_event)]
+    assert callable(removers[0])
+    assert removers[1:] == ["unsub"]
 
 
 def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:

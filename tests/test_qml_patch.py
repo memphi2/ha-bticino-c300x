@@ -128,6 +128,27 @@ def test_core_patch_confirm_paths_update_core_state() -> None:
     assert entry.runtime_data.qml_patch_status == status
 
 
+def test_core_patch_keeps_action_status_when_apply_confirmation_mismatches() -> None:
+    api = _FakeApi(core_apply_status={"core_patched": False, "core_state": "busy"})
+    entry = _entry(api, {"available": True, "patched": False, "core_patched": False})
+
+    status = asyncio.run(async_apply_qml_core_patch_and_confirm(entry))
+
+    assert status == {"core_patched": False, "core_state": "busy"}
+    assert entry.runtime_data.qml_patch_status == status
+
+
+def test_core_patch_restores_previous_status_on_apply_error() -> None:
+    api = _FakeApi(fail_action="core_apply")
+    previous = {"available": True, "patched": True, "core_patched": False}
+    entry = _entry(api, previous)
+
+    with pytest.raises(RuntimeError, match="core apply failed"):
+        asyncio.run(async_apply_qml_core_patch_and_confirm(entry))
+
+    assert entry.runtime_data.qml_patch_status == previous
+
+
 def test_core_patch_keeps_action_status_when_confirmation_mismatches() -> None:
     api = _FakeApi(core_restore_status={"core_patched": True, "core_state": "busy"})
     entry = _entry(api, {"available": True, "patched": False, "core_patched": True})
@@ -145,5 +166,16 @@ def test_core_patch_restores_previous_status_on_error() -> None:
 
     with pytest.raises(RuntimeError, match="core restore failed"):
         asyncio.run(async_restore_qml_core_patch_and_confirm(entry))
+
+    assert entry.runtime_data.qml_patch_status == previous
+
+
+def test_restore_qml_patch_restores_previous_status_on_error() -> None:
+    api = _FakeApi(fail_action="restore")
+    previous = {"available": True, "patched": True, "state": "patched"}
+    entry = _entry(api, previous)
+
+    with pytest.raises(RuntimeError, match="restore failed"):
+        asyncio.run(async_restore_qml_patch_and_confirm(entry))
 
     assert entry.runtime_data.qml_patch_status == previous

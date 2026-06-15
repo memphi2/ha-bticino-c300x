@@ -177,6 +177,13 @@ def test_agent_diagnostics_change_reason_prioritizes_known_groups() -> None:
     )
     assert (
         _agent_diagnostics_change_reason(
+            {"ui_event_waiters": 1},
+            {"ui_event_waiters": 4},
+        )
+        == "display_event_watchdog_changed"
+    )
+    assert (
+        _agent_diagnostics_change_reason(
             {"accepted_clients": 1},
             {"accepted_clients": 2},
         )

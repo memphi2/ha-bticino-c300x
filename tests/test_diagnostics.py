@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import sys
 import types
@@ -80,6 +81,17 @@ from custom_components.bticino_c300x.data import (
     C300XOperationDiagnostics,
 )
 from custom_components.bticino_c300x.diagnostics import (
+    _agent_info_diagnostics,
+    _agent_write_diagnostics,
+    _capability_diagnostics,
+    _entity_domain_counts,
+    _host_private_address,
+    _isoformat,
+    _safe_error_summary,
+    _safe_status_dict,
+    _safe_system_metrics,
+    _same_lan_prefix_guess,
+    _sequence_count,
     async_get_config_entry_diagnostics,
 )
 
@@ -457,3 +469,136 @@ def test_config_entry_diagnostics_explain_callback_and_maintenance_failures() ->
         "type": "C300XAgentApiConnectionError",
         "message": "device agent returned HTTP 403: maintenance_unauthorized",
     }
+
+
+def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
+    runtime = SimpleNamespace(
+        agent_info={
+            "version": "1.2.1",
+            "implementation": "native",
+            "api_version": "1.1",
+            "model": "C300X",
+            "firmware": "1.7.19",
+            "device_id": "private-device-id",
+        },
+        capabilities={
+            "video": {"supported": True, "internal": "hidden", "count": 2},
+            "home_call": True,
+            "custom": ["not safe"],
+        },
+        system_metrics={
+            "cpu_count": 1,
+            "cpu_usage_percent": 2.5,
+            "temperature_c": 41.2,
+            "extra": "ignored",
+        },
+        agent_diagnostics={
+            "agent_write_count": 3,
+            "last_write_reason": "config_changed",
+            "token": "secret",
+            "nested": {"hidden": True},
+        },
+        agent_diagnostics_updated_by="push_event",
+        agent_diagnostics_change_reason="write_diagnostics_changed",
+    )
+    entry = _FakeEntry(runtime_data=runtime)
+
+    agent_info = _agent_info_diagnostics(runtime)
+    assert agent_info == {
+        "version": "1.2.1",
+        "implementation": "native",
+        "api_version": "1.1",
+        "model": "C300X",
+        "firmware": "1.7.19",
+        "device_id_configured": True,
+        "device_id_fingerprint": agent_info["device_id_fingerprint"],
+    }
+    assert "private-device-id" not in json.dumps(agent_info)
+
+    assert _capability_diagnostics(runtime) == {
+        "custom": {"configured": True},
+        "home_call": {"supported": True},
+        "video": {"count": 2, "supported": True},
+    }
+    assert _safe_system_metrics(runtime) == {
+        "cpu_count": 1,
+        "cpu_usage_percent": 2.5,
+        "load_1m": None,
+        "load_5m": None,
+        "load_15m": None,
+        "load_1m_percent": None,
+        "memory_total_kb": None,
+        "memory_available_kb": None,
+        "memory_used_kb": None,
+        "memory_usage_percent": None,
+        "temperature_c": 41.2,
+        "temperature_source": None,
+    }
+
+    writes = _agent_write_diagnostics(entry)  # type: ignore[arg-type]
+    assert writes["agent_write_count"] == 3
+    assert writes["last_write_reason"] == "config_changed"
+    assert writes["agent_diagnostics_updated_by"] == "push_event"
+    assert "token" not in writes
+    assert "nested" not in writes
+
+
+def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
+    assert _agent_info_diagnostics(None) is None
+    assert _agent_info_diagnostics(SimpleNamespace(agent_info=[])) is None
+    assert _capability_diagnostics(None) is None
+    assert _capability_diagnostics(SimpleNamespace(capabilities=[])) is None
+    assert _safe_system_metrics(None) is None
+    assert _safe_system_metrics(SimpleNamespace(system_metrics=[])) is None
+    empty_writes = _agent_write_diagnostics(_FakeEntry())  # type: ignore[arg-type]
+    assert isinstance(empty_writes, dict)
+    assert empty_writes["agent_write_count"] is None
+    assert (
+        _agent_write_diagnostics(  # type: ignore[arg-type]
+            _FakeEntry(runtime_data=SimpleNamespace(agent_diagnostics=[]))
+        )
+        is None
+    )
+
+
+def test_diagnostics_value_helpers_redact_and_normalize_values() -> None:
+    assert _safe_status_dict(
+        {
+            "ok": True,
+            "host": "192.0.2.60",
+            "nested": {"hidden": True},
+            "path": "/secret",
+            "count": 2,
+        }
+    ) == {"count": 2, "ok": True}
+    assert _safe_status_dict([]) is None
+
+    assert _entity_domain_counts(["light.a", "sensor.temp", "light.b", "invalid"]) == {
+        "light": 2,
+        "sensor": 1,
+    }
+    assert _entity_domain_counts("sensor.temp") == {}
+    assert _sequence_count([1, 2, 3]) == 3
+    assert _sequence_count("abc") is None
+    assert _isoformat(datetime(2026, 6, 15, tzinfo=UTC)) == "2026-06-15T00:00:00+00:00"
+    assert _isoformat("already") == "already"
+    assert _isoformat(1) is None
+
+    summary = _safe_error_summary(
+        "ClientConnectorError: failed http://ha.local:8123 for 192.0.2.10 and [fe80::1]:8123"
+    )
+    assert summary == {
+        "type": "ClientConnectorError",
+        "message": "failed <url> for <ipv4> and <ipv6>",
+    }
+    assert _safe_error_summary("") is None
+
+    private_a = ".".join(("192", "168", "1", "10"))
+    private_b = ".".join(("192", "168", "1", "20"))
+    assert _host_private_address(private_a) is True
+    assert _host_private_address("example.invalid") is None
+    assert _same_lan_prefix_guess(None, None) is None
+    assert _same_lan_prefix_guess(
+        ipaddress.ip_address(private_a),
+        ipaddress.ip_address(private_b),
+    ) is True

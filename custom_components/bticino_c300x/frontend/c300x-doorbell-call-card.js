@@ -15,12 +15,8 @@ import {
   c300xObjectSuffix,
 } from "./c300x-entity-resolver.js";
 import {
-  c300xDoorstationAction,
-  c300xHomeCallStatusKey,
+  c300xCardViewModel,
   c300xIsHomeCallActive,
-  c300xIsHomeCallConnected,
-  c300xIsHomeCallRinging,
-  c300xIsRingPreviewAvailable,
 } from "./c300x-state-model.js";
 import { C300XRingbackTone } from "./c300x-ringback-tone.js";
 import { C300XWebrtcClient } from "./c300x-webrtc-client.js";
@@ -400,70 +396,48 @@ class C300XDoorbellCallCard extends HTMLElement {
     const homeCallMode = this._isHomeCallMode();
     const entity = this._hass?.states?.[this._config.entity];
     const name = this._displayName(entity);
-    const callActive = homeCallMode && c300xIsHomeCallActive(entity);
-    const homeCallConnected = homeCallMode && c300xIsHomeCallConnected(entity);
-    const homeCallRinging = homeCallMode && c300xIsHomeCallRinging(entity);
     const doorstationActive = !homeCallMode && (this._webrtc.running || !!this._webrtc.remoteStream);
-    const doorstationAction = this._doorstationAction(entity, doorstationActive);
-    const doorstationActionLabel = this._label(doorstationAction);
+    const view = c300xCardViewModel({
+      cameraEntity: entity,
+      homeCallMode,
+      active: doorstationActive,
+      startingCall: this._startingCall,
+      doorbellAnswered: this._doorbellAnswered,
+      previewStarting: this._previewStarting,
+      ringPreviewActive: this._ringPreviewActive,
+    });
+    const actionLabel = this._label(view.actionLabelKey);
 
     this._titleEl.textContent = name;
     this._emptyEl.textContent = this._label(homeCallMode ? "no_active_home_call" : "no_active_door_call");
     this._bodyEl.classList.toggle("home-call", homeCallMode);
     this._bodyEl.classList.toggle("doorstation", !homeCallMode);
-    const actionActive = homeCallMode
-      ? (callActive || this._startingCall)
-      : (doorstationActive || doorstationAction === "answer");
-    const action = homeCallMode ? ((callActive || this._startingCall) ? "hang_up" : "call_home") : doorstationAction;
-    const actionLabel = homeCallMode ? this._label(action) : doorstationActionLabel;
-    const actionDisabled = action === "external_call" || action === "busy" || action === "unavailable";
-    const actionIcon = homeCallMode
-      ? ((callActive || this._startingCall) ? "mdi:phone-hangup" : "mdi:phone")
-      : (
-        action === "hang_up"
-          ? "mdi:phone-hangup"
-          : (action === "answer" ? "mdi:phone-in-talk" : (actionDisabled ? "mdi:phone-off" : "mdi:play"))
-      );
-    this._actionIconEl.setAttribute("icon", actionIcon);
+    this._actionIconEl.setAttribute("icon", view.actionIcon);
     this._actionButtonEl.title = actionLabel;
     this._actionButtonEl.setAttribute("aria-label", actionLabel);
-    this._actionButtonEl.disabled = actionDisabled;
-    this._actionButtonEl.classList.toggle("active", actionActive);
-    this._actionButtonEl.classList.toggle(
-      "dialing",
-      (homeCallMode && callActive && !homeCallConnected)
-        || (!homeCallMode && doorstationAction === "answer"),
-    );
-    this._actionButtonEl.classList.toggle("answerable", !homeCallMode && doorstationAction === "answer");
-    this._actionButtonEl.classList.toggle("blocked", !homeCallMode && actionDisabled);
-    this._actionButtonEl.classList.toggle(
-      "recording",
-      homeCallConnected || (!homeCallMode && doorstationActive),
-    );
+    this._actionButtonEl.disabled = view.actionDisabled;
+    this._actionButtonEl.classList.toggle("active", view.actionActive);
+    this._actionButtonEl.classList.toggle("dialing", view.actionDialing);
+    this._actionButtonEl.classList.toggle("answerable", view.actionAnswerable);
+    this._actionButtonEl.classList.toggle("blocked", view.actionBlocked);
+    this._actionButtonEl.classList.toggle("recording", view.actionRecording);
     this._updateMicButton();
     this._secondaryEl.textContent = this._error
       || this._notice
-      || (homeCallMode ? this._homeCallStatusText(entity) : doorstationActionLabel);
+      || this._labelOrRaw(view.secondaryKey);
     this._secondaryEl.classList.toggle("error", !!this._error);
     this._secondaryEl.classList.toggle("notice", !this._error && !!this._notice);
-    this._mediaEl.style.display = homeCallMode ? "none" : "";
-    this._emptyEl.style.display = this._webrtc.remoteStream ? "none" : "";
-    this._syncRingbackTone(homeCallRinging);
-    if (
-      !homeCallMode
-      && doorstationAction === "answer"
-      && c300xIsRingPreviewAvailable(entity)
-    ) {
+    this._mediaEl.style.display = view.showMedia ? "" : "none";
+    this._emptyEl.style.display = this._webrtc.remoteStream || !view.showEmpty ? "none" : "";
+    this._syncRingbackTone(view.ringbackActive);
+    if (view.shouldAutoPreview) {
       this._ensureDoorbellPreview();
     }
   }
 
   async _handlePrimaryAction() {
     if (!this._isHomeCallMode()) {
-      const action = this._doorstationAction(
-        this._hass?.states?.[this._config.entity],
-        this._webrtc.running || !!this._webrtc.remoteStream,
-      );
+      const action = this._doorstationView().action;
       if (action === "external_call") {
         return;
       }
@@ -807,11 +781,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     return c300xIsHomeCallActive(this._hass?.states?.[this._config.entity]);
   }
 
-  _homeCallStatusText(entity) {
-    const key = c300xHomeCallStatusKey(entity);
-    return C300X_TRANSLATIONS.en[key] ? this._label(key) : key;
-  }
-
   _syncRingbackTone(active) {
     if (active) {
       this._ringbackTone?.start();
@@ -824,10 +793,12 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._ringbackTone?.stop();
   }
 
-  _doorstationAction(cameraEntity, active) {
-    return c300xDoorstationAction({
-      cameraEntity,
-      active,
+  _doorstationView() {
+    return c300xCardViewModel({
+      cameraEntity: this._hass?.states?.[this._config.entity],
+      homeCallMode: false,
+      active: this._webrtc.running || !!this._webrtc.remoteStream,
+      startingCall: this._startingCall,
       doorbellAnswered: this._doorbellAnswered,
       previewStarting: this._previewStarting,
       ringPreviewActive: this._ringPreviewActive,
@@ -840,6 +811,10 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _label(key) {
     return c300xLocalize(this._hass, key);
+  }
+
+  _labelOrRaw(key) {
+    return C300X_TRANSLATIONS.en[key] ? this._label(key) : key;
   }
 
   async _stopHomeCall() {

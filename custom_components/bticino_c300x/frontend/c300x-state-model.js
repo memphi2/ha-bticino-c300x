@@ -50,6 +50,81 @@ export function c300xIsHomeCallRinging(cameraEntity) {
   );
 }
 
+export function c300xCardViewModel({
+  cameraEntity,
+  homeCallMode,
+  active,
+  startingCall,
+  doorbellAnswered,
+  previewStarting,
+  ringPreviewActive,
+}) {
+  if (homeCallMode) {
+    const callActive = c300xIsHomeCallActive(cameraEntity);
+    const connected = c300xIsHomeCallConnected(cameraEntity);
+    const ringing = c300xIsHomeCallRinging(cameraEntity);
+    const action = callActive || startingCall ? "hang_up" : "call_home";
+    return {
+      action,
+      actionLabelKey: action,
+      actionIcon: callActive || startingCall ? "mdi:phone-hangup" : "mdi:phone",
+      actionDisabled: false,
+      actionActive: callActive || startingCall,
+      actionDialing: callActive && !connected,
+      actionAnswerable: false,
+      actionBlocked: false,
+      actionRecording: connected,
+      secondaryKey: c300xHomeCallStatusKey(cameraEntity),
+      showMedia: false,
+      showEmpty: true,
+      ringbackActive: ringing,
+      shouldAutoPreview: false,
+    };
+  }
+
+  const action = c300xDoorstationAction({
+    cameraEntity,
+    active,
+    doorbellAnswered,
+    previewStarting,
+    ringPreviewActive,
+  });
+  const actionDisabled = (
+    action === "external_call"
+    || action === "busy"
+    || action === "unavailable"
+  );
+  return {
+    action,
+    actionLabelKey: action,
+    actionIcon: c300xDoorstationActionIcon(action, actionDisabled),
+    actionDisabled,
+    actionActive: active || action === "answer",
+    actionDialing: action === "answer",
+    actionAnswerable: action === "answer",
+    actionBlocked: actionDisabled,
+    actionRecording: active,
+    secondaryKey: action,
+    showMedia: true,
+    showEmpty: !active,
+    ringbackActive: false,
+    shouldAutoPreview: action === "answer" && c300xIsRingPreviewAvailable(cameraEntity),
+  };
+}
+
+export function c300xDoorstationActionIcon(action, disabled) {
+  if (action === "hang_up") {
+    return "mdi:phone-hangup";
+  }
+  if (action === "answer") {
+    return "mdi:phone-in-talk";
+  }
+  if (disabled) {
+    return "mdi:phone-off";
+  }
+  return "mdi:play";
+}
+
 export function c300xDoorstationAction({
   cameraEntity,
   active,

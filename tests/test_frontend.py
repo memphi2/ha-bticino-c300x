@@ -471,9 +471,11 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
 
     assert 'external_call: "External Call"' in translations_source
-    assert 'actionDisabled ? "mdi:phone-off"' in source
-    assert 'const actionDisabled = action === "external_call" || action === "busy" || action === "unavailable";' in source
-    assert "this._actionButtonEl.disabled = actionDisabled;" in source
+    assert 'actionDisabled,\n    actionActive: active || action === "answer",' in state_source
+    assert 'action === "external_call"' in state_source
+    assert 'action === "busy"' in state_source
+    assert 'action === "unavailable"' in state_source
+    assert "this._actionButtonEl.disabled = view.actionDisabled;" in source
     assert 'if (action === "external_call") {' in source
     assert "return attributes.external_media_active === true" in state_source
     assert 'attributes.video_owner === "external_media"' in state_source
@@ -502,8 +504,8 @@ def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:
     webrtc_source = CARD_WEBRTC_SOURCE.read_text(encoding="utf-8")
 
     assert "async _ensureDoorbellPreview()" in source
-    assert 'doorstationAction === "answer"' in source
-    assert "c300xIsRingPreviewAvailable(entity)" in source
+    assert "if (view.shouldAutoPreview) {" in source
+    assert 'shouldAutoPreview: action === "answer" && c300xIsRingPreviewAvailable(cameraEntity)' in state_source
     assert "c300xIsRingPreviewAvailable(cameraEntity)" in state_source
     assert 'c300xMediaState(cameraEntity) === "ring_preview_active"' in state_source
     assert "this._ringPreviewActive = true;" in source
@@ -599,9 +601,10 @@ def test_bundled_card_uses_camera_state_machine_without_state_entity_overrides()
 
     assert "this._hass?.states?.[this._stateEntityId()]" not in source
     assert "c300xStateEntityId" not in source
-    assert "c300xIsHomeCallActive(entity)" in source
-    assert "c300xIsHomeCallConnected(entity)" in source
-    assert "c300xHomeCallStatusKey(entity)" in source
+    assert "c300xCardViewModel({" in source
+    assert "c300xIsHomeCallActive(cameraEntity)" in state_source
+    assert "c300xIsHomeCallConnected(cameraEntity)" in state_source
+    assert "c300xHomeCallStatusKey(cameraEntity)" in state_source
     assert "stateEntity:" not in source
     assert 'mediaState === "home_call_active"' in state_source
     assert 'mediaState === "home_call_ringing"' in state_source
@@ -618,8 +621,8 @@ def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() ->
 
     assert 'from "./c300x-ringback-tone.js"' in source
     assert "new C300XRingbackTone" in source
-    assert "c300xIsHomeCallRinging(entity)" in source
-    assert "this._syncRingbackTone(homeCallRinging);" in source
+    assert "c300xIsHomeCallRinging(cameraEntity)" in state_source
+    assert "this._syncRingbackTone(view.ringbackActive);" in source
     assert "this._stopRingbackTone();" in source
     assert 'mediaState === "home_call_starting"' in state_source
     assert 'mediaState === "home_call_ringing"' in state_source

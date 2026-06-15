@@ -9,10 +9,9 @@
 Local-first Home Assistant custom integration for the BTicino Classe
 300X / C300X video door station.
 
-The project pairs a Home Assistant integration with a small native C agent on
-the C300X. The goal is a quiet, local, event-driven setup: no Node.js runtime on
-the device, no polling controller, no cloud dependency for normal operation, and
-no fake Home Assistant entities.
+It brings the door station into Home Assistant as a local device: doorbell
+events, camera view, calls, display pages and common controls without depending
+on a cloud service for normal operation.
 
 <p align="center">
   <img src="custom_components/bticino_c300x/brand/logo.png" alt="BTicino C300X integration logo" width="140">
@@ -21,10 +20,9 @@ no fake Home Assistant entities.
 ## What It Does
 
 Use this integration when you want your Classe 300X to behave like a local Home
-Assistant device: doorbell events, camera, talkback, door unlock, stair light,
+Assistant device: doorbell events, camera, door calls, door unlock, stair light,
 ringer/forwarding controls, messages and optional display pages. Normal
-operation is local, push-based, and does not need a Node.js runtime on the
-C300X.
+operation is local and push-based.
 
 - **On-demand**: open the door camera from Home Assistant when nobody is
   ringing.
@@ -36,9 +34,9 @@ C300X.
 ## Requirements
 
 - Home Assistant `2025.5.0` or newer.
-- A BTicino Classe 300X / C300X on the `1.7.x` firmware family.
-- A rooted or SSH-enabled C300X for native-agent installation.
-- A trusted local network path from Home Assistant to the C300X.
+- BTicino Classe 300X / C300X firmware `1.7.x`.
+- Root or SSH access on the C300X for the first device-agent installation.
+- A trusted local network between Home Assistant and the C300X.
 
 If your device is still stock, root or SSH-enable it first. Rooting and
 firmware patching are outside this repository. When a separate rooting workflow
@@ -46,16 +44,17 @@ asks for a firmware target, use `1.7.19`.
 
 ## Highlights
 
-- Native C device agent, no Node.js runtime on the C300X.
-- Local push events instead of a polling controller.
-- Capability-gated Home Assistant entities and services.
-- Bundled Lovelace cards for doorstation video/Ring Call and Home Call.
-- Door unlock, stair light, ringer mute, forwarding mode, answering machine,
-  video messages, voice memos and text memos.
-- Optional C300X display pages for Alarmo and a dynamic Home Assistant board.
-- Optional local Ring Call capture and Wyoming speech analysis helpers for
-  automations.
-- Compact normal diagnostics plus disabled-by-default detailed diagnostics.
+- See who is at the door from Home Assistant and start the camera on demand.
+- Answer a supported incoming door call from the Home Assistant dashboard.
+- Call the C300X display from Home Assistant with a dedicated Home Call card.
+- Control door unlock, stair light, ringer mute, forwarding and answering
+  machine state.
+- Show optional Home Assistant, weather and Alarmo pages on the C300X display.
+- Use video messages, voice memos and text memos from Home Assistant.
+- Build local automations around ring events, captured clips and speech
+  analysis.
+- Keep day-to-day status simple, with deeper diagnostics available only when
+  needed.
 
 Full setup, service, notification and troubleshooting details are in the
 [User Guide](docs/user-guide.md).
@@ -183,9 +182,7 @@ cp -a custom_components/bticino_c300x /config/custom_components/
 Then restart Home Assistant.
 
 The HACS release asset is `ha-bticino-c300x.zip`. It contains both the Home
-Assistant integration and the matching ARMHF native-agent bundle. Normal users
-should not need Node.js, npm, a cross compiler, or SSH helper tools inside Home
-Assistant.
+Assistant integration and the matching device-agent bundle.
 
 ### 2. Add the integration
 
@@ -244,8 +241,8 @@ The installer deploys project-owned files only:
 - Display setup helper script
 - optional firewall helper state managed by the native agent
 
-The installer does not ship vendor firmware, extracted firmware files, APKs,
-Node modules, or third-party controller code.
+The installer does not ship vendor firmware, extracted firmware files, APKs or
+third-party controller code.
 
 ### 5. Choose optional features
 

@@ -5,6 +5,8 @@ export const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c3
 export const C300X_DEFAULT_CONFIG = {
   mode: "doorbell_call",
   hangup_script: "",
+  ringback_tone: true,
+  ringback_volume: 12,
 };
 
 export function c300xObjectSuffix(objectId, baseObjectId) {

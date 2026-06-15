@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Adds an optional local Home Call ringback tone in the bundled Home Call card
+  while Home Assistant waits for the C300X to answer.
+
+### Changed
+
+- Refocuses the README on user-facing features and keeps technical setup
+  details in the user guide.
+- Clarifies in the user guide that Ring Calls can be answered from Home
+  Assistant only when **Forwarding** is set to **Home Assistant**.
+- Clarifies that the bundled media card uses the selected camera entity and
+  media-state attributes, so localized or renamed state entities do not need
+  separate card configuration.
+
 ## v1.2.1 - 2026-06-15
 
 ### Fixed

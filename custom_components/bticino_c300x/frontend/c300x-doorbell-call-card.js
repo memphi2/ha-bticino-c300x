@@ -19,8 +19,10 @@ import {
   c300xHomeCallStatusKey,
   c300xIsHomeCallActive,
   c300xIsHomeCallConnected,
+  c300xIsHomeCallRinging,
   c300xIsRingPreviewAvailable,
 } from "./c300x-state-model.js";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js";
 import { C300XWebrtcClient } from "./c300x-webrtc-client.js";
 
 function c300xFireConfigChanged(element, config) {
@@ -117,6 +119,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._doorbellAnswered = false;
     this._error = "";
     this._notice = "";
+    this._ringbackTone = new C300XRingbackTone({
+      getEnabled: () => this._config?.ringback_tone !== false,
+      getVolume: () => this._config?.ringback_volume,
+    });
     this._ensureRendered();
   }
 
@@ -137,6 +143,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._stopRingbackTone();
     this._closePeer(false);
   }
 
@@ -395,6 +402,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     const name = this._displayName(entity);
     const callActive = homeCallMode && c300xIsHomeCallActive(entity);
     const homeCallConnected = homeCallMode && c300xIsHomeCallConnected(entity);
+    const homeCallRinging = homeCallMode && c300xIsHomeCallRinging(entity);
     const doorstationActive = !homeCallMode && (this._webrtc.running || !!this._webrtc.remoteStream);
     const doorstationAction = this._doorstationAction(entity, doorstationActive);
     const doorstationActionLabel = this._label(doorstationAction);
@@ -440,6 +448,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._secondaryEl.classList.toggle("notice", !this._error && !!this._notice);
     this._mediaEl.style.display = homeCallMode ? "none" : "";
     this._emptyEl.style.display = this._webrtc.remoteStream ? "none" : "";
+    this._syncRingbackTone(homeCallRinging);
     if (
       !homeCallMode
       && doorstationAction === "answer"
@@ -803,6 +812,18 @@ class C300XDoorbellCallCard extends HTMLElement {
     return C300X_TRANSLATIONS.en[key] ? this._label(key) : key;
   }
 
+  _syncRingbackTone(active) {
+    if (active) {
+      this._ringbackTone?.start();
+      return;
+    }
+    this._stopRingbackTone();
+  }
+
+  _stopRingbackTone() {
+    this._ringbackTone?.stop();
+  }
+
   _doorstationAction(cameraEntity, active) {
     return c300xDoorstationAction({
       cameraEntity,
@@ -939,9 +960,31 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
         name: "hangup_script",
         selector: { entity: { domain: "script" } },
       }]),
+      ...(homeCallMode ? [
+        {
+          name: "ringback_tone",
+          selector: { boolean: {} },
+        },
+        {
+          name: "ringback_volume",
+          selector: {
+            number: {
+              min: 0,
+              max: 100,
+              step: 1,
+              mode: "slider",
+              unit_of_measurement: "%",
+            },
+          },
+        },
+      ] : []),
     ];
     form.computeLabel = (schema) => this._label(
-      schema.name === "hangup_script" ? "optional_hangup_script" : schema.name,
+      {
+        hangup_script: "optional_hangup_script",
+        ringback_tone: "ringback_tone",
+        ringback_volume: "ringback_volume",
+      }[schema.name] || schema.name,
     );
     form.addEventListener("value-changed", (event) => {
       this._setConfig(event.detail.value || {});
@@ -958,6 +1001,9 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     }
     if (nextConfig.mode === "home_call") {
       delete nextConfig.hangup_script;
+    } else {
+      delete nextConfig.ringback_tone;
+      delete nextConfig.ringback_volume;
     }
     delete nextConfig.home_call_entity;
     delete nextConfig.doorbell_state_entity;

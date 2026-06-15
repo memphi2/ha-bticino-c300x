@@ -458,7 +458,7 @@
     },
     "device_agent_self_test_failed": {
       "title": "Il self-test del device agent C300X segnala un problema",
-      "description": "{entry_title} raggiunge il device agent C300X, ma il self-test in sola lettura segnala un controllo architetturale non riuscito. Controlli non riusciti: {failed_checks}. Motivi: {reasons}. Cosa fare: {actions}. Non e stata eseguita alcuna riparazione automatica. Il firewall IPv6 e opzionale salvo che questa istanza HA raggiunga il dispositivo tramite IPv6."
+      "description": "{entry_title} raggiunge il device agent C300X, ma il self-test in sola lettura segnala un controllo di configurazione non riuscito. Controlli non riusciti: {failed_checks}. Motivi: {reasons}. Cosa fare: {actions}. Non e stata eseguita alcuna riparazione automatica. Il firewall IPv6 e opzionale salvo che questa istanza HA raggiunga il dispositivo tramite IPv6."
     },
     "device_agent_ui_event_watchdog": {
       "title": "Watcher eventi display C300X protetto",

@@ -27,6 +27,7 @@ from custom_components.bticino_c300x.frontend import (
 CARD_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_FILENAME
 CARD_METADATA_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_METADATA_FILENAME
 CARD_RESOLVER_SOURCE = FRONTEND_DIR / "c300x-entity-resolver.js"
+CARD_RINGBACK_SOURCE = FRONTEND_DIR / "c300x-ringback-tone.js"
 CARD_STATE_SOURCE = FRONTEND_DIR / "c300x-state-model.js"
 CARD_TRANSLATIONS_SOURCE = FRONTEND_DIR / "c300x-translations.js"
 CARD_WEBRTC_SOURCE = FRONTEND_DIR / "c300x-webrtc-client.js"
@@ -606,3 +607,31 @@ def test_bundled_card_uses_camera_state_machine_without_state_entity_overrides()
     assert 'mediaState === "home_call_ringing"' in state_source
     assert 'return mediaState ? "busy" : cameraEntity.state;' in state_source
     assert "return false;" in state_source
+
+
+def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    resolver_source = CARD_RESOLVER_SOURCE.read_text(encoding="utf-8")
+    ringback_source = CARD_RINGBACK_SOURCE.read_text(encoding="utf-8")
+    state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+    translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
+
+    assert 'from "./c300x-ringback-tone.js"' in source
+    assert "new C300XRingbackTone" in source
+    assert "c300xIsHomeCallRinging(entity)" in source
+    assert "this._syncRingbackTone(homeCallRinging);" in source
+    assert "this._stopRingbackTone();" in source
+    assert 'mediaState === "home_call_starting"' in state_source
+    assert 'mediaState === "home_call_ringing"' in state_source
+    assert 'mediaState === "home_call_active"' not in state_source[
+        state_source.index("export function c300xIsHomeCallRinging"):
+        state_source.index("export function c300xDoorstationAction")
+    ]
+    assert "createOscillator" in ringback_source
+    assert "440" in ringback_source
+    assert "480" in ringback_source
+    assert "C300X_RINGBACK_ON_MS" in ringback_source
+    assert "ringback_tone: true" in resolver_source
+    assert "ringback_volume: 12" in resolver_source
+    assert 'ringback_tone: "Ringback tone"' in translations_source
+    assert 'ringback_volume: "Ringback volume"' in translations_source

@@ -458,7 +458,7 @@
     },
     "device_agent_self_test_failed": {
       "title": "C300X Device-Agent-Self-Test meldet ein Problem",
-      "description": "{entry_title} erreicht den C300X Device-Agent, aber der read-only Self-Test meldet eine fehlgeschlagene Architekturpruefung. Fehlgeschlagene Checks: {failed_checks}. Gruende: {reasons}. Was zu tun ist: {actions}. Es wurde keine automatische Reparatur ausgefuehrt. IPv6-Firewall ist optional, ausser diese HA-Instanz erreicht das Geraet ueber IPv6."
+      "description": "{entry_title} erreicht den C300X Device-Agent, aber der read-only Self-Test meldet eine fehlgeschlagene Setup-Pruefung. Fehlgeschlagene Checks: {failed_checks}. Gruende: {reasons}. Was zu tun ist: {actions}. Es wurde keine automatische Reparatur ausgefuehrt. IPv6-Firewall ist optional, ausser diese HA-Instanz erreicht das Geraet ueber IPv6."
     },
     "device_agent_ui_event_watchdog": {
       "title": "C300X Display-Ereignis-Watcher wurde geschuetzt",

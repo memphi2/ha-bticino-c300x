@@ -440,7 +440,7 @@
     },
     "device_agent_self_test_failed": {
       "title": "C300X device agent self-test found a problem",
-      "description": "{entry_title} reached the C300X device agent, but the read-only self-test reported a failed architecture check. Failed checks: {failed_checks}. Reasons: {reasons}. What to do: {actions}. No automatic repair was run. IPv6 firewall is optional unless this HA instance reaches the device over IPv6."
+      "description": "{entry_title} reached the C300X device agent, but the read-only self-test reported a failed setup check. Failed checks: {failed_checks}. Reasons: {reasons}. What to do: {actions}. No automatic repair was run. IPv6 firewall is optional unless this HA instance reaches the device over IPv6."
     },
     "device_agent_ui_event_watchdog": {
       "title": "C300X display event watcher was protected",

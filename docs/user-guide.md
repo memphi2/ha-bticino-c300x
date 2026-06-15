@@ -13,15 +13,12 @@ integration, install or update the native agent through the setup/Repair flow,
 choose the features you want, and then use the C300X as a local push-based Home
 Assistant device.
 
-The integration keeps the three local media workflows separate. Ring Call,
-on-demand video, Home Call and external media ownership use the same state
-model, while local Ring Call capture and speech-analysis helpers remain
-available for automations:
+The integration keeps the three local media workflows separate:
 
 - **On-demand**: open the door camera from Home Assistant when nobody is
   ringing.
 - **Ring Call**: answer a supported incoming doorbell call from Home Assistant
-  with video, device audio and microphone talkback.
+  when the C300X forwarding mode is set to **Home Assistant**.
 - **Home Call**: call the C300X from Home Assistant as an audio-only local
   call.
 
@@ -161,7 +158,9 @@ After setup, typical interaction happens through Home Assistant entities:
 
 - Use the doorstation card's play button for on-demand camera viewing.
 - Press **Answer** in the doorstation card when the doorbell rings to take over
-  the real Ring Call.
+  the real Ring Call. This requires **Forwarding** to be set to **Home
+  Assistant**; in **Smartphone** mode the call goes to the smartphone route, and
+  in **Blocked** mode Home Assistant receives only the ring event.
 - Use the Home Call card to call the C300X from Home Assistant and hang up from
   either side.
 - Use the talkback control only from a secure Home Assistant frontend
@@ -292,7 +291,8 @@ The **Forwarding** select has three visible modes:
   Assistant keeps out of that external route; use the app for the real Ring Call
   or switch to **Home Assistant** for HA answering.
 - **Home Assistant**: the C300X routes the Ring Call to Home Assistant without
-  forwarding it to all smartphones.
+  forwarding it to all smartphones. This is the required mode when you want to
+  press **Answer** in the Home Assistant doorstation card.
 - **Blocked**: the C300X still emits a doorbell ring event, but it does not
   deliver a real SIP Ring Call to Home Assistant. The doorstation card therefore
   does not show **Answer** in that state; use **Stream** for on-demand viewing.
@@ -327,9 +327,10 @@ used for an unlock decision.
 
 The integration bundles the `custom:c300x-doorbell-call-card` Lovelace card and
 loads it automatically. Add it from the Lovelace card picker or use YAML. The
-card editor is localized in English, German, French and Italian. Generated cards
-store the matching Doorbell state and Home Call state entities explicitly, and
-the editor lets you correct those fields for renamed or localized entities.
+card editor is localized in English, German, French and Italian. The card uses
+the selected camera entity and the media-state attributes reported by the
+integration, so renamed or localized state entities do not need separate card
+configuration.
 
 Add two cards when you want the full media UI:
 

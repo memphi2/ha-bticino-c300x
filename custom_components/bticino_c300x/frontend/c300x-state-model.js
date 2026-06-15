@@ -42,6 +42,14 @@ export function c300xIsHomeCallConnected(cameraEntity) {
   return c300xMediaState(cameraEntity) === "home_call_active";
 }
 
+export function c300xIsHomeCallRinging(cameraEntity) {
+  const mediaState = c300xMediaState(cameraEntity);
+  return (
+    mediaState === "home_call_starting"
+    || mediaState === "home_call_ringing"
+  );
+}
+
 export function c300xDoorstationAction({
   cameraEntity,
   active,

@@ -458,7 +458,7 @@
     },
     "device_agent_self_test_failed": {
       "title": "Le self-test de l'agent C300X signale un probleme",
-      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un controle d'architecture en echec. Controles en echec : {failed_checks}. Raisons : {reasons}. Action conseillee : {actions}. Aucune reparation automatique n'a ete executee. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
+      "description": "{entry_title} peut joindre l'agent C300X, mais le self-test en lecture seule signale un controle de configuration en echec. Controles en echec : {failed_checks}. Raisons : {reasons}. Action conseillee : {actions}. Aucune reparation automatique n'a ete executee. Le pare-feu IPv6 est optionnel sauf si cette instance HA joint l'appareil en IPv6."
     },
     "device_agent_ui_event_watchdog": {
       "title": "Le watcher d'evenements display C300X a ete protege",

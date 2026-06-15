@@ -30,6 +30,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 )
 from custom_components.bticino_c300x.device_installer import (  # noqa: E402
     DEFAULT_REMOTE_DIR,
+    C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     _device_config_json,
     _render_startup_defaults,
@@ -152,6 +153,78 @@ def test_bootstrap_device_config_supports_manual_stair_light_activation() -> Non
             "type": "stair_light",
         }
     ]
+
+
+def test_bootstrap_request_validation_rejects_unsafe_inputs() -> None:
+    invalid_requests = [
+        (
+            C300XDeviceInstallRequest(
+                host=" ",
+                ssh_username="root",
+                ssh_password="secret",
+            ),
+            "invalid_device_host",
+        ),
+        (
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username=" ",
+                ssh_password="secret",
+            ),
+            "invalid_ssh_username",
+        ),
+        (
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username="root",
+                ssh_password="",
+            ),
+            "invalid_ssh_password",
+        ),
+        (
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username="root",
+                ssh_password="secret",
+                agent_port=0,
+            ),
+            "invalid_agent_port",
+        ),
+        (
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username="root",
+                ssh_password="secret",
+                remote_dir="/home/bticino/cfg/extra/bad path",
+            ),
+            "invalid_remote_dir",
+        ),
+    ]
+
+    for request, reason in invalid_requests:
+        try:
+            device_installer._validate_request(request)
+        except C300XDeviceInstallError as err:
+            assert err.reason == reason
+        else:
+            raise AssertionError(f"{reason} was accepted")
+
+
+def test_bootstrap_remote_dir_validation_rejects_traversal_and_shell_chars() -> None:
+    for remote_dir in (
+        "relative/path",
+        "/home/bticino/cfg/extra/../bad",
+        "/home/bticino/cfg/extra/bad`cmd`",
+        "/home/bticino/cfg/extra/bad$var",
+        "/home/bticino/cfg/extra/bad\\path",
+        " /home/bticino/cfg/extra/c300x-native-agent",
+    ):
+        try:
+            device_installer._validate_remote_dir(remote_dir)
+        except C300XDeviceInstallError as err:
+            assert err.reason == "invalid_remote_dir"
+        else:
+            raise AssertionError(f"{remote_dir!r} was accepted")
 
 
 def test_startup_defaults_use_configured_device_agent_dir() -> None:
@@ -467,6 +540,101 @@ def test_write_remote_file_repairs_mode_drift_for_identical_content() -> None:
         is True
     )
     assert client.commands[-1][0].startswith("chmod 600 ")
+
+
+def test_write_remote_file_replaces_changed_content_atomically() -> None:
+    content = b"changed"
+
+    class FakeSshClient:
+        def __init__(self) -> None:
+            self.commands: list[tuple[str, bytes | None]] = []
+
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            self.commands.append((command, input_data))
+            if command.startswith("python - "):
+                return "not-a-sha\n"
+            if ".new" in command and "mv -f" in command:
+                return ""
+            raise AssertionError(f"unexpected command: {command}")
+
+        def put_file(
+            self,
+            source: Path,
+            remote_path: str,
+            mode: str | None = None,
+        ) -> bool:
+            raise AssertionError("not used")
+
+        def close(self) -> None:
+            pass
+
+    client = FakeSshClient()
+
+    assert device_installer._write_remote_file_sync(
+        client,
+        "/home/bticino/cfg/extra/c300x-native-agent/config.json",
+        content,
+        mode="600",
+    )
+    write_command, input_data = client.commands[-1]
+    assert "config.json.new" in write_command
+    assert "chmod 600" in write_command
+    assert "mv -f" in write_command
+    assert input_data == content
+
+
+def test_remote_helpers_treat_invalid_or_missing_remote_state_as_mismatch() -> None:
+    class FakeSshClient:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            self.commands.append(command)
+            if command.startswith("python - "):
+                raise C300XDeviceInstallError("device_install_failed")
+            if command.startswith("stat -c %a "):
+                raise C300XDeviceInstallError("device_install_failed")
+            if command.startswith("readlink "):
+                raise C300XDeviceInstallError("device_install_failed")
+            raise AssertionError(f"unexpected command: {command}")
+
+        def put_file(
+            self,
+            source: Path,
+            remote_path: str,
+            mode: str | None = None,
+        ) -> bool:
+            raise AssertionError("not used")
+
+        def close(self) -> None:
+            pass
+
+    client = FakeSshClient()
+
+    assert device_installer._remote_sha256_sync(client, "/missing") is None
+    assert not device_installer._remote_content_matches_sync(client, "/missing", b"x")
+    assert not device_installer._remote_mode_matches_sync(client, "/missing", "600")
+    assert not device_installer._remote_symlink_target_matches_sync(
+        client,
+        "/missing-link",
+        "/target",
+    )
+
+
+def test_first_and_optional_existing_helpers(tmp_path: Path) -> None:
+    missing = tmp_path / "missing"
+    present = tmp_path / "present"
+    present.write_text("payload", encoding="utf-8")
+
+    assert device_installer._first_existing(missing, present) == present
+    assert device_installer._optional_existing(missing, present) == present
+    assert device_installer._optional_existing(missing) is None
+    try:
+        device_installer._first_existing(missing)
+    except C300XDeviceInstallError as err:
+        assert err.reason == "agent_bundle_missing"
+    else:
+        raise AssertionError("missing bundle path was accepted")
 
 
 def test_put_file_repairs_mode_drift_for_identical_payload(tmp_path: Path) -> None:

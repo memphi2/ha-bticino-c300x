@@ -56,8 +56,8 @@ asks for a firmware target, use `1.7.19`.
 - Keep day-to-day status simple, with deeper diagnostics available only when
   needed.
 
-Full setup, service, notification and troubleshooting details are in the
-[User Guide](docs/user-guide.md).
+Full setup, service, notification and symptom-based troubleshooting details are
+in the [User Guide](docs/user-guide.md).
 
 ## Screenshots
 
@@ -290,7 +290,7 @@ belong in this README:
 - Mobile notification examples for Android and iOS.
 - Ring Call capture, local Wyoming speech analysis and strict phrase matching.
 - Callback URL, IPv6, security, performance, MQTT migration and maintenance.
-- Troubleshooting and the support checklist.
+- Symptom-based troubleshooting and the support checklist.
 
 Short version: keep the C300X agent on a trusted local network, do not expose
 its API or media ports to the internet, use HTTPS/Home Assistant Cloud for

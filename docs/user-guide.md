@@ -520,53 +520,127 @@ credentials and paths are rejected.
 
 ## Troubleshooting
 
-### Integration cannot connect
+Start with the symptom you see. Most problems are caused by one of these four
+things: the device agent is not reachable, a feature is disabled, the C300X
+needs the matching setup Repair, or the browser/mobile app is not using a secure
+frontend URL for microphone access.
 
-Check these in order:
+### Nothing connects
 
-1. The C300X is powered on, connected to Wi-Fi and reachable from Home
-   Assistant.
-2. `http://<agent-host>:8091/api/v1/health` opens from the Home Assistant
+Do this first when setup, entities or services cannot reach the device:
+
+1. Confirm that the C300X is powered on, connected to Wi-Fi and reachable from
+   the Home Assistant network.
+2. Open `http://<agent-host>:8091/api/v1/health` from the Home Assistant
    network.
-3. The API token in Home Assistant matches `api.token` on the device.
-4. The firewall patch is enabled only if your C300X needs it for the configured
-   API/media ports.
-5. The Home Assistant callback URL is a stable local HTTP URL. Do not use
-   `.local`, loopback, unspecified, or link-local callback addresses.
+3. In Home Assistant, open the BTicino C300X integration and resolve pending
+   Repairs before changing other options.
+4. Check that the API token in Home Assistant still matches `api.token` on the
+   device.
+5. Use a stable callback URL in setup/options. Do not use `.local`, loopback,
+   unspecified, or link-local callback addresses.
 
 ### Entities are missing
 
-Entities are capability-gated. First check:
+Entities appear only when the installed agent reports the matching capability.
 
-```text
-GET /api/v1/capabilities
-```
+1. Open the integration options and confirm that the feature is enabled.
+2. Resolve any pending agent-update or setup Repair.
+3. Download Home Assistant diagnostics for the integration and check the
+   reported capabilities.
+4. If the feature is enabled but the capability is missing, update the native
+   agent from the integration Repair flow.
 
-Missing capabilities mean missing entities by design. If a capability should be
-there, check that the feature is enabled in options, the agent is current, and
-there is no pending Home Assistant Repair for an agent update.
+### The camera card shows no stream
 
-### Camera does not start
+Use this for an empty card, a stream that never starts, or a stream that only
+works after the second click:
 
-- Enable video in the integration options.
-- Ensure the installed native agent has video enabled.
-- Check that Home Assistant can reach the media port.
-- Prefer stable IPv4 or ULA/global IPv6 addresses over `.local`, mDNS or
-  link-local names.
-- For browser talkback/microphone access, open Home Assistant through HTTPS,
-  Home Assistant Cloud, or another secure frontend URL.
-- After a major native-agent upgrade, if media entities, capabilities or call
-  controls stay inconsistent, use `Remove device agent`, remove the integration
-  entry, then reinstall the integration and native agent cleanly.
+1. Confirm that doorbell camera/video is enabled in the integration options.
+2. Resolve pending Repairs for firewall/media setup or native-agent update.
+3. Check that Home Assistant can reach the configured media port from the same
+   network path used by the browser.
+4. Use a stable IPv4 address or a stable ULA/global IPv6 address. Avoid `.local`,
+   mDNS names and link-local addresses for media/callback paths.
+5. Close other browser windows or capture automations that may already be using
+   the doorstation RTSP stream, then try again.
+6. If the stream remains stuck after a native-agent upgrade, use **Stop** in the
+   card or the `bticino_c300x.stop_doorbell_video` service, then reload the
+   integration.
+
+### The card shows Stream instead of Answer
+
+The card can answer only a real Ring Call delivered to Home Assistant.
+
+1. Set the **Forwarding** select to **Home Assistant**.
+2. Confirm that the Home Assistant media user setup Repair is complete.
+3. Ring the doorbell again; changing forwarding mode does not convert an already
+   missed ring into an answerable call.
+4. If **Smartphone** is selected, answer the call in the phone app or switch to
+   **Home Assistant** for the next ring.
+5. If **Blocked** is selected, Home Assistant receives only the ring event. Use
+   **Stream** for on-demand viewing.
+
+### Talkback or microphone does not work
+
+Talkback needs a secure frontend URL and browser microphone permission.
+
+1. Open Home Assistant through HTTPS, Home Assistant Cloud, or another secure
+   frontend URL.
+2. Allow microphone access for that browser/site.
+3. In mobile notifications, open the dashboard first and press **Answer** in the
+   card. Do not expect a background notification action to grant microphone
+   access.
+4. If video works but microphone does not, test from a desktop browser over the
+   same HTTPS URL to separate browser permission issues from device media issues.
+
+### Home Call rings but the state looks wrong
+
+Home Call is audio-only and separate from the doorstation camera path.
+
+1. Use the dedicated Home Call card or the `start_home_call` and
+   `stop_home_call` services.
+2. If the display rings but Home Assistant still shows a stale state, hang up
+   from Home Assistant once, then check the Home Call active binary sensor.
+3. If this repeats, download Home Assistant diagnostics and include the Home
+   Call status attributes in the support request.
+
+### Ring Call capture does not create analysis files
+
+Capture is exclusive and writes predictable local files.
+
+1. Close the doorstation card and other live viewers before starting capture.
+2. Confirm that the output paths are below `/media/c300x/`, `/config/c300x/` or
+   `/config/www/c300x/`.
+3. Check `/media/c300x/` for the MP4 clip and `/config/c300x/` for
+   `latest.capture.json`, `latest.raw.wav`, `latest.processed.wav` and
+   `frame_01.jpg` to `frame_03.jpg`.
+4. Run Wyoming analysis only after capture finished successfully.
 
 ### Messages or memos do not update
 
-Check the event subscription status and relevant message/memo capabilities. The
-agent should push changes; it should not need periodic scans. If the C300X
-display still shows an old unread counter after a delete, enable the detailed
-device-agent diagnostics entity or download Home Assistant diagnostics and
-check whether the Display patch is active and whether the memo/message event was
-delivered.
+Message and memo counters are push-based.
+
+1. Check that the relevant message/memo capabilities are present in diagnostics.
+2. Confirm that the Display patch is active when you use display-side memo or
+   dashboard functions.
+3. If the C300X display still shows an old unread counter after a delete, reload
+   the C300X display GUI from the integration maintenance button.
+4. If it still does not update, download Home Assistant diagnostics and include
+   the event subscription and message/memo attributes.
+
+### After an update, features behave inconsistently
+
+Use this when entities exist but call/media behavior does not match the enabled
+features after a larger update:
+
+1. Resolve all pending Repairs.
+2. Restart Home Assistant.
+3. If the native agent was updated, reload the C300X display GUI from the
+   integration maintenance button.
+4. If media entities, capabilities or call controls still stay inconsistent,
+   use **Remove device agent**, remove the integration entry, then reinstall the
+   integration and native agent cleanly.
 
 ## Removal
 

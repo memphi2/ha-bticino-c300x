@@ -17,6 +17,7 @@ import {
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
+  c300xMediaState,
 } from "./c300x-state-model.js";
 import { C300XRingbackTone } from "./c300x-ringback-tone.js";
 import { C300XWebrtcClient } from "./c300x-webrtc-client.js";
@@ -110,6 +111,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._transitionWebrtc = null;
     this._startingCall = false;
     this._previewStarting = false;
+    this._ringPreviewStarted = false;
     this._answeringDoorbell = false;
     this._ringPreviewActive = false;
     this._doorbellAnswered = false;
@@ -395,6 +397,10 @@ class C300XDoorbellCallCard extends HTMLElement {
 
     const homeCallMode = this._isHomeCallMode();
     const entity = this._hass?.states?.[this._config.entity];
+    const mediaState = c300xMediaState(entity);
+    if (mediaState !== "ring_pending" && mediaState !== "ring_preview_active") {
+      this._ringPreviewStarted = false;
+    }
     const name = this._displayName(entity);
     const doorstationActive = !homeCallMode && (this._webrtc.running || !!this._webrtc.remoteStream);
     const view = c300xCardViewModel({
@@ -449,10 +455,10 @@ class C300XDoorbellCallCard extends HTMLElement {
         this._answeringDoorbell = true;
         try {
           await this._answerDoorbellCall();
+          this._doorbellAnswered = true;
           if (this._ringPreviewActive && this._webrtc.pc) {
             await this._startAnsweredDoorbellStream();
           } else {
-            this._doorbellAnswered = true;
             await this._startTalkback();
           }
         } finally {
@@ -487,13 +493,21 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _ensureDoorbellPreview() {
-    if (this._webrtc.running || this._previewStarting || this._answeringDoorbell) {
+    if (
+      this._webrtc.running
+      || this._transitionWebrtc
+      || this._previewStarting
+      || this._ringPreviewStarted
+      || this._answeringDoorbell
+      || this._doorbellAnswered
+    ) {
       return;
     }
     this._previewStarting = true;
     try {
       await this._startTalkback({ microphone: false, receiveAudio: false });
       if (this._webrtc.remoteStream && !this._error) {
+        this._ringPreviewStarted = true;
         this._ringPreviewActive = true;
         this._updateState();
       }
@@ -679,6 +693,9 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._micMuted = false;
 
     this._ringPreviewActive = false;
+    if (clearStatus) {
+      this._ringPreviewStarted = false;
+    }
     this._doorbellAnswered = false;
     if (this._videoEl && !options.keepMediaElement) {
       this._videoEl.srcObject = null;

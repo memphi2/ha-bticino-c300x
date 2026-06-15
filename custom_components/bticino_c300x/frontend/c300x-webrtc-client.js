@@ -100,6 +100,9 @@ export class C300XWebrtcClient {
     };
 
     pc.onconnectionstatechange = () => {
+      if (this._closing) {
+        return;
+      }
       const state = pc.connectionState || pc.iceConnectionState;
       if (["closed", "disconnected", "failed"].includes(state)) {
         this._onClosed?.(state);
@@ -189,6 +192,9 @@ export class C300XWebrtcClient {
               return;
             }
             if (message.type === "closed") {
+              if (this._closing) {
+                return;
+              }
               this._onClosed?.(message.reason || "closed");
               return;
             }

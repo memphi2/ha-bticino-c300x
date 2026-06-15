@@ -1,11 +1,20 @@
 # Changelog
 
-## Unreleased
+## v1.2.2 - 2026-06-16
 
 ### Added
 
 - Adds an optional local Home Call ringback tone in the bundled Home Call card
   while Home Assistant waits for the C300X to answer.
+
+### Fixed
+
+- Updates the packaged native C300X device agent to `1.2.2`.
+- Bootstraps the local Home Assistant media-user files when no usable existing
+  media identity is present, so Ring Call/Home Call media setup can recover on
+  devices where `c300x@...` is not detected.
+- Treats the Home Assistant media user as the required local media identity
+  instead of relying on a detected native `c300x` user.
 
 ### Changed
 
@@ -16,6 +25,12 @@
 - Clarifies that the bundled media card uses the selected camera entity and
   media-state attributes, so localized or renamed state entities do not need
   separate card configuration.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant so the updated local
+  media-user setup is installed on the C300X.
 
 ## v1.2.1 - 2026-06-15
 

@@ -513,11 +513,27 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             )
 
         try:
-            async def _restart_reader() -> None:
+            async def _restart_reader() -> bool | None:
+                current_session = self._webrtc_sessions.get(session_id)
+                if current_session is None:
+                    return False
+                if current_session.ring_preview:
+                    status = await self._async_refresh_video_status_or_none(
+                        apply_status=False
+                    )
+                    decision = (
+                        self._derive_media_decision(status)
+                        if status is not None
+                        else self._last_media_decision
+                    )
+                    if not _media_decision_is_unanswered_ring(decision):
+                        current_session.ring_preview = False
+                        return False
                 if owner == "home_call":
                     await self._async_restart_home_call_reader()
                 else:
                     await self._async_restart_video_reader(audio=wants_audio)
+                return None
 
             if owner == "home_call":
                 await self._entry.runtime_data.api.async_start_home_call(

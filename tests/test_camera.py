@@ -7,6 +7,7 @@ import sys
 import types
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -816,6 +817,25 @@ def test_doorbell_camera_ring_reader_restart_does_not_restart_on_demand() -> Non
     asyncio.run(_run())
 
     assert api.activate_calls == []
+
+
+def test_doorbell_camera_ring_preview_restart_stops_after_answer_state() -> None:
+    source = Path("custom_components/bticino_c300x/camera.py").read_text(
+        encoding="utf-8"
+    )
+    callback_block = source[
+        source.index("async def _restart_reader()")
+        : source.index("if owner == \"home_call\":", source.index("async def _restart_reader()"))
+    ]
+
+    assert "current_session = self._webrtc_sessions.get(session_id)" in callback_block
+    assert "if current_session is None:" in callback_block
+    assert "return False" in callback_block
+    assert "if current_session.ring_preview:" in callback_block
+    assert "await self._async_refresh_video_status_or_none(" in callback_block
+    assert "apply_status=False" in callback_block
+    assert "not _media_decision_is_unanswered_ring(decision)" in callback_block
+    assert "current_session.ring_preview = False" in callback_block
 
 
 def test_doorbell_camera_rtsp_policy_blocks_second_on_demand_browser() -> None:

@@ -267,6 +267,71 @@ def test_restarting_rtsp_video_track_restarts_after_reader_failure(
     assert restarts == ["restart"]
 
 
+def test_restarting_rtsp_video_track_stops_when_restart_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[int] = []
+    restarts: list[str] = []
+
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_reader.asyncio, "sleep", no_sleep)
+
+    class _MediaError(Exception):
+        pass
+
+    class _SourceTrack:
+        async def recv(self) -> object:
+            raise RuntimeError("closed")
+
+        def stop(self) -> None:
+            return None
+
+    class _VideoTrack:
+        kind = "video"
+
+        async def next_timestamp(self) -> tuple[int, str]:
+            return 1, "1/90000"
+
+        def stop(self) -> None:
+            return None
+
+    class _MediaPlayer:
+        def __init__(self, _url: str, options: dict[str, str]) -> None:
+            opened.append(len(opened))
+            self.video = _SourceTrack()
+            self.audio = None
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def restart_callback() -> bool:
+        restarts.append("restart")
+        return False
+
+    async def _run() -> None:
+        track = _new_restarting_rtsp_video_track(
+            _VideoTrack,
+            _MediaError,
+            _MediaPlayer,
+            _Hass(),
+            "rtsp://agent.local:6554/doorbell-video",
+            restart_callback,
+        )
+        await track._ensure_reader()
+        track._restart_pending = True
+        with pytest.raises(_MediaError):
+            await track._async_open_reader()
+        track.stop()
+
+    asyncio.run(_run())
+
+    assert opened == [0]
+    assert restarts == ["restart"]
+
+
 def test_restarting_rtsp_tracks_reject_missing_media_and_max_restarts() -> None:
     class _MediaError(Exception):
         pass

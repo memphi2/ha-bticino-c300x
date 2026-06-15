@@ -20,7 +20,7 @@ The endpoint aggregates existing read-only state into a single status payload:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.2.1",
+  "agent_version": "1.2.2",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -58,6 +58,7 @@ must not contain tokens, SIP secrets, webhook URLs, or raw file contents.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.2.2 | 1.1 | 1.7.x | Bootstraps and requires the dedicated Home Assistant media user for local media identity. |
 | 1.2.1 | 1.1 | 1.7.x | Keeps the Home Assistant media user on the internal route only. |
 | 1.2.0 | 1.1 | 1.7.x | Adds read-only architecture self-test. |
 

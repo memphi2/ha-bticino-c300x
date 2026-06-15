@@ -548,6 +548,39 @@ def test_bundled_card_transitions_answer_without_clearing_preview() -> None:
     assert "attachMedia();" in webrtc_source
 
 
+def test_bundled_card_does_not_restart_preview_during_answer_transition() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    webrtc_source = CARD_WEBRTC_SOURCE.read_text(encoding="utf-8")
+
+    answer_block = source[
+        source.index('if (action === "answer") {') : source.index(
+            "await this._startTalkback();\n      return;"
+        )
+    ]
+    preview_guard = source[
+        source.index("async _ensureDoorbellPreview()") : source.index(
+            "this._previewStarting = true;",
+            source.index("async _ensureDoorbellPreview()"),
+        )
+    ]
+
+    assert answer_block.index("await this._answerDoorbellCall();") < answer_block.index(
+        "this._doorbellAnswered = true;"
+    )
+    assert answer_block.index("this._doorbellAnswered = true;") < answer_block.index(
+        "await this._startAnsweredDoorbellStream();"
+    )
+    assert "|| this._transitionWebrtc" in preview_guard
+    assert "|| this._doorbellAnswered" in preview_guard
+    assert "|| this._ringPreviewStarted" in preview_guard
+    assert "if (this._closing) {\n        return;\n      }\n      const state" in webrtc_source
+    assert (
+        'if (this._closing) {\n                return;\n              }\n'
+        '              this._onClosed?.(message.reason || "closed");'
+        in webrtc_source
+    )
+
+
 def test_bundled_card_uses_media_state_for_answered_ring_call() -> None:
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
 

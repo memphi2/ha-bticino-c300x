@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
 
@@ -13,6 +14,7 @@ RTSP_FRAME_TIMEOUT_SECONDS = 5.0
 RTSP_MAX_SESSION_RESTARTS = 3
 DOORSTATION_AUDIO_GAIN_DB = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 DOORSTATION_AUDIO_GAIN = 10 ** (DOORSTATION_AUDIO_GAIN_DB / 20)
+RestartCallback = Callable[[], Awaitable[bool | None]]
 
 _RTSP_PLAYER_OPTIONS = {
     "rtsp_transport": "tcp",
@@ -32,7 +34,7 @@ def _new_restarting_rtsp_tracks(
     media_player_cls: Any,
     hass: Any,
     stream_url: str,
-    restart_callback: Any,
+    restart_callback: RestartCallback,
     audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
 ) -> tuple[Any, Any, Any]:
     """Create shared audio/video tracks over one C300X RTSP reader."""
@@ -89,7 +91,9 @@ def _new_restarting_rtsp_tracks(
                 if self._restart_attempts >= RTSP_MAX_SESSION_RESTARTS:
                     raise media_stream_error_cls
                 self._restart_attempts += 1
-                await restart_callback()
+                if await restart_callback() is False:
+                    self._stopped = True
+                    raise media_stream_error_cls
             self._opened_once = True
             player = await hass.async_add_executor_job(
                 lambda: media_player_cls(
@@ -206,7 +210,7 @@ def _new_restarting_rtsp_video_track(
     media_player_cls: Any,
     hass: Any,
     stream_url: str,
-    restart_callback: Any,
+    restart_callback: RestartCallback,
 ) -> Any:
     """Create the proven video-only RTSP track for the C300X bridge."""
 
@@ -262,7 +266,9 @@ def _new_restarting_rtsp_video_track(
                 if self._restart_attempts >= RTSP_MAX_SESSION_RESTARTS:
                     raise media_stream_error_cls
                 self._restart_attempts += 1
-                await restart_callback()
+                if await restart_callback() is False:
+                    self._stopped = True
+                    raise media_stream_error_cls
             self._opened_once = True
             player = await hass.async_add_executor_job(
                 lambda: media_player_cls(
@@ -315,7 +321,7 @@ def _new_restarting_rtsp_audio_track(
     media_player_cls: Any,
     hass: Any,
     stream_url: str,
-    restart_callback: Any,
+    restart_callback: RestartCallback,
     av_module: Any | None = None,
     audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
 ) -> Any:
@@ -376,7 +382,9 @@ def _new_restarting_rtsp_audio_track(
                 if self._restart_attempts >= RTSP_MAX_SESSION_RESTARTS:
                     raise media_stream_error_cls
                 self._restart_attempts += 1
-                await restart_callback()
+                if await restart_callback() is False:
+                    self._stopped = True
+                    raise media_stream_error_cls
             self._opened_once = True
             player = await hass.async_add_executor_job(
                 lambda: media_player_cls(

@@ -111,6 +111,7 @@ from custom_components.bticino_c300x import services as service_module  # noqa: 
 from custom_components.bticino_c300x.action import ActionValidationError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
+    CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DATA_RUNTIME_ENTRIES,
     DOMAIN,
@@ -1921,5 +1922,302 @@ def test_write_text_memo_service_calls_agent_api_and_refreshes_memos() -> None:
         assert api.text_memo_calls == [{"text": "new memo", "read": True}]
         assert entry.runtime_data.memos["text_total"] == 1
         assert entry.runtime_data.memos_updated_at is not None
+
+    asyncio.run(_run())
+
+
+def _translation_key(err: Exception) -> str | None:
+    return getattr(err, "translation_key", None)
+
+
+def test_common_use_case_guards_accept_supported_capabilities() -> None:
+    entry = _FakeEntry(
+        _FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+                "home_call": {"supported": True},
+                "memos": {"supported": True, "write_text": True},
+                "maintenance": {"supported": True, "reboot": True},
+            },
+            qml_patch_status={"patched": True},
+        ),
+        data={CONF_VIDEO_ENABLED: True, CONF_MAINTENANCE_TOKEN: "token"},
+    )
+
+    common_use_cases.ensure_doorbell_video_supported(entry)
+    common_use_cases.ensure_doorbell_call_supported(entry)
+    common_use_cases.ensure_home_call_supported(entry)
+    common_use_cases.ensure_text_memo_write_supported(entry)
+    common_use_cases.ensure_maintenance_action(entry, "reboot")
+
+
+def test_common_use_case_guards_reject_missing_capabilities() -> None:
+    entry = _FakeEntry(_FakeRuntimeData(capabilities={}), data={CONF_VIDEO_ENABLED: True})
+    cases = [
+        (
+            common_use_cases.ensure_doorbell_video_supported,
+            "doorbell_video_not_available",
+        ),
+        (
+            common_use_cases.ensure_doorbell_call_supported,
+            "doorbell_video_not_available",
+        ),
+        (common_use_cases.ensure_home_call_supported, "home_call_not_available"),
+        (
+            common_use_cases.ensure_text_memo_write_supported,
+            "text_memo_write_not_supported",
+        ),
+    ]
+
+    for guard, expected_key in cases:
+        try:
+            guard(entry)
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == expected_key
+        else:
+            raise AssertionError(f"{expected_key} guard accepted missing capability")
+
+    try:
+        common_use_cases.ensure_maintenance_action(entry, "reboot")
+    except exceptions.ServiceValidationError as err:
+        assert _translation_key(err) == "maintenance_action_not_supported"
+    else:
+        raise AssertionError("maintenance guard accepted missing token/capability")
+
+
+def test_common_use_case_guards_reject_disabled_video() -> None:
+    entry = _FakeEntry(
+        _FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+                "home_call": {"supported": True},
+            },
+        ),
+        data={CONF_VIDEO_ENABLED: False},
+    )
+
+    for guard, expected_key in [
+        (
+            common_use_cases.ensure_doorbell_video_supported,
+            "doorbell_video_not_available",
+        ),
+        (
+            common_use_cases.ensure_doorbell_call_supported,
+            "doorbell_video_not_available",
+        ),
+        (common_use_cases.ensure_home_call_supported, "home_call_not_available"),
+    ]:
+        try:
+            guard(entry)
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == expected_key
+        else:
+            raise AssertionError(f"{expected_key} guard accepted disabled video")
+
+
+def test_common_agent_command_failures_are_translated() -> None:
+    async def _failing_command() -> None:
+        raise RuntimeError("agent failed")
+
+    async def _run() -> None:
+        try:
+            await common_use_cases.raise_agent_command_failed(_failing_command())
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == "agent_command_failed"
+        else:
+            raise AssertionError("agent failure was not translated")
+
+    asyncio.run(_run())
+
+
+def test_common_gui_patch_refresh_is_required_when_inactive(monkeypatch) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(qml_patch_status={"patched": False}))
+        refreshes = 0
+
+        async def _refresh(entry_arg: Any) -> None:
+            nonlocal refreshes
+            assert entry_arg is entry
+            refreshes += 1
+            entry.runtime_data.qml_patch_status = {"patched": True}
+
+        monkeypatch.setattr(common_use_cases, "async_refresh_qml_patch_status", _refresh)
+
+        await common_use_cases.async_ensure_gui_function_patch(entry)
+
+        assert refreshes == 1
+
+    asyncio.run(_run())
+
+
+def test_common_gui_patch_refresh_failures_are_translated(monkeypatch) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData(qml_patch_status={"patched": False}))
+
+        async def _refresh(_entry: Any) -> None:
+            raise RuntimeError("agent unavailable")
+
+        monkeypatch.setattr(common_use_cases, "async_refresh_qml_patch_status", _refresh)
+
+        try:
+            await common_use_cases.async_ensure_gui_function_patch(entry)
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == "agent_command_failed"
+        else:
+            raise AssertionError("failed GUI patch refresh was not translated")
+
+    asyncio.run(_run())
+
+
+def test_common_latest_item_id_uses_cache_then_refreshes() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData())
+        entry.runtime_data.cached_payload = {"latest": "cached-id"}
+        refreshes = 0
+
+        async def _refresh() -> dict[str, Any]:
+            nonlocal refreshes
+            refreshes += 1
+            return {"latest": "fresh-id"}
+
+        def latest(payload: dict[str, Any]) -> str | None:
+            return payload.get("latest")
+
+        assert (
+            await common_use_cases.latest_item_id_for_entry(
+                entry,
+                cache_attr="cached_payload",
+                refresh=_refresh,
+                latest=latest,
+                unavailable_error="missing_item",
+            )
+            == "cached-id"
+        )
+        assert refreshes == 0
+
+        entry.runtime_data.cached_payload = {}
+        assert (
+            await common_use_cases.latest_item_id_for_entry(
+                entry,
+                cache_attr="cached_payload",
+                refresh=_refresh,
+                latest=latest,
+                unavailable_error="missing_item",
+            )
+            == "fresh-id"
+        )
+        assert refreshes == 1
+
+    asyncio.run(_run())
+
+
+def test_common_latest_item_id_translates_refresh_and_empty_results() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(_FakeRuntimeData())
+
+        async def _failing_refresh() -> dict[str, Any]:
+            raise RuntimeError("agent failed")
+
+        try:
+            await common_use_cases.latest_item_id_for_entry(
+                entry,
+                cache_attr="missing_cache",
+                refresh=_failing_refresh,
+                latest=lambda payload: payload.get("latest"),
+                unavailable_error="missing_item",
+            )
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == "agent_command_failed"
+        else:
+            raise AssertionError("refresh failure was not translated")
+
+        async def _empty_refresh() -> dict[str, Any]:
+            return {}
+
+        try:
+            await common_use_cases.latest_item_id_for_entry(
+                entry,
+                cache_attr="missing_cache",
+                refresh=_empty_refresh,
+                latest=lambda payload: payload.get("latest"),
+                unavailable_error="missing_item",
+            )
+        except exceptions.ServiceValidationError as err:
+            assert _translation_key(err) == "missing_item"
+        else:
+            raise AssertionError("missing item was accepted")
+
+    asyncio.run(_run())
+
+
+def test_common_refresh_after_message_mutation_notifies_listeners(monkeypatch) -> None:  # noqa: ANN001
+    dispatcher_calls: list[tuple[Any, ...]] = []
+    diagnostics_refreshes: list[str] = []
+
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_dispatcher_send",
+        lambda *args: dispatcher_calls.append(args),
+    )
+
+    async def _refresh_diagnostics(_hass: Any, entry: Any) -> None:
+        diagnostics_refreshes.append(entry.entry_id)
+
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_refresh_agent_diagnostics",
+        _refresh_diagnostics,
+    )
+
+    async def _run() -> None:
+        hass = _FakeHass([])
+        entry = _FakeEntry(_FakeRuntimeData())
+        refreshes = 0
+
+        async def _refresh() -> dict[str, Any]:
+            nonlocal refreshes
+            refreshes += 1
+            return {"ok": True}
+
+        await common_use_cases.async_refresh_after_message_mutation(
+            hass,  # type: ignore[arg-type]
+            entry,
+            refresh=_refresh,
+            signal="signal-name",
+        )
+
+        assert refreshes == 1
+
+    asyncio.run(_run())
+
+    assert dispatcher_calls == [(dispatcher_calls[0][0], "signal-name", "entry-id")]
+    assert diagnostics_refreshes == ["entry-id"]
+
+
+def test_common_play_media_calls_home_assistant_media_player() -> None:
+    async def _run() -> None:
+        hass = _FakeHass([])
+
+        await common_use_cases.async_play_media(
+            hass,  # type: ignore[arg-type]
+            "media_player.room",
+            media_content_id="media-source://c300x/latest",
+            media_content_type="music",
+        )
+
+        assert hass.services.calls == [
+            (
+                "media_player",
+                "play_media",
+                {
+                    "entity_id": "media_player.room",
+                    "media_content_id": "media-source://c300x/latest",
+                    "media_content_type": "music",
+                },
+                True,
+            )
+        ]
 
     asyncio.run(_run())

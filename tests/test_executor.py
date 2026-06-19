@@ -1446,8 +1446,8 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
     assert main_page["badges"][0] == {"state": "HA\nonline", "color": "#58d68d"}
     assert main_page["badges"][1] == {"state": "Alarm\nAus"}
     assert main_page["badges"][2]["state"].count("\n") == 1
-    assert main_page["buttons"] == []
-    assert main_page["switches"] == []
+    assert "buttons" not in main_page
+    assert "switches" not in main_page
     buttons = pages["Home Assistant"]["buttons"]
     assert {
         "domain": "c300x",
@@ -1502,8 +1502,8 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
         "badge": "Sonnig\n22 C",
         "color": "#f1c40f",
     }
-    assert main_page["buttons"] == []
-    assert main_page["switches"] == []
+    assert "buttons" not in main_page
+    assert "switches" not in main_page
 
 
 def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:
@@ -2055,5 +2055,4 @@ def test_async_dashboard_payload_keeps_agent_controls_off_main_page() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    buttons = result["data"]["pages"][0]["buttons"]
-    assert buttons == []
+    assert "buttons" not in result["data"]["pages"][0]

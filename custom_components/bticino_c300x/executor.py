@@ -1392,14 +1392,12 @@ def _dashboard_int(value: Any, fallback: int) -> int:
 def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
     finalized = {
         "title": page.get("title") or _DASHBOARD_ACTION_PAGE,
-        "badges": list(page.get("badges") or []),
-        "buttons": _finalize_dashboard_items(page.get("buttons")),
-        "choices": _finalize_dashboard_items(page.get("choices")),
-        "entities": _finalize_dashboard_items(page.get("entities")),
-        "switches": _finalize_dashboard_items(page.get("switches")),
-        "sliders": _finalize_dashboard_items(page.get("sliders")),
-        "images": _finalize_dashboard_items(page.get("images")),
     }
+    if badges := list(page.get("badges") or []):
+        finalized["badges"] = badges
+    for key in ("buttons", "choices", "entities", "switches", "sliders", "images"):
+        if items := _finalize_dashboard_items(page.get(key)):
+            finalized[key] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
     if page.get("flow"):

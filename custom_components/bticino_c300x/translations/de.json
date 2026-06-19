@@ -272,6 +272,15 @@
           "error": "Fehler"
         }
       },
+      "media_readiness": {
+        "name": "Medien-Bereitschaft",
+        "state": {
+          "ready": "Bereit",
+          "warning": "Warnung",
+          "blocked": "Blockiert",
+          "unavailable": "Nicht verfuegbar"
+        }
+      },
       "agent_diagnostics": {
         "name": "Device-Agent-Diagnose",
         "state": {

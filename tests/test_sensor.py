@@ -142,10 +142,12 @@ from custom_components.bticino_c300x.sensor import (
     C300XDeviceMemorySensor,
     C300XDeviceTemperatureSensor,
     C300XDoorbellStateSensor,
+    C300XMediaReadinessSensor,
     C300XTextMemosSensor,
     C300XVoicemailMessagesSensor,
     C300XVoiceMemosSensor,
     _agent_diagnostics_status,
+    _media_readiness,
 )
 from custom_components.bticino_c300x.sensor import (
     async_setup_entry as async_setup_sensor_entry,
@@ -356,6 +358,8 @@ class _FakeRuntimeData:
     agent_diagnostics_updated_at: Any = None
     agent_diagnostics_updated_by: str | None = None
     agent_diagnostics_change_reason: str | None = None
+    device_user_status: dict[str, Any] = field(default_factory=dict)
+    self_test_status: dict[str, Any] = field(default_factory=dict)
     agent_update_state: Any = None
 
 
@@ -429,6 +433,115 @@ def test_agent_status_sensor_reports_media_watchdog_trigger_count() -> None:
     entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
 
     assert entity.extra_state_attributes["media_watchdog_trigger_count"] == 3
+
+
+def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> None:
+    connection = _FakeConnectionState()
+    connection.event_subscription_last_success_at = "2026-06-19T20:00:00Z"
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            connection_state=connection,
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+                "home_call": {"supported": True},
+            },
+            device_user_status={
+                "homeassistant_user_present": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": True,
+            },
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "homeassistant"
+
+    entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "ready"
+    assert entity.extra_state_attributes["recommended_action"] == "no_action_needed"
+    assert entity.extra_state_attributes["media_user_ok"] is True
+    assert entity.extra_state_attributes["forwarding_homeassistant"] is True
+    assert entity.extra_state_attributes["failed_checks"] == []
+
+
+def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> None:
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"doorbell_call": {"supported": True}},
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "blocked"
+
+    readiness = _media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["status"] == "blocked"
+    assert readiness["forwarding_homeassistant"] is False
+    assert "forwarding_homeassistant" in readiness["failed_checks"]
+    assert readiness["recommended_action"] == "set_forwarding_to_homeassistant"
+
+
+def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+            },
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {
+                        "ok": False,
+                        "reason": "ipv6_media_ports_missing",
+                    },
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {
+                        "ok": False,
+                        "reason": "talkback_rtp_firewall_missing",
+                    },
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "homeassistant"
+
+    readiness = _media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["status"] == "warning"
+    assert readiness["failed_checks"] == []
+    assert "firewall:optional_ipv6" in readiness["warnings"]
+    assert "talkback_rtp:optional_ipv6" in readiness["warnings"]
 
 
 def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
@@ -1545,7 +1658,7 @@ def test_message_sensors_load_one_startup_snapshot() -> None:
         voice_sensor = next(
             entity for entity in entities if isinstance(entity, C300XVoiceMemosSensor)
         )
-        assert len(entities) == 4
+        assert len(entities) == 5
         assert video_sensor.native_value == 1
         assert video_sensor.extra_state_attributes["unread"] == 1
         assert video_sensor.extra_state_attributes["latest_message_id"] == "message_1"

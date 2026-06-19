@@ -272,6 +272,15 @@
           "error": "Erreur"
         }
       },
+      "media_readiness": {
+        "name": "Disponibilite media",
+        "state": {
+          "ready": "Pret",
+          "warning": "Avertissement",
+          "blocked": "Bloque",
+          "unavailable": "Indisponible"
+        }
+      },
       "agent_diagnostics": {
         "name": "Diagnostics de l'agent appareil",
         "state": {

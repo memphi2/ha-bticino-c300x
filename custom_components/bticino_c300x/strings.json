@@ -272,6 +272,15 @@
           "error": "Error"
         }
       },
+      "media_readiness": {
+        "name": "Media readiness",
+        "state": {
+          "ready": "Ready",
+          "warning": "Warning",
+          "blocked": "Blocked",
+          "unavailable": "Unavailable"
+        }
+      },
       "agent_diagnostics": {
         "name": "Device agent diagnostics",
         "state": {

@@ -2,6 +2,7 @@
 
 var BASE_URL = "http://127.0.0.1:8090"
 var connections = []
+var dashboardRevision = ""
 var eventRevision = 0
 var eventRequest = null
 var eventWatching = false
@@ -68,7 +69,19 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
 }
 
 function dashboard(statusItem, pageItem) {
-    getJson("/homeassistant", function(data) {
+    var path = "/homeassistant"
+    if (dashboardRevision.length > 0) {
+        path += "?revision=" + encodeURIComponent(dashboardRevision)
+    }
+    getJson(path, function(data) {
+        if (data && data.not_modified === true) {
+            statusItem.text = uiText(pageItem, "board_loaded")
+            statusItem.color = "#58d68d"
+            return
+        }
+        if (data && data.revision !== undefined) {
+            dashboardRevision = String(data.revision)
+        }
         var pages = dashboardPages(data)
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         pageItem.dashboardPages = pages

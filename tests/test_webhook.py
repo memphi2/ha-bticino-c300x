@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import json
 import sys
 import types
 from types import SimpleNamespace
@@ -321,6 +322,60 @@ def test_display_bridge_status_webhook_uses_registered_handler(monkeypatch) -> N
     )
 
     assert response.status == 200
+
+
+def test_display_bridge_dashboard_webhook_returns_revision_and_not_modified(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    hass = _FakeHass()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret"},
+        options={},
+    )
+
+    async def dashboard(hass_arg: object, entry_arg: object) -> dict[str, object]:
+        assert hass_arg is hass
+        assert entry_arg is entry
+        return {"data": {"pages": [{"title": "Main"}]}, "preventReturnToHomepage": False}
+
+    monkeypatch.setattr(webhook_module, "async_dashboard_payload", dashboard)
+
+    response = asyncio.run(
+        _async_handle_webhook(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            _FakeRequest(
+                "",
+                {"type": "dashboard"},
+                extra_headers={HEADER_SHARED_SECRET: "shared-secret"},
+            ),  # type: ignore[arg-type]
+        )
+    )
+    payload = json.loads(response.text)
+    revision = payload["revision"]
+
+    cached = asyncio.run(
+        _async_handle_webhook(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            _FakeRequest(
+                "",
+                {"type": "dashboard", "revision": revision},
+                extra_headers={HEADER_SHARED_SECRET: "shared-secret"},
+            ),  # type: ignore[arg-type]
+        )
+    )
+
+    assert response.status == 200
+    assert payload["data"]["pages"][0]["title"] == "Main"
+    assert cached.status == 200
+    assert json.loads(cached.text) == {
+        "ok": True,
+        "not_modified": True,
+        "revision": revision,
+    }
 
 
 def test_agent_event_webhook_rejects_unauthorized_or_unsupported_events() -> None:

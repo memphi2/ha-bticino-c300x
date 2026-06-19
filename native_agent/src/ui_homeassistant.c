@@ -133,19 +133,34 @@ enum c300x_ui_homeassistant_payload_result c300x_ui_homeassistant_build_payload(
     char service[32];
     char entities[128];
     char option[160];
+    char revision[48];
     char entity_id[128];
+    char revision_json[128];
     char *selected_entity_id;
     int written;
 
     query_param_value(query, "domain", domain, sizeof(domain));
     query_param_value(query, "service", service, sizeof(service));
     query_param_value(query, "option", option, sizeof(option));
+    query_param_value(query, "revision", revision, sizeof(revision));
     if (!query_param_value(query, "entities", entities, sizeof(entities))) {
         query_param_value(query, "entity_id", entities, sizeof(entities));
     }
 
     if (domain[0] == '\0' && service[0] == '\0' && entities[0] == '\0') {
-        written = snprintf(payload, payload_len, "{\"type\":\"dashboard\"}");
+        if (revision[0] != '\0') {
+            if (!json_string(revision, revision_json, sizeof(revision_json))) {
+                return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
+            }
+            written = snprintf(
+                payload,
+                payload_len,
+                "{\"type\":\"dashboard\",\"revision\":%s}",
+                revision_json
+            );
+        } else {
+            written = snprintf(payload, payload_len, "{\"type\":\"dashboard\"}");
+        }
         if (written < 0 || (size_t)written >= payload_len) {
             return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
         }

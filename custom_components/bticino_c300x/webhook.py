@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from hmac import compare_digest
 from typing import Any
 
@@ -192,7 +194,19 @@ async def _display_bridge_status(context: _DisplayBridgeContext) -> dict[str, An
 
 
 async def _display_bridge_dashboard(context: _DisplayBridgeContext) -> dict[str, Any]:
-    return await async_dashboard_payload(context.hass, context.entry)
+    dashboard = await async_dashboard_payload(context.hass, context.entry)
+    revision = _dashboard_revision(dashboard)
+    requested_revision = str(context.payload.get("revision") or "").strip()
+    if requested_revision and requested_revision == revision:
+        return {"ok": True, "not_modified": True, "revision": revision}
+    return {**dashboard, "revision": revision}
+
+
+def _dashboard_revision(payload: Mapping[str, Any]) -> str:
+    """Return a stable short revision for the display dashboard payload."""
+
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return sha256(encoded).hexdigest()[:16]
 
 
 async def _display_bridge_action(context: _DisplayBridgeContext) -> dict[str, Any]:

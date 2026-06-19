@@ -826,6 +826,12 @@ def run_smoke(
             if callback.requests[-1].get("secret") != "display-secret":
                 raise AssertionError("display bridge secret was not forwarded")
             callback_seen = len(callback.requests)
+            cached_dashboard = ui_get_json(ui_port, "/homeassistant?revision=rev-test")
+            assert_json_field(cached_dashboard, "preventReturnToHomepage", True)
+            dashboard_callback = wait_for_callback_type(callback, "dashboard", callback_seen)
+            if dashboard_callback["body"].get("revision") != "rev-test":
+                raise AssertionError("dashboard revision was not forwarded")
+            callback_seen = len(callback.requests)
             ui_action = ui_get_json(ui_port, "/ui/action?id=scene%3Aleave")
             assert_json_field(ui_action, "device_ui_enabled", True)
             action_callback = wait_for_callback_type(callback, "action", callback_seen)

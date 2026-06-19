@@ -168,6 +168,9 @@ _DNS_MDNS_RDATA_MODULES = (
     "dns.rdtypes.ANY.PTR",
     "dns.rdtypes.ANY.SRV",
     "dns.rdtypes.ANY.TXT",
+    "dns.rdtypes.ANY.NSEC",
+    "dns.rdtypes.CLASS32769.TXT",
+    "dns.rdtypes.CLASS32769.NSEC",
 )
 
 
@@ -190,6 +193,7 @@ def _preload_dns_mdns_modules(
             dns_rdatatype.PTR,
             dns_rdatatype.SRV,
             dns_rdatatype.TXT,
+            getattr(dns_rdatatype, "NSEC", 47),
         ):
             dns_rdata.get_rdata_class(mdns_rdclass, rdtype)
 
@@ -818,9 +822,27 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             session = self._webrtc_sessions.get(session_id)
             if session is None:
                 return
+            if _webrtc_session_peer_closed(session):
+                await self._async_close_webrtc_session(
+                    session_id,
+                    notify_client=True,
+                    reason="webrtc_closed",
+                )
+                continue
             if session.owner == "home_call":
-                with suppress(Exception):
-                    await self._async_wait_for_home_call_active(apply_status=False)
+                try:
+                    home_call_status = await self._entry.runtime_data.api.async_home_call_status()
+                except Exception:  # noqa: BLE001 - transient status errors must not tear down active calls
+                    continue
+                if not _home_call_status_has_media(home_call_status):
+                    self._apply_home_call_ended(dict(home_call_status))
+                    await self._async_close_webrtc_session(
+                        session_id,
+                        stop_media=False,
+                        notify_client=True,
+                        reason="home_call_ended",
+                    )
+                    continue
                 continue
             with suppress(Exception):
                 decision = self._derive_media_decision(
@@ -1227,6 +1249,28 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
     def _active_local_media_sessions(self) -> int:
         return self._webrtc_session_registry.active_media_sessions()
+
+
+def _home_call_status_has_media(status: Mapping[str, Any]) -> bool:
+    """Return true while the agent reports an active Home Call media path."""
+
+    return bool(
+        status.get("running")
+        or status.get("active")
+        or status.get("answered")
+        or status.get("rtp_proxy")
+        or status.get("target_audio_port")
+    )
+
+
+def _webrtc_session_peer_closed(session: _NativeWebRTCSession) -> bool:
+    """Return true when aiortc has already moved the peer into a terminal state."""
+
+    peer = session.peer
+    for attr_name in ("connectionState", "iceConnectionState"):
+        if getattr(peer, attr_name, None) in {"closed", "failed", "disconnected"}:
+            return True
+    return getattr(peer, "signalingState", None) == "closed"
 
 
 @callback

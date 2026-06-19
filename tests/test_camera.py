@@ -305,6 +305,9 @@ def test_webrtc_preloads_dnspython_mdns_records_without_failing_on_missing_modul
         "dns.rdtypes.ANY.PTR",
         "dns.rdtypes.ANY.SRV",
         "dns.rdtypes.ANY.TXT",
+        "dns.rdtypes.ANY.NSEC",
+        "dns.rdtypes.CLASS32769.TXT",
+        "dns.rdtypes.CLASS32769.NSEC",
         "dns.rdata",
         "dns.rdataclass",
         "dns.rdatatype",
@@ -315,6 +318,7 @@ def test_webrtc_preloads_dnspython_mdns_records_without_failing_on_missing_modul
         (32769, 12),
         (32769, 33),
         (32769, 16),
+        (32769, 47),
     ]
 
 
@@ -1221,6 +1225,119 @@ def test_doorbell_camera_home_call_renew_does_not_warm_video(
     assert api.home_call_status_calls >= 1
     assert api.activate_calls == []
     assert camera._bridge_status.get("home_call_active") is None
+
+
+def test_doorbell_camera_home_call_renew_closes_when_agent_reports_idle(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    monkeypatch.setattr(camera_module, "WEBRTC_RENEW_SECONDS", 0.01)
+
+    class _EndedHomeCallApi(_FakeApi):
+        async def async_home_call_status(self) -> dict[str, Any]:
+            self.home_call_status_calls += 1
+            return {
+                "available": True,
+                "running": False,
+                "active": False,
+                "answered": False,
+                "rtp_proxy": False,
+                "target_audio_port": 0,
+                "rtp_packets": 7,
+                "rtcp_packets": 2,
+            }
+
+    class _Peer:
+        connectionState = "connected"
+        iceConnectionState = "completed"
+        signalingState = "stable"
+
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    api = _EndedHomeCallApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._video_owner = "home_call"
+    camera._bridge_status = {
+        "media_owner": "home_call",
+        "home_call_running": True,
+        "home_call_active": True,
+        "home_call_answered": True,
+    }
+    sent_messages: list[Any] = []
+    peer = _Peer()
+    camera._webrtc_sessions["session-home"] = _NativeWebRTCSession(
+        peer,
+        owner="home_call",
+        send_message=sent_messages.append,
+    )
+
+    async def _run() -> None:
+        await asyncio.wait_for(
+            camera._async_renew_webrtc_until_closed("session-home"),
+            1,
+        )
+
+    asyncio.run(_run())
+
+    assert "session-home" not in camera._webrtc_sessions
+    assert peer.closed is True
+    assert sent_messages == [{"type": "closed", "reason": "home_call_ended"}]
+    assert api.home_call_status_calls == 1
+    assert api.home_call_stop_calls == 0
+    assert camera._bridge_status["home_call_active"] is False
+    assert camera._active_local_media_sessions() == 0
+
+
+def test_doorbell_camera_renew_closes_terminal_webrtc_peer(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    monkeypatch.setattr(camera_module, "WEBRTC_RENEW_SECONDS", 0.01)
+
+    class _Peer:
+        connectionState = "closed"
+        iceConnectionState = "closed"
+        signalingState = "closed"
+
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _Player:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    api = _FakeApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    sent_messages: list[Any] = []
+    peer = _Peer()
+    player = _Player()
+    session = _NativeWebRTCSession(peer, send_message=sent_messages.append)
+    session.player = player
+    camera._webrtc_sessions["session-doorbell"] = session
+
+    async def _run() -> None:
+        await asyncio.wait_for(
+            camera._async_renew_webrtc_until_closed("session-doorbell"),
+            1,
+        )
+
+    asyncio.run(_run())
+
+    assert "session-doorbell" not in camera._webrtc_sessions
+    assert peer.closed is True
+    assert player.stopped is True
+    assert sent_messages == [{"type": "closed", "reason": "webrtc_closed"}]
+    assert api.stop_calls == 1
 
 
 def test_doorbell_camera_home_call_wait_ignores_pre_answer_running_state(

@@ -209,6 +209,8 @@ int c300x_ui_events_store_waiter(
 )
 {
     size_t index;
+    size_t oldest_index = C300X_UI_EVENT_MAX_WAITERS;
+    time_t oldest_deadline = 0;
 
     if (overflowed != NULL) {
         *overflowed = 0;
@@ -220,19 +222,26 @@ int c300x_ui_events_store_waiter(
             events->waiters[index].deadline = time(NULL) + C300X_UI_EVENT_WAIT_SECONDS;
             return 0;
         }
+        if (
+            oldest_index >= C300X_UI_EVENT_MAX_WAITERS
+            || events->waiters[index].deadline < oldest_deadline
+        ) {
+            oldest_index = index;
+            oldest_deadline = events->waiters[index].deadline;
+        }
     }
     events->waiter_overflows++;
     if (overflowed != NULL) {
         *overflowed = 1;
     }
-    send_json_fn(
-        client_fd,
-        429,
-        "Too Many Requests",
-        "{\"ok\":false,\"error\":\"too_many_ui_event_waiters\",\"retry_after_ms\":1000}\n",
-        ctx
-    );
-    return 1;
+    if (oldest_index < C300X_UI_EVENT_MAX_WAITERS) {
+        close_waiter(events, oldest_index, 0, send_json_fn, ctx);
+        events->waiters[oldest_index].fd = client_fd;
+        events->waiters[oldest_index].since = since;
+        events->waiters[oldest_index].deadline = time(NULL) + C300X_UI_EVENT_WAIT_SECONDS;
+        return 0;
+    }
+    return 0;
 }
 
 int c300x_ui_events_pollfds(

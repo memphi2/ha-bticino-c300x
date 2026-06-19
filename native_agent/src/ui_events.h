@@ -6,7 +6,7 @@
 #include <time.h>
 
 #define C300X_UI_EVENT_MAX_WAITERS 4
-#define C300X_UI_EVENT_WAIT_SECONDS 300
+#define C300X_UI_EVENT_WAIT_SECONDS 60
 
 struct c300x_ui_event_waiter {
     int fd;

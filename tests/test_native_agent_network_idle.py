@@ -176,13 +176,16 @@ def test_ui_event_long_poll_closes_when_client_disconnects() -> None:
 
     assert "int ui_event_poll_index = -1, ui_event_poll_count = 0;" in loop_body
     assert "#define C300X_UI_EVENT_MAX_WAITERS 4" in ui_header
+    assert "#define C300X_UI_EVENT_WAIT_SECONDS 60" in ui_header
     assert "struct c300x_ui_event_waiter waiters[C300X_UI_EVENT_MAX_WAITERS];" in ui_header
     assert "c300x_ui_events_pollfds(" in loop_body
     assert "runtime->ui_event_wait_fd" not in text
     assert "poll_fds[count].events = POLLIN | POLLRDHUP;" in ui_events
     assert "C300X_SOCKET_CLOSED_REVENTS" in ui_events
     assert "c300x_ui_events_handle_pollfds(" in post_poll_body
-    assert "too_many_ui_event_waiters" in ui_events
+    assert "events->waiter_overflows++;" in ui_events
+    assert "close_waiter(events, oldest_index, 0, send_json_fn, ctx);" in ui_events
+    assert "too_many_ui_event_waiters" not in ui_events
 
 
 def test_native_http_client_sockets_are_explicitly_shutdown_before_close() -> None:

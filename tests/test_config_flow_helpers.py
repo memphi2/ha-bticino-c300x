@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 import voluptuous as vol
+import voluptuous_serialize
 
 homeassistant = sys.modules.setdefault(
     "homeassistant",
@@ -249,6 +250,13 @@ def test_stair_light_address_parts_build_openwebnet_where() -> None:
     )[0]
 
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
+
+
+def test_feature_schemas_are_serializable_for_home_assistant_forms() -> None:
+    """Keep visible form schemas compatible with HA data-entry-flow JSON output."""
+
+    voluptuous_serialize.convert(_setup_features_schema(False))
+    voluptuous_serialize.convert(_reconfigure_features_schema(False))
 
 
 @pytest.mark.parametrize("value", ["", "../bad", "abc", "10;reboot"])

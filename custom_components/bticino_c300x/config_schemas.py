@@ -213,11 +213,11 @@ def _media_feature_schema(
             vol.Optional(
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
                 default=default_p,
-            ): stair_light_p,
+            ): str,
             vol.Optional(
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
                 default=default_n,
-            ): stair_light_n,
+            ): str,
         }
     )
     return vol.Schema(fields)

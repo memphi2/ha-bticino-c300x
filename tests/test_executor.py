@@ -77,6 +77,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
@@ -1349,6 +1351,21 @@ def test_async_trigger_stair_light_uses_configured_address() -> None:
 
     assert result == {"ok": True, "action_id": "stair_light", "address": "20#1"}
     assert entry.runtime_data.api.last_stair_light_address == "20#1"
+
+
+def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+        }
+    )
+
+    result = run(async_trigger_stair_light(hass, entry))
+
+    assert result == {"ok": True, "action_id": "stair_light", "address": "21"}
+    assert entry.runtime_data.api.last_stair_light_address == "21"
 
 
 def test_async_trigger_stair_light_uses_option_address() -> None:

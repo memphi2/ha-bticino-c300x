@@ -120,11 +120,13 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _reconfigure_unique_id,
     _setup_connection_schema,
     _setup_features_schema,
-    _stair_light_address,
     _weather_entity_id,
 )
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
+from custom_components.bticino_c300x.config_schemas import (  # noqa: E402
+    stair_light_address as _stair_light_address,
+)
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
@@ -140,6 +142,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
@@ -153,6 +157,8 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_WEATHER_ENTITY_ID,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    DEFAULT_STAIR_LIGHT_N,
+    DEFAULT_STAIR_LIGHT_P,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_STREAM_PATH,
     DEVICE_ACTIVATION_MODE_AUTO,
@@ -216,6 +222,30 @@ def test_probe_agent_requires_event_subscription_endpoint(
 
 def test_stair_light_address_accepts_firmware_default() -> None:
     assert _stair_light_address(DEFAULT_STAIR_LIGHT_ADDRESS) == DEFAULT_STAIR_LIGHT_ADDRESS
+
+
+def test_stair_light_address_parts_match_firmware_default() -> None:
+    result = _feature_input(
+        {
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
+        }
+    )[0]
+
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "01"
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "00"
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == DEFAULT_STAIR_LIGHT_ADDRESS
+
+
+def test_stair_light_address_parts_build_openwebnet_where() -> None:
+    result = _feature_input(
+        {
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+        }
+    )[0]
+
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
 
 
 @pytest.mark.parametrize("value", ["", "../bad", "abc", "10;reboot"])
@@ -536,10 +566,9 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
     assert result[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
-    assert (
-        result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS]
-        == DEFAULT_STAIR_LIGHT_ADDRESS
-    )
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in result
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
 
 
 def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
@@ -1234,7 +1263,9 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_DEVICE_UI_ENABLED not in features
     assert CONF_DASHBOARD_PREVENT_RETURN not in features
     assert features[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
-    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in features
+    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
+    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
@@ -1539,7 +1570,8 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
                 CONF_DOORSTATION_AUDIO_GAIN_DB: -1.5,
                 CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
                 CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1",
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
             }
         )
     )
@@ -1566,7 +1598,9 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == -1.5
     assert result["data"][CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 2.5
     assert result["data"][CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
-    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "20#1"
+    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
+    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
+    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "01"
     assert result["data"][CONF_DEVICE_UI_ENABLED] is True
     assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"

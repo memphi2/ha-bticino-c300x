@@ -46,7 +46,9 @@
           "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address"
+          "device_activation_stair_light_address": "Manual stair light activation address",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address"
         }
       },
       "user_dashboard": {
@@ -88,7 +90,9 @@
           "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address"
+          "device_activation_stair_light_address": "Manual stair light activation address",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address"
         }
       },
       "reconfigure_dashboard": {
@@ -125,6 +129,7 @@
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
       "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
+      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "required": "This field is required."
     }
   },
@@ -153,7 +158,9 @@
           "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_address": "Manual stair light activation address"
+          "device_activation_stair_light_address": "Manual stair light activation address",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address"
         }
       },
       "dashboard": {
@@ -179,7 +186,8 @@
       "invalid_callback_base_url": "Enter a local HTTP Home Assistant callback URL reachable from the C300X, or leave it empty.",
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
-      "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB."
+      "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
+      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99."
     }
   },
   "entity": {

@@ -16,6 +16,8 @@ from custom_components.bticino_c300x.const import (
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -329,19 +331,26 @@ def test_configure_device_activations_updates_only_when_needed() -> None:
 
     assert api.configured == [(True, False, "77")]
 
-    matching = _ActivationApi(
+
+def test_configure_device_activations_uses_p_n_address() -> None:
+    entry = _entry(
+        options={
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+        }
+    )
+    api = _ActivationApi(
         {
             "activations_enabled": True,
             "activations_auto_discover": False,
-            "activation_stair_light_address": "77",
+            "activation_stair_light_address": "21",
         }
     )
-    asyncio.run(integration._async_configure_device_activations(entry, matching))
-    assert matching.configured == []
 
-    unsupported = _ActivationApi({}, error=integration.C300XAgentApiUnsupportedError)
-    asyncio.run(integration._async_configure_device_activations(entry, unsupported))
-    assert unsupported.configured == []
+    asyncio.run(integration._async_configure_device_activations(entry, api))
+
+    assert api.configured == []
 
 
 def test_configure_device_activations_ignores_agent_errors() -> None:

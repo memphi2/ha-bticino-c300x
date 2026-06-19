@@ -41,6 +41,7 @@ from .action import (
     normalize_action_id,
     validate_action_map,
 )
+from .activation_address import stair_light_where_from_entry_values
 from .capabilities import entry_device_ui_enabled_or_patch_active
 from .const import (
     ALARM_DOMAIN,
@@ -51,6 +52,8 @@ from .const import (
     CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_ANSWERING_MACHINE,
@@ -783,10 +786,14 @@ async def async_trigger_stair_light(
 ) -> dict[str, Any]:
     """Activate the staircase light through the configured agent."""
 
-    target_address = address or entry_config_value(
-        entry,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-        DEFAULT_STAIR_LIGHT_ADDRESS,
+    target_address = address or stair_light_where_from_entry_values(
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
+        entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
+        entry_config_value(
+            entry,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+            DEFAULT_STAIR_LIGHT_ADDRESS,
+        ),
     )
     await entry.runtime_data.api.async_stair_light(target_address)
     hass.bus.async_fire(

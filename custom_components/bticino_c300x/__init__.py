@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import config_validation as cv
 
+from .activation_address import stair_light_where_from_entry_values
 from .api import (
     C300XAgentApi,
     C300XAgentApiError,
@@ -29,6 +30,8 @@ from .const import (
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -548,13 +551,15 @@ def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool
         )
     ).strip()
     auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
-    address = str(
+    address = stair_light_where_from_entry_values(
+        _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
+        _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
         _entry_config_value(
             entry,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
             DEFAULT_STAIR_LIGHT_ADDRESS,
-        )
-    ).strip() or DEFAULT_STAIR_LIGHT_ADDRESS
+        ),
+    )
     return True, auto_discover, address
 
 

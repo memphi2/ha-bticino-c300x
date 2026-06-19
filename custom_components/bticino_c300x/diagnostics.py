@@ -30,6 +30,8 @@ from .const import (
     CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
     CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_PORT,
@@ -140,6 +142,8 @@ async def async_get_config_entry_diagnostics(
             ),
             "stair_light_configured": bool(
                 entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS, "")
+                or entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
+                or entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, "")
             ),
             "alarm_entity_configured": bool(_configured_alarm_entity(entry)),
             "weather_entity_configured": bool(_configured_weather_entity(entry)),

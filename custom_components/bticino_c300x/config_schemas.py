@@ -6,6 +6,10 @@ from typing import Any
 
 import voluptuous as vol
 
+from .activation_address import (
+    normalize_stair_light_part,
+    stair_light_parts_from_where,
+)
 from .config_audio import audio_gain_db
 from .const import (
     CONF_AGENT_HOST,
@@ -14,7 +18,8 @@ from .const import (
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -23,6 +28,8 @@ from .const import (
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEFAULT_STAIR_LIGHT_N,
+    DEFAULT_STAIR_LIGHT_P,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
 )
@@ -121,6 +128,18 @@ def stair_light_address(value: Any) -> str:
     return address
 
 
+def stair_light_p(value: Any) -> str:
+    """Validate the P value for the firmware stair light address."""
+
+    return normalize_stair_light_part(value, default=DEFAULT_STAIR_LIGHT_P)
+
+
+def stair_light_n(value: Any) -> str:
+    """Validate the N value for the firmware stair light address."""
+
+    return normalize_stair_light_part(value, default=DEFAULT_STAIR_LIGHT_N)
+
+
 def audio_gain_db_selector() -> Any:
     """Return a bounded audio gain selector with a test-friendly fallback."""
 
@@ -146,6 +165,9 @@ def _media_feature_schema(
     default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
 ) -> vol.Schema:
+    default_p, default_n = stair_light_parts_from_where(
+        default_device_activation_stair_light_address
+    )
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
     }
@@ -175,9 +197,13 @@ def _media_feature_schema(
                 default=default_device_activation_mode,
             ): vol.In(DEVICE_ACTIVATION_MODES),
             vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                default=default_device_activation_stair_light_address,
-            ): str,
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                default=default_p,
+            ): stair_light_p,
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                default=default_n,
+            ): stair_light_n,
         }
     )
     return vol.Schema(fields)

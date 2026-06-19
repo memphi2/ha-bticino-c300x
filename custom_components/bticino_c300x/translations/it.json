@@ -46,7 +46,9 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale"
+          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale"
         }
       },
       "user_dashboard": {
@@ -88,7 +90,9 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale"
+          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale"
         }
       },
       "reconfigure_dashboard": {
@@ -125,6 +129,7 @@
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
       "invalid_audio_gain": "Scegli un guadagno audio tra -12 dB e +12 dB.",
+      "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "required": "Questo campo è obbligatorio."
     }
   },
@@ -153,7 +158,9 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale"
+          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale"
         }
       },
       "dashboard": {
@@ -179,7 +186,8 @@
       "invalid_callback_base_url": "Inserisci un URL HTTP locale di Home Assistant raggiungibile dal C300X oppure lascia vuoto il campo.",
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
-      "invalid_audio_gain": "Scegli un guadagno audio tra -12 dB e +12 dB."
+      "invalid_audio_gain": "Scegli un guadagno audio tra -12 dB e +12 dB.",
+      "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99."
     }
   },
   "entity": {

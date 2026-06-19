@@ -17,6 +17,7 @@ Page {
     property variant switches: []
     property variant entities: []
     property variant sliders: []
+    property variant choices: []
     property variant buttons: []
     property variant images: []
     property variant flowItems: []
@@ -678,8 +679,107 @@ Page {
                     }
                 }
 
+                Grid {
+                    id: choiceGrid
+                    width: parent.width
+                    columns: 1
+                    spacing: 10
+                    visible: choices.length > 0
+                    height: visible ? childrenRect.height : 0
+
+                    Repeater {
+                        model: choices
+
+                        Item {
+                            id: choiceTile
+                            property variant choiceItem: modelData
+                            width: choiceGrid.width
+                            height: 64 + Math.ceil((choiceItem.options ? choiceItem.options.length : 0) / 3) * 42
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(choiceTile.choiceItem) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                            }
+
+                            UbuntuLightText {
+                                text: itemDetail(choiceTile.choiceItem) + trsl.empty
+                                color: "#c7d0d9"
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 34
+                            }
+
+                            Grid {
+                                id: optionGrid
+                                columns: 3
+                                spacing: 6
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 60
+                                visible: choiceTile.choiceItem.options && choiceTile.choiceItem.options.length > 0
+                                property int optionWidth: (width - (spacing * 2)) / 3
+
+                                Repeater {
+                                    model: choiceTile.choiceItem.options || []
+
+                                    Item {
+                                        width: optionGrid.optionWidth
+                                        height: 36
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: String(modelData) === String(choiceTile.choiceItem.value) || optionMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                            fillMode: Image.Stretch
+                                        }
+
+                                        UbuntuLightText {
+                                            text: String(modelData) + trsl.empty
+                                            color: "white"
+                                            font.pixelSize: String(modelData).length > 12 ? 13 : 15
+                                            elide: Text.ElideRight
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 6
+                                            anchors.rightMargin: 6
+                                        }
+
+                                        BeepingMouseArea {
+                                            id: optionMouse
+                                            anchors.fill: parent
+                                            onClicked: Api.dashboardChoiceAction(choiceTile.choiceItem, String(modelData), status, page)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 UbuntuLightText {
-                    text: buttons.length === 0 && switches.length === 0 && entities.length === 0 && sliders.length === 0 && images.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: buttons.length === 0 && switches.length === 0 && entities.length === 0 && sliders.length === 0 && choices.length === 0 && images.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width

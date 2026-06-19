@@ -399,8 +399,19 @@ def test_weather_entity_id_allows_empty_value() -> None:
 
 def test_dashboard_entity_ids_accept_supported_entities() -> None:
     assert _dashboard_entity_ids(
-        [" Switch.Entry ", "sensor.temperature", "switch.entry"]
-    ) == ["switch.entry", "sensor.temperature"]
+        [
+            " Switch.Entry ",
+            "sensor.temperature",
+            "switch.entry",
+            "select.forwarding",
+            "input_select.scene",
+        ]
+    ) == [
+        "switch.entry",
+        "sensor.temperature",
+        "select.forwarding",
+        "input_select.scene",
+    ]
 
 
 @pytest.mark.parametrize("value", ["media_player.tv", "sensor.", "bad"])

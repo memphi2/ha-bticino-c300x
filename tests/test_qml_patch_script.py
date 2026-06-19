@@ -224,8 +224,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
     "Alarm.qml": "e1a7bfef32000f71b386bb8e466eaf822c405e2267eca0fe3084e803901dcc3d",
-    "HomeAssistant.qml": "d979051994646987fa6425736dcb7a4da7ee5354f383ecab6ab1c8cf1583075a",
-    "js/c300x_ha.js": "398c522bb356dda01f246c042213c767091e84cd862c89e6eafd2519ee733520",
+    "HomeAssistant.qml": "369a8063bb75d6f51d10e81dd897d73b894710c737a7c4f95ea0a0671d946a76",
+    "js/c300x_ha.js": "f291d3e813fcbade768b832d5cc765de9f85753d989329158db772955c593015",
     "js/c300x_i18n.js": "f589b25ac7029a4d2108115d368e14628229d2ff0c3d32bdb501d88ba72ae9c9",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
 }
@@ -418,6 +418,10 @@ def test_home_assistant_qml_keeps_empty_state_label_blank() -> None:
         dashboard_js.index("function dashboardItems") :
         dashboard_js.index("function dashboardSliders")
     ]
+    dashboard_choices_body = dashboard_js[
+        dashboard_js.index("function dashboardChoices") :
+        dashboard_js.index("function dashboardImages")
+    ]
 
     assert 'item.hasOwnProperty("state_label")' in item_detail_body
     assert item_detail_body.index('item.hasOwnProperty("state_label")') < (
@@ -425,6 +429,22 @@ def test_home_assistant_qml_keeps_empty_state_label_blank() -> None:
     )
     assert 'source[i].hasOwnProperty("state_label")' in dashboard_items_body
     assert 'source[i].state_label || source[i].label || ""' not in dashboard_items_body
+    assert '"options": listOrEmpty(source[i].options)' in dashboard_choices_body
+
+
+def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    dashboard_js = (ROOT / "device_qml" / "js/c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "property variant choices: []" in home_assistant_qml
+    assert "id: choiceGrid" in home_assistant_qml
+    assert "Api.dashboardChoiceAction" in home_assistant_qml
+    assert "pageItem.choices = dashboardChoices(pageData.choices)" in dashboard_js
+    assert 'item.entity_id + ":select:" + option' in dashboard_js
 
 
 def test_qml_i18n_catalogs_have_identical_key_sets() -> None:

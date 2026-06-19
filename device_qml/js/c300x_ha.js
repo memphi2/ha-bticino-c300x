@@ -87,6 +87,7 @@ function dashboard(statusItem, pageItem) {
         pageItem.switches = []
         pageItem.entities = []
         pageItem.sliders = []
+        pageItem.choices = []
         pageItem.buttons = []
         pageItem.images = []
         pageItem.flowItems = []
@@ -163,6 +164,24 @@ function dashboardSliderAction(item, direction, statusItem, pageItem) {
     }
     var path = "/homeassistant?domain=c300x&service=toggle&entities="
         + encodeURIComponent(item.entity_id + ":" + direction)
+    getJson(path, function(data) {
+        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
+        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
+        dashboard(statusItem, pageItem)
+    }, function(error) {
+        statusItem.text = error
+        statusItem.color = "#ff6b6b"
+    })
+}
+
+function dashboardChoiceAction(item, option, statusItem, pageItem) {
+    if (!item || !item.entity_id || option === undefined || option === null) {
+        statusItem.text = uiText(pageItem, "invalid_action")
+        statusItem.color = "#ff6b6b"
+        return
+    }
+    var path = "/homeassistant?domain=c300x&service=toggle&entities="
+        + encodeURIComponent(item.entity_id + ":select:" + option)
     getJson(path, function(data) {
         statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
         statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
@@ -503,6 +522,7 @@ function loadDashboardPage(statusItem, pageItem) {
     pageItem.switches = dashboardItems(pageData.switches, "switch")
     pageItem.entities = dashboardItems(pageData.entities, "entity")
     pageItem.sliders = dashboardSliders(pageData.sliders)
+    pageItem.choices = dashboardChoices(pageData.choices)
     pageItem.buttons = dashboardItems(pageData.buttons, "button")
     pageItem.images = dashboardImages(pageData.images)
     applyWeather(pageItem, pageData.weather)
@@ -607,6 +627,27 @@ function dashboardSliders(source) {
             "min": Number(source[i].min || 0),
             "max": Number(source[i].max || 100),
             "step": Number(source[i].step || 1)
+        })
+    }
+    return target
+}
+
+function dashboardChoices(source) {
+    source = listOrEmpty(source)
+    var target = []
+    for (var i = 0; i < source.length; i++) {
+        if (!source[i].entity_id) {
+            continue
+        }
+        target.push({
+            "kind": "choice",
+            "domain": source[i].domain || "c300x",
+            "entity_id": source[i].entity_id,
+            "name": source[i].name || source[i].entity_id,
+            "state": false,
+            "state_label": source[i].state_label || source[i].value || "",
+            "value": source[i].value || "",
+            "options": listOrEmpty(source[i].options)
         })
     }
     return target

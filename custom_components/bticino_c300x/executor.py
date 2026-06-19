@@ -129,9 +129,11 @@ _DASHBOARD_SWITCH_SERVICES = {"toggle"}
 _DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"fan", "input_boolean", "light", "switch"}
 _DASHBOARD_BUTTON_ENTITY_DOMAINS = {"button", "input_button", "scene", "script"}
 _DASHBOARD_SLIDER_ENTITY_DOMAINS = {"input_number", "number"}
+_DASHBOARD_CHOICE_ENTITY_DOMAINS = {"input_select", "select"}
 _DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
 _DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET
 _DASHBOARD_SLIDER_ACTIONS = {"decrement", "increment"}
+_DASHBOARD_CHOICE_ACTIONS = {"next", "previous"}
 _DASHBOARD_ON_STATES = {
     "armed_away",
     "armed_custom_bypass",
@@ -745,6 +747,7 @@ def _dashboard_page(
             "switches": [],
             "entities": [],
             "sliders": [],
+            "choices": [],
             "images": [],
             "weather": None,
         }
@@ -794,6 +797,10 @@ def _dashboard_item_for_entity(
     if domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
         item["_kind"] = "slider"
         item.update(_dashboard_slider_payload(state))
+        return item
+    if domain in _DASHBOARD_CHOICE_ENTITY_DOMAINS:
+        item["_kind"] = "choice"
+        item.update(_dashboard_choice_payload(state))
         return item
     item["_kind"] = "entity"
     item["state"] = _dashboard_state_is_on(state.state if state else None)
@@ -913,6 +920,8 @@ async def _async_execute_dashboard_entity(
         )
     elif domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
         await _async_adjust_dashboard_slider(hass, entity_id, action)
+    elif domain in _DASHBOARD_CHOICE_ENTITY_DOMAINS:
+        await _async_adjust_dashboard_choice(hass, entity_id, action)
     else:
         raise ValueError("read_only_dashboard_entity")
 
@@ -983,21 +992,59 @@ async def _async_adjust_dashboard_slider(
     )
 
 
+async def _async_adjust_dashboard_choice(
+    hass: HomeAssistant,
+    entity_id: str,
+    action: str | None,
+) -> None:
+    """Select an option or cycle a select/input_select entity."""
+
+    if not action:
+        raise ValueError("invalid_dashboard_choice_action")
+    domain = entity_id.split(".", 1)[0]
+    if action.startswith("select:"):
+        option = action.split(":", 1)[1]
+        if not option:
+            raise ValueError("invalid_dashboard_choice_action")
+        await hass.services.async_call(
+            domain,
+            "select_option",
+            {"entity_id": entity_id, "option": option},
+            blocking=True,
+        )
+        return
+    if action not in _DASHBOARD_CHOICE_ACTIONS:
+        raise ValueError("invalid_dashboard_choice_action")
+    await hass.services.async_call(
+        domain,
+        f"select_{action}",
+        {"entity_id": entity_id, "cycle": True},
+        blocking=True,
+    )
+
+
 def _dashboard_selected_entity_action(action_id: str) -> tuple[str, str | None]:
     """Split a selected entity action such as `input_number.temp:increment`."""
 
-    raw = str(action_id or "").strip().lower()
+    raw = str(action_id or "").strip()
+    normalized = raw.lower()
     if ":" not in raw:
-        return raw, None
+        return normalized, None
+    if ":select:" in normalized:
+        entity_id, command, value = raw.split(":", 2)
+        if command.lower() == "select":
+            return entity_id.lower(), f"select:{value}"
     entity_id, action = raw.rsplit(":", 1)
-    if action in _DASHBOARD_SLIDER_ACTIONS:
-        return entity_id, action
-    return raw, None
+    normalized_action = action.lower()
+    if normalized_action in _DASHBOARD_SLIDER_ACTIONS | _DASHBOARD_CHOICE_ACTIONS:
+        return entity_id.lower(), normalized_action
+    return normalized, None
 
 
 def _dashboard_collection_key(kind: str) -> str:
     return {
         "button": "buttons",
+        "choice": "choices",
         "entity": "entities",
         "image": "images",
         "slider": "sliders",
@@ -1185,6 +1232,24 @@ def _dashboard_slider_payload(state: Any | None) -> dict[str, Any]:
     }
 
 
+def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
+    attributes = getattr(state, "attributes", None)
+    if not isinstance(attributes, dict):
+        attributes = {}
+    raw_options = attributes.get("options")
+    if not isinstance(raw_options, list):
+        raw_options = []
+    value = "" if state is None else str(state.state or "")
+    return {
+        "value": _dashboard_text(value, "", 80),
+        "options": [
+            _dashboard_text(option, "", 80)
+            for option in raw_options
+            if isinstance(option, str) and option.strip()
+        ][:12],
+    }
+
+
 def _dashboard_float(value: Any, fallback: float | None) -> float | None:
     try:
         return float(value)
@@ -1222,6 +1287,7 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
         "title": page.get("title") or _DASHBOARD_ACTION_PAGE,
         "badges": list(page.get("badges") or []),
         "buttons": _finalize_dashboard_items(page.get("buttons")),
+        "choices": _finalize_dashboard_items(page.get("choices")),
         "entities": _finalize_dashboard_items(page.get("entities")),
         "switches": _finalize_dashboard_items(page.get("switches")),
         "sliders": _finalize_dashboard_items(page.get("sliders")),
@@ -1261,6 +1327,7 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
         for key in (
             "badges",
             "buttons",
+            "choices",
             "entities",
             "switches",
             "sliders",

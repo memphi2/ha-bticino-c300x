@@ -383,6 +383,52 @@ def test_async_execute_dashboard_action_clamps_zero_minimum_slider() -> None:
     ]
 
 
+def test_async_execute_dashboard_action_selects_selected_option() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["select.mode"]})
+
+    result = run(
+        async_execute_dashboard_action(
+            hass,
+            entry,
+            "select.mode:select:Home Assistant",
+        )
+    )
+
+    assert result == {"ok": True, "action_id": "select.mode"}
+    assert hass.services.calls == [
+        (
+            "select",
+            "select_option",
+            {"entity_id": "select.mode", "option": "Home Assistant"},
+            True,
+        )
+    ]
+
+
+def test_async_execute_dashboard_action_selects_input_select_option() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_select.scene"]})
+
+    result = run(
+        async_execute_dashboard_action(
+            hass,
+            entry,
+            "input_select.scene:select:Night",
+        )
+    )
+
+    assert result == {"ok": True, "action_id": "input_select.scene"}
+    assert hass.services.calls == [
+        (
+            "input_select",
+            "select_option",
+            {"entity_id": "input_select.scene", "option": "Night"},
+            True,
+        )
+    ]
+
+
 def test_async_execute_action_rejects_unknown_action() -> None:
     hass = FakeHass()
     entry = FakeEntry(options={CONF_ACTIONS: {}})
@@ -1531,6 +1577,20 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
                         "unit_of_measurement": "C",
                     },
                 ),
+                "select.forwarding": FakeState(
+                    "Home Assistant",
+                    attributes={
+                        "friendly_name": "Forwarding",
+                        "options": ["Smartphone", "Home Assistant", "Blocked"],
+                    },
+                ),
+                "input_select.scene": FakeState(
+                    "Night",
+                    attributes={
+                        "friendly_name": "Scene",
+                        "options": ["Day", "Night"],
+                    },
+                ),
             }
         )
     )
@@ -1542,6 +1602,8 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
                 "binary_sensor.window",
                 "button.restart",
                 "input_number.target",
+                "select.forwarding",
+                "input_select.scene",
             ],
         },
     )
@@ -1595,6 +1657,24 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "value": 18.0,
         }
     ]
+    assert page["choices"] == [
+        {
+            "domain": "c300x",
+            "entity_id": "select.forwarding",
+            "name": "Forwarding",
+            "options": ["Smartphone", "Home Assistant", "Blocked"],
+            "state_label": "Home Assistant",
+            "value": "Home Assistant",
+        },
+        {
+            "domain": "c300x",
+            "entity_id": "input_select.scene",
+            "name": "Scene",
+            "options": ["Day", "Night"],
+            "state_label": "Night",
+            "value": "Night",
+        },
+    ]
 
 
 def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None:
@@ -1623,6 +1703,13 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
                         "unit_of_measurement": "C",
                     },
                 ),
+                "select.forwarding": FakeState(
+                    "Home Assistant",
+                    attributes={
+                        "friendly_name": "Forwarding",
+                        "options": ["Smartphone", "Home Assistant"],
+                    },
+                ),
             }
         )
     )
@@ -1633,6 +1720,7 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
                 "sensor.temperature",
                 "button.restart",
                 "input_number.target",
+                "select.forwarding",
             ],
             CONF_DASHBOARD_ENTITY_NAME_DISPLAY: "entity_id",
             CONF_DASHBOARD_ENTITY_SECONDARY_INFO: "entity_id",
@@ -1652,6 +1740,8 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
     assert page["buttons"][0]["state_label"] == "button.restart"
     assert page["sliders"][0]["name"] == "input_number.target"
     assert page["sliders"][0]["state_label"] == "input_number.target"
+    assert page["choices"][0]["name"] == "select.forwarding"
+    assert page["choices"][0]["state_label"] == "select.forwarding"
 
 
 def test_async_dashboard_payload_can_show_entity_last_changed() -> None:

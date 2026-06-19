@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.3 - 2026-06-19
+
+### Fixed
+
+- Updates the packaged native C300X device agent to `1.2.3`.
+- Reduces repeated C300X display dashboard payload traffic with a revision
+  check.
+- Recycles stale display-event waiters instead of keeping blocked long-poll
+  connections around.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant.
+
 ## v1.2.2 - 2026-06-16
 
 ### Added

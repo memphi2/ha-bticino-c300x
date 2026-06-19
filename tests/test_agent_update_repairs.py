@@ -118,7 +118,12 @@ class FakePatchApi:
         self.calls.append("qml_status")
         return self.qml_status
 
-    async def async_apply_qml_patch(self) -> dict[str, Any]:
+    async def async_apply_qml_patch(
+        self,
+        *,
+        dynamic_homepage: bool = False,
+    ) -> dict[str, Any]:
+        _ = dynamic_homepage
         self.calls.append("apply_qml")
         return {"available": True, "patched": True, "state": "patched"}
 

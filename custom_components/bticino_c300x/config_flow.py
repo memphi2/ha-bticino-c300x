@@ -21,32 +21,35 @@ from .api import (
 )
 from .callback_url import normalize_callback_base_url
 from .config_audio import audio_gain_db, audio_gain_db_or_default
+from .config_flow_dashboard import (
+    DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+)
+from .config_flow_dashboard import (
+    DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
+)
+from .config_flow_dashboard import (
+    dashboard_entity_ids as _dashboard_entity_ids,
+)
+from .config_flow_dashboard import (
+    dashboard_entity_name_display as _dashboard_entity_name_display,
+)
+from .config_flow_dashboard import (
+    dashboard_entity_secondary_info as _dashboard_entity_secondary_info,
+)
+from .config_flow_dashboard import (
+    dashboard_input_defaults as _dashboard_input_defaults,
+)
+from .config_flow_dashboard import (
+    dashboard_schema as _dashboard_schema,
+)
 from .config_flow_forms import (
     actions_json as _actions_json,
-)
-from .config_flow_forms import (
-    actions_json_field as _actions_json_field,
-)
-from .config_flow_forms import (
-    alarm_entity_selector as _alarm_entity_selector,
-)
-from .config_flow_forms import (
-    dashboard_entity_name_display_selector as _dashboard_entity_name_display_selector,
-)
-from .config_flow_forms import (
-    dashboard_entity_secondary_info_selector as _dashboard_entity_secondary_info_selector,
-)
-from .config_flow_forms import (
-    dashboard_entity_selector as _dashboard_entity_selector,
 )
 from .config_flow_forms import (
     optional_suggested as _optional_suggested,
 )
 from .config_flow_forms import (
     password_selector as _password_selector,
-)
-from .config_flow_forms import (
-    weather_entity_selector as _weather_entity_selector,
 )
 from .config_schemas import (
     reconfigure_connection_schema as _reconfigure_connection_schema,
@@ -73,6 +76,7 @@ from .const import (
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
     CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
@@ -93,8 +97,6 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
-    DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DEFAULT_AGENT_PORT,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
@@ -107,9 +109,6 @@ from .const import (
     DEVICE_ACTIVATION_MODES,
     DOMAIN,
     WEATHER_DOMAIN,
-)
-from .dashboard_entities import (
-    normalize_dashboard_entity_ids,
 )
 from .device_installer import (
     C300XDeviceInstallError,
@@ -125,7 +124,6 @@ _QML_PATCH_STATUS_UNKNOWN = "unknown"
 _QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
 _SETUP_VIDEO_ENABLED_DEFAULT = True
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True
-_DASHBOARD_PREVENT_RETURN_DEFAULT = False
 _RECONFIGURED_OPTION_KEYS = frozenset(
     {
         CONF_ACTIONS,
@@ -136,6 +134,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_CREATE_HOMEASSISTANT_USER,
         CONF_ALARM_ENTITY_ID,
         CONF_DASHBOARD_ENTITIES,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
         CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
         CONF_DASHBOARD_PREVENT_RETURN,
@@ -590,6 +589,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
                     )
                 ),
+                default_dashboard_dynamic_homepage=bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                        _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+                    )
+                ),
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
@@ -635,6 +640,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DASHBOARD_PREVENT_RETURN
                 ],
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: feature_data[
+                    CONF_DASHBOARD_DYNAMIC_HOMEPAGE
+                ],
                 CONF_DASHBOARD_ENTITY_NAME_DISPLAY: feature_data[
                     CONF_DASHBOARD_ENTITY_NAME_DISPLAY
                 ],
@@ -799,6 +807,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     (user_input or {}).get(
                         CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
                         feature_defaults[CONF_DASHBOARD_ENTITY_SECONDARY_INFO],
+                    )
+                ),
+                default_dashboard_dynamic_homepage=bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                        feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
                     )
                 ),
                 default_device_ui_enabled=bool(
@@ -993,6 +1007,12 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                         feature_defaults[CONF_DASHBOARD_ENTITY_SECONDARY_INFO],
                     )
                 ),
+                default_dashboard_dynamic_homepage=bool(
+                    (user_input or {}).get(
+                        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                        feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
+                    )
+                ),
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
@@ -1179,33 +1199,6 @@ def _optional_domain_entity_id(value: Any, *, domain: str, error: str) -> str:
     return entity_id
 
 
-def _dashboard_entity_ids(value: Any) -> list[str]:
-    """Validate selected entities for the simple C300X dashboard page."""
-
-    try:
-        return list(normalize_dashboard_entity_ids(value, strict=True))
-    except ValueError as err:
-        raise vol.Invalid("invalid dashboard entities") from err
-
-
-def _dashboard_entity_name_display(value: Any) -> str:
-    """Validate how direct dashboard entities should be named."""
-
-    display = str(value or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME).strip()
-    if display not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
-        return DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-    return display
-
-
-def _dashboard_entity_secondary_info(value: Any) -> str:
-    """Validate direct dashboard entity secondary-info mode."""
-
-    info = str(value or DASHBOARD_ENTITY_SECONDARY_INFO_STATE).strip()
-    if info not in DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS:
-        return DASHBOARD_ENTITY_SECONDARY_INFO_STATE
-    return info
-
-
 def _non_empty_string(value: Any) -> str:
     """Validate non-empty setup strings."""
 
@@ -1330,6 +1323,7 @@ def _feature_input(
     alarm_entity_id = ""
     weather_entity_id = ""
     dashboard_entities: list[str] = []
+    dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
     dashboard_entity_name_display = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
     dashboard_entity_secondary_info = DASHBOARD_ENTITY_SECONDARY_INFO_STATE
     actions: dict[str, dict[str, Any]] = {}
@@ -1385,6 +1379,12 @@ def _feature_input(
                 DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
             )
         )
+        dashboard_dynamic_homepage = bool(
+            user_input.get(
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+            )
+        )
     media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
     if media_enabled:
         try:
@@ -1415,6 +1415,7 @@ def _feature_input(
             CONF_ALARM_ENTITY_ID: alarm_entity_id,
             CONF_WEATHER_ENTITY_ID: weather_entity_id,
             CONF_DASHBOARD_ENTITIES: dashboard_entities,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
             CONF_DASHBOARD_ENTITY_NAME_DISPLAY: dashboard_entity_name_display,
             CONF_DASHBOARD_ENTITY_SECONDARY_INFO: dashboard_entity_secondary_info,
             CONF_ACTIONS: actions,
@@ -1644,61 +1645,6 @@ def _options_features_schema(
     )
 
 
-def _dashboard_schema(
-    default_alarm_entity: str,
-    default_weather_entity: str,
-    default_actions_json: str = "",
-    default_dashboard_prevent_return: bool = _DASHBOARD_PREVENT_RETURN_DEFAULT,
-    default_dashboard_entities: Any = None,
-    default_dashboard_entity_name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    default_dashboard_entity_secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-    *,
-    default_device_ui_enabled: bool = False,
-) -> vol.Schema:
-    """Return the display dashboard schema."""
-
-    return vol.Schema(
-        {
-            vol.Optional(
-                CONF_DEVICE_UI_ENABLED,
-                default=default_device_ui_enabled,
-            ): bool,
-            _optional_suggested(
-                CONF_ALARM_ENTITY_ID,
-                default_alarm_entity,
-            ): _alarm_entity_selector(),
-            _optional_suggested(
-                CONF_WEATHER_ENTITY_ID,
-                default_weather_entity,
-            ): _weather_entity_selector(),
-            _optional_suggested(
-                CONF_DASHBOARD_ENTITIES,
-                _dashboard_entity_ids(default_dashboard_entities or []),
-            ): _dashboard_entity_selector(),
-            vol.Optional(
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                default=_dashboard_entity_name_display(
-                    default_dashboard_entity_name_display
-                ),
-            ): _dashboard_entity_name_display_selector(),
-            vol.Optional(
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                default=_dashboard_entity_secondary_info(
-                    default_dashboard_entity_secondary_info
-                ),
-            ): _dashboard_entity_secondary_info_selector(),
-            _optional_suggested(
-                CONF_ACTIONS_JSON,
-                default_actions_json,
-            ): _actions_json_field(),
-            vol.Optional(
-                CONF_DASHBOARD_PREVENT_RETURN,
-                default=default_dashboard_prevent_return,
-            ): bool,
-        }
-    )
-
-
 def _current_connection_options(
     config_entry: config_entries.ConfigEntry,
 ) -> dict[str, Any]:
@@ -1737,6 +1683,13 @@ def _current_feature_options(
         ),
         CONF_DASHBOARD_ENTITIES: _dashboard_entity_ids(
             _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
+        ),
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE: bool(
+            _config_default(
+                config_entry,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+            )
         ),
         CONF_DASHBOARD_ENTITY_NAME_DISPLAY: _dashboard_entity_name_display(
             _config_default(
@@ -1900,6 +1853,13 @@ def _feature_input_defaults(
     data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
     data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
     data.setdefault(
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+        defaults.get(
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+            _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+        ),
+    )
+    data.setdefault(
         CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
         defaults.get(
             CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
@@ -1917,66 +1877,6 @@ def _feature_input_defaults(
     data.setdefault(
         CONF_DASHBOARD_PREVENT_RETURN,
         defaults[CONF_DASHBOARD_PREVENT_RETURN],
-    )
-    return data
-
-
-def _dashboard_input_defaults(
-    user_input: dict[str, Any],
-    defaults: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Return dashboard input defaults for the separate display dashboard page."""
-
-    data = dict(user_input)
-    data.setdefault(
-        CONF_DEVICE_UI_ENABLED,
-        False if defaults is None else defaults.get(CONF_DEVICE_UI_ENABLED, False),
-    )
-    data.setdefault(
-        CONF_ALARM_ENTITY_ID,
-        "" if defaults is None else defaults[CONF_ALARM_ENTITY_ID],
-    )
-    data.setdefault(
-        CONF_WEATHER_ENTITY_ID,
-        "" if defaults is None else defaults[CONF_WEATHER_ENTITY_ID],
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITIES,
-        [] if defaults is None else defaults.get(CONF_DASHBOARD_ENTITIES, []),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-        (
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-            if defaults is None
-            else defaults.get(
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-            )
-        ),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-        (
-            DASHBOARD_ENTITY_SECONDARY_INFO_STATE
-            if defaults is None
-            else defaults.get(
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-            )
-        ),
-    )
-    data.setdefault(
-        CONF_ACTIONS_JSON,
-        "" if defaults is None else _actions_json(defaults[CONF_ACTIONS]),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_PREVENT_RETURN,
-        (
-            _DASHBOARD_PREVENT_RETURN_DEFAULT
-            if defaults is None
-            else defaults[CONF_DASHBOARD_PREVENT_RETURN]
-        ),
     )
     return data
 

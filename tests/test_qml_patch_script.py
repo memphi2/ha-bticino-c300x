@@ -295,6 +295,41 @@ def test_qml_patch_apply_installs_complete_function_patch(tmp_path: Path) -> Non
     _assert_complete_gui_patch(gui_dir)
 
 
+def test_qml_patch_apply_can_use_dynamic_home_page_buttons(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(
+        tmp_path,
+        gui_dir,
+        backup_dir,
+        "apply",
+        env_overrides={"C300X_QML_DYNAMIC_HOME_PAGE": "1"},
+    )
+
+    assert status["state"] == "patched"
+    assert status["patched"] is True
+    home_page = (gui_dir / "HomePage.qml").read_text()
+    assert 'import "js/c300x_ha.js" as HAConfig' in home_page
+    assert 'import "js/c300x_memos.js" as MemoSync' in home_page
+    assert "function displayBridgeButtonCount()" in home_page
+    assert "function refreshDisplayBridgeButtons()" in home_page
+    assert "HAConfig.homeButtons" in home_page
+    assert "+ 2 + page.displayBridgeButtonCount()" in home_page
+    assert "id: homeAssistantButtonRow" not in home_page
+    assert "visible: page.alarmButtonVisible" in home_page
+    assert "visible: page.haButtonVisible" in home_page
+    assert "function isVisible() { return visible }" in home_page
+    assert home_page.index('objectName: "settingsButton"') < home_page.index(
+        'objectName: "alarmButton"'
+    )
+    assert home_page.index('objectName: "alarmButton"') < home_page.index(
+        'objectName: "haButton"'
+    )
+
+
 def test_qml_media_user_label_apply_installs_call_forwarding_label(tmp_path: Path) -> None:
     gui_dir = tmp_path / "gui"
     backup_dir = tmp_path / "backups"

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from custom_components.bticino_c300x.const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from custom_components.bticino_c300x.qml_patch import (
     async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
@@ -24,11 +25,17 @@ class _FakeApi:
     core_apply_status: dict[str, Any] = field(default_factory=dict)
     core_restore_status: dict[str, Any] = field(default_factory=dict)
     fail_action: str | None = None
+    dynamic_homepage: bool | None = None
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         return self.status
 
-    async def async_apply_qml_patch(self) -> dict[str, Any]:
+    async def async_apply_qml_patch(
+        self,
+        *,
+        dynamic_homepage: bool = False,
+    ) -> dict[str, Any]:
+        self.dynamic_homepage = dynamic_homepage
         if self.fail_action == "apply":
             raise RuntimeError("apply failed")
         return self.apply_status
@@ -49,8 +56,15 @@ class _FakeApi:
         return self.core_restore_status
 
 
-def _entry(api: _FakeApi, initial: dict[str, Any] | None = None) -> SimpleNamespace:
+def _entry(
+    api: _FakeApi,
+    initial: dict[str, Any] | None = None,
+    *,
+    options: dict[str, Any] | None = None,
+) -> SimpleNamespace:
     return SimpleNamespace(
+        data={},
+        options=options or {},
         runtime_data=SimpleNamespace(
             api=api,
             qml_patch_status=initial or {},
@@ -87,6 +101,18 @@ def test_apply_qml_patch_confirms_with_fresh_status() -> None:
     assert status == {"available": True, "patched": True, "state": "patched"}
     assert changes == 2
     assert entry.runtime_data.qml_patch_status == status
+
+
+def test_apply_qml_patch_forwards_dynamic_home_page_option() -> None:
+    api = _FakeApi(
+        status={"available": True, "patched": True, "state": "patched"},
+        apply_status={"patched": True},
+    )
+    entry = _entry(api, options={CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True})
+
+    asyncio.run(async_apply_qml_patch_and_confirm(entry))
+
+    assert api.dynamic_homepage is True
 
 
 def test_restore_qml_patch_keeps_action_status_when_confirmation_mismatches() -> None:

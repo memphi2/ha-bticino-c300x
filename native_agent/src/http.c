@@ -344,6 +344,16 @@ static int run_command_capture(
     int timeout_ms,
     int *exit_code
 );
+static int run_command_capture_with_env(
+    const char *program,
+    const char *argument,
+    char *out,
+    size_t out_len,
+    int timeout_ms,
+    int *exit_code,
+    const char *env_name,
+    const char *env_value
+);
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
@@ -9090,6 +9100,29 @@ static int run_command_capture(
     int *exit_code
 )
 {
+    return run_command_capture_with_env(
+        program,
+        argument,
+        out,
+        out_len,
+        timeout_ms,
+        exit_code,
+        NULL,
+        NULL
+    );
+}
+
+static int run_command_capture_with_env(
+    const char *program,
+    const char *argument,
+    char *out,
+    size_t out_len,
+    int timeout_ms,
+    int *exit_code,
+    const char *env_name,
+    const char *env_value
+)
+{
     const int interval_ms = 50;
     int pipe_fd[2];
     int status = 0;
@@ -9126,6 +9159,9 @@ static int run_command_capture(
             close(null_fd);
         }
         close(pipe_fd[1]);
+        if (env_name != NULL && env_value != NULL) {
+            (void)setenv(env_name, env_value, 1);
+        }
         execl(program, program, argument, (char *)NULL);
         _exit(127);
     }
@@ -10409,7 +10445,8 @@ static void send_qml_patch_script_response(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *action,
-    int records_write
+    int records_write,
+    int dynamic_homepage
 )
 {
     char output[4096];
@@ -10424,13 +10461,15 @@ static void send_qml_patch_script_response(
         );
         return;
     }
-    if (!run_command_capture(
+    if (!run_command_capture_with_env(
         config->maintenance_qml_patch_script,
         action,
         output,
         sizeof(output),
         10000,
-        NULL
+        NULL,
+        dynamic_homepage ? "C300X_QML_DYNAMIC_HOME_PAGE" : NULL,
+        dynamic_homepage ? "1" : NULL
     )) {
         send_json(
             client_fd,
@@ -10474,7 +10513,7 @@ static void handle_qml_patch_status(
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
         return;
     }
-    send_qml_patch_script_response(client_fd, config, NULL, "status", 0);
+    send_qml_patch_script_response(client_fd, config, NULL, "status", 0, 0);
 }
 
 static void handle_qml_patch_action(
@@ -10498,7 +10537,29 @@ static void handle_qml_patch_action(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
     }
-    send_qml_patch_script_response(client_fd, config, runtime, action, 1);
+    {
+        int dynamic_homepage = 0;
+        if (strcmp(action, "apply") == 0) {
+            (void)json_bool_field(
+                request->body,
+                "dynamic_homepage",
+                &dynamic_homepage
+            );
+            (void)json_bool_field(
+                request->body,
+                "dynamicHomepage",
+                &dynamic_homepage
+            );
+        }
+        send_qml_patch_script_response(
+            client_fd,
+            config,
+            runtime,
+            action,
+            1,
+            dynamic_homepage
+        );
+    }
 }
 
 static void handle_gui_reload(

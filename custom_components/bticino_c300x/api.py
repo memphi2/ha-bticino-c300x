@@ -930,13 +930,20 @@ class C300XAgentApi:
         )
         return normalize_qml_patch_status(data)
 
-    async def async_apply_qml_patch(self) -> dict[str, Any]:
+    async def async_apply_qml_patch(
+        self,
+        *,
+        dynamic_homepage: bool = False,
+    ) -> dict[str, Any]:
         """Apply the device UI patch through the maintenance API."""
 
         data = await self._request_json(
             "POST",
             "/api/v1/maintenance/qml-patch/actions/apply",
-            json_data={"confirm": "apply_qml_patch"},
+            json_data={
+                "confirm": "apply_qml_patch",
+                "dynamic_homepage": dynamic_homepage,
+            },
             extra_headers=self._maintenance_headers(),
         )
         return normalize_qml_patch_status(data)

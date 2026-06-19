@@ -236,7 +236,12 @@ class _FakeMemoApi:
         self.video_messages_calls += 1
         return self._refreshed_video_messages
 
-    async def async_apply_qml_patch(self) -> dict[str, Any]:
+    async def async_apply_qml_patch(
+        self,
+        *,
+        dynamic_homepage: bool = False,
+    ) -> dict[str, Any]:
+        _ = dynamic_homepage
         self.qml_patch_actions.append("apply")
         return {
             "available": True,

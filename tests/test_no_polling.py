@@ -54,30 +54,30 @@ def test_device_homeassistant_page_cleans_dashboard_runtime() -> None:
     assert "time=\" + Date.now()" not in text
 
 
-def test_device_home_page_uses_static_display_bridge_buttons() -> None:
+def test_device_home_page_buttons_do_not_poll() -> None:
     text = (ROOT / "native_agent" / "scripts" / "qml_patch.sh").read_text(
         encoding="utf-8"
     )
     helper = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(encoding="utf-8")
 
-    assert "property bool alarmButtonVisible: false" not in text
-    assert "property bool haButtonVisible: false" not in text
-    assert "visible: page.alarmButtonVisible" not in text
-    assert "visible: page.haButtonVisible" not in text
     assert 'objectName: \\"alarmButton\\"' in text
     assert 'objectName: \\"haButton\\"' in text
     assert 'id: homeAssistantButtonRow' in text
     assert "width: buttonPrototype.width * 2 + foobar.spacing" in text
     assert "spacing: foobar.spacing" in text
+    assert "function displayBridgeButtonCount()" in text
     assert 'pressedIcon: \\"images/keylock_icon-small_p.svg\\"' in text
     assert 'defaultIcon: \\"images/keylock_icon-small.svg\\"' in text
     assert 'pressedIcon: \\"images/call/icon_call-home_p.svg\\"' in text
     assert 'defaultIcon: \\"images/call/icon_call-home.svg\\"' in text
-    assert "HAConfig.homeButtons" not in text
+    assert "HAConfig.homeButtons" in text
     assert "function startMessageNotificationWatch()" in text
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in text
     assert "function homeButtons(callback)" in helper
+    assert "Timer" not in text
+    assert "setInterval" not in text
     assert "Timer" not in helper
+    assert "setInterval" not in helper
     assert "setInterval" not in helper
 
 

@@ -10,6 +10,7 @@ RELOAD_GUI="${C300X_QML_RELOAD_GUI:-1}"
 GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"
 GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
+DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
 CORE_PATCH_FILES="EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
@@ -96,7 +97,7 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         && file_contains "$GUI_DIR/MainApp.qml" 'alarmPage,' \
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
-        && file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
+        && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "alarmButton"' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "haButton"' \
@@ -114,12 +115,22 @@ partial_patch_present() {
     file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "Alarm.qml"' \
         || file_contains "$GUI_DIR/MainApp.qml" 'sourceUrl: "HomeAssistant.qml"' \
         || file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
+        || file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
         || file_contains "$GUI_DIR/MemoPage.qml" 'MemoSync.syncMemoModel' \
         || [ -f "$GUI_DIR/Alarm.qml" ] \
         || [ -f "$GUI_DIR/HomeAssistant.qml" ] \
         || [ -f "$GUI_DIR/js/c300x_ha.js" ] \
         || [ -f "$GUI_DIR/js/c300x_i18n.js" ] \
         || [ -f "$GUI_DIR/js/c300x_memos.js" ]
+}
+
+home_page_feature_patch_present() {
+    file_contains "$GUI_DIR/HomePage.qml" 'id: homeAssistantButtonRow' \
+        || (
+            file_contains "$GUI_DIR/HomePage.qml" 'function displayBridgeButtonCount()' \
+            && file_contains "$GUI_DIR/HomePage.qml" 'HAConfig.homeButtons' \
+            && file_contains "$GUI_DIR/HomePage.qml" '+ 2 + page.displayBridgeButtonCount()'
+        )
 }
 
 core_patch_present() {
@@ -320,10 +331,13 @@ patch_home_page() {
     fi
     mkdir -p "$output_dir"
     require_clean_original_page "$source_home_page" "HomePage.qml"
-    awk '
+    awk -v dynamic_home_page="$DYNAMIC_HOME_PAGE" '
         function print_memo_sync_import() {
             if (!printed_memo_sync_import) {
                 print "import \"js/c300x_memos.js\" as MemoSync"
+                if (dynamic_home_page == "1") {
+                    print "import \"js/c300x_ha.js\" as HAConfig"
+                }
                 printed_memo_sync_import=1
             }
         }
@@ -359,7 +373,30 @@ patch_home_page() {
             print "        MemoSync.stopEventWatch()"
             print "    }"
         }
+        function print_display_bridge_button_helpers() {
+            if (dynamic_home_page != "1") {
+                return
+            }
+            print ""
+            print "    property bool alarmButtonVisible: false"
+            print "    property bool haButtonVisible: false"
+            print ""
+            print "    function displayBridgeButtonCount() {"
+            print "        return (alarmButtonVisible ? 1 : 0) + (haButtonVisible ? 1 : 0)"
+            print "    }"
+            print ""
+            print "    function refreshDisplayBridgeButtons() {"
+            print "        HAConfig.homeButtons(function(alarmConfigured, dashboardAvailable) {"
+            print "            page.alarmButtonVisible = alarmConfigured"
+            print "            page.haButtonVisible = dashboardAvailable"
+            print "        })"
+            print "    }"
+        }
         function print_home_assistant_flow_item() {
+            if (dynamic_home_page == "1") {
+                print_home_assistant_dynamic_flow_items()
+                return
+            }
             print ""
             print "            Row {"
             print "                id: homeAssistantButtonRow"
@@ -392,6 +429,36 @@ patch_home_page() {
             print "                }"
             print "            }"
         }
+        function print_home_assistant_dynamic_flow_items() {
+            print ""
+            print "            BasicButton {"
+            print "                objectName: \"alarmButton\""
+            print "                visible: page.alarmButtonVisible"
+            print "                function isVisible() { return visible }"
+            print "                style: HomePageButtonStyle {"
+            print "                    pressedImage: \"images/function_btn_p.svg\""
+            print "                    pressedIcon: \"images/keylock_icon-small_p.svg\""
+            print "                    defaultIcon: \"images/keylock_icon-small.svg\""
+            print "                    defaultImage: \"images/function_btn.svg\""
+            print "                    description: trsl.language === \"de\" ? \"Alarmanlage\" : (trsl.language === \"it\" ? \"Allarme\" : (trsl.language === \"fr\" ? \"Alarme\" : \"Alarm\"))"
+            print "                }"
+            print "                onTouched: tabView.activateTab(alarmPage)"
+            print "            }"
+            print ""
+            print "            BasicButton {"
+            print "                objectName: \"haButton\""
+            print "                visible: page.haButtonVisible"
+            print "                function isVisible() { return visible }"
+            print "                style: HomePageButtonStyle {"
+            print "                    pressedImage: \"images/function_btn_p.svg\""
+            print "                    pressedIcon: \"images/call/icon_call-home_p.svg\""
+            print "                    defaultIcon: \"images/call/icon_call-home.svg\""
+            print "                    defaultImage: \"images/function_btn.svg\""
+            print "                    description: \"Home Assistant\""
+            print "                }"
+            print "                onTouched: tabView.activateTab(haPage)"
+            print "            }"
+        }
         function delta(line, opened, closed, copy) {
             copy=line
             opened=gsub(/\{/, "{", copy)
@@ -412,6 +479,7 @@ patch_home_page() {
         $0 == "    id: page" {
             print
             print_home_notification_helpers()
+            print_display_bridge_button_helpers()
             next
         }
         $0 == "    function aboutToShow() {" {
@@ -420,13 +488,37 @@ patch_home_page() {
             next
         }
         in_about_to_show && $0 == "    }" {
+            if (dynamic_home_page == "1") {
+                print "        refreshDisplayBridgeButtons()"
+            }
             print "        refreshMessageNotifications()"
             print
             in_about_to_show=0
             next
         }
+        $0 ~ /function buttonCount\(\)/ {
+            in_button_count=1
+            print
+            next
+        }
+        in_button_count && dynamic_home_page == "1" && $0 ~ /\+ 2/ {
+            sub(/\+ 2/, "+ 2 + page.displayBridgeButtonCount()")
+            print
+            if ($0 ~ /\}/) {
+                in_button_count=0
+            }
+            next
+        }
+        in_button_count && $0 ~ /^[[:space:]]*\}/ {
+            in_button_count=0
+            print
+            next
+        }
         $0 == "                loader.item.setDate()" {
             print
+            if (dynamic_home_page == "1") {
+                print "                refreshDisplayBridgeButtons()"
+            }
             print "                startMessageNotificationWatch()"
             next
         }
@@ -487,17 +579,34 @@ patch_home_page() {
             }
         }
     ' "$source_home_page" > "$temp_file"
-    verify_generated_page \
-        "$temp_file" \
-        "HomePage.qml" \
-        'import "js/c300x_memos.js" as MemoSync' \
-        'function refreshMessageNotifications()' \
-        'function startMessageNotificationWatch()' \
-        'MemoSync.syncHomeNotifications(page)' \
-        'id: homeAssistantButtonRow' \
-        'objectName: "alarmButton"' \
-        'objectName: "haButton"' \
-        'images/call/icon_call-home.svg'
+    if [ "$DYNAMIC_HOME_PAGE" = "1" ]; then
+        verify_generated_page \
+            "$temp_file" \
+            "HomePage.qml" \
+            'import "js/c300x_memos.js" as MemoSync' \
+            'import "js/c300x_ha.js" as HAConfig' \
+            'function refreshMessageNotifications()' \
+            'function displayBridgeButtonCount()' \
+            'HAConfig.homeButtons' \
+            '+ 2 + page.displayBridgeButtonCount()' \
+            'visible: page.alarmButtonVisible' \
+            'visible: page.haButtonVisible' \
+            'objectName: "alarmButton"' \
+            'objectName: "haButton"' \
+            'images/call/icon_call-home.svg'
+    else
+        verify_generated_page \
+            "$temp_file" \
+            "HomePage.qml" \
+            'import "js/c300x_memos.js" as MemoSync' \
+            'function refreshMessageNotifications()' \
+            'function startMessageNotificationWatch()' \
+            'MemoSync.syncHomeNotifications(page)' \
+            'id: homeAssistantButtonRow' \
+            'objectName: "alarmButton"' \
+            'objectName: "haButton"' \
+            'images/call/icon_call-home.svg'
+    fi
     mv "$temp_file" "$home_page"
 }
 

@@ -21,6 +21,7 @@ CONF_DASHBOARD_PREVENT_RETURN = "dashboard_prevent_return"
 CONF_DASHBOARD_ENTITIES = "dashboard_entities"
 CONF_DASHBOARD_ENTITY_NAME_DISPLAY = "dashboard_entity_name_display"
 CONF_DASHBOARD_ENTITY_SECONDARY_INFO = "dashboard_entity_secondary_info"
+CONF_DASHBOARD_DYNAMIC_HOMEPAGE = "dashboard_dynamic_homepage"
 CONF_DEVICE_ACTIVATION_MODE = "device_activation_mode"
 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS = (
     "device_activation_stair_light_address"

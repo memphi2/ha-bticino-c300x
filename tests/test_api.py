@@ -1497,7 +1497,30 @@ def test_apply_qml_patch_sends_maintenance_confirmation() -> None:
         "POST",
         "http://agent.local:8080/api/v1/maintenance/qml-patch/actions/apply",
     )
-    assert request["kwargs"]["json"] == {"confirm": "apply_qml_patch"}
+    assert request["kwargs"]["json"] == {
+        "confirm": "apply_qml_patch",
+        "dynamic_homepage": False,
+    }
+
+
+def test_apply_qml_patch_sends_dynamic_homepage_flag() -> None:
+    session = _FakeSession('{"ok": true, "state": "patched"}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+
+    assert (
+        asyncio.run(api.async_apply_qml_patch(dynamic_homepage=True))["state"]
+        == "patched"
+    )
+    request = session.requests[0]
+    assert request["kwargs"]["json"] == {
+        "confirm": "apply_qml_patch",
+        "dynamic_homepage": True,
+    }
 
 
 def test_apply_qml_core_patch_sends_maintenance_confirmation() -> None:

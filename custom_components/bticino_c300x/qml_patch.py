@@ -8,6 +8,9 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 
+from .const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
+from .entry_config import entry_config_value
+
 
 async def async_refresh_qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
     """Refresh and store the device-reported Display patch status."""
@@ -31,7 +34,11 @@ async def async_apply_qml_patch_and_confirm(
         status_changed=status_changed,
         transient_state="patching",
         expected_patched=True,
-        action=entry.runtime_data.api.async_apply_qml_patch,
+        action=lambda: entry.runtime_data.api.async_apply_qml_patch(
+            dynamic_homepage=bool(
+                entry_config_value(entry, CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False)
+            )
+        ),
     )
 
 

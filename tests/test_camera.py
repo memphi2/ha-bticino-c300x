@@ -633,6 +633,53 @@ def test_doorbell_camera_closing_one_of_multiple_webrtc_sessions_keeps_agent_sta
     assert camera.extra_state_attributes["video_window_available"] is True
 
 
+def test_doorbell_camera_closing_unanswered_ring_preview_keeps_ring_media() -> None:
+    class _RingPreviewApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "ring"
+            status["window_available"] = True
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "unanswered_ring_call": True,
+            }
+            return status
+
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _Player:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    api = _RingPreviewApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    peer = _Peer()
+    player = _Player()
+    session = _NativeWebRTCSession(peer, owner="ring")
+    session.ring_preview = True
+    session.player = player
+    camera._webrtc_sessions["ring-preview"] = session
+
+    asyncio.run(camera._async_close_webrtc_session("ring-preview"))
+
+    assert peer.closed is True
+    assert player.stopped is True
+    assert api.stop_calls == 0
+    assert api.hangup_calls == 0
+
+
 def test_doorbell_camera_cpu_watchdog_closes_local_webrtc_sessions() -> None:
     class _Peer:
         def __init__(self) -> None:
@@ -1988,6 +2035,49 @@ def test_doorbell_camera_applies_home_call_ended_event_without_polling() -> None
     assert camera._bridge_status["home_call_target_audio_port"] == 0
     assert camera._bridge_status["home_call_rtp_packets"] == 69
     assert camera._bridge_status["home_call_rtcp_packets"] == 2
+    assert entry.runtime_data.api.home_call_status_calls == 0
+
+
+def test_doorbell_camera_home_call_answered_then_ended_event_sequence() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "home_call_answered",
+                "home_call": {
+                    "running": True,
+                    "active": True,
+                    "answered": True,
+                    "rtp_proxy": True,
+                    "target_audio_port": 62012,
+                },
+            }
+        )
+    )
+
+    assert camera._last_media_state is MediaState.HOME_CALL_ACTIVE
+    assert camera.extra_state_attributes["video_owner"] == "home_call"
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "home_call_ended",
+                "home_call": {"rtp_packets": 12, "rtcp_packets": 3},
+            }
+        )
+    )
+
+    assert camera._last_media_state is MediaState.IDLE
+    assert camera.extra_state_attributes["video_owner"] == "idle"
+    assert camera._bridge_status["home_call_running"] is False
+    assert camera._bridge_status["home_call_active"] is False
+    assert camera._bridge_status["home_call_answered"] is False
+    assert camera._bridge_status["home_call_rtp_packets"] == 12
+    assert camera._bridge_status["home_call_rtcp_packets"] == 3
     assert entry.runtime_data.api.home_call_status_calls == 0
 
 

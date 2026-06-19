@@ -13,6 +13,8 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
+- Hard-reload the browser or clear the Home Assistant app/WebView cache if a
+  dashboard still shows the old Lovelace card behavior.
 - Update the native C300X device agent from Home Assistant.
 
 ## v1.2.2 - 2026-06-16

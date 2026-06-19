@@ -403,7 +403,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         try:
             connection = discovery_connection_updates(host, port)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return self.async_abort(reason="cannot_connect")
 
         discovered_unique_id = discovery_unique_id(properties)

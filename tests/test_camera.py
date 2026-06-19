@@ -1869,6 +1869,65 @@ def test_doorbell_camera_updates_derived_media_state_from_ring_event() -> None:
     assert camera._last_media_decision.primary_action == "answer_ring"
 
 
+def test_doorbell_camera_ring_event_sequence_reaches_preview_then_idle() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "doorbell_pressed",
+                "media_owner": "ring",
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": False,
+                    "unanswered_ring_call": True,
+                },
+            }
+        )
+    )
+
+    assert camera._last_media_state is MediaState.RING_PENDING
+    assert camera._last_media_decision.rtsp_start_allowed is False
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "doorbell_view_requested",
+                "media_owner": "ring",
+                "video_window_available": True,
+                "video_available": True,
+                "stream_path": "/doorbell-video",
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "unanswered_ring_call": True,
+                },
+            }
+        )
+    )
+
+    assert camera._last_media_state is MediaState.RING_PREVIEW_ACTIVE
+    assert camera._last_media_decision.primary_action == "answer_ring"
+    assert camera.extra_state_attributes["video_window_available"] is True
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "doorbell_media_closed",
+            }
+        )
+    )
+
+    assert camera._last_media_state is MediaState.IDLE
+    assert camera.extra_state_attributes["video_window_available"] is False
+
+
 def test_doorbell_camera_keeps_agent_video_until_close_event() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]

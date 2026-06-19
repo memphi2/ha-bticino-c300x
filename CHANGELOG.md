@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.2.3 - 2026-06-19
+## v1.2.4 - 2026-06-20
 
 ### Fixed
 
@@ -9,6 +9,9 @@
   check.
 - Recycles stale display-event waiters instead of keeping blocked long-poll
   connections around.
+- Fixes dashboard configuration flow layout and per-entity display options.
+- Keeps Media Readiness forwarding and media-user attributes consistent after
+  refreshes.
 
 ### Upgrade Notes
 

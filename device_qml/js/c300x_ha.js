@@ -193,6 +193,20 @@ function dashboardChoiceAction(item, option, statusItem, pageItem) {
     })
 }
 
+function dashboardChoiceOptionLabel(option) {
+    if (option && option.label !== undefined && option.label !== null) {
+        return String(option.label)
+    }
+    return String(option || "")
+}
+
+function dashboardChoiceOptionValue(option) {
+    if (option && option.value !== undefined && option.value !== null) {
+        return String(option.value)
+    }
+    return String(option || "")
+}
+
 function stairLight(statusItem, pageItem) {
     getJson("/ui/stair-light", function(data) {
         statusItem.text = data.ok ? uiText(pageItem, "stair_light_sent") : uiText(pageItem, "stair_light_error")
@@ -651,8 +665,27 @@ function dashboardChoices(source) {
             "state": false,
             "state_label": source[i].state_label || source[i].value || "",
             "value": source[i].value || "",
-            "options": listOrEmpty(source[i].options)
+            "options": dashboardChoiceOptions(source[i].options)
         })
+    }
+    return target
+}
+
+function dashboardChoiceOptions(source) {
+    source = listOrEmpty(source)
+    var target = []
+    for (var i = 0; i < source.length; i++) {
+        if (source[i] && source[i].value !== undefined) {
+            target.push({
+                "label": source[i].label !== undefined ? String(source[i].label) : String(source[i].value),
+                "value": String(source[i].value)
+            })
+        } else if (source[i] !== undefined && source[i] !== null) {
+            target.push({
+                "label": String(source[i]),
+                "value": String(source[i])
+            })
+        }
     }
     return target
 }

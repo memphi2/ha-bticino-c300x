@@ -1360,9 +1360,12 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
         raw_options = []
     value = "" if state is None else str(state.state or "")
     return {
-        "value": _dashboard_text(value, "", 80),
+        "value": value,
         "options": [
-            _dashboard_text(option, "", 80)
+            {
+                "label": _dashboard_text(option, "", 80),
+                "value": option,
+            }
             for option in raw_options
             if isinstance(option, str) and option.strip()
         ][:12],

@@ -1686,7 +1686,11 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "domain": "c300x",
             "entity_id": "select.forwarding",
             "name": "Forwarding",
-            "options": ["Smartphone", "Home Assistant", "Blocked"],
+            "options": [
+                {"label": "Smartphone", "value": "Smartphone"},
+                {"label": "Home Assistant", "value": "Home Assistant"},
+                {"label": "Blocked", "value": "Blocked"},
+            ],
             "state_label": "Home Assistant",
             "value": "Home Assistant",
         },
@@ -1694,7 +1698,10 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "domain": "c300x",
             "entity_id": "input_select.scene",
             "name": "Scene",
-            "options": ["Day", "Night"],
+            "options": [
+                {"label": "Day", "value": "Day"},
+                {"label": "Night", "value": "Night"},
+            ],
             "state_label": "Night",
             "value": "Night",
         },
@@ -1889,6 +1896,42 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
     assert page["sliders"][0]["state_label"] == "input_number.target"
     assert page["choices"][0]["name"] == "select.forwarding"
     assert page["choices"][0]["state_label"] == "select.forwarding"
+
+
+def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
+    long_option = "Home   Assistant  " + ("manual " * 20)
+    states = {
+        "select.forwarding": FakeState(
+            long_option,
+            attributes={
+                "friendly_name": "Forwarding",
+                "options": [long_option],
+            },
+        )
+    }
+    hass = FakeHass(states=states)
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["select.forwarding"]})
+
+    result = run(
+        async_dashboard_payload(
+            hass,
+            entry,
+        )
+    )
+    page = {page["title"]: page for page in result["data"]["pages"]}[
+        "Home Assistant"
+    ]
+
+    choice = page["choices"][0]
+    assert choice["domain"] == "c300x"
+    assert choice["entity_id"] == "select.forwarding"
+    assert choice["name"] == "Forwarding"
+    assert choice["value"] == long_option
+    assert choice["state_label"] != long_option
+    assert choice["state_label"].startswith("Home Assistant manual")
+    assert choice["options"][0]["value"] == long_option
+    assert choice["options"][0]["label"] != long_option
+    assert choice["options"][0]["label"].startswith("Home Assistant manual")
 
 
 def test_async_dashboard_payload_can_show_entity_last_changed() -> None:

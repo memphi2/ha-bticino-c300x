@@ -767,14 +767,14 @@ Page {
 
                                         Image {
                                             anchors.fill: parent
-                                            source: String(modelData) === String(choiceTile.choiceItem.value) || optionMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                            source: Api.dashboardChoiceOptionValue(modelData) === String(choiceTile.choiceItem.value) || optionMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
                                             fillMode: Image.Stretch
                                         }
 
                                         UbuntuLightText {
-                                            text: String(modelData) + trsl.empty
+                                            text: Api.dashboardChoiceOptionLabel(modelData) + trsl.empty
                                             color: "white"
-                                            font.pixelSize: String(modelData).length > 12 ? 13 : 15
+                                            font.pixelSize: Api.dashboardChoiceOptionLabel(modelData).length > 12 ? 13 : 15
                                             elide: Text.ElideRight
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
@@ -786,7 +786,7 @@ Page {
                                         BeepingMouseArea {
                                             id: optionMouse
                                             anchors.fill: parent
-                                            onClicked: Api.dashboardChoiceAction(choiceTile.choiceItem, String(modelData), status, page)
+                                            onClicked: Api.dashboardChoiceAction(choiceTile.choiceItem, Api.dashboardChoiceOptionValue(modelData), status, page)
                                         }
                                     }
                                 }

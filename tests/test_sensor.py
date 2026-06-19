@@ -506,6 +506,48 @@ def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> N
     assert readiness["recommended_action"] == "set_forwarding_to_homeassistant"
 
 
+def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
+    entry = _FakeEntry()
+    entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+    entity.wrote_state = False
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_type": "smartphone_forwarding_changed",
+            }
+        )
+    )
+
+    assert entity.wrote_state is True
+
+
+def test_media_readiness_sensor_ignores_unrelated_agent_events() -> None:
+    entry = _FakeEntry()
+    entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+    entity.wrote_state = False
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_type": "doorbell_pressed",
+            }
+        )
+    )
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": "other",
+                "event_type": "smartphone_forwarding_changed",
+            }
+        )
+    )
+
+    assert entity.wrote_state is False
+
+
 def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
     entry = _FakeEntry(
         options={"video_enabled": True},

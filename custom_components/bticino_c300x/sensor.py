@@ -497,6 +497,12 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
         """Subscribe to connection and diagnostic updates used by readiness."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_AGENT_EVENT_RECEIVED,
+                self._handle_agent_event,
+            )
+        )
         for signal in (
             SIGNAL_AGENT_INFO_CHANGED,
             SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
@@ -531,6 +537,13 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
     def _handle_readiness_changed(self, *args: Any) -> None:
         entry_id = args[0] if args else None
         if entry_id in (None, self._entry.entry_id):
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_agent_event(self, event: Any) -> None:
+        if event.data.get("entry_id") != self._entry.entry_id:
+            return
+        if agent_event_key(event.data) == "smartphone_forwarding_changed":
             self.async_write_ha_state()
 
 

@@ -60,8 +60,6 @@
           "weather_entity_id": "Entità meteo",
           "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
-          "dashboard_entity_name_display": "Nome entita dashboard",
-          "dashboard_entity_secondary_info": "Informazione secondaria entita dashboard",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }
@@ -104,8 +102,6 @@
           "weather_entity_id": "Entità meteo",
           "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
-          "dashboard_entity_name_display": "Nome entita dashboard",
-          "dashboard_entity_secondary_info": "Informazione secondaria entita dashboard",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }
@@ -172,8 +168,6 @@
           "weather_entity_id": "Entità meteo",
           "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
-          "dashboard_entity_name_display": "Nome entita dashboard",
-          "dashboard_entity_secondary_info": "Informazione secondaria entita dashboard",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }

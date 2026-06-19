@@ -73,8 +73,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
-    CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-    CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -1876,8 +1875,16 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
                 "input_number.target",
                 "select.forwarding",
             ],
-            CONF_DASHBOARD_ENTITY_NAME_DISPLAY: "entity_id",
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO: "entity_id",
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "switch.entry": {"name": "entity_id", "secondary": "entity_id"},
+                "sensor.temperature": {"name": "entity_id", "secondary": "entity_id"},
+                "button.restart": {"name": "entity_id", "secondary": "entity_id"},
+                "input_number.target": {
+                    "name": "entity_id",
+                    "secondary": "entity_id",
+                },
+                "select.forwarding": {"name": "entity_id", "secondary": "entity_id"},
+            },
         },
     )
 
@@ -1896,6 +1903,47 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
     assert page["sliders"][0]["state_label"] == "input_number.target"
     assert page["choices"][0]["name"] == "select.forwarding"
     assert page["choices"][0]["state_label"] == "select.forwarding"
+
+
+def test_async_dashboard_payload_uses_per_entity_display_overrides() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "sensor.temperature": FakeState(
+                    "21.5",
+                    attributes={
+                        "friendly_name": "Temperature",
+                        "unit_of_measurement": "C",
+                    },
+                ),
+                "switch.entry": FakeState("on", attributes={"friendly_name": "Entry"}),
+            }
+        )
+    )
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature", "switch.entry"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {
+                    "name": "entity_id",
+                    "secondary": "none",
+                },
+                "switch.entry": {
+                    "secondary": "entity_id",
+                },
+            },
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    page = {page["title"]: page for page in result["data"]["pages"]}[
+        "Home Assistant"
+    ]
+    assert page["entities"][0]["name"] == "sensor.temperature"
+    assert page["entities"][0]["state_label"] == ""
+    assert page["switches"][0]["name"] == "Entry"
+    assert page["switches"][0]["state_label"] == "switch.entry"
 
 
 def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
@@ -1950,7 +1998,9 @@ def test_async_dashboard_payload_can_show_entity_last_changed() -> None:
     entry = FakeEntry(
         options={
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO: "last_changed",
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"secondary": "last_changed"}
+            },
         },
     )
 
@@ -1977,7 +2027,9 @@ def test_async_dashboard_payload_can_hide_entity_secondary_info() -> None:
     entry = FakeEntry(
         options={
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO: "none",
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"secondary": "none"}
+            },
         },
     )
 

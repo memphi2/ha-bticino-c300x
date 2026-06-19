@@ -73,7 +73,7 @@ def dashboard_entity_selector() -> Any:
 
 
 def dashboard_entity_name_display_selector() -> Any:
-    """Return the selector for direct dashboard entity titles."""
+    """Return the selector for one dashboard entity title."""
 
     if selector is None:
         return str
@@ -95,7 +95,7 @@ def dashboard_entity_name_display_selector() -> Any:
 
 
 def dashboard_entity_secondary_info_selector() -> Any:
-    """Return the selector for direct dashboard entity secondary text."""
+    """Return the selector for one dashboard entity secondary text."""
 
     if selector is None:
         return str

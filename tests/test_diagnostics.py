@@ -64,6 +64,7 @@ from custom_components.bticino_c300x.const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
@@ -232,6 +233,9 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
                 "switch.private_switch",
                 "sensor.private_temperature",
             ],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.private_temperature": {"secondary": "none"},
+            },
         },
         runtime_data=runtime_data,
     )
@@ -267,6 +271,7 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         "sensor": 1,
         "switch": 1,
     }
+    assert diagnostics["configuration"]["dashboard_entity_display_override_count"] == 1
     assert diagnostics["runtime"]["system_metrics"] == {
         "cpu_count": 2,
         "cpu_usage_percent": 3.5,

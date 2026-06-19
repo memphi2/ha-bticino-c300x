@@ -48,8 +48,7 @@ from .const import (
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
-    CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-    CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -60,12 +59,10 @@ from .const import (
     DASHBOARD_ENTITY_DOOR_UNLOCK,
     DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID,
     DASHBOARD_ENTITY_SECONDARY_INFO_LAST_CHANGED,
     DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
-    DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DASHBOARD_ENTITY_STAIR_LIGHT,
     DEFAULT_STAIR_LIGHT_ADDRESS,
@@ -74,6 +71,9 @@ from .const import (
 )
 from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAIN_SET,
+    dashboard_entity_name_display_override,
+    dashboard_entity_secondary_info_override,
+    normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
 )
 from .dashboard_labels import (
@@ -200,36 +200,14 @@ def configured_dashboard_entities(entry: ConfigEntry) -> tuple[str, ...]:
     return _dashboard_entity_ids(entry_config_value(entry, CONF_DASHBOARD_ENTITIES, []))
 
 
-def configured_dashboard_entity_name_display(entry: ConfigEntry) -> str:
-    """Return how selected dashboard entities should be named."""
+def configured_dashboard_entity_display_overrides(
+    entry: ConfigEntry,
+) -> dict[str, dict[str, str]]:
+    """Return per-entity dashboard display overrides."""
 
-    value = str(
-        entry_config_value(
-            entry,
-            CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-        )
-        or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
+    return normalize_dashboard_entity_display_overrides(
+        entry_config_value(entry, CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
     )
-    if value not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
-        return DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-    return value
-
-
-def configured_dashboard_entity_secondary_info(entry: ConfigEntry) -> str:
-    """Return selected dashboard entity secondary-info mode."""
-
-    value = str(
-        entry_config_value(
-            entry,
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-            DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-        )
-        or DASHBOARD_ENTITY_SECONDARY_INFO_STATE
-    )
-    if value not in DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS:
-        return DASHBOARD_ENTITY_SECONDARY_INFO_STATE
-    return value
 
 
 def configured_dashboard_prevent_return(entry: ConfigEntry) -> bool:
@@ -547,15 +525,22 @@ async def async_dashboard_payload(
         main_page["weather"] = weather
 
     main_page["badges"] = badges
-    entity_name_display = configured_dashboard_entity_name_display(entry)
-    entity_secondary_info = configured_dashboard_entity_secondary_info(entry)
+    entity_display_overrides = configured_dashboard_entity_display_overrides(entry)
     for index, entity_id in enumerate(configured_dashboard_entities(entry), start=1):
         dashboard_item = _dashboard_item_for_entity(
             hass,
             entity_id,
             index * 10,
-            name_display=entity_name_display,
-            secondary_info=entity_secondary_info,
+            name_display=dashboard_entity_name_display_override(
+                entity_display_overrides,
+                entity_id,
+                DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+            ),
+            secondary_info=dashboard_entity_secondary_info_override(
+                entity_display_overrides,
+                entity_id,
+                DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+            ),
             language=language,
         )
         if dashboard_item is None:

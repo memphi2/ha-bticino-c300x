@@ -60,8 +60,6 @@
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "dashboard_entity_name_display": "Nom de l'entite dashboard",
-          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }
@@ -104,8 +102,6 @@
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "dashboard_entity_name_display": "Nom de l'entite dashboard",
-          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }
@@ -172,8 +168,6 @@
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
-          "dashboard_entity_name_display": "Nom de l'entite dashboard",
-          "dashboard_entity_secondary_info": "Information secondaire de l'entite dashboard",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
         }

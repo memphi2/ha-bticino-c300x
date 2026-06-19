@@ -60,8 +60,6 @@
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "dashboard_entity_name_display": "Dashboard entity name",
-          "dashboard_entity_secondary_info": "Dashboard entity secondary info",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }
@@ -104,8 +102,6 @@
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "dashboard_entity_name_display": "Dashboard entity name",
-          "dashboard_entity_secondary_info": "Dashboard entity secondary info",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }
@@ -172,8 +168,6 @@
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "dashboard_entity_name_display": "Dashboard entity name",
-          "dashboard_entity_secondary_info": "Dashboard entity secondary info",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
         }

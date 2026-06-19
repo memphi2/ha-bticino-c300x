@@ -36,8 +36,7 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
-    CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-    CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_UI_ENABLED,
     CONF_WEATHER_ENTITY_ID,
@@ -46,10 +45,15 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
-from .dashboard_entities import normalize_dashboard_entity_ids
+from .dashboard_entities import (
+    normalize_dashboard_entity_display_overrides,
+    normalize_dashboard_entity_ids,
+)
 
 DASHBOARD_PREVENT_RETURN_DEFAULT = False
 DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT = False
+_DASHBOARD_ENTITY_NAME_FIELD_PREFIX = "Name: "
+_DASHBOARD_ENTITY_SECONDARY_FIELD_PREFIX = "Secondary info: "
 
 
 def dashboard_entity_ids(value: Any) -> list[str]:
@@ -61,22 +65,92 @@ def dashboard_entity_ids(value: Any) -> list[str]:
         raise vol.Invalid("invalid dashboard entities") from err
 
 
-def dashboard_entity_name_display(value: Any) -> str:
-    """Validate how direct dashboard entities should be named."""
+def dashboard_entity_display_overrides(value: Any) -> dict[str, dict[str, str]]:
+    """Validate per-entity dashboard display override mapping."""
 
+    if value in (None, ""):
+        return {}
+    try:
+        return normalize_dashboard_entity_display_overrides(value, strict=True)
+    except ValueError as err:
+        raise vol.Invalid("invalid dashboard entity display overrides") from err
+
+
+def _dashboard_entity_name_field(entity_id: str) -> str:
+    return f"{_DASHBOARD_ENTITY_NAME_FIELD_PREFIX}{entity_id}"
+
+
+def _dashboard_entity_secondary_field(entity_id: str) -> str:
+    return f"{_DASHBOARD_ENTITY_SECONDARY_FIELD_PREFIX}{entity_id}"
+
+
+def _dashboard_entity_name_display(value: Any) -> str:
     display = str(value or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME).strip()
     if display not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
         return DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
     return display
 
 
-def dashboard_entity_secondary_info(value: Any) -> str:
-    """Validate direct dashboard entity secondary-info mode."""
-
+def _dashboard_entity_secondary_info(value: Any) -> str:
     info = str(value or DASHBOARD_ENTITY_SECONDARY_INFO_STATE).strip()
     if info not in DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS:
         return DASHBOARD_ENTITY_SECONDARY_INFO_STATE
     return info
+
+
+def dashboard_entity_display_form_complete(
+    user_input: dict[str, Any] | None,
+    entity_ids: Any,
+) -> bool:
+    """Return whether the per-entity display controls were rendered and posted."""
+
+    if user_input is None:
+        return True
+    entities = dashboard_entity_ids(entity_ids)
+    return all(
+        _dashboard_entity_name_field(entity_id) in user_input
+        and _dashboard_entity_secondary_field(entity_id) in user_input
+        for entity_id in entities
+    )
+
+
+def dashboard_entity_display_overrides_from_fields(
+    user_input: dict[str, Any],
+    entity_ids: Any,
+    defaults: Any = None,
+) -> dict[str, dict[str, str]]:
+    """Build per-entity display overrides from rendered form controls."""
+
+    entities = dashboard_entity_ids(entity_ids)
+    existing = normalize_dashboard_entity_display_overrides(defaults)
+    result: dict[str, dict[str, str]] = {}
+    for entity_id in entities:
+        name = _dashboard_entity_name_display(
+            user_input.get(
+                _dashboard_entity_name_field(entity_id),
+                existing.get(entity_id, {}).get(
+                    "name",
+                    DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+                ),
+            )
+        )
+        secondary = _dashboard_entity_secondary_info(
+            user_input.get(
+                _dashboard_entity_secondary_field(entity_id),
+                existing.get(entity_id, {}).get(
+                    "secondary",
+                    DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+                ),
+            )
+        )
+        options: dict[str, str] = {}
+        if name != DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME:
+            options["name"] = name
+        if secondary != DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
+            options["secondary"] = secondary
+        if options:
+            result[entity_id] = options
+    return result
 
 
 def dashboard_schema(
@@ -85,16 +159,18 @@ def dashboard_schema(
     default_actions_json: str = "",
     default_dashboard_prevent_return: bool = DASHBOARD_PREVENT_RETURN_DEFAULT,
     default_dashboard_entities: Any = None,
-    default_dashboard_entity_name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    default_dashboard_entity_secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    default_dashboard_entity_display_overrides: Any = None,
     default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
     *,
     default_device_ui_enabled: bool = False,
 ) -> vol.Schema:
     """Return the display dashboard schema."""
 
-    return vol.Schema(
-        {
+    dashboard_entities = dashboard_entity_ids(default_dashboard_entities or [])
+    dashboard_overrides = normalize_dashboard_entity_display_overrides(
+        default_dashboard_entity_display_overrides
+    )
+    fields: dict[Any, Any] = {
             vol.Optional(
                 CONF_DEVICE_UI_ENABLED,
                 default=default_device_ui_enabled,
@@ -109,24 +185,35 @@ def dashboard_schema(
             ): _weather_entity_selector(),
             _optional_suggested(
                 CONF_DASHBOARD_ENTITIES,
-                dashboard_entity_ids(default_dashboard_entities or []),
+                dashboard_entities,
             ): _dashboard_entity_selector(),
             vol.Optional(
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                 default=default_dashboard_dynamic_homepage,
             ): bool,
+    }
+    for entity_id in dashboard_entities:
+        entity_overrides = dashboard_overrides.get(entity_id, {})
+        fields[
             vol.Optional(
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                default=dashboard_entity_name_display(
-                    default_dashboard_entity_name_display
+                _dashboard_entity_name_field(entity_id),
+                default=entity_overrides.get(
+                    "name",
+                    DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
                 ),
-            ): _dashboard_entity_name_display_selector(),
+            )
+        ] = _dashboard_entity_name_display_selector()
+        fields[
             vol.Optional(
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                default=dashboard_entity_secondary_info(
-                    default_dashboard_entity_secondary_info
+                _dashboard_entity_secondary_field(entity_id),
+                default=entity_overrides.get(
+                    "secondary",
+                    DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
                 ),
-            ): _dashboard_entity_secondary_info_selector(),
+            )
+        ] = _dashboard_entity_secondary_info_selector()
+    fields.update(
+        {
             _optional_suggested(
                 CONF_ACTIONS_JSON,
                 default_actions_json,
@@ -137,6 +224,7 @@ def dashboard_schema(
             ): bool,
         }
     )
+    return vol.Schema(fields)
 
 
 def dashboard_input_defaults(
@@ -173,27 +261,15 @@ def dashboard_input_defaults(
             )
         ),
     )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-        (
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-            if defaults is None
-            else defaults.get(
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-            )
-        ),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-        (
-            DASHBOARD_ENTITY_SECONDARY_INFO_STATE
-            if defaults is None
-            else defaults.get(
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-            )
-        ),
+    data[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
+        dashboard_entity_display_overrides_from_fields(
+            data,
+            data.get(CONF_DASHBOARD_ENTITIES, ()),
+            {} if defaults is None else defaults.get(
+                CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                {},
+            ),
+        )
     )
     data.setdefault(
         CONF_ACTIONS_JSON,

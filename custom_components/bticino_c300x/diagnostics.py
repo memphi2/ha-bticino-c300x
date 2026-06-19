@@ -27,8 +27,7 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
-    CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-    CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -117,6 +116,11 @@ async def async_get_config_entry_diagnostics(
 
     actions = entry.options.get(CONF_ACTIONS, {})
     dashboard_entities = entry_config_value(entry, CONF_DASHBOARD_ENTITIES, [])
+    dashboard_overrides = entry_config_value(
+        entry,
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        {},
+    )
     runtime = getattr(entry, "runtime_data", None)
     network = await _async_network_diagnostics(hass, entry)
     bundle_status = await _async_installer_bundle_status(hass)
@@ -153,16 +157,9 @@ async def async_get_config_entry_diagnostics(
             if isinstance(dashboard_entities, list)
             else 0,
             "dashboard_entity_domains": _entity_domain_counts(dashboard_entities),
-            "dashboard_entity_name_display": entry_config_value(
-                entry,
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                "friendly_name",
-            ),
-            "dashboard_entity_secondary_info": entry_config_value(
-                entry,
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                "state",
-            ),
+            "dashboard_entity_display_override_count": len(dashboard_overrides)
+            if isinstance(dashboard_overrides, dict)
+            else 0,
         },
         "network": network,
         "installation": _installation_diagnostics(runtime, bundle_status),

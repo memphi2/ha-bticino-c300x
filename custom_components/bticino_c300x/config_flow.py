@@ -32,13 +32,13 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
+    dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
+)
+from .config_flow_dashboard import (
+    dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
+)
+from .config_flow_dashboard import (
     dashboard_entity_ids as _dashboard_entity_ids,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_name_display as _dashboard_entity_name_display,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_secondary_info as _dashboard_entity_secondary_info,
 )
 from .config_flow_dashboard import (
     dashboard_input_defaults as _dashboard_input_defaults,
@@ -85,8 +85,7 @@ from .const import (
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
-    CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-    CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
@@ -105,8 +104,6 @@ from .const import (
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
-    DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-    DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DEFAULT_AGENT_PORT,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_NAME,
@@ -146,8 +143,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_ALARM_ENTITY_ID,
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DEVICE_ACTIVATION_MODE,
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
@@ -569,6 +565,11 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_user_features()
         errors: dict[str, str] = {}
         if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                user_input.get(CONF_DASHBOARD_ENTITIES, []),
+            ):
+                return self._async_show_user_dashboard_form(user_input, errors)
             dashboard_input = _dashboard_input_defaults(user_input)
             feature_data, errors = _feature_input(
                 {**self._setup_feature_data, **dashboard_input},
@@ -576,6 +577,15 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             if not errors:
                 return await self._async_create_setup_entry(feature_data)
+
+        return self._async_show_user_dashboard_form(user_input, errors)
+
+    def _async_show_user_dashboard_form(
+        self,
+        user_input: dict[str, Any] | None,
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show initial C300X display dashboard settings."""
 
         return self.async_show_form(
             step_id="user_dashboard",
@@ -590,17 +600,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 (user_input or {}).get(CONF_DASHBOARD_ENTITIES, []),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                        DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                        DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-                    )
+                (user_input or {}).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    {},
                 ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
@@ -656,11 +658,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: feature_data[
                     CONF_DASHBOARD_DYNAMIC_HOMEPAGE
                 ],
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY: feature_data[
-                    CONF_DASHBOARD_ENTITY_NAME_DISPLAY
-                ],
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO: feature_data[
-                    CONF_DASHBOARD_ENTITY_SECONDARY_INFO
+                CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: feature_data[
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES
                 ],
             },
         )
@@ -772,6 +771,18 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_reconfigure_features()
         errors: dict[str, str] = {}
         if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                user_input.get(
+                    CONF_DASHBOARD_ENTITIES,
+                    feature_defaults[CONF_DASHBOARD_ENTITIES],
+                ),
+            ):
+                return await self._async_show_reconfigure_dashboard_form(
+                    user_input,
+                    feature_defaults,
+                    errors,
+                )
             dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(
                 {**self._reconfigure_feature_data, **dashboard_input}
@@ -779,6 +790,21 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 return await self._async_finish_reconfigure(feature_data)
 
+        return await self._async_show_reconfigure_dashboard_form(
+            user_input,
+            feature_defaults,
+            errors,
+        )
+
+    async def _async_show_reconfigure_dashboard_form(
+        self,
+        user_input: dict[str, Any] | None,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show reconfigure C300X display dashboard settings."""
+
+        entry = self._get_reconfigure_entry()
         return self.async_show_form(
             step_id="reconfigure_dashboard",
             data_schema=_dashboard_schema(
@@ -810,17 +836,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DASHBOARD_ENTITIES,
                     feature_defaults[CONF_DASHBOARD_ENTITIES],
                 ),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                        feature_defaults[CONF_DASHBOARD_ENTITY_NAME_DISPLAY],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                        feature_defaults[CONF_DASHBOARD_ENTITY_SECONDARY_INFO],
-                    )
+                (user_input or {}).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
                 ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
@@ -964,6 +982,18 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_features()
         errors: dict[str, str] = {}
         if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                user_input.get(
+                    CONF_DASHBOARD_ENTITIES,
+                    feature_defaults[CONF_DASHBOARD_ENTITIES],
+                ),
+            ):
+                return await self._async_show_options_dashboard_form(
+                    user_input,
+                    feature_defaults,
+                    errors,
+                )
             dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(
                 {**self._feature_options, **dashboard_input}
@@ -976,6 +1006,20 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                         **feature_data,
                     },
                 )
+
+        return await self._async_show_options_dashboard_form(
+            user_input,
+            feature_defaults,
+            errors,
+        )
+
+    async def _async_show_options_dashboard_form(
+        self,
+        user_input: dict[str, Any] | None,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show options C300X display dashboard settings."""
 
         return self.async_show_form(
             step_id="dashboard",
@@ -1008,17 +1052,9 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                     CONF_DASHBOARD_ENTITIES,
                     feature_defaults[CONF_DASHBOARD_ENTITIES],
                 ),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                        feature_defaults[CONF_DASHBOARD_ENTITY_NAME_DISPLAY],
-                    )
-                ),
-                str(
-                    (user_input or {}).get(
-                        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                        feature_defaults[CONF_DASHBOARD_ENTITY_SECONDARY_INFO],
-                    )
+                (user_input or {}).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
                 ),
                 default_dashboard_dynamic_homepage=bool(
                     (user_input or {}).get(
@@ -1336,9 +1372,8 @@ def _feature_input(
     alarm_entity_id = ""
     weather_entity_id = ""
     dashboard_entities: list[str] = []
+    dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
     dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
-    dashboard_entity_name_display = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
-    dashboard_entity_secondary_info = DASHBOARD_ENTITY_SECONDARY_INFO_STATE
     actions: dict[str, dict[str, Any]] = {}
     try:
         device_activation_mode = _device_activation_mode(
@@ -1386,18 +1421,14 @@ def _feature_input(
             )
         except vol.Invalid:
             errors[CONF_DASHBOARD_ENTITIES] = "invalid_dashboard_entities"
-        dashboard_entity_name_display = _dashboard_entity_name_display(
-            user_input.get(
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+        try:
+            dashboard_entity_display_overrides = _dashboard_entity_display_overrides(
+                user_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, "")
             )
-        )
-        dashboard_entity_secondary_info = _dashboard_entity_secondary_info(
-            user_input.get(
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+        except vol.Invalid:
+            errors[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
+                "invalid_dashboard_entity_display_overrides"
             )
-        )
         dashboard_dynamic_homepage = bool(
             user_input.get(
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
@@ -1435,8 +1466,7 @@ def _feature_input(
             CONF_WEATHER_ENTITY_ID: weather_entity_id,
             CONF_DASHBOARD_ENTITIES: dashboard_entities,
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
-            CONF_DASHBOARD_ENTITY_NAME_DISPLAY: dashboard_entity_name_display,
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO: dashboard_entity_secondary_info,
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard_entity_display_overrides,
             CONF_ACTIONS: actions,
             CONF_DASHBOARD_PREVENT_RETURN: bool(
                 user_input.get(
@@ -1713,25 +1743,14 @@ def _current_feature_options(
         CONF_DASHBOARD_ENTITIES: _dashboard_entity_ids(
             _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
         ),
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: _dashboard_entity_display_overrides(
+            _config_default(config_entry, CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
+        ),
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE: bool(
             _config_default(
                 config_entry,
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                 _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-            )
-        ),
-        CONF_DASHBOARD_ENTITY_NAME_DISPLAY: _dashboard_entity_name_display(
-            _config_default(
-                config_entry,
-                CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-                DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-            )
-        ),
-        CONF_DASHBOARD_ENTITY_SECONDARY_INFO: _dashboard_entity_secondary_info(
-            _config_default(
-                config_entry,
-                CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-                DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
             )
         ),
         CONF_VIDEO_ENABLED: bool(
@@ -1910,18 +1929,8 @@ def _feature_input_defaults(
         ),
     )
     data.setdefault(
-        CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-        defaults.get(
-            CONF_DASHBOARD_ENTITY_NAME_DISPLAY,
-            DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-        ),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-        defaults.get(
-            CONF_DASHBOARD_ENTITY_SECONDARY_INFO,
-            DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-        ),
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        defaults.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {}),
     )
     data.setdefault(CONF_ACTIONS_JSON, _actions_json(defaults[CONF_ACTIONS]))
     data.setdefault(

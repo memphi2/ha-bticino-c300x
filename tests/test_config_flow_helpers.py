@@ -103,9 +103,11 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _connection_input,
     _current_connection_options,
     _current_feature_options,
+    _dashboard_entity_display_form_complete,
     _dashboard_input_defaults,
     _dashboard_schema,
     _dashboard_entity_ids,
+    _dashboard_entity_display_overrides,
     _feature_input,
     _feature_input_defaults,
     _non_empty_string,
@@ -139,6 +141,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DASHBOARD_ENTITIES,
+    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
@@ -453,6 +456,31 @@ def test_dashboard_entity_ids_reject_unsupported_entities(value: str) -> None:
 def test_dashboard_entity_ids_allows_empty_value() -> None:
     assert _dashboard_entity_ids("") == []
     assert _dashboard_entity_ids([]) == []
+
+
+def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
+    assert _dashboard_entity_display_overrides(
+        {"sensor.temperature": {"name": "entity_id", "secondary": "none"}}
+    ) == {
+        "sensor.temperature": {
+            "name": "entity_id",
+            "secondary": "none",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"media_player.tv": {"name": "entity_id"}},
+        {"sensor.temperature": {"name": "bad"}},
+        {"sensor.temperature": {"secondary": "bad"}},
+        "not a mapping",
+    ],
+)
+def test_dashboard_entity_display_overrides_rejects_invalid_mapping(value: object) -> None:
+    with pytest.raises(vol.Invalid):
+        _dashboard_entity_display_overrides(value)
 
 
 def test_actions_json_is_stable_for_options_form() -> None:
@@ -1152,6 +1180,9 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     ]
     assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITIES in _schema_key_names(dashboard_schema)
+    assert CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES not in _schema_key_names(
+        dashboard_schema
+    )
     assert CONF_VIDEO_PORT not in _schema_key_names(dashboard_schema)
     assert CONF_VIDEO_STREAM_PATH not in _schema_key_names(dashboard_schema)
 
@@ -1380,6 +1411,40 @@ def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
+def test_dashboard_schema_adds_display_controls_for_selected_entities() -> None:
+    schema = _dashboard_schema(
+        "",
+        "",
+        default_dashboard_entities=["sensor.temperature"],
+        default_dashboard_entity_display_overrides={
+            "sensor.temperature": {
+                "name": "entity_id",
+                "secondary": "none",
+            }
+        },
+    )
+
+    result = schema({})
+
+    assert result["Name: sensor.temperature"] == "entity_id"
+    assert result["Secondary info: sensor.temperature"] == "none"
+
+
+def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields() -> None:
+    assert not _dashboard_entity_display_form_complete(
+        {CONF_DASHBOARD_ENTITIES: ["sensor.temperature"]},
+        ["sensor.temperature"],
+    )
+    assert _dashboard_entity_display_form_complete(
+        {
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            "Name: sensor.temperature": "friendly_name",
+            "Secondary info: sensor.temperature": "state",
+        },
+        ["sensor.temperature"],
+    )
+
+
 def test_options_features_schema_never_contains_dashboard_fields() -> None:
     entry = SimpleNamespace(
         data={
@@ -1575,7 +1640,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             }
         )
     )
-    result = asyncio.run(
+    entity_options_form = asyncio.run(
         flow.async_step_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
@@ -1587,9 +1652,24 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             }
         )
     )
+    result = asyncio.run(
+        flow.async_step_dashboard(
+            {
+                CONF_DEVICE_UI_ENABLED: True,
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_WEATHER_ENTITY_ID: "weather.home",
+                CONF_DASHBOARD_ENTITIES: ["switch.entry"],
+                "Name: switch.entry": "friendly_name",
+                "Secondary info: switch.entry": "state",
+                CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
+                CONF_DASHBOARD_PREVENT_RETURN: True,
+            }
+        )
+    )
 
     assert connection_form["step_id"] == "features"
     assert dashboard_form["step_id"] == "dashboard"
+    assert entity_options_form["step_id"] == "dashboard"
     assert result["type"] == "create_entry"
     assert result["data"][CONF_AGENT_HOST] == "agent.local"
     assert result["data"][CONF_AGENT_PORT] == 8092

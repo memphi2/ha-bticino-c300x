@@ -224,7 +224,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
     "Alarm.qml": "e1a7bfef32000f71b386bb8e466eaf822c405e2267eca0fe3084e803901dcc3d",
-    "HomeAssistant.qml": "71179e1676494da836c46ec39f353d63e4d18a8b386d47dc9bb7b6c1e7ea767a",
+    "HomeAssistant.qml": "32732a6df2205565d14942746d293adcaccf1fa7b9d42f4fb0b368386bf46038",
     "js/c300x_ha.js": "7966a425ba2744ea78cac4241a02a3db5e65e4f58275e0f2b2c45fc974d97fd6",
     "js/c300x_i18n.js": "f589b25ac7029a4d2108115d368e14628229d2ff0c3d32bdb501d88ba72ae9c9",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
@@ -467,7 +467,7 @@ def test_home_assistant_qml_keeps_empty_state_label_blank() -> None:
     assert '"options": dashboardChoiceOptions(source[i].options)' in dashboard_choices_body
 
 
-def test_home_assistant_buttons_have_visible_press_feedback() -> None:
+def test_home_assistant_buttons_keep_static_press_feedback() -> None:
     home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
         encoding="utf-8"
     )
@@ -476,10 +476,9 @@ def test_home_assistant_buttons_have_visible_press_feedback() -> None:
         home_assistant_qml.index("id: choiceGrid")
     ]
 
-    assert "scale: buttonMouse.pressed ? 0.96 : 1.0" in button_grid_body
-    assert "opacity: buttonMouse.pressed ? 0.78 : 1.0" in button_grid_body
-    assert "Behavior on scale" in button_grid_body
-    assert "Behavior on opacity" in button_grid_body
+    assert "source: buttonBackground(buttonMouse.pressed)" in button_grid_body
+    assert "Behavior on" not in button_grid_body
+    assert "NumberAnimation" not in button_grid_body
 
 
 def test_home_assistant_qml_renders_select_entities_as_choices() -> None:

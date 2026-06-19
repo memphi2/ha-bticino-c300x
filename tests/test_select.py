@@ -97,6 +97,7 @@ class _FakeRuntimeData:
         default_factory=lambda: {"smartphone_forwarding": {"supported": True}}
     )
     api: _FakeApi = field(default_factory=_FakeApi)
+    event_state: SimpleNamespace = field(default_factory=SimpleNamespace)
 
 
 @dataclass
@@ -117,6 +118,7 @@ def test_smartphone_forwarding_select_refreshes_active_status() -> None:
     assert entry.runtime_data.api.active_reads == 1
     assert entity.current_option == "Blocked"
     assert entity.extra_state_attributes == {"mode": 2, "state": "blocked"}
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"
 
 
 def test_select_setup_adds_supported_entities_after_initial_refresh() -> None:

@@ -100,7 +100,6 @@ def media_readiness(entry: ConfigEntry) -> dict[str, Any]:
         "forwarding_state": forwarding_state,
         "rtsp_ok": check_results["rtsp"],
         "webrtc_available": video_enabled and doorbell_video_supported,
-        "https_microphone_ok": None,
         "https_microphone_requirement": "secure_context_required_for_microphone",
         "talkback_rtp_ok": check_results["talkback_rtp"],
         "callback_url_ok": callback_url_ok,

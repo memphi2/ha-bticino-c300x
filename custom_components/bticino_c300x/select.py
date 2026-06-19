@@ -93,6 +93,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     def _apply_status(self, status: dict) -> None:
         self._mode = status.get("mode")
         self._state = status.get("state", "unknown")
+        self._entry.runtime_data.event_state.smartphone_forwarding_mode = self._state
         self._attr_available = True
 
     async def async_added_to_hass(self) -> None:
@@ -116,6 +117,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         forwarding = _normalize_smartphone_forwarding_event(event.data)
         self._state = forwarding.get("state")
         self._mode = forwarding.get("mode")
+        self._entry.runtime_data.event_state.smartphone_forwarding_mode = self._state
         self._attr_available = True
         self.async_write_ha_state()
 

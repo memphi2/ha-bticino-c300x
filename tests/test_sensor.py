@@ -474,6 +474,8 @@ def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> Non
     assert entity.extra_state_attributes["recommended_action"] == "no_action_needed"
     assert entity.extra_state_attributes["media_user_ok"] is True
     assert entity.extra_state_attributes["forwarding_homeassistant"] is True
+    assert entity.extra_state_attributes["forwarding_state"] == "homeassistant"
+    assert "https_microphone_ok" not in entity.extra_state_attributes
     assert entity.extra_state_attributes["failed_checks"] == []
 
 

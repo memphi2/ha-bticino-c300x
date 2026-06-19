@@ -18,12 +18,19 @@ from custom_components.bticino_c300x.camera_media.webrtc_session import (
 
 
 def test_session_registry_reports_media_and_owner_groups() -> None:
+    closed_peer = SimpleNamespace(
+        connectionState="closed",
+        iceConnectionState="closed",
+        signalingState="closed",
+    )
     sessions: dict[str, NativeWebRTCSession] = {
         "door": NativeWebRTCSession(SimpleNamespace()),
         "home": NativeWebRTCSession(SimpleNamespace(), owner="home_call"),
         "ring": NativeWebRTCSession(SimpleNamespace()),
+        "closed": NativeWebRTCSession(closed_peer),
     }
     sessions["door"].player = object()
+    sessions["closed"].player = object()
     sessions["ring"].ring_call = True
     registry = NativeWebRTCSessionRegistry(sessions)
 
@@ -31,7 +38,7 @@ def test_session_registry_reports_media_and_owner_groups() -> None:
     assert registry.has_sessions() is True
     assert registry.session_ids_by_owner("home_call") == ["home"]
     assert registry.session_ids_for_ring_call() == ["ring"]
-    assert registry.session_ids() == ["door", "home", "ring"]
+    assert registry.session_ids() == ["door", "home", "ring", "closed"]
 
 
 def test_session_registry_closes_resources_and_notifies_client() -> None:

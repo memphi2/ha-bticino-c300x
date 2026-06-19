@@ -34,6 +34,18 @@ class NativeWebRTCSession:
         self.pending_ice_candidates: list[Any | None] = []
 
 
+def webrtc_session_peer_closed(session: NativeWebRTCSession) -> bool:
+    """Return true when aiortc has already moved the peer into a terminal state."""
+
+    peer = getattr(session, "peer", None)
+    if peer is None:
+        return False
+    for attr_name in ("connectionState", "iceConnectionState"):
+        if getattr(peer, attr_name, None) in {"closed", "failed", "disconnected"}:
+            return True
+    return getattr(peer, "signalingState", None) == "closed"
+
+
 class NativeWebRTCSessionRegistry:
     """Manage WebRTC session ownership and resource cleanup."""
 
@@ -47,7 +59,9 @@ class NativeWebRTCSessionRegistry:
         """Return sessions that currently own a media player/track."""
 
         return sum(
-            1 for session in self._sessions.values() if session.player is not None
+            1
+            for session in self._sessions.values()
+            if session.player is not None and not webrtc_session_peer_closed(session)
         )
 
     def has_sessions(self) -> bool:

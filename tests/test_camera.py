@@ -921,6 +921,60 @@ def test_doorbell_camera_rtsp_policy_blocks_second_on_demand_browser() -> None:
     assert camera._last_video_block_reason == "rtsp_consumer_active"
 
 
+def test_doorbell_camera_on_demand_closes_stale_webrtc_before_admission() -> None:
+    class _IdleApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "idle"
+            status["window_available"] = False
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "idle",
+                "clients": 0,
+            }
+            return status
+
+    class _ClosedPeer:
+        connectionState = "closed"
+        iceConnectionState = "closed"
+        signalingState = "closed"
+
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _Player:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    api = _IdleApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    peer = _ClosedPeer()
+    player = _Player()
+    session = _NativeWebRTCSession(peer)
+    session.player = player
+    camera._webrtc_sessions["stale"] = session
+    _stub_rtsp_ready(camera)
+
+    stream_url = asyncio.run(camera._async_prepare_rtsp_stream(audio=False))
+
+    assert stream_url == "rtsp://127.0.0.1:6554/doorbell-video"
+    assert camera._webrtc_sessions == {}
+    assert peer.closed is True
+    assert player.stopped is True
+    assert api.stop_calls == 1
+    assert api.activate_calls == [False]
+
+
 def test_doorbell_camera_rtsp_policy_allows_second_ring_preview_when_agent_shares() -> None:
     class _SharedRingPreviewApi(_FakeApi):
         async def async_doorbell_video_status(self) -> dict[str, Any]:

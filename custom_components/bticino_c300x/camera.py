@@ -94,6 +94,9 @@ from .camera_media.webrtc_session import (
 from .camera_media.webrtc_session import (
     webrtc_server_configuration as _webrtc_server_configuration,
 )
+from .camera_media.webrtc_session import (
+    webrtc_session_peer_closed as _webrtc_session_peer_closed_impl,
+)
 from .const import (
     CONF_AGENT_HOST,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
@@ -733,7 +736,19 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 
+        await self._async_close_stale_webrtc_sessions()
         return await self._rtsp_orchestrator.async_prepare_rtsp_stream(audio=audio)
+
+    async def _async_close_stale_webrtc_sessions(self) -> None:
+        """Close terminal WebRTC peers before evaluating RTSP admission."""
+
+        for session_id, session in list(self._webrtc_sessions.items()):
+            if _webrtc_session_peer_closed(session):
+                await self._async_close_webrtc_session(
+                    session_id,
+                    notify_client=True,
+                    reason="webrtc_closed",
+                )
 
     async def _async_wait_for_call_media_after_external_event(
         self,
@@ -1264,13 +1279,7 @@ def _home_call_status_has_media(status: Mapping[str, Any]) -> bool:
 
 
 def _webrtc_session_peer_closed(session: _NativeWebRTCSession) -> bool:
-    """Return true when aiortc has already moved the peer into a terminal state."""
-
-    peer = session.peer
-    for attr_name in ("connectionState", "iceConnectionState"):
-        if getattr(peer, attr_name, None) in {"closed", "failed", "disconnected"}:
-            return True
-    return getattr(peer, "signalingState", None) == "closed"
+    return _webrtc_session_peer_closed_impl(session)
 
 
 @callback

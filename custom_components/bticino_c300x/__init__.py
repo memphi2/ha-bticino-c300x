@@ -29,6 +29,7 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
@@ -549,10 +550,15 @@ def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool
         )
     ).strip()
     auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
-    address = stair_light_where_from_entry_values(
-        _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
-        _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
-    )
+    p_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
+    n_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, "")
+    if str(p_value or "").strip() or str(n_value or "").strip():
+        address = stair_light_where_from_entry_values(p_value, n_value)
+    else:
+        address = str(
+            _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS, "")
+            or ""
+        ).strip() or stair_light_where_from_entry_values("", "")
     return True, auto_discover, address
 
 

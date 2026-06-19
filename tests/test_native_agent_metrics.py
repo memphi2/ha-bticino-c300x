@@ -36,10 +36,13 @@ def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
 
 
 def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    sample_body = text.rsplit("static int read_system_metrics_sample", maxsplit=1)[
-        1
-    ].split("static int system_metrics_json", maxsplit=1)[0]
+    text = (ROOT / "native_agent" / "src" / "system_metrics.c").read_text(
+        encoding="utf-8"
+    )
+    sample_body = text.rsplit(
+        "int c300x_system_metrics_read_sample",
+        maxsplit=1,
+    )[1].split("int c300x_system_metrics_json", maxsplit=1)[0]
 
     assert "read_memory_metrics(" in sample_body
     assert text.count("read_memory_metrics(") == 2
@@ -63,8 +66,8 @@ def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> No
         "    }\n"
         in dispatch_body
     )
-    assert dispatch_body.index("system_metrics_json(&sample") < dispatch_body.index(
-        "system_metrics_mark_dispatched(runtime, &sample, now)"
+    assert dispatch_body.index("c300x_system_metrics_json(&sample") < (
+        dispatch_body.index("system_metrics_mark_dispatched(runtime, &sample, now)")
     )
 
 
@@ -132,13 +135,13 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
         maxsplit=1,
     )[1].split("static void system_metrics_dispatch_if_due", maxsplit=1)[0]
 
-    assert "read_system_metrics_sample(" not in post_body
+    assert "c300x_system_metrics_read_sample(" not in post_body
     assert (
         'if (subscription_matches_event(&runtime->subscriptions[0], "system.metrics_changed"))'
         in post_body
     )
-    assert dispatch_now_body.index("system_metrics_watch_active") < dispatch_now_body.index(
-        "read_system_metrics_sample"
+    assert dispatch_now_body.index("system_metrics_watch_active") < (
+        dispatch_now_body.index("c300x_system_metrics_read_sample")
     )
 
 
@@ -150,7 +153,7 @@ def test_native_agent_metrics_initializes_internal_monitor_without_subscribers()
     )[0]
 
     assert init_body.index("system_metrics_monitor_active") < init_body.index(
-        "read_system_metrics_sample"
+        "c300x_system_metrics_read_sample"
     )
 
 

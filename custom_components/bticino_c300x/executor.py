@@ -50,7 +50,6 @@ from .const import (
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_WEATHER_ENTITY_ID,
@@ -65,7 +64,6 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DASHBOARD_ENTITY_STAIR_LIGHT,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DOMAIN,
     EVENT_ACTION_RECEIVED,
 )
@@ -449,11 +447,6 @@ async def async_trigger_stair_light(
     target_address = address or stair_light_where_from_entry_values(
         entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
         entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
-        entry_config_value(
-            entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-            DEFAULT_STAIR_LIGHT_ADDRESS,
-        ),
     )
     await entry.runtime_data.api.async_stair_light(target_address)
     hass.bus.async_fire(

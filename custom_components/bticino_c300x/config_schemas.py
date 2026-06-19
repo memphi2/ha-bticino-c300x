@@ -8,7 +8,6 @@ import voluptuous as vol
 
 from .activation_address import (
     normalize_stair_light_part,
-    stair_light_parts_from_where,
 )
 from .config_audio import audio_gain_db
 from .const import (
@@ -50,6 +49,8 @@ def setup_features_schema(
     default_video_enabled: bool,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
     default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
+    default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
+    default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
@@ -63,6 +64,8 @@ def setup_features_schema(
         default_device_activation_stair_light_address=(
             default_device_activation_stair_light_address
         ),
+        default_device_activation_stair_light_p=default_device_activation_stair_light_p,
+        default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -100,6 +103,8 @@ def reconfigure_features_schema(
     default_video_enabled: bool,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
     default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
+    default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
+    default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
@@ -113,6 +118,8 @@ def reconfigure_features_schema(
         default_device_activation_stair_light_address=(
             default_device_activation_stair_light_address
         ),
+        default_device_activation_stair_light_p=default_device_activation_stair_light_p,
+        default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -161,12 +168,19 @@ def _media_feature_schema(
     default_video_enabled: bool,
     default_device_activation_mode: str,
     default_device_activation_stair_light_address: str,
+    default_device_activation_stair_light_p: str,
+    default_device_activation_stair_light_n: str,
     default_create_homeassistant_user: bool,
     default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
 ) -> vol.Schema:
-    default_p, default_n = stair_light_parts_from_where(
-        default_device_activation_stair_light_address
+    default_p = normalize_stair_light_part(
+        default_device_activation_stair_light_p,
+        default=DEFAULT_STAIR_LIGHT_P,
+    )
+    default_n = normalize_stair_light_part(
+        default_device_activation_stair_light_n,
+        default=DEFAULT_STAIR_LIGHT_N,
     )
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,

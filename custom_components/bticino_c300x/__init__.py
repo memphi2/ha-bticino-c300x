@@ -29,7 +29,6 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
@@ -42,7 +41,6 @@ from .const import (
     DATA_RUNTIME_ENTRIES,
     DEFAULT_AGENT_PORT,
     DEFAULT_RECONNECT_GRACE_SECONDS,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
@@ -554,11 +552,6 @@ def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool
     address = stair_light_where_from_entry_values(
         _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, ""),
         _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
-        _entry_config_value(
-            entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-            DEFAULT_STAIR_LIGHT_ADDRESS,
-        ),
     )
     return True, auto_discover, address
 

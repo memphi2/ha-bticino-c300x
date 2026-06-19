@@ -13,7 +13,6 @@ from homeassistant.core import callback
 
 from .action import ActionValidationError, parse_actions_json
 from .activation_address import (
-    stair_light_parts_from_where,
     stair_light_where_from_parts,
 )
 from .api import (
@@ -531,6 +530,14 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 DEFAULT_STAIR_LIGHT_ADDRESS,
                             )
                         ),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                            DEFAULT_STAIR_LIGHT_P,
+                        ),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                            DEFAULT_STAIR_LIGHT_N,
+                        ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
@@ -550,6 +557,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _SETUP_VIDEO_ENABLED_DEFAULT,
                 default_device_activation_mode=DEVICE_ACTIVATION_MODE_AUTO,
                 default_device_activation_stair_light_address=DEFAULT_STAIR_LIGHT_ADDRESS,
+                default_device_activation_stair_light_p=DEFAULT_STAIR_LIGHT_P,
+                default_device_activation_stair_light_n=DEFAULT_STAIR_LIGHT_N,
                 default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
             ),
             errors=errors,
@@ -733,6 +742,14 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS
                                 ],
                             )
+                        ),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                            feature_defaults[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
+                        ),
+                        user_input.get(
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                            feature_defaults[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
                         ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
@@ -1670,6 +1687,16 @@ def _options_features_schema(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
         DEFAULT_STAIR_LIGHT_ADDRESS,
     )
+    default_device_activation_stair_light_p = _config_default(
+        config_entry,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+        DEFAULT_STAIR_LIGHT_P,
+    )
+    default_device_activation_stair_light_n = _config_default(
+        config_entry,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+        DEFAULT_STAIR_LIGHT_N,
+    )
     default_doorstation_audio_gain_db = audio_gain_db_or_default(
         _config_default(
             config_entry,
@@ -1690,6 +1717,8 @@ def _options_features_schema(
         default_video_enabled,
         default_device_activation_mode,
         default_device_activation_stair_light_address,
+        default_device_activation_stair_light_p,
+        default_device_activation_stair_light_n,
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -1725,14 +1754,6 @@ def _current_feature_options(
 ) -> dict[str, Any]:
     """Return effective feature options for reconfigure defaults."""
 
-    legacy_stair_light_address = _config_default(
-        config_entry,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-        DEFAULT_STAIR_LIGHT_ADDRESS,
-    )
-    default_stair_light_p, default_stair_light_n = stair_light_parts_from_where(
-        legacy_stair_light_address
-    )
     return {
         CONF_ALARM_ENTITY_ID: _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
         CONF_WEATHER_ENTITY_ID: _config_default(
@@ -1811,12 +1832,12 @@ def _current_feature_options(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: _config_default(
             config_entry,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-            default_stair_light_p,
+            DEFAULT_STAIR_LIGHT_P,
         ),
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: _config_default(
             config_entry,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-            default_stair_light_n,
+            DEFAULT_STAIR_LIGHT_N,
         ),
     }
 
@@ -1846,6 +1867,8 @@ def _reconfigure_features_schema_from_current(
         bool(current[CONF_VIDEO_ENABLED]),
         current[CONF_DEVICE_ACTIVATION_MODE],
         current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS],
+        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
+        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
         default_doorstation_audio_gain_db=float(
             current[CONF_DOORSTATION_AUDIO_GAIN_DB]
@@ -1885,16 +1908,13 @@ def _feature_input_defaults(
             DEFAULT_STAIR_LIGHT_ADDRESS,
         ),
     )
-    default_stair_light_p, default_stair_light_n = stair_light_parts_from_where(
-        data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS]
-    )
     data.setdefault(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, default_stair_light_p),
+        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P),
     )
     data.setdefault(
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, default_stair_light_n),
+        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N),
     )
     data.setdefault(CONF_VIDEO_PORT, defaults.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT))
     data.setdefault(

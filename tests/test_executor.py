@@ -1344,14 +1344,14 @@ def test_async_trigger_stair_light_calls_agent_api() -> None:
     ]
 
 
-def test_async_trigger_stair_light_uses_configured_address() -> None:
+def test_async_trigger_stair_light_ignores_old_configured_address() -> None:
     hass = FakeHass()
     entry = FakeEntry(data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"})
 
     result = run(async_trigger_stair_light(hass, entry))
 
-    assert result == {"ok": True, "action_id": "stair_light", "address": "20#1"}
-    assert entry.runtime_data.api.last_stair_light_address == "20#1"
+    assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
+    assert entry.runtime_data.api.last_stair_light_address == "10"
 
 
 def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
@@ -1369,7 +1369,7 @@ def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
     assert entry.runtime_data.api.last_stair_light_address == "21"
 
 
-def test_async_trigger_stair_light_uses_option_address() -> None:
+def test_async_trigger_stair_light_ignores_old_option_address() -> None:
     hass = FakeHass()
     entry = FakeEntry(
         data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"},
@@ -1378,8 +1378,8 @@ def test_async_trigger_stair_light_uses_option_address() -> None:
 
     result = run(async_trigger_stair_light(hass, entry))
 
-    assert result == {"ok": True, "action_id": "stair_light", "address": "30#1"}
-    assert entry.runtime_data.api.last_stair_light_address == "30#1"
+    assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
+    assert entry.runtime_data.api.last_stair_light_address == "10"
 
 
 def test_async_trigger_stair_light_accepts_override_address() -> None:

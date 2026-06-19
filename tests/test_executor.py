@@ -307,6 +307,18 @@ def test_async_execute_dashboard_action_presses_selected_button() -> None:
     ]
 
 
+def test_async_execute_dashboard_action_presses_selected_input_button() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_button.door"]})
+
+    result = run(async_execute_dashboard_action(hass, entry, "input_button.door"))
+
+    assert result == {"ok": True, "action_id": "input_button.door"}
+    assert hass.services.calls == [
+        ("input_button", "press", {"entity_id": "input_button.door"}, True)
+    ]
+
+
 def test_async_execute_dashboard_action_adjusts_selected_slider() -> None:
     hass = FakeHass(
         states=FakeStates(

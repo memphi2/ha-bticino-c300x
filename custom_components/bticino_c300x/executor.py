@@ -890,9 +890,16 @@ async def _async_execute_dashboard_entity(
             {"entity_id": entity_id},
             blocking=True,
         )
-    elif domain in {"button", "input_button"}:
+    elif domain == "button":
         await hass.services.async_call(
             domain,
+            "press",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
+    elif domain == "input_button":
+        await hass.services.async_call(
+            "input_button",
             "press",
             {"entity_id": entity_id},
             blocking=True,

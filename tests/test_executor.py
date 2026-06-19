@@ -178,6 +178,7 @@ class FakeHass:
     bus: FakeBus = field(default_factory=FakeBus)
     states: FakeStates = field(default_factory=lambda: FakeStates({}))
     data: dict[str, Any] = field(default_factory=dict)
+    config: Any = field(default_factory=lambda: types.SimpleNamespace(language="de"))
 
     def __post_init__(self) -> None:
         self.services.states = self.states
@@ -1638,6 +1639,7 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "name": "Window",
             "state": True,
             "state_label": "Offen",
+            "color": "#ff6b6b",
         },
     ]
     assert page["buttons"] == [
@@ -1723,6 +1725,84 @@ def test_async_dashboard_payload_uses_binary_sensor_device_class_labels() -> Non
     for device_class, labels in expected_labels.items():
         assert labels_by_entity[f"binary_sensor.{device_class}_off"] == labels[0]
         assert labels_by_entity[f"binary_sensor.{device_class}_on"] == labels[1]
+
+
+def test_async_dashboard_payload_localizes_binary_sensor_labels() -> None:
+    expected = {
+        "de": ("Geschlossen", "Offen"),
+        "en": ("Closed", "Open"),
+        "fr": ("Ferme", "Ouvert"),
+        "it": ("Chiuso", "Aperto"),
+    }
+    for language, labels in expected.items():
+        hass = FakeHass(
+            config=types.SimpleNamespace(language=language),
+            states=FakeStates(
+                {
+                    "binary_sensor.window_off": FakeState(
+                        "off",
+                        attributes={
+                            "friendly_name": "Window closed",
+                            "device_class": "window",
+                        },
+                    ),
+                    "binary_sensor.window_on": FakeState(
+                        "on",
+                        attributes={
+                            "friendly_name": "Window open",
+                            "device_class": "window",
+                        },
+                    ),
+                }
+            ),
+        )
+        entry = FakeEntry(
+            options={
+                CONF_DASHBOARD_ENTITIES: [
+                    "binary_sensor.window_off",
+                    "binary_sensor.window_on",
+                ],
+            }
+        )
+
+        result = run(async_dashboard_payload(hass, entry))
+
+        page = {page["title"]: page for page in result["data"]["pages"]}[
+            "Home Assistant"
+        ]
+        by_entity = {item["entity_id"]: item for item in page["entities"]}
+        assert by_entity["binary_sensor.window_off"]["state_label"] == labels[0]
+        assert by_entity["binary_sensor.window_off"]["color"] == "#58d68d"
+        assert by_entity["binary_sensor.window_on"]["state_label"] == labels[1]
+        assert by_entity["binary_sensor.window_on"]["color"] == "#ff6b6b"
+
+
+def test_async_dashboard_payload_falls_back_to_english_without_matching_language() -> None:
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["binary_sensor.safety"]})
+
+    for language in ("", "nl"):
+        hass = FakeHass(
+            config=types.SimpleNamespace(language=language),
+            states=FakeStates(
+                {
+                    "binary_sensor.safety": FakeState(
+                        "on",
+                        attributes={
+                            "friendly_name": "Safety",
+                            "device_class": "safety",
+                        },
+                    ),
+                }
+            ),
+        )
+
+        result = run(async_dashboard_payload(hass, entry))
+
+        page = {page["title"]: page for page in result["data"]["pages"]}[
+            "Home Assistant"
+        ]
+        assert page["entities"][0]["state_label"] == "Unsafe"
+        assert page["entities"][0]["color"] == "#ff6b6b"
 
 
 def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None:

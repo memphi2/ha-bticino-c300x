@@ -69,6 +69,9 @@ Page {
     }
 
     function itemColor(item) {
+        if (item.color && item.color.length > 0) {
+            return item.color
+        }
         if (item.kind === "switch" && item.state) {
             return "#58d68d"
         }

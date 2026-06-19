@@ -134,6 +134,10 @@ _DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
 _DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET
 _DASHBOARD_SLIDER_ACTIONS = {"decrement", "increment"}
 _DASHBOARD_CHOICE_ACTIONS = {"next", "previous"}
+_DASHBOARD_COLOR_GOOD = "#58d68d"
+_DASHBOARD_COLOR_BAD = "#ff6b6b"
+_DASHBOARD_COLOR_WARNING = "#f1c40f"
+_DASHBOARD_COLOR_NEUTRAL = "#c7d0d9"
 _DASHBOARD_ON_STATES = {
     "armed_away",
     "armed_custom_bypass",
@@ -146,7 +150,7 @@ _DASHBOARD_ON_STATES = {
     "playing",
     "triggered",
 }
-_DASHBOARD_STATE_LABELS = {
+_DASHBOARD_STATE_LABELS_DE = {
     "armed_away": "Abwesend",
     "armed_custom_bypass": "Bypass",
     "armed_home": "Zuhause",
@@ -166,7 +170,73 @@ _DASHBOARD_STATE_LABELS = {
     "unavailable": "Offline",
     "unknown": "Unbekannt",
 }
-_BINARY_SENSOR_DEVICE_CLASS_LABELS = {
+_DASHBOARD_STATE_LABELS_EN = {
+    "armed_away": "Away",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "Home",
+    "armed_night": "Night",
+    "armed_vacation": "Vacation",
+    "arming": "Arming",
+    "closed": "Closed",
+    "disarmed": "Off",
+    "home": "Home",
+    "idle": "Ready",
+    "off": "Off",
+    "on": "On",
+    "open": "Open",
+    "pending": "Pending",
+    "playing": "Active",
+    "triggered": "Alarm",
+    "unavailable": "Offline",
+    "unknown": "Unknown",
+}
+_DASHBOARD_STATE_LABELS_FR = {
+    "armed_away": "Absent",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "Maison",
+    "armed_night": "Nuit",
+    "armed_vacation": "Vacances",
+    "arming": "Activation",
+    "closed": "Ferme",
+    "disarmed": "Arrete",
+    "home": "Maison",
+    "idle": "Pret",
+    "off": "Arrete",
+    "on": "Actif",
+    "open": "Ouvert",
+    "pending": "En attente",
+    "playing": "Actif",
+    "triggered": "Alarme",
+    "unavailable": "Hors ligne",
+    "unknown": "Inconnu",
+}
+_DASHBOARD_STATE_LABELS_IT = {
+    "armed_away": "Fuori casa",
+    "armed_custom_bypass": "Bypass",
+    "armed_home": "Casa",
+    "armed_night": "Notte",
+    "armed_vacation": "Vacanza",
+    "arming": "Attivazione",
+    "closed": "Chiuso",
+    "disarmed": "Spento",
+    "home": "Casa",
+    "idle": "Pronto",
+    "off": "Spento",
+    "on": "Acceso",
+    "open": "Aperto",
+    "pending": "In attesa",
+    "playing": "Attivo",
+    "triggered": "Allarme",
+    "unavailable": "Offline",
+    "unknown": "Sconosciuto",
+}
+_DASHBOARD_STATE_LABELS_BY_LANGUAGE = {
+    "de": _DASHBOARD_STATE_LABELS_DE,
+    "en": _DASHBOARD_STATE_LABELS_EN,
+    "fr": _DASHBOARD_STATE_LABELS_FR,
+    "it": _DASHBOARD_STATE_LABELS_IT,
+}
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_DE = {
     "battery": ("Normal", "Niedrig"),
     "battery_charging": ("Laedt nicht", "Laedt"),
     "cold": ("Normal", "Kalt"),
@@ -195,7 +265,129 @@ _BINARY_SENSOR_DEVICE_CLASS_LABELS = {
     "vibration": ("Ruhig", "Vibration"),
     "window": ("Geschlossen", "Offen"),
 }
-_WEATHER_STATE_LABELS = {
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_EN = {
+    "battery": ("Normal", "Low"),
+    "battery_charging": ("Not charging", "Charging"),
+    "cold": ("Normal", "Cold"),
+    "connectivity": ("Disconnected", "Connected"),
+    "door": ("Closed", "Open"),
+    "garage_door": ("Closed", "Open"),
+    "gas": ("Clear", "Gas detected"),
+    "heat": ("Normal", "Hot"),
+    "light": ("Dark", "Light"),
+    "lock": ("Locked", "Unlocked"),
+    "moisture": ("Dry", "Wet"),
+    "motion": ("No motion", "Motion"),
+    "moving": ("Stopped", "Moving"),
+    "occupancy": ("Clear", "Occupied"),
+    "opening": ("Closed", "Open"),
+    "plug": ("Disconnected", "Connected"),
+    "power": ("Off", "On"),
+    "presence": ("Away", "Present"),
+    "problem": ("OK", "Problem"),
+    "running": ("Stopped", "Running"),
+    "safety": ("Safe", "Unsafe"),
+    "smoke": ("Clear", "Smoke detected"),
+    "sound": ("Quiet", "Sound"),
+    "tamper": ("OK", "Tamper"),
+    "update": ("Up to date", "Update"),
+    "vibration": ("Quiet", "Vibration"),
+    "window": ("Closed", "Open"),
+}
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_FR = {
+    "battery": ("Normal", "Faible"),
+    "battery_charging": ("Ne charge pas", "Charge"),
+    "cold": ("Normal", "Froid"),
+    "connectivity": ("Deconnecte", "Connecte"),
+    "door": ("Ferme", "Ouvert"),
+    "garage_door": ("Ferme", "Ouvert"),
+    "gas": ("OK", "Gaz detecte"),
+    "heat": ("Normal", "Chaud"),
+    "light": ("Sombre", "Clair"),
+    "lock": ("Verrouille", "Deverrouille"),
+    "moisture": ("Sec", "Humide"),
+    "motion": ("Aucun mouvement", "Mouvement"),
+    "moving": ("Arrete", "En mouvement"),
+    "occupancy": ("Libre", "Occupe"),
+    "opening": ("Ferme", "Ouvert"),
+    "plug": ("Deconnecte", "Connecte"),
+    "power": ("Arrete", "Actif"),
+    "presence": ("Absent", "Present"),
+    "problem": ("OK", "Probleme"),
+    "running": ("Arrete", "En marche"),
+    "safety": ("Sur", "Dangereux"),
+    "smoke": ("OK", "Fumee detectee"),
+    "sound": ("Silence", "Son"),
+    "tamper": ("OK", "Sabotage"),
+    "update": ("A jour", "Mise a jour"),
+    "vibration": ("Calme", "Vibration"),
+    "window": ("Ferme", "Ouvert"),
+}
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_IT = {
+    "battery": ("Normale", "Bassa"),
+    "battery_charging": ("Non in carica", "In carica"),
+    "cold": ("Normale", "Freddo"),
+    "connectivity": ("Disconnesso", "Connesso"),
+    "door": ("Chiuso", "Aperto"),
+    "garage_door": ("Chiuso", "Aperto"),
+    "gas": ("OK", "Gas rilevato"),
+    "heat": ("Normale", "Caldo"),
+    "light": ("Buio", "Luce"),
+    "lock": ("Bloccato", "Sbloccato"),
+    "moisture": ("Asciutto", "Bagnato"),
+    "motion": ("Nessun movimento", "Movimento"),
+    "moving": ("Fermo", "In movimento"),
+    "occupancy": ("Libero", "Occupato"),
+    "opening": ("Chiuso", "Aperto"),
+    "plug": ("Disconnesso", "Connesso"),
+    "power": ("Spento", "Acceso"),
+    "presence": ("Assente", "Presente"),
+    "problem": ("OK", "Problema"),
+    "running": ("Fermo", "In funzione"),
+    "safety": ("Sicuro", "Non sicuro"),
+    "smoke": ("OK", "Fumo rilevato"),
+    "sound": ("Silenzio", "Suono"),
+    "tamper": ("OK", "Manomissione"),
+    "update": ("Aggiornato", "Aggiornamento"),
+    "vibration": ("Calmo", "Vibrazione"),
+    "window": ("Chiuso", "Aperto"),
+}
+_BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE = {
+    "de": _BINARY_SENSOR_DEVICE_CLASS_LABELS_DE,
+    "en": _BINARY_SENSOR_DEVICE_CLASS_LABELS_EN,
+    "fr": _BINARY_SENSOR_DEVICE_CLASS_LABELS_FR,
+    "it": _BINARY_SENSOR_DEVICE_CLASS_LABELS_IT,
+}
+_BINARY_SENSOR_DEVICE_CLASS_COLORS = {
+    "battery": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "battery_charging": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
+    "cold": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "connectivity": (_DASHBOARD_COLOR_BAD, _DASHBOARD_COLOR_GOOD),
+    "door": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "garage_door": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "gas": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "heat": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "light": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_WARNING),
+    "lock": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "moisture": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "motion": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "moving": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "occupancy": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "opening": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "plug": (_DASHBOARD_COLOR_WARNING, _DASHBOARD_COLOR_GOOD),
+    "power": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
+    "presence": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
+    "problem": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "running": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
+    "safety": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "smoke": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "sound": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
+    "tamper": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+    "update": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
+    "vibration": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
+    "window": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
+}
+_WEATHER_STATE_LABELS_DE = {
     "clear-night": "Klar",
     "cloudy": "Bewoelkt",
     "exceptional": "Extrem",
@@ -212,6 +404,84 @@ _WEATHER_STATE_LABELS = {
     "windy": "Windig",
     "windy-variant": "Windig",
 }
+_WEATHER_STATE_LABELS_EN = {
+    "clear-night": "Clear",
+    "cloudy": "Cloudy",
+    "exceptional": "Extreme",
+    "fog": "Fog",
+    "hail": "Hail",
+    "lightning": "Thunder",
+    "lightning-rainy": "Thunder",
+    "partlycloudy": "Partly cloudy",
+    "pouring": "Pouring",
+    "rainy": "Rain",
+    "snowy": "Snow",
+    "snowy-rainy": "Sleet",
+    "sunny": "Sunny",
+    "windy": "Windy",
+    "windy-variant": "Windy",
+}
+_WEATHER_STATE_LABELS_FR = {
+    "clear-night": "Clair",
+    "cloudy": "Nuageux",
+    "exceptional": "Extreme",
+    "fog": "Brouillard",
+    "hail": "Grele",
+    "lightning": "Orage",
+    "lightning-rainy": "Orage",
+    "partlycloudy": "Partiellement nuageux",
+    "pouring": "Pluie forte",
+    "rainy": "Pluie",
+    "snowy": "Neige",
+    "snowy-rainy": "Neige fondue",
+    "sunny": "Ensoleille",
+    "windy": "Venteux",
+    "windy-variant": "Venteux",
+}
+_WEATHER_STATE_LABELS_IT = {
+    "clear-night": "Sereno",
+    "cloudy": "Nuvoloso",
+    "exceptional": "Estremo",
+    "fog": "Nebbia",
+    "hail": "Grandine",
+    "lightning": "Temporale",
+    "lightning-rainy": "Temporale",
+    "partlycloudy": "Parzialmente nuvoloso",
+    "pouring": "Pioggia intensa",
+    "rainy": "Pioggia",
+    "snowy": "Neve",
+    "snowy-rainy": "Nevischio",
+    "sunny": "Soleggiato",
+    "windy": "Ventoso",
+    "windy-variant": "Ventoso",
+}
+_WEATHER_STATE_LABELS_BY_LANGUAGE = {
+    "de": _WEATHER_STATE_LABELS_DE,
+    "en": _WEATHER_STATE_LABELS_EN,
+    "fr": _WEATHER_STATE_LABELS_FR,
+    "it": _WEATHER_STATE_LABELS_IT,
+}
+_WEATHER_TITLE_BY_LANGUAGE = {
+    "de": "Wetter",
+    "en": "Weather",
+    "fr": "Meteo",
+    "it": "Meteo",
+}
+
+
+def _dashboard_language(hass: HomeAssistant | None) -> str:
+    language = str(getattr(getattr(hass, "config", None), "language", "") or "").lower()
+    if language.startswith("de"):
+        return "de"
+    if language.startswith("fr"):
+        return "fr"
+    if language.startswith("it"):
+        return "it"
+    return "en"
+
+
+def _localized_weather_title(language: str) -> str:
+    return _WEATHER_TITLE_BY_LANGUAGE.get(language, _WEATHER_TITLE_BY_LANGUAGE["en"])
 
 
 def configured_alarm_entity_id(entry: ConfigEntry) -> str | None:
@@ -571,16 +841,19 @@ async def async_dashboard_payload(
             "refreshInterval": 0,
             "data": {"pages": []},
         }
+    language = _dashboard_language(hass)
     pages: dict[str, dict[str, Any]] = {}
     main_page = _dashboard_page(pages, _DASHBOARD_DEFAULT_PAGE)
     badges = [{"state": "HA\nonline", "color": "#58d68d"}]
 
     alarm = status.get("alarm")
     if isinstance(alarm, dict):
-        badges.append({"state": f"Alarm\n{_dashboard_alarm_state(alarm.get('state'))}"})
+        badges.append(
+            {"state": f"Alarm\n{_dashboard_alarm_state(alarm.get('state'), language)}"}
+        )
 
     badges.append({"state": _dashboard_datetime_label()})
-    weather = _dashboard_weather(hass, entry)
+    weather = _dashboard_weather(hass, entry, language)
     if weather is not None:
         main_page["weather"] = weather
 
@@ -594,6 +867,7 @@ async def async_dashboard_payload(
             index * 10,
             name_display=entity_name_display,
             secondary_info=entity_secondary_info,
+            language=language,
         )
         if dashboard_item is None:
             continue
@@ -602,7 +876,12 @@ async def async_dashboard_payload(
         page[_dashboard_collection_key(kind)].append(dashboard_item)
 
     for action_id, action in configured_actions(entry).items():
-        dashboard_item = _dashboard_item_for_action(hass, action_id, action)
+        dashboard_item = _dashboard_item_for_action(
+            hass,
+            action_id,
+            action,
+            language=language,
+        )
         if dashboard_item is None:
             continue
         page = _dashboard_page(pages, dashboard_item.pop("_page"))
@@ -655,8 +934,8 @@ async def async_execute_dashboard_action(
     return await async_execute_action(hass, entry, entity_id)
 
 
-def _dashboard_alarm_state(state: Any) -> str:
-    return _dashboard_state_label(state)
+def _dashboard_alarm_state(state: Any, language: str) -> str:
+    return _dashboard_state_label(state, language)
 
 
 def _dashboard_datetime_label() -> str:
@@ -667,7 +946,11 @@ def _dashboard_datetime_label() -> str:
     return now.strftime("%d.%m.\n%H:%M")
 
 
-def _dashboard_weather(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any] | None:
+def _dashboard_weather(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    language: str,
+) -> dict[str, Any] | None:
     """Return weather data for the first dashboard page."""
 
     entity_id = configured_weather_entity_id(entry)
@@ -675,28 +958,29 @@ def _dashboard_weather(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
         return None
     state = hass.states.get(entity_id)
     if state is None:
+        title = _localized_weather_title(language)
         return {
             "available": False,
-            "title": "Wetter",
+            "title": title,
             "condition": "Offline",
             "condition_key": "unavailable",
             "temperature": "",
             "humidity": "",
             "wind": "",
             "updated": "",
-            "badge": "Wetter\nOffline",
+            "badge": f"{title}\nOffline",
             "color": "#f1c40f",
         }
 
     attributes = getattr(state, "attributes", None)
     if not isinstance(attributes, dict):
         attributes = {}
-    condition = _weather_state_label(state.state)
+    condition = _weather_state_label(state.state, language)
     condition_key = str(state.state or "unknown").lower()
     temperature = _weather_temperature(attributes)
     humidity = _weather_humidity(attributes)
     wind = _weather_wind(attributes)
-    title = _dashboard_text(attributes.get("friendly_name"), "Wetter", 40)
+    title = _dashboard_text(attributes.get("friendly_name"), _localized_weather_title(language), 40)
     updated = _weather_updated_label(state)
     return {
         "available": state.state not in {"unknown", "unavailable"},
@@ -712,9 +996,10 @@ def _dashboard_weather(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
     }
 
 
-def _weather_state_label(value: Any) -> str:
+def _weather_state_label(value: Any, language: str) -> str:
     raw = str(value or "unknown").lower()
-    return _WEATHER_STATE_LABELS.get(raw, _dashboard_state_label(raw))
+    labels = _WEATHER_STATE_LABELS_BY_LANGUAGE.get(language, _WEATHER_STATE_LABELS_EN)
+    return labels.get(raw, _dashboard_state_label(raw, language))
 
 
 def _weather_temperature(attributes: dict[str, Any]) -> str:
@@ -790,6 +1075,7 @@ def _dashboard_item_for_entity(
     *,
     name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    language: str = "en",
 ) -> dict[str, Any] | None:
     """Return a dashboard item for one directly selected HA entity."""
 
@@ -803,7 +1089,12 @@ def _dashboard_item_for_entity(
         "domain": DASHBOARD_ACTION_DOMAIN,
         "entity_id": entity_id,
         "name": name,
-        "state_label": _entity_secondary_label(state, entity_id, secondary_info),
+        "state_label": _entity_secondary_label(
+            state,
+            entity_id,
+            secondary_info,
+            language=language,
+        ),
         "_page": _DASHBOARD_ACTION_PAGE,
         "_order": order,
     }
@@ -813,7 +1104,12 @@ def _dashboard_item_for_entity(
         return item
     if domain in _DASHBOARD_BUTTON_ENTITY_DOMAINS:
         item["_kind"] = "button"
-        item["state_label"] = _button_secondary_label(state, entity_id, secondary_info)
+        item["state_label"] = _button_secondary_label(
+            state,
+            entity_id,
+            secondary_info,
+            language=language,
+        )
         return item
     if domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
         item["_kind"] = "slider"
@@ -825,6 +1121,9 @@ def _dashboard_item_for_entity(
         return item
     item["_kind"] = "entity"
     item["state"] = _dashboard_state_is_on(state.state if state else None)
+    color = _entity_state_color(state, entity_id=entity_id)
+    if color is not None:
+        item["color"] = color
     return item
 
 
@@ -832,6 +1131,8 @@ def _dashboard_item_for_action(
     hass: HomeAssistant,
     action_id: str,
     action: dict[str, Any],
+    *,
+    language: str = "en",
 ) -> dict[str, Any] | None:
     dashboard = action.get("dashboard")
     if not isinstance(dashboard, dict):
@@ -878,7 +1179,7 @@ def _dashboard_item_for_action(
     elif state is not None:
         item["state_label"] = _dashboard_text(
             dashboard.get("state_label"),
-            _dashboard_state_label(state.state),
+            _dashboard_state_label(state.state, language),
             60,
         )
     return item
@@ -1127,9 +1428,10 @@ def _dashboard_state_is_on(value: Any) -> bool:
     return str(value or "").lower() in _DASHBOARD_ON_STATES
 
 
-def _dashboard_state_label(value: Any) -> str:
+def _dashboard_state_label(value: Any, language: str = "en") -> str:
     raw = str(value or "unknown").lower()
-    return _DASHBOARD_STATE_LABELS.get(raw, str(value or "unknown"))
+    labels = _DASHBOARD_STATE_LABELS_BY_LANGUAGE.get(language, _DASHBOARD_STATE_LABELS_EN)
+    return labels.get(raw, str(value or "unknown"))
 
 
 def _entity_name(
@@ -1154,8 +1456,11 @@ def _entity_secondary_label(
     entity_id: str,
     secondary_info: str,
     *,
-    fallback: str = "Unbekannt",
+    language: str = "en",
+    fallback: str | None = None,
 ) -> str:
+    if fallback is None:
+        fallback = _dashboard_state_label("unknown", language)
     if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_NONE:
         return ""
     if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID:
@@ -1164,13 +1469,20 @@ def _entity_secondary_label(
         return _state_time_label(state, "last_changed")
     if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED:
         return _state_time_label(state, "last_updated")
-    return _entity_state_label(state, entity_id=entity_id, fallback=fallback)
+    return _entity_state_label(
+        state,
+        entity_id=entity_id,
+        fallback=fallback,
+        language=language,
+    )
 
 
 def _button_secondary_label(
     state: Any | None,
     entity_id: str,
     secondary_info: str,
+    *,
+    language: str = "en",
 ) -> str:
     if secondary_info in {
         DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
@@ -1183,6 +1495,7 @@ def _button_secondary_label(
         state,
         entity_id,
         secondary_info,
+        language=language,
         fallback="",
     )
 
@@ -1191,8 +1504,11 @@ def _entity_state_label(
     state: Any | None,
     *,
     entity_id: str | None = None,
-    fallback: str = "Unbekannt",
+    language: str = "en",
+    fallback: str = "",
 ) -> str:
+    if not fallback:
+        fallback = _dashboard_state_label("unknown", language)
     if state is None:
         return "Offline"
     attributes = getattr(state, "attributes", None)
@@ -1200,10 +1516,16 @@ def _entity_state_label(
         attributes = {}
     state_value = str(state.state or "unknown")
     if str(entity_id or getattr(state, "entity_id", "")).startswith("binary_sensor."):
-        return _binary_sensor_state_label(state_value, attributes, fallback=fallback)
-    label = _dashboard_state_label(state_value)
+        return _binary_sensor_state_label(
+            state_value,
+            attributes,
+            fallback=fallback,
+            language=language,
+        )
+    label = _dashboard_state_label(state_value, language)
     unit = attributes.get("unit_of_measurement")
-    if unit and state_value.lower() not in _DASHBOARD_STATE_LABELS:
+    labels = _DASHBOARD_STATE_LABELS_BY_LANGUAGE.get(language, _DASHBOARD_STATE_LABELS_EN)
+    if unit and state_value.lower() not in labels:
         label = f"{state_value} {unit}"
     if label == "unknown" and fallback:
         return fallback
@@ -1214,17 +1536,76 @@ def _binary_sensor_state_label(
     state_value: str,
     attributes: dict[str, Any],
     *,
+    language: str = "en",
     fallback: str,
 ) -> str:
     raw = state_value.lower()
     if raw in {"unknown", "unavailable"}:
-        return _dashboard_state_label(raw)
-    labels = _BINARY_SENSOR_DEVICE_CLASS_LABELS.get(
+        return _dashboard_state_label(raw, language)
+    device_labels = _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE.get(
+        language,
+        _BINARY_SENSOR_DEVICE_CLASS_LABELS_EN,
+    )
+    labels = device_labels.get(
         str(attributes.get("device_class") or "").lower()
     )
     if labels is not None and raw in {"off", "on"}:
         return labels[1] if raw == "on" else labels[0]
-    return _dashboard_state_label(raw) if raw in _DASHBOARD_STATE_LABELS else fallback
+    state_labels = _DASHBOARD_STATE_LABELS_BY_LANGUAGE.get(
+        language,
+        _DASHBOARD_STATE_LABELS_EN,
+    )
+    return _dashboard_state_label(raw, language) if raw in state_labels else fallback
+
+
+def _entity_state_color(
+    state: Any | None,
+    *,
+    entity_id: str | None = None,
+) -> str | None:
+    if state is None:
+        return _DASHBOARD_COLOR_WARNING
+    attributes = getattr(state, "attributes", None)
+    if not isinstance(attributes, dict):
+        attributes = {}
+    raw = str(state.state or "unknown").lower()
+    if str(entity_id or getattr(state, "entity_id", "")).startswith("binary_sensor."):
+        return _binary_sensor_state_color(raw, attributes)
+    return _raw_state_color(raw)
+
+
+def _binary_sensor_state_color(
+    raw: str,
+    attributes: dict[str, Any],
+) -> str:
+    if raw in {"unknown", "unavailable"}:
+        return _DASHBOARD_COLOR_WARNING
+    if raw in {"off", "on"}:
+        colors = _BINARY_SENSOR_DEVICE_CLASS_COLORS.get(
+            str(attributes.get("device_class") or "").lower()
+        )
+        if colors is not None:
+            return colors[1] if raw == "on" else colors[0]
+        return _DASHBOARD_COLOR_BAD if raw == "on" else _DASHBOARD_COLOR_GOOD
+    return _raw_state_color(raw) or _DASHBOARD_COLOR_NEUTRAL
+
+
+def _raw_state_color(raw: str) -> str | None:
+    if raw in {"closed", "disarmed", "idle", "locked", "off", "ok", "safe"}:
+        return _DASHBOARD_COLOR_GOOD
+    if raw in {
+        "on",
+        "open",
+        "problem",
+        "triggered",
+        "unsafe",
+        "unlocked",
+        "violated",
+    }:
+        return _DASHBOARD_COLOR_BAD
+    if raw in {"unknown", "unavailable"}:
+        return _DASHBOARD_COLOR_WARNING
+    return None
 
 
 def _state_time_label(state: Any | None, attribute: str) -> str:

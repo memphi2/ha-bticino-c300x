@@ -604,6 +604,9 @@ function dashboardItems(source, kind) {
         } else if (source[i].label) {
             item.state_label = source[i].label
         }
+        if (source[i].color) {
+            item.color = source[i].color
+        }
         target.push(item)
     }
     return target

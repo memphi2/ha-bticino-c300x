@@ -142,6 +142,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
@@ -1191,10 +1192,12 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
         default_device_ui_enabled=True,
     )
 
-    assert _schema_key_names(dashboard_schema)[:2] == [
+    assert _schema_key_names(dashboard_schema)[:3] == [
         CONF_DEVICE_UI_ENABLED,
-        CONF_ALARM_ENTITY_ID,
+        CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     ]
+    assert CONF_ALARM_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITIES in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES not in _schema_key_names(
@@ -1428,6 +1431,18 @@ def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
+def test_dashboard_schema_orders_checkbox_options_first() -> None:
+    schema = _dashboard_schema("", "")
+
+    keys = [getattr(key, "schema", key) for key in schema.schema]
+
+    assert keys[:3] == [
+        CONF_DEVICE_UI_ENABLED,
+        CONF_DASHBOARD_PREVENT_RETURN,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+    ]
+
+
 def test_dashboard_schema_keeps_entity_display_controls_on_separate_page() -> None:
     schema = _dashboard_schema(
         "",
@@ -1443,9 +1458,9 @@ def test_dashboard_schema_keeps_entity_display_controls_on_separate_page() -> No
 
     result = schema({})
 
-    assert "Name shown for sensor.temperature" not in result
-    assert "Custom name for sensor.temperature" not in result
-    assert "Secondary line for sensor.temperature" not in result
+    assert "1. Temperature - Name" not in result
+    assert "1. Temperature - Custom name" not in result
+    assert "1. Temperature - Secondary line" not in result
 
 
 def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -> None:
@@ -1462,9 +1477,9 @@ def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -
 
     result = schema({})
 
-    assert result["Name shown for sensor.temperature"] == "custom"
-    assert result["Custom name for sensor.temperature"] == "Outside"
-    assert result["Secondary line for sensor.temperature"] == "none"
+    assert result["1. Temperature - Name"] == "custom"
+    assert result["1. Temperature - Custom name"] == "Outside"
+    assert result["1. Temperature - Secondary line"] == "none"
 
 
 def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields() -> None:
@@ -1475,9 +1490,9 @@ def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields(
     assert _dashboard_entity_display_form_complete(
         {
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            "Name shown for sensor.temperature": "friendly_name",
-            "Custom name for sensor.temperature": "",
-            "Secondary line for sensor.temperature": "state",
+            "1. Temperature - Name": "friendly_name",
+            "1. Temperature - Custom name": "",
+            "1. Temperature - Secondary line": "state",
         },
         ["sensor.temperature"],
     )
@@ -1693,9 +1708,9 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     result = asyncio.run(
         flow.async_step_dashboard_entity_display(
             {
-                "Name shown for switch.entry": "custom",
-                "Custom name for switch.entry": "Entry",
-                "Secondary line for switch.entry": "state",
+                "1. Entry - Name": "custom",
+                "1. Entry - Custom name": "Entry",
+                "1. Entry - Secondary line": "state",
             }
         )
     )

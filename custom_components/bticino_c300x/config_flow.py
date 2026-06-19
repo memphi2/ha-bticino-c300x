@@ -37,6 +37,9 @@ from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
 )
 from .config_flow_dashboard import (
+    dashboard_entity_display_schema as _dashboard_entity_display_schema,
+)
+from .config_flow_dashboard import (
     dashboard_entity_ids as _dashboard_entity_ids,
 )
 from .config_flow_dashboard import (
@@ -175,8 +178,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_agent_needs_token = False
         self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
+        self._setup_dashboard_input: dict[str, Any] = {}
         self._reconfigure_connection: dict[str, Any] = {}
         self._reconfigure_feature_data: dict[str, Any] = {}
+        self._reconfigure_dashboard_input: dict[str, Any] = {}
 
     async def async_step_user(
         self,
@@ -574,20 +579,61 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_user_features()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
-                user_input,
-                user_input.get(CONF_DASHBOARD_ENTITIES, []),
+            self._setup_dashboard_input = _dashboard_input_defaults(user_input)
+            if (
+                self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]
+                and self._setup_dashboard_input[CONF_DASHBOARD_ENTITIES]
             ):
-                return self._async_show_user_dashboard_form(user_input, errors)
-            dashboard_input = _dashboard_input_defaults(user_input)
-            feature_data, errors = _feature_input(
-                {**self._setup_feature_data, **dashboard_input},
-                default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
-            )
-            if not errors:
-                return await self._async_create_setup_entry(feature_data)
+                return self._async_show_user_dashboard_entity_display_form(None, errors)
+            return await self._async_create_setup_entry_from_dashboard(errors)
 
         return self._async_show_user_dashboard_form(user_input, errors)
+
+    async def async_step_user_dashboard_entity_display(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Collect per-entity display labels for the initial C300X dashboard."""
+
+        if not self._setup_dashboard_input:
+            return await self.async_step_user_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                self._setup_dashboard_input[CONF_DASHBOARD_ENTITIES],
+            ):
+                return self._async_show_user_dashboard_entity_display_form(
+                    user_input,
+                    errors,
+                )
+            self._setup_dashboard_input[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
+                _dashboard_input_defaults(
+                    {
+                        **self._setup_dashboard_input,
+                        **user_input,
+                    }
+                )[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
+            )
+            return await self._async_create_setup_entry_from_dashboard(errors)
+        return self._async_show_user_dashboard_entity_display_form(user_input, errors)
+
+    async def _async_create_setup_entry_from_dashboard(
+        self,
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Create the setup entry from collected setup feature/dashboard pages."""
+
+        feature_data, errors = _feature_input(
+            {**self._setup_feature_data, **self._setup_dashboard_input},
+            default_video_enabled=_SETUP_VIDEO_ENABLED_DEFAULT,
+        )
+        if errors:
+            return self._async_show_user_dashboard_form(
+                self._setup_dashboard_input,
+                errors,
+            )
+        return await self._async_create_setup_entry(feature_data)
 
     def _async_show_user_dashboard_form(
         self,
@@ -624,6 +670,25 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_DEVICE_UI_ENABLED,
                         self._setup_device_ui_default,
                     )
+                ),
+            ),
+            errors=errors,
+        )
+
+    def _async_show_user_dashboard_entity_display_form(
+        self,
+        user_input: dict[str, Any] | None,
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show initial per-entity C300X display dashboard settings."""
+
+        return self.async_show_form(
+            step_id="user_dashboard_entity_display",
+            data_schema=_dashboard_entity_display_schema(
+                self._setup_dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
+                (user_input or self._setup_dashboard_input).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    {},
                 ),
             ),
             errors=errors,
@@ -788,30 +853,87 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_reconfigure_features()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
+            self._reconfigure_dashboard_input = _dashboard_input_defaults(
                 user_input,
-                user_input.get(
-                    CONF_DASHBOARD_ENTITIES,
-                    feature_defaults[CONF_DASHBOARD_ENTITIES],
-                ),
+                feature_defaults,
+            )
+            if (
+                self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]
+                and self._reconfigure_dashboard_input[CONF_DASHBOARD_ENTITIES]
             ):
-                return await self._async_show_reconfigure_dashboard_form(
-                    user_input,
+                return await self._async_show_reconfigure_dashboard_entity_display_form(
+                    None,
                     feature_defaults,
                     errors,
                 )
-            dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
-            feature_data, errors = _feature_input(
-                {**self._reconfigure_feature_data, **dashboard_input}
+            return await self._async_finish_reconfigure_from_dashboard(
+                feature_defaults,
+                errors,
             )
-            if not errors:
-                return await self._async_finish_reconfigure(feature_data)
 
         return await self._async_show_reconfigure_dashboard_form(
             user_input,
             feature_defaults,
             errors,
         )
+
+    async def async_step_reconfigure_dashboard_entity_display(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Reconfigure per-entity C300X display dashboard labels."""
+
+        entry = self._get_reconfigure_entry()
+        feature_defaults = _current_feature_options(entry)
+        if not self._reconfigure_dashboard_input:
+            return await self.async_step_reconfigure_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                self._reconfigure_dashboard_input[CONF_DASHBOARD_ENTITIES],
+            ):
+                return await self._async_show_reconfigure_dashboard_entity_display_form(
+                    user_input,
+                    feature_defaults,
+                    errors,
+                )
+            self._reconfigure_dashboard_input[
+                CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES
+            ] = _dashboard_input_defaults(
+                {
+                    **self._reconfigure_dashboard_input,
+                    **user_input,
+                },
+                feature_defaults,
+            )[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
+            return await self._async_finish_reconfigure_from_dashboard(
+                feature_defaults,
+                errors,
+            )
+        return await self._async_show_reconfigure_dashboard_entity_display_form(
+            user_input,
+            feature_defaults,
+            errors,
+        )
+
+    async def _async_finish_reconfigure_from_dashboard(
+        self,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Finish reconfigure from collected dashboard pages."""
+
+        feature_data, errors = _feature_input(
+            {**self._reconfigure_feature_data, **self._reconfigure_dashboard_input}
+        )
+        if errors:
+            return await self._async_show_reconfigure_dashboard_form(
+                self._reconfigure_dashboard_input,
+                feature_defaults,
+                errors,
+            )
+        return await self._async_finish_reconfigure(feature_data)
 
     async def _async_show_reconfigure_dashboard_form(
         self,
@@ -876,6 +998,30 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
+    async def _async_show_reconfigure_dashboard_entity_display_form(
+        self,
+        user_input: dict[str, Any] | None,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show reconfigure per-entity C300X display dashboard settings."""
+
+        entry = self._get_reconfigure_entry()
+        return self.async_show_form(
+            step_id="reconfigure_dashboard_entity_display",
+            data_schema=_dashboard_entity_display_schema(
+                self._reconfigure_dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
+                (user_input or self._reconfigure_dashboard_input).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
+                ),
+            ),
+            errors=errors,
+            description_placeholders=await _async_qml_patch_description_placeholders(
+                entry
+            ),
+        )
+
     async def _async_finish_reconfigure(
         self,
         feature_data: dict[str, Any],
@@ -915,6 +1061,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._connection_options: dict[str, Any] = {}
         self._feature_options: dict[str, Any] = {}
+        self._dashboard_options: dict[str, Any] = {}
 
     async def async_step_init(
         self,
@@ -999,35 +1146,91 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_features()
         errors: dict[str, str] = {}
         if user_input is not None:
-            if not _dashboard_entity_display_form_complete(
+            self._dashboard_options = _dashboard_input_defaults(
                 user_input,
-                user_input.get(
-                    CONF_DASHBOARD_ENTITIES,
-                    feature_defaults[CONF_DASHBOARD_ENTITIES],
-                ),
+                feature_defaults,
+            )
+            if (
+                self._dashboard_options[CONF_DEVICE_UI_ENABLED]
+                and self._dashboard_options[CONF_DASHBOARD_ENTITIES]
             ):
-                return await self._async_show_options_dashboard_form(
-                    user_input,
+                return await self._async_show_options_dashboard_entity_display_form(
+                    None,
                     feature_defaults,
                     errors,
                 )
-            dashboard_input = _dashboard_input_defaults(user_input, feature_defaults)
-            feature_data, errors = _feature_input(
-                {**self._feature_options, **dashboard_input}
+            return await self._async_create_options_entry_from_dashboard(
+                feature_defaults,
+                errors,
             )
-            if not errors:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        **self._connection_options,
-                        **feature_data,
-                    },
-                )
 
         return await self._async_show_options_dashboard_form(
             user_input,
             feature_defaults,
             errors,
+        )
+
+    async def async_step_dashboard_entity_display(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Manage per-entity display labels for C300X dashboard options."""
+
+        feature_defaults = _current_feature_options(self._config_entry)
+        if not self._dashboard_options:
+            return await self.async_step_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not _dashboard_entity_display_form_complete(
+                user_input,
+                self._dashboard_options[CONF_DASHBOARD_ENTITIES],
+            ):
+                return await self._async_show_options_dashboard_entity_display_form(
+                    user_input,
+                    feature_defaults,
+                    errors,
+                )
+            self._dashboard_options[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
+                _dashboard_input_defaults(
+                    {
+                        **self._dashboard_options,
+                        **user_input,
+                    },
+                    feature_defaults,
+                )[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
+            )
+            return await self._async_create_options_entry_from_dashboard(
+                feature_defaults,
+                errors,
+            )
+        return await self._async_show_options_dashboard_entity_display_form(
+            user_input,
+            feature_defaults,
+            errors,
+        )
+
+    async def _async_create_options_entry_from_dashboard(
+        self,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Create the options entry from collected dashboard pages."""
+
+        feature_data, errors = _feature_input(
+            {**self._feature_options, **self._dashboard_options}
+        )
+        if errors:
+            return await self._async_show_options_dashboard_form(
+                self._dashboard_options,
+                feature_defaults,
+                errors,
+            )
+        return self.async_create_entry(
+            title="",
+            data={
+                **self._connection_options,
+                **feature_data,
+            },
         )
 
     async def _async_show_options_dashboard_form(
@@ -1084,6 +1287,29 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                         CONF_DEVICE_UI_ENABLED,
                         feature_defaults[CONF_DEVICE_UI_ENABLED],
                     )
+                ),
+            ),
+            errors=errors,
+            description_placeholders=await _async_qml_patch_description_placeholders(
+                self._config_entry
+            ),
+        )
+
+    async def _async_show_options_dashboard_entity_display_form(
+        self,
+        user_input: dict[str, Any] | None,
+        feature_defaults: dict[str, Any],
+        errors: dict[str, str],
+    ) -> config_entries.FlowResult:
+        """Show options per-entity C300X display dashboard settings."""
+
+        return self.async_show_form(
+            step_id="dashboard_entity_display",
+            data_schema=_dashboard_entity_display_schema(
+                self._dashboard_options.get(CONF_DASHBOARD_ENTITIES, []),
+                (user_input or self._dashboard_options).get(
+                    CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                    feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
                 ),
             ),
             errors=errors,

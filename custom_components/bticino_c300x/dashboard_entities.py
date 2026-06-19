@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from .const import (
+    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS,
     DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS,
@@ -80,12 +81,18 @@ def normalize_dashboard_entity_display_overrides(
             raw_options.get("secondary", raw_options.get("secondary_info", ""))
             or ""
         ).strip()
+        custom_name = str(raw_options.get("custom_name", "") or "").strip()
         if name:
             if name not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
                 if strict:
                     raise ValueError("invalid dashboard entity display name mode")
             else:
                 options["name"] = name
+                if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM:
+                    if not custom_name and strict:
+                        raise ValueError("missing dashboard entity custom name")
+                    if custom_name:
+                        options["custom_name"] = custom_name
         if secondary:
             if secondary not in DASHBOARD_ENTITY_SECONDARY_INFO_OPTIONS:
                 if strict:
@@ -115,6 +122,15 @@ def dashboard_entity_secondary_info_override(
     """Return the secondary-info mode for one entity."""
 
     return overrides.get(entity_id, {}).get("secondary", fallback)
+
+
+def dashboard_entity_custom_name_override(
+    overrides: DashboardEntityDisplayOverrides,
+    entity_id: str,
+) -> str:
+    """Return the custom display name for one entity."""
+
+    return overrides.get(entity_id, {}).get("custom_name", "")
 
 
 def _iter_dashboard_entity_values(value: Any, *, strict: bool) -> tuple[Any, ...]:

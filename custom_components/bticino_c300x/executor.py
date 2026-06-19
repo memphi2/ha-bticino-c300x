@@ -56,6 +56,7 @@ from .const import (
     DASHBOARD_ACTION_DOMAIN,
     DASHBOARD_ENTITY_ANSWERING_MACHINE,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
+    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID,
@@ -69,6 +70,7 @@ from .const import (
 )
 from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAIN_SET,
+    dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
     normalize_dashboard_entity_display_overrides,
@@ -529,6 +531,10 @@ async def async_dashboard_payload(
                 entity_id,
                 DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
             ),
+            custom_name=dashboard_entity_custom_name_override(
+                entity_display_overrides,
+                entity_id,
+            ),
             secondary_info=dashboard_entity_secondary_info_override(
                 entity_display_overrides,
                 entity_id,
@@ -744,6 +750,7 @@ def _dashboard_item_for_entity(
     order: int,
     *,
     name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    custom_name: str = "",
     secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     language: str = "en",
 ) -> dict[str, Any] | None:
@@ -754,7 +761,12 @@ def _dashboard_item_for_entity(
         return None
 
     state = hass.states.get(entity_id)
-    name = _entity_name(entity_id, state, display=name_display)
+    name = _entity_name(
+        entity_id,
+        state,
+        display=name_display,
+        custom_name=custom_name,
+    )
     item: dict[str, Any] = {
         "domain": DASHBOARD_ACTION_DOMAIN,
         "entity_id": entity_id,
@@ -1109,7 +1121,10 @@ def _entity_name(
     state: Any | None,
     *,
     display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    custom_name: str = "",
 ) -> str:
+    if display == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM and custom_name.strip():
+        return _dashboard_text(custom_name, entity_id, 80)
     if display == DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID:
         return _dashboard_text(entity_id, entity_id, 80)
     attributes = getattr(state, "attributes", None)

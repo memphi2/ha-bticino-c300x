@@ -105,6 +105,7 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _current_connection_options,
     _current_feature_options,
     _dashboard_entity_display_form_complete,
+    _dashboard_entity_display_schema,
     _dashboard_input_defaults,
     _dashboard_schema,
     _dashboard_entity_ids,
@@ -468,10 +469,17 @@ def test_dashboard_entity_ids_allows_empty_value() -> None:
 
 def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
     assert _dashboard_entity_display_overrides(
-        {"sensor.temperature": {"name": "entity_id", "secondary": "none"}}
+        {
+            "sensor.temperature": {
+                "name": "custom",
+                "custom_name": "Outside",
+                "secondary": "none",
+            }
+        }
     ) == {
         "sensor.temperature": {
-            "name": "entity_id",
+            "name": "custom",
+            "custom_name": "Outside",
             "secondary": "none",
         }
     }
@@ -482,6 +490,7 @@ def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
     [
         {"media_player.tv": {"name": "entity_id"}},
         {"sensor.temperature": {"name": "bad"}},
+        {"sensor.temperature": {"name": "custom"}},
         {"sensor.temperature": {"secondary": "bad"}},
         "not a mapping",
     ],
@@ -1419,7 +1428,7 @@ def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
 
 
-def test_dashboard_schema_adds_display_controls_for_selected_entities() -> None:
+def test_dashboard_schema_keeps_entity_display_controls_on_separate_page() -> None:
     schema = _dashboard_schema(
         "",
         "",
@@ -1434,8 +1443,28 @@ def test_dashboard_schema_adds_display_controls_for_selected_entities() -> None:
 
     result = schema({})
 
-    assert result["Name: sensor.temperature"] == "entity_id"
-    assert result["Secondary info: sensor.temperature"] == "none"
+    assert "Name shown for sensor.temperature" not in result
+    assert "Custom name for sensor.temperature" not in result
+    assert "Secondary line for sensor.temperature" not in result
+
+
+def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -> None:
+    schema = _dashboard_entity_display_schema(
+        default_dashboard_entities=["sensor.temperature"],
+        default_dashboard_entity_display_overrides={
+            "sensor.temperature": {
+                "name": "custom",
+                "custom_name": "Outside",
+                "secondary": "none",
+            }
+        },
+    )
+
+    result = schema({})
+
+    assert result["Name shown for sensor.temperature"] == "custom"
+    assert result["Custom name for sensor.temperature"] == "Outside"
+    assert result["Secondary line for sensor.temperature"] == "none"
 
 
 def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields() -> None:
@@ -1446,8 +1475,9 @@ def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields(
     assert _dashboard_entity_display_form_complete(
         {
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
-            "Name: sensor.temperature": "friendly_name",
-            "Secondary info: sensor.temperature": "state",
+            "Name shown for sensor.temperature": "friendly_name",
+            "Custom name for sensor.temperature": "",
+            "Secondary line for sensor.temperature": "state",
         },
         ["sensor.temperature"],
     )
@@ -1661,23 +1691,18 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
         )
     )
     result = asyncio.run(
-        flow.async_step_dashboard(
+        flow.async_step_dashboard_entity_display(
             {
-                CONF_DEVICE_UI_ENABLED: True,
-                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-                CONF_WEATHER_ENTITY_ID: "weather.home",
-                CONF_DASHBOARD_ENTITIES: ["switch.entry"],
-                "Name: switch.entry": "friendly_name",
-                "Secondary info: switch.entry": "state",
-                CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
-                CONF_DASHBOARD_PREVENT_RETURN: True,
+                "Name shown for switch.entry": "custom",
+                "Custom name for switch.entry": "Entry",
+                "Secondary line for switch.entry": "state",
             }
         )
     )
 
     assert connection_form["step_id"] == "features"
     assert dashboard_form["step_id"] == "dashboard"
-    assert entity_options_form["step_id"] == "dashboard"
+    assert entity_options_form["step_id"] == "dashboard_entity_display"
     assert result["type"] == "create_entry"
     assert result["data"][CONF_AGENT_HOST] == "agent.local"
     assert result["data"][CONF_AGENT_PORT] == 8092
@@ -1694,6 +1719,9 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert result["data"][CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert result["data"][CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert result["data"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
+        "switch.entry": {"name": "custom", "custom_name": "Entry"}
+    }
     assert result["data"][CONF_ACTIONS] == {
         "standby": {
             "data": {},

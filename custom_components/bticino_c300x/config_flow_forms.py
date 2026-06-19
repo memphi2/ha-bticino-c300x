@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from .const import (
     ALARM_DOMAIN,
+    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     WEATHER_DOMAIN,
 )
@@ -88,10 +89,22 @@ def dashboard_entity_name_display_selector() -> Any:
                     "value": "entity_id",
                     "label": "Entity ID",
                 },
+                {
+                    "value": DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+                    "label": "Custom name",
+                },
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )
+
+
+def dashboard_entity_custom_name_selector() -> Any:
+    """Return the text selector for one custom dashboard entity title."""
+
+    if selector is None:
+        return str
+    return selector.TextSelector(selector.TextSelectorConfig())
 
 
 def dashboard_entity_secondary_info_selector() -> Any:

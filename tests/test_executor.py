@@ -1946,6 +1946,37 @@ def test_async_dashboard_payload_uses_per_entity_display_overrides() -> None:
     assert page["switches"][0]["state_label"] == "switch.entry"
 
 
+def test_async_dashboard_payload_uses_custom_entity_display_name() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "sensor.temperature": FakeState(
+                    "21.5",
+                    attributes={"friendly_name": "Temperature"},
+                ),
+            }
+        )
+    )
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {
+                    "name": "custom",
+                    "custom_name": "Outside",
+                },
+            },
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    page = {page["title"]: page for page in result["data"]["pages"]}[
+        "Home Assistant"
+    ]
+    assert page["entities"][0]["name"] == "Outside"
+
+
 def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
     long_option = "Home   Assistant  " + ("manual " * 20)
     states = {

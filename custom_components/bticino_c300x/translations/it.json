@@ -64,6 +64,10 @@
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }
       },
+      "user_dashboard_entity_display": {
+        "title": "Visualizzazione entita dashboard",
+        "description": "Scegli come ogni entita selezionata viene mostrata sul display C300X."
+      },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
         "description": "Aggiorna connessione del device agent, token manutenzione o ruota le credenziali webhook.",
@@ -105,6 +109,10 @@
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }
+      },
+      "reconfigure_dashboard_entity_display": {
+        "title": "Visualizzazione entita dashboard",
+        "description": "Scegli come ogni entita selezionata viene mostrata sul display C300X."
       }
     },
     "abort": {
@@ -171,6 +179,10 @@
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
         }
+      },
+      "dashboard_entity_display": {
+        "title": "Visualizzazione entita dashboard",
+        "description": "Scegli come ogni entita selezionata viene mostrata sul display C300X."
       }
     },
     "error": {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -26,6 +27,7 @@ from .const import (
     DOMAIN,
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
+from .media_readiness import media_readiness
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
@@ -38,6 +40,7 @@ DEVICE_AGENT_UI_EVENT_WATCHDOG_ISSUE = "device_agent_ui_event_watchdog"
 UNSUPPORTED_CALLBACK_URL_ISSUE = "unsupported_callback_url"
 DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE = "device_core_qml_hook_required"
 DEVICE_USER_REQUIRED_ISSUE = "device_user_required"
+MEDIA_SETUP_REPAIR_REQUIRED_ISSUE = "media_setup_repair_required"
 MEDIA_WATCHDOG_TIMEOUT_ISSUE = "media_watchdog_timeout"
 ALL_REPAIR_ISSUES = frozenset(
     {
@@ -52,6 +55,7 @@ ALL_REPAIR_ISSUES = frozenset(
         UNSUPPORTED_CALLBACK_URL_ISSUE,
         DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
         DEVICE_USER_REQUIRED_ISSUE,
+        MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     }
 )
@@ -81,6 +85,7 @@ def async_sync_entry_repair_issues(
     _sync_unsupported_callback_url_issue(hass, entry)
     _sync_device_core_qml_hook_issue(hass, entry)
     _sync_device_user_issue(hass, entry)
+    _sync_media_setup_repair_issue(hass, entry)
 
 
 @callback
@@ -555,6 +560,74 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         is_fixable=maintenance_action_is_advertised(capabilities, "device_user_ensure"),
         placeholders={"reason": reason},
     )
+
+
+def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    if connection_state is None or not getattr(connection_state, "available", True):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        )
+        return
+    if not _entry_media_enabled(entry):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        )
+        return
+    readiness = media_readiness(entry)
+    failed = readiness.get("failed_checks")
+    if readiness.get("status") != "blocked" or not isinstance(failed, list):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        )
+        return
+    capabilities = getattr(runtime_data, "capabilities", {})
+    fixable_checks = _media_setup_fixable_checks(failed, capabilities)
+    if not fixable_checks or fixable_checks == ["homeassistant_user"]:
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        )
+        return
+    _create_issue(
+        hass,
+        entry,
+        MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        severity=ir.IssueSeverity.WARNING,
+        is_fixable=True,
+        placeholders={
+            "failed_checks": ", ".join(str(check) for check in failed),
+            "fixable_checks": ", ".join(fixable_checks),
+            "recommended_action": str(readiness.get("recommended_action") or "unknown"),
+        },
+    )
+
+
+def _media_setup_fixable_checks(
+    failed: list[Any],
+    capabilities: Mapping[str, Any],
+) -> list[str]:
+    checks = {str(check) for check in failed}
+    fixable: list[str] = []
+    if checks & {"firewall", "talkback_rtp"} and maintenance_action_is_advertised(
+        capabilities,
+        "firewall_apply",
+    ):
+        fixable.append("firewall")
+    if checks & {"homeassistant_user", "device_routing"} and maintenance_action_is_advertised(
+        capabilities,
+        "device_user_ensure",
+    ):
+        fixable.append("homeassistant_user")
+    return fixable
 
 
 def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:

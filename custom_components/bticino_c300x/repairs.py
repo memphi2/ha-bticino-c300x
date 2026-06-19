@@ -53,6 +53,7 @@ from .device_installer import (
 from .device_user import homeassistant_account_label
 from .entry_config import entry_config_value
 from .frontend import async_setup_frontend
+from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
     async_apply_qml_core_patch_and_confirm,
@@ -63,6 +64,7 @@ from .repair_issues import (
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
+    MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
@@ -108,6 +110,12 @@ async def async_create_fix_flow(
         and isinstance(data.get("entry_id"), str)
     ):
         return DeviceUserRepairFlow(hass, str(data["entry_id"]))
+    if (
+        data is not None
+        and data.get("issue_type") == MEDIA_SETUP_REPAIR_REQUIRED_ISSUE
+        and isinstance(data.get("entry_id"), str)
+    ):
+        return MediaSetupRepairFlow(hass, str(data["entry_id"]))
     if (
         data is not None
         and data.get("issue_type") == FRONTEND_CARD_SETUP_HINT_ISSUE
@@ -237,7 +245,7 @@ class DeviceUserRepairFlow(RepairsFlow):
     ) -> Any:
         """Start the repair flow."""
 
-        return await self.async_step_confirm(user_input)
+        return await self.async_step_confirm(None)
 
     async def async_step_confirm(
         self,
@@ -266,6 +274,101 @@ class DeviceUserRepairFlow(RepairsFlow):
             issue_id=repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, self._entry_id),
         )
         return self.async_create_entry(data={})
+
+
+class MediaSetupRepairFlow(RepairsFlow):
+    """Guided repair flow for local C300X media prerequisites."""
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        """Initialize the repair flow."""
+
+        self.hass = hass
+        self._entry_id = entry_id
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Start the repair flow."""
+
+        return await self.async_step_confirm(None)
+
+    async def async_step_confirm(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Repair explicitly confirmed media setup prerequisites."""
+
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is None:
+            return self.async_abort(reason="entry_not_loaded")
+        readiness = media_readiness(entry)
+        placeholders = _media_setup_repair_placeholders(readiness)
+        if user_input is None:
+            return self.async_show_form(
+                step_id="confirm",
+                description_placeholders=placeholders,
+            )
+        try:
+            repaired = await _async_repair_media_setup(self.hass, entry)
+        except C300XAgentApiError:
+            return self.async_show_form(
+                step_id="confirm",
+                errors={"base": "media_setup_repair_failed"},
+                description_placeholders=placeholders,
+            )
+        ir.async_delete_issue(
+            hass=self.hass,
+            domain=DOMAIN,
+            issue_id=repair_issue_id(
+                MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+                self._entry_id,
+            ),
+        )
+        return self.async_create_entry(data={"repaired": repaired})
+
+
+async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str]:
+    """Run the safe media setup repairs selected by current readiness."""
+
+    readiness = media_readiness(entry)
+    failed = readiness.get("failed_checks")
+    failed_checks = {str(check) for check in failed} if isinstance(failed, list) else set()
+    repaired: list[str] = []
+    if failed_checks & {"firewall", "talkback_rtp"}:
+        await entry.runtime_data.api.async_set_firewall_enabled(True)
+        await entry.runtime_data.api.async_apply_firewall()
+        repaired.append("firewall")
+    if failed_checks & {"homeassistant_user", "device_routing"}:
+        status = await entry.runtime_data.api.async_ensure_homeassistant_user(
+            account_label=homeassistant_account_label(hass)
+        )
+        entry.runtime_data.device_user_status = status
+        repaired.append("homeassistant_user")
+    if repaired:
+        with suppress(C300XAgentApiError):
+            entry.runtime_data.self_test_status = await entry.runtime_data.api.async_self_test()
+        with suppress(C300XAgentApiError):
+            entry.runtime_data.device_user_status = (
+                await entry.runtime_data.api.async_device_user_status()
+            )
+    return repaired
+
+
+def _media_setup_repair_placeholders(readiness: dict[str, Any]) -> dict[str, str]:
+    """Return user-facing placeholders for the media setup repair."""
+
+    failed = readiness.get("failed_checks")
+    warnings = readiness.get("warnings")
+    return {
+        "failed_checks": ", ".join(str(check) for check in failed)
+        if isinstance(failed, list) and failed
+        else "unknown",
+        "warnings": ", ".join(str(warning) for warning in warnings)
+        if isinstance(warnings, list) and warnings
+        else "none",
+        "recommended_action": str(readiness.get("recommended_action") or "unknown"),
+    }
 
 
 async def _async_setup_lovelace_cards(

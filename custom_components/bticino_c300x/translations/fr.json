@@ -512,6 +512,23 @@
         }
       }
     },
+    "media_setup_repair_required": {
+      "title": "La configuration media C300X peut etre reparee",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Reparer la configuration media C300X",
+            "description": "Home Assistant peut reparer maintenant les prerequis media detectes. Il execute uniquement les actions de maintenance device-agent explicitement confirmees pour les erreurs reparables : pare-feu media IPv4 et utilisateur/routage media Home Assistant. IPv6 est optionnel et n'est pas modifie par cette reparation.\n\nChecks en echec : {failed_checks}\nChecks reparables : {fixable_checks}\nAction recommandee : {recommended_action}"
+          }
+        },
+        "error": {
+          "media_setup_repair_failed": "La reparation de la configuration media a echoue. Verifiez l'acces maintenance et reessayez."
+        },
+        "abort": {
+          "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "La liste d'actions dashboard C300X est invalide",
       "description": "La liste d'actions de {entry_title} ne peut pas etre analysee : {error}. Corrigez la carte d'actions configuree, puis rechargez l'integration."

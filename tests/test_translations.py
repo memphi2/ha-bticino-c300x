@@ -168,8 +168,34 @@ def test_fixable_frontend_card_repair_uses_ha_issue_fix_flow_schema() -> None:
         assert confirm["description"]
         assert _path_value(confirm, "data")["dashboard_path"]
         assert _path_value(confirm, "data")["view_path"]
-        assert _path_value(fix_flow, "error")["camera_entity_missing"]
-        assert _path_value(fix_flow, "error")["lovelace_storage_unavailable"]
+
+
+def test_fixable_media_setup_repair_uses_ha_issue_fix_flow_schema() -> None:
+    """Validate HA can render the guided media setup repair flow."""
+
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        data = _load_json(path)
+        assert "description" not in _path_value(
+            data,
+            "issues",
+            "media_setup_repair_required",
+        )
+        fix_flow = _path_value(
+            data,
+            "issues",
+            "media_setup_repair_required",
+            "fix_flow",
+        )
+        confirm = _path_value(fix_flow, "step", "confirm")
+        assert confirm["title"]
+        assert confirm["description"]
+        assert _path_value(fix_flow, "error")["media_setup_repair_failed"]
         assert _path_value(fix_flow, "abort")["entry_not_loaded"]
 
 

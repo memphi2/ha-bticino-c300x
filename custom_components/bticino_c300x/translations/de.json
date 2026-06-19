@@ -512,6 +512,23 @@
         }
       }
     },
+    "media_setup_repair_required": {
+      "title": "C300X Medien-Setup kann repariert werden",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "C300X Medien-Setup reparieren",
+            "description": "Home Assistant kann die erkannten Voraussetzungen fuer das Medien-Setup jetzt reparieren. Es werden nur ausdruecklich bestaetigte Device-Agent-Wartungsaktionen fuer behebbare Fehler ausgefuehrt: IPv4-Medien-Firewall und Home-Assistant-Media-User/Routing. IPv6 ist optional und wird durch diese Reparatur nicht geaendert.\n\nFehlgeschlagene Checks: {failed_checks}\nReparierbare Checks: {fixable_checks}\nEmpfohlene Aktion: {recommended_action}"
+          }
+        },
+        "error": {
+          "media_setup_repair_failed": "Die Medien-Setup-Reparatur ist fehlgeschlagen. Pruefe den Maintenance-Zugriff und versuche es erneut."
+        },
+        "abort": {
+          "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "C300X Dashboard-Action-Allowlist ist ungueltig",
       "description": "Die Action-Allowlist fuer {entry_title} kann nicht gelesen werden: {error}. Korrigiere die konfigurierte Action-Map und lade danach die Integration neu."

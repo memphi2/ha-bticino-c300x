@@ -134,6 +134,7 @@ from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
 )
 from custom_components.bticino_c300x.doorbell_state import normalize_doorbell_state
+from custom_components.bticino_c300x.media_readiness import media_readiness
 from custom_components.bticino_c300x.sensor import (
     C300XAgentDiagnosticsSensor,
     C300XAgentStatusSensor,
@@ -147,7 +148,6 @@ from custom_components.bticino_c300x.sensor import (
     C300XVoicemailMessagesSensor,
     C300XVoiceMemosSensor,
     _agent_diagnostics_status,
-    _media_readiness,
 )
 from custom_components.bticino_c300x.sensor import (
     async_setup_entry as async_setup_sensor_entry,
@@ -498,7 +498,7 @@ def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> N
     )
     entry.runtime_data.event_state.smartphone_forwarding_mode = "blocked"
 
-    readiness = _media_readiness(entry)  # type: ignore[arg-type]
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
 
     assert readiness["status"] == "blocked"
     assert readiness["forwarding_homeassistant"] is False
@@ -536,7 +536,7 @@ def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
     )
     entry.runtime_data.event_state.smartphone_forwarding_mode = "homeassistant"
 
-    readiness = _media_readiness(entry)  # type: ignore[arg-type]
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
 
     assert readiness["status"] == "warning"
     assert readiness["failed_checks"] == []

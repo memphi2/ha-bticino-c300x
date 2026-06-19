@@ -494,6 +494,23 @@
         }
       }
     },
+    "media_setup_repair_required": {
+      "title": "C300X media setup can be repaired",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Repair C300X media setup",
+            "description": "Home Assistant can repair the detected media setup prerequisites now. It will only run explicitly confirmed device-agent maintenance actions for the failed checks it can fix: IPv4 media firewall and the Home Assistant media-user/routing setup. IPv6 is optional and is not changed by this repair.\n\nFailed checks: {failed_checks}\nFixable checks: {fixable_checks}\nRecommended action: {recommended_action}"
+          }
+        },
+        "error": {
+          "media_setup_repair_failed": "The media setup repair failed. Check maintenance access and retry."
+        },
+        "abort": {
+          "entry_not_loaded": "The BTicino C300X entry is not loaded."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "C300X dashboard action allowlist is invalid",
       "description": "The action allowlist for {entry_title} cannot be parsed: {error}. Fix the configured action map, then reload the integration."

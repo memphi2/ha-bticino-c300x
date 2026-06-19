@@ -512,6 +512,23 @@
         }
       }
     },
+    "media_setup_repair_required": {
+      "title": "Configurazione media C300X riparabile",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Ripara configurazione media C300X",
+            "description": "Home Assistant puo riparare ora i prerequisiti media rilevati. Esegue solo azioni di manutenzione device-agent confermate esplicitamente per gli errori riparabili: firewall media IPv4 e utente/routing media Home Assistant. IPv6 e opzionale e non viene modificato da questa riparazione.\n\nCheck non riusciti: {failed_checks}\nCheck riparabili: {fixable_checks}\nAzione consigliata: {recommended_action}"
+          }
+        },
+        "error": {
+          "media_setup_repair_failed": "Riparazione configurazione media non riuscita. Controlla l'accesso manutenzione e riprova."
+        },
+        "abort": {
+          "entry_not_loaded": "La voce BTicino C300X non e caricata."
+        }
+      }
+    },
     "invalid_action_map": {
       "title": "Allowlist azioni dashboard C300X non valida",
       "description": "L'allowlist delle azioni per {entry_title} non può essere letta: {error}. Correggi la mappa azioni configurata, poi ricarica l'integrazione."

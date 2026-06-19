@@ -80,12 +80,14 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
+    MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     CallbackUrlRepairFlow,
     DeviceAgentUpdateRepairFlow,
     DeviceCoreQmlHookRepairFlow,
     DeviceUserRepairFlow,
     FrontendCardSetupRepairFlow,
+    MediaSetupRepairFlow,
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
     _async_reload_entry_after_agent_update,
@@ -113,6 +115,7 @@ class FakePatchApi:
             "state": "patched",
         }
         self.device_user_status = {"homeassistant_user_present": True}
+        self.self_test_status = {"ok": True, "checks": {}}
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         self.calls.append("qml_status")
@@ -149,6 +152,10 @@ class FakePatchApi:
         self.calls.append("apply_firewall")
         return {"available": True, "patched": True, "state": "patched"}
 
+    async def async_set_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.calls.append(f"set_firewall_enabled:{enabled}")
+        return {"firewall_enabled": enabled}
+
     async def async_ipv6_firewall_status(self) -> dict[str, Any]:
         self.calls.append("ipv6_firewall_status")
         return self.ipv6_firewall_status
@@ -167,6 +174,14 @@ class FakePatchApi:
         account_label: str,
     ) -> dict[str, Any]:
         self.calls.append(f"ensure_homeassistant_user:{account_label}")
+        return self.device_user_status
+
+    async def async_self_test(self) -> dict[str, Any]:
+        self.calls.append("self_test")
+        return self.self_test_status
+
+    async def async_device_user_status(self) -> dict[str, Any]:
+        self.calls.append("device_user_status")
         return self.device_user_status
 
 
@@ -193,6 +208,15 @@ class FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     agent_info: dict[str, Any] = field(default_factory=dict)
     device_user_status: dict[str, Any] = field(default_factory=dict)
+    self_test_status: dict[str, Any] = field(default_factory=dict)
+    connection_state: Any = field(
+        default_factory=lambda: types.SimpleNamespace(available=True)
+    )
+    event_state: Any = field(
+        default_factory=lambda: types.SimpleNamespace(
+            smartphone_forwarding_mode="homeassistant"
+        )
+    )
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     agent_update_state: Any = None
@@ -262,6 +286,7 @@ def test_create_fix_flow_routes_known_issues() -> None:
         (UNSUPPORTED_CALLBACK_URL_ISSUE, CallbackUrlRepairFlow),
         (DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, DeviceCoreQmlHookRepairFlow),
         (DEVICE_USER_REQUIRED_ISSUE, DeviceUserRepairFlow),
+        (MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, MediaSetupRepairFlow),
         (FRONTEND_CARD_SETUP_HINT_ISSUE, FrontendCardSetupRepairFlow),
     )
 
@@ -485,6 +510,62 @@ def test_device_user_repair_flow_creates_user_and_clears_issue() -> None:
     assert result == {"type": "create_entry", "data": {}}
     assert api.calls == ["ensure_homeassistant_user:Home Assistant HA Test"]
     assert entry.runtime_data.device_user_status == api.device_user_status
+
+
+def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
+    """Media setup repair applies only confirmed fixable media prerequisites."""
+
+    api = FakePatchApi()
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={
+            "doorbell_video": {"supported": True},
+            "doorbell_call": {"supported": True},
+        },
+        self_test_status={
+            "ok": False,
+            "checks": {
+                "capabilities": {"ok": True},
+                "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+                "rtsp": {"ok": True},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": False},
+                "device_routing": {"ok": False},
+                "startup": {"ok": True},
+            },
+        },
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    def show_form(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "form", **kwargs}
+
+    def create_entry(**kwargs: Any) -> dict[str, Any]:
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_show_form = show_form  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+
+    init_result = asyncio.run(flow.async_step_init({"issue_id": "from-flow-manager"}))
+    assert init_result["type"] == "form"
+    assert api.calls == []
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {
+        "type": "create_entry",
+        "data": {"repaired": ["firewall", "homeassistant_user"]},
+    }
+    assert api.calls == [
+        "set_firewall_enabled:True",
+        "apply_firewall",
+        "ensure_homeassistant_user:Home Assistant HA Test",
+        "self_test",
+        "device_user_status",
+    ]
+    assert entry.runtime_data.device_user_status == api.device_user_status
+    assert entry.runtime_data.self_test_status == api.self_test_status
 
 
 def test_device_user_repair_flow_reports_agent_failures() -> None:

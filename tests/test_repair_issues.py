@@ -103,6 +103,7 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     DEVICE_USER_REQUIRED_ISSUE,
     FRONTEND_CARD_SETUP_HINT_ISSUE,
     INVALID_ACTION_MAP_ISSUE,
+    MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
     MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
@@ -124,8 +125,14 @@ repair_issues.er = entity_registry
 @dataclass(slots=True)
 class FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=lambda: {"doorbell_events": True})
+    agent_info: dict[str, Any] = field(default_factory=dict)
     agent_update_state: AgentUpdateState | None = None
     connection_state: Any | None = None
+    event_state: Any = field(
+        default_factory=lambda: types.SimpleNamespace(
+            smartphone_forwarding_mode="homeassistant"
+        )
+    )
     display_bridge_diagnostics: Any | None = None
     agent_diagnostics: dict[str, Any] | None = None
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
@@ -588,6 +595,92 @@ def test_failed_self_test_talkback_points_to_ipv4_firewall_switch() -> None:
     assert "required IPv4 firewall setup" in issue["translation_placeholders"]["reasons"]
     assert "talkback_rtp_firewall_missing" not in issue["translation_placeholders"]["reasons"]
     assert "IPv6 firewall switch is only needed" in issue["translation_placeholders"]["actions"]
+
+
+def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=True),
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+                "maintenance": {
+                    "supported": True,
+                    "firewall_apply": True,
+                    "device_user_ensure": True,
+                },
+            },
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {
+                        "ok": False,
+                        "reason": "ipv4_media_ports_missing",
+                    },
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": False},
+                    "device_routing": {"ok": False},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["severity"] == "warning"
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == MEDIA_SETUP_REPAIR_REQUIRED_ISSUE
+    assert issue["translation_placeholders"]["fixable_checks"] == (
+        "firewall, homeassistant_user"
+    )
+
+
+def test_single_media_user_failure_uses_existing_device_user_repair_only() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=True),
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {
+                    "supported": True,
+                    "device_user_ensure": True,
+                },
+            },
+            device_user_status={
+                "homeassistant_user_present": False,
+                "media_identity_available": True,
+                "routes_consistent": False,
+            },
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": False},
+                    "device_routing": {"ok": False},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in CREATED_ISSUES
+    assert (
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
 
 
 def test_failed_self_test_ignores_optional_ipv6_firewall_only() -> None:

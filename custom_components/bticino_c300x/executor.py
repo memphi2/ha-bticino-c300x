@@ -76,6 +76,21 @@ from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAIN_SET,
     normalize_dashboard_entity_ids,
 )
+from .dashboard_labels import (
+    _BINARY_SENSOR_DEVICE_CLASS_COLORS,
+    _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
+    _BINARY_SENSOR_DEVICE_CLASS_LABELS_EN,
+    _DASHBOARD_COLOR_BAD,
+    _DASHBOARD_COLOR_GOOD,
+    _DASHBOARD_COLOR_NEUTRAL,
+    _DASHBOARD_COLOR_WARNING,
+    _DASHBOARD_ON_STATES,
+    _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
+    _DASHBOARD_STATE_LABELS_EN,
+    _WEATHER_STATE_LABELS_BY_LANGUAGE,
+    _WEATHER_STATE_LABELS_EN,
+    _WEATHER_TITLE_BY_LANGUAGE,
+)
 from .entity import entry_config_value
 
 
@@ -137,339 +152,6 @@ _DASHBOARD_READ_ONLY_ENTITY_DOMAINS = {"binary_sensor", "sensor"}
 _DASHBOARD_SUPPORTED_ENTITY_DOMAINS = DASHBOARD_ENTITY_DOMAIN_SET
 _DASHBOARD_SLIDER_ACTIONS = {"decrement", "increment"}
 _DASHBOARD_CHOICE_ACTIONS = {"next", "previous"}
-_DASHBOARD_COLOR_GOOD = "#58d68d"
-_DASHBOARD_COLOR_BAD = "#ff6b6b"
-_DASHBOARD_COLOR_WARNING = "#f1c40f"
-_DASHBOARD_COLOR_NEUTRAL = "#c7d0d9"
-_DASHBOARD_ON_STATES = {
-    "armed_away",
-    "armed_custom_bypass",
-    "armed_home",
-    "armed_night",
-    "armed_vacation",
-    "home",
-    "on",
-    "open",
-    "playing",
-    "triggered",
-}
-_DASHBOARD_STATE_LABELS_DE = {
-    "armed_away": "Abwesend",
-    "armed_custom_bypass": "Bypass",
-    "armed_home": "Zuhause",
-    "armed_night": "Nacht",
-    "armed_vacation": "Urlaub",
-    "arming": "Aktiviert",
-    "closed": "Geschlossen",
-    "disarmed": "Aus",
-    "home": "Zuhause",
-    "idle": "Bereit",
-    "off": "Aus",
-    "on": "Ein",
-    "open": "Offen",
-    "pending": "Wartet",
-    "playing": "Aktiv",
-    "triggered": "Alarm",
-    "unavailable": "Offline",
-    "unknown": "Unbekannt",
-}
-_DASHBOARD_STATE_LABELS_EN = {
-    "armed_away": "Away",
-    "armed_custom_bypass": "Bypass",
-    "armed_home": "Home",
-    "armed_night": "Night",
-    "armed_vacation": "Vacation",
-    "arming": "Arming",
-    "closed": "Closed",
-    "disarmed": "Off",
-    "home": "Home",
-    "idle": "Ready",
-    "off": "Off",
-    "on": "On",
-    "open": "Open",
-    "pending": "Pending",
-    "playing": "Active",
-    "triggered": "Alarm",
-    "unavailable": "Offline",
-    "unknown": "Unknown",
-}
-_DASHBOARD_STATE_LABELS_FR = {
-    "armed_away": "Absent",
-    "armed_custom_bypass": "Bypass",
-    "armed_home": "Maison",
-    "armed_night": "Nuit",
-    "armed_vacation": "Vacances",
-    "arming": "Activation",
-    "closed": "Ferme",
-    "disarmed": "Arrete",
-    "home": "Maison",
-    "idle": "Pret",
-    "off": "Arrete",
-    "on": "Actif",
-    "open": "Ouvert",
-    "pending": "En attente",
-    "playing": "Actif",
-    "triggered": "Alarme",
-    "unavailable": "Hors ligne",
-    "unknown": "Inconnu",
-}
-_DASHBOARD_STATE_LABELS_IT = {
-    "armed_away": "Fuori casa",
-    "armed_custom_bypass": "Bypass",
-    "armed_home": "Casa",
-    "armed_night": "Notte",
-    "armed_vacation": "Vacanza",
-    "arming": "Attivazione",
-    "closed": "Chiuso",
-    "disarmed": "Spento",
-    "home": "Casa",
-    "idle": "Pronto",
-    "off": "Spento",
-    "on": "Acceso",
-    "open": "Aperto",
-    "pending": "In attesa",
-    "playing": "Attivo",
-    "triggered": "Allarme",
-    "unavailable": "Offline",
-    "unknown": "Sconosciuto",
-}
-_DASHBOARD_STATE_LABELS_BY_LANGUAGE = {
-    "de": _DASHBOARD_STATE_LABELS_DE,
-    "en": _DASHBOARD_STATE_LABELS_EN,
-    "fr": _DASHBOARD_STATE_LABELS_FR,
-    "it": _DASHBOARD_STATE_LABELS_IT,
-}
-_BINARY_SENSOR_DEVICE_CLASS_LABELS_DE = {
-    "battery": ("Normal", "Niedrig"),
-    "battery_charging": ("Laedt nicht", "Laedt"),
-    "cold": ("Normal", "Kalt"),
-    "connectivity": ("Getrennt", "Verbunden"),
-    "door": ("Geschlossen", "Offen"),
-    "garage_door": ("Geschlossen", "Offen"),
-    "gas": ("Klar", "Gas erkannt"),
-    "heat": ("Normal", "Heiss"),
-    "light": ("Dunkel", "Hell"),
-    "lock": ("Gesperrt", "Entsperrt"),
-    "moisture": ("Trocken", "Feucht"),
-    "motion": ("Keine Bewegung", "Bewegung"),
-    "moving": ("Steht", "Bewegt sich"),
-    "occupancy": ("Frei", "Belegt"),
-    "opening": ("Geschlossen", "Offen"),
-    "plug": ("Getrennt", "Verbunden"),
-    "power": ("Aus", "Ein"),
-    "presence": ("Abwesend", "Anwesend"),
-    "problem": ("OK", "Problem"),
-    "running": ("Gestoppt", "Laeuft"),
-    "safety": ("Sicher", "Unsicher"),
-    "smoke": ("Klar", "Rauch erkannt"),
-    "sound": ("Ruhig", "Geraeusch"),
-    "tamper": ("OK", "Manipulation"),
-    "update": ("Aktuell", "Update"),
-    "vibration": ("Ruhig", "Vibration"),
-    "window": ("Geschlossen", "Offen"),
-}
-_BINARY_SENSOR_DEVICE_CLASS_LABELS_EN = {
-    "battery": ("Normal", "Low"),
-    "battery_charging": ("Not charging", "Charging"),
-    "cold": ("Normal", "Cold"),
-    "connectivity": ("Disconnected", "Connected"),
-    "door": ("Closed", "Open"),
-    "garage_door": ("Closed", "Open"),
-    "gas": ("Clear", "Gas detected"),
-    "heat": ("Normal", "Hot"),
-    "light": ("Dark", "Light"),
-    "lock": ("Locked", "Unlocked"),
-    "moisture": ("Dry", "Wet"),
-    "motion": ("No motion", "Motion"),
-    "moving": ("Stopped", "Moving"),
-    "occupancy": ("Clear", "Occupied"),
-    "opening": ("Closed", "Open"),
-    "plug": ("Disconnected", "Connected"),
-    "power": ("Off", "On"),
-    "presence": ("Away", "Present"),
-    "problem": ("OK", "Problem"),
-    "running": ("Stopped", "Running"),
-    "safety": ("Safe", "Unsafe"),
-    "smoke": ("Clear", "Smoke detected"),
-    "sound": ("Quiet", "Sound"),
-    "tamper": ("OK", "Tamper"),
-    "update": ("Up to date", "Update"),
-    "vibration": ("Quiet", "Vibration"),
-    "window": ("Closed", "Open"),
-}
-_BINARY_SENSOR_DEVICE_CLASS_LABELS_FR = {
-    "battery": ("Normal", "Faible"),
-    "battery_charging": ("Ne charge pas", "Charge"),
-    "cold": ("Normal", "Froid"),
-    "connectivity": ("Deconnecte", "Connecte"),
-    "door": ("Ferme", "Ouvert"),
-    "garage_door": ("Ferme", "Ouvert"),
-    "gas": ("OK", "Gaz detecte"),
-    "heat": ("Normal", "Chaud"),
-    "light": ("Sombre", "Clair"),
-    "lock": ("Verrouille", "Deverrouille"),
-    "moisture": ("Sec", "Humide"),
-    "motion": ("Aucun mouvement", "Mouvement"),
-    "moving": ("Arrete", "En mouvement"),
-    "occupancy": ("Libre", "Occupe"),
-    "opening": ("Ferme", "Ouvert"),
-    "plug": ("Deconnecte", "Connecte"),
-    "power": ("Arrete", "Actif"),
-    "presence": ("Absent", "Present"),
-    "problem": ("OK", "Probleme"),
-    "running": ("Arrete", "En marche"),
-    "safety": ("Sur", "Dangereux"),
-    "smoke": ("OK", "Fumee detectee"),
-    "sound": ("Silence", "Son"),
-    "tamper": ("OK", "Sabotage"),
-    "update": ("A jour", "Mise a jour"),
-    "vibration": ("Calme", "Vibration"),
-    "window": ("Ferme", "Ouvert"),
-}
-_BINARY_SENSOR_DEVICE_CLASS_LABELS_IT = {
-    "battery": ("Normale", "Bassa"),
-    "battery_charging": ("Non in carica", "In carica"),
-    "cold": ("Normale", "Freddo"),
-    "connectivity": ("Disconnesso", "Connesso"),
-    "door": ("Chiuso", "Aperto"),
-    "garage_door": ("Chiuso", "Aperto"),
-    "gas": ("OK", "Gas rilevato"),
-    "heat": ("Normale", "Caldo"),
-    "light": ("Buio", "Luce"),
-    "lock": ("Bloccato", "Sbloccato"),
-    "moisture": ("Asciutto", "Bagnato"),
-    "motion": ("Nessun movimento", "Movimento"),
-    "moving": ("Fermo", "In movimento"),
-    "occupancy": ("Libero", "Occupato"),
-    "opening": ("Chiuso", "Aperto"),
-    "plug": ("Disconnesso", "Connesso"),
-    "power": ("Spento", "Acceso"),
-    "presence": ("Assente", "Presente"),
-    "problem": ("OK", "Problema"),
-    "running": ("Fermo", "In funzione"),
-    "safety": ("Sicuro", "Non sicuro"),
-    "smoke": ("OK", "Fumo rilevato"),
-    "sound": ("Silenzio", "Suono"),
-    "tamper": ("OK", "Manomissione"),
-    "update": ("Aggiornato", "Aggiornamento"),
-    "vibration": ("Calmo", "Vibrazione"),
-    "window": ("Chiuso", "Aperto"),
-}
-_BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE = {
-    "de": _BINARY_SENSOR_DEVICE_CLASS_LABELS_DE,
-    "en": _BINARY_SENSOR_DEVICE_CLASS_LABELS_EN,
-    "fr": _BINARY_SENSOR_DEVICE_CLASS_LABELS_FR,
-    "it": _BINARY_SENSOR_DEVICE_CLASS_LABELS_IT,
-}
-_BINARY_SENSOR_DEVICE_CLASS_COLORS = {
-    "battery": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "battery_charging": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
-    "cold": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "connectivity": (_DASHBOARD_COLOR_BAD, _DASHBOARD_COLOR_GOOD),
-    "door": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "garage_door": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "gas": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "heat": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "light": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_WARNING),
-    "lock": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "moisture": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "motion": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "moving": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "occupancy": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "opening": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "plug": (_DASHBOARD_COLOR_WARNING, _DASHBOARD_COLOR_GOOD),
-    "power": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
-    "presence": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
-    "problem": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "running": (_DASHBOARD_COLOR_NEUTRAL, _DASHBOARD_COLOR_GOOD),
-    "safety": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "smoke": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "sound": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
-    "tamper": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-    "update": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
-    "vibration": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_WARNING),
-    "window": (_DASHBOARD_COLOR_GOOD, _DASHBOARD_COLOR_BAD),
-}
-_WEATHER_STATE_LABELS_DE = {
-    "clear-night": "Klar",
-    "cloudy": "Bewoelkt",
-    "exceptional": "Extrem",
-    "fog": "Nebel",
-    "hail": "Hagel",
-    "lightning": "Gewitter",
-    "lightning-rainy": "Gewitter",
-    "partlycloudy": "Teils wolkig",
-    "pouring": "Starkregen",
-    "rainy": "Regen",
-    "snowy": "Schnee",
-    "snowy-rainy": "Schneeregen",
-    "sunny": "Sonnig",
-    "windy": "Windig",
-    "windy-variant": "Windig",
-}
-_WEATHER_STATE_LABELS_EN = {
-    "clear-night": "Clear",
-    "cloudy": "Cloudy",
-    "exceptional": "Extreme",
-    "fog": "Fog",
-    "hail": "Hail",
-    "lightning": "Thunder",
-    "lightning-rainy": "Thunder",
-    "partlycloudy": "Partly cloudy",
-    "pouring": "Pouring",
-    "rainy": "Rain",
-    "snowy": "Snow",
-    "snowy-rainy": "Sleet",
-    "sunny": "Sunny",
-    "windy": "Windy",
-    "windy-variant": "Windy",
-}
-_WEATHER_STATE_LABELS_FR = {
-    "clear-night": "Clair",
-    "cloudy": "Nuageux",
-    "exceptional": "Extreme",
-    "fog": "Brouillard",
-    "hail": "Grele",
-    "lightning": "Orage",
-    "lightning-rainy": "Orage",
-    "partlycloudy": "Partiellement nuageux",
-    "pouring": "Pluie forte",
-    "rainy": "Pluie",
-    "snowy": "Neige",
-    "snowy-rainy": "Neige fondue",
-    "sunny": "Ensoleille",
-    "windy": "Venteux",
-    "windy-variant": "Venteux",
-}
-_WEATHER_STATE_LABELS_IT = {
-    "clear-night": "Sereno",
-    "cloudy": "Nuvoloso",
-    "exceptional": "Estremo",
-    "fog": "Nebbia",
-    "hail": "Grandine",
-    "lightning": "Temporale",
-    "lightning-rainy": "Temporale",
-    "partlycloudy": "Parzialmente nuvoloso",
-    "pouring": "Pioggia intensa",
-    "rainy": "Pioggia",
-    "snowy": "Neve",
-    "snowy-rainy": "Nevischio",
-    "sunny": "Soleggiato",
-    "windy": "Ventoso",
-    "windy-variant": "Ventoso",
-}
-_WEATHER_STATE_LABELS_BY_LANGUAGE = {
-    "de": _WEATHER_STATE_LABELS_DE,
-    "en": _WEATHER_STATE_LABELS_EN,
-    "fr": _WEATHER_STATE_LABELS_FR,
-    "it": _WEATHER_STATE_LABELS_IT,
-}
-_WEATHER_TITLE_BY_LANGUAGE = {
-    "de": "Wetter",
-    "en": "Weather",
-    "fr": "Meteo",
-    "it": "Meteo",
-}
 
 
 def _dashboard_language(hass: HomeAssistant | None) -> str:
@@ -912,6 +594,8 @@ async def async_execute_dashboard_action(
     hass: HomeAssistant,
     entry: ConfigEntry,
     entity_id: str,
+    *,
+    option: str | None = None,
 ) -> dict[str, Any]:
     """Execute a dashboard-compatible c300x action id."""
 
@@ -937,6 +621,7 @@ async def async_execute_dashboard_action(
             entry,
             selected_entity_id,
             selected_action,
+            option=option,
         )
     return await async_execute_action(hass, entry, entity_id)
 
@@ -1211,6 +896,8 @@ async def _async_execute_dashboard_entity(
     entry: ConfigEntry,
     entity_id: str,
     action: str | None,
+    *,
+    option: str | None = None,
 ) -> dict[str, Any]:
     """Execute the default action for a directly selected dashboard entity."""
 
@@ -1246,7 +933,7 @@ async def _async_execute_dashboard_entity(
     elif domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
         await _async_adjust_dashboard_slider(hass, entity_id, action)
     elif domain in _DASHBOARD_CHOICE_ENTITY_DOMAINS:
-        await _async_adjust_dashboard_choice(hass, entity_id, action)
+        await _async_adjust_dashboard_choice(hass, entity_id, action, option=option)
     else:
         raise ValueError("read_only_dashboard_entity")
 
@@ -1321,16 +1008,15 @@ async def _async_adjust_dashboard_choice(
     hass: HomeAssistant,
     entity_id: str,
     action: str | None,
+    *,
+    option: str | None = None,
 ) -> None:
     """Select an option or cycle a select/input_select entity."""
 
-    if not action:
-        raise ValueError("invalid_dashboard_choice_action")
-    domain = entity_id.split(".", 1)[0]
-    if action.startswith("select:"):
-        option = action.split(":", 1)[1]
+    if option is not None:
         if not option:
             raise ValueError("invalid_dashboard_choice_action")
+        domain = entity_id.split(".", 1)[0]
         await hass.services.async_call(
             domain,
             "select_option",
@@ -1338,6 +1024,9 @@ async def _async_adjust_dashboard_choice(
             blocking=True,
         )
         return
+    if not action:
+        raise ValueError("invalid_dashboard_choice_action")
+    domain = entity_id.split(".", 1)[0]
     if action not in _DASHBOARD_CHOICE_ACTIONS:
         raise ValueError("invalid_dashboard_choice_action")
     await hass.services.async_call(
@@ -1355,10 +1044,6 @@ def _dashboard_selected_entity_action(action_id: str) -> tuple[str, str | None]:
     normalized = raw.lower()
     if ":" not in raw:
         return normalized, None
-    if ":select:" in normalized:
-        entity_id, command, value = raw.split(":", 2)
-        if command.lower() == "select":
-            return entity_id.lower(), f"select:{value}"
     entity_id, action = raw.rsplit(":", 1)
     normalized_action = action.lower()
     if normalized_action in _DASHBOARD_SLIDER_ACTIONS | _DASHBOARD_CHOICE_ACTIONS:

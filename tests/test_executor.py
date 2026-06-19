@@ -394,7 +394,8 @@ def test_async_execute_dashboard_action_selects_selected_option() -> None:
         async_execute_dashboard_action(
             hass,
             entry,
-            "select.mode:select:Home Assistant",
+            "select.mode",
+            option="Home Assistant, manual",
         )
     )
 
@@ -403,7 +404,7 @@ def test_async_execute_dashboard_action_selects_selected_option() -> None:
         (
             "select",
             "select_option",
-            {"entity_id": "select.mode", "option": "Home Assistant"},
+            {"entity_id": "select.mode", "option": "Home Assistant, manual"},
             True,
         )
     ]
@@ -417,7 +418,8 @@ def test_async_execute_dashboard_action_selects_input_select_option() -> None:
         async_execute_dashboard_action(
             hass,
             entry,
-            "input_select.scene:select:Night",
+            "input_select.scene",
+            option="Night scene",
         )
     )
 
@@ -426,7 +428,7 @@ def test_async_execute_dashboard_action_selects_input_select_option() -> None:
         (
             "input_select",
             "select_option",
-            {"entity_id": "input_select.scene", "option": "Night"},
+            {"entity_id": "input_select.scene", "option": "Night scene"},
             True,
         )
     ]

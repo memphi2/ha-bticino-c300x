@@ -831,6 +831,22 @@ def run_smoke(
             action_callback = wait_for_callback_type(callback, "action", callback_seen)
             if action_callback["body"].get("action_id") != "scene:leave":
                 raise AssertionError("encoded UI action id was not decoded")
+            callback_seen = len(callback.requests)
+            dashboard_choice = ui_get_json(
+                ui_port,
+                "/homeassistant?domain=c300x&service=toggle"
+                "&entities=select.forwarding&option=Home%20Assistant%2C%20manual",
+            )
+            assert_json_field(dashboard_choice, "device_ui_enabled", True)
+            dashboard_callback = wait_for_callback_type(
+                callback,
+                "dashboard_action",
+                callback_seen,
+            )
+            if dashboard_callback["body"].get("entity_id") != "select.forwarding":
+                raise AssertionError("dashboard choice entity id was not forwarded")
+            if dashboard_callback["body"].get("option") != "Home Assistant, manual":
+                raise AssertionError("dashboard choice option was not forwarded")
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "muted", False)
             assert_json_field(
                 api_get(api_port, "/api/v1/smartphone-forwarding"),

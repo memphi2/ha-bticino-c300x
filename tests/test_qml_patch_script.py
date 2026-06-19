@@ -224,8 +224,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
     "Alarm.qml": "e1a7bfef32000f71b386bb8e466eaf822c405e2267eca0fe3084e803901dcc3d",
-    "HomeAssistant.qml": "181691109af58cb240df3612cf5e39b2c8043187594a88a32cac14c442210896",
-    "js/c300x_ha.js": "f291d3e813fcbade768b832d5cc765de9f85753d989329158db772955c593015",
+    "HomeAssistant.qml": "060a56efe16561dcc64d57d050fa27f9fec83df7995cc1e56506701fb8989b0e",
+    "js/c300x_ha.js": "7873d6f6c96555e792a6ac556557138a38103aea9097e2802bdc85306bb2b54d",
     "js/c300x_i18n.js": "f589b25ac7029a4d2108115d368e14628229d2ff0c3d32bdb501d88ba72ae9c9",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
 }
@@ -494,7 +494,9 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
     assert "id: choiceGrid" in home_assistant_qml
     assert "Api.dashboardChoiceAction" in home_assistant_qml
     assert "pageItem.choices = dashboardChoices(pageData.choices)" in dashboard_js
-    assert 'item.entity_id + ":select:" + option' in dashboard_js
+    assert "+ encodeURIComponent(item.entity_id)" in dashboard_js
+    assert '"&option=" + encodeURIComponent(option)' in dashboard_js
+    assert 'item.entity_id + ":select:" + option' not in dashboard_js
 
 
 def test_qml_i18n_catalogs_have_identical_key_sets() -> None:

@@ -25,6 +25,14 @@ void http_host_header_value(
     char *out,
     size_t out_len
 );
+void percent_decode_query_value(
+    const char *value_start,
+    const char *value_end,
+    char *out,
+    size_t out_len
+);
+int query_param_value(const char *query, const char *key, char *out, size_t out_len);
+int validate_action_id(const char *value);
 void set_socket_timeout(int fd, int timeout_ms);
 void set_fd_nonblocking(int fd);
 void set_fd_cloexec(int fd);

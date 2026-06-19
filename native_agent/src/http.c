@@ -14,6 +14,7 @@
 #include "string_util.h"
 #include "system_metrics_watchdog.h"
 #include "self_test.h"
+#include "ui_homeassistant.h"
 #include "ui_events.h"
 #include "video_rtsp.h"
 #include <arpa/inet.h>
@@ -44,8 +45,6 @@
 #define C300X_MAX_SUBSCRIPTION_EVENTS 24
 #define C300X_MAX_URL_LEN 512
 #define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
-#define C300X_DASHBOARD_DOMAIN "c300x"
-#define C300X_DASHBOARD_STAIR_LIGHT_ENTITY "stair_light"
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
 #define C300X_MAX_VOICEMAIL_DATE_LEN 64
@@ -253,8 +252,6 @@ static void send_file_response(
     const char *cache_control
 );
 static void request_path_and_query(const char *line_path, char *path, size_t path_len, char *query, size_t query_len);
-static int query_param_value(const char *query, const char *key, char *out, size_t out_len);
-static int validate_action_id(const char *value);
 static int validate_alarm_command(const char *value);
 static int validate_alarm_code(const char *value);
 static int validate_event_name(const char *value);
@@ -615,108 +612,6 @@ static void request_path_and_query(
         snprintf(query, query_len, "%s", query_start + 1);
     }
 }
-static int hex_digit_value(char ch)
-{
-    if (ch >= '0' && ch <= '9') {
-        return ch - '0';
-    }
-    if (ch >= 'a' && ch <= 'f') {
-        return ch - 'a' + 10;
-    }
-    if (ch >= 'A' && ch <= 'F') {
-        return ch - 'A' + 10;
-    }
-    return -1;
-}
-
-static void percent_decode_query_value(
-    const char *value_start,
-    const char *value_end,
-    char *out,
-    size_t out_len
-)
-{
-    size_t written = 0;
-    if (out_len == 0) {
-        return;
-    }
-    while (value_start < value_end && written + 1 < out_len) {
-        if (*value_start == '%' && value_start + 2 < value_end) {
-            int high = hex_digit_value(value_start[1]);
-            int low = hex_digit_value(value_start[2]);
-            if (high >= 0 && low >= 0) {
-                out[written++] = (char)((high << 4) | low);
-                value_start += 3;
-                continue;
-            }
-        }
-        out[written++] = *value_start == '+' ? ' ' : *value_start;
-        value_start++;
-    }
-    out[written] = '\0';
-}
-
-static int query_param_value(const char *query, const char *key, char *out, size_t out_len)
-{
-    const char *ptr;
-    size_t key_len = strlen(key);
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    if (query == NULL || key == NULL || key_len == 0 || out_len == 0) {
-        return 0;
-    }
-    ptr = query;
-    while (*ptr != '\0') {
-        const char *value_start;
-        const char *pair_end;
-
-        while (*ptr == '&') {
-            ptr++;
-        }
-        if (*ptr == '\0') {
-            break;
-        }
-        pair_end = strchr(ptr, '&');
-        if (pair_end == NULL) {
-            pair_end = ptr + strlen(ptr);
-        }
-        if (strncmp(ptr, key, key_len) == 0 && ptr[key_len] == '=') {
-            value_start = ptr + key_len + 1;
-            percent_decode_query_value(value_start, pair_end, out, out_len);
-            return 1;
-        }
-        ptr = pair_end;
-        if (*ptr == '&') {
-            ptr++;
-        }
-    }
-    return 0;
-}
-
-static int validate_action_id(const char *value)
-{
-    size_t index;
-    size_t len = strlen(value);
-
-    if (len == 0 || len > 80) {
-        return 0;
-    }
-    for (index = 0; index < len; index++) {
-        unsigned char ch = (unsigned char)value[index];
-        if (
-            (ch >= 'a' && ch <= 'z')
-            || (ch >= 'A' && ch <= 'Z')
-            || (ch >= '0' && ch <= '9')
-            || ch == '_' || ch == '.' || ch == ':' || ch == '-'
-        ) {
-            continue;
-        }
-        return 0;
-    }
-    return 1;
-}
-
 static int validate_alarm_command(const char *value)
 {
     return strcmp(value, "arm_away") == 0
@@ -12071,59 +11966,33 @@ static void handle_ui_homeassistant(
     const struct request *request
 )
 {
-    char domain[32];
-    char service[32];
-    char entities[128];
-    char entity_id[128];
-    char payload[256];
+    enum c300x_ui_homeassistant_payload_result payload_result;
+    char payload[2048];
     char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
 
     if (response == NULL) {
         return;
     }
 
-    query_param_value(request->query, "domain", domain, sizeof(domain));
-    query_param_value(request->query, "service", service, sizeof(service));
-    if (!query_param_value(request->query, "entities", entities, sizeof(entities))) {
-        query_param_value(request->query, "entity_id", entities, sizeof(entities));
-    }
-
-    if (domain[0] == '\0' && service[0] == '\0' && entities[0] == '\0') {
-        snprintf(payload, sizeof(payload), "{\"type\":\"dashboard\"}");
-        if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-            send_homeassistant_unavailable(client_fd);
-            free(response);
-            return;
-        }
-        send_json(client_fd, 200, "OK", response);
-        free(response);
-        return;
-    }
-
-    if (strcmp(domain, C300X_DASHBOARD_DOMAIN) != 0 || strcmp(service, "toggle") != 0 || entities[0] == '\0') {
+    payload_result = c300x_ui_homeassistant_build_payload(
+        request->query,
+        payload,
+        sizeof(payload)
+    );
+    if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_UNSUPPORTED) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_dashboard_command\"}\n");
         free(response);
         return;
     }
-
-    snprintf(entity_id, sizeof(entity_id), "%s", entities);
-    char *comma = strchr(entity_id, ',');
-    if (comma != NULL) {
-        *comma = '\0';
-    }
-    char *trimmed = entity_id;
-    while (*trimmed == ' ') {
-        trimmed++;
-    }
-    if (!validate_action_id(trimmed)) {
+    if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_INVALID_ACTION_ID) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_action_id\"}\n");
         free(response);
         return;
     }
-    if (strcmp(trimmed, C300X_DASHBOARD_STAIR_LIGHT_ENTITY) == 0) {
-        snprintf(payload, sizeof(payload), "{\"type\":\"stair_light\"}");
-    } else {
-        snprintf(payload, sizeof(payload), "{\"type\":\"dashboard_action\",\"entity_id\":\"%s\"}", trimmed);
+    if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE) {
+        send_response_too_large(client_fd);
+        free(response);
+        return;
     }
     if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
         send_homeassistant_unavailable(client_fd);

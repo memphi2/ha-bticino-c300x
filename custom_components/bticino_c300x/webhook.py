@@ -210,6 +210,7 @@ async def _display_bridge_dashboard_action(
         context.hass,
         context.entry,
         str(context.payload.get("entity_id", "")),
+        option=optional_string(context.payload.get("option")),
     )
 
 

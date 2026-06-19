@@ -181,7 +181,8 @@ function dashboardChoiceAction(item, option, statusItem, pageItem) {
         return
     }
     var path = "/homeassistant?domain=c300x&service=toggle&entities="
-        + encodeURIComponent(item.entity_id + ":select:" + option)
+        + encodeURIComponent(item.entity_id)
+        + "&option=" + encodeURIComponent(option)
     getJson(path, function(data) {
         statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
         statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"

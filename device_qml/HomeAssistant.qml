@@ -640,6 +640,20 @@ Page {
                         Item {
                             width: buttonGrid.tileWidth
                             height: 64
+                            scale: buttonMouse.pressed ? 0.96 : 1.0
+                            opacity: buttonMouse.pressed ? 0.78 : 1.0
+
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: 70
+                                }
+                            }
+
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: 70
+                                }
+                            }
 
                             Image {
                                 anchors.fill: parent

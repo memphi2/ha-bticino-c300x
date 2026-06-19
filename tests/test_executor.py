@@ -1434,7 +1434,7 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
         "domain": "c300x",
         "entity_id": "leave_home",
         "name": "leave_home",
-        "state_label": "Ausfuehren",
+        "state_label": "",
     } in buttons
 
 
@@ -1560,8 +1560,11 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
                     },
                 ),
                 "binary_sensor.window": FakeState(
-                    "off",
-                    attributes={"friendly_name": "Window"},
+                    "on",
+                    attributes={
+                        "friendly_name": "Window",
+                        "device_class": "window",
+                    },
                 ),
                 "button.restart": FakeState(
                     "unknown",
@@ -1633,8 +1636,8 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "domain": "c300x",
             "entity_id": "binary_sensor.window",
             "name": "Window",
-            "state": False,
-            "state_label": "Aus",
+            "state": True,
+            "state_label": "Offen",
         },
     ]
     assert page["buttons"] == [
@@ -1642,7 +1645,7 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "domain": "c300x",
             "entity_id": "button.restart",
             "name": "Restart",
-            "state_label": "Ausfuehren",
+            "state_label": "",
         }
     ]
     assert page["sliders"] == [
@@ -1675,6 +1678,51 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "value": "Night",
         },
     ]
+
+
+def test_async_dashboard_payload_uses_binary_sensor_device_class_labels() -> None:
+    states = {}
+    expected_labels = {
+        "window": ("Geschlossen", "Offen"),
+        "door": ("Geschlossen", "Offen"),
+        "motion": ("Keine Bewegung", "Bewegung"),
+        "problem": ("OK", "Problem"),
+        "moisture": ("Trocken", "Feucht"),
+    }
+    entities = []
+    for device_class in expected_labels:
+        off_entity = f"binary_sensor.{device_class}_off"
+        on_entity = f"binary_sensor.{device_class}_on"
+        states[off_entity] = FakeState(
+            "off",
+            attributes={
+                "friendly_name": f"{device_class} off",
+                "device_class": device_class,
+            },
+        )
+        states[on_entity] = FakeState(
+            "on",
+            attributes={
+                "friendly_name": f"{device_class} on",
+                "device_class": device_class,
+            },
+        )
+        entities.extend((off_entity, on_entity))
+
+    hass = FakeHass(states=FakeStates(states))
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: entities})
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    page = {page["title"]: page for page in result["data"]["pages"]}[
+        "Home Assistant"
+    ]
+    labels_by_entity = {
+        item["entity_id"]: item["state_label"] for item in page["entities"]
+    }
+    for device_class, labels in expected_labels.items():
+        assert labels_by_entity[f"binary_sensor.{device_class}_off"] == labels[0]
+        assert labels_by_entity[f"binary_sensor.{device_class}_on"] == labels[1]
 
 
 def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None:

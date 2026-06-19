@@ -166,6 +166,35 @@ _DASHBOARD_STATE_LABELS = {
     "unavailable": "Offline",
     "unknown": "Unbekannt",
 }
+_BINARY_SENSOR_DEVICE_CLASS_LABELS = {
+    "battery": ("Normal", "Niedrig"),
+    "battery_charging": ("Laedt nicht", "Laedt"),
+    "cold": ("Normal", "Kalt"),
+    "connectivity": ("Getrennt", "Verbunden"),
+    "door": ("Geschlossen", "Offen"),
+    "garage_door": ("Geschlossen", "Offen"),
+    "gas": ("Klar", "Gas erkannt"),
+    "heat": ("Normal", "Heiss"),
+    "light": ("Dunkel", "Hell"),
+    "lock": ("Gesperrt", "Entsperrt"),
+    "moisture": ("Trocken", "Feucht"),
+    "motion": ("Keine Bewegung", "Bewegung"),
+    "moving": ("Steht", "Bewegt sich"),
+    "occupancy": ("Frei", "Belegt"),
+    "opening": ("Geschlossen", "Offen"),
+    "plug": ("Getrennt", "Verbunden"),
+    "power": ("Aus", "Ein"),
+    "presence": ("Abwesend", "Anwesend"),
+    "problem": ("OK", "Problem"),
+    "running": ("Gestoppt", "Laeuft"),
+    "safety": ("Sicher", "Unsicher"),
+    "smoke": ("Klar", "Rauch erkannt"),
+    "sound": ("Ruhig", "Geraeusch"),
+    "tamper": ("OK", "Manipulation"),
+    "update": ("Aktuell", "Update"),
+    "vibration": ("Ruhig", "Vibration"),
+    "window": ("Geschlossen", "Offen"),
+}
 _WEATHER_STATE_LABELS = {
     "clear-night": "Klar",
     "cloudy": "Bewoelkt",
@@ -784,15 +813,7 @@ def _dashboard_item_for_entity(
         return item
     if domain in _DASHBOARD_BUTTON_ENTITY_DOMAINS:
         item["_kind"] = "button"
-        if state is None or str(state.state or "").lower() in {"unknown", "unavailable"}:
-            item["state_label"] = _button_secondary_label(state, entity_id, secondary_info)
-        else:
-            item["state_label"] = _entity_secondary_label(
-                state,
-                entity_id,
-                secondary_info,
-                fallback="Ausfuehren",
-            )
+        item["state_label"] = _button_secondary_label(state, entity_id, secondary_info)
         return item
     if domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS:
         item["_kind"] = "slider"
@@ -852,16 +873,12 @@ def _dashboard_item_for_action(
     state = _dashboard_action_state(hass, action, dashboard)
     if kind == "switch":
         item["state"] = _dashboard_state_is_on(state.state if state else None)
-    if state is not None:
+    if kind == "button":
+        item["state_label"] = _dashboard_text(dashboard.get("state_label"), "", 60)
+    elif state is not None:
         item["state_label"] = _dashboard_text(
             dashboard.get("state_label"),
             _dashboard_state_label(state.state),
-            60,
-        )
-    elif kind == "button":
-        item["state_label"] = _dashboard_text(
-            dashboard.get("state_label"),
-            "Ausfuehren",
             60,
         )
     return item
@@ -1147,7 +1164,7 @@ def _entity_secondary_label(
         return _state_time_label(state, "last_changed")
     if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED:
         return _state_time_label(state, "last_updated")
-    return _entity_state_label(state, fallback=fallback)
+    return _entity_state_label(state, entity_id=entity_id, fallback=fallback)
 
 
 def _button_secondary_label(
@@ -1155,23 +1172,35 @@ def _button_secondary_label(
     entity_id: str,
     secondary_info: str,
 ) -> str:
-    if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
-        return "Ausfuehren"
+    if secondary_info in {
+        DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+        DASHBOARD_ENTITY_SECONDARY_INFO_LAST_CHANGED,
+        DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
+        DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
+    }:
+        return ""
     return _entity_secondary_label(
         state,
         entity_id,
         secondary_info,
-        fallback="Ausfuehren",
+        fallback="",
     )
 
 
-def _entity_state_label(state: Any | None, *, fallback: str = "Unbekannt") -> str:
+def _entity_state_label(
+    state: Any | None,
+    *,
+    entity_id: str | None = None,
+    fallback: str = "Unbekannt",
+) -> str:
     if state is None:
         return "Offline"
     attributes = getattr(state, "attributes", None)
     if not isinstance(attributes, dict):
         attributes = {}
     state_value = str(state.state or "unknown")
+    if str(entity_id or getattr(state, "entity_id", "")).startswith("binary_sensor."):
+        return _binary_sensor_state_label(state_value, attributes, fallback=fallback)
     label = _dashboard_state_label(state_value)
     unit = attributes.get("unit_of_measurement")
     if unit and state_value.lower() not in _DASHBOARD_STATE_LABELS:
@@ -1179,6 +1208,23 @@ def _entity_state_label(state: Any | None, *, fallback: str = "Unbekannt") -> st
     if label == "unknown" and fallback:
         return fallback
     return _dashboard_text(label, fallback, 60)
+
+
+def _binary_sensor_state_label(
+    state_value: str,
+    attributes: dict[str, Any],
+    *,
+    fallback: str,
+) -> str:
+    raw = state_value.lower()
+    if raw in {"unknown", "unavailable"}:
+        return _dashboard_state_label(raw)
+    labels = _BINARY_SENSOR_DEVICE_CLASS_LABELS.get(
+        str(attributes.get("device_class") or "").lower()
+    )
+    if labels is not None and raw in {"off", "on"}:
+        return labels[1] if raw == "on" else labels[0]
+    return _dashboard_state_label(raw) if raw in _DASHBOARD_STATE_LABELS else fallback
 
 
 def _state_time_label(state: Any | None, attribute: str) -> str:

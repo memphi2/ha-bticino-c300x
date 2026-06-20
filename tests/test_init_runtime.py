@@ -74,31 +74,40 @@ def test_async_setup_registers_frontend_services_and_websocket(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
-    import custom_components.bticino_c300x.camera as camera
-    import custom_components.bticino_c300x.frontend as frontend
-    import custom_components.bticino_c300x.services as services
-
-    monkeypatch.setattr(
+    blueprint_installer = types.ModuleType(
+        "custom_components.bticino_c300x.blueprint_installer"
+    )
+    blueprint_installer.async_install_bundled_blueprints = (
+        lambda _hass: _async_value(calls.append("blueprints"))
+    )
+    frontend = types.ModuleType("custom_components.bticino_c300x.frontend")
+    frontend.async_setup_frontend = lambda _hass: _async_value(calls.append("frontend"))
+    services = types.ModuleType("custom_components.bticino_c300x.services")
+    services.async_setup_services = lambda _hass: _async_value(calls.append("services"))
+    camera = types.ModuleType("custom_components.bticino_c300x.camera")
+    camera.async_register_home_call_ws = lambda _hass: calls.append("ws")
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.bticino_c300x.blueprint_installer",
+        blueprint_installer,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.bticino_c300x.frontend",
         frontend,
-        "async_setup_frontend",
-        lambda _hass: _async_value(calls.append("frontend")),
     )
-    monkeypatch.setattr(
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.bticino_c300x.services",
         services,
-        "async_setup_services",
-        lambda _hass: _async_value(calls.append("services")),
     )
-    monkeypatch.setattr(
-        camera,
-        "async_register_home_call_ws",
-        lambda _hass: calls.append("ws"),
-    )
+    monkeypatch.setitem(sys.modules, "custom_components.bticino_c300x.camera", camera)
     hass = SimpleNamespace(data={})
 
     assert asyncio.run(integration.async_setup(hass, {})) is True
 
     assert hass.data[DOMAIN] == {}
-    assert calls == ["frontend", "services", "ws"]
+    assert calls == ["blueprints", "frontend", "services", "ws"]
 
 
 def test_setup_entry_builds_runtime_and_forwards_platforms(

@@ -1073,7 +1073,7 @@ def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
 
         attrs = entity.extra_state_attributes
         assert entry.runtime_data.api.diagnostics_calls == 1
-        assert entity.native_value == "media_resources_open"
+        assert entity.native_value == "idle"
         assert attrs["agent_write_count"] == 2
         assert attrs["last_write_reason"] == "updated"
         assert attrs["change_reason"] == "api_refresh"
@@ -1085,6 +1085,56 @@ def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
         assert attrs["video_bridge_active_threads"] == 1
 
     asyncio.run(_run())
+
+
+def test_agent_diagnostics_sensor_reports_idle_for_ready_rtsp_bridge() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_bridge_running": True,
+                "video_bridge_media_active": False,
+                "video_bridge_stop_in_progress": False,
+                "video_bridge_open_fds": 2,
+                "video_bridge_active_threads": 2,
+                "video_clients": 0,
+                "video_running": False,
+                "home_call_running": False,
+                "home_call_active": False,
+                "ring_call_active": False,
+                "ring_media_active": False,
+            },
+        )
+    )
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "idle"
+    assert entity.extra_state_attributes["recommended_action"] == "no_action_needed"
+
+
+def test_agent_diagnostics_sensor_reports_resources_when_bridge_stopped_with_fds() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_bridge_running": False,
+                "video_bridge_media_active": False,
+                "video_bridge_stop_in_progress": False,
+                "video_bridge_open_fds": 1,
+                "video_bridge_active_threads": 1,
+                "video_clients": 0,
+            },
+        )
+    )
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "media_resources_open"
 
 
 def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:

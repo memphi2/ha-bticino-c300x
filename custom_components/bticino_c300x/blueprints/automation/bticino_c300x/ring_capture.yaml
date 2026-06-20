@@ -1,0 +1,65 @@
+blueprint:
+  name: C300X Ring capture
+  description: Capture a short MP4/WAV/JPEG set when the C300X doorbell rings. No transcription or decision is run.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/ring_capture.yaml
+  input:
+    media_readiness_entity:
+      name: Media readiness sensor
+      description: Capture runs only when Media readiness is ready or warning.
+      selector:
+        entity:
+          domain: sensor
+    entry_id:
+      name: Entry ID
+      description: Optional C300X config entry ID. Leave empty when there is only one C300X entry.
+      default: ""
+      selector:
+        text:
+    duration_seconds:
+      name: Duration
+      description: Capture duration in seconds.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: slider
+    include_audio:
+      name: Include audio
+      description: Save device audio when available.
+      default: true
+      selector:
+        boolean:
+    capture_file_dir:
+      name: Capture file directory
+      description: Directory for latest.raw.wav, latest.processed.wav, frames and latest.capture.json. Existing files are overwritten.
+      default: /config/c300x
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+
+variables:
+  media_readiness_entity: !input media_readiness_entity
+  entry_id: !input entry_id
+  capture_file_dir: !input capture_file_dir
+
+condition:
+  - condition: template
+    value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
+
+action:
+  - service: bticino_c300x.capture_doorbell_call
+    data:
+      entry_id: "{{ entry_id }}"
+      duration_seconds: !input duration_seconds
+      include_audio: !input include_audio
+      wav_output_dir: "{{ capture_file_dir }}"

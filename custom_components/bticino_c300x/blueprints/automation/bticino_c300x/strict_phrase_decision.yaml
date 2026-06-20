@@ -1,0 +1,68 @@
+blueprint:
+  name: C300X strict phrase decision
+  description: Evaluate the latest local C300X ring transcription with strict capture freshness and exact phrase matching. Unlock is optional.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/strict_phrase_decision.yaml
+  input:
+    decision_trigger:
+      name: Decision trigger
+      description: Input button that starts the decision after capture and transcription have finished.
+      selector:
+        entity:
+          domain: input_button
+    entry_id:
+      name: Entry ID
+      description: Optional C300X config entry ID. Required for unlock only when more than one C300X entry exists.
+      default: ""
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Exact phrase that must match the transcription.
+      selector:
+        text:
+    result_path:
+      name: Result path
+      default: /config/c300x/analysis/result.json
+      selector:
+        text:
+    capture_path:
+      name: Capture metadata path
+      default: /config/c300x/latest.capture.json
+      selector:
+        text:
+    decision_path:
+      name: Decision path
+      default: /config/c300x/analysis/decision.json
+      selector:
+        text:
+    unlock_on_match:
+      name: Unlock on match
+      description: Unlock only when the result belongs to a fresh capture and the phrase matches exactly.
+      default: false
+      selector:
+        boolean:
+    lock_id:
+      name: Lock ID
+      description: Optional C300X lock ID. Defaults to default.
+      default: default
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input decision_trigger
+
+action:
+  - service: bticino_c300x.evaluate_ring_analysis
+    data:
+      entry_id: !input entry_id
+      result_path: !input result_path
+      decision_path: !input decision_path
+      capture_path: !input capture_path
+      expected_phrase: !input expected_phrase
+      unlock_on_match: !input unlock_on_match
+      lock_id: !input lock_id

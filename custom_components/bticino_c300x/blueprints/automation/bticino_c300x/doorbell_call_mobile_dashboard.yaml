@@ -1,0 +1,84 @@
+blueprint:
+  name: C300X Ring Call mobile dashboard notification
+  description: Send a Home Assistant Companion App notification for an answerable C300X Ring Call. Tapping the notification opens the configured dashboard.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_mobile_dashboard.yaml
+  input:
+    forwarding_entity:
+      name: Forwarding select
+      description: C300X Forwarding select. It must be Home Assistant for Answer to work.
+      selector:
+        entity:
+          domain: select
+    media_readiness_entity:
+      name: Media readiness sensor
+      description: C300X Media readiness diagnostic sensor. Ready and warning are allowed.
+      selector:
+        entity:
+          domain: sensor
+    camera_entity:
+      name: Camera entity
+      description: Optional C300X camera entity attached to the notification.
+      default: ""
+      selector:
+        entity:
+          domain: camera
+    notify_service:
+      name: Mobile notify service
+      description: Companion App notify service, for example notify.mobile_app_your_phone.
+      selector:
+        text:
+    dashboard_path:
+      name: Dashboard path
+      description: Dashboard path opened when the notification is tapped.
+      default: /lovelace/c300x
+      selector:
+        text:
+    title:
+      name: Title
+      default: Doorbell
+      selector:
+        text:
+    message:
+      name: Message
+      default: Open Home Assistant to answer.
+      selector:
+        text:
+
+mode: restart
+
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+
+variables:
+  forwarding_entity: !input forwarding_entity
+  media_readiness_entity: !input media_readiness_entity
+  camera_entity: !input camera_entity
+  dashboard_path: !input dashboard_path
+  title: !input title
+  message: !input message
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ states(forwarding_entity) == 'Home Assistant'
+         or states(forwarding_entity) == 'homeassistant'
+         or state_attr(forwarding_entity, 'state') == 'homeassistant'
+         or state_attr(forwarding_entity, 'mode') == 'homeassistant' }}
+  - condition: template
+    value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: "{{ title }}"
+      message: "{{ message }}"
+      data:
+        url: "{{ dashboard_path }}"
+        clickAction: "{{ dashboard_path }}"
+        entity_id: "{{ camera_entity }}"
+        tag: c300x_ring_call
+        group: c300x

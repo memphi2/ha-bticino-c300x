@@ -600,8 +600,9 @@ def _agent_diagnostics_status(
         return "doorbell_media_active"
     if diagnostics.get("video_clients"):
         return "rtsp_busy"
-    if diagnostics.get("video_bridge_open_fds") or diagnostics.get(
-        "video_bridge_active_threads"
+    if not diagnostics.get("video_bridge_running") and (
+        diagnostics.get("video_bridge_open_fds")
+        or diagnostics.get("video_bridge_active_threads")
     ):
         return "media_resources_open"
     return "idle"

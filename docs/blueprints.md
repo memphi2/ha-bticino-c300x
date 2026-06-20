@@ -4,6 +4,16 @@ The integration ships optional Home Assistant automation blueprints for common
 C300X workflows. They use the public C300X services and entities; they do not
 change the device configuration.
 
+When Home Assistant loads the integration, missing bundled blueprints are copied
+to:
+
+```text
+/config/blueprints/automation/bticino_c300x/
+```
+
+They then appear in Home Assistant under **Settings -> Automations & scenes ->
+Blueprints**. Existing blueprint files are not overwritten.
+
 ## Included Blueprints
 
 | Blueprint | Purpose |
@@ -15,10 +25,10 @@ change the device configuration.
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. |
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
 
-Import the blueprint from the matching file below
-`blueprints/automation/bticino_c300x/` in this repository. In Home Assistant,
-use **Settings -> Automations & scenes -> Blueprints -> Import Blueprint** and
-paste the raw GitHub URL for the selected blueprint file.
+If a blueprint is missing, restart Home Assistant once after updating the
+integration. As a fallback, import the matching file from
+`blueprints/automation/bticino_c300x/` in this repository with **Import
+Blueprint**.
 
 ## Recommended Use
 

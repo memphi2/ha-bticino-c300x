@@ -79,11 +79,13 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the integration domain."""
 
+    from .blueprint_installer import async_install_bundled_blueprints
     from .camera import async_register_home_call_ws
     from .frontend import async_setup_frontend
     from .services import async_setup_services
 
     hass.data.setdefault(DOMAIN, {})
+    await async_install_bundled_blueprints(hass)
     await async_setup_frontend(hass)
     await async_setup_services(hass)
     async_register_home_call_ws(hass)

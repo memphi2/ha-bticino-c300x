@@ -7,6 +7,14 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 BLUEPRINT_DIR = ROOT / "blueprints" / "automation" / "bticino_c300x"
+PACKAGED_BLUEPRINT_DIR = (
+    ROOT
+    / "custom_components"
+    / "bticino_c300x"
+    / "blueprints"
+    / "automation"
+    / "bticino_c300x"
+)
 
 
 class BlueprintLoader(yaml.SafeLoader):
@@ -51,6 +59,17 @@ def test_blueprints_are_valid_automation_blueprints() -> None:
         assert data["blueprint"]["domain"] == "automation"
         assert data["blueprint"]["source_url"].endswith(filename)
         assert data["mode"] in {"restart", "single"}
+
+
+def test_packaged_blueprints_match_repo_blueprints() -> None:
+    repo_files = {path.name for path in BLUEPRINT_DIR.glob("*.yaml")}
+    package_files = {path.name for path in PACKAGED_BLUEPRINT_DIR.glob("*.yaml")}
+
+    assert package_files == repo_files
+    for filename in repo_files:
+        assert (PACKAGED_BLUEPRINT_DIR / filename).read_text(
+            encoding="utf-8"
+        ) == (BLUEPRINT_DIR / filename).read_text(encoding="utf-8")
 
 
 def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:

@@ -7,6 +7,13 @@
 - Refocuses the README setup section on the guided Quickstart path so new users
   start with HACS, agent setup, Media Readiness and the bundled card in the
   right order.
+- Installs the bundled automation blueprints into Home Assistant's blueprint
+  folder when the integration loads, so they appear in the normal Blueprint UI.
+
+### Fixed
+
+- Keeps the device-agent diagnostics entity idle when the RTSP bridge is merely
+  ready with no active clients, media session, Ring Call or Home Call.
 
 ## v1.3.0 - 2026-06-20
 

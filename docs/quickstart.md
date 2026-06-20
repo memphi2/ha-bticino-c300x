@@ -116,7 +116,8 @@ another secure browser context with microphone permission.
 ## 8. Optional Blueprints
 
 Ready-made blueprints are available for doorbell notifications, Ring Call
-notifications, capture, Wyoming transcription and strict phrase decisions.
+notifications, capture, Wyoming transcription and strict phrase decisions. They
+are installed into Home Assistant's blueprint folder when the integration loads.
 
 Details: [Blueprints](blueprints.md)
 

@@ -19,6 +19,7 @@ class _Api:
         self.hangup_calls = 0
         self.stop_calls = 0
         self.home_call_stop_calls = 0
+        self.reload_gui_calls = 0
 
     async def async_hangup_doorbell_call(self) -> dict[str, bool]:
         self.hangup_calls += 1
@@ -30,6 +31,10 @@ class _Api:
 
     async def async_stop_home_call(self) -> dict[str, bool]:
         self.home_call_stop_calls += 1
+        return {"ok": True}
+
+    async def async_reload_gui(self) -> dict[str, bool]:
+        self.reload_gui_calls += 1
         return {"ok": True}
 
 
@@ -319,6 +324,7 @@ def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions()
 
     assert camera.refreshed is True
     assert api.stop_calls == 1
+    assert api.reload_gui_calls == 1
 
 
 def test_schedule_task_uses_running_loop_without_hass_helper() -> None:

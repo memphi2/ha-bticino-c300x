@@ -190,6 +190,7 @@ async def async_handle_runtime_agent_cpu_watchdog(
     with suppress(Exception):
         status = await api.async_doorbell_video_status()
     await _async_stop_media_for_watchdog(api, status)
+    await _async_reload_display_gui_for_watchdog(api)
 
 
 async def async_handle_agent_cpu_watchdog(
@@ -233,6 +234,7 @@ async def async_handle_agent_cpu_watchdog(
             "bridge": camera._bridge_status,
         },
     )
+    await _async_reload_display_gui_for_watchdog(entry.runtime_data.api)
 
 
 async def _async_stop_media_for_watchdog(
@@ -267,3 +269,13 @@ async def _async_stop_media_for_watchdog(
     if decision.state in _DOORBELL_VIDEO_STATES:
         with suppress(Exception):
             await api.async_stop_doorbell_video()
+
+
+async def _async_reload_display_gui_for_watchdog(api: Any) -> None:
+    """Reload the display GUI after sustained high CPU watchdog trips."""
+
+    reload_gui = getattr(api, "async_reload_gui", None)
+    if not callable(reload_gui):
+        return
+    with suppress(Exception):
+        await reload_gui()

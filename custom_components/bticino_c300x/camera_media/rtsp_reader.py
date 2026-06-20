@@ -53,9 +53,10 @@ def _new_restarting_rtsp_tracks(
 
         async def recv(self, kind: str) -> Any:
             while not self._stopped:
-                had_reader = self._player is not None
+                had_reader = False
                 try:
                     await self._ensure_reader()
+                    had_reader = self._player is not None
                     track = self._video_track if kind == "video" else self._audio_track
                     if track is None:
                         raise media_stream_error_cls
@@ -230,9 +231,10 @@ def _new_restarting_rtsp_video_track(
 
         async def recv(self) -> Any:
             while not self._stopped:
-                had_reader = self._track is not None
+                had_reader = False
                 try:
                     await self._ensure_reader()
+                    had_reader = self._track is not None
                     frame = await asyncio.wait_for(
                         self._track.recv(),
                         timeout=RTSP_FRAME_TIMEOUT_SECONDS,
@@ -343,9 +345,10 @@ def _new_restarting_rtsp_audio_track(
 
         async def recv(self) -> Any:
             while not self._stopped:
-                had_reader = self._track is not None
+                had_reader = False
                 try:
                     await self._ensure_reader()
+                    had_reader = self._track is not None
                     frame = await asyncio.wait_for(
                         self._track.recv(),
                         timeout=RTSP_FRAME_TIMEOUT_SECONDS,

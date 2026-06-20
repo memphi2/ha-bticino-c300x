@@ -267,6 +267,223 @@ def test_restarting_rtsp_video_track_restarts_after_reader_failure(
     assert restarts == ["restart"]
 
 
+def test_restarting_rtsp_video_track_restarts_after_first_frame_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[int] = []
+    restarts: list[str] = []
+
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_reader.asyncio, "sleep", no_sleep)
+
+    class _Frame:
+        pts: int | None = None
+        time_base: object | None = None
+
+    class _SourceTrack:
+        def __init__(self, fail: bool) -> None:
+            self._fail = fail
+
+        async def recv(self) -> _Frame:
+            if self._fail:
+                raise RuntimeError("first frame missing")
+            return _Frame()
+
+        def stop(self) -> None:
+            return None
+
+    class _VideoTrack:
+        kind = "video"
+
+        async def next_timestamp(self) -> tuple[int, str]:
+            return 11, "1/90000"
+
+        def stop(self) -> None:
+            return None
+
+    class _MediaPlayer:
+        def __init__(self, _url: str, options: dict[str, str]) -> None:
+            assert options["rtsp_transport"] == "tcp"
+            opened.append(len(opened))
+            self.video = _SourceTrack(fail=len(opened) == 1)
+            self.audio = None
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def restart_callback() -> None:
+        restarts.append("restart")
+
+    async def _run() -> _Frame:
+        track = _new_restarting_rtsp_video_track(
+            _VideoTrack,
+            Exception,
+            _MediaPlayer,
+            _Hass(),
+            "rtsp://agent.local:6554/doorbell-video",
+            restart_callback,
+        )
+        try:
+            return await track.recv()
+        finally:
+            track.stop()
+
+    frame = asyncio.run(_run())
+
+    assert frame.pts == 11
+    assert opened == [0, 1]
+    assert restarts == ["restart"]
+
+
+def test_restarting_shared_rtsp_tracks_restart_after_first_frame_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[int] = []
+    restarts: list[str] = []
+
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_reader.asyncio, "sleep", no_sleep)
+
+    class _Frame:
+        pts: int | None = None
+        time_base: object | None = None
+
+    class _SourceTrack:
+        def __init__(self, fail: bool = False) -> None:
+            self._fail = fail
+
+        async def recv(self) -> _Frame:
+            if self._fail:
+                raise RuntimeError("first shared frame missing")
+            return _Frame()
+
+        def stop(self) -> None:
+            return None
+
+    class _VideoTrack:
+        kind = "video"
+
+        async def next_timestamp(self) -> tuple[int, str]:
+            return 17, "1/90000"
+
+        def stop(self) -> None:
+            return None
+
+    class _AudioTrack:
+        kind = "audio"
+
+        def stop(self) -> None:
+            return None
+
+    class _MediaPlayer:
+        def __init__(self, _url: str, options: dict[str, str]) -> None:
+            assert options["rtsp_transport"] == "tcp"
+            opened.append(len(opened))
+            self.video = _SourceTrack(fail=len(opened) == 1)
+            self.audio = _SourceTrack()
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def restart_callback() -> None:
+        restarts.append("restart")
+
+    async def _run() -> _Frame:
+        media, video_track, _audio_track = _new_restarting_rtsp_tracks(
+            SimpleNamespace(),
+            _VideoTrack,
+            _AudioTrack,
+            Exception,
+            _MediaPlayer,
+            _Hass(),
+            "rtsp://agent.local:6554/doorbell",
+            restart_callback,
+        )
+        try:
+            return await video_track.recv()
+        finally:
+            media.stop()
+
+    frame = asyncio.run(_run())
+
+    assert frame.pts == 17
+    assert opened == [0, 1]
+    assert restarts == ["restart"]
+
+
+def test_restarting_rtsp_audio_track_restarts_after_first_frame_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[int] = []
+    restarts: list[str] = []
+
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_reader.asyncio, "sleep", no_sleep)
+
+    class _Frame:
+        pass
+
+    class _SourceTrack:
+        def __init__(self, fail: bool) -> None:
+            self._fail = fail
+
+        async def recv(self) -> _Frame:
+            if self._fail:
+                raise RuntimeError("first audio frame missing")
+            return _Frame()
+
+        def stop(self) -> None:
+            return None
+
+    class _AudioTrack:
+        kind = "audio"
+
+        def stop(self) -> None:
+            return None
+
+    class _MediaPlayer:
+        def __init__(self, _url: str, options: dict[str, str]) -> None:
+            assert options["rtsp_transport"] == "tcp"
+            opened.append(len(opened))
+            self.video = None
+            self.audio = _SourceTrack(fail=len(opened) == 1)
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def restart_callback() -> None:
+        restarts.append("restart")
+
+    async def _run() -> _Frame:
+        track = _new_restarting_rtsp_audio_track(
+            _AudioTrack,
+            Exception,
+            _MediaPlayer,
+            _Hass(),
+            "rtsp://agent.local:6554/home-call",
+            restart_callback,
+        )
+        try:
+            return await track.recv()
+        finally:
+            track.stop()
+
+    frame = asyncio.run(_run())
+
+    assert isinstance(frame, _Frame)
+    assert opened == [0, 1]
+    assert restarts == ["restart"]
+
+
 def test_restarting_rtsp_video_track_stops_when_restart_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -4,25 +4,12 @@ blueprint:
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_mobile_dashboard.yaml
   input:
-    forwarding_entity:
-      name: Forwarding select
-      description: C300X Forwarding select. It must be Home Assistant for Answer to work.
+    c300x_device:
+      name: C300X device
+      description: Select the C300X device. The blueprint derives the camera, forwarding select and media-readiness sensor from this device.
       selector:
-        entity:
-          domain: select
-    media_readiness_entity:
-      name: Media readiness sensor
-      description: C300X Media readiness diagnostic sensor. Ready and warning are allowed.
-      selector:
-        entity:
-          domain: sensor
-    camera_entity:
-      name: Camera entity
-      description: Optional C300X camera entity attached to the notification.
-      default: ""
-      selector:
-        entity:
-          domain: camera
+        device:
+          integration: bticino_c300x
     notify_service:
       name: Mobile notify service
       description: Companion App notify service, for example notify.mobile_app_your_phone.
@@ -101,9 +88,38 @@ trigger:
       event_key: doorbell_pressed
 
 variables:
-  forwarding_entity: !input forwarding_entity
-  media_readiness_entity: !input media_readiness_entity
-  camera_entity: !input camera_entity
+  c300x_device: !input c300x_device
+  c300x_entities: "{{ device_entities(c300x_device) | list }}"
+  forwarding_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% set options = state_attr(entity_id, 'options') or [] %}
+      {% if entity_id.startswith('select.')
+            and 'Home Assistant' in options
+            and 'Blocked' in options %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
+  media_readiness_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% if entity_id.startswith('sensor.')
+            and state_attr(entity_id, 'agent_reachable') is not none
+            and state_attr(entity_id, 'media_user_ok') is not none
+            and state_attr(entity_id, 'ring_call_supported') is not none %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
+  camera_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% if not ns.entity and entity_id.startswith('camera.') %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
   dashboard_path: !input dashboard_path
   title: !input title
   message: !input message

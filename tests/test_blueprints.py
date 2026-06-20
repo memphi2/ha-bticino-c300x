@@ -102,6 +102,7 @@ def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() ->
 
 def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     data = _blueprint("doorbell_call_mobile_dashboard.yaml")
+    inputs = data["blueprint"]["input"]
     action = data["action"][0]
     notify_data = action["data"]["data"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
@@ -118,6 +119,20 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
         if isinstance(item, dict) and "service" in item
     ]
 
+    assert "c300x_device" in inputs
+    assert "forwarding_entity" not in inputs
+    assert "media_readiness_entity" not in inputs
+    assert "camera_entity" not in inputs
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert data["variables"]["c300x_device"] == "c300x_device"
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
+    assert "'Blocked' in options" in data["variables"]["forwarding_entity"]
+    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
+    assert "ring_call_supported" in data["variables"]["media_readiness_entity"]
+    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert action["service"] == "notify_service"
     assert notify_data["url"] == "{{ dashboard_path }}"
     assert notify_data["clickAction"] == "{{ dashboard_path }}"

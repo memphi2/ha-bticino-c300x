@@ -49,6 +49,9 @@ dashboard in the Companion App and calls `bticino_c300x.answer_doorbell_call`.
 After answering, a quiet in-call notification keeps a **Hang Up** action
 available.
 
+For this Android blueprint, select the C300X device. The blueprint derives the
+matching camera, forwarding select and media-readiness sensor from that device.
+
 The phone sound comes from the Android notification channel configured in the
 blueprint. Open the Home Assistant Companion App notification settings and set
 the sound for that channel to the ringtone you want.

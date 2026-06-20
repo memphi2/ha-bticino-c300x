@@ -139,6 +139,7 @@ class _FakeApi:
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
         self.home_call_status_calls = 0
+        self.reload_gui_calls = 0
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         return {
@@ -191,6 +192,10 @@ class _FakeApi:
 
     async def async_stop_home_call(self) -> dict[str, Any]:
         self.home_call_stop_calls += 1
+        return {"ok": True}
+
+    async def async_reload_gui(self) -> dict[str, Any]:
+        self.reload_gui_calls += 1
         return {"ok": True}
 
 
@@ -715,6 +720,7 @@ def test_doorbell_camera_cpu_watchdog_closes_local_webrtc_sessions() -> None:
     api, camera, peer = asyncio.run(_run())
 
     assert api.stop_calls == 0
+    assert api.reload_gui_calls == 1
     assert camera._webrtc_sessions == {}
     assert peer.closed is True
     assert camera._agent_cpu_watchdog.tripped is True

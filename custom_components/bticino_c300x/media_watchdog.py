@@ -221,6 +221,7 @@ async def async_handle_agent_cpu_watchdog(
                 notify_client=True,
                 reason="agent_cpu_watchdog",
             )
+        await _async_reload_display_gui_for_watchdog(entry.runtime_data.api)
         return
 
     with suppress(Exception):

@@ -28,6 +28,7 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
     SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
 )
+from .device_user import device_user_repair_reason
 from .media_readiness import media_readiness
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
@@ -537,19 +538,7 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return
 
-    reason = None
-    if status.get("homeassistant_user_present") is False:
-        reason = "homeassistant_user_missing"
-    elif status.get("routes_consistent") is False:
-        reason = "homeassistant_routes_inconsistent"
-    elif status.get("media_identity_available") is False:
-        reason = "media_identity_missing"
-    elif (
-        status.get("homeassistant_user_present") is True
-        and "device_routing_applied" in status
-        and status.get("device_routing_applied") is False
-    ):
-        reason = "device_routing_missing"
+    reason = device_user_repair_reason(status)
     if reason is None:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return

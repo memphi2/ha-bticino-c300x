@@ -49,7 +49,11 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
-from .device_user import homeassistant_account_label
+from .device_user import (
+    device_user_bootstrap_needed,
+    device_user_bootstrap_satisfied,
+    homeassistant_account_label,
+)
 from .entry_config import (
     entry_config_value as _entry_config_value,
 )
@@ -458,9 +462,9 @@ async def _async_sync_device_user(
             status = await entry.runtime_data.api.async_ensure_homeassistant_user(
                 account_label=homeassistant_account_label(hass),
             )
-            if _device_user_bootstrap_satisfied(status):
+            if device_user_bootstrap_satisfied(status):
                 _mark_homeassistant_media_user_bootstrapped(hass, entry)
-        elif _device_user_bootstrap_satisfied(status):
+        elif device_user_bootstrap_satisfied(status):
             _mark_homeassistant_media_user_bootstrapped(hass, entry)
         entry.runtime_data.device_user_status = status
         entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
@@ -484,38 +488,7 @@ def _device_user_bootstrap_allowed(
         and not bool(
             _entry_config_value(entry, CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, False)
         )
-        and _device_user_bootstrap_needed(status)
-    )
-
-
-def _device_user_bootstrap_needed(status: dict[str, Any]) -> bool:
-    """Return true for a hard missing media-user/routing status."""
-
-    if status.get("available") is False or status.get("status_available") is False:
-        return False
-    if status.get("homeassistant_user_present") is False:
-        return True
-    if status.get("media_identity_available") is False:
-        return True
-    if status.get("routes_consistent") is False:
-        return True
-    return (
-        status.get("homeassistant_user_present") is True
-        and "device_routing_applied" in status
-        and status.get("device_routing_applied") is False
-    )
-
-
-def _device_user_bootstrap_satisfied(status: dict[str, Any]) -> bool:
-    """Return true when startup can mark the one-time bootstrap as done."""
-
-    if status.get("available") is False or status.get("status_available") is False:
-        return False
-    return (
-        status.get("homeassistant_user_present") is True
-        and status.get("media_identity_available") is not False
-        and status.get("routes_consistent") is not False
-        and status.get("device_routing_applied") is not False
+        and device_user_bootstrap_needed(status)
     )
 
 

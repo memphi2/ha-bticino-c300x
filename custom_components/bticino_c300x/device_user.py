@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,87 @@ def homeassistant_account_label(hass: HomeAssistant) -> str:
     if not location_name or location_name.casefold() == "home assistant":
         return "Home Assistant"
     return f"Home Assistant {location_name}"
+
+
+def device_user_status_available(status: Mapping[str, Any]) -> bool:
+    """Return whether a device-user status payload is usable."""
+
+    return status.get("available") is not False and status.get("status_available") is not False
+
+
+def device_user_bootstrap_needed(status: Mapping[str, Any]) -> bool:
+    """Return true for a hard missing media-user/routing status."""
+
+    if not device_user_status_available(status):
+        return False
+    if status.get("homeassistant_user_present") is False:
+        return True
+    if status.get("media_identity_available") is False:
+        return True
+    if status.get("routes_consistent") is False:
+        return True
+    return (
+        status.get("homeassistant_user_present") is True
+        and "device_routing_applied" in status
+        and status.get("device_routing_applied") is False
+    )
+
+
+def device_user_bootstrap_satisfied(status: Mapping[str, Any]) -> bool:
+    """Return true when startup can mark the one-time bootstrap as done."""
+
+    if not device_user_status_available(status):
+        return False
+    return (
+        status.get("homeassistant_user_present") is True
+        and status.get("media_identity_available") is not False
+        and status.get("routes_consistent") is not False
+        and status.get("device_routing_applied") is not False
+    )
+
+
+def device_user_ready(status: Mapping[str, Any]) -> bool | None:
+    """Return whether the dedicated media user and route state are ready."""
+
+    if not device_user_status_available(status):
+        return None
+    present = status.get("homeassistant_user_present")
+    media_identity = status.get("media_identity_available")
+    routes = status.get("routes_consistent")
+    routing = status.get("device_routing_applied")
+    if (
+        present is None
+        and media_identity is None
+        and routes is None
+        and routing is None
+    ):
+        return None
+    return (
+        present is True
+        and media_identity is not False
+        and routes is not False
+        and routing is not False
+    )
+
+
+def device_user_repair_reason(status: Mapping[str, Any]) -> str | None:
+    """Return the stable repair reason for a broken media-user status."""
+
+    if not device_user_status_available(status):
+        return None
+    if status.get("homeassistant_user_present") is False:
+        return "homeassistant_user_missing"
+    if status.get("routes_consistent") is False:
+        return "homeassistant_routes_inconsistent"
+    if status.get("media_identity_available") is False:
+        return "media_identity_missing"
+    if (
+        status.get("homeassistant_user_present") is True
+        and "device_routing_applied" in status
+        and status.get("device_routing_applied") is False
+    ):
+        return "device_routing_missing"
+    return None
 
 
 def media_user_attributes(entry: ConfigEntry) -> dict[str, Any]:

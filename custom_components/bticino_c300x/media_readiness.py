@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
+from .device_user import device_user_ready
 from .entry_config import entry_config_value
 
 MEDIA_READINESS_STATUS_OPTIONS = ("ready", "warning", "blocked", "unavailable")
@@ -169,23 +170,7 @@ def media_user_ready(
         return user_check is not False and routing_check is not False
     if not isinstance(device_user_status, Mapping):
         return None
-    present = device_user_status.get("homeassistant_user_present")
-    media_identity = device_user_status.get("media_identity_available")
-    routes = device_user_status.get("routes_consistent")
-    routing = device_user_status.get("device_routing_applied")
-    if (
-        present is None
-        and media_identity is None
-        and routes is None
-        and routing is None
-    ):
-        return None
-    return (
-        present is True
-        and media_identity is not False
-        and routes is not False
-        and routing is not False
-    )
+    return device_user_ready(device_user_status)
 
 
 def event_callback_ready(connection_state: Any) -> bool | None:

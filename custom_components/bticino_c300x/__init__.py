@@ -27,6 +27,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -34,6 +35,7 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -47,6 +49,7 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
+from .device_user import homeassistant_account_label
 from .entry_config import (
     entry_config_value as _entry_config_value,
 )
@@ -442,9 +445,8 @@ async def _async_sync_device_user(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
-    """Refresh the Flexisip user status used for media calls without writing."""
+    """Bootstrap once, then refresh the Flexisip user status read-only."""
 
-    _ = hass
     if not _entry_video_enabled(entry):
         return
     capabilities = getattr(entry.runtime_data, "capabilities", {})
@@ -452,6 +454,14 @@ async def _async_sync_device_user(
         return
     try:
         status = await entry.runtime_data.api.async_device_user_status()
+        if _device_user_bootstrap_allowed(entry, status):
+            status = await entry.runtime_data.api.async_ensure_homeassistant_user(
+                account_label=homeassistant_account_label(hass),
+            )
+            if _device_user_bootstrap_satisfied(status):
+                _mark_homeassistant_media_user_bootstrapped(hass, entry)
+        elif _device_user_bootstrap_satisfied(status):
+            _mark_homeassistant_media_user_bootstrapped(hass, entry)
         entry.runtime_data.device_user_status = status
         entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
     except C300XAgentApiUnsupportedError:
@@ -461,6 +471,65 @@ async def _async_sync_device_user(
             "C300X device-user status sync failed: %s",
             compact_error_text(err),
         )
+
+
+def _device_user_bootstrap_allowed(
+    entry: BticinoC300XConfigEntry,
+    status: dict[str, Any],
+) -> bool:
+    """Return true when startup may perform the one-time media-user bootstrap."""
+
+    return (
+        bool(_entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, False))
+        and not bool(
+            _entry_config_value(entry, CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, False)
+        )
+        and _device_user_bootstrap_needed(status)
+    )
+
+
+def _device_user_bootstrap_needed(status: dict[str, Any]) -> bool:
+    """Return true for a hard missing media-user/routing status."""
+
+    if status.get("available") is False or status.get("status_available") is False:
+        return False
+    if status.get("homeassistant_user_present") is False:
+        return True
+    if status.get("media_identity_available") is False:
+        return True
+    if status.get("routes_consistent") is False:
+        return True
+    return (
+        status.get("homeassistant_user_present") is True
+        and "device_routing_applied" in status
+        and status.get("device_routing_applied") is False
+    )
+
+
+def _device_user_bootstrap_satisfied(status: dict[str, Any]) -> bool:
+    """Return true when startup can mark the one-time bootstrap as done."""
+
+    if status.get("available") is False or status.get("status_available") is False:
+        return False
+    return (
+        status.get("homeassistant_user_present") is True
+        and status.get("media_identity_available") is not False
+        and status.get("routes_consistent") is not False
+        and status.get("device_routing_applied") is not False
+    )
+
+
+def _mark_homeassistant_media_user_bootstrapped(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> None:
+    """Persist that startup must no longer auto-write media-user files."""
+
+    if _entry_config_value(entry, CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, False):
+        return
+    data = dict(entry.data)
+    data[CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED] = True
+    hass.config_entries.async_update_entry(entry, data=data)
 
 
 async def _async_refresh_device_user_status(

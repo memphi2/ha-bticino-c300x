@@ -21,6 +21,7 @@ from custom_components.bticino_c300x.const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
+    CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -484,7 +485,7 @@ def test_configure_display_bridge_records_agent_failures(
         assert entry.runtime_data.display_bridge_diagnostics.last_error is not None
 
 
-def test_sync_device_user_refreshes_missing_media_user_without_repair() -> None:
+def test_sync_device_user_bootstraps_missing_media_user_once() -> None:
     entry = _entry(
         options={
             CONF_VIDEO_ENABLED: True,
@@ -497,13 +498,45 @@ def test_sync_device_user_refreshes_missing_media_user_without_repair() -> None:
         device_user_status={},
         device_user_status_updated_at=None,
     )
-    hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+    hass, updates = _hass_with_config_updates()
+
+    asyncio.run(integration._async_sync_device_user(hass, entry))
+
+    assert entry.runtime_data.api.ensure_labels == ["Home Assistant HA Test"]
+    assert entry.runtime_data.device_user_status == {
+        "homeassistant_user_present": True,
+        "media_identity_available": True,
+        "routes_consistent": True,
+        "device_routing_applied": True,
+        "media_user_label_applied": True,
+    }
+    assert entry.runtime_data.device_user_status_updated_at is not None
+    assert updates == [
+        {"data": {CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True}}
+    ]
+
+
+def test_sync_device_user_does_not_rebootstrap_missing_media_user() -> None:
+    entry = _entry(
+        data={CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True},
+        options={
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
+        },
+    )
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=_DeviceUserApi({"homeassistant_user_present": False}),
+        device_user_status={},
+        device_user_status_updated_at=None,
+    )
+    hass, updates = _hass_with_config_updates()
 
     asyncio.run(integration._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == []
     assert entry.runtime_data.device_user_status == {"homeassistant_user_present": False}
-    assert entry.runtime_data.device_user_status_updated_at is not None
+    assert updates == []
 
 
 def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:
@@ -519,12 +552,13 @@ def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:
             device_user_status={},
             device_user_status_updated_at=None,
         )
-        hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+        hass, updates = _hass_with_config_updates()
 
         asyncio.run(integration._async_sync_device_user(hass, entry))
 
         assert entry.runtime_data.api.ensure_labels == []
         assert entry.runtime_data.device_user_status == {}
+        assert updates == []
 
 
 def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
@@ -536,6 +570,7 @@ def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
     )
     status = {
         "homeassistant_user_present": True,
+        "media_identity_available": True,
         "routes_consistent": True,
         "device_routing_applied": True,
         "media_user_label_applied": True,
@@ -546,13 +581,16 @@ def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
         device_user_status={},
         device_user_status_updated_at=None,
     )
-    hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+    hass, updates = _hass_with_config_updates()
 
     asyncio.run(integration._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == []
     assert entry.runtime_data.device_user_status == status
     assert entry.runtime_data.device_user_status_updated_at is not None
+    assert updates == [
+        {"data": {CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True}}
+    ]
 
 
 def test_sync_device_user_ignores_agent_failures() -> None:
@@ -572,11 +610,12 @@ def test_sync_device_user_ignores_agent_failures() -> None:
             device_user_status={},
             device_user_status_updated_at=None,
         )
-        hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+        hass, updates = _hass_with_config_updates()
 
         asyncio.run(integration._async_sync_device_user(hass, entry))
 
         assert entry.runtime_data.device_user_status == {}
+        assert updates == []
 
 
 def test_sync_device_user_does_not_repair_unavailable_status() -> None:
@@ -601,12 +640,13 @@ def test_sync_device_user_does_not_repair_unavailable_status() -> None:
         device_user_status={},
         device_user_status_updated_at=None,
     )
-    hass = SimpleNamespace(config=SimpleNamespace(location_name="HA Test"))
+    hass, updates = _hass_with_config_updates()
 
     asyncio.run(integration._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.device_user_status == status
     assert entry.runtime_data.api.ensure_labels == []
+    assert updates == []
 
 
 def test_refresh_self_test_updates_or_clears_status() -> None:
@@ -885,6 +925,25 @@ def _entry(
     )
 
 
+def _hass_with_config_updates() -> tuple[SimpleNamespace, list[dict[str, Any]]]:
+    updates: list[dict[str, Any]] = []
+
+    def _update_entry(entry: SimpleNamespace, **kwargs: Any) -> None:
+        updates.append(kwargs)
+        if "data" in kwargs:
+            entry.data = kwargs["data"]
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+
+    return (
+        SimpleNamespace(
+            config=SimpleNamespace(location_name="HA Test"),
+            config_entries=SimpleNamespace(async_update_entry=_update_entry),
+        ),
+        updates,
+    )
+
+
 class _ActivationApi:
     def __init__(
         self,
@@ -947,6 +1006,7 @@ class _DeviceUserApi:
         self.ensure_labels.append(account_label)
         return {
             "homeassistant_user_present": True,
+            "media_identity_available": True,
             "routes_consistent": True,
             "device_routing_applied": True,
             "media_user_label_applied": True,

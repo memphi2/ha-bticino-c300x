@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -20,11 +20,12 @@ from .dashboard_labels import (
     _WEATHER_TITLE_BY_LANGUAGE,
 )
 
-_WEATHER_SUN_LABELS = {
-    "de": ("Auf", "Unter"),
-    "en": ("Rise", "Set"),
-    "fr": ("Lever", "Coucher"),
-    "it": ("Alba", "Tramonto"),
+_FORECAST_TYPE_KEY = "_c300x_forecast_type"
+_EMPTY_FORECAST = {
+    "time": "",
+    "condition": "",
+    "condition_key": "",
+    "temperature": "",
 }
 
 
@@ -66,7 +67,11 @@ def dashboard_weather_payload(
             "humidity": "",
             "wind": "",
             "forecast": "",
-            "sun": _weather_sun(hass, language),
+            "forecast_1": dict(_EMPTY_FORECAST),
+            "forecast_2": dict(_EMPTY_FORECAST),
+            "sun": "",
+            "sunrise": "",
+            "sunset": "",
             "updated": "",
             "badge": f"{title}\nOffline",
             "color": "#f1c40f",
@@ -80,8 +85,14 @@ def dashboard_weather_payload(
     temperature = _weather_temperature(attributes)
     humidity = _weather_humidity(attributes)
     wind = _weather_wind(attributes)
-    title = _dashboard_text(attributes.get("friendly_name"), _localized_weather_title(language), 40)
+    title = _localized_weather_title(language)
     updated = _weather_updated_label(state)
+    forecast_entries = _weather_forecast_entries(
+        attributes,
+        language,
+        forecast_items=forecast_items,
+    )
+    sunrise, sunset = _weather_sun_times(hass)
     return {
         "available": state.state not in {"unknown", "unavailable"},
         "title": title,
@@ -95,7 +106,11 @@ def dashboard_weather_payload(
             language,
             forecast_items=forecast_items,
         ),
-        "sun": _weather_sun(hass, language),
+        "forecast_1": forecast_entries[0],
+        "forecast_2": forecast_entries[1],
+        "sun": _weather_sun_text(sunrise, sunset),
+        "sunrise": sunrise,
+        "sunset": sunset,
         "updated": updated,
         "badge": f"{condition}\n{temperature or title}",
         "color": _weather_color(state.state),
@@ -157,8 +172,20 @@ async def _async_weather_forecast_items(
             continue
         forecast = _weather_service_forecast_items(response, entity_id)
         if forecast:
-            return forecast
+            return _tag_forecast_items(forecast, forecast_type)
     return None
+
+
+def _tag_forecast_items(forecast: list[Any], forecast_type: str) -> list[Any]:
+    tagged: list[Any] = []
+    for item in forecast:
+        if isinstance(item, dict):
+            tagged_item = dict(item)
+            tagged_item[_FORECAST_TYPE_KEY] = forecast_type
+            tagged.append(tagged_item)
+        else:
+            tagged.append(item)
+    return tagged
 
 
 def _weather_service_forecast_items(response: Any, entity_id: str) -> list[Any]:
@@ -198,6 +225,37 @@ def _weather_forecast(
     return _dashboard_text(" | ".join(labels), "", 86)
 
 
+def _weather_forecast_entries(
+    attributes: dict[str, Any],
+    language: str,
+    *,
+    forecast_items: list[Any] | None = None,
+) -> tuple[dict[str, str], dict[str, str]]:
+    forecast = forecast_items if forecast_items is not None else _weather_forecast_items(attributes)
+    unit = str(attributes.get("temperature_unit") or attributes.get("unit_of_measurement") or "C")
+    entries: list[dict[str, str]] = []
+    for item in forecast:
+        if len(entries) >= 2:
+            break
+        if not isinstance(item, dict):
+            continue
+        condition_key = str(item.get("condition") or "").lower()
+        entries.append(
+            {
+                "time": _weather_forecast_time_label(
+                    item.get("datetime") or item.get("native_datetime") or item.get("time"),
+                    item.get(_FORECAST_TYPE_KEY),
+                ),
+                "condition": _weather_state_label(condition_key, language),
+                "condition_key": condition_key,
+                "temperature": _weather_forecast_temperature(item, unit),
+            }
+        )
+    while len(entries) < 2:
+        entries.append(dict(_EMPTY_FORECAST))
+    return (entries[0], entries[1])
+
+
 def _weather_forecast_items(attributes: dict[str, Any]) -> list[Any]:
     for key in ("forecast", "forecasts"):
         value = attributes.get(key)
@@ -207,6 +265,10 @@ def _weather_forecast_items(attributes: dict[str, Any]) -> list[Any]:
             nested = value.get("forecast")
             if isinstance(nested, list):
                 return nested
+            for forecast_type in ("hourly", "daily"):
+                typed_nested = value.get(forecast_type)
+                if isinstance(typed_nested, list):
+                    return _tag_forecast_items(typed_nested, forecast_type)
             for nested in value.values():
                 if isinstance(nested, list):
                     return nested
@@ -223,26 +285,53 @@ def _weather_forecast_temperature(item: dict[str, Any], fallback_unit: str) -> s
     return f"{value} {unit}"
 
 
-def _weather_sun(hass: HomeAssistant, language: str) -> str:
+def _weather_sun(hass: HomeAssistant, _language: str) -> str:
+    sunrise, sunset = _weather_sun_times(hass)
+    return _weather_sun_text(sunrise, sunset)
+
+
+def _weather_sun_text(sunrise: str, sunset: str) -> str:
+    if sunrise and sunset:
+        return f"{sunrise}   {sunset}"
+    return sunrise or sunset
+
+
+def _weather_sun_times(hass: HomeAssistant) -> tuple[str, str]:
     sun_state = hass.states.get("sun.sun")
     attributes = getattr(sun_state, "attributes", None)
     if not isinstance(attributes, dict):
-        return ""
+        return ("", "")
     sunrise = _weather_time_label(attributes.get("next_rising"))
     sunset = _weather_time_label(attributes.get("next_setting"))
-    sunrise_label, sunset_label = _WEATHER_SUN_LABELS.get(language, _WEATHER_SUN_LABELS["en"])
-    if sunrise and sunset:
-        return f"{sunrise_label} {sunrise}   {sunset_label} {sunset}"
-    if sunrise:
-        return f"{sunrise_label} {sunrise}"
-    if sunset:
-        return f"{sunset_label} {sunset}"
-    return ""
+    return (sunrise, sunset)
 
 
 def _weather_time_label(value: Any) -> str:
-    if value in (None, ""):
+    display_time = _weather_display_datetime(value)
+    if display_time is None:
         return ""
+    if hasattr(display_time, "strftime"):
+        return display_time.strftime("%H:%M")
+    return _dashboard_text(display_time, "", 16)
+
+
+def _weather_forecast_time_label(value: Any, forecast_type: Any) -> str:
+    display_time = _weather_display_datetime(value)
+    if display_time is None:
+        return ""
+    if not hasattr(display_time, "strftime"):
+        return _dashboard_text(display_time, "", 16)
+    if forecast_type == "hourly":
+        next_time = display_time + timedelta(hours=1)
+        return f"{display_time.strftime('%H:%M')}-{next_time.strftime('%H:%M')}"
+    if forecast_type == "daily":
+        return f"{display_time.day}.{display_time.month}."
+    return display_time.strftime("%H:%M")
+
+
+def _weather_display_datetime(value: Any) -> Any:
+    if value in (None, ""):
+        return None
     display_time = value
     if isinstance(value, str):
         parse_datetime = getattr(dt_util, "parse_datetime", None) if dt_util is not None else None
@@ -254,9 +343,7 @@ def _weather_time_label(value: Any) -> str:
                 return _dashboard_text(value, "", 16)
     as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
     display_time = as_local(display_time) if callable(as_local) else display_time
-    if hasattr(display_time, "strftime"):
-        return display_time.strftime("%H:%M")
-    return _dashboard_text(display_time, "", 16)
+    return display_time
 
 
 def _weather_updated_label(state: Any) -> str:

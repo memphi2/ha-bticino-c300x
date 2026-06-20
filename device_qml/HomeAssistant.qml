@@ -40,7 +40,11 @@ Page {
     property string weatherHumidity: ""
     property string weatherWind: ""
     property string weatherForecast: ""
+    property variant weatherForecast1: ({})
+    property variant weatherForecast2: ({})
     property string weatherSun: ""
+    property string weatherSunrise: ""
+    property string weatherSunset: ""
     property string weatherUpdated: ""
     property string weatherColor: "#58d68d"
 
@@ -131,10 +135,10 @@ Page {
     function weatherDetailsText() {
         var details = []
         if (weatherHumidity.length > 0) {
-            details.push(uiText("humidity") + " " + weatherHumidity)
+            details.push(uiText("humidity") + ": " + weatherHumidity)
         }
         if (weatherWind.length > 0) {
-            details.push(uiText("wind") + " " + weatherWind)
+            details.push(uiText("wind") + ": " + weatherWind)
         }
         return details.join("   ")
     }
@@ -144,17 +148,36 @@ Page {
     }
 
     function weatherConditionText() {
-        if (weatherForecast.length > 0) {
-            return weatherCondition + "   " + weatherForecast
-        }
         return weatherCondition
     }
 
     function weatherSunText() {
-        if (weatherSun.length > 0) {
-            return weatherSun
+        var parts = []
+        if (weatherSunrise.length > 0) {
+            parts.push(uiText("rise") + ": " + weatherSunrise)
+        }
+        if (weatherSunset.length > 0) {
+            parts.push(uiText("set") + ": " + weatherSunset)
+        }
+        if (parts.length > 0) {
+            return parts.join("   ")
         }
         return weatherUpdatedText()
+    }
+
+    function weatherForecastText(item) {
+        if (!item || !item.condition_key) {
+            return ""
+        }
+        return uiWeather(item.condition_key, item.condition || "")
+    }
+
+    function weatherForecastTemperature(item) {
+        return item && item.temperature ? item.temperature : ""
+    }
+
+    function weatherForecastTime(item) {
+        return item && item.time ? item.time : ""
     }
 
     Column {
@@ -232,8 +255,11 @@ Page {
                 Item {
                     id: weatherCard
                     width: parent.width
-                    height: weatherVisible ? 156 : 0
+                    height: weatherVisible ? 166 : 0
                     visible: weatherVisible
+                    property int tileSpacing: 10
+                    property int tileLeft: 18
+                    property int tileWidth: (width - (tileLeft * 2) - (tileSpacing * 2)) / 3
 
                     Image {
                         anchors.fill: parent
@@ -242,91 +268,198 @@ Page {
                     }
 
                     Rectangle {
-                        width: 6
-                        height: parent.height - 22
-                        radius: 3
-                        color: weatherColor
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Rectangle {
-                        width: 98
-                        height: 82
+                        id: weatherNowTile
+                        width: weatherCard.tileWidth
+                        height: 92
                         radius: 8
-                        color: "#1f2c36"
-                        border.color: weatherColor
-                        border.width: 2
+                        color: weatherColor
+                        border.color: "#ffffff"
+                        border.width: 1
+                        opacity: 0.94
                         anchors.left: parent.left
-                        anchors.leftMargin: 30
-                        anchors.verticalCenter: parent.verticalCenter
-                        opacity: 0.92
+                        anchors.leftMargin: weatherCard.tileLeft
+                        anchors.top: parent.top
+                        anchors.topMargin: 14
 
                         UbuntuLightText {
                             text: weatherTemperature.length > 0 ? weatherTemperature : uiText("weather")
                             color: "white"
-                            font.pixelSize: weatherTemperature.length > 7 ? 20 : 25
+                            font.pixelSize: weatherTemperature.length > 7 ? 20 : 24
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
-                            anchors.fill: parent
-                            anchors.leftMargin: 6
-                            anchors.rightMargin: 6
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 8
+                            height: 42
+                            anchors.leftMargin: 5
+                            anchors.rightMargin: 5
                             wrapMode: Text.WordWrap
+                        }
+
+                        UbuntuLightText {
+                            text: weatherConditionText() + trsl.empty
+                            color: "white"
+                            font.pixelSize: 18
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 9
+                            height: 34
+                            anchors.leftMargin: 5
+                            anchors.rightMargin: 5
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Rectangle {
+                        id: weatherForecastTile1
+                        width: weatherCard.tileWidth
+                        height: 92
+                        radius: 8
+                        color: "#1f2c36"
+                        border.color: weatherColor
+                        border.width: 2
+                        opacity: 0.94
+                        anchors.left: weatherNowTile.right
+                        anchors.leftMargin: weatherCard.tileSpacing
+                        anchors.top: weatherNowTile.top
+
+                        UbuntuLightText {
+                            text: weatherForecastTime(weatherForecast1) + trsl.empty
+                            color: "#c7d0d9"
+                            font.pixelSize: 14
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 7
+                            height: 20
+                            elide: Text.ElideRight
+                        }
+
+                        UbuntuLightText {
+                            text: weatherForecastTemperature(weatherForecast1) + trsl.empty
+                            color: "white"
+                            font.pixelSize: 20
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 30
+                            height: 28
+                            elide: Text.ElideRight
+                        }
+
+                        UbuntuLightText {
+                            text: weatherForecastText(weatherForecast1) + trsl.empty
+                            color: "#e6edf3"
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 7
+                            height: 25
+                            anchors.leftMargin: 5
+                            anchors.rightMargin: 5
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Rectangle {
+                        id: weatherForecastTile2
+                        width: weatherCard.tileWidth
+                        height: 92
+                        radius: 8
+                        color: "#1f2c36"
+                        border.color: weatherColor
+                        border.width: 2
+                        opacity: 0.94
+                        anchors.left: weatherForecastTile1.right
+                        anchors.leftMargin: weatherCard.tileSpacing
+                        anchors.top: weatherNowTile.top
+
+                        UbuntuLightText {
+                            text: weatherForecastTime(weatherForecast2) + trsl.empty
+                            color: "#c7d0d9"
+                            font.pixelSize: 14
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 7
+                            height: 20
+                            elide: Text.ElideRight
+                        }
+
+                        UbuntuLightText {
+                            text: weatherForecastTemperature(weatherForecast2) + trsl.empty
+                            color: "white"
+                            font.pixelSize: 20
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 30
+                            height: 28
+                            elide: Text.ElideRight
+                        }
+
+                        UbuntuLightText {
+                            text: weatherForecastText(weatherForecast2) + trsl.empty
+                            color: "#e6edf3"
+                            font.pixelSize: 16
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 7
+                            height: 25
+                            anchors.leftMargin: 5
+                            anchors.rightMargin: 5
+                            elide: Text.ElideRight
                         }
                     }
 
                     UbuntuLightText {
-                        text: weatherTitle + trsl.empty
-                        color: "#c7d0d9"
+                        text: weatherDetailsText() + trsl.empty
+                        color: "#e6edf3"
                         font.pixelSize: 16
                         anchors.left: parent.left
-                        anchors.leftMargin: 146
+                        anchors.leftMargin: 24
                         anchors.right: parent.right
-                        anchors.rightMargin: 18
-                        anchors.top: parent.top
-                        anchors.topMargin: 12
-                        elide: Text.ElideRight
-                    }
-
-                    UbuntuLightText {
-                        text: weatherConditionText() + trsl.empty
-                        color: "white"
-                        font.pixelSize: weatherForecast.length > 0 ? 17 : 23
-                        font.bold: true
-                        anchors.left: parent.left
-                        anchors.leftMargin: 146
-                        anchors.right: parent.right
-                        anchors.rightMargin: 18
-                        anchors.top: parent.top
-                        anchors.topMargin: 34
-                        elide: Text.ElideRight
-                    }
-
-                    UbuntuLightText {
-                        text: weatherDetailsText() + trsl.empty
-                        color: "#c7d0d9"
-                        font.pixelSize: 15
-                        anchors.left: parent.left
-                        anchors.leftMargin: 146
-                        anchors.right: parent.right
-                        anchors.rightMargin: 18
-                        anchors.top: parent.top
-                        anchors.topMargin: 70
+                        anchors.rightMargin: 24
+                        anchors.top: weatherNowTile.bottom
+                        anchors.topMargin: 8
+                        height: 22
+                        horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
                     }
 
                     UbuntuLightText {
                         text: weatherSunText() + trsl.empty
-                        color: "#8d98a3"
-                        font.pixelSize: 14
+                        color: "#c7d0d9"
+                        font.pixelSize: 15
                         anchors.left: parent.left
-                        anchors.leftMargin: 146
+                        anchors.leftMargin: 24
                         anchors.right: parent.right
-                        anchors.rightMargin: 18
+                        anchors.rightMargin: 24
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 12
+                        anchors.bottomMargin: 10
+                        height: 22
+                        horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
                     }
                 }
@@ -418,68 +551,86 @@ Page {
                     height: visible ? childrenRect.height : 0
                     property int tileWidth: (width - spacing) / 2
 
-                    Repeater {
-                        model: items
+                    Component {
+                        id: mixedImageTileComponent
+
+                        Image {
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            cache: false
+                            anchors.fill: parent
+                            source: tileItem.source || ""
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+
+                    Component {
+                        id: mixedEntityTileComponent
 
                         Item {
-                            id: mixedTile
-                            property variant tileItem: modelData
-                            property bool isSwitch: tileItem.kind === "switch"
-                            property bool isButton: tileItem.kind === "button"
-                            property bool isSlider: tileItem.kind === "slider"
-                            property bool isChoice: tileItem.kind === "choice"
-                            property bool isImage: tileItem.kind === "image"
-                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
-                            height: isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            anchors.fill: parent
 
                             Image {
                                 anchors.fill: parent
-                                visible: !mixedTile.isImage
-                                source: mixedTile.isButton && tileMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/settings/act_btn.svg"
+                                source: "images/settings/act_btn.svg"
                                 fillMode: Image.Stretch
-                            }
-
-                            Image {
-                                cache: false
-                                visible: mixedTile.isImage
-                                anchors.fill: parent
-                                source: tileItem.source || ""
-                                fillMode: Image.PreserveAspectFit
                             }
 
                             UbuntuLightText {
                                 text: itemName(tileItem) + trsl.empty
-                                visible: !mixedTile.isImage
                                 color: "white"
-                                font.pixelSize: mixedTile.isButton ? 18 : 17
+                                font.pixelSize: 17
                                 elide: Text.ElideRight
                                 anchors.left: parent.left
-                                anchors.leftMargin: mixedTile.isButton ? 18 : 14
-                                anchors.right: mixedTile.isSwitch ? switchButton.left : (mixedTile.isSlider ? minusButton.left : parent.right)
-                                anchors.rightMargin: mixedTile.isSwitch || mixedTile.isSlider ? 8 : 14
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
                                 anchors.top: parent.top
-                                anchors.topMargin: mixedTile.isSwitch ? 18 : (mixedTile.isButton ? 10 : 9)
+                                anchors.topMargin: 9
                             }
 
                             UbuntuLightText {
-                                text: mixedTile.isSlider ? sliderValueText(tileItem) + trsl.empty : itemDetail(tileItem) + trsl.empty
-                                visible: !mixedTile.isSwitch && !mixedTile.isImage
+                                text: itemDetail(tileItem) + trsl.empty
                                 color: itemColor(tileItem)
                                 font.pixelSize: 15
                                 elide: Text.ElideRight
                                 anchors.left: parent.left
-                                anchors.leftMargin: mixedTile.isButton ? 18 : 14
-                                anchors.right: mixedTile.isSlider ? minusButton.left : parent.right
-                                anchors.rightMargin: mixedTile.isSlider ? 8 : 14
-                                anchors.top: mixedTile.isChoice ? parent.top : undefined
-                                anchors.topMargin: mixedTile.isChoice ? 34 : 0
-                                anchors.bottom: mixedTile.isChoice ? undefined : parent.bottom
-                                anchors.bottomMargin: mixedTile.isButton ? 8 : 8
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                            }
+                        }
+                    }
+
+                    Component {
+                        id: mixedSwitchTileComponent
+
+                        Item {
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            anchors.fill: parent
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(tileItem) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: switchButton.left
+                                anchors.rightMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             BasicButton {
                                 id: switchButton
-                                visible: mixedTile.isSwitch
                                 width: 86
                                 height: 36
                                 anchors.right: parent.right
@@ -497,10 +648,97 @@ Page {
                                 }
                                 onTouched: Api.dashboardAction(tileItem, status, page)
                             }
+                        }
+                    }
+
+                    Component {
+                        id: mixedButtonTileComponent
+
+                        Item {
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            anchors.fill: parent
+
+                            Image {
+                                anchors.fill: parent
+                                source: tileMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(tileItem) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 18
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 18
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 10
+                            }
+
+                            UbuntuLightText {
+                                text: itemDetail(tileItem) + trsl.empty
+                                color: itemColor(tileItem)
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 18
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                            }
+
+                            BeepingMouseArea {
+                                id: tileMouse
+                                anchors.fill: parent
+                                onClicked: Api.dashboardAction(tileItem, status, page)
+                            }
+                        }
+                    }
+
+                    Component {
+                        id: mixedSliderTileComponent
+
+                        Item {
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            anchors.fill: parent
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(tileItem) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: minusButton.left
+                                anchors.rightMargin: 8
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                            }
+
+                            UbuntuLightText {
+                                text: sliderValueText(tileItem) + trsl.empty
+                                color: itemColor(tileItem)
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: minusButton.left
+                                anchors.rightMargin: 8
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 8
+                            }
 
                             Item {
                                 id: minusButton
-                                visible: mixedTile.isSlider
                                 width: 48
                                 height: 42
                                 anchors.right: plusButton.left
@@ -529,7 +767,6 @@ Page {
 
                             Item {
                                 id: plusButton
-                                visible: mixedTile.isSlider
                                 width: 48
                                 height: 42
                                 anchors.right: parent.right
@@ -555,6 +792,47 @@ Page {
                                     onClicked: Api.dashboardSliderAction(tileItem, "increment", status, page)
                                 }
                             }
+                        }
+                    }
+
+                    Component {
+                        id: mixedChoiceTileComponent
+
+                        Item {
+                            property variant tileItem: parent ? parent.tileItem : ({})
+                            anchors.fill: parent
+
+                            Image {
+                                anchors.fill: parent
+                                source: "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(tileItem) + trsl.empty
+                                color: "white"
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 9
+                            }
+
+                            UbuntuLightText {
+                                text: itemDetail(tileItem) + trsl.empty
+                                color: itemColor(tileItem)
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 34
+                            }
 
                             Grid {
                                 id: mixedOptionGrid
@@ -566,7 +844,7 @@ Page {
                                 anchors.rightMargin: 14
                                 anchors.top: parent.top
                                 anchors.topMargin: 60
-                                visible: mixedTile.isChoice && tileItem.options && tileItem.options.length > 0
+                                visible: tileItem.options && tileItem.options.length > 0
                                 property int optionWidth: (width - (spacing * 2)) / 3
 
                                 Repeater {
@@ -602,12 +880,27 @@ Page {
                                     }
                                 }
                             }
+                        }
+                    }
 
-                            BeepingMouseArea {
-                                id: tileMouse
-                                visible: mixedTile.isButton
+                    Repeater {
+                        model: items
+
+                        Item {
+                            id: mixedTile
+                            property variant tileItem: modelData
+                            property bool isSwitch: tileItem.kind === "switch"
+                            property bool isButton: tileItem.kind === "button"
+                            property bool isSlider: tileItem.kind === "slider"
+                            property bool isChoice: tileItem.kind === "choice"
+                            property bool isImage: tileItem.kind === "image"
+                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
+                            height: isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))
+
+                            Loader {
                                 anchors.fill: parent
-                                onClicked: Api.dashboardAction(tileItem, status, page)
+                                property variant tileItem: mixedTile.tileItem
+                                sourceComponent: mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent))))
                             }
                         }
                     }
@@ -676,7 +969,7 @@ Page {
                                 anchors.rightMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
                                 checkable: true
-                                checked: modelData.state
+                                checked: tileItem.state
                                 style: CheckableButtonStyle {
                                     defaultImage: "images/ringtones/switch-bg_btn.svg"
                                     checkedImage: "images/ringtones/switch-bg_btn_p.svg"

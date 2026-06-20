@@ -1575,14 +1575,28 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
     assert main_page["badges"][1]["state"].count("\n") == 1
     assert main_page["weather"] == {
         "available": True,
-        "title": "Zuhause",
+        "title": "Wetter",
         "condition": "Sonnig",
         "condition_key": "sunny",
         "temperature": "22 C",
         "humidity": "55%",
         "wind": "12 km/h",
         "forecast": "14:00 Regen 20 C | 18:00 Bewoelkt 18 C",
-        "sun": "Auf 03:20   Unter 19:28",
+        "forecast_1": {
+            "time": "14:00",
+            "condition": "Regen",
+            "condition_key": "rainy",
+            "temperature": "20 C",
+        },
+        "forecast_2": {
+            "time": "18:00",
+            "condition": "Bewoelkt",
+            "condition_key": "cloudy",
+            "temperature": "18 C",
+        },
+        "sun": "03:20   19:28",
+        "sunrise": "03:20",
+        "sunset": "19:28",
         "updated": "10:30",
         "badge": "Sonnig\n22 C",
         "color": "#f1c40f",
@@ -1645,7 +1659,15 @@ def test_async_dashboard_payload_uses_weather_forecast_service() -> None:
 
     main_page = {page["title"]: page for page in result["data"]["pages"]}["C300X"]
     assert main_page["weather"]["forecast"] == "15:00 Regen 18 C"
-    assert main_page["weather"]["sun"] == "Auf 03:20   Unter 19:28"
+    assert main_page["weather"]["forecast_1"] == {
+        "time": "15:00-16:00",
+        "condition": "Regen",
+        "condition_key": "rainy",
+        "temperature": "18 C",
+    }
+    assert main_page["weather"]["sun"] == "03:20   19:28"
+    assert main_page["weather"]["sunrise"] == "03:20"
+    assert main_page["weather"]["sunset"] == "19:28"
     assert hass.services.calls[0] == (
         "weather",
         "get_forecasts",

@@ -52,6 +52,7 @@ Page {
     }
 
     function handleScreenOff() {
+        stopStatusWatch()
         return true
     }
 

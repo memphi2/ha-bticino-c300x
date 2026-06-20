@@ -615,7 +615,7 @@ function dashboardPageTitle(pageData) {
         return ""
     }
     var title = pageData.title || pageData.name || ""
-    return title === "C300X" ? "" : title
+    return title === "C300X" || title === "Home Assistant" ? "" : title
 }
 
 function applyWeather(pageItem, source) {

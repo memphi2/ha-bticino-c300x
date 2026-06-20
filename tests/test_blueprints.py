@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+BLUEPRINT_DIR = ROOT / "blueprints" / "automation" / "bticino_c300x"
+
+
+class BlueprintLoader(yaml.SafeLoader):
+    """YAML loader that accepts Home Assistant blueprint tags."""
+
+
+def _construct_ha_tag(
+    loader: BlueprintLoader, _tag_suffix: str, node: yaml.Node
+) -> Any:
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return None
+
+
+BlueprintLoader.add_multi_constructor("!", _construct_ha_tag)
+
+
+def _blueprint(filename: str) -> dict[str, Any]:
+    return yaml.load(
+        (BLUEPRINT_DIR / filename).read_text(encoding="utf-8"),
+        Loader=BlueprintLoader,
+    )
+
+
+def test_blueprints_are_valid_automation_blueprints() -> None:
+    expected = {
+        "doorbell_notification.yaml",
+        "doorbell_call_notification.yaml",
+        "ring_capture.yaml",
+        "ring_capture_wyoming.yaml",
+        "strict_phrase_decision.yaml",
+    }
+
+    assert {path.name for path in BLUEPRINT_DIR.glob("*.yaml")} == expected
+    for filename in expected:
+        data = _blueprint(filename)
+        assert data["blueprint"]["domain"] == "automation"
+        assert data["blueprint"]["source_url"].endswith(filename)
+        assert data["mode"] in {"restart", "single"}
+
+
+def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
+    for filename in {
+        "doorbell_notification.yaml",
+        "doorbell_call_notification.yaml",
+        "ring_capture.yaml",
+        "ring_capture_wyoming.yaml",
+    }:
+        trigger = _blueprint(filename)["trigger"][0]
+        assert trigger == {
+            "platform": "event",
+            "event_type": "bticino_c300x_agent_event_received",
+            "event_data": {"event_key": "doorbell_pressed"},
+        }
+
+
+def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() -> None:
+    data = _blueprint("doorbell_call_notification.yaml")
+    conditions = data["condition"]
+    templates = "\n".join(condition["value_template"] for condition in conditions)
+
+    assert "Home Assistant" in templates
+    assert "homeassistant" in templates
+    assert "ready" in templates
+    assert "warning" in templates
+    assert data["variables"]["dashboard_path"] == "dashboard_path"
+
+
+def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:
+    data = _blueprint("ring_capture.yaml")
+    action = data["action"]
+
+    assert len(action) == 1
+    assert action[0]["service"] == "bticino_c300x.capture_doorbell_call"
+    assert action[0]["data"]["wav_output_dir"] == "{{ capture_file_dir }}"
+    assert "output_path" not in action[0]["data"]
+
+
+def test_wyoming_blueprint_captures_then_transcribes_latest_files() -> None:
+    data = _blueprint("ring_capture_wyoming.yaml")
+    services = [action["service"] for action in data["action"]]
+    analysis_data = data["action"][1]["data"]
+
+    assert services == [
+        "bticino_c300x.capture_doorbell_call",
+        "bticino_c300x.run_ring_wyoming_analysis",
+    ]
+    assert analysis_data["capture_path"] == "{{ capture_dir }}/latest.capture.json"
+    assert analysis_data["wav_path"] == "{{ capture_dir }}/latest.raw.wav"
+    assert analysis_data["result_path"] == "{{ result_path }}"
+
+
+def test_strict_phrase_blueprint_uses_existing_guardrail_service() -> None:
+    data = _blueprint("strict_phrase_decision.yaml")
+    trigger = data["trigger"][0]
+    action = data["action"][0]
+
+    assert trigger == {"platform": "state", "entity_id": "decision_trigger"}
+    assert action["service"] == "bticino_c300x.evaluate_ring_analysis"
+    assert action["data"]["result_path"] == "result_path"
+    assert action["data"]["capture_path"] == "capture_path"
+    assert action["data"]["unlock_on_match"] == "unlock_on_match"

@@ -86,7 +86,14 @@ After Media Readiness is ready:
 Use one normal card for Doorbell/On-demand. Add a second card in **Home Call**
 mode when you want Home Call.
 
-## 7. Test the Three Media Paths
+## 7. Optional Blueprints
+
+Ready-made blueprints are available for doorbell notifications, Ring Call
+notifications, capture, Wyoming transcription and strict phrase decisions.
+
+Details: [Blueprints](blueprints.md)
+
+## 8. Test the Three Media Paths
 
 Test in this order:
 

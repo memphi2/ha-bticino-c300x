@@ -1,0 +1,43 @@
+blueprint:
+  name: C300X Doorbell notification
+  description: Send a notification or run another action when the C300X doorbell rings. This blueprint does not answer a call.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_notification.yaml
+  input:
+    camera_entity:
+      name: Camera entity
+      description: Optional C300X camera entity for notification data/templates.
+      default: ""
+      selector:
+        entity:
+          domain: camera
+    dashboard_path:
+      name: Dashboard path
+      description: Dashboard path to open from the notification action.
+      default: /lovelace/c300x
+      selector:
+        text:
+    notify_action:
+      name: Notification action
+      description: Action to run when the doorbell rings. Use this for notify.mobile_app_* or another notification script.
+      selector:
+        action:
+
+mode: restart
+
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+
+variables:
+  camera_entity: !input camera_entity
+  dashboard_path: !input dashboard_path
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "true"
+        sequence: !input notify_action

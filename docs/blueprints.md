@@ -1,0 +1,72 @@
+# Blueprints
+
+The integration ships optional Home Assistant automation blueprints for common
+C300X workflows. They use the public C300X services and entities; they do not
+change the device configuration.
+
+## Included Blueprints
+
+| Blueprint | Purpose |
+| --- | --- |
+| C300X Doorbell notification | Run a notification action when the doorbell rings. |
+| C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. |
+| C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. |
+| C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. |
+| C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
+
+Import the blueprint from the matching file below
+`blueprints/automation/bticino_c300x/` in this repository.
+
+## Recommended Use
+
+Start with **Media readiness**. Ring Call notification and capture should only
+run when the media setup is `ready` or `warning`.
+
+For Ring Call notifications, the C300X forwarding select must be set to
+**Home Assistant**. The blueprint opens the dashboard through your notification
+action; the bundled card handles Answer and Hang Up.
+
+For capture and transcription, the default paths are:
+
+- MP4 clips: `/media/c300x/`
+- Latest raw WAV, processed WAV, frames and capture metadata: `/config/c300x/`
+- Wyoming result and decision files: `/config/c300x/analysis/`
+
+The capture files below `/config/c300x/` are overwritten on each run so the
+directory does not grow indefinitely.
+
+## Notification Actions
+
+The notification blueprints intentionally leave the notification action to you.
+That keeps mobile-app, persistent-notification and script-based setups possible.
+
+The action can use these blueprint variables:
+
+- `camera_entity`
+- `dashboard_path`
+
+Example action:
+
+```yaml
+service: notify.mobile_app_your_phone
+data:
+  title: Doorbell
+  message: Someone is at the door.
+  data:
+    url: "{{ dashboard_path }}"
+    clickAction: "{{ dashboard_path }}"
+    entity_id: "{{ camera_entity }}"
+```
+
+## Strict Phrase Decision
+
+The strict phrase blueprint is intentionally separate from capture and
+transcription. Trigger it after your transcription run, for example with an
+`input_button` or from another automation.
+
+The decision service checks that:
+
+- the result belongs to a fresh capture,
+- the capture ID was not already consumed for unlock,
+- the phrase matches exactly,
+- unlock only runs when `unlock_on_match` is enabled.

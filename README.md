@@ -101,6 +101,7 @@ depend on enabled options and installed agent capabilities.
 | Recommended install path | [Quickstart](docs/quickstart.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
+| Ready-made automations | [Blueprints](docs/blueprints.md) |
 | SSH, firewall, Display patch, remove agent | [Advanced maintenance](docs/advanced-maintenance.md) |
 | Hardware release checks | [Release validation](docs/release-validation.md) |
 

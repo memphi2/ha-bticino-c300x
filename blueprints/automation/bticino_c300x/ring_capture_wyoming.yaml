@@ -1,0 +1,106 @@
+blueprint:
+  name: C300X Ring capture and Wyoming transcription
+  description: Capture a ring clip, then transcribe latest.raw.wav with a local Wyoming Whisper service.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/ring_capture_wyoming.yaml
+  input:
+    media_readiness_entity:
+      name: Media readiness sensor
+      description: Capture runs only when Media readiness is ready or warning.
+      selector:
+        entity:
+          domain: sensor
+    entry_id:
+      name: Entry ID
+      description: Optional C300X config entry ID. Leave empty when there is only one C300X entry.
+      default: ""
+      selector:
+        text:
+    wyoming_host:
+      name: Wyoming host
+      description: Hostname or IP address of the Wyoming Whisper service.
+      selector:
+        text:
+    wyoming_port:
+      name: Wyoming port
+      default: 10300
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    language:
+      name: Language hint
+      description: Optional Whisper language hint, for example de or en.
+      default: ""
+      selector:
+        text:
+    expected_phrase:
+      name: Expected phrase
+      description: Optional exact phrase stored in the transcription result for later decision.
+      default: ""
+      selector:
+        text:
+    duration_seconds:
+      name: Duration
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: slider
+    include_audio:
+      name: Include audio
+      default: true
+      selector:
+        boolean:
+    capture_file_dir:
+      name: Capture file directory
+      default: /config/c300x
+      selector:
+        text:
+    result_path:
+      name: Result path
+      default: /config/c300x/analysis/result.json
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+
+variables:
+  media_readiness_entity: !input media_readiness_entity
+  entry_id: !input entry_id
+  wyoming_host: !input wyoming_host
+  language: !input language
+  expected_phrase: !input expected_phrase
+  capture_file_dir: !input capture_file_dir
+  result_path: !input result_path
+  capture_dir: "{{ capture_file_dir.rstrip('/') }}"
+
+condition:
+  - condition: template
+    value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
+
+action:
+  - service: bticino_c300x.capture_doorbell_call
+    data:
+      entry_id: "{{ entry_id }}"
+      duration_seconds: !input duration_seconds
+      include_audio: !input include_audio
+      wav_output_dir: "{{ capture_file_dir }}"
+  - service: bticino_c300x.run_ring_wyoming_analysis
+    data:
+      wyoming_host: "{{ wyoming_host }}"
+      wyoming_port: !input wyoming_port
+      capture_path: "{{ capture_dir }}/latest.capture.json"
+      wav_path: "{{ capture_dir }}/latest.raw.wav"
+      result_path: "{{ result_path }}"
+      language: "{{ language }}"
+      expected_phrase: "{{ expected_phrase }}"

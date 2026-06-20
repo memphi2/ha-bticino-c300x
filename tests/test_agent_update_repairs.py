@@ -97,8 +97,12 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _async_setup_lovelace_cards,
     _async_verify_agent_after_update,
     _async_wait_for_agent_after_update,
+    _dashboard_select_options,
     _ExternalPatchChanges,
     _ExternalPatchState,
+    _media_setup_repair_placeholders,
+    _normalize_lovelace_target,
+    _validated_callback_base_url,
     async_create_fix_flow,
 )
 
@@ -448,6 +452,22 @@ def test_callback_url_repair_flow_stores_valid_override_and_reloads(monkeypatch)
     assert hass.config_entries.reloads == ["entry-1"]
 
 
+def test_callback_url_repair_flow_aborts_when_entry_missing() -> None:
+    flow = CallbackUrlRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_configure({}))
+
+    assert result == {"type": "abort", "reason": "entry_not_loaded"}
+
+
+def test_callback_url_helper_reports_validation_errors() -> None:
+    errors: dict[str, str] = {}
+
+    assert _validated_callback_base_url({CONF_CALLBACK_BASE_URL: "ftp://bad"}, errors) == ""
+    assert errors == {CONF_CALLBACK_BASE_URL: "invalid_callback_base_url"}
+
+
 def test_core_qml_hook_repair_flow_applies_only_core_patch() -> None:
     api = FakePatchApi()
     api.qml_status = {
@@ -495,6 +515,22 @@ def test_core_qml_hook_repair_flow_applies_only_core_patch() -> None:
     assert entry.runtime_data.qml_patch_status["core_state"] == "patched"
 
 
+def test_core_qml_hook_repair_flow_aborts_when_unsupported_or_missing() -> None:
+    missing_flow = DeviceCoreQmlHookRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    missing_flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    missing = asyncio.run(missing_flow.async_step_confirm({}))
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    unsupported_flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    unsupported_flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    unsupported = asyncio.run(unsupported_flow.async_step_confirm({}))
+
+    assert missing == {"type": "abort", "reason": "entry_not_loaded"}
+    assert unsupported == {"type": "abort", "reason": "core_patch_unsupported"}
+
+
 def test_device_user_repair_flow_creates_user_and_clears_issue() -> None:
     api = FakePatchApi()
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
@@ -518,6 +554,15 @@ def test_device_user_repair_flow_creates_user_and_clears_issue() -> None:
     assert result == {"type": "create_entry", "data": {}}
     assert api.calls == ["ensure_homeassistant_user:Home Assistant HA Test"]
     assert entry.runtime_data.device_user_status == api.device_user_status
+
+
+def test_device_user_repair_flow_aborts_when_entry_missing() -> None:
+    flow = DeviceUserRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "abort", "reason": "entry_not_loaded"}
 
 
 def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
@@ -615,6 +660,60 @@ def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
         "device_user_status",
     ]
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "homeassistant"
+
+
+def test_media_setup_repair_noops_when_media_is_ready() -> None:
+    api = FakePatchApi()
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={
+            "doorbell_video": {"supported": True},
+            "doorbell_call": {"supported": True},
+            "home_call": {"supported": True},
+        },
+        device_user_status={
+            "homeassistant_user_present": True,
+            "device_routing_applied": True,
+            "media_user_label_applied": True,
+        },
+        self_test_status={
+            "ok": True,
+            "checks": {
+                "capabilities": {"ok": True},
+                "firewall": {"ok": True},
+                "rtsp": {"ok": True},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+                "startup": {"ok": True},
+            },
+        },
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "create_entry", "data": {"repaired": []}}
+    assert api.calls == []
+
+
+def test_media_setup_repair_aborts_when_entry_missing() -> None:
+    flow = MediaSetupRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "abort", "reason": "entry_not_loaded"}
+
+
+def test_media_setup_repair_placeholders_handle_empty_details() -> None:
+    assert _media_setup_repair_placeholders({}) == {
+        "failed_checks": "unknown",
+        "warnings": "none",
+        "recommended_action": "unknown",
+    }
 
 
 def test_media_setup_repair_unreachable_agent_only_reloads_entry() -> None:
@@ -1188,6 +1287,26 @@ def test_restore_external_patch_state_reenables_ipv6_endpoint_before_apply() -> 
         "set_ipv6_firewall_enabled:True",
         "apply_ipv6_firewall",
     ]
+
+
+def test_lovelace_repair_helpers_normalize_paths_and_fallback_options() -> None:
+    hass = FakeHass(FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi())))
+
+    assert _dashboard_select_options(hass) == [
+        {"value": "__default__", "label": "Lovelace (/lovelace)"}
+    ]
+    assert _normalize_lovelace_target("__default__", "/lovelace/front-door") == (
+        None,
+        "front-door",
+    )
+    assert _normalize_lovelace_target("panel", "/panel/c300x") == ("panel", "c300x")
+
+    try:
+        _normalize_lovelace_target("panel", "bad/path")
+    except Exception as err:  # noqa: BLE001 - private helper raises setup error
+        assert str(err) == "lovelace_config_invalid"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("invalid Lovelace target was accepted")
 
 
 def test_install_result_config_change_restores_active_ipv6_firewall_patch() -> None:

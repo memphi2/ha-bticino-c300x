@@ -621,6 +621,21 @@ def test_remote_helpers_treat_invalid_or_missing_remote_state_as_mismatch() -> N
     )
 
 
+def test_base_ssh_client_methods_are_abstract() -> None:
+    client = device_installer._DeviceSshClient()
+
+    for call in (
+        lambda: client.run("true"),
+        lambda: client.put_file(Path("/tmp/source"), "/remote"),
+        client.close,
+    ):
+        try:
+            call()
+        except NotImplementedError:
+            continue
+        raise AssertionError("abstract SSH client method did not raise")
+
+
 def test_first_and_optional_existing_helpers(tmp_path: Path) -> None:
     missing = tmp_path / "missing"
     present = tmp_path / "present"
@@ -663,6 +678,264 @@ def test_put_file_repairs_mode_drift_for_identical_payload(tmp_path: Path) -> No
         "700",
     )
     assert commands[-1][0].startswith("chmod 700 ")
+
+
+def test_paramiko_client_run_streams_stdout_and_input() -> None:
+    class FakeChannel:
+        def __init__(self) -> None:
+            self.input_data: bytes | None = None
+            self.closed = False
+            self.stdout = [b"ok\n"]
+
+        def settimeout(self, _timeout: float) -> None:
+            return None
+
+        def exec_command(self, command: str) -> None:
+            assert command == "agent status"
+
+        def sendall(self, input_data: bytes) -> None:
+            self.input_data = input_data
+
+        def shutdown_write(self) -> None:
+            return None
+
+        def recv_ready(self) -> bool:
+            return bool(self.stdout)
+
+        def recv(self, _size: int) -> bytes:
+            return self.stdout.pop(0)
+
+        def recv_stderr_ready(self) -> bool:
+            return False
+
+        def recv_stderr(self, _size: int) -> bytes:
+            return b""
+
+        def exit_status_ready(self) -> bool:
+            return True
+
+        def recv_exit_status(self) -> int:
+            return 0
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeTransport:
+        def __init__(self, channel: FakeChannel) -> None:
+            self.channel = channel
+
+        def is_active(self) -> bool:
+            return True
+
+        def open_session(self, *, timeout: float) -> FakeChannel:
+            assert timeout > 0
+            return self.channel
+
+    channel = FakeChannel()
+    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
+    client._client = types.SimpleNamespace(
+        get_transport=lambda: FakeTransport(channel)
+    )
+
+    assert client.run("agent status", b"payload") == "ok\n"
+    assert channel.input_data == b"payload"
+    assert channel.closed is True
+
+
+def test_paramiko_client_run_fails_when_transport_inactive() -> None:
+    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client._client = types.SimpleNamespace(get_transport=lambda: None)
+
+    try:
+        client.run("agent status")
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_failed"
+    else:  # pragma: no cover
+        raise AssertionError("inactive transport was accepted")
+
+
+def test_paramiko_client_run_reports_nonzero_exit() -> None:
+    class FakeChannel:
+        def __init__(self) -> None:
+            self.stderr = [b"failed"]
+
+        def settimeout(self, _timeout: float) -> None:
+            return None
+
+        def exec_command(self, _command: str) -> None:
+            return None
+
+        def shutdown_write(self) -> None:
+            return None
+
+        def recv_ready(self) -> bool:
+            return False
+
+        def recv(self, _size: int) -> bytes:
+            return b""
+
+        def recv_stderr_ready(self) -> bool:
+            return bool(self.stderr)
+
+        def recv_stderr(self, _size: int) -> bytes:
+            return self.stderr.pop(0)
+
+        def exit_status_ready(self) -> bool:
+            return True
+
+        def recv_exit_status(self) -> int:
+            return 1
+
+        def close(self) -> None:
+            return None
+
+    class FakeTransport:
+        def is_active(self) -> bool:
+            return True
+
+        def open_session(self, *, timeout: float) -> FakeChannel:
+            assert timeout > 0
+            return FakeChannel()
+
+    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
+    client._client = types.SimpleNamespace(get_transport=lambda: FakeTransport())
+
+    try:
+        client.run("agent status")
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_failed"
+    else:  # pragma: no cover
+        raise AssertionError("nonzero command exit was accepted")
+
+
+def test_paramiko_put_file_replaces_changed_payload(tmp_path: Path) -> None:
+    payload = tmp_path / "config.json"
+    payload.write_bytes(b"new")
+    commands: list[tuple[str, bytes | None]] = []
+
+    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+
+    def fake_run(command: str, input_data: bytes | None = None) -> str:
+        commands.append((command, input_data))
+        if command.startswith("python - "):
+            return "not-a-valid-sha\n"
+        if ".new" in command and "mv -f" in command:
+            return ""
+        raise AssertionError(f"unexpected command: {command}")
+
+    client.run = fake_run
+
+    assert client.put_file(payload, "/remote/config.json", "600") is True
+    assert commands[-1] == (
+        "umask 077 && cat > /remote/config.json.new && "
+        "chmod 600 /remote/config.json.new && "
+        "mv -f /remote/config.json.new /remote/config.json",
+        b"new",
+    )
+
+
+def test_paramiko_client_init_connects_with_legacy_options(monkeypatch: Any) -> None:
+    events: list[tuple[str, Any]] = []
+
+    class FakeSSHClient:
+        def set_missing_host_key_policy(self, policy: Any) -> None:
+            events.append(("policy", type(policy).__name__))
+
+        def connect(self, **kwargs: Any) -> None:
+            events.append(("connect", kwargs))
+
+        def close(self) -> None:
+            events.append(("close", None))
+
+    class FakeParamiko:
+        __version__ = "3.5.1"
+        AuthenticationException = RuntimeError
+        SSHException = RuntimeError
+        SSHClient = FakeSSHClient
+
+        class AutoAddPolicy:
+            pass
+
+    monkeypatch.setitem(sys.modules, "paramiko", FakeParamiko)
+
+    client = device_installer._ParamikoDeviceSshClient(
+        C300XDeviceInstallRequest(
+            host="[fe80::1]",
+            ssh_username=" root ",
+            ssh_password="secret",
+        )
+    )
+    client.close()
+
+    assert events[0] == ("policy", "AutoAddPolicy")
+    assert events[1][0] == "connect"
+    assert events[1][1]["hostname"] == "fe80::1"
+    assert events[1][1]["username"] == "root"
+    assert events[2] == ("close", None)
+
+
+def test_paramiko_client_init_reports_connect_failures(monkeypatch: Any) -> None:
+    class FakeParamiko:
+        __version__ = "3.5.1"
+
+        class AuthenticationException(Exception):
+            pass
+
+        class SSHException(Exception):
+            pass
+
+        class AutoAddPolicy:
+            pass
+
+        class SSHClient:
+            def set_missing_host_key_policy(self, _policy: Any) -> None:
+                return None
+
+            def connect(self, **_kwargs: Any) -> None:
+                raise FakeParamiko.AuthenticationException("denied")
+
+    monkeypatch.setitem(sys.modules, "paramiko", FakeParamiko)
+
+    try:
+        device_installer._ParamikoDeviceSshClient(
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username="root",
+                ssh_password="secret",
+            )
+        )
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_failed"
+    else:  # pragma: no cover
+        raise AssertionError("connect failure was accepted")
+
+
+def test_paramiko_client_init_reports_missing_dependency(monkeypatch: Any) -> None:
+    monkeypatch.delitem(sys.modules, "paramiko", raising=False)
+
+    original_import = __import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "paramiko":
+            raise ImportError("missing")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+
+    try:
+        device_installer._ParamikoDeviceSshClient(
+            C300XDeviceInstallRequest(
+                host="c300x.local",
+                ssh_username="root",
+                ssh_password="secret",
+            )
+        )
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "installer_dependency_missing"
+    else:  # pragma: no cover
+        raise AssertionError("missing Paramiko dependency was accepted")
 
 
 def test_startup_script_recreates_missing_rc_link_without_rewriting_init(
@@ -864,6 +1137,83 @@ def test_startup_script_keeps_matching_rc_link_unchanged(tmp_path: Path) -> None
 def test_ssh_host_unwraps_ipv6_brackets() -> None:
     assert device_installer._ssh_host("[fe80::1]") == "fe80::1"
     assert device_installer._ssh_host("c300x.local") == "c300x.local"
+
+
+def test_startup_render_and_verify_error_paths(tmp_path: Path) -> None:
+    invalid_init = tmp_path / "c300x-native-agent"
+    invalid_init.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    try:
+        device_installer._render_startup_script(invalid_init, DEFAULT_REMOTE_DIR)
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "agent_bundle_missing"
+    else:  # pragma: no cover
+        raise AssertionError("invalid startup script was accepted")
+
+    class BadStartupClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            _ = input_data
+            if command.startswith("readlink "):
+                return "/wrong\n"
+            raise AssertionError(f"unexpected command: {command}")
+
+    try:
+        device_installer._verify_startup_sync(BadStartupClient())
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_verify_failed"
+    else:  # pragma: no cover
+        raise AssertionError("bad startup link was accepted")
+
+    class MissingLinkClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            _ = command, input_data
+            raise device_installer.C300XDeviceInstallError("device_install_failed")
+
+    try:
+        device_installer._verify_startup_sync(MissingLinkClient())
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_verify_failed"
+    else:  # pragma: no cover
+        raise AssertionError("missing startup link was accepted")
+
+    class BrokenStatusClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            _ = input_data
+            if command.startswith("readlink "):
+                return f"{device_installer.REMOTE_INIT_SCRIPT}\n"
+            if command.endswith(" status"):
+                raise device_installer.C300XDeviceInstallError("device_install_failed")
+            raise AssertionError(f"unexpected command: {command}")
+
+    try:
+        device_installer._verify_startup_sync(BrokenStatusClient())
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_verify_failed"
+    else:  # pragma: no cover
+        raise AssertionError("bad startup status was accepted")
+
+
+def test_firewall_patch_bootstrap_invokes_project_script() -> None:
+    commands: list[str] = []
+
+    class FakeSshClient:
+        def run(self, command: str, input_data: bytes | None = None) -> str:
+            _ = input_data
+            commands.append(command)
+            return ""
+
+    device_installer._apply_firewall_patch_sync(
+        FakeSshClient(),
+        "/home/bticino/cfg/extra/c300x-native-agent",
+        8091,
+    )
+
+    assert commands == [
+        f"C300X_IPTABLES={device_installer.REMOTE_FIREWALL_PATH} "
+        f"C300X_IPTABLES_BACKUP={device_installer.REMOTE_FIREWALL_BACKUP} "
+        "/home/bticino/cfg/extra/c300x-native-agent/bootstrap_firewall.sh "
+        "8091"
+    ]
 
 
 def test_paramiko_connect_kwargs_force_legacy_ssh_rsa() -> None:

@@ -808,6 +808,14 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
         _self_test_failure_is_optional_ipv6_only(
             "talkback_rtp",
             "talkback_rtp_firewall_missing",
+            {},
+        )
+        is False
+    )
+    assert (
+        _self_test_failure_is_optional_ipv6_only(
+            "talkback_rtp",
+            "talkback_rtp_firewall_missing",
             checks,
         )
         is True
@@ -833,6 +841,14 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
     assert "Update or reconfigure" in _self_test_repair_action(
         "capabilities",
         "missing",
+    )
+    assert "IPv4 media and talkback ports" in _self_test_repair_action(
+        "firewall",
+        "ipv4_media_ports_missing",
+    )
+    assert "IPv6 is optional" in _self_test_repair_action(
+        "firewall",
+        "ipv6_media_ports_missing",
     )
     assert _self_test_repair_action("unknown", "missing") is None
 
@@ -1012,6 +1028,96 @@ def test_missing_device_user_media_identity_creates_repair_issue() -> None:
     assert issue["translation_placeholders"]["reason"] == "homeassistant_user_missing"
 
 
+def test_device_user_with_missing_media_identity_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {"supported": True, "device_user_ensure": True},
+            },
+            device_user_status={
+                "homeassistant_user_present": True,
+                "media_identity_available": False,
+                "routes_consistent": True,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["translation_placeholders"]["reason"] == "media_identity_missing"
+
+
+def test_device_user_with_missing_device_routing_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {"supported": True, "device_user_ensure": True},
+            },
+            device_user_status={
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+                "device_routing_applied": False,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["translation_placeholders"]["reason"] == "device_routing_missing"
+
+
+def test_device_user_with_missing_media_label_creates_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "home_call": {"supported": True},
+                "maintenance": {"supported": True, "device_user_ensure": True},
+            },
+            device_user_status={
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": False,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
+    assert issue["translation_placeholders"]["reason"] == "media_user_label_missing"
+
+
+def test_complete_device_user_status_clears_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            device_user_status={
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": True,
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
+
+
 def test_device_user_without_homeassistant_user_creates_repair_issue() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
@@ -1061,6 +1167,76 @@ def test_homeassistant_user_with_incomplete_routes_creates_repair_issue() -> Non
     assert issue["is_fixable"] is True
     assert issue["translation_placeholders"]["reason"] == (
         "homeassistant_routes_inconsistent"
+    )
+
+
+def test_ready_media_setup_clears_media_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(
+                available=True,
+                event_subscription_last_success_at=datetime(2026, 6, 2, tzinfo=UTC),
+            ),
+            agent_info={"version": "1.2.3"},
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "doorbell_call": {"supported": True},
+            },
+            device_user_status={
+                "homeassistant_user_present": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": True,
+            },
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
+    )
+
+
+def test_media_setup_with_no_fixable_checks_clears_media_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=True),
+            capabilities={"doorbell_video": {"supported": True}},
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": False},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert (
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+        in DELETED_ISSUES
     )
 
 
@@ -1123,3 +1299,41 @@ def test_media_watchdog_creates_error_repair_issue() -> None:
     assert issue["translation_key"] == MEDIA_WATCHDOG_TIMEOUT_ISSUE
     assert issue["translation_placeholders"]["cpu_percent"] == "95.0"
     assert issue["translation_placeholders"]["duration_seconds"] == "300"
+
+
+def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
+    entry = FakeEntry()
+
+    assert repair_issues._callback_problem(  # noqa: SLF001 - targeted helper coverage
+        types.SimpleNamespace(runtime_data=None)
+    ) is None
+    assert repair_issues._media_setup_fixable_checks(  # noqa: SLF001
+        ["capabilities", "rtsp"],
+        {},
+    ) == ["agent_update"]
+    assert repair_issues._entry_media_enabled(  # noqa: SLF001
+        FakeEntry(
+            data={CONF_VIDEO_ENABLED: True},
+            options={CONF_VIDEO_ENABLED: False},
+        )
+    ) is False
+
+    display_bridge = types.SimpleNamespace(
+        callback_scheme="https",
+        callback_host_type="mdns",
+    )
+    assert repair_issues._callback_problem(  # noqa: SLF001
+        FakeEntry(runtime_data=FakeRuntimeData(display_bridge_diagnostics=display_bridge))
+    ) == {
+        "source": "display bridge",
+        "scheme": "https",
+        "host_type": "mdns",
+    }
+
+    monkeypatch.setattr(repair_issues, "er", None)
+    assert repair_issues._entity_exists(FakeHass(), "sensor.anything") is False  # noqa: SLF001
+    repair_issues._mark_frontend_card_setup_dismissed(  # noqa: SLF001
+        types.SimpleNamespace(),
+        entry,
+    )
+    assert entry.data == {}

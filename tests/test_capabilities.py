@@ -10,11 +10,20 @@ from custom_components.bticino_c300x import (
     async_migrate_entry,
 )
 from custom_components.bticino_c300x.capabilities import (
+    answering_machine_message_delete_supported,
+    answering_machine_message_media_supported,
     auth_config_supported,
+    entry_device_ui_enabled,
+    entry_device_ui_enabled_or_patch_active,
+    entry_gui_dependent_features_active,
     event_label,
     events_for_capabilities,
     gate_capabilities,
     ha_event_types_for_capabilities,
+    locks_for_capabilities,
+    maintenance_action_is_advertised,
+    maintenance_action_is_supported,
+    memo_delete_supported,
     memo_text_write_supported,
 )
 from custom_components.bticino_c300x.const import (
@@ -22,6 +31,7 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_TOKEN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
@@ -230,6 +240,7 @@ def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:
 
 
 def test_event_label_returns_localized_event_names() -> None:
+    assert event_label(None, "de") is None
     assert event_label("door_unlock_started", "en") == "Door unlock started"
     assert event_label("door_unlock_started", "de") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it") == "Apertura porta avviata"
@@ -247,6 +258,7 @@ def test_event_label_returns_localized_event_names() -> None:
     assert event_label("door_unlock_started", "de-DE") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it-IT") == "Apertura porta avviata"
     assert event_label("door_unlock_started", "fr") == "Ouverture porte demarree"
+    assert event_label("unknown_vendor_event", "de") is None
 
 
 def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> None:
@@ -276,6 +288,15 @@ def test_gate_capabilities_disables_doorbell_video_when_ha_option_is_off() -> No
     ]
 
 
+def test_capability_event_helpers_avoid_duplicate_stair_light_action_event() -> None:
+    assert ha_event_types_for_capabilities(
+        {"stair_light": {"supported": True}}
+    ) == [
+        "stair_light_activated",
+        "agent_restarted",
+    ]
+
+
 def test_gate_capabilities_keeps_doorbell_video_when_ha_option_is_on() -> None:
     capabilities = {"doorbell_video": True}
 
@@ -285,6 +306,76 @@ def test_gate_capabilities_keeps_doorbell_video_when_ha_option_is_on() -> None:
 def test_auth_config_supported_requires_configurable_agent_capability() -> None:
     assert auth_config_supported({"auth": {"supported": True, "configurable": True}})
     assert not auth_config_supported({"auth": {"supported": True, "configurable": False}})
+
+
+def test_capability_helpers_normalize_lock_and_maintenance_shapes() -> None:
+    assert locks_for_capabilities({"locks": False}) == []
+    assert locks_for_capabilities({"locks": {"supported": True, "default_id": "main"}}) == [
+        {"id": "main", "name": "main"}
+    ]
+    assert locks_for_capabilities(
+        {
+            "locks": {
+                "supported": True,
+                "locks": [
+                    {"id": "front", "name": "Front door"},
+                    {"id": ""},
+                    "invalid",
+                ],
+            }
+        }
+    ) == [{"id": "front", "name": "Front door"}]
+
+    capabilities = {"maintenance": {"supported": True, "agent_update": True}}
+    assert maintenance_action_is_advertised(capabilities, "agent_update")
+    assert maintenance_action_is_supported(capabilities, "agent_update", "token")
+    assert not maintenance_action_is_supported(capabilities, "agent_update", "")
+    assert not maintenance_action_is_advertised({"maintenance": {"supported": False}}, "x")
+
+
+def test_entry_ui_capability_helpers_follow_options_data_and_patch_status() -> None:
+    patched_entry = SimpleNamespace(
+        data={},
+        options={},
+        runtime_data=SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+    option_entry = SimpleNamespace(
+        data={CONF_DEVICE_UI_ENABLED: False},
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=SimpleNamespace(qml_patch_status={"patched": False}),
+    )
+    disabled_entry = SimpleNamespace(
+        data={CONF_DEVICE_UI_ENABLED: False},
+        options={},
+        runtime_data=SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+
+    assert entry_device_ui_enabled(patched_entry) is False
+    assert entry_device_ui_enabled_or_patch_active(patched_entry) is True
+    assert entry_gui_dependent_features_active(patched_entry) is False
+    assert entry_device_ui_enabled(option_entry) is True
+    assert entry_gui_dependent_features_active(option_entry) is False
+    assert entry_device_ui_enabled_or_patch_active(disabled_entry) is False
+
+
+def test_message_and_memo_capability_helpers_require_exact_support_flags() -> None:
+    messages = {
+        "answering_machine": {
+            "supported": True,
+            "messages": {"supported": True, "delete": True, "media": True},
+        }
+    }
+
+    assert answering_machine_message_delete_supported(messages)
+    assert answering_machine_message_media_supported(messages)
+    assert not answering_machine_message_delete_supported(
+        {"answering_machine": {"supported": True, "messages": True}}
+    )
+    assert not answering_machine_message_media_supported(
+        {"answering_machine": {"supported": True, "messages": {"supported": False}}}
+    )
+    assert memo_delete_supported({"memos": {"supported": True, "delete": True}})
+    assert not memo_delete_supported({"memos": True})
 
 
 def test_entry_platforms_allow_options_to_disable_setup_video() -> None:

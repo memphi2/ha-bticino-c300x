@@ -11,6 +11,7 @@ from custom_components.bticino_c300x.camera_media.webrtc_session import (
     async_wait_for_ice_gathering,
     candidate_is_link_local,
     filter_link_local_sdp_candidates,
+    patch_aioice_turn_transport_sendto,
     prefer_webrtc_codecs,
     rtc_candidate_from_message,
     webrtc_server_configuration,
@@ -242,6 +243,71 @@ def test_webrtc_server_configuration_mirrors_ha_ice_servers() -> None:
     ]
     assert config.iceServers[0].username == "cloud-user"
     assert config.iceServers[0].credential == "cloud-credential"
+
+
+def test_aioice_turn_sendto_guard_consumes_transaction_failures() -> None:
+    handled: list[dict[str, Any]] = []
+
+    class TransactionFailed(Exception):
+        pass
+
+    TransactionFailed.__module__ = "aioice.stun"
+
+    class _InnerProtocol:
+        async def send_data(self, _data: bytes, _addr: tuple[str, int]) -> None:
+            raise TransactionFailed("401")
+
+    class _TurnTransport:
+        def __init__(self) -> None:
+            self.__inner_protocol = _InnerProtocol()
+
+        def sendto(self, _data: bytes, _addr: tuple[str, int]) -> None:
+            raise AssertionError("original sendto should be guarded")
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _loop, context: handled.append(context))
+        patch_aioice_turn_transport_sendto(
+            SimpleNamespace(TurnTransport=_TurnTransport)
+        )
+
+        _TurnTransport().sendto(b"packet", ("192.0.2.10", 3478))
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    assert handled == []
+
+
+def test_aioice_turn_sendto_guard_reports_unexpected_failures() -> None:
+    handled: list[dict[str, Any]] = []
+
+    class _InnerProtocol:
+        async def send_data(self, _data: bytes, _addr: tuple[str, int]) -> None:
+            raise RuntimeError("unexpected")
+
+    class _TurnTransport:
+        def __init__(self) -> None:
+            self.__inner_protocol = _InnerProtocol()
+
+        def sendto(self, _data: bytes, _addr: tuple[str, int]) -> None:
+            raise AssertionError("original sendto should be guarded")
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _loop, context: handled.append(context))
+        patch_aioice_turn_transport_sendto(
+            SimpleNamespace(TurnTransport=_TurnTransport)
+        )
+
+        _TurnTransport().sendto(b"packet", ("192.0.2.10", 3478))
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    assert len(handled) == 1
+    assert handled[0]["message"] == "Unhandled aioice TURN send task exception"
+    assert isinstance(handled[0]["exception"], RuntimeError)
 
 
 def test_webrtc_server_configuration_ignores_bad_or_empty_ice_servers() -> None:

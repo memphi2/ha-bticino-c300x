@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 from collections.abc import Callable, MutableMapping
 from contextlib import suppress
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class NativeWebRTCSession:
@@ -207,6 +210,8 @@ def webrtc_server_configuration(
 ) -> Any:
     """Mirror HA's WebRTC ICE servers into the server-side aiortc peer."""
 
+    patch_aioice_turn_transport_sendto()
+
     ice_servers: list[Any] = []
     if get_client_config is None:
         return aiortc_modules.RTCConfiguration(iceServers=ice_servers)
@@ -231,6 +236,76 @@ def webrtc_server_configuration(
         )
 
     return aiortc_modules.RTCConfiguration(iceServers=ice_servers)
+
+
+def patch_aioice_turn_transport_sendto(aioice_turn_module: Any | None = None) -> None:
+    """Attach exception handling to aioice TURN send tasks.
+
+    aioice 0.10 creates TURN ``send_data`` tasks without keeping or observing
+    the returned task. A failed TURN channel bind can therefore surface in HA as
+    "Task exception was never retrieved" even when WebRTC can fall back to
+    another ICE candidate pair. The guard keeps expected STUN/TURN transaction
+    errors out of the global log while preserving normal loop reporting for
+    unexpected failures.
+    """
+
+    if aioice_turn_module is None:
+        try:
+            from aioice import turn as aioice_turn_module
+        except ImportError:
+            return
+
+    turn_transport = getattr(aioice_turn_module, "TurnTransport", None)
+    if turn_transport is None:
+        return
+
+    original_sendto = getattr(turn_transport, "sendto", None)
+    if original_sendto is None or getattr(original_sendto, "_c300x_guarded", False):
+        return
+
+    def _sendto(self: Any, data: bytes, addr: tuple[str, int]) -> None:
+        inner_protocol = getattr(self, "_TurnTransport__inner_protocol", None)
+        if inner_protocol is None or not hasattr(inner_protocol, "send_data"):
+            original_sendto(self, data, addr)
+            return
+        task = asyncio.create_task(inner_protocol.send_data(data, addr))
+        task.add_done_callback(_handle_aioice_turn_send_done)
+
+    _sendto._c300x_guarded = True  # type: ignore[attr-defined]
+    _sendto._c300x_original_sendto = original_sendto  # type: ignore[attr-defined]
+    turn_transport.sendto = _sendto
+
+
+def _handle_aioice_turn_send_done(task: asyncio.Task[Any]) -> None:
+    """Consume expected aioice TURN transaction failures from send tasks."""
+
+    try:
+        exception = task.exception()
+    except asyncio.CancelledError:
+        return
+    if exception is None:
+        return
+    if _is_expected_aioice_transaction_error(exception):
+        _LOGGER.debug("Ignoring failed aioice TURN send task", exc_info=exception)
+        return
+    task.get_loop().call_exception_handler(
+        {
+            "message": "Unhandled aioice TURN send task exception",
+            "exception": exception,
+            "task": task,
+        }
+    )
+
+
+def _is_expected_aioice_transaction_error(exception: BaseException) -> bool:
+    """Return true for STUN/TURN transaction errors handled by ICE fallback."""
+
+    exception_type = type(exception)
+    return (
+        exception_type.__module__ == "aioice.stun"
+        and exception_type.__name__
+        in {"TransactionFailed", "TransactionTimeout", "TransactionError"}
+    )
 
 
 def prefer_webrtc_codecs(peer: Any, aiortc_modules: Any) -> None:

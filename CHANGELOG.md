@@ -9,8 +9,8 @@
   problems, including agent reachability, media-user/routing setup, forwarding,
   firewall and callback URL checks.
 - Adds bundled automation blueprints for doorbell notifications, Ring Call
-  notifications, Ring Capture, local Wyoming transcription and strict phrase
-  decisions.
+  notifications, Companion App dashboard notifications, Ring Capture, local
+  Wyoming transcription and strict phrase decisions.
 - Adds richer C300X display dashboard options, including the dynamic home page
   default, per-entity display names/secondary text, selectable Alarm page quick
   action and improved weather display.

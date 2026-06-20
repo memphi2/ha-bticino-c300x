@@ -93,6 +93,9 @@ variables:
 
 condition:
   - condition: template
+    value_template: >-
+      {{ not entry_id or trigger.event.data.entry_id == entry_id }}
+  - condition: template
     value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
 
 action:

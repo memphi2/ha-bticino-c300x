@@ -20,7 +20,7 @@ Blueprints**. Existing blueprint files are not overwritten.
 | --- | --- |
 | C300X Doorbell notification | Run a notification action when the doorbell rings. Select the C300X device; the blueprint finds the camera entity. |
 | C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. Select the C300X device; the blueprint finds the matching entities. |
-| C300X Ring Call phone alert | Ring an Android phone with Answer, Hang Up and Open actions. |
+| C300X Ring Call Android phone alert | Ring an Android phone with Answer, Hang Up and Open actions. |
 | C300X Ring Call iOS phone alert | Ring an iPhone with critical sound plus Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. Select the C300X device; the blueprint finds the media-readiness sensor. |
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. Select the C300X device; the blueprint finds the media-readiness sensor. |
@@ -36,25 +36,22 @@ Blueprint**.
 Start with **Media readiness**. Ring Call notification and capture should only
 run when the media setup is `ready` or `warning`.
 
-For Ring Call notifications, select the C300X device. The blueprint derives the
+For Ring Call notifications, select the C300X device. The blueprints derive the
 matching forwarding select, media-readiness sensor and camera from that device.
-Forwarding must be set to **Home Assistant**. The blueprint opens the dashboard
-through your notification action; the bundled card handles Answer and Hang Up.
+Forwarding must be set to **Home Assistant**. If you have more than one C300X
+entry, also enter the matching Entry ID so the automation only reacts to that
+device.
 
 Use the simple Doorbell notification blueprint only when you want an event
 notification and do not want to answer the call. It also starts from the C300X
 device and derives the camera entity for notification templates.
 
-Use **C300X Ring Call phone alert** for Android phones. It
+Use **C300X Ring Call Android phone alert** for Android phones. It
 creates a high-priority notification with **Answer**, **Hang Up** and **Open**
 actions. **Answer** clears the ringing notification, opens the configured
 dashboard in the Companion App and calls `bticino_c300x.answer_doorbell_call`.
 After answering, a quiet in-call notification keeps a **Hang Up** action
 available.
-
-For the Android phone alert blueprint, select the C300X device as well. The
-blueprint derives the matching camera, forwarding select and media-readiness
-sensor from that device.
 
 The phone sound comes from the Android notification channel configured in the
 blueprint. Open the Home Assistant Companion App notification settings and set
@@ -64,6 +61,13 @@ Use **C300X Ring Call iOS phone alert** for iPhones. It sends an iOS critical
 notification with **Answer**, **Hang Up** and **Open** actions. **Answer**
 opens the Companion App in the foreground, clears the ringing notification and
 calls `bticino_c300x.answer_doorbell_call`.
+
+For the dedicated phone alert blueprints, set the notify service to the matching
+Companion App service, for example:
+
+```text
+notify.mobile_app_your_phone
+```
 
 For capture and transcription, the default paths are:
 
@@ -84,6 +88,7 @@ The action can use these blueprint variables:
 
 - `camera_entity`
 - `dashboard_path`
+- `entry_id`
 
 Example action:
 
@@ -96,13 +101,6 @@ data:
     url: "{{ dashboard_path }}"
     clickAction: "{{ dashboard_path }}"
     entity_id: "{{ camera_entity }}"
-```
-
-For the dedicated Android phone alert blueprint, set **Mobile notify
-service** to the same service name, for example:
-
-```text
-notify.mobile_app_your_phone
 ```
 
 ## Strict Phrase Decision

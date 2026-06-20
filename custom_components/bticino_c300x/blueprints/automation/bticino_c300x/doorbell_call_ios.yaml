@@ -150,6 +150,9 @@ variables:
 condition:
   - condition: template
     value_template: >-
+      {{ not entry_id or trigger.event.data.entry_id == entry_id }}
+  - condition: template
+    value_template: >-
       {{ states(forwarding_entity) == 'Home Assistant'
          or states(forwarding_entity) == 'homeassistant'
          or state_attr(forwarding_entity, 'state') == 'homeassistant'

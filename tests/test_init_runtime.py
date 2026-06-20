@@ -539,6 +539,34 @@ def test_sync_device_user_does_not_rebootstrap_missing_media_user() -> None:
     assert updates == []
 
 
+def test_sync_device_user_does_not_mark_failed_bootstrap() -> None:
+    entry = _entry(
+        options={
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
+        }
+    )
+    api = _DeviceUserApi({"homeassistant_user_present": False})
+    api._ensure_status = {
+        "homeassistant_user_present": False,
+        "media_identity_available": False,
+        "routes_consistent": False,
+    }
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=api,
+        device_user_status={},
+        device_user_status_updated_at=None,
+    )
+    hass, updates = _hass_with_config_updates()
+
+    asyncio.run(integration._async_sync_device_user(hass, entry))
+
+    assert api.ensure_labels == ["Home Assistant HA Test"]
+    assert entry.runtime_data.device_user_status == api._ensure_status
+    assert updates == []
+
+
 def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:
     for entry in (
         _entry(options={CONF_VIDEO_ENABLED: False}),
@@ -995,6 +1023,7 @@ class _DeviceUserApi:
     def __init__(self, status: dict[str, Any], *, error: Exception | None = None) -> None:
         self._status = status
         self._error = error
+        self._ensure_status: dict[str, Any] | None = None
         self.ensure_labels: list[str] = []
 
     async def async_device_user_status(self) -> dict[str, Any]:
@@ -1004,6 +1033,8 @@ class _DeviceUserApi:
 
     async def async_ensure_homeassistant_user(self, *, account_label: str) -> dict[str, Any]:
         self.ensure_labels.append(account_label)
+        if self._ensure_status is not None:
+            return self._ensure_status
         return {
             "homeassistant_user_present": True,
             "media_identity_available": True,

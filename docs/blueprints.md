@@ -20,7 +20,7 @@ Blueprints**. Existing blueprint files are not overwritten.
 | --- | --- |
 | C300X Doorbell notification | Run a notification action when the doorbell rings. |
 | C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. |
-| C300X Ring Call mobile dashboard notification | Send an Android Companion App call notification with Answer, Hang Up and Open actions. |
+| C300X Ring Call phone alert | Ring an Android phone with Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. |
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. |
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
@@ -42,7 +42,7 @@ action; the bundled card handles Answer and Hang Up.
 Use the simple Doorbell notification blueprint when you only want an event
 notification and do not want to answer the call.
 
-Use **C300X Ring Call mobile dashboard notification** for Android phones. It
+Use **C300X Ring Call phone alert** for Android phones. It
 creates a high-priority notification with **Answer**, **Hang Up** and **Open**
 actions. **Answer** clears the ringing notification, opens the configured
 dashboard in the Companion App and calls `bticino_c300x.answer_doorbell_call`.
@@ -88,7 +88,7 @@ data:
     entity_id: "{{ camera_entity }}"
 ```
 
-For the dedicated Android mobile dashboard blueprint, set **Mobile notify
+For the dedicated Android phone alert blueprint, set **Mobile notify
 service** to the same service name, for example:
 
 ```text

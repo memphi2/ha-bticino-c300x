@@ -1,6 +1,6 @@
 blueprint:
-  name: C300X Ring Call mobile dashboard notification
-  description: Send an Android Home Assistant Companion App call notification for an answerable C300X Ring Call. The phone notification can ring, open the configured dashboard, answer the call, and hang up.
+  name: C300X Ring Call phone alert
+  description: Ring an Android phone for an answerable C300X Ring Call. The notification can open the configured dashboard, answer the call, and hang up.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_mobile_dashboard.yaml
   input:

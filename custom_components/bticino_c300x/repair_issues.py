@@ -26,6 +26,7 @@ from .const import (
     CONF_VIDEO_ENABLED,
     DOMAIN,
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
+    SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
 )
 from .media_readiness import media_readiness
 
@@ -215,6 +216,12 @@ def _sync_agent_capability_issue(hass: HomeAssistant, entry: ConfigEntry) -> Non
         entry,
         AGENT_CAPABILITY_MISMATCH_ISSUE,
         severity=ir.IssueSeverity.ERROR,
+        is_fixable=True,
+        translation_key=DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+        placeholders=agent_update_repair_placeholders(
+            getattr(entry.runtime_data, "agent_update_state", None),
+            entry.runtime_data,
+        ),
     )
 
 
@@ -564,14 +571,6 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
-    connection_state = getattr(runtime_data, "connection_state", None)
-    if connection_state is None or not getattr(connection_state, "available", True):
-        async_delete_repair_issue(
-            hass,
-            entry.entry_id,
-            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
-        )
-        return
     if not _entry_media_enabled(entry):
         async_delete_repair_issue(
             hass,
@@ -581,7 +580,10 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
         return
     readiness = media_readiness(entry)
     failed = readiness.get("failed_checks")
-    if readiness.get("status") != "blocked" or not isinstance(failed, list):
+    if readiness.get("status") not in {"blocked", "unavailable"} or not isinstance(
+        failed,
+        list,
+    ):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -590,7 +592,7 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
         return
     capabilities = getattr(runtime_data, "capabilities", {})
     fixable_checks = _media_setup_fixable_checks(failed, capabilities)
-    if not fixable_checks or fixable_checks == ["homeassistant_user"]:
+    if not fixable_checks:
         async_delete_repair_issue(
             hass,
             entry.entry_id,
@@ -617,6 +619,10 @@ def _media_setup_fixable_checks(
 ) -> list[str]:
     checks = {str(check) for check in failed}
     fixable: list[str] = []
+    if "agent_reachable" in checks:
+        fixable.append("agent_reachable")
+    if checks & {"capabilities", "rtsp"}:
+        fixable.append("agent_update")
     if checks & {"firewall", "talkback_rtp"} and maintenance_action_is_advertised(
         capabilities,
         "firewall_apply",
@@ -627,6 +633,11 @@ def _media_setup_fixable_checks(
         "device_user_ensure",
     ):
         fixable.append("homeassistant_user")
+    if "forwarding_homeassistant" in checks and capability_is_supported(
+        capabilities,
+        "smartphone_forwarding",
+    ):
+        fixable.append(SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT)
     return fixable
 
 
@@ -634,6 +645,29 @@ def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return None
+    readiness = media_readiness(entry)
+    failed = readiness.get("failed_checks")
+    if isinstance(failed, list) and "callback_url" in failed:
+        connection_state = getattr(runtime_data, "connection_state", None)
+        return {
+            "source": "event subscription",
+            "scheme": str(
+                getattr(
+                    connection_state,
+                    "event_subscription_callback_scheme",
+                    None,
+                )
+                or "unknown"
+            ),
+            "host_type": str(
+                getattr(
+                    connection_state,
+                    "event_subscription_callback_host_type",
+                    None,
+                )
+                or "unknown"
+            ),
+        }
     checks = (
         (
             "event subscription",
@@ -670,6 +704,7 @@ def _create_issue(
     *,
     severity: ir.IssueSeverity,
     is_fixable: bool = False,
+    translation_key: str | None = None,
     placeholders: dict[str, str] | None = None,
 ) -> None:
     translation_placeholders = {
@@ -684,7 +719,7 @@ def _create_issue(
         is_fixable=is_fixable,
         is_persistent=False,
         severity=severity,
-        translation_key=issue_type,
+        translation_key=translation_key or issue_type,
         translation_placeholders=translation_placeholders,
         data={"entry_id": entry.entry_id, "issue_type": issue_type},
     )

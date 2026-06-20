@@ -537,7 +537,7 @@
         "step": {
           "confirm": {
             "title": "C300X Medien-Setup reparieren",
-            "description": "Home Assistant kann die erkannten Voraussetzungen fuer das Medien-Setup jetzt reparieren. Es werden nur ausdruecklich bestaetigte Device-Agent-Wartungsaktionen fuer behebbare Fehler ausgefuehrt: IPv4-Medien-Firewall und Home-Assistant-Media-User/Routing. IPv6 ist optional und wird durch diese Reparatur nicht geaendert.\n\nFehlgeschlagene Checks: {failed_checks}\nReparierbare Checks: {fixable_checks}\nEmpfohlene Aktion: {recommended_action}"
+            "description": "Home Assistant kann jetzt die passende Reparatur fuer fehlgeschlagene Medien-Readiness-Checks ausfuehren. Je nach Fehler werden Agent-Erreichbarkeit neu geprueft, Agent-Setup-Metadaten aktualisiert, die IPv4-Medien-Firewall angewendet, Home-Assistant-Media-User/Routing repariert oder Ring-Call-Forwarding auf Home Assistant gesetzt. IPv6 ist optional und wird durch diese Reparatur nicht geaendert.\n\nFehlgeschlagene Checks: {failed_checks}\nReparierbare Checks: {fixable_checks}\nEmpfohlene Aktion: {recommended_action}"
           }
         },
         "error": {

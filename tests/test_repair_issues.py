@@ -407,7 +407,8 @@ def test_empty_agent_capabilities_create_repair_issue() -> None:
         repair_issue_id(AGENT_CAPABILITY_MISMATCH_ISSUE, entry.entry_id)
     ]
     assert issue["severity"] == "error"
-    assert issue["translation_key"] == AGENT_CAPABILITY_MISMATCH_ISSUE
+    assert issue["is_fixable"] is True
+    assert issue["translation_key"] == DEVICE_AGENT_UPDATE_REQUIRED_ISSUE
 
 
 def test_offline_agent_clears_capability_repair_issue() -> None:
@@ -642,7 +643,95 @@ def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -
     )
 
 
-def test_single_media_user_failure_uses_existing_device_user_repair_only() -> None:
+def test_offline_media_readiness_creates_fixable_media_setup_repair() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=False),
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is True
+    assert issue["translation_placeholders"]["fixable_checks"] == "agent_reachable"
+
+
+def test_forwarding_failure_creates_fixable_media_setup_repair() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=True),
+            capabilities={
+                "doorbell_call": {"supported": True},
+                "smartphone_forwarding": {"supported": True},
+            },
+            event_state=types.SimpleNamespace(smartphone_forwarding_mode="smartphone"),
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is True
+    assert issue["translation_placeholders"]["fixable_checks"] == "homeassistant"
+
+
+def test_callback_readiness_failure_creates_callback_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(
+                available=True,
+                event_subscription_last_success_at=None,
+                event_subscription_last_error="connection refused",
+                event_subscription_callback_scheme="https",
+                event_subscription_callback_host_type="hostname",
+            ),
+            capabilities={"doorbell_call": {"supported": True}},
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(UNSUPPORTED_CALLBACK_URL_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is True
+    assert issue["translation_placeholders"]["source"] == "event subscription"
+    assert issue["translation_placeholders"]["scheme"] == "https"
+
+
+def test_single_media_user_failure_creates_device_user_and_media_repairs() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
@@ -679,7 +768,7 @@ def test_single_media_user_failure_uses_existing_device_user_repair_only() -> No
     assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in CREATED_ISSUES
     assert (
         repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
-        in DELETED_ISSUES
+        in CREATED_ISSUES
     )
 
 

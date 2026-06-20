@@ -537,7 +537,7 @@
         "step": {
           "confirm": {
             "title": "Reparer la configuration media C300X",
-            "description": "Home Assistant peut reparer maintenant les prerequis media detectes. Il execute uniquement les actions de maintenance device-agent explicitement confirmees pour les erreurs reparables : pare-feu media IPv4 et utilisateur/routage media Home Assistant. IPv6 est optionnel et n'est pas modifie par cette reparation.\n\nChecks en echec : {failed_checks}\nChecks reparables : {fixable_checks}\nAction recommandee : {recommended_action}"
+            "description": "Home Assistant peut executer maintenant la reparation adaptee aux checks media-readiness en echec. Selon les erreurs, cela peut recontroler l'accessibilite de l'agent, actualiser les metadonnees de configuration agent, appliquer le pare-feu media IPv4, reparer l'utilisateur/routage media Home Assistant ou regler le forwarding Ring Call sur Home Assistant. IPv6 est optionnel et n'est pas modifie par cette reparation.\n\nChecks en echec : {failed_checks}\nChecks reparables : {fixable_checks}\nAction recommandee : {recommended_action}"
           }
         },
         "error": {

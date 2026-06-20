@@ -1506,7 +1506,7 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
     assert main_page["badges"][2]["state"].count("\n") == 1
     assert "buttons" not in main_page
     assert "switches" not in main_page
-    buttons = pages["Home Assistant"]["items"]
+    buttons = pages[""]["items"]
     assert {
         "domain": "c300x",
         "entity_id": "leave_home",
@@ -1716,7 +1716,7 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
     result = run(async_dashboard_payload(hass, entry))
 
     pages = {page["title"]: page for page in result["data"]["pages"]}
-    page = pages["Home Assistant"]
+    page = pages[""]
     assert [item["entity_id"] for item in page["items"]] == [
         "switch.entry",
         "sensor.temperature",
@@ -1831,9 +1831,7 @@ def test_async_dashboard_payload_uses_binary_sensor_device_class_labels() -> Non
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     labels_by_entity = {item["entity_id"]: item["state_label"] for item in page["items"]}
     for device_class, labels in expected_labels.items():
         assert labels_by_entity[f"binary_sensor.{device_class}_off"] == labels[0]
@@ -1880,9 +1878,7 @@ def test_async_dashboard_payload_localizes_binary_sensor_labels() -> None:
 
         result = run(async_dashboard_payload(hass, entry))
 
-        page = {page["title"]: page for page in result["data"]["pages"]}[
-            "Home Assistant"
-        ]
+        page = {page["title"]: page for page in result["data"]["pages"]}[""]
         by_entity = {item["entity_id"]: item for item in page["items"]}
         assert by_entity["binary_sensor.window_off"]["state_label"] == labels[0]
         assert by_entity["binary_sensor.window_off"]["color"] == "#58d68d"
@@ -1911,9 +1907,7 @@ def test_async_dashboard_payload_falls_back_to_english_without_matching_language
 
         result = run(async_dashboard_payload(hass, entry))
 
-        page = {page["title"]: page for page in result["data"]["pages"]}[
-            "Home Assistant"
-        ]
+        page = {page["title"]: page for page in result["data"]["pages"]}[""]
         assert page["items"][0]["state_label"] == "Unsafe"
         assert page["items"][0]["color"] == "#ff6b6b"
 
@@ -1978,9 +1972,7 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert [item["entity_id"] for item in page["items"]] == [
         "switch.entry",
         "sensor.temperature",
@@ -2032,9 +2024,7 @@ def test_async_dashboard_payload_uses_per_entity_display_overrides() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert [item["entity_id"] for item in page["items"]] == [
         "sensor.temperature",
         "switch.entry",
@@ -2070,9 +2060,7 @@ def test_async_dashboard_payload_uses_custom_entity_display_name() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert page["items"][0]["name"] == "Outside"
 
 
@@ -2096,9 +2084,7 @@ def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
             entry,
         )
     )
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
 
     choice = page["items"][0]
     assert choice["domain"] == "c300x"
@@ -2136,9 +2122,7 @@ def test_async_dashboard_payload_can_show_entity_last_changed() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert page["items"][0]["name"] == "Temperature"
     assert page["items"][0]["state_label"] == "14.06. 12:34"
 
@@ -2165,9 +2149,7 @@ def test_async_dashboard_payload_can_hide_entity_secondary_info() -> None:
 
     result = run(async_dashboard_payload(hass, entry))
 
-    page = {page["title"]: page for page in result["data"]["pages"]}[
-        "Home Assistant"
-    ]
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert page["items"][0]["name"] == "Temperature"
     assert page["items"][0]["state_label"] == ""
 

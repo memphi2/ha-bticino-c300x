@@ -27,16 +27,16 @@ def media_readiness(entry: ConfigEntry) -> dict[str, Any]:
     """Return a read-only readiness summary for local media features."""
 
     runtime_data = entry.runtime_data
-    connection_state = runtime_data.connection_state
-    capabilities = runtime_data.capabilities
-    self_test = runtime_data.self_test_status
+    connection_state = getattr(runtime_data, "connection_state", None)
+    capabilities = getattr(runtime_data, "capabilities", {})
+    self_test = getattr(runtime_data, "self_test_status", {})
     checks = self_test.get("checks") if isinstance(self_test, Mapping) else None
     if not isinstance(checks, Mapping):
         checks = {}
 
     failed: list[str] = []
     warnings: list[str] = []
-    agent_reachable = bool(connection_state.available)
+    agent_reachable = bool(getattr(connection_state, "available", False))
     if not agent_reachable:
         failed.append("agent_reachable")
 
@@ -85,7 +85,7 @@ def media_readiness(entry: ConfigEntry) -> dict[str, Any]:
     if not agent_reachable:
         status = "unavailable"
 
-    agent_info = runtime_data.agent_info
+    agent_info = getattr(runtime_data, "agent_info", {})
     agent_version = agent_info.get("version") if isinstance(agent_info, Mapping) else None
     return {
         "status": status,

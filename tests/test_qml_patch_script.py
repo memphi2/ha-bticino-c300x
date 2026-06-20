@@ -494,7 +494,7 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
     assert "Api.dashboardChoiceAction" in home_assistant_qml
     assert "Api.dashboardChoiceOptionLabel(modelData)" in home_assistant_qml
     assert "Api.dashboardChoiceOptionValue(modelData)" in home_assistant_qml
-    assert "pageItem.choices = dashboardChoices(pageData.choices)" in dashboard_js
+    assert "pageItem.items = dashboardMixedItems(pageData.items)" in dashboard_js
     assert "function dashboardChoiceOptions" in dashboard_js
     assert "+ encodeURIComponent(item.entity_id)" in dashboard_js
     assert '"&option=" + encodeURIComponent(option)' in dashboard_js

@@ -44,7 +44,9 @@ from .const import (
     DOMAIN,
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
     SIGNAL_AGENT_INFO_CHANGED,
+    SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
+    SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
 )
 from .device_installer import (
     C300XDeviceInstallRequest,
@@ -60,6 +62,7 @@ from .qml_patch import (
     async_apply_qml_patch_and_confirm,
 )
 from .repair_issues import (
+    AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
@@ -88,7 +91,11 @@ async def async_create_fix_flow(
 
     if (
         data is not None
-        and data.get("issue_type") == DEVICE_AGENT_UPDATE_REQUIRED_ISSUE
+        and data.get("issue_type")
+        in {
+            AGENT_CAPABILITY_MISMATCH_ISSUE,
+            DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
+        }
         and isinstance(data.get("entry_id"), str)
     ):
         return DeviceAgentUpdateRepairFlow(hass, str(data["entry_id"]))
@@ -335,6 +342,14 @@ async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str
     failed = readiness.get("failed_checks")
     failed_checks = {str(check) for check in failed} if isinstance(failed, list) else set()
     repaired: list[str] = []
+    if "agent_reachable" in failed_checks:
+        await _async_reload_entry_after_agent_update(hass, entry.entry_id)
+        repaired.append("agent_reachable_check")
+        return repaired
+    if failed_checks & {"capabilities", "rtsp"}:
+        setup_data = await entry.runtime_data.api.async_validate_setup()
+        await _async_apply_repaired_agent_setup(hass, entry, setup_data)
+        repaired.append("agent_update_check")
     if failed_checks & {"firewall", "talkback_rtp"}:
         await entry.runtime_data.api.async_set_firewall_enabled(True)
         await entry.runtime_data.api.async_apply_firewall()
@@ -345,6 +360,15 @@ async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str
         )
         entry.runtime_data.device_user_status = status
         repaired.append("homeassistant_user")
+    if "forwarding_homeassistant" in failed_checks:
+        status = await entry.runtime_data.api.async_set_smartphone_forwarding_mode(
+            SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
+        )
+        entry.runtime_data.event_state.smartphone_forwarding_mode = status.get(
+            "state",
+            SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
+        )
+        repaired.append("forwarding_homeassistant")
     if repaired:
         with suppress(C300XAgentApiError):
             entry.runtime_data.self_test_status = await entry.runtime_data.api.async_self_test()
@@ -352,6 +376,7 @@ async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str
             entry.runtime_data.device_user_status = (
                 await entry.runtime_data.api.async_device_user_status()
             )
+        async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry.entry_id)
     return repaired
 
 

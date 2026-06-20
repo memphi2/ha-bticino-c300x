@@ -76,6 +76,7 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
     _LOVELACE_DASHBOARD_FIELD,
     _LOVELACE_VIEW_FIELD,
+    AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
     DEVICE_USER_REQUIRED_ISSUE,
@@ -184,6 +185,10 @@ class FakePatchApi:
         self.calls.append("device_user_status")
         return self.device_user_status
 
+    async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
+        self.calls.append(f"set_forwarding:{mode}")
+        return {"mode": mode, "state": mode}
+
 
 class FakeUpdateVerifyApi:
     def __init__(self) -> None:
@@ -282,6 +287,7 @@ def test_create_fix_flow_routes_known_issues() -> None:
     hass = FakeHass(entry)
 
     cases = (
+        (AGENT_CAPABILITY_MISMATCH_ISSUE, DeviceAgentUpdateRepairFlow),
         (DEVICE_AGENT_UPDATE_REQUIRED_ISSUE, DeviceAgentUpdateRepairFlow),
         (UNSUPPORTED_CALLBACK_URL_ISSUE, CallbackUrlRepairFlow),
         (DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE, DeviceCoreQmlHookRepairFlow),
@@ -566,6 +572,47 @@ def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
     ]
     assert entry.runtime_data.device_user_status == api.device_user_status
     assert entry.runtime_data.self_test_status == api.self_test_status
+
+
+def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
+    api = FakePatchApi()
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={
+            "doorbell_call": {"supported": True},
+            "smartphone_forwarding": {"supported": True},
+        },
+        self_test_status={
+            "ok": True,
+            "checks": {
+                "capabilities": {"ok": True},
+                "firewall": {"ok": True},
+                "rtsp": {"ok": True},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+                "startup": {"ok": True},
+            },
+        },
+    )
+    runtime_data.event_state.smartphone_forwarding_mode = "smartphone"
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {
+        "type": "create_entry",
+        "data": {"repaired": ["forwarding_homeassistant"]},
+    }
+    assert api.calls == [
+        "set_forwarding:homeassistant",
+        "self_test",
+        "device_user_status",
+    ]
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "homeassistant"
 
 
 def test_device_user_repair_flow_reports_agent_failures() -> None:

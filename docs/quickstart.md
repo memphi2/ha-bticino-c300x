@@ -1,6 +1,14 @@
 # Quickstart
 
-This is the recommended 10-minute path for a normal C300X install.
+This is the recommended first setup path. Follow it in order and do not start
+with YAML, manual card configuration or advanced display pages.
+
+Goal:
+
+```text
+HACS install -> add integration -> install/update agent -> Media readiness ready
+-> add the C300X card
+```
 
 ## Before You Start
 
@@ -46,7 +54,7 @@ If the agent is not reachable yet, the setup flow offers an installer step.
 Use it only on a rooted or SSH-enabled C300X.
 
 If an older agent is reachable, Home Assistant may show an agent-update Repair.
-Run that Repair before testing media features.
+Run that Repair before testing camera or call features.
 
 The SSH credentials used during installation are one-time setup inputs. They
 are not stored in the Home Assistant config entry, diagnostics or logs.
@@ -58,7 +66,8 @@ Recommended first-run choices:
 - Enable **Doorbell camera/video** when you want camera, Ring Call, Home Call or
   talkback.
 - Keep **Create Home Assistant media user** enabled for media features.
-- Leave the Display patch disabled unless you want C300X display pages.
+- Leave display pages disabled unless you want Home Assistant pages on the
+  C300X display.
 - Select Alarmo and weather entities only if you use those display pages.
 - Leave destructive maintenance controls disabled until needed.
 
@@ -71,6 +80,9 @@ After setup, open the `Media readiness` diagnostic sensor.
 - **ready**: continue with the Lovelace card.
 - **warning**: basic media can work, but review the listed warnings.
 - **blocked** or **unavailable**: open the Repair issue and press **Fix now**.
+
+Do not debug the card before this entity is `ready` or shows only warnings you
+understand.
 
 Details: [Media readiness](media-readiness.md)
 
@@ -86,14 +98,10 @@ After Media Readiness is ready:
 Use one normal card for Doorbell/On-demand. Add a second card in **Home Call**
 mode when you want Home Call.
 
-## 7. Optional Blueprints
+After an update, hard-reload the browser or clear the Home Assistant frontend
+cache if the card still looks old.
 
-Ready-made blueprints are available for doorbell notifications, Ring Call
-notifications, capture, Wyoming transcription and strict phrase decisions.
-
-Details: [Blueprints](blueprints.md)
-
-## 8. Test the Three Media Paths
+## 7. Test the Three Media Paths
 
 Test in this order:
 
@@ -104,6 +112,13 @@ Test in this order:
 
 Talkback needs a secure Home Assistant frontend: HTTPS, Home Assistant Cloud or
 another secure browser context with microphone permission.
+
+## 8. Optional Blueprints
+
+Ready-made blueprints are available for doorbell notifications, Ring Call
+notifications, capture, Wyoming transcription and strict phrase decisions.
+
+Details: [Blueprints](blueprints.md)
 
 ## If Something Fails
 

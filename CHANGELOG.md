@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.1 - Unreleased
+
+### Changed
+
+- Refocuses the README setup section on the guided Quickstart path so new users
+  start with HACS, agent setup, Media Readiness and the bundled card in the
+  right order.
+
 ## v1.3.0 - 2026-06-20
 
 ### Added

@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v1.3.0-0366d6?style=flat-square)](.github/release-notes/v1.3.0.md)
+[![Release](https://img.shields.io/badge/release-v1.3.1-0366d6?style=flat-square)](CHANGELOG.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -19,19 +19,20 @@ forwarding controls, messages and optional display pages.
 
 ## 5-Minute Setup
 
-This is the recommended path for a normal install:
+Start with the guided setup document:
 
-1. Install this repository through HACS as a custom integration.
-2. Restart Home Assistant.
-3. Add **BTicino C300X** from **Settings -> Devices & services**.
-4. Install or update the C300X device agent from the setup or Repair flow.
-5. Open the **Media readiness** diagnostic entity.
-6. If it is **ready**, add the bundled C300X Lovelace card.
-7. If it is not ready, open the shown Repair and press **Fix now**.
-8. Optional: import a bundled blueprint for notifications, capture or local
-   transcription.
+**[Quickstart: install, agent, Media readiness, card](docs/quickstart.md)**
 
-Full step-by-step setup: [docs/quickstart.md](docs/quickstart.md)
+The short path is:
+
+```text
+HACS -> add integration -> install/update agent -> Media readiness
+-> Fix now if needed -> add the C300X card
+```
+
+Keep the first install boring: get **Media readiness** to `ready`, then add the
+bundled card. Blueprints, display pages and advanced maintenance can wait until
+the three media paths work.
 
 ## What You Get
 
@@ -102,7 +103,7 @@ depend on enabled options and installed agent capabilities.
 
 | Start here | Link |
 | --- | --- |
-| Recommended install path | [Quickstart](docs/quickstart.md) |
+| 5-minute setup path | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |

@@ -61,6 +61,7 @@ from .qml_patch import (
     async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
 )
+from .repair_flows_device_user import DeviceUserRepairFlow
 from .repair_issues import (
     AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
@@ -235,52 +236,6 @@ class _LovelaceCardSetupError(Exception):
     def __init__(self, error_key: str) -> None:
         super().__init__(error_key)
         self.error_key = error_key
-
-
-class DeviceUserRepairFlow(RepairsFlow):
-    """Repair flow that creates or repairs the dedicated HA media user."""
-
-    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
-        """Initialize the repair flow."""
-
-        self.hass = hass
-        self._entry_id = entry_id
-
-    async def async_step_init(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> Any:
-        """Start the repair flow."""
-
-        return await self.async_step_confirm(None)
-
-    async def async_step_confirm(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> Any:
-        """Create or repair the Home Assistant Flexisip user."""
-
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None:
-            return self.async_abort(reason="entry_not_loaded")
-        if user_input is None:
-            return self.async_show_form(step_id="confirm")
-        try:
-            status = await entry.runtime_data.api.async_ensure_homeassistant_user(
-                account_label=homeassistant_account_label(self.hass)
-            )
-        except C300XAgentApiError:
-            return self.async_show_form(
-                step_id="confirm",
-                errors={"base": "device_user_setup_failed"},
-            )
-        entry.runtime_data.device_user_status = status
-        ir.async_delete_issue(
-            hass=self.hass,
-            domain=DOMAIN,
-            issue_id=repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, self._entry_id),
-        )
-        return self.async_create_entry(data={})
 
 
 class MediaSetupRepairFlow(RepairsFlow):

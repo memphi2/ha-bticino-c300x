@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.3.0 - 2026-06-20
+
+### Added
+
+- Updates the packaged native C300X device agent to `1.3.0`.
+- Adds guided **Media readiness** repairs for the most common media setup
+  problems, including agent reachability, media-user/routing setup, forwarding,
+  firewall and callback URL checks.
+- Adds bundled automation blueprints for doorbell notifications, Ring Call
+  notifications, Ring Capture, local Wyoming transcription and strict phrase
+  decisions.
+- Adds richer C300X display dashboard options, including the dynamic home page
+  default, per-entity display names/secondary text, selectable Alarm page quick
+  action and improved weather display.
+
+### Changed
+
+- Keeps dashboard entity order aligned with the configured order instead of
+  grouping mixed entity types by class.
+- Reduces C300X display dashboard refresh traffic and keeps image/dashboard
+  tiles consistent in mixed dashboard payloads.
+- Improves Ring Call and on-demand RTSP recovery when the first media frame or
+  a stale media reader fails.
+
+### Fixed
+
+- Prevents Alarm page quick actions from refreshing the wrong display page.
+- Keeps Wyoming transcription blueprints from running without the raw audio
+  file they need.
+- Keeps Media Readiness and forwarding state more actionable for normal users.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload the browser or clear the Home Assistant app/WebView cache if a
+  dashboard still shows old card behavior.
+- If you use C300X display pages, update the native C300X device agent from
+  Home Assistant so active display patches can be refreshed.
+
 ## v1.2.4 - 2026-06-20
 
 ### Fixed

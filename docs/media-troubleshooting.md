@@ -19,6 +19,9 @@ Check:
 If the stream was left active by an old browser session, press **Stop** in the
 card or call `bticino_c300x.stop_doorbell_video`, then retry.
 
+If this happens directly after updating the native agent or changing display
+pages, reload the integration once and re-check `Media readiness`.
+
 ## Card Shows Stream Instead of Answer
 
 The card can show **Answer** only when Home Assistant receives a real Ring Call.
@@ -82,6 +85,9 @@ Check:
 4. Check `/media/c300x/` for the MP4 and `/config/c300x/` for `latest.raw.wav`,
    `latest.processed.wav`, `latest.capture.json`, `frame_01.jpg`,
    `frame_02.jpg` and `frame_03.jpg`.
+
+Use the Ring Capture + Wyoming blueprint only when audio is enabled. The
+blueprint always records audio because transcription needs `latest.raw.wav`.
 
 ## Common Log Clues
 

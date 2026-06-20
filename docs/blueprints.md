@@ -15,7 +15,9 @@ change the device configuration.
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
 
 Import the blueprint from the matching file below
-`blueprints/automation/bticino_c300x/` in this repository.
+`blueprints/automation/bticino_c300x/` in this repository. In Home Assistant,
+use **Settings -> Automations & scenes -> Blueprints -> Import Blueprint** and
+paste the raw GitHub URL for the selected blueprint file.
 
 ## Recommended Use
 
@@ -25,6 +27,9 @@ run when the media setup is `ready` or `warning`.
 For Ring Call notifications, the C300X forwarding select must be set to
 **Home Assistant**. The blueprint opens the dashboard through your notification
 action; the bundled card handles Answer and Hang Up.
+
+Use the simple Doorbell notification blueprint when you only want an event
+notification and do not want to answer the call.
 
 For capture and transcription, the default paths are:
 

@@ -64,6 +64,9 @@ The guided Repair can:
 
 Repairs are explicit. They do not run just because Home Assistant starts.
 
+If a Repair changes device-side media setup, wait for it to finish, then check
+`Media readiness` again before testing the card.
+
 ## IPv6
 
 IPv6 is optional. A failure that only reports missing optional IPv6 firewall

@@ -1103,6 +1103,225 @@ def test_bootstrap_install_success_continues_to_feature_step(
     ]
 
 
+def test_manual_setup_invalid_connection_stays_on_user_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_NAME: "Door",
+                CONF_AGENT_HOST: "",
+                CONF_AGENT_PORT: 8091,
+                CONF_CALLBACK_BASE_URL: "",
+            }
+        )
+    )
+
+    assert result["step_id"] == "user"
+    assert result["errors"] == {CONF_AGENT_HOST: "invalid_agent_host"}
+
+
+def test_agent_missing_without_connection_returns_user_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_agent_missing({}))
+
+    assert result["step_id"] == "user"
+
+
+def test_agent_missing_choose_install_returns_bootstrap_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_agent_missing({CONF_BOOTSTRAP_INSTALL_AGENT: True})
+    )
+
+    assert result["step_id"] == "bootstrap_install"
+
+
+def test_bootstrap_install_reports_install_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.async_set_unique_id = (  # type: ignore[method-assign]
+        lambda *_args, **_kwargs: asyncio.sleep(0)
+    )
+    flow._abort_if_unique_id_configured = lambda **_kwargs: None  # type: ignore[method-assign]
+
+    async def install_agent(*_args: object, **_kwargs: object) -> None:
+        raise config_flow_module.C300XDeviceInstallError("ssh_auth_failed")
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_install_device_agent",
+        install_agent,
+    )
+
+    result = asyncio.run(
+        flow.async_step_bootstrap_install(
+            {
+                CONF_BOOTSTRAP_SSH_USERNAME: "root",
+                CONF_BOOTSTRAP_SSH_PASSWORD: "bad",
+            }
+        )
+    )
+
+    assert result["step_id"] == "bootstrap_install"
+    assert result["errors"] == {"base": "ssh_auth_failed"}
+
+
+def test_bootstrap_install_reports_verify_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.async_set_unique_id = (  # type: ignore[method-assign]
+        lambda *_args, **_kwargs: asyncio.sleep(0)
+    )
+    flow._abort_if_unique_id_configured = lambda **_kwargs: None  # type: ignore[method-assign]
+
+    async def install_agent(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def probe_agent(*_args: object, **_kwargs: object) -> str:
+        return "missing"
+
+    monkeypatch.setattr(
+        config_flow_module.secrets,
+        "token_urlsafe",
+        lambda length: f"token-{length}",
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_install_device_agent",
+        install_agent,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_probe_agent",
+        probe_agent,
+    )
+
+    result = asyncio.run(
+        flow.async_step_bootstrap_install(
+            {
+                CONF_BOOTSTRAP_SSH_USERNAME: "root",
+                CONF_BOOTSTRAP_SSH_PASSWORD: "temporary",
+            }
+        )
+    )
+
+    assert result["step_id"] == "bootstrap_install"
+    assert result["errors"] == {"base": "device_install_verify_failed"}
+
+
+def test_agent_auth_missing_connection_returns_user_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_agent_auth({CONF_AGENT_TOKEN: ""}))
+
+    assert result["step_id"] == "user"
+
+
+def test_agent_auth_requires_token_when_agent_challenged() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow._setup_agent_needs_token = True
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_agent_auth({CONF_AGENT_TOKEN: ""}))
+
+    assert result["step_id"] == "agent_auth"
+    assert result["errors"] == {CONF_AGENT_TOKEN: "required"}
+
+
+def test_user_features_without_connection_returns_user_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_user_features({}))
+
+    assert result["step_id"] == "user"
+
+
+def test_user_features_invalid_input_stays_on_features_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_user_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_DOORSTATION_AUDIO_GAIN_DB: 42,
+            }
+        )
+    )
+
+    assert result["step_id"] == "user_features"
+    assert result["errors"] == {CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain"}
+
+
+def test_user_dashboard_without_features_returns_features_form() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_user_dashboard({}))
+
+    assert result["step_id"] == "user_features"
+
+
+def test_user_dashboard_entity_display_requires_all_rendered_fields() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow._setup_dashboard_input = {
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_user_dashboard_entity_display(
+            {
+                "1. Temperature - Name": "custom",
+            }
+        )
+    )
+
+    assert result["step_id"] == "user_dashboard_entity_display"
+
+
 def test_zeroconf_probes_agent_before_auth_form(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

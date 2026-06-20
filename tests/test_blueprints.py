@@ -39,6 +39,7 @@ def test_blueprints_are_valid_automation_blueprints() -> None:
     expected = {
         "doorbell_notification.yaml",
         "doorbell_call_notification.yaml",
+        "doorbell_call_mobile_dashboard.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
         "strict_phrase_decision.yaml",
@@ -56,6 +57,7 @@ def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
     for filename in {
         "doorbell_notification.yaml",
         "doorbell_call_notification.yaml",
+        "doorbell_call_mobile_dashboard.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
     }:
@@ -77,6 +79,22 @@ def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() ->
     assert "ready" in templates
     assert "warning" in templates
     assert data["variables"]["dashboard_path"] == "dashboard_path"
+
+
+def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
+    data = _blueprint("doorbell_call_mobile_dashboard.yaml")
+    action = data["action"][0]
+    notify_data = action["data"]["data"]
+    templates = "\n".join(condition["value_template"] for condition in data["condition"])
+
+    assert action["service"] == "notify_service"
+    assert notify_data["url"] == "{{ dashboard_path }}"
+    assert notify_data["clickAction"] == "{{ dashboard_path }}"
+    assert notify_data["entity_id"] == "{{ camera_entity }}"
+    assert notify_data["tag"] == "c300x_ring_call"
+    assert "homeassistant" in templates
+    assert "ready" in templates
+    assert "warning" in templates
 
 
 def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:

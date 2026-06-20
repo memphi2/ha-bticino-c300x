@@ -88,11 +88,34 @@ def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
         }
 
 
+def test_doorbell_notification_derives_camera_from_device() -> None:
+    data = _blueprint("doorbell_notification.yaml")
+    inputs = data["blueprint"]["input"]
+
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert "camera_entity" not in inputs
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
+
+
 def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() -> None:
     data = _blueprint("doorbell_call_notification.yaml")
+    inputs = data["blueprint"]["input"]
     conditions = data["condition"]
     templates = "\n".join(condition["value_template"] for condition in conditions)
 
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert "forwarding_entity" not in inputs
+    assert "media_readiness_entity" not in inputs
+    assert "camera_entity" not in inputs
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
+    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
+    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
     assert "Home Assistant" in templates
     assert "homeassistant" in templates
     assert "ready" in templates
@@ -184,8 +207,15 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
 
 def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:
     data = _blueprint("ring_capture.yaml")
+    inputs = data["blueprint"]["input"]
     action = data["action"]
 
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert "media_readiness_entity" not in inputs
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert len(action) == 1
     assert action[0]["service"] == "bticino_c300x.capture_doorbell_call"
     assert action[0]["data"]["wav_output_dir"] == "{{ capture_file_dir }}"
@@ -194,10 +224,17 @@ def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:
 
 def test_wyoming_blueprint_captures_then_transcribes_latest_files() -> None:
     data = _blueprint("ring_capture_wyoming.yaml")
+    inputs = data["blueprint"]["input"]
     services = [action["service"] for action in data["action"]]
     capture_data = data["action"][0]["data"]
     analysis_data = data["action"][1]["data"]
 
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert "media_readiness_entity" not in inputs
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert services == [
         "bticino_c300x.capture_doorbell_call",
         "bticino_c300x.run_ring_wyoming_analysis",

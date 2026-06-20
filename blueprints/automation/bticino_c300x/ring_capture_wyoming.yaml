@@ -4,12 +4,12 @@ blueprint:
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/ring_capture_wyoming.yaml
   input:
-    media_readiness_entity:
-      name: Media readiness sensor
-      description: Capture runs only when Media readiness is ready or warning.
+    c300x_device:
+      name: C300X device
+      description: Select the C300X device. The blueprint derives the media-readiness sensor from this device.
       selector:
-        entity:
-          domain: sensor
+        device:
+          integration: bticino_c300x
     entry_id:
       name: Entry ID
       description: Optional C300X config entry ID. Leave empty when there is only one C300X entry.
@@ -70,7 +70,19 @@ trigger:
       event_key: doorbell_pressed
 
 variables:
-  media_readiness_entity: !input media_readiness_entity
+  c300x_device: !input c300x_device
+  c300x_entities: "{{ device_entities(c300x_device) | list }}"
+  media_readiness_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% if entity_id.startswith('sensor.')
+            and state_attr(entity_id, 'agent_reachable') is not none
+            and state_attr(entity_id, 'media_user_ok') is not none
+            and state_attr(entity_id, 'ring_call_supported') is not none %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
   entry_id: !input entry_id
   wyoming_host: !input wyoming_host
   language: !input language

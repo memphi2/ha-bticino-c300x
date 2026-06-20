@@ -161,6 +161,8 @@ class _FakeApi:
         self.memos_calls = 0
         self.diagnostics_calls = 0
         self.doorbell_video_status_calls = 0
+        self.validate_setup_calls = 0
+        self.validate_setup_error: Exception | None = None
         self.doorbell_video_status: dict[str, Any] = {
             "available": True,
             "media_owner": "idle",
@@ -247,6 +249,9 @@ class _FakeApi:
         }
 
     async def async_validate_setup(self) -> dict[str, Any]:
+        self.validate_setup_calls += 1
+        if self.validate_setup_error is not None:
+            raise self.validate_setup_error
         return {
             "version": "0.2.0",
             "implementation": "native-c",
@@ -548,6 +553,26 @@ def test_media_readiness_sensor_ignores_unrelated_agent_events() -> None:
     )
 
     assert entity.wrote_state is False
+
+
+def test_media_readiness_sensor_subscribes_to_readiness_sources() -> None:
+    async def _run() -> None:
+        hass = _FakeHass()
+        entry = _FakeEntry()
+        entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+        entity.hass = hass
+        entity.wrote_state = False
+
+        await entity.async_added_to_hass()
+        entity._handle_readiness_changed()
+
+        assert entity.wrote_state is True
+
+        entity.wrote_state = False
+        entity._handle_readiness_changed("other")
+        assert entity.wrote_state is False
+
+    asyncio.run(_run())
 
 
 def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
@@ -1059,6 +1084,54 @@ def test_agent_status_sensor_updates_on_agent_info_signal() -> None:
     assert entity.wrote_state is True
 
 
+def test_agent_status_sensor_update_refreshes_setup_metadata() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+        await entity.async_update()
+
+        assert api.validate_setup_calls == 1
+        assert entry.runtime_data.agent_info["firmware"] == "1.7.19"
+
+    asyncio.run(_run())
+
+
+def test_agent_status_sensor_update_keeps_existing_metadata_on_api_error() -> None:
+    async def _run() -> None:
+        from custom_components.bticino_c300x.api import C300XAgentApiError
+
+        api = _FakeApi()
+        api.validate_setup_error = C300XAgentApiError("offline")
+        runtime = _FakeRuntimeData(api=api)
+        runtime.agent_info = {"version": "old"}
+        entry = _FakeEntry(runtime_data=runtime)
+        entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+
+        await entity.async_update()
+
+        assert api.validate_setup_calls == 1
+        assert entry.runtime_data.agent_info == {"version": "old"}
+
+    asyncio.run(_run())
+
+
+def test_agent_status_sensor_subscribes_to_status_sources() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry()
+        entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+        entity.wrote_state = False
+
+        await entity.async_added_to_hass()
+        entity._handle_connection_state_changed(entry.entry_id)
+
+        assert entity.wrote_state is True
+
+    asyncio.run(_run())
+
+
 def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
     async def _run() -> None:
         entry = _FakeEntry(
@@ -1218,6 +1291,49 @@ def test_doorbell_state_sensor_is_created_for_doorbell_video_events() -> None:
         await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
 
         assert any(isinstance(entity, C300XDoorbellStateSensor) for entity in entities)
+
+    asyncio.run(_run())
+
+
+def test_sensor_setup_creates_all_capability_backed_sensors() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "system_metrics": {
+                        "supported": True,
+                        "cpu": True,
+                        "temperature": True,
+                        "load": True,
+                        "memory": True,
+                    },
+                    "diagnostics": {"supported": True},
+                    "answering_machine": {
+                        "supported": True,
+                        "messages": {"supported": True},
+                    },
+                    "memos": {"supported": True},
+                }
+            )
+        )
+        entities: list[Any] = []
+
+        await async_setup_sensor_entry(_FakeHass(), entry, entities.extend)  # type: ignore[arg-type]
+
+        assert any(isinstance(entity, C300XAgentStatusSensor) for entity in entities)
+        assert any(isinstance(entity, C300XMediaReadinessSensor) for entity in entities)
+        assert any(isinstance(entity, C300XDoorbellStateSensor) for entity in entities)
+        assert any(isinstance(entity, C300XDeviceCpuSensor) for entity in entities)
+        assert any(isinstance(entity, C300XDeviceTemperatureSensor) for entity in entities)
+        assert any(isinstance(entity, C300XDeviceLoadSensor) for entity in entities)
+        assert any(isinstance(entity, C300XDeviceMemorySensor) for entity in entities)
+        assert any(isinstance(entity, C300XAgentDiagnosticsSensor) for entity in entities)
+        assert any(isinstance(entity, C300XVoicemailMessagesSensor) for entity in entities)
+        assert any(isinstance(entity, C300XTextMemosSensor) for entity in entities)
+        assert any(isinstance(entity, C300XVoiceMemosSensor) for entity in entities)
+        assert entry.runtime_data.api.answering_machine_messages_calls == 1
+        assert entry.runtime_data.api.memos_calls == 1
 
     asyncio.run(_run())
 

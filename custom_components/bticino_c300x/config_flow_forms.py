@@ -73,6 +73,16 @@ def dashboard_entity_selector() -> Any:
     )
 
 
+def alarm_page_entity_selector() -> Any:
+    """Return a single-entity selector for the alarm page quick tile."""
+
+    if selector is None:
+        return str
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(domain=list(DASHBOARD_ENTITY_DOMAINS)),
+    )
+
+
 def dashboard_entity_name_display_selector() -> Any:
     """Return the selector for one dashboard entity title."""
 

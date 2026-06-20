@@ -18,6 +18,9 @@ from .config_flow_dashboard import (
     DASHBOARD_PREVENT_RETURN_DEFAULT as _DASHBOARD_PREVENT_RETURN_DEFAULT,
 )
 from .config_flow_dashboard import (
+    alarm_page_entity_id as _alarm_page_entity_id,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
 )
 from .config_flow_dashboard import (
@@ -35,6 +38,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
@@ -297,6 +301,7 @@ def _feature_input(
     errors: dict[str, str] = {}
     device_ui_enabled = bool(user_input.get(CONF_DEVICE_UI_ENABLED, False))
     alarm_entity_id = ""
+    alarm_page_entity_id = ""
     weather_entity_id = ""
     dashboard_entities: list[str] = []
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
@@ -336,6 +341,12 @@ def _feature_input(
             alarm_entity_id = _alarm_entity_id(user_input.get(CONF_ALARM_ENTITY_ID, ""))
         except vol.Invalid:
             errors[CONF_ALARM_ENTITY_ID] = "invalid_alarm_entity"
+        try:
+            alarm_page_entity_id = _alarm_page_entity_id(
+                user_input.get(CONF_ALARM_PAGE_ENTITY_ID, "")
+            )
+        except vol.Invalid:
+            errors[CONF_ALARM_PAGE_ENTITY_ID] = "invalid_alarm_page_entity"
         try:
             weather_entity_id = _weather_entity_id(
                 user_input.get(CONF_WEATHER_ENTITY_ID, "")
@@ -390,6 +401,7 @@ def _feature_input(
     return (
         {
             CONF_ALARM_ENTITY_ID: alarm_entity_id,
+            CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
             CONF_WEATHER_ENTITY_ID: weather_entity_id,
             CONF_DASHBOARD_ENTITIES: dashboard_entities,
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,

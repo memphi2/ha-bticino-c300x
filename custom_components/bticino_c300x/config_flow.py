@@ -79,6 +79,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
@@ -154,6 +155,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_CALLBACK_BASE_URL,
         CONF_CREATE_HOMEASSISTANT_USER,
         CONF_ALARM_ENTITY_ID,
+        CONF_ALARM_PAGE_ENTITY_ID,
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
@@ -680,6 +682,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
                     )
                 ),
+                default_alarm_page_entity=str(
+                    (user_input or {}).get(CONF_ALARM_PAGE_ENTITY_ID, "")
+                ),
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
@@ -1000,6 +1005,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
                     )
                 ),
+                default_alarm_page_entity=str(
+                    (user_input or {}).get(
+                        CONF_ALARM_PAGE_ENTITY_ID,
+                        feature_defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
+                    )
+                ),
                 default_device_ui_enabled=bool(
                     (user_input or {}).get(
                         CONF_DEVICE_UI_ENABLED,
@@ -1295,6 +1306,12 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                     (user_input or {}).get(
                         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
                         feature_defaults[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
+                    )
+                ),
+                default_alarm_page_entity=str(
+                    (user_input or {}).get(
+                        CONF_ALARM_PAGE_ENTITY_ID,
+                        feature_defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
                     )
                 ),
                 default_device_ui_enabled=bool(
@@ -1816,6 +1833,7 @@ def _feature_input_defaults(
     if not bool(data.get(CONF_DEVICE_UI_ENABLED, False)):
         return data
     data.setdefault(CONF_ALARM_ENTITY_ID, defaults[CONF_ALARM_ENTITY_ID])
+    data.setdefault(CONF_ALARM_PAGE_ENTITY_ID, defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""))
     data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
     data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
     data.setdefault(

@@ -59,6 +59,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
                 activeSinceItem.text = ""
             }
         }
+        pageItem.alarmPageItem = alarmPageItem(data.alarm_page_entity)
     }, function(error) {
         statusItem.text = error
         statusItem.color = "#ff6b6b"
@@ -220,15 +221,41 @@ function dashboardChoiceOptionValue(option) {
     return String(option || "")
 }
 
-function stairLight(statusItem, pageItem) {
-    getJson("/ui/stair-light", function(data) {
-        statusItem.text = data.ok ? uiText(pageItem, "stair_light_sent") : uiText(pageItem, "stair_light_error")
-        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
-    }, function(error) {
-        statusItem.text = error
-        statusItem.color = "#ff6b6b"
-    })
+
+function alarmPageItem(source) {
+    if (!source || !source.entity_id || !source.domain) {
+        return {
+            "kind": "button",
+            "domain": "c300x",
+            "entity_id": "stair_light",
+            "name_key": "stair_light",
+            "name": "stair_light",
+            "state": false,
+            "state_label": ""
+        }
+    }
+    var item = {
+        "kind": source.kind || "entity",
+        "domain": source.domain,
+        "entity_id": source.entity_id,
+        "name": source.name || source.entity_id,
+        "state": source.state === true,
+        "state_label": ""
+    }
+    if (source.name_key) {
+        item.name_key = source.name_key
+    }
+    if (source.hasOwnProperty && source.hasOwnProperty("state_label")) {
+        item.state_label = source.state_label
+    } else if (source.label) {
+        item.state_label = source.label
+    }
+    if (source.color) {
+        item.color = source.color
+    }
+    return item
 }
+
 
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
     if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {

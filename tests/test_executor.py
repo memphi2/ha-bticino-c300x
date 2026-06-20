@@ -72,6 +72,7 @@ helpers.entity = entity
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
@@ -92,6 +93,7 @@ from custom_components.bticino_c300x.executor import (  # noqa: E402
     async_unlock_door,
     configured_actions,
     configured_alarm_entity_id,
+    configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_weather_entity_id,
 )
@@ -921,6 +923,62 @@ def test_async_status_returns_alarm_state_and_action_ids() -> None:
     assert result["alarm_configured"] is True
     assert result["dashboard_available"] is True
     assert result["actions"] == ["a", "b"]
+    assert result["alarm_page_entity"] == {
+        "kind": "button",
+        "domain": "c300x",
+        "entity_id": "stair_light",
+        "name": "stair_light",
+        "name_key": "stair_light",
+        "state_label": "",
+    }
+
+
+def test_async_status_uses_configured_alarm_page_entity() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "switch.porch": FakeState(
+                    "on",
+                    attributes={"friendly_name": "Porch"},
+                )
+            }
+        )
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_ALARM_PAGE_ENTITY_ID: "switch.porch",
+        }
+    )
+
+    result = run(async_status(hass, entry))
+
+    assert configured_alarm_page_entity_id(entry) == "switch.porch"
+    assert result["alarm_page_entity"] == {
+        "domain": "c300x",
+        "entity_id": "switch.porch",
+        "name": "Porch",
+        "state_label": "Ein",
+        "kind": "switch",
+        "state": True,
+    }
+
+
+def test_async_execute_dashboard_action_allows_alarm_page_entity() -> None:
+    hass = FakeHass(states=FakeStates({"switch.porch": FakeState("off")}))
+    entry = FakeEntry(
+        options={
+            CONF_ALARM_PAGE_ENTITY_ID: "switch.porch",
+            CONF_DASHBOARD_ENTITIES: [],
+        }
+    )
+
+    result = run(async_execute_dashboard_action(hass, entry, "switch.porch"))
+
+    assert result == {"ok": True, "action_id": "switch.porch"}
+    assert hass.services.calls == [
+        ("switch", "toggle", {"entity_id": "switch.porch"}, True)
+    ]
 
 
 def test_async_status_limits_alarm_commands_to_supported_features() -> None:

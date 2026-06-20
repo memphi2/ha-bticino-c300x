@@ -16,6 +16,9 @@ from .config_flow_forms import (
     alarm_entity_selector as _alarm_entity_selector,
 )
 from .config_flow_forms import (
+    alarm_page_entity_selector as _alarm_page_entity_selector,
+)
+from .config_flow_forms import (
     dashboard_entity_custom_name_selector as _dashboard_entity_custom_name_selector,
 )
 from .config_flow_forms import (
@@ -37,6 +40,7 @@ from .const import (
     CONF_ACTIONS,
     CONF_ACTIONS_JSON,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
@@ -68,6 +72,17 @@ def dashboard_entity_ids(value: Any) -> list[str]:
         return list(normalize_dashboard_entity_ids(value, strict=True))
     except ValueError as err:
         raise vol.Invalid("invalid dashboard entities") from err
+
+
+def alarm_page_entity_id(value: Any) -> str:
+    """Validate the optional alarm page quick entity."""
+
+    if value in (None, ""):
+        return ""
+    entities = dashboard_entity_ids([value])
+    if not entities:
+        raise vol.Invalid("invalid alarm page entity")
+    return entities[0]
 
 
 def dashboard_entity_display_overrides(value: Any) -> dict[str, dict[str, str]]:
@@ -186,6 +201,7 @@ def dashboard_schema(
     default_dashboard_entities: Any = None,
     default_dashboard_entity_display_overrides: Any = None,
     default_dashboard_dynamic_homepage: bool = DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+    default_alarm_page_entity: str = "",
     *,
     default_device_ui_enabled: bool = False,
 ) -> vol.Schema:
@@ -209,6 +225,10 @@ def dashboard_schema(
                 CONF_ALARM_ENTITY_ID,
                 default_alarm_entity,
             ): _alarm_entity_selector(),
+            _optional_suggested(
+                CONF_ALARM_PAGE_ENTITY_ID,
+                default_alarm_page_entity,
+            ): _alarm_page_entity_selector(),
             _optional_suggested(
                 CONF_WEATHER_ENTITY_ID,
                 default_weather_entity,
@@ -279,6 +299,10 @@ def dashboard_input_defaults(
     data.setdefault(
         CONF_ALARM_ENTITY_ID,
         "" if defaults is None else defaults[CONF_ALARM_ENTITY_ID],
+    )
+    data.setdefault(
+        CONF_ALARM_PAGE_ENTITY_ID,
+        "" if defaults is None else defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""),
     )
     data.setdefault(
         CONF_WEATHER_ENTITY_ID,

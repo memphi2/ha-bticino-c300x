@@ -35,6 +35,7 @@ Page {
     property string commandFeedback: ""
     property string commandFeedbackColor: "#c7d0d9"
     property string activeFeedbackCommand: ""
+    property variant alarmPageItem: null
 
     Timer {
         id: modeFeedbackTimer
@@ -323,6 +324,46 @@ Page {
         return pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
     }
 
+    function alarmPageItemName() {
+        if (!alarmPageItem) return uiText("stair_light")
+        if (alarmPageItem.name_key === "stair_light" || alarmPageItem.entity_id === "stair_light") return uiText("stair_light")
+        return alarmPageItem.name || alarmPageItem.entity_id || uiText("action")
+    }
+
+    function alarmPageItemDetail() {
+        if (!alarmPageItem) return ""
+        if (alarmPageItem.kind === "switch") return alarmPageItem.state ? uiText("on") : uiText("off")
+        if (alarmPageItem.state_label && alarmPageItem.state_label.length > 0) return alarmPageItem.state_label
+        return alarmPageItem.kind === "entity" ? "" : uiText("execute")
+    }
+
+    function alarmPageItemColor() {
+        if (alarmPageItem && alarmPageItem.color && alarmPageItem.color.length > 0) return alarmPageItem.color
+        if (alarmPageItem && alarmPageItem.kind === "switch" && alarmPageItem.state) return "#58d68d"
+        if (alarmPageItem && alarmPageItem.kind === "entity" && alarmPageItem.state) return "#58d68d"
+        return "white"
+    }
+
+    function executeAlarmPageItem() {
+        if (!alarmPageItem) {
+            alarmPageItem = {
+                "kind": "button",
+                "domain": "c300x",
+                "entity_id": "stair_light",
+                "name_key": "stair_light",
+                "name": "stair_light",
+                "state": false,
+                "state_label": ""
+            }
+        }
+        if (alarmPageItem.kind === "button" || alarmPageItem.kind === "switch") {
+            Api.dashboardAction(alarmPageItem, status, page)
+            return
+        }
+        status.text = alarmPageItemDetail()
+        status.color = alarmPageItemColor()
+    }
+
     function stateColor() {
         if (alarmRawState === "triggered") return "#ff6b6b"
         if (alarmRawState === "arming" || alarmRawState === "pending") return "#f1c40f"
@@ -535,16 +576,36 @@ Page {
                     }
 
                     UbuntuLightText {
-                        text: uiText("stair_light") + trsl.empty
+                        text: alarmPageItemName() + trsl.empty
                         color: "white"
-                        font.pixelSize: 18
-                        anchors.centerIn: parent
+                        font.pixelSize: alarmPageItemDetail().length > 0 ? 14 : 18
+                        elide: Text.ElideRight
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.top: parent.top
+                        anchors.topMargin: alarmPageItemDetail().length > 0 ? 4 : 10
+                    }
+
+                    UbuntuLightText {
+                        text: alarmPageItemDetail() + trsl.empty
+                        color: alarmPageItemColor()
+                        font.pixelSize: 13
+                        visible: alarmPageItemDetail().length > 0
+                        elide: Text.ElideRight
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 4
                     }
 
                     BeepingMouseArea {
                         id: stairMouse
                         anchors.fill: parent
-                        onClicked: Api.stairLight(status, page)
+                        onClicked: executeAlarmPageItem()
                     }
                 }
 

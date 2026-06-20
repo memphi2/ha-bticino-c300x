@@ -57,6 +57,7 @@
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
+          "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
@@ -103,6 +104,7 @@
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
+          "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
@@ -131,6 +133,7 @@
       "invalid_ssh_password": "Enter the C300X SSH password.",
       "invalid_ssh_username": "Enter the C300X SSH user.",
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
+      "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
       "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
@@ -173,6 +176,7 @@
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
+          "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
           "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
@@ -191,6 +195,7 @@
       "invalid_agent_host": "Enter the device agent host.",
       "invalid_callback_base_url": "Enter a local HTTP Home Assistant callback URL reachable from the C300X, or leave it empty.",
       "invalid_alarm_entity": "Select an alarm control panel entity or leave the field empty.",
+      "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
       "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99."

@@ -57,6 +57,7 @@
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
+          "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
@@ -103,6 +104,7 @@
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
+          "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
@@ -131,6 +133,7 @@
       "invalid_ssh_password": "Saisissez le mot de passe SSH du C300X.",
       "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
@@ -173,6 +176,7 @@
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
+          "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
           "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
@@ -191,6 +195,7 @@
       "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
       "invalid_callback_base_url": "Saisissez une URL callback HTTP locale de Home Assistant joignable par le C300X, ou laissez vide.",
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
+      "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99."

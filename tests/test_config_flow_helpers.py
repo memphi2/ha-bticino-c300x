@@ -138,6 +138,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
@@ -631,6 +632,7 @@ def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
 
     assert errors == {}
     assert data[CONF_ALARM_ENTITY_ID] == ""
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == ""
     assert data[CONF_WEATHER_ENTITY_ID] == ""
     assert data[CONF_DASHBOARD_ENTITIES] == []
     assert data[CONF_ACTIONS] == {}
@@ -747,6 +749,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         {
             CONF_DEVICE_UI_ENABLED: True,
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_ALARM_PAGE_ENTITY_ID: "input_button.entry",
             CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_DASHBOARD_ENTITIES: ["switch.entry", "sensor.temperature"],
             CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
@@ -756,6 +759,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
 
     assert errors == {}
     assert data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == "input_button.entry"
     assert data[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert data[CONF_DASHBOARD_ENTITIES] == ["switch.entry", "sensor.temperature"]
     assert data[CONF_ACTIONS] == {
@@ -767,6 +771,17 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         }
     }
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
+
+
+def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
+    _data, errors = _feature_input(
+        {
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_ALARM_PAGE_ENTITY_ID: "media_player.tv",
+        }
+    )
+
+    assert errors == {CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity"}
 
 
 def test_manual_setup_duplicate_aborts_before_agent_probe(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1198,6 +1213,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     ]
     assert CONF_ALARM_ENTITY_ID in _schema_key_names(dashboard_schema)
+    assert CONF_ALARM_PAGE_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITIES in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES not in _schema_key_names(

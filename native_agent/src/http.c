@@ -282,12 +282,6 @@ static void handle_ui_action(
     struct agent_runtime *runtime,
     const struct request *request
 );
-static void handle_ui_stair_light(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-);
 static void handle_ui_alarm_command(
     int client_fd,
     const struct c300x_config *config,
@@ -11651,10 +11645,6 @@ static int handle_ui_request(
         handle_ui_action(client_fd, config, runtime, request);
         return 1;
     }
-    if (strcmp(request->path, "/ui/stair-light") == 0) {
-        handle_ui_stair_light(client_fd, config, runtime, request);
-        return 1;
-    }
     if (strcmp(request->path, "/ui/alarm/command") == 0) {
         handle_ui_alarm_command(client_fd, config, runtime, request);
         return 1;
@@ -11735,42 +11725,6 @@ static void handle_ui_action(
     }
     send_json(client_fd, 200, "OK", response);
     free(response);
-}
-
-static void handle_ui_stair_light(
-    int client_fd,
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const struct request *request
-)
-{
-    char address[C300X_MAX_ADDRESS_LEN];
-    char reply[C300X_MAX_FRAME_LEN];
-    char error[C300X_MAX_ERROR_LEN];
-    char body[512];
-    char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-
-    query_param_value(request->query, "address", address, sizeof(address));
-    if (!activate_stair_light(
-        config,
-        runtime,
-        address,
-        sizeof(address),
-        reply,
-        sizeof(reply),
-        error,
-        sizeof(error)
-    )) {
-        if (strcmp(error, "invalid_stair_light_address") == 0) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_stair_light_address\"}\n");
-            return;
-        }
-        send_device_error(client_fd, error);
-        return;
-    }
-    json_string(address, address_json, sizeof(address_json));
-    snprintf(body, sizeof(body), "{\"ok\":true,\"address\":%s}\n", address_json);
-    send_json(client_fd, 200, "OK", body);
 }
 
 static void handle_ui_alarm_command(

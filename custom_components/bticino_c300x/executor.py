@@ -47,6 +47,7 @@ from .const import (
     ALARM_DOMAIN,
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
@@ -176,6 +177,14 @@ def configured_alarm_entity_id(entry: ConfigEntry) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def configured_alarm_page_entity_id(entry: ConfigEntry) -> str | None:
+    """Return the optional dashboard-compatible entity shown on the alarm page."""
+
+    value = entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID)
+    entities = _dashboard_entity_ids([value] if isinstance(value, str) else value)
+    return entities[0] if entities else None
+
+
 def configured_weather_entity_id(entry: ConfigEntry) -> str | None:
     """Return the weather entity configured for the C300X dashboard."""
 
@@ -229,6 +238,7 @@ async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
     actions = configured_actions(entry)
     dashboard_entities = configured_dashboard_entities(entry)
     alarm_entity_id = configured_alarm_entity_id(entry)
+    language = _dashboard_language(hass)
     alarm: dict[str, Any] | None = None
     if device_ui_enabled and alarm_entity_id:
         state = hass.states.get(alarm_entity_id)
@@ -248,6 +258,9 @@ async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
         "entry_id": entry.entry_id,
         "title": entry.title,
         "alarm": alarm,
+        "alarm_page_entity": _alarm_page_entity(hass, entry, language)
+        if device_ui_enabled
+        else None,
         "alarm_configured": alarm is not None,
         "dashboard_available": device_ui_enabled
         and (
@@ -599,7 +612,11 @@ async def async_execute_dashboard_action(
             "enabled": result.get("enabled"),
         }
     selected_entity_id, selected_action = _dashboard_selected_entity_action(entity_id)
-    if selected_entity_id in configured_dashboard_entities(entry):
+    allowed_dashboard_entities = set(configured_dashboard_entities(entry))
+    alarm_page_entity_id = configured_alarm_page_entity_id(entry)
+    if alarm_page_entity_id:
+        allowed_dashboard_entities.add(alarm_page_entity_id)
+    if selected_entity_id in allowed_dashboard_entities:
         return await _async_execute_dashboard_entity(
             hass,
             entry,
@@ -620,6 +637,43 @@ def _dashboard_datetime_label() -> str:
     now_func = getattr(dt_util, "now", None) if dt_util is not None else None
     now = now_func() if callable(now_func) else datetime.now()
     return now.strftime("%d.%m.\n%H:%M")
+
+
+def _alarm_page_entity(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    language: str,
+) -> dict[str, Any]:
+    entity_id = configured_alarm_page_entity_id(entry)
+    if entity_id is None:
+        return {
+            "kind": "button",
+            "domain": DASHBOARD_ACTION_DOMAIN,
+            "entity_id": DASHBOARD_ENTITY_STAIR_LIGHT,
+            "name": DASHBOARD_ENTITY_STAIR_LIGHT,
+            "name_key": "stair_light",
+            "state_label": "",
+        }
+    item = _dashboard_item_for_entity(
+        hass,
+        entity_id,
+        0,
+        language=language,
+    )
+    if item is None:
+        return {
+            "kind": "entity",
+            "domain": DASHBOARD_ACTION_DOMAIN,
+            "entity_id": entity_id,
+            "name": entity_id,
+            "state_label": "unavailable",
+            "color": _DASHBOARD_COLOR_WARNING,
+        }
+    payload = dict(item)
+    payload["kind"] = str(payload.pop("_kind", "entity"))
+    payload.pop("_page", None)
+    payload.pop("_order", None)
+    return payload
 
 
 def _dashboard_weather(

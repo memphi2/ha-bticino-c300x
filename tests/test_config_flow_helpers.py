@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import types
+from collections.abc import Callable
 from types import SimpleNamespace
 
 import pytest
@@ -128,8 +129,14 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
 )
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
+from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
+    _dashboard_entity_name_display,
+    _dashboard_entity_secondary_info,
+)
 from custom_components.bticino_c300x.config_schemas import (  # noqa: E402
     stair_light_address as _stair_light_address,
+    stair_light_n as _stair_light_n,
+    stair_light_p as _stair_light_p,
 )
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
@@ -254,6 +261,23 @@ def test_stair_light_address_parts_build_openwebnet_where() -> None:
     )[0]
 
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
+
+
+@pytest.mark.parametrize(
+    ("validator", "value"),
+    [
+        (_stair_light_p, "100"),
+        (_stair_light_p, "A1"),
+        (_stair_light_n, "100"),
+        (_stair_light_n, "A1"),
+    ],
+)
+def test_stair_light_address_parts_reject_invalid_values(
+    validator: Callable[[object], str],
+    value: str,
+) -> None:
+    with pytest.raises(vol.Invalid):
+        validator(value)
 
 
 def test_feature_schemas_are_serializable_for_home_assistant_forms() -> None:
@@ -501,6 +525,11 @@ def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
 def test_dashboard_entity_display_overrides_rejects_invalid_mapping(value: object) -> None:
     with pytest.raises(vol.Invalid):
         _dashboard_entity_display_overrides(value)
+
+
+def test_dashboard_entity_display_field_modes_fall_back_to_safe_defaults() -> None:
+    assert _dashboard_entity_name_display("bad") == "friendly_name"
+    assert _dashboard_entity_secondary_info("bad") == "state"
 
 
 def test_actions_json_is_stable_for_options_form() -> None:

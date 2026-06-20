@@ -5,6 +5,7 @@ from types import MappingProxyType, SimpleNamespace
 import pytest
 
 from custom_components.bticino_c300x.dashboard_entities import (
+    normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
 )
 from custom_components.bticino_c300x.entry_config import (
@@ -23,6 +24,67 @@ def test_entry_config_value_honors_present_blank_options() -> None:
     entry = SimpleNamespace(data={"maintenance_token": "old"}, options={"maintenance_token": ""})
 
     assert entry_config_value(entry, "maintenance_token", "") == ""
+
+
+def test_dashboard_entity_display_overrides_validate_modes() -> None:
+    assert normalize_dashboard_entity_display_overrides(
+        {
+            "sensor.temperature": {
+                "name": "custom",
+                "custom_name": "Outside",
+                "secondary": "none",
+            }
+        },
+        strict=True,
+    ) == {
+        "sensor.temperature": {
+            "name": "custom",
+            "custom_name": "Outside",
+            "secondary": "none",
+        }
+    }
+
+    with pytest.raises(ValueError, match="invalid dashboard entity display name mode"):
+        normalize_dashboard_entity_display_overrides(
+            {"sensor.temperature": {"name": "bad"}},
+            strict=True,
+        )
+    with pytest.raises(ValueError, match="missing dashboard entity custom name"):
+        normalize_dashboard_entity_display_overrides(
+            {"sensor.temperature": {"name": "custom"}},
+            strict=True,
+        )
+    with pytest.raises(ValueError, match="invalid dashboard entity secondary info mode"):
+        normalize_dashboard_entity_display_overrides(
+            {"sensor.temperature": {"secondary": "bad"}},
+            strict=True,
+        )
+
+
+def test_dashboard_entity_display_overrides_drop_invalid_lenient_values() -> None:
+    assert normalize_dashboard_entity_display_overrides("bad") == {}
+    assert normalize_dashboard_entity_display_overrides(
+        {
+            "media_player.tv": {"name": "entity_id"},
+            "sensor.temperature": "bad",
+            "sensor.humidity": {"name": "bad", "secondary": "bad"},
+        }
+    ) == {}
+
+
+def test_dashboard_entity_display_overrides_reject_invalid_strict_values() -> None:
+    with pytest.raises(ValueError, match="invalid dashboard entity display overrides"):
+        normalize_dashboard_entity_display_overrides("bad", strict=True)
+    with pytest.raises(ValueError, match="invalid dashboard entity"):
+        normalize_dashboard_entity_display_overrides(
+            {"media_player.tv": {"name": "entity_id"}},
+            strict=True,
+        )
+    with pytest.raises(ValueError, match="invalid dashboard entity display override"):
+        normalize_dashboard_entity_display_overrides(
+            {"sensor.temperature": "bad"},
+            strict=True,
+        )
 
 
 def test_entry_config_value_keeps_required_data_when_option_is_blank() -> None:

@@ -67,6 +67,11 @@ def test_device_user_status_helpers_keep_single_truth() -> None:
         "media_identity_available": True,
         "routes_consistent": False,
     }
+    missing_identity = {
+        "homeassistant_user_present": True,
+        "media_identity_available": False,
+        "routes_consistent": True,
+    }
     unavailable = {
         "available": False,
         "homeassistant_user_present": False,
@@ -82,6 +87,11 @@ def test_device_user_status_helpers_keep_single_truth() -> None:
     assert device_user_bootstrap_satisfied(missing) is False
     assert device_user_bootstrap_needed(missing) is True
     assert device_user_repair_reason(missing) == "homeassistant_routes_inconsistent"
+
+    assert device_user_ready(missing_identity) is False
+    assert device_user_bootstrap_satisfied(missing_identity) is False
+    assert device_user_bootstrap_needed(missing_identity) is True
+    assert device_user_repair_reason(missing_identity) == "media_identity_missing"
 
     assert device_user_ready(unavailable) is None
     assert device_user_bootstrap_satisfied(unavailable) is False

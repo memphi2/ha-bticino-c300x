@@ -154,6 +154,7 @@ function getJson(path, callback, errorCallback) {
     xhr.startTime = Date.now()
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
+            removeConnection(xhr)
             if (xhr.status === 200) {
                 try {
                     callback(JSON.parse(xhr.responseText))
@@ -220,7 +221,7 @@ function removeConnection(xhr) {
 function cleanupConnections() {
     var index = connections.length
     while (index--) {
-        if (connections[index].longPoll === true) {
+        if (connections[index].longPoll === true && connections[index] === eventRequest && eventWatching === true) {
             continue
         }
         if (Date.now() - connections[index].startTime > 3000) {

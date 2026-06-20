@@ -224,10 +224,10 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
     "Alarm.qml": "25871ecab4824d2fc70b3515ecf7d3009e6760a76f618eb48d9ede7d8803e5eb",
-    "HomeAssistant.qml": "657dacd6652f394510c2cbb5f1ba7584df6d6ff734d593510e998116ed9cf929",
-    "js/c300x_ha.js": "cdaaaeb9ffacc21263cf7c7addda70e5e39781fe2994741f98acf88a9b5d38e9",
+    "HomeAssistant.qml": "9f71af5653da2e90111dacdc9a06ef422fb21980dfa85ac4d7d7fe6ea3661371",
+    "js/c300x_ha.js": "be2107688977236a13a554e747ad532397987941f2941b67ff8a6b6a174ea688",
     "js/c300x_i18n.js": "0cdbc4c08842839188c8d1ae24a5e413eda2ac9072b0d73b7f5db481d8212a57",
-    "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
+    "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 
 
@@ -471,14 +471,14 @@ def test_home_assistant_buttons_keep_static_press_feedback() -> None:
     home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
         encoding="utf-8"
     )
-    button_grid_body = home_assistant_qml[
-        home_assistant_qml.index("id: buttonGrid") :
-        home_assistant_qml.index("id: choiceGrid")
+    button_component_body = home_assistant_qml[
+        home_assistant_qml.index("id: mixedButtonTileComponent") :
+        home_assistant_qml.index("id: mixedSliderTileComponent")
     ]
 
-    assert "source: buttonBackground(buttonMouse.pressed)" in button_grid_body
-    assert "Behavior on" not in button_grid_body
-    assert "NumberAnimation" not in button_grid_body
+    assert "source: tileMouse.pressed" in button_component_body
+    assert "Behavior on" not in button_component_body
+    assert "NumberAnimation" not in button_component_body
 
 
 def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
@@ -489,8 +489,8 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
         encoding="utf-8"
     )
 
-    assert "property variant choices: []" in home_assistant_qml
-    assert "id: choiceGrid" in home_assistant_qml
+    assert "id: mixedChoiceTileComponent" in home_assistant_qml
+    assert "id: choiceGrid" not in home_assistant_qml
     assert "Api.dashboardChoiceAction" in home_assistant_qml
     assert "Api.dashboardChoiceOptionLabel(modelData)" in home_assistant_qml
     assert "Api.dashboardChoiceOptionValue(modelData)" in home_assistant_qml
@@ -523,8 +523,8 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
         encoding="utf-8"
     )
     mixed_items_body = home_assistant_qml[
-        home_assistant_qml.index("id: itemColumn") :
-        home_assistant_qml.index("id: imageFlow")
+        home_assistant_qml.rindex("Flow {", 0, home_assistant_qml.index("id: itemColumn")) :
+        home_assistant_qml.index('text: items.length === 0')
     ]
 
     assert "Flow {" in mixed_items_body
@@ -537,6 +537,23 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
     assert "sourceComponent:" in mixed_items_body
     assert "visible: mixedTile.is" not in mixed_items_body
     assert "visible: !mixedTile.is" not in mixed_items_body
+
+
+def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() -> None:
+    for relative_path in ("js/c300x_ha.js", "js/c300x_memos.js"):
+        script = (ROOT / "device_qml" / relative_path).read_text(encoding="utf-8")
+        cleanup_body = script[
+            script.index("function cleanupConnections") :
+        ]
+
+        assert (
+            "longPoll === true && "
+            in cleanup_body
+        )
+        assert "connections" in cleanup_body
+        assert "eventRequest" in cleanup_body
+        assert "eventWatching === true" in cleanup_body
+        assert "removeConnection(xhr)" in script[script.index("function getJson") :]
 
 
 def test_alarm_quick_action_uses_single_line_large_label() -> None:

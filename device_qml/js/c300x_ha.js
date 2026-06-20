@@ -99,12 +99,6 @@ function dashboard(statusItem, pageItem) {
         pageItem.dashboardPages = []
         pageItem.badges = []
         pageItem.items = []
-        pageItem.switches = []
-        pageItem.entities = []
-        pageItem.sliders = []
-        pageItem.choices = []
-        pageItem.buttons = []
-        pageItem.images = []
         pageItem.flowItems = []
         pageItem.flowLines = []
         pageItem.flowVisible = false
@@ -578,12 +572,6 @@ function loadDashboardPage(statusItem, pageItem) {
     var flowLines = listOrEmpty(flow.lines)
     pageItem.badges = listOrEmpty(pageData.badges)
     pageItem.items = dashboardMixedItems(pageData.items)
-    pageItem.switches = []
-    pageItem.entities = []
-    pageItem.sliders = []
-    pageItem.choices = []
-    pageItem.buttons = []
-    pageItem.images = []
     applyWeather(pageItem, pageData.weather)
     pageItem.flowItems = flowItems
     pageItem.flowLines = flowLines
@@ -930,7 +918,7 @@ function getJson(path, callback, errorCallback) {
 function cleanupConnections() {
     var i = connections.length
     while (i--) {
-        if (connections[i].longPoll === true) {
+        if (connections[i].longPoll === true && connections[i] === eventRequest && eventWatching === true) {
             continue
         }
         if (Date.now() - connections[i].startTime > 3000) {

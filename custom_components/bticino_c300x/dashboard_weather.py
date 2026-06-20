@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -21,6 +22,8 @@ from .dashboard_labels import (
 )
 
 _FORECAST_TYPE_KEY = "_c300x_forecast_type"
+_FORECAST_CACHE_KEY = "bticino_c300x_dashboard_weather_forecast"
+_FORECAST_CACHE_TTL_SECONDS = 300.0
 _EMPTY_FORECAST = {
     "time": "",
     "condition": "",
@@ -157,7 +160,18 @@ async def _async_weather_forecast_items(
 ) -> list[Any] | None:
     if entity_id is None or not hasattr(hass, "services"):
         return None
+    cache = _weather_forecast_cache(hass)
+    state = hass.states.get(entity_id) if hasattr(hass, "states") else None
+    state_revision = _weather_state_revision(state)
     for forecast_type in ("hourly", "daily"):
+        cached = _cached_weather_forecast(
+            cache,
+            entity_id,
+            forecast_type,
+            state_revision,
+        )
+        if cached is not None:
+            return cached
         try:
             response = await hass.services.async_call(
                 "weather",
@@ -172,8 +186,70 @@ async def _async_weather_forecast_items(
             continue
         forecast = _weather_service_forecast_items(response, entity_id)
         if forecast:
-            return _tag_forecast_items(forecast, forecast_type)
+            tagged = _tag_forecast_items(forecast, forecast_type)
+            _store_weather_forecast_cache(
+                cache,
+                entity_id,
+                forecast_type,
+                state_revision,
+                tagged,
+            )
+            return tagged
     return None
+
+
+def _weather_forecast_cache(hass: HomeAssistant) -> dict[tuple[str, str], dict[str, Any]]:
+    data = getattr(hass, "data", None)
+    if not isinstance(data, dict):
+        return {}
+    cache = data.setdefault(_FORECAST_CACHE_KEY, {})
+    if not isinstance(cache, dict):
+        cache = {}
+        data[_FORECAST_CACHE_KEY] = cache
+    return cache
+
+
+def _weather_state_revision(state: Any) -> str:
+    if state is None:
+        return ""
+    parts = (
+        getattr(state, "state", ""),
+        getattr(state, "last_updated", None),
+        getattr(state, "last_changed", None),
+    )
+    return "|".join(str(part or "") for part in parts)
+
+
+def _cached_weather_forecast(
+    cache: dict[tuple[str, str], dict[str, Any]],
+    entity_id: str,
+    forecast_type: str,
+    state_revision: str,
+) -> list[Any] | None:
+    cached = cache.get((entity_id, forecast_type))
+    if not isinstance(cached, dict):
+        return None
+    if cached.get("state_revision") != state_revision:
+        return None
+    expires_at = cached.get("expires_at")
+    if not isinstance(expires_at, (float, int)) or expires_at < monotonic():
+        return None
+    forecast = cached.get("forecast")
+    return list(forecast) if isinstance(forecast, list) else None
+
+
+def _store_weather_forecast_cache(
+    cache: dict[tuple[str, str], dict[str, Any]],
+    entity_id: str,
+    forecast_type: str,
+    state_revision: str,
+    forecast: list[Any],
+) -> None:
+    cache[(entity_id, forecast_type)] = {
+        "expires_at": monotonic() + _FORECAST_CACHE_TTL_SECONDS,
+        "state_revision": state_revision,
+        "forecast": list(forecast),
+    }
 
 
 def _tag_forecast_items(forecast: list[Any], forecast_type: str) -> list[Any]:

@@ -1676,6 +1676,71 @@ def test_async_dashboard_payload_uses_weather_forecast_service() -> None:
     )
 
 
+def test_async_dashboard_payload_caches_weather_forecast_service() -> None:
+    states = FakeStates(
+        {
+            "weather.home": FakeState(
+                "cloudy",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "temperature": 19,
+                    "temperature_unit": "C",
+                },
+                last_updated=datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+            ),
+            "sun.sun": FakeState(
+                "above_horizon",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "next_rising": "2026-05-30T03:20:00+00:00",
+                    "next_setting": "2026-05-29T19:28:00+00:00",
+                },
+            ),
+        }
+    )
+    hass = FakeHass(
+        states=states,
+        services=FakeServices(
+            responses={
+                (
+                    "weather",
+                    "get_forecasts",
+                ): {
+                    "weather.home": {
+                        "forecast": [
+                            {
+                                "datetime": "2026-05-29T15:00:00+00:00",
+                                "condition": "rainy",
+                                "temperature": 18,
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    first = run(async_dashboard_payload(hass, entry))
+    second = run(async_dashboard_payload(hass, entry))
+
+    assert first["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
+    assert second["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
+    assert hass.services.calls == [
+        (
+            "weather",
+            "get_forecasts",
+            {"entity_id": "weather.home", "type": "hourly"},
+            True,
+        )
+    ]
+
+
 def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:
     hass = FakeHass(
         states=FakeStates(

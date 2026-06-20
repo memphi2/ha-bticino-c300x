@@ -1529,6 +1529,26 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
                         "humidity": 55,
                         "wind_speed": 12,
                         "wind_speed_unit": "km/h",
+                        "forecast": [
+                            {
+                                "datetime": "2026-05-29T14:00:00+00:00",
+                                "condition": "rainy",
+                                "temperature": 20,
+                            },
+                            {
+                                "datetime": "2026-05-29T18:00:00+00:00",
+                                "condition": "cloudy",
+                                "temperature": 18,
+                            },
+                        ],
+                    },
+                ),
+                "sun.sun": FakeState(
+                    "above_horizon",
+                    datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                    {
+                        "next_rising": "2026-05-30T03:20:00+00:00",
+                        "next_setting": "2026-05-29T19:28:00+00:00",
                     },
                 )
             }
@@ -1556,6 +1576,8 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
         "temperature": "22 C",
         "humidity": "55%",
         "wind": "12 km/h",
+        "forecast": "14:00 Regen 20 C | 18:00 Bewoelkt 18 C",
+        "sun": "Auf 03:20   Unter 19:28",
         "updated": "10:30",
         "badge": "Sonnig\n22 C",
         "color": "#f1c40f",

@@ -88,10 +88,8 @@ from .dashboard_labels import (
     _DASHBOARD_ON_STATES,
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
-    _WEATHER_STATE_LABELS_BY_LANGUAGE,
-    _WEATHER_STATE_LABELS_EN,
-    _WEATHER_TITLE_BY_LANGUAGE,
 )
+from .dashboard_weather import dashboard_weather_payload
 from .entity import entry_config_value
 
 
@@ -120,6 +118,7 @@ _ALARM_ARM_COMMANDS = (
         _alarm_feature("ARM_VACATION", 32),
     ),
 )
+
 _ALARM_COMMAND_TARGET_STATES = {
     command: state for command, state, _name, _feature in _ALARM_ARM_COMMANDS
 }
@@ -164,10 +163,6 @@ def _dashboard_language(hass: HomeAssistant | None) -> str:
     if language.startswith("it"):
         return "it"
     return "en"
-
-
-def _localized_weather_title(language: str) -> str:
-    return _WEATHER_TITLE_BY_LANGUAGE.get(language, _WEATHER_TITLE_BY_LANGUAGE["en"])
 
 
 def configured_alarm_entity_id(entry: ConfigEntry) -> str | None:
@@ -528,7 +523,7 @@ async def async_dashboard_payload(
         )
 
     badges.append({"state": _dashboard_datetime_label()})
-    weather = _dashboard_weather(hass, entry, language)
+    weather = dashboard_weather_payload(hass, configured_weather_entity_id(entry), language)
     if weather is not None:
         main_page["weather"] = weather
 
@@ -674,108 +669,6 @@ def _alarm_page_entity(
     payload.pop("_page", None)
     payload.pop("_order", None)
     return payload
-
-
-def _dashboard_weather(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    language: str,
-) -> dict[str, Any] | None:
-    """Return weather data for the first dashboard page."""
-
-    entity_id = configured_weather_entity_id(entry)
-    if entity_id is None:
-        return None
-    state = hass.states.get(entity_id)
-    if state is None:
-        title = _localized_weather_title(language)
-        return {
-            "available": False,
-            "title": title,
-            "condition": "Offline",
-            "condition_key": "unavailable",
-            "temperature": "",
-            "humidity": "",
-            "wind": "",
-            "updated": "",
-            "badge": f"{title}\nOffline",
-            "color": "#f1c40f",
-        }
-
-    attributes = getattr(state, "attributes", None)
-    if not isinstance(attributes, dict):
-        attributes = {}
-    condition = _weather_state_label(state.state, language)
-    condition_key = str(state.state or "unknown").lower()
-    temperature = _weather_temperature(attributes)
-    humidity = _weather_humidity(attributes)
-    wind = _weather_wind(attributes)
-    title = _dashboard_text(attributes.get("friendly_name"), _localized_weather_title(language), 40)
-    updated = _weather_updated_label(state)
-    return {
-        "available": state.state not in {"unknown", "unavailable"},
-        "title": title,
-        "condition": condition,
-        "condition_key": condition_key,
-        "temperature": temperature,
-        "humidity": humidity,
-        "wind": wind,
-        "updated": updated,
-        "badge": f"{condition}\n{temperature or title}",
-        "color": _weather_color(state.state),
-    }
-
-
-def _weather_state_label(value: Any, language: str) -> str:
-    raw = str(value or "unknown").lower()
-    labels = _WEATHER_STATE_LABELS_BY_LANGUAGE.get(language, _WEATHER_STATE_LABELS_EN)
-    return labels.get(raw, _dashboard_state_label(raw, language))
-
-
-def _weather_temperature(attributes: dict[str, Any]) -> str:
-    value = attributes.get("temperature")
-    if value in (None, ""):
-        return ""
-    unit = str(attributes.get("temperature_unit") or attributes.get("unit_of_measurement") or "C")
-    return f"{value} {unit}"
-
-
-def _weather_humidity(attributes: dict[str, Any]) -> str:
-    value = attributes.get("humidity")
-    if value in (None, ""):
-        return ""
-    return f"{value}%"
-
-
-def _weather_wind(attributes: dict[str, Any]) -> str:
-    value = attributes.get("wind_speed")
-    if value in (None, ""):
-        return ""
-    unit = str(attributes.get("wind_speed_unit") or "")
-    suffix = f" {unit}" if unit else ""
-    return f"{value}{suffix}"
-
-
-def _weather_updated_label(state: Any) -> str:
-    last_changed = getattr(state, "last_changed", None)
-    if last_changed is None:
-        return ""
-    as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
-    display_time = as_local(last_changed) if callable(as_local) else last_changed
-    if hasattr(display_time, "strftime"):
-        return display_time.strftime("%H:%M")
-    return ""
-
-
-def _weather_color(value: Any) -> str:
-    raw = str(value or "unknown").lower()
-    if raw in {"sunny", "clear-night", "partlycloudy"}:
-        return "#f1c40f"
-    if raw in {"rainy", "pouring", "lightning-rainy", "snowy-rainy"}:
-        return "#5dade2"
-    if raw in {"unknown", "unavailable"}:
-        return "#f1c40f"
-    return "#58d68d"
 
 
 def _dashboard_page(

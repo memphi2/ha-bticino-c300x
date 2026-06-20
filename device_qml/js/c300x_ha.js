@@ -625,6 +625,8 @@ function applyWeather(pageItem, source) {
         pageItem.weatherTemperature = ""
         pageItem.weatherHumidity = ""
         pageItem.weatherWind = ""
+        pageItem.weatherForecast = ""
+        pageItem.weatherSun = ""
         pageItem.weatherUpdated = ""
         pageItem.weatherColor = "#58d68d"
         return
@@ -636,6 +638,8 @@ function applyWeather(pageItem, source) {
     pageItem.weatherTemperature = source.temperature || ""
     pageItem.weatherHumidity = source.humidity || ""
     pageItem.weatherWind = source.wind || ""
+    pageItem.weatherForecast = source.forecast || ""
+    pageItem.weatherSun = source.sun || ""
     pageItem.weatherUpdated = source.updated || ""
     pageItem.weatherColor = source.color || "#58d68d"
 }

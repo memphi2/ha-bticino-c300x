@@ -38,6 +38,8 @@ Page {
     property string weatherTemperature: ""
     property string weatherHumidity: ""
     property string weatherWind: ""
+    property string weatherForecast: ""
+    property string weatherSun: ""
     property string weatherUpdated: ""
     property string weatherColor: "#58d68d"
 
@@ -138,6 +140,20 @@ Page {
 
     function weatherUpdatedText() {
         return weatherUpdated.length > 0 ? uiText("updated") + " " + weatherUpdated : ""
+    }
+
+    function weatherConditionText() {
+        if (weatherForecast.length > 0) {
+            return weatherCondition + "   " + weatherForecast
+        }
+        return weatherCondition
+    }
+
+    function weatherSunText() {
+        if (weatherSun.length > 0) {
+            return weatherSun
+        }
+        return weatherUpdatedText()
     }
 
     Column {
@@ -274,9 +290,9 @@ Page {
                     }
 
                     UbuntuLightText {
-                        text: weatherCondition + trsl.empty
+                        text: weatherConditionText() + trsl.empty
                         color: "white"
-                        font.pixelSize: 23
+                        font.pixelSize: weatherForecast.length > 0 ? 18 : 23
                         font.bold: true
                         anchors.left: parent.left
                         anchors.leftMargin: 146
@@ -301,7 +317,7 @@ Page {
                     }
 
                     UbuntuLightText {
-                        text: weatherUpdatedText() + trsl.empty
+                        text: weatherSunText() + trsl.empty
                         color: "#8d98a3"
                         font.pixelSize: 14
                         anchors.left: parent.left

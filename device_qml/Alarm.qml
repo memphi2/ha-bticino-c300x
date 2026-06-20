@@ -331,10 +331,7 @@ Page {
     }
 
     function alarmPageItemDetail() {
-        if (!alarmPageItem) return ""
-        if (alarmPageItem.kind === "switch") return alarmPageItem.state ? uiText("on") : uiText("off")
-        if (alarmPageItem.state_label && alarmPageItem.state_label.length > 0) return alarmPageItem.state_label
-        return alarmPageItem.kind === "entity" ? "" : uiText("execute")
+        return ""
     }
 
     function alarmPageItemColor() {
@@ -578,14 +575,13 @@ Page {
                     UbuntuLightText {
                         text: alarmPageItemName() + trsl.empty
                         color: "white"
-                        font.pixelSize: alarmPageItemDetail().length > 0 ? 14 : 18
+                        font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20
                         elide: Text.ElideRight
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        anchors.top: parent.top
-                        anchors.topMargin: alarmPageItemDetail().length > 0 ? 4 : 10
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     UbuntuLightText {

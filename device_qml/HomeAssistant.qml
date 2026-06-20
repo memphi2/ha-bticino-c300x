@@ -232,7 +232,7 @@ Page {
                 Item {
                     id: weatherCard
                     width: parent.width
-                    height: weatherVisible ? 126 : 0
+                    height: weatherVisible ? 156 : 0
                     visible: weatherVisible
 
                     Image {
@@ -293,7 +293,7 @@ Page {
                     UbuntuLightText {
                         text: weatherConditionText() + trsl.empty
                         color: "white"
-                        font.pixelSize: weatherForecast.length > 0 ? 18 : 23
+                        font.pixelSize: weatherForecast.length > 0 ? 17 : 23
                         font.bold: true
                         anchors.left: parent.left
                         anchors.leftMargin: 146
@@ -312,8 +312,8 @@ Page {
                         anchors.leftMargin: 146
                         anchors.right: parent.right
                         anchors.rightMargin: 18
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 34
+                        anchors.top: parent.top
+                        anchors.topMargin: 70
                         elide: Text.ElideRight
                     }
 
@@ -410,12 +410,13 @@ Page {
                     }
                 }
 
-                Column {
+                Flow {
                     id: itemColumn
                     width: parent.width
                     spacing: 10
                     visible: items.length > 0
                     height: visible ? childrenRect.height : 0
+                    property int tileWidth: (width - spacing) / 2
 
                     Repeater {
                         model: items
@@ -428,7 +429,7 @@ Page {
                             property bool isSlider: tileItem.kind === "slider"
                             property bool isChoice: tileItem.kind === "choice"
                             property bool isImage: tileItem.kind === "image"
-                            width: itemColumn.width
+                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
                             height: isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))
 
                             Image {

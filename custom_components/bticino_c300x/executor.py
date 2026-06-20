@@ -89,7 +89,7 @@ from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
     _DASHBOARD_STATE_LABELS_EN,
 )
-from .dashboard_weather import dashboard_weather_payload
+from .dashboard_weather import async_dashboard_weather_payload
 from .entity import entry_config_value
 
 
@@ -523,7 +523,11 @@ async def async_dashboard_payload(
         )
 
     badges.append({"state": _dashboard_datetime_label()})
-    weather = dashboard_weather_payload(hass, configured_weather_entity_id(entry), language)
+    weather = await async_dashboard_weather_payload(
+        hass,
+        configured_weather_entity_id(entry),
+        language,
+    )
     if weather is not None:
         main_page["weather"] = weather
 

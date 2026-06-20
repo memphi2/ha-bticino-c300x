@@ -119,6 +119,7 @@ class FakeStates:
 class FakeServices:
     calls: list[tuple[str, str, dict[str, Any], bool]] = field(default_factory=list)
     targets: list[dict[str, Any] | None] = field(default_factory=list)
+    responses: dict[tuple[str, str], Any] = field(default_factory=dict)
     states: FakeStates | None = None
     mutate_alarm_states: bool = True
     error: Exception | None = None
@@ -130,11 +131,14 @@ class FakeServices:
         data: dict[str, Any],
         blocking: bool,
         target: dict[str, Any] | None = None,
-    ) -> None:
+        return_response: bool = False,
+    ) -> Any:
         self.calls.append((domain, service, data, blocking))
         self.targets.append(target)
         if self.error is not None:
             raise self.error
+        if return_response:
+            return self.responses.get((domain, service), {})
         if self.states is None or not self.mutate_alarm_states:
             return
         entity_id = data.get("entity_id")
@@ -1585,6 +1589,69 @@ def test_async_dashboard_payload_includes_configured_weather() -> None:
     }
     assert "buttons" not in main_page
     assert "switches" not in main_page
+
+
+def test_async_dashboard_payload_uses_weather_forecast_service() -> None:
+    states = FakeStates(
+        {
+            "weather.home": FakeState(
+                "cloudy",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "friendly_name": "Zuhause",
+                    "temperature": 19,
+                    "temperature_unit": "C",
+                },
+            ),
+            "sun.sun": FakeState(
+                "above_horizon",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "next_rising": "2026-05-30T03:20:00+00:00",
+                    "next_setting": "2026-05-29T19:28:00+00:00",
+                },
+            ),
+        }
+    )
+    hass = FakeHass(
+        states=states,
+        services=FakeServices(
+            responses={
+                (
+                    "weather",
+                    "get_forecasts",
+                ): {
+                    "weather.home": {
+                        "forecast": [
+                            {
+                                "datetime": "2026-05-29T15:00:00+00:00",
+                                "condition": "rainy",
+                                "temperature": 18,
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    main_page = {page["title"]: page for page in result["data"]["pages"]}["C300X"]
+    assert main_page["weather"]["forecast"] == "15:00 Regen 18 C"
+    assert main_page["weather"]["sun"] == "Auf 03:20   Unter 19:28"
+    assert hass.services.calls[0] == (
+        "weather",
+        "get_forecasts",
+        {"entity_id": "weather.home", "type": "hourly"},
+        True,
+    )
 
 
 def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:

@@ -223,8 +223,8 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "d17f8121d4455d0c0ca1e26c8f3a33bfca919310fef50903621eab7ee0ced5ac",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
-    "Alarm.qml": "bf1d12647cb729c8ad904908b225085d52079292b5fac9fef8f70d5d224e5847",
-    "HomeAssistant.qml": "806183eeed1075f5917b9174620edd10f2fd0a903e0f952c1c4dde69d85297e6",
+    "Alarm.qml": "66eeaecb48b584c8d89a1adc0d56a678dd0c0b07391656f1851e99333893144a",
+    "HomeAssistant.qml": "41b2c0d0910d26a19ce90a8c98a0797a47aad8b2bb56fd5bc3ca360d9281ebc9",
     "js/c300x_ha.js": "88163a0e93b4fcedbdb0f3e6eb08d2900f366448c5f13dc3ed64ac66dae78cfb",
     "js/c300x_i18n.js": "545cb310c7ffa1bf37232afdc70c48a1023b3020b2838f75ddbd28130ba0420d",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
@@ -516,6 +516,39 @@ def test_home_assistant_mixed_dashboard_preserves_image_kind() -> None:
 
     assert 'kind === "image"' in dashboard_mixed_body
     assert '"kind": "image"' in dashboard_images_body
+
+
+def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() -> None:
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    mixed_items_body = home_assistant_qml[
+        home_assistant_qml.index("id: itemColumn") :
+        home_assistant_qml.index("id: imageFlow")
+    ]
+
+    assert "Flow {" in mixed_items_body
+    assert "property int tileWidth: (width - spacing) / 2" in mixed_items_body
+    assert (
+        "width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
+        in mixed_items_body
+    )
+
+
+def test_alarm_quick_action_uses_single_line_large_label() -> None:
+    alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
+    detail_body = alarm_qml[
+        alarm_qml.index("function alarmPageItemDetail") :
+        alarm_qml.index("function alarmPageItemColor")
+    ]
+    quick_tile_body = alarm_qml[
+        alarm_qml.index("id: stairMouse") - 1400 :
+        alarm_qml.index("id: stairMouse")
+    ]
+
+    assert 'return ""' in detail_body
+    assert "font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20" in quick_tile_body
+    assert "anchors.verticalCenter: parent.verticalCenter" in quick_tile_body
 
 
 def test_alarm_quick_action_does_not_refresh_home_assistant_dashboard() -> None:

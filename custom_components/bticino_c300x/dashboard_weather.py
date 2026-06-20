@@ -28,10 +28,27 @@ _WEATHER_SUN_LABELS = {
 }
 
 
+async def async_dashboard_weather_payload(
+    hass: HomeAssistant,
+    entity_id: str | None,
+    language: str,
+) -> dict[str, Any] | None:
+    """Return weather data for the dashboard, including HA forecast service data."""
+
+    return dashboard_weather_payload(
+        hass,
+        entity_id,
+        language,
+        forecast_items=await _async_weather_forecast_items(hass, entity_id),
+    )
+
+
 def dashboard_weather_payload(
     hass: HomeAssistant,
     entity_id: str | None,
     language: str,
+    *,
+    forecast_items: list[Any] | None = None,
 ) -> dict[str, Any] | None:
     """Return weather data for the first dashboard page."""
 
@@ -73,7 +90,11 @@ def dashboard_weather_payload(
         "temperature": temperature,
         "humidity": humidity,
         "wind": wind,
-        "forecast": _weather_forecast(attributes, language),
+        "forecast": _weather_forecast(
+            attributes,
+            language,
+            forecast_items=forecast_items,
+        ),
         "sun": _weather_sun(hass, language),
         "updated": updated,
         "badge": f"{condition}\n{temperature or title}",
@@ -115,8 +136,50 @@ def _weather_wind(attributes: dict[str, Any]) -> str:
     return f"{value}{suffix}"
 
 
-def _weather_forecast(attributes: dict[str, Any], language: str) -> str:
-    forecast = _weather_forecast_items(attributes)
+async def _async_weather_forecast_items(
+    hass: HomeAssistant,
+    entity_id: str | None,
+) -> list[Any] | None:
+    if entity_id is None or not hasattr(hass, "services"):
+        return None
+    for forecast_type in ("hourly", "daily"):
+        try:
+            response = await hass.services.async_call(
+                "weather",
+                "get_forecasts",
+                {"entity_id": entity_id, "type": forecast_type},
+                blocking=True,
+                return_response=True,
+            )
+        except (TypeError, ValueError):
+            return None
+        except Exception:
+            continue
+        forecast = _weather_service_forecast_items(response, entity_id)
+        if forecast:
+            return forecast
+    return None
+
+
+def _weather_service_forecast_items(response: Any, entity_id: str) -> list[Any]:
+    if not isinstance(response, dict):
+        return []
+    entity_payload = response.get(entity_id)
+    if isinstance(entity_payload, dict):
+        forecast = entity_payload.get("forecast")
+        if isinstance(forecast, list):
+            return forecast
+    forecast = response.get("forecast")
+    return forecast if isinstance(forecast, list) else []
+
+
+def _weather_forecast(
+    attributes: dict[str, Any],
+    language: str,
+    *,
+    forecast_items: list[Any] | None = None,
+) -> str:
+    forecast = forecast_items if forecast_items is not None else _weather_forecast_items(attributes)
     if not forecast:
         return ""
     unit = str(attributes.get("temperature_unit") or attributes.get("unit_of_measurement") or "C")

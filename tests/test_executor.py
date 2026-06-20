@@ -83,6 +83,15 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
 )
+from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
+    _cached_weather_forecast,
+    _weather_forecast,
+    _weather_forecast_cache,
+    _weather_forecast_temperature,
+    _weather_forecast_time_label,
+    _weather_sun,
+    dashboard_weather_payload,
+)
 from custom_components.bticino_c300x.executor import (  # noqa: E402
     async_dashboard_payload,
     async_execute_action,
@@ -1739,6 +1748,388 @@ def test_async_dashboard_payload_caches_weather_forecast_service() -> None:
             True,
         )
     ]
+
+
+def test_async_dashboard_payload_weather_offline_entity() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.missing",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    weather = result["data"]["pages"][0]["weather"]
+    assert weather["available"] is False
+    assert weather["condition_key"] == "unavailable"
+    assert weather["forecast_1"] == {
+        "time": "",
+        "condition": "",
+        "condition_key": "",
+        "temperature": "",
+    }
+    assert weather["badge"] == "Wetter\nOffline"
+    assert weather["color"] == "#f1c40f"
+
+
+def test_async_dashboard_payload_weather_uses_daily_forecast_fallback() -> None:
+    class DailyOnlyServices(FakeServices):
+        async def async_call(
+            self,
+            domain: str,
+            service: str,
+            data: dict[str, Any],
+            blocking: bool,
+            target: dict[str, Any] | None = None,
+            return_response: bool = False,
+        ) -> Any:
+            self.calls.append((domain, service, data, blocking))
+            self.targets.append(target)
+            if data["type"] == "hourly":
+                return {"weather.home": {"forecast": []}}
+            return {
+                "forecast": [
+                    {
+                        "datetime": "2026-05-30T00:00:00+00:00",
+                        "condition": "sunny",
+                        "templow": 12,
+                    },
+                    {
+                        "datetime": "2026-05-31T00:00:00+00:00",
+                        "condition": "rainy",
+                        "temperature": 18,
+                    },
+                ]
+            }
+
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "weather.home": FakeState(
+                    "cloudy",
+                    datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                    {
+                        "temperature": 19,
+                        "temperature_unit": "C",
+                    },
+                )
+            }
+        ),
+        services=DailyOnlyServices(),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    weather = result["data"]["pages"][0]["weather"]
+    assert weather["forecast_1"] == {
+        "time": "30.5.",
+        "condition": "Sonnig",
+        "condition_key": "sunny",
+        "temperature": "12 C",
+    }
+    assert weather["forecast_2"] == {
+        "time": "31.5.",
+        "condition": "Regen",
+        "condition_key": "rainy",
+        "temperature": "18 C",
+    }
+    assert hass.services.calls == [
+        (
+            "weather",
+            "get_forecasts",
+            {"entity_id": "weather.home", "type": "hourly"},
+            True,
+        ),
+        (
+            "weather",
+            "get_forecasts",
+            {"entity_id": "weather.home", "type": "daily"},
+            True,
+        ),
+    ]
+
+
+def test_async_dashboard_payload_weather_uses_nested_attribute_forecast() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "weather.home": FakeState(
+                    "pouring",
+                    datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                    {
+                        "temperature": 17,
+                        "unit_of_measurement": "C",
+                        "humidity": "",
+                        "wind_speed": "",
+                        "forecasts": {
+                            "daily": [
+                                {
+                                    "time": "Tomorrow",
+                                    "condition": "cloudy",
+                                    "temperature": "",
+                                    "templow": 11,
+                                },
+                                "ignored",
+                                {
+                                    "time": "Later",
+                                    "condition": "sunny",
+                                    "temperature": 23,
+                                },
+                            ]
+                        },
+                    },
+                ),
+                "sun.sun": FakeState("unknown", attributes={}),
+            }
+        )
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    weather = result["data"]["pages"][0]["weather"]
+    assert weather["condition"] == "Starkregen"
+    assert weather["humidity"] == ""
+    assert weather["wind"] == ""
+    assert weather["forecast_1"] == {
+        "time": "Tomorrow",
+        "condition": "Bewoelkt",
+        "condition_key": "cloudy",
+        "temperature": "11 C",
+    }
+    assert weather["forecast_2"] == {
+        "time": "Later",
+        "condition": "Sonnig",
+        "condition_key": "sunny",
+        "temperature": "23 C",
+    }
+    assert weather["sun"] == ""
+    assert weather["color"] == "#5dade2"
+
+
+def test_async_dashboard_payload_weather_handles_forecast_service_errors() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "weather.home": FakeState(
+                    "unknown",
+                    None,
+                    {
+                        "temperature": "",
+                        "forecast": {"forecast": "not-a-list"},
+                    },
+                )
+            }
+        ),
+        services=FakeServices(error=TypeError("unsupported")),
+        config=types.SimpleNamespace(language="xx"),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    weather = result["data"]["pages"][0]["weather"]
+    assert weather["available"] is False
+    assert weather["title"] == "Weather"
+    assert weather["condition"] == "Unknown"
+    assert weather["forecast"] == ""
+    assert weather["forecast_1"]["time"] == ""
+    assert weather["updated"] == ""
+
+
+def test_async_dashboard_payload_weather_cache_invalidates_on_state_revision() -> None:
+    states = FakeStates(
+        {
+            "weather.home": FakeState(
+                "cloudy",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "temperature": 19,
+                    "temperature_unit": "C",
+                },
+                last_updated=datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+            )
+        }
+    )
+    hass = FakeHass(
+        states=states,
+        services=FakeServices(
+            responses={
+                (
+                    "weather",
+                    "get_forecasts",
+                ): {
+                    "weather.home": {
+                        "forecast": [
+                            {
+                                "datetime": "2026-05-29T15:00:00+00:00",
+                                "condition": "rainy",
+                                "temperature": 18,
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    run(async_dashboard_payload(hass, entry))
+    states.values["weather.home"].last_updated = datetime(
+        2026,
+        5,
+        29,
+        10,
+        31,
+        tzinfo=UTC,
+    )
+    run(async_dashboard_payload(hass, entry))
+
+    assert len(hass.services.calls) == 2
+
+
+def test_dashboard_weather_payload_handles_non_dict_attributes() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "weather.home": FakeState(
+                    "windy",
+                    datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                    "not-a-dict",  # type: ignore[arg-type]
+                )
+            }
+        )
+    )
+
+    weather = dashboard_weather_payload(hass, "weather.home", "en")
+
+    assert weather is not None
+    assert weather["available"] is True
+    assert weather["condition"] == "Windy"
+    assert weather["temperature"] == ""
+    assert weather["humidity"] == ""
+    assert weather["wind"] == ""
+    assert weather["forecast_1"]["time"] == ""
+
+
+def test_async_dashboard_payload_weather_replaces_invalid_cache_container() -> None:
+    states = FakeStates(
+        {
+            "weather.home": FakeState(
+                "cloudy",
+                datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+                {
+                    "temperature": 19,
+                    "temperature_unit": "C",
+                },
+                last_updated=datetime(2026, 5, 29, 10, 30, tzinfo=UTC),
+            )
+        }
+    )
+    hass = FakeHass(
+        states=states,
+        data={"bticino_c300x_dashboard_weather_forecast": "stale"},
+        services=FakeServices(
+            responses={
+                (
+                    "weather",
+                    "get_forecasts",
+                ): {
+                    "weather.home": {
+                        "forecast": [
+                            {
+                                "datetime": "2026-05-29T15:00:00+00:00",
+                                "condition": "rainy",
+                                "temperature": 18,
+                            }
+                        ]
+                    }
+                }
+            }
+        ),
+    )
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+        }
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    assert result["data"]["pages"][0]["weather"]["forecast"] == "15:00 Regen 18 C"
+    assert isinstance(hass.data["bticino_c300x_dashboard_weather_forecast"], dict)
+    assert len(hass.services.calls) == 1
+
+
+def test_dashboard_weather_cache_helpers_handle_unusable_cache() -> None:
+    hass = types.SimpleNamespace(data="not-a-dict")
+
+    assert _weather_forecast_cache(hass) == {}
+    assert (
+        _cached_weather_forecast(
+            {("weather.home", "hourly"): {"expires_at": 0.0}},
+            "weather.home",
+            "hourly",
+            "",
+        )
+        is None
+    )
+
+
+def test_dashboard_weather_private_helpers_cover_sun_and_truncation() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "sun.sun": FakeState(
+                    "above_horizon",
+                    attributes={"next_rising": "2026-05-30T03:20:00+00:00"},
+                )
+            }
+        )
+    )
+    long_forecast = [
+        {
+            "time": "very-long-unparseable-weather-time-label",
+            "condition": "unknown_condition_with_a_long_name",
+            "temperature": 123,
+            "temperature_unit": "C",
+        },
+        {
+            "time": "second-long-unparseable-weather-time-label",
+            "condition": "another_unknown_condition_with_a_long_name",
+            "temperature": 456,
+            "temperature_unit": "C",
+        },
+    ]
+
+    assert _weather_sun(hass, "en") == "03:20"
+    assert _weather_forecast_time_label(None, "hourly") == ""
+    assert _weather_forecast_temperature({}, "C") == ""
+    assert _weather_forecast({}, "en", forecast_items=long_forecast).endswith("...")
 
 
 def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:

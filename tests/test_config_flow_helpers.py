@@ -137,6 +137,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_AGENT_TOKEN,
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
+    CONF_BOOTSTRAP_INSTALL_AGENT,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_BOOTSTRAP_SSH_PASSWORD,
@@ -864,6 +865,242 @@ def test_bootstrap_duplicate_aborts_before_device_install(
         )
 
     assert calls == ["unique:bticino_c300x:c300x.local:8091", "abort"]
+
+
+def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    flow = BticinoC300XConfigFlow()
+    flow.context = {}  # type: ignore[attr-defined]
+    flow.hass = SimpleNamespace()
+
+    async def async_set_unique_id(unique_id: str, **_kwargs: object) -> None:
+        calls.append(f"unique:{unique_id}")
+
+    def abort_if_unique_id_configured(**_kwargs: object) -> None:
+        calls.append("abort_check")
+
+    async def probe_agent(_hass: object, connection: dict[str, object]) -> str:
+        calls.append(f"probe:{connection[CONF_AGENT_HOST]}")
+        return "reachable"
+
+    def create_entry(**kwargs: object) -> dict[str, object]:
+        calls.append("create_entry")
+        return {"type": "create_entry", **kwargs}
+
+    flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
+    flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
+    flow.async_create_entry = create_entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow._async_in_progress = lambda **_kwargs: []  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_probe_agent",
+        probe_agent,
+    )
+    async def agent_stable_unique_id(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_agent_stable_unique_id",
+        agent_stable_unique_id,
+    )
+
+    auth_form = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_NAME: "Door",
+                CONF_AGENT_HOST: "c300x.local",
+                CONF_AGENT_PORT: 8091,
+                CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+            }
+        )
+    )
+    feature_form = asyncio.run(
+        flow.async_step_agent_auth(
+            {
+                CONF_AGENT_TOKEN: "agent-token",
+                CONF_MAINTENANCE_TOKEN: "maintenance-token",
+            }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_user_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_CREATE_HOMEASSISTANT_USER: True,
+                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
+            }
+        )
+    )
+    entity_display_form = asyncio.run(
+        flow.async_step_user_dashboard(
+            {
+                CONF_DEVICE_UI_ENABLED: True,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+                CONF_WEATHER_ENTITY_ID: "weather.home",
+                CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            }
+        )
+    )
+    result = asyncio.run(
+        flow.async_step_user_dashboard_entity_display(
+            {
+                "1. Temperature - Name": "custom",
+                "1. Temperature - Custom name": "Outside",
+                "1. Temperature - Secondary line": "none",
+            }
+        )
+    )
+
+    assert auth_form["step_id"] == "agent_auth"
+    assert feature_form["step_id"] == "user_features"
+    assert dashboard_form["step_id"] == "user_dashboard"
+    assert entity_display_form["step_id"] == "user_dashboard_entity_display"
+    assert result["type"] == "create_entry"
+    assert result["title"] == "Door"
+    assert result["data"][CONF_AGENT_HOST] == "c300x.local"
+    assert result["data"][CONF_AGENT_TOKEN] == "agent-token"
+    assert result["data"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
+    assert result["data"][CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result["data"][CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+    assert result["options"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
+        "sensor.temperature": {
+            "name": "custom",
+            "custom_name": "Outside",
+            "secondary": "none",
+        }
+    }
+    assert calls == [
+        "unique:bticino_c300x:c300x.local:8091",
+        "abort_check",
+        "probe:c300x.local",
+        "unique:bticino_c300x:c300x.local:8091",
+        "abort_check",
+        "create_entry",
+    ]
+
+
+def test_manual_setup_missing_agent_can_skip_installer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.async_set_unique_id = (  # type: ignore[method-assign]
+        lambda *_args, **_kwargs: asyncio.sleep(0)
+    )
+    flow._abort_if_unique_id_configured = lambda **_kwargs: None  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    async def probe_agent(_hass: object, _connection: dict[str, object]) -> str:
+        return "missing"
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_probe_agent",
+        probe_agent,
+    )
+
+    missing_form = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_NAME: "Door",
+                CONF_AGENT_HOST: "c300x.local",
+                CONF_AGENT_PORT: 8091,
+            }
+        )
+    )
+    auth_form = asyncio.run(
+        flow.async_step_agent_missing({CONF_BOOTSTRAP_INSTALL_AGENT: False})
+    )
+
+    assert missing_form["step_id"] == "agent_missing"
+    assert auth_form["step_id"] == "agent_auth"
+    assert flow._setup_agent_needs_token is False
+
+
+def test_bootstrap_install_success_continues_to_feature_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    flow = BticinoC300XConfigFlow()
+    flow.context = {}  # type: ignore[attr-defined]
+    flow.hass = SimpleNamespace()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.async_set_unique_id = (  # type: ignore[method-assign]
+        lambda *_args, **_kwargs: asyncio.sleep(0)
+    )
+    flow._abort_if_unique_id_configured = lambda **_kwargs: calls.append(  # type: ignore[method-assign]
+        "abort_check"
+    )
+
+    async def install_agent(request: object, **kwargs: object) -> None:
+        calls.append(
+            "install:"
+            f"{request.host}:{kwargs['api_token']}:{kwargs['maintenance_token']}"
+        )
+
+    async def probe_agent(
+        _hass: object,
+        connection: dict[str, object],
+        *,
+        api_token: str = "",
+    ) -> str:
+        calls.append(f"probe:{connection[CONF_AGENT_HOST]}:{api_token}")
+        return "reachable"
+
+    async def migrate_legacy(*_args: object, **_kwargs: object) -> None:
+        calls.append("migrate")
+
+    monkeypatch.setattr(
+        config_flow_module.secrets,
+        "token_urlsafe",
+        lambda length: f"token-{length}",
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_install_device_agent",
+        install_agent,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_probe_agent",
+        probe_agent,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_migrate_legacy_mqtt_for_connection",
+        migrate_legacy,
+    )
+    async def agent_stable_unique_id(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_agent_stable_unique_id",
+        agent_stable_unique_id,
+    )
+
+    result = asyncio.run(
+        flow.async_step_bootstrap_install(
+            {
+                CONF_BOOTSTRAP_SSH_USERNAME: "root",
+                CONF_BOOTSTRAP_SSH_PASSWORD: "temporary",
+            }
+        )
+    )
+
+    assert result["step_id"] == "user_features"
+    assert flow._setup_connection[CONF_AGENT_TOKEN] == "token-32"
+    assert flow._setup_connection[CONF_MAINTENANCE_TOKEN] == "token-32"
+    assert calls == [
+        "abort_check",
+        "install:c300x.local:token-32:token-32",
+        "probe:c300x.local:token-32",
+        "migrate",
+    ]
 
 
 def test_zeroconf_probes_agent_before_auth_form(
@@ -1764,6 +2001,136 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             "target": {},
         }
     }
+
+
+def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    entry = SimpleNamespace(
+        unique_id="c300x-stable-id",
+        data={
+            CONF_AGENT_HOST: "old-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "old-token",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: "",
+            CONF_VIDEO_ENABLED: False,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
+            CONF_ALARM_ENTITY_ID: "",
+            CONF_ALARM_PAGE_ENTITY_ID: "",
+            CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
+            CONF_ACTIONS: {},
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
+            CONF_VIDEO_PORT: 6554,
+            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_DEVICE_UI_ENABLED: False,
+        },
+        options={},
+        runtime_data=SimpleNamespace(qml_patch_status={"available": True, "patched": True}),
+    )
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_update_entry=lambda *_args, **_kwargs: None,
+        )
+    )
+    flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    async def async_set_unique_id(unique_id: str, **_kwargs: object) -> None:
+        calls.append(f"unique:{unique_id}")
+
+    def abort_if_unique_id_mismatch() -> None:
+        calls.append("mismatch_check")
+
+    def update_and_abort(target: object, *, data_updates: dict[str, object]) -> dict[str, object]:
+        calls.append("update")
+        assert target is entry
+        return {"type": "abort", "data_updates": data_updates}
+
+    async def qml_patch_description_placeholders(_entry: object) -> dict[str, str]:
+        return {"qml_patch_status": "patched"}
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_qml_patch_description_placeholders",
+        qml_patch_description_placeholders,
+    )
+    flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
+    flow._abort_if_unique_id_mismatch = abort_if_unique_id_mismatch  # type: ignore[method-assign]
+    flow.async_update_and_abort = update_and_abort  # type: ignore[method-assign]
+
+    features_form = asyncio.run(
+        flow.async_step_reconfigure(
+            {
+                CONF_AGENT_HOST: "agent.local",
+                CONF_AGENT_PORT: 8092,
+                CONF_AGENT_TOKEN: "agent-token",
+                CONF_MAINTENANCE_TOKEN: "maintenance-token",
+                CONF_CALLBACK_BASE_URL: "http://192.0.2.20:8123",
+                CONF_ROTATE_SHARED_SECRET: False,
+            }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_reconfigure_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_CREATE_HOMEASSISTANT_USER: True,
+                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "03",
+            }
+        )
+    )
+    entity_display_form = asyncio.run(
+        flow.async_step_reconfigure_dashboard(
+            {
+                CONF_DEVICE_UI_ENABLED: True,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False,
+                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
+                CONF_WEATHER_ENTITY_ID: "weather.home",
+                CONF_DASHBOARD_ENTITIES: ["select.forwarding"],
+                CONF_ACTIONS_JSON: "",
+                CONF_DASHBOARD_PREVENT_RETURN: True,
+            }
+        )
+    )
+    result = asyncio.run(
+        flow.async_step_reconfigure_dashboard_entity_display(
+            {
+                "1. Forwarding - Name": "friendly_name",
+                "1. Forwarding - Custom name": "",
+                "1. Forwarding - Secondary line": "last_changed",
+            }
+        )
+    )
+
+    assert features_form["step_id"] == "reconfigure_features"
+    assert dashboard_form["step_id"] == "reconfigure_dashboard"
+    assert entity_display_form["step_id"] == "reconfigure_dashboard_entity_display"
+    assert result["type"] == "abort"
+    assert result["data_updates"][CONF_AGENT_HOST] == "agent.local"
+    assert result["data_updates"][CONF_AGENT_PORT] == 8092
+    assert result["data_updates"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.20:8123"
+    assert result["data_updates"][CONF_CREATE_HOMEASSISTANT_USER] is True
+    assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "23"
+    assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
+    assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
+    assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
+        "select.forwarding": {
+            "secondary": "last_changed",
+        }
+    }
+    assert calls == ["unique:c300x-stable-id", "mismatch_check", "update"]
 
 
 def test_options_flow_invalid_connection_stays_on_connection_page() -> None:

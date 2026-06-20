@@ -14,6 +14,7 @@ Page {
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
     property variant badges: []
+    property variant items: []
     property variant switches: []
     property variant entities: []
     property variant sliders: []
@@ -409,6 +410,208 @@ Page {
                     }
                 }
 
+                Column {
+                    id: itemColumn
+                    width: parent.width
+                    spacing: 10
+                    visible: items.length > 0
+                    height: visible ? childrenRect.height : 0
+
+                    Repeater {
+                        model: items
+
+                        Item {
+                            id: mixedTile
+                            property variant tileItem: modelData
+                            property bool isSwitch: tileItem.kind === "switch"
+                            property bool isButton: tileItem.kind === "button"
+                            property bool isSlider: tileItem.kind === "slider"
+                            property bool isChoice: tileItem.kind === "choice"
+                            property bool isImage: tileItem.kind === "image"
+                            width: itemColumn.width
+                            height: isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))
+
+                            Image {
+                                anchors.fill: parent
+                                visible: !mixedTile.isImage
+                                source: mixedTile.isButton && tileMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/settings/act_btn.svg"
+                                fillMode: Image.Stretch
+                            }
+
+                            Image {
+                                cache: false
+                                visible: mixedTile.isImage
+                                anchors.fill: parent
+                                source: tileItem.source || ""
+                                fillMode: Image.PreserveAspectFit
+                            }
+
+                            UbuntuLightText {
+                                text: itemName(tileItem) + trsl.empty
+                                visible: !mixedTile.isImage
+                                color: "white"
+                                font.pixelSize: mixedTile.isButton ? 18 : 17
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: mixedTile.isButton ? 18 : 14
+                                anchors.right: mixedTile.isSwitch ? switchButton.left : (mixedTile.isSlider ? minusButton.left : parent.right)
+                                anchors.rightMargin: mixedTile.isSwitch || mixedTile.isSlider ? 8 : 14
+                                anchors.top: parent.top
+                                anchors.topMargin: mixedTile.isSwitch ? 18 : (mixedTile.isButton ? 10 : 9)
+                            }
+
+                            UbuntuLightText {
+                                text: mixedTile.isSlider ? sliderValueText(tileItem) + trsl.empty : itemDetail(tileItem) + trsl.empty
+                                visible: !mixedTile.isSwitch && !mixedTile.isImage
+                                color: itemColor(tileItem)
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                                anchors.left: parent.left
+                                anchors.leftMargin: mixedTile.isButton ? 18 : 14
+                                anchors.right: mixedTile.isSlider ? minusButton.left : parent.right
+                                anchors.rightMargin: mixedTile.isSlider ? 8 : 14
+                                anchors.top: mixedTile.isChoice ? parent.top : undefined
+                                anchors.topMargin: mixedTile.isChoice ? 34 : 0
+                                anchors.bottom: mixedTile.isChoice ? undefined : parent.bottom
+                                anchors.bottomMargin: mixedTile.isButton ? 8 : 8
+                            }
+
+                            BasicButton {
+                                id: switchButton
+                                visible: mixedTile.isSwitch
+                                width: 86
+                                height: 36
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                checkable: true
+                                checked: tileItem.state
+                                style: CheckableButtonStyle {
+                                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                                }
+                                onTouched: Api.dashboardAction(tileItem, status, page)
+                            }
+
+                            Item {
+                                id: minusButton
+                                visible: mixedTile.isSlider
+                                width: 48
+                                height: 42
+                                anchors.right: plusButton.left
+                                anchors.rightMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: minusMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                    fillMode: Image.Stretch
+                                }
+
+                                UbuntuLightText {
+                                    text: "-" + trsl.empty
+                                    color: "white"
+                                    font.pixelSize: 26
+                                    anchors.centerIn: parent
+                                }
+
+                                BeepingMouseArea {
+                                    id: minusMouse
+                                    anchors.fill: parent
+                                    onClicked: Api.dashboardSliderAction(tileItem, "decrement", status, page)
+                                }
+                            }
+
+                            Item {
+                                id: plusButton
+                                visible: mixedTile.isSlider
+                                width: 48
+                                height: 42
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: plusMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                    fillMode: Image.Stretch
+                                }
+
+                                UbuntuLightText {
+                                    text: "+" + trsl.empty
+                                    color: "white"
+                                    font.pixelSize: 26
+                                    anchors.centerIn: parent
+                                }
+
+                                BeepingMouseArea {
+                                    id: plusMouse
+                                    anchors.fill: parent
+                                    onClicked: Api.dashboardSliderAction(tileItem, "increment", status, page)
+                                }
+                            }
+
+                            Grid {
+                                id: mixedOptionGrid
+                                columns: 3
+                                spacing: 6
+                                anchors.left: parent.left
+                                anchors.leftMargin: 14
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.top: parent.top
+                                anchors.topMargin: 60
+                                visible: mixedTile.isChoice && tileItem.options && tileItem.options.length > 0
+                                property int optionWidth: (width - (spacing * 2)) / 3
+
+                                Repeater {
+                                    model: tileItem.options || []
+
+                                    Item {
+                                        width: mixedOptionGrid.optionWidth
+                                        height: 36
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: Api.dashboardChoiceOptionValue(modelData) === String(tileItem.value) || optionMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                                            fillMode: Image.Stretch
+                                        }
+
+                                        UbuntuLightText {
+                                            text: Api.dashboardChoiceOptionLabel(modelData) + trsl.empty
+                                            color: "white"
+                                            font.pixelSize: Api.dashboardChoiceOptionLabel(modelData).length > 12 ? 13 : 15
+                                            elide: Text.ElideRight
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 6
+                                            anchors.rightMargin: 6
+                                        }
+
+                                        BeepingMouseArea {
+                                            id: optionMouse
+                                            anchors.fill: parent
+                                            onClicked: Api.dashboardChoiceAction(tileItem, Api.dashboardChoiceOptionValue(modelData), status, page)
+                                        }
+                                    }
+                                }
+                            }
+
+                            BeepingMouseArea {
+                                id: tileMouse
+                                visible: mixedTile.isButton
+                                anchors.fill: parent
+                                onClicked: Api.dashboardAction(tileItem, status, page)
+                            }
+                        }
+                    }
+                }
+
                 Flow {
                     id: imageFlow
                     width: parent.width
@@ -798,7 +1001,7 @@ Page {
                 }
 
                 UbuntuLightText {
-                    text: buttons.length === 0 && switches.length === 0 && entities.length === 0 && sliders.length === 0 && choices.length === 0 && images.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
+                    text: items.length === 0 && !flowVisible && !weatherVisible ? uiText("dashboard_empty") + trsl.empty : ""
                     color: "#f1c40f"
                     font.pixelSize: 18
                     width: parent.width

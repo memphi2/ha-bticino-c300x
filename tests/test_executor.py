@@ -1506,10 +1506,11 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
     assert main_page["badges"][2]["state"].count("\n") == 1
     assert "buttons" not in main_page
     assert "switches" not in main_page
-    buttons = pages["Home Assistant"]["buttons"]
+    buttons = pages["Home Assistant"]["items"]
     assert {
         "domain": "c300x",
         "entity_id": "leave_home",
+        "kind": "button",
         "name": "leave_home",
         "state_label": "",
     } in buttons
@@ -1627,17 +1628,19 @@ def test_async_dashboard_payload_builds_dynamic_pages_from_actions() -> None:
     result = run(async_dashboard_payload(hass, entry))
 
     pages = {page["title"]: page for page in result["data"]["pages"]}
-    assert pages["Licht"]["switches"] == [
+    assert pages["Licht"]["items"] == [
         {
             "domain": "c300x",
             "entity_id": "entry_light",
+            "kind": "switch",
             "name": "Diele",
             "state": True,
             "state_label": "Ein",
         }
     ]
-    assert pages["Kamera"]["images"] == [
+    assert pages["Kamera"]["items"] == [
         {
+            "kind": "image",
             "source": "http://example.test/image.jpg",
             "width": 240,
             "height": 135,
@@ -1714,19 +1717,28 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
 
     pages = {page["title"]: page for page in result["data"]["pages"]}
     page = pages["Home Assistant"]
-    assert page["switches"] == [
+    assert [item["entity_id"] for item in page["items"]] == [
+        "switch.entry",
+        "sensor.temperature",
+        "binary_sensor.window",
+        "button.restart",
+        "input_number.target",
+        "select.forwarding",
+        "input_select.scene",
+    ]
+    assert page["items"] == [
         {
             "domain": "c300x",
             "entity_id": "switch.entry",
+            "kind": "switch",
             "name": "Entry",
             "state": True,
             "state_label": "Ein",
-        }
-    ]
-    assert page["entities"] == [
+        },
         {
             "domain": "c300x",
             "entity_id": "sensor.temperature",
+            "kind": "entity",
             "name": "Temperature",
             "state": False,
             "state_label": "21.5 C",
@@ -1734,36 +1746,34 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
         {
             "domain": "c300x",
             "entity_id": "binary_sensor.window",
+            "kind": "entity",
             "name": "Window",
             "state": True,
             "state_label": "Offen",
             "color": "#ff6b6b",
         },
-    ]
-    assert page["buttons"] == [
         {
             "domain": "c300x",
             "entity_id": "button.restart",
+            "kind": "button",
             "name": "Restart",
             "state_label": "",
-        }
-    ]
-    assert page["sliders"] == [
+        },
         {
             "domain": "c300x",
             "entity_id": "input_number.target",
+            "kind": "slider",
             "max": 23.0,
             "min": 15.0,
             "name": "Target",
             "state_label": "18 C",
             "step": 0.5,
             "value": 18.0,
-        }
-    ]
-    assert page["choices"] == [
+        },
         {
             "domain": "c300x",
             "entity_id": "select.forwarding",
+            "kind": "choice",
             "name": "Forwarding",
             "options": [
                 {"label": "Smartphone", "value": "Smartphone"},
@@ -1776,6 +1786,7 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
         {
             "domain": "c300x",
             "entity_id": "input_select.scene",
+            "kind": "choice",
             "name": "Scene",
             "options": [
                 {"label": "Day", "value": "Day"},
@@ -1785,7 +1796,6 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "value": "Night",
         },
     ]
-
 
 def test_async_dashboard_payload_uses_binary_sensor_device_class_labels() -> None:
     states = {}
@@ -1824,9 +1834,7 @@ def test_async_dashboard_payload_uses_binary_sensor_device_class_labels() -> Non
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    labels_by_entity = {
-        item["entity_id"]: item["state_label"] for item in page["entities"]
-    }
+    labels_by_entity = {item["entity_id"]: item["state_label"] for item in page["items"]}
     for device_class, labels in expected_labels.items():
         assert labels_by_entity[f"binary_sensor.{device_class}_off"] == labels[0]
         assert labels_by_entity[f"binary_sensor.{device_class}_on"] == labels[1]
@@ -1875,7 +1883,7 @@ def test_async_dashboard_payload_localizes_binary_sensor_labels() -> None:
         page = {page["title"]: page for page in result["data"]["pages"]}[
             "Home Assistant"
         ]
-        by_entity = {item["entity_id"]: item for item in page["entities"]}
+        by_entity = {item["entity_id"]: item for item in page["items"]}
         assert by_entity["binary_sensor.window_off"]["state_label"] == labels[0]
         assert by_entity["binary_sensor.window_off"]["color"] == "#58d68d"
         assert by_entity["binary_sensor.window_on"]["state_label"] == labels[1]
@@ -1906,8 +1914,8 @@ def test_async_dashboard_payload_falls_back_to_english_without_matching_language
         page = {page["title"]: page for page in result["data"]["pages"]}[
             "Home Assistant"
         ]
-        assert page["entities"][0]["state_label"] == "Unsafe"
-        assert page["entities"][0]["color"] == "#ff6b6b"
+        assert page["items"][0]["state_label"] == "Unsafe"
+        assert page["items"][0]["color"] == "#ff6b6b"
 
 
 def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None:
@@ -1973,16 +1981,23 @@ def test_async_dashboard_payload_uses_dashboard_entity_display_options() -> None
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    assert page["switches"][0]["name"] == "switch.entry"
-    assert page["switches"][0]["state_label"] == "switch.entry"
-    assert page["entities"][0]["name"] == "sensor.temperature"
-    assert page["entities"][0]["state_label"] == "sensor.temperature"
-    assert page["buttons"][0]["name"] == "button.restart"
-    assert page["buttons"][0]["state_label"] == "button.restart"
-    assert page["sliders"][0]["name"] == "input_number.target"
-    assert page["sliders"][0]["state_label"] == "input_number.target"
-    assert page["choices"][0]["name"] == "select.forwarding"
-    assert page["choices"][0]["state_label"] == "select.forwarding"
+    assert [item["entity_id"] for item in page["items"]] == [
+        "switch.entry",
+        "sensor.temperature",
+        "button.restart",
+        "input_number.target",
+        "select.forwarding",
+    ]
+    assert page["items"][0]["name"] == "switch.entry"
+    assert page["items"][0]["state_label"] == "switch.entry"
+    assert page["items"][1]["name"] == "sensor.temperature"
+    assert page["items"][1]["state_label"] == "sensor.temperature"
+    assert page["items"][2]["name"] == "button.restart"
+    assert page["items"][2]["state_label"] == "button.restart"
+    assert page["items"][3]["name"] == "input_number.target"
+    assert page["items"][3]["state_label"] == "input_number.target"
+    assert page["items"][4]["name"] == "select.forwarding"
+    assert page["items"][4]["state_label"] == "select.forwarding"
 
 
 def test_async_dashboard_payload_uses_per_entity_display_overrides() -> None:
@@ -2020,10 +2035,14 @@ def test_async_dashboard_payload_uses_per_entity_display_overrides() -> None:
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    assert page["entities"][0]["name"] == "sensor.temperature"
-    assert page["entities"][0]["state_label"] == ""
-    assert page["switches"][0]["name"] == "Entry"
-    assert page["switches"][0]["state_label"] == "switch.entry"
+    assert [item["entity_id"] for item in page["items"]] == [
+        "sensor.temperature",
+        "switch.entry",
+    ]
+    assert page["items"][0]["name"] == "sensor.temperature"
+    assert page["items"][0]["state_label"] == ""
+    assert page["items"][1]["name"] == "Entry"
+    assert page["items"][1]["state_label"] == "switch.entry"
 
 
 def test_async_dashboard_payload_uses_custom_entity_display_name() -> None:
@@ -2054,7 +2073,7 @@ def test_async_dashboard_payload_uses_custom_entity_display_name() -> None:
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    assert page["entities"][0]["name"] == "Outside"
+    assert page["items"][0]["name"] == "Outside"
 
 
 def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
@@ -2081,7 +2100,7 @@ def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:
         "Home Assistant"
     ]
 
-    choice = page["choices"][0]
+    choice = page["items"][0]
     assert choice["domain"] == "c300x"
     assert choice["entity_id"] == "select.forwarding"
     assert choice["name"] == "Forwarding"
@@ -2120,8 +2139,8 @@ def test_async_dashboard_payload_can_show_entity_last_changed() -> None:
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    assert page["entities"][0]["name"] == "Temperature"
-    assert page["entities"][0]["state_label"] == "14.06. 12:34"
+    assert page["items"][0]["name"] == "Temperature"
+    assert page["items"][0]["state_label"] == "14.06. 12:34"
 
 
 def test_async_dashboard_payload_can_hide_entity_secondary_info() -> None:
@@ -2149,8 +2168,8 @@ def test_async_dashboard_payload_can_hide_entity_secondary_info() -> None:
     page = {page["title"]: page for page in result["data"]["pages"]}[
         "Home Assistant"
     ]
-    assert page["entities"][0]["name"] == "Temperature"
-    assert page["entities"][0]["state_label"] == ""
+    assert page["items"][0]["name"] == "Temperature"
+    assert page["items"][0]["state_label"] == ""
 
 
 def test_async_dashboard_payload_keeps_agent_controls_off_main_page() -> None:

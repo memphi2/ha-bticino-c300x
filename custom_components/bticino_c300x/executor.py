@@ -552,9 +552,8 @@ async def async_dashboard_payload(
         )
         if dashboard_item is None:
             continue
-        page = _dashboard_page(pages, dashboard_item.pop("_page"))
-        kind = dashboard_item.pop("_kind")
-        page[_dashboard_collection_key(kind)].append(dashboard_item)
+        page = _dashboard_page(pages, dashboard_item.get("_page"))
+        page["items"].append(dashboard_item)
 
     for action_id, action in configured_actions(entry).items():
         dashboard_item = _dashboard_item_for_action(
@@ -565,9 +564,8 @@ async def async_dashboard_payload(
         )
         if dashboard_item is None:
             continue
-        page = _dashboard_page(pages, dashboard_item.pop("_page"))
-        kind = dashboard_item.pop("_kind")
-        page[_dashboard_collection_key(kind)].append(dashboard_item)
+        page = _dashboard_page(pages, dashboard_item.get("_page"))
+        page["items"].append(dashboard_item)
 
     return {
         "preventReturnToHomepage": prevent_return,
@@ -680,12 +678,7 @@ def _dashboard_page(
         pages[page_title] = {
             "title": page_title,
             "badges": [],
-            "buttons": [],
-            "switches": [],
-            "entities": [],
-            "sliders": [],
-            "choices": [],
-            "images": [],
+            "items": [],
             "weather": None,
         }
     return pages[page_title]
@@ -986,17 +979,6 @@ def _dashboard_selected_entity_action(action_id: str) -> tuple[str, str | None]:
     if normalized_action in _DASHBOARD_SLIDER_ACTIONS | _DASHBOARD_CHOICE_ACTIONS:
         return entity_id.lower(), normalized_action
     return normalized, None
-
-
-def _dashboard_collection_key(kind: str) -> str:
-    return {
-        "button": "buttons",
-        "choice": "choices",
-        "entity": "entities",
-        "image": "images",
-        "slider": "sliders",
-        "switch": "switches",
-    }[kind]
 
 
 def _dashboard_action_state(
@@ -1350,9 +1332,8 @@ def _finalize_dashboard_page(page: dict[str, Any]) -> dict[str, Any]:
     }
     if badges := list(page.get("badges") or []):
         finalized["badges"] = badges
-    for key in ("buttons", "choices", "entities", "switches", "sliders", "images"):
-        if items := _finalize_dashboard_items(page.get(key)):
-            finalized[key] = items
+    if items := _finalize_dashboard_items(page.get("items")):
+        finalized["items"] = items
     if isinstance(page.get("weather"), dict):
         finalized["weather"] = page["weather"]
     if page.get("flow"):
@@ -1374,6 +1355,8 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         cleaned = dict(item)
+        if "_kind" in cleaned and "kind" not in cleaned:
+            cleaned["kind"] = str(cleaned["_kind"])
         cleaned.pop("_kind", None)
         cleaned.pop("_order", None)
         cleaned.pop("_page", None)
@@ -1386,12 +1369,7 @@ def _dashboard_page_has_content(page: dict[str, Any]) -> bool:
         bool(page.get(key))
         for key in (
             "badges",
-            "buttons",
-            "choices",
-            "entities",
-            "switches",
-            "sliders",
-            "images",
+            "items",
             "weather",
             "flow",
         )

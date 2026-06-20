@@ -98,6 +98,7 @@ function dashboard(statusItem, pageItem) {
         statusItem.color = "#ff6b6b"
         pageItem.dashboardPages = []
         pageItem.badges = []
+        pageItem.items = []
         pageItem.switches = []
         pageItem.entities = []
         pageItem.sliders = []
@@ -574,12 +575,13 @@ function loadDashboardPage(statusItem, pageItem) {
     var flowItems = listOrEmpty(flow.items)
     var flowLines = listOrEmpty(flow.lines)
     pageItem.badges = listOrEmpty(pageData.badges)
-    pageItem.switches = dashboardItems(pageData.switches, "switch")
-    pageItem.entities = dashboardItems(pageData.entities, "entity")
-    pageItem.sliders = dashboardSliders(pageData.sliders)
-    pageItem.choices = dashboardChoices(pageData.choices)
-    pageItem.buttons = dashboardItems(pageData.buttons, "button")
-    pageItem.images = dashboardImages(pageData.images)
+    pageItem.items = dashboardMixedItems(pageData.items)
+    pageItem.switches = []
+    pageItem.entities = []
+    pageItem.sliders = []
+    pageItem.choices = []
+    pageItem.buttons = []
+    pageItem.images = []
     applyWeather(pageItem, pageData.weather)
     pageItem.flowItems = flowItems
     pageItem.flowLines = flowLines
@@ -667,6 +669,28 @@ function dashboardItems(source, kind) {
             item.color = source[i].color
         }
         target.push(item)
+    }
+    return target
+}
+
+function dashboardMixedItems(source) {
+    source = listOrEmpty(source)
+    var target = []
+    for (var i = 0; i < source.length; i++) {
+        var kind = source[i].kind || ""
+        var normalized = []
+        if (kind === "slider") {
+            normalized = dashboardSliders([source[i]])
+        } else if (kind === "choice") {
+            normalized = dashboardChoices([source[i]])
+        } else if (kind === "image") {
+            normalized = dashboardImages([source[i]])
+        } else {
+            normalized = dashboardItems([source[i]], kind || "entity")
+        }
+        if (normalized.length > 0) {
+            target.push(normalized[0])
+        }
     }
     return target
 }

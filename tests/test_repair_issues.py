@@ -619,6 +619,11 @@ def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -
                     "device_user_ensure": True,
                 },
             },
+            device_user_status={
+                "homeassistant_user_present": False,
+                "media_identity_available": True,
+                "routes_consistent": False,
+            },
             self_test_status={
                 "ok": False,
                 "checks": {
@@ -648,6 +653,8 @@ def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -
     assert issue["translation_placeholders"]["fixable_checks"] == (
         "firewall, homeassistant_user"
     )
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
 
 
 def test_offline_media_readiness_creates_fixable_media_setup_repair() -> None:
@@ -738,7 +745,7 @@ def test_callback_readiness_failure_creates_callback_repair_issue() -> None:
     assert issue["translation_placeholders"]["scheme"] == "https"
 
 
-def test_single_media_user_failure_creates_device_user_and_media_repairs() -> None:
+def test_single_media_user_failure_creates_only_device_user_repair() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
@@ -775,7 +782,11 @@ def test_single_media_user_failure_creates_device_user_and_media_repairs() -> No
     assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in CREATED_ISSUES
     assert (
         repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
-        in CREATED_ISSUES
+        in DELETED_ISSUES
+    )
+    assert (
+        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+        not in CREATED_ISSUES
     )
 
 
@@ -1346,6 +1357,12 @@ def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
         ["capabilities", "rtsp"],
         {},
     ) == ["agent_update"]
+    assert repair_issues._media_setup_has_only_device_user_failures(  # noqa: SLF001
+        ["homeassistant_user", "device_routing"]
+    )
+    assert repair_issues._media_setup_has_non_device_user_failure(  # noqa: SLF001
+        ["homeassistant_user", "firewall"]
+    )
     assert repair_issues._entry_media_enabled(  # noqa: SLF001
         FakeEntry(
             data={CONF_VIDEO_ENABLED: True},

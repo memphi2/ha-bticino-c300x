@@ -542,6 +542,11 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if reason is None:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return
+    readiness = media_readiness(entry)
+    failed = readiness.get("failed_checks")
+    if _media_setup_has_non_device_user_failure(failed):
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
     _create_issue(
         hass,
         entry,
@@ -574,6 +579,13 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
         )
         return
     capabilities = getattr(runtime_data, "capabilities", {})
+    if _media_setup_has_only_device_user_failures(failed):
+        async_delete_repair_issue(
+            hass,
+            entry.entry_id,
+            MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
+        )
+        return
     fixable_checks = _media_setup_fixable_checks(failed, capabilities)
     if not fixable_checks:
         async_delete_repair_issue(
@@ -622,6 +634,29 @@ def _media_setup_fixable_checks(
     ):
         fixable.append(SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT)
     return fixable
+
+
+def _media_setup_has_only_device_user_failures(failed: object) -> bool:
+    if not isinstance(failed, list) or not failed:
+        return False
+    checks = {str(check) for check in failed}
+    return checks <= {"homeassistant_user", "device_routing"}
+
+
+def _media_setup_has_non_device_user_failure(failed: object) -> bool:
+    if not isinstance(failed, list):
+        return False
+    checks = {str(check) for check in failed}
+    return bool(
+        checks
+        & {
+            "capabilities",
+            "firewall",
+            "rtsp",
+            "talkback_rtp",
+            "forwarding_homeassistant",
+        }
+    )
 
 
 def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:

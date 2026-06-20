@@ -61,9 +61,16 @@ def _delete_issue(**kwargs: Any) -> None:
 
 
 issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
+issue_registry.EVENT_REPAIRS_ISSUE_REGISTRY_UPDATED = (
+    "repairs_issue_registry_updated"
+)
 issue_registry.async_create_issue = _create_issue
 issue_registry.async_delete_issue = _delete_issue
 config_validation.config_entry_only_config_schema = lambda _domain: dict
+config_validation.empty_config_schema = lambda _domain: dict
+config_validation.ensure_list = lambda value: value if isinstance(value, list) else [value]
+config_validation.string = str
+config_validation.boolean = bool
 
 
 def _async_get_entity_registry(hass: Any) -> Any:
@@ -1026,6 +1033,34 @@ def test_missing_device_user_media_identity_creates_repair_issue() -> None:
     assert issue["is_fixable"] is True
     assert issue["translation_key"] == DEVICE_USER_REQUIRED_ISSUE
     assert issue["translation_placeholders"]["reason"] == "homeassistant_user_missing"
+
+
+def test_unavailable_device_user_status_does_not_create_repair_issue() -> None:
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {
+                    "supported": True,
+                    "device_user_ensure": True,
+                },
+            },
+            device_user_status={
+                "available": False,
+                "supported": True,
+                "homeassistant_user_present": None,
+                "media_identity_available": None,
+                "routes_consistent": None,
+                "error": "status_failed",
+            },
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
 
 
 def test_device_user_with_missing_media_identity_creates_repair_issue() -> None:

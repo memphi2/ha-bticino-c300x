@@ -2187,6 +2187,27 @@ def test_normalize_device_user_status_is_non_sensitive() -> None:
     assert "digest" not in status["raw"]
 
 
+def test_normalize_device_user_status_keeps_unavailable_unknown() -> None:
+    status = normalize_device_user_status(
+        {
+            "ok": False,
+            "status_available": False,
+            "supported": True,
+            "homeassistant_user_present": False,
+            "media_identity_available": False,
+            "routes_consistent": False,
+            "error": "status_failed",
+        }
+    )
+
+    assert status["available"] is False
+    assert status["supported"] is True
+    assert status["homeassistant_user_present"] is None
+    assert status["media_identity_available"] is None
+    assert status["routes_consistent"] is None
+    assert status["error"] == "status_failed"
+
+
 def test_answering_machine_messages_requests_authenticated_endpoint() -> None:
     session = _FakeSession(
         '{"ok": true, "available": true, "total": 1, "unread": 1, '

@@ -13,7 +13,7 @@ from .base import AgentContract
 class SelfTestCheck(AgentContract):
     """One normalized device-agent self-test check."""
 
-    ok: bool
+    ok: bool | None
     reason: str | None
     details: dict[str, Any]
 
@@ -50,7 +50,7 @@ def normalize_self_test_contract(
             }
             checks[name] = SelfTestCheck(
                 raw=dict(raw_check),
-                ok=_optional_bool(raw_check.get("ok")) is True,
+                ok=_optional_bool(raw_check.get("ok")),
                 reason=_optional_string(raw_check.get("reason")),
                 details=details,
             )

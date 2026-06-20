@@ -3635,7 +3635,8 @@ static void device_user_status_body(
         body,
         body_len,
         "{"
-        "\"ok\":true,"
+        "\"ok\":%s,"
+        "\"status_available\":%s,"
         "\"supported\":%s,"
         "\"domain_present\":%s,"
         "\"homeassistant_user_present\":%s,"
@@ -3658,6 +3659,8 @@ static void device_user_status_body(
         "\"account_label\":%s,"
         "\"error\":%s"
         "}\n",
+        status->status_available ? "true" : "false",
+        status->status_available ? "true" : "false",
         status->supported ? "true" : "false",
         status->domain_present ? "true" : "false",
         status->homeassistant_user_present ? "true" : "false",

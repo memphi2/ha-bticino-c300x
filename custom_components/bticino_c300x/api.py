@@ -1345,65 +1345,45 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("device user status returned non-object JSON")
+    available = _optional_bool(data.get("ok")) is not False
+
+    def status_bool(key: str) -> bool | None:
+        if not available:
+            return None
+        return _optional_bool(data.get(key))
+
     return {
-        "available": bool(data.get("ok", True)),
+        "available": available,
         "supported": _optional_bool(data.get("supported")) is True,
-        "domain_present": _optional_bool(data.get("domain_present")) is True,
-        "homeassistant_user_present": _optional_bool(
-            data.get("homeassistant_user_present")
-        )
-        is True,
-        "accounts_homeassistant_present": _optional_bool(
-            data.get("accounts_homeassistant_present")
-        )
-        is True,
-        "route_int_homeassistant_present": _optional_bool(
-            data.get("route_int_homeassistant_present")
-        )
-        is True,
-        "route_ext_homeassistant_present": _optional_bool(
-            data.get("route_ext_homeassistant_present")
-        )
-        is True,
-        "route_conf_homeassistant_present": _optional_bool(
-            data.get("route_conf_homeassistant_present")
-        )
-        is True,
-        "route_conf_is_symlink": _optional_bool(data.get("route_conf_is_symlink"))
-        is True,
-        "writable_files_present": _optional_bool(data.get("writable_files_present"))
-        is True,
-        "media_identity_available": _optional_bool(
-            data.get("media_identity_available")
-        )
-        is True,
-        "routes_consistent": _optional_bool(data.get("routes_consistent")) is True,
-        "device_routing_supported": _optional_bool(
-            data.get("device_routing_supported")
-        )
-        is True,
-        "device_routing_applied": _optional_bool(
-            data.get("device_routing_applied")
-        )
-        is True,
+        "domain_present": status_bool("domain_present"),
+        "homeassistant_user_present": status_bool("homeassistant_user_present"),
+        "accounts_homeassistant_present": status_bool(
+            "accounts_homeassistant_present"
+        ),
+        "route_int_homeassistant_present": status_bool(
+            "route_int_homeassistant_present"
+        ),
+        "route_ext_homeassistant_present": status_bool(
+            "route_ext_homeassistant_present"
+        ),
+        "route_conf_homeassistant_present": status_bool(
+            "route_conf_homeassistant_present"
+        ),
+        "route_conf_is_symlink": status_bool("route_conf_is_symlink"),
+        "writable_files_present": status_bool("writable_files_present"),
+        "media_identity_available": status_bool("media_identity_available"),
+        "routes_consistent": status_bool("routes_consistent"),
+        "device_routing_supported": status_bool("device_routing_supported"),
+        "device_routing_applied": status_bool("device_routing_applied"),
         "device_routing_state": _optional_string(
             data.get("device_routing_state")
         ),
-        "device_routing_backup_present": _optional_bool(
-            data.get("device_routing_backup_present")
-        )
-        is True,
+        "device_routing_backup_present": status_bool("device_routing_backup_present"),
         "device_routing_error": _optional_string(
             data.get("device_routing_error")
         ),
-        "media_user_label_available": _optional_bool(
-            data.get("media_user_label_available")
-        )
-        is True,
-        "media_user_label_applied": _optional_bool(
-            data.get("media_user_label_applied")
-        )
-        is True,
+        "media_user_label_available": status_bool("media_user_label_available"),
+        "media_user_label_applied": status_bool("media_user_label_applied"),
         "media_user_label_state": _optional_string(
             data.get("media_user_label_state")
         ),
@@ -1416,6 +1396,7 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
 _SAFE_DEVICE_USER_RAW_KEYS = frozenset(
     {
         "ok",
+        "status_available",
         "supported",
         "domain_present",
         "homeassistant_user_present",

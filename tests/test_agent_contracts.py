@@ -230,8 +230,33 @@ def test_self_test_contract_handles_bool_strings_and_ignores_bad_checks() -> Non
     assert status.checks["startup"].ok is False
     assert status.checks["startup"].reason == "42"
     assert status.checks["startup"].details == {"agent_init_script_present": False}
-    assert status.checks["capabilities"].ok is False
+    assert status.checks["capabilities"].ok is None
     assert status.checks["capabilities"].reason is None
     assert status.checks["talkback_rtp"].ok is True
     assert status.checks["talkback_rtp"].reason is None
-    assert status.checks["firewall"].ok is False
+    assert status.checks["firewall"].ok is None
+
+
+def test_self_test_contract_preserves_unknown_check_state() -> None:
+    status = normalize_self_test(
+        {
+            "ok": True,
+            "checks": {
+                "homeassistant_user": {
+                    "ok": None,
+                    "reason": "device_user_status_unavailable",
+                },
+                "device_routing": {
+                    "reason": "not_checked_device_user_status_unavailable",
+                },
+            },
+        }
+    )
+
+    assert status.ok is True
+    assert status.checks["homeassistant_user"].ok is None
+    assert (
+        status.checks["homeassistant_user"].reason
+        == "device_user_status_unavailable"
+    )
+    assert status.checks["device_routing"].ok is None

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -69,7 +67,6 @@ else:
 
 BASE_PLATFORMS = ("binary_sensor", "button", "event", "sensor", "select", "switch")
 CAMERA_PLATFORM = "camera"
-MEDIA_USER_STARTUP_RETRY_DELAYS = (2.0, 5.0)
 _LOGGER = logging.getLogger(__name__)
 _GUI_DEPENDENT_ENTITY_KEYS = (
     ("button", "delete_latest_video_message"),
@@ -255,7 +252,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
         await _async_sync_device_ui_patch(entry)
         await _async_sync_device_user(hass, entry)
         await _async_refresh_self_test(entry)
-        await _async_stabilize_media_user_startup(entry)
     _async_remove_stale_gui_dependent_entities(hass, entry)
     async_sync_entry_repair_issues(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -459,7 +455,11 @@ async def _async_sync_device_user(
         status = await entry.runtime_data.api.async_device_user_status()
         entry.runtime_data.device_user_status = status
         entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
-        if _entry_create_homeassistant_user(entry) and _device_user_needs_ensure(status):
+        if (
+            status.get("available") is not False
+            and _entry_create_homeassistant_user(entry)
+            and _device_user_needs_ensure(status)
+        ):
             status = await entry.runtime_data.api.async_ensure_homeassistant_user(
                 account_label=homeassistant_account_label(hass)
             )
@@ -496,35 +496,6 @@ async def _async_refresh_device_user_status(
             "C300X device-user status refresh failed: %s",
             compact_error_text(err),
         )
-
-
-async def _async_stabilize_media_user_startup(entry: BticinoC300XConfigEntry) -> None:
-    """Wait briefly for read-only media-user checks to settle after HA startup."""
-
-    if _media_user_startup_status(entry) is not False:
-        return
-    for delay in MEDIA_USER_STARTUP_RETRY_DELAYS:
-        await asyncio.sleep(delay)
-        await _async_refresh_device_user_status(entry)
-        await _async_refresh_self_test(entry)
-        if _media_user_startup_status(entry) is not False:
-            return
-
-
-def _media_user_startup_status(entry: BticinoC300XConfigEntry) -> bool | None:
-    """Return the current media-user readiness without creating Repairs issues."""
-
-    from .media_readiness import media_user_ready
-
-    runtime_data = entry.runtime_data
-    self_test = getattr(runtime_data, "self_test_status", {})
-    checks = self_test.get("checks") if isinstance(self_test, Mapping) else None
-    if not isinstance(checks, Mapping):
-        checks = {}
-    return media_user_ready(
-        getattr(runtime_data, "device_user_status", {}),
-        checks,
-    )
 
 
 def _device_user_needs_ensure(status: dict[str, Any]) -> bool:

@@ -1110,6 +1110,7 @@ static int read_status_from_buffers(
     char ha_aor[256];
 
     memset(status, 0, sizeof(*status));
+    status->status_available = 1;
     status->supported = 1;
     status->route_conf_is_symlink = route_conf_symlink;
     status->writable_files_present = users->exists && route_int->exists && route_ext->exists;
@@ -1187,6 +1188,7 @@ int c300x_device_user_read_status(struct c300x_device_user_status *status)
     if (!ok) {
         memset(status, 0, sizeof(*status));
         status->supported = 1;
+        status->status_available = 0;
         snprintf(status->error, sizeof(status->error), "%s", error[0] != '\0' ? error : "status_failed");
     }
     free_file_buffer(&users);

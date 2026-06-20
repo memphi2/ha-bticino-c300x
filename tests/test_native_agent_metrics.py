@@ -188,6 +188,35 @@ def test_native_agent_device_user_status_does_not_expose_sip_identity() -> None:
     assert "device_routing_update_backup_sha256" not in body
 
 
+def test_native_agent_device_user_status_reports_read_availability() -> None:
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    body = text.split("static void device_user_status_body", maxsplit=1)[1].split(
+        "static void handle_device_user_get",
+        maxsplit=1,
+    )[0]
+    read_status = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"\\"ok\\":%s,"' in body
+    assert '"\\"status_available\\":%s,"' in body
+    assert "status->status_available ? \"true\" : \"false\"" in body
+    assert "status->status_available = 1;" in read_status
+    assert "status->status_available = 0;" in read_status
+
+
+def test_native_agent_self_test_keeps_unavailable_device_user_unknown() -> None:
+    text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(
+        encoding="utf-8"
+    )
+
+    assert "user_ok = -1;" in text
+    assert "device_routing_ok = -1;" in text
+    assert 'user_reason = "device_user_status_unavailable";' in text
+    assert "check_json(user_ok)" in text
+    assert "check_json(device_routing_ok)" in text
+
+
 def test_native_agent_device_user_keeps_homeassistant_out_of_external_route() -> None:
     text = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"

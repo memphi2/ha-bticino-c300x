@@ -11,6 +11,7 @@
 #define C300X_DEVICE_USER_LABEL_LEN 96
 
 struct c300x_device_user_status {
+    int status_available;
     int supported;
     int domain_present;
     int homeassistant_user_present;

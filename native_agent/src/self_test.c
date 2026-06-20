@@ -38,6 +38,14 @@ static const char *bool_json(int value)
     return value ? "true" : "false";
 }
 
+static const char *check_json(int value)
+{
+    if (value < 0) {
+        return "null";
+    }
+    return bool_json(value);
+}
+
 static const char *firmware_family(const struct c300x_config *config)
 {
     if (config == NULL || config->device_firmware[0] == '\0') {
@@ -482,8 +490,10 @@ int c300x_self_test_json(
         talkback_reason = talkback_ok ? "talkback_rtp_ready" : "talkback_rtp_firewall_missing";
 
         if (!c300x_device_user_read_status(&user_status)) {
-            user_ok = 0;
-            user_reason = "device_user_status_failed";
+            user_ok = -1;
+            device_routing_ok = -1;
+            user_reason = "device_user_status_unavailable";
+            device_routing_reason = "not_checked_device_user_status_unavailable";
         } else if (!user_status.media_identity_available) {
             user_ok = 0;
             user_reason = "media_identity_missing";
@@ -496,8 +506,10 @@ int c300x_self_test_json(
             user_reason = "homeassistant_user_missing";
         }
 
-        routing_read_ok = c300x_device_routing_read_status(&routing_status);
-        if (user_status.homeassistant_user_present) {
+        if (user_status.status_available) {
+            routing_read_ok = c300x_device_routing_read_status(&routing_status);
+        }
+        if (user_status.status_available && user_status.homeassistant_user_present) {
             device_routing_ok = routing_read_ok
                 && routing_status.patched
                 && qml.available
@@ -555,7 +567,15 @@ int c300x_self_test_json(
         C300X_SELF_TEST_API_VERSION,
         C300X_NATIVE_AGENT_VERSION,
         firmware_json,
-        bool_json(capabilities_ok && firewall_ok && rtsp_ok && talkback_ok && user_ok && device_routing_ok && startup_ok),
+        bool_json(
+            capabilities_ok
+            && firewall_ok
+            && rtsp_ok
+            && talkback_ok
+            && user_ok != 0
+            && device_routing_ok != 0
+            && startup_ok
+        ),
         bool_json(capabilities_ok),
         capabilities_ok ? "ok" : "config_missing",
         C300X_SELF_TEST_API_VERSION,
@@ -579,14 +599,14 @@ int c300x_self_test_json(
         bool_json(talkback_ok),
         talkback_reason,
         C300X_TALKBACK_RTP_PORT,
-        bool_json(user_ok),
+        check_json(user_ok),
         user_reason,
         bool_json(user_status.supported),
         bool_json(user_status.media_identity_available),
         bool_json(user_status.homeassistant_user_present),
         bool_json(user_status.routes_consistent),
         user_error_json,
-        bool_json(device_routing_ok),
+        check_json(device_routing_ok),
         device_routing_reason,
         bool_json(routing_status.supported),
         bool_json(routing_status.patched),

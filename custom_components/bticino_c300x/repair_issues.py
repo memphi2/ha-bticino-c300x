@@ -536,24 +536,27 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if not isinstance(status, dict) or not status:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return
+    if status.get("available") is False:
+        async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
+        return
 
     reason = None
-    if status.get("homeassistant_user_present") is not True:
+    if status.get("homeassistant_user_present") is False:
         reason = "homeassistant_user_missing"
-    elif status.get("routes_consistent") is not True:
+    elif status.get("routes_consistent") is False:
         reason = "homeassistant_routes_inconsistent"
-    elif status.get("media_identity_available") is not True:
+    elif status.get("media_identity_available") is False:
         reason = "media_identity_missing"
     elif (
         status.get("homeassistant_user_present") is True
         and "device_routing_applied" in status
-        and status.get("device_routing_applied") is not True
+        and status.get("device_routing_applied") is False
     ):
         reason = "device_routing_missing"
     elif (
         status.get("homeassistant_user_present") is True
         and "media_user_label_applied" in status
-        and status.get("media_user_label_applied") is not True
+        and status.get("media_user_label_applied") is False
     ):
         reason = "media_user_label_missing"
     if reason is None:

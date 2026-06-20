@@ -27,7 +27,6 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_ALARM_ENTITY_ID,
-    CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -48,7 +47,6 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
-from .device_user import homeassistant_account_label
 from .entry_config import (
     entry_config_value as _entry_config_value,
 )
@@ -444,8 +442,9 @@ async def _async_sync_device_user(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
-    """Refresh and optionally repair the Flexisip user used for media calls."""
+    """Refresh the Flexisip user status used for media calls without writing."""
 
+    _ = hass
     if not _entry_video_enabled(entry):
         return
     capabilities = getattr(entry.runtime_data, "capabilities", {})
@@ -455,21 +454,11 @@ async def _async_sync_device_user(
         status = await entry.runtime_data.api.async_device_user_status()
         entry.runtime_data.device_user_status = status
         entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
-        if (
-            status.get("available") is not False
-            and _entry_create_homeassistant_user(entry)
-            and _device_user_needs_ensure(status)
-        ):
-            status = await entry.runtime_data.api.async_ensure_homeassistant_user(
-                account_label=homeassistant_account_label(hass)
-            )
-            entry.runtime_data.device_user_status = status
-            entry.runtime_data.device_user_status_updated_at = datetime.now(UTC)
     except C300XAgentApiUnsupportedError:
         _LOGGER.debug("C300X device agent does not support device-user status")
     except C300XAgentApiError as err:
         _LOGGER.warning(
-            "C300X device-user setup/status sync failed: %s",
+            "C300X device-user status sync failed: %s",
             compact_error_text(err),
         )
 
@@ -496,27 +485,6 @@ async def _async_refresh_device_user_status(
             "C300X device-user status refresh failed: %s",
             compact_error_text(err),
         )
-
-
-def _device_user_needs_ensure(status: dict[str, Any]) -> bool:
-    """Return true when the dedicated HA media user is absent or incomplete."""
-
-    if status.get("homeassistant_user_present") is False:
-        return True
-    if status.get("media_identity_available") is False:
-        return True
-    if status.get("routes_consistent") is False:
-        return True
-    return (
-        status.get("device_routing_supported") is not False
-        and status.get("device_routing_applied") is False
-    )
-
-
-def _entry_create_homeassistant_user(entry: BticinoC300XConfigEntry) -> bool:
-    """Return whether setup should create/repair the dedicated media user."""
-
-    return bool(_entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, True))
 
 
 async def _async_refresh_self_test(entry: BticinoC300XConfigEntry) -> None:

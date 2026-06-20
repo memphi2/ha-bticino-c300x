@@ -301,40 +301,6 @@ def test_device_user_and_activation_config_helpers() -> None:
         }
     )
 
-    assert integration._entry_create_homeassistant_user(entry) is False
-    assert integration._device_user_needs_ensure({}) is False
-    assert (
-        integration._device_user_needs_ensure(
-            {
-                "homeassistant_user_present": True,
-                "routes_consistent": True,
-                "device_routing_applied": True,
-                "media_user_label_applied": False,
-            }
-        )
-        is False
-    )
-    assert (
-        integration._device_user_needs_ensure(
-            {
-                "homeassistant_user_present": False,
-                "routes_consistent": True,
-                "device_routing_applied": True,
-            }
-        )
-        is True
-    )
-    assert (
-        integration._device_user_needs_ensure(
-            {
-                "homeassistant_user_present": True,
-                "routes_consistent": True,
-                "device_routing_applied": True,
-                "media_user_label_applied": True,
-            }
-        )
-        is False
-    )
     assert integration._entry_activation_config(entry) == (
         True,
         False,
@@ -497,7 +463,7 @@ def test_configure_display_bridge_records_agent_failures(
         assert entry.runtime_data.display_bridge_diagnostics.last_error is not None
 
 
-def test_sync_device_user_ensures_missing_media_user() -> None:
+def test_sync_device_user_refreshes_missing_media_user_without_repair() -> None:
     entry = _entry(
         options={
             CONF_VIDEO_ENABLED: True,
@@ -514,13 +480,9 @@ def test_sync_device_user_ensures_missing_media_user() -> None:
 
     asyncio.run(integration._async_sync_device_user(hass, entry))
 
-    assert entry.runtime_data.api.ensure_labels == ["Home Assistant HA Test"]
-    assert entry.runtime_data.device_user_status == {
-        "homeassistant_user_present": True,
-        "routes_consistent": True,
-        "device_routing_applied": True,
-        "media_user_label_applied": True,
-    }
+    assert entry.runtime_data.api.ensure_labels == []
+    assert entry.runtime_data.device_user_status == {"homeassistant_user_present": False}
+    assert entry.runtime_data.device_user_status_updated_at is not None
 
 
 def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:

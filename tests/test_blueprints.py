@@ -243,7 +243,16 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         {"action": "URI", "title": "{{ open_title }}", "uri": "{{ dashboard_path }}"},
     ]
     assert data["action"][2]["wait_for_trigger"] == [
-        {"platform": "event", "event_type": "mobile_app_notification_action"}
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ answer_action }}"},
+        },
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ hangup_action }}"},
+        },
     ]
     assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
@@ -257,6 +266,13 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     assert answer_sequence[1]["data"]["data"]["command"] == "{{ dashboard_path }}"
     assert answer_sequence[3]["data"]["data"]["tag"] == "{{ active_tag }}"
     assert answer_sequence[3]["data"]["data"]["importance"] == "low"
+    assert answer_sequence[4]["wait_for_trigger"] == [
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ hangup_action }}"},
+        }
+    ]
     assert answer_sequence[5]["then"][0] == {
         "service": "bticino_c300x.hangup_doorbell_call",
         "data": {"entry_id": "{{ entry_id }}"},
@@ -272,7 +288,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
     data = _blueprint("doorbell_call_ios.yaml")
     inputs = data["blueprint"]["input"]
     notify_data = data["action"][0]["data"]["data"]
-    wait_trigger = data["action"][1]["wait_for_trigger"][0]
+    wait_triggers = data["action"][1]["wait_for_trigger"]
     answer_sequence = data["action"][2]["choose"][0]["sequence"]
     hangup_sequence = data["action"][2]["choose"][1]["sequence"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
@@ -315,15 +331,29 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
         "title": "{{ open_title }}",
         "uri": "{{ dashboard_path }}",
     }
-    assert wait_trigger == {
-        "platform": "event",
-        "event_type": "mobile_app_notification_action",
-    }
+    assert wait_triggers == [
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ answer_action }}"},
+        },
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ hangup_action }}"},
+        },
+    ]
     assert answer_sequence[1] == {
         "service": "bticino_c300x.answer_doorbell_call",
         "data": {"entry_id": "{{ entry_id }}"},
     }
-    assert answer_sequence[3]["wait_for_trigger"][0] == wait_trigger
+    assert answer_sequence[3]["wait_for_trigger"] == [
+        {
+            "platform": "event",
+            "event_type": "mobile_app_notification_action",
+            "event_data": {"action": "{{ hangup_action }}"},
+        }
+    ]
     assert hangup_sequence[0] == {
         "service": "bticino_c300x.hangup_doorbell_call",
         "data": {"entry_id": "{{ entry_id }}"},

@@ -202,6 +202,12 @@ action:
   - wait_for_trigger:
       - platform: event
         event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ answer_action }}"
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ hangup_action }}"
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true
   - choose:
@@ -249,6 +255,8 @@ action:
           - wait_for_trigger:
               - platform: event
                 event_type: mobile_app_notification_action
+                event_data:
+                  action: "{{ hangup_action }}"
             timeout: "{{ active_call_timeout_seconds | int(180) }}"
             continue_on_timeout: true
           - if:

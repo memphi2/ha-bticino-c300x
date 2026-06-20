@@ -513,18 +513,15 @@ async def _async_configure_device_activations(
     enabled, auto_discover, stair_light_address = _entry_activation_config(entry)
     try:
         status = await api.async_auth_config_status()
-        if (
-            status.get("activations_enabled") is None
-            and status.get("activations_auto_discover") is None
-        ):
+        current_enabled = status.get("activations_enabled")
+        current_auto_discover = status.get("activations_auto_discover")
+        current_stair_light_address = status.get("activation_stair_light_address")
+        if current_enabled is None or current_auto_discover is None:
             return
         if (
-            status.get("activations_enabled") is enabled
-            and status.get("activations_auto_discover") is auto_discover
-            and (
-                auto_discover
-                or status.get("activation_stair_light_address") == stair_light_address
-            )
+            current_enabled is enabled
+            and current_auto_discover is auto_discover
+            and (auto_discover or current_stair_light_address in {None, stair_light_address})
         ):
             return
         await api.async_configure_device_activations(

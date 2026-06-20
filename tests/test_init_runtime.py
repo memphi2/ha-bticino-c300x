@@ -349,6 +349,27 @@ def test_configure_device_activations_uses_p_n_address() -> None:
     assert api.configured == []
 
 
+def test_configure_device_activations_skips_unknown_manual_address() -> None:
+    entry = _entry(
+        options={
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+        }
+    )
+    api = _ActivationApi(
+        {
+            "activations_enabled": True,
+            "activations_auto_discover": False,
+            "activation_stair_light_address": None,
+        }
+    )
+
+    asyncio.run(integration._async_configure_device_activations(entry, api))
+
+    assert api.configured == []
+
+
 def test_configure_device_activations_ignores_agent_errors() -> None:
     entry = _entry(
         options={

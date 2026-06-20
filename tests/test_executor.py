@@ -69,6 +69,9 @@ helpers.config_validation = config_validation
 helpers.dispatcher = dispatcher
 helpers.entity = entity
 
+from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
+    dashboard_entity_display_overrides_from_fields,
+)
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
@@ -2607,6 +2610,49 @@ def test_async_dashboard_payload_uses_custom_entity_display_name() -> None:
 
     page = {page["title"]: page for page in result["data"]["pages"]}[""]
     assert page["items"][0]["name"] == "Outside"
+
+
+def test_dashboard_entity_display_config_fields_drive_payload() -> None:
+    entity_ids = ["sensor.temperature", "button.restart"]
+    overrides = dashboard_entity_display_overrides_from_fields(
+        {
+            "1. Temperature - Name": "custom",
+            "1. Temperature - Custom name": "Outside",
+            "1. Temperature - Secondary line": "entity_id",
+            "2. Restart - Name": "entity_id",
+            "2. Restart - Custom name": "",
+            "2. Restart - Secondary line": "state",
+        },
+        entity_ids,
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "sensor.temperature": FakeState(
+                    "21.5",
+                    attributes={"friendly_name": "Temperature"},
+                ),
+                "button.restart": FakeState(
+                    "unknown",
+                    attributes={"friendly_name": "Restart"},
+                ),
+            }
+        )
+    )
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: entity_ids,
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: overrides,
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    page = {page["title"]: page for page in result["data"]["pages"]}[""]
+    assert page["items"][0]["name"] == "Outside"
+    assert page["items"][0]["state_label"] == "sensor.temperature"
+    assert page["items"][1]["name"] == "button.restart"
+    assert page["items"][1]["state_label"] == ""
 
 
 def test_async_dashboard_payload_preserves_exact_choice_option_values() -> None:

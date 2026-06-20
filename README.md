@@ -17,23 +17,6 @@ forwarding controls, messages and optional display pages.
   <img src="custom_components/bticino_c300x/brand/logo.png" alt="BTicino C300X integration logo" width="140">
 </p>
 
-## 5-Minute Setup
-
-Start with the guided setup document:
-
-**[Quickstart: install, agent, Media readiness, card](docs/quickstart.md)**
-
-The short path is:
-
-```text
-HACS -> add integration -> install/update agent -> Media readiness
--> Fix now if needed -> add the C300X card
-```
-
-Keep the first install boring: get **Media readiness** to `ready`, then add the
-bundled card. Blueprints, display pages and advanced maintenance can wait until
-the three media paths work.
-
 ## What You Get
 
 - Doorbell ring events and local camera viewing.
@@ -98,6 +81,23 @@ depend on enabled options and installed agent capabilities.
     <td align="center"><strong>Custom Home Assistant page</strong><br><img src="docs/images/readme/display-custom-ha-page.jpeg" alt="Custom Home Assistant page on the BTicino C300X display" width="320"></td>
   </tr>
 </table>
+
+## 5-Minute Setup
+
+Start with the guided setup document:
+
+**[Quickstart: install, agent, Media readiness, card](docs/quickstart.md)**
+
+The short path is:
+
+```text
+HACS -> add integration -> install/update agent -> Media readiness
+-> Fix now if needed -> add the C300X card
+```
+
+Keep the first install boring: get **Media readiness** to `ready`, then add the
+bundled card. Blueprints, display pages and advanced maintenance can wait until
+the three media paths work.
 
 ## Documentation
 

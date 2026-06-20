@@ -48,11 +48,12 @@ entity = sys.modules.setdefault(
     "homeassistant.helpers.entity",
     types.ModuleType("homeassistant.helpers.entity"),
 )
-
 if not hasattr(dispatcher, "async_dispatcher_connect"):
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
 if not hasattr(config_validation, "config_entry_only_config_schema"):
     config_validation.config_entry_only_config_schema = lambda *_args, **_kwargs: object()
+if not hasattr(config_validation, "ensure_list"):
+    config_validation.ensure_list = lambda value: value if isinstance(value, list) else [value]
 
 if not hasattr(entity, "Entity"):
 
@@ -68,6 +69,8 @@ if not hasattr(entity, "Entity"):
 helpers.config_validation = config_validation
 helpers.dispatcher = dispatcher
 helpers.entity = entity
+helpers.selector = None
+sys.modules.pop("homeassistant.helpers.selector", None)
 
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
     dashboard_entity_display_overrides_from_fields,

@@ -20,7 +20,7 @@ Blueprints**. Existing blueprint files are not overwritten.
 | --- | --- |
 | C300X Doorbell notification | Run a notification action when the doorbell rings. |
 | C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. |
-| C300X Ring Call mobile dashboard notification | Send a Companion App notification that opens the C300X dashboard. |
+| C300X Ring Call mobile dashboard notification | Send an Android Companion App call notification with Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. |
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. |
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
@@ -42,10 +42,16 @@ action; the bundled card handles Answer and Hang Up.
 Use the simple Doorbell notification blueprint when you only want an event
 notification and do not want to answer the call.
 
-Use **C300X Ring Call mobile dashboard notification** when the notification
-should directly open the C300X dashboard in the Home Assistant Companion App.
-The call is still answered from the card after the dashboard opens; background
-notification actions cannot grant browser microphone access reliably.
+Use **C300X Ring Call mobile dashboard notification** for Android phones. It
+creates a high-priority notification with **Answer**, **Hang Up** and **Open**
+actions. **Answer** clears the ringing notification, opens the configured
+dashboard in the Companion App and calls `bticino_c300x.answer_doorbell_call`.
+After answering, a quiet in-call notification keeps a **Hang Up** action
+available.
+
+The phone sound comes from the Android notification channel configured in the
+blueprint. Open the Home Assistant Companion App notification settings and set
+the sound for that channel to the ringtone you want.
 
 For capture and transcription, the default paths are:
 
@@ -79,8 +85,8 @@ data:
     entity_id: "{{ camera_entity }}"
 ```
 
-For the dedicated mobile dashboard blueprint, set **Mobile notify service** to
-the same service name, for example:
+For the dedicated Android mobile dashboard blueprint, set **Mobile notify
+service** to the same service name, for example:
 
 ```text
 notify.mobile_app_your_phone

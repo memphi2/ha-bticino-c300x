@@ -105,12 +105,49 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     action = data["action"][0]
     notify_data = action["data"]["data"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
+    services = [
+        item["service"]
+        for item in data["action"]
+        if isinstance(item, dict) and "service" in item
+    ]
+    answer_sequence = data["action"][2]["choose"][0]["sequence"]
+    hangup_sequence = data["action"][2]["choose"][1]["sequence"]
+    answer_services = [
+        item["service"]
+        for item in answer_sequence
+        if isinstance(item, dict) and "service" in item
+    ]
 
     assert action["service"] == "notify_service"
     assert notify_data["url"] == "{{ dashboard_path }}"
     assert notify_data["clickAction"] == "{{ dashboard_path }}"
     assert notify_data["entity_id"] == "{{ camera_entity }}"
-    assert notify_data["tag"] == "c300x_ring_call"
+    assert notify_data["tag"] == "{{ ring_tag }}"
+    assert notify_data["channel"] == "{{ notification_channel }}"
+    assert notify_data["importance"] == "max"
+    assert notify_data["persistent"] is True
+    assert notify_data["sticky"] == "true"
+    assert notify_data["actions"] == [
+        {"action": "C300X_RING_ANSWER", "title": "{{ answer_title }}"},
+        {
+            "action": "C300X_RING_HANGUP",
+            "title": "{{ hangup_title }}",
+            "destructive": True,
+        },
+        {"action": "URI", "title": "{{ open_title }}", "uri": "{{ dashboard_path }}"},
+    ]
+    assert services == ["notify_service"]
+    assert answer_services[:3] == [
+        "notify_service",
+        "notify_service",
+        "bticino_c300x.answer_doorbell_call",
+    ]
+    assert answer_sequence[0]["data"]["message"] == "clear_notification"
+    assert answer_sequence[1]["data"]["message"] == "command_webview"
+    assert answer_sequence[1]["data"]["data"]["command"] == "{{ dashboard_path }}"
+    assert answer_sequence[3]["data"]["data"]["tag"] == "{{ active_tag }}"
+    assert answer_sequence[3]["data"]["data"]["importance"] == "low"
+    assert hangup_sequence[0]["service"] == "bticino_c300x.hangup_doorbell_call"
     assert "homeassistant" in templates
     assert "ready" in templates
     assert "warning" in templates

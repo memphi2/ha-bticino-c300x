@@ -1,6 +1,6 @@
 blueprint:
   name: C300X Ring Call mobile dashboard notification
-  description: Send a Home Assistant Companion App notification for an answerable C300X Ring Call. Tapping the notification opens the configured dashboard.
+  description: Send an Android Home Assistant Companion App call notification for an answerable C300X Ring Call. The phone notification can ring, open the configured dashboard, answer the call, and hang up.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_mobile_dashboard.yaml
   input:
@@ -41,9 +41,56 @@ blueprint:
         text:
     message:
       name: Message
-      default: Open Home Assistant to answer.
+      default: Open Home Assistant or answer from this notification.
       selector:
         text:
+    answer_title:
+      name: Answer button
+      default: Answer
+      selector:
+        text:
+    hangup_title:
+      name: Hang up button
+      default: Hang up
+      selector:
+        text:
+    open_title:
+      name: Open dashboard button
+      default: Open
+      selector:
+        text:
+    notification_channel:
+      name: Ring notification channel
+      description: Android notification channel used for the ringing notification. Configure its sound in the Home Assistant Companion App notification settings.
+      default: C300X Doorbell
+      selector:
+        text:
+    active_call_channel:
+      name: Active-call notification channel
+      description: Android notification channel for the quiet in-call Hang Up notification after Answer.
+      default: C300X Call
+      selector:
+        text:
+    notification_timeout_seconds:
+      name: Ring notification timeout
+      description: Seconds to keep the answerable notification active.
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          step: 5
+          mode: box
+    active_call_timeout_seconds:
+      name: Active-call timeout
+      description: Seconds to keep listening for the Hang Up action after Answer.
+      default: 180
+      selector:
+        number:
+          min: 30
+          max: 900
+          step: 10
+          mode: box
 
 mode: restart
 
@@ -60,6 +107,17 @@ variables:
   dashboard_path: !input dashboard_path
   title: !input title
   message: !input message
+  answer_title: !input answer_title
+  hangup_title: !input hangup_title
+  open_title: !input open_title
+  notification_channel: !input notification_channel
+  active_call_channel: !input active_call_channel
+  notification_timeout_seconds: !input notification_timeout_seconds
+  active_call_timeout_seconds: !input active_call_timeout_seconds
+  ring_tag: c300x_ring_call
+  active_tag: c300x_ring_call_active
+  answer_action: C300X_RING_ANSWER
+  hangup_action: C300X_RING_HANGUP
 
 condition:
   - condition: template
@@ -80,5 +138,110 @@ action:
         url: "{{ dashboard_path }}"
         clickAction: "{{ dashboard_path }}"
         entity_id: "{{ camera_entity }}"
-        tag: c300x_ring_call
+        tag: "{{ ring_tag }}"
         group: c300x
+        channel: "{{ notification_channel }}"
+        importance: max
+        priority: high
+        ttl: 0
+        timeout: "{{ notification_timeout_seconds | int(60) }}"
+        persistent: true
+        sticky: "true"
+        vibrationPattern: "100, 700, 200, 700, 200, 700"
+        actions:
+          - action: C300X_RING_ANSWER
+            title: "{{ answer_title }}"
+          - action: C300X_RING_HANGUP
+            title: "{{ hangup_title }}"
+            destructive: true
+          - action: URI
+            title: "{{ open_title }}"
+            uri: "{{ dashboard_path }}"
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: C300X_RING_ANSWER
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: C300X_RING_HANGUP
+    timeout: "{{ notification_timeout_seconds | int(60) }}"
+    continue_on_timeout: true
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ wait.trigger is not none
+                 and wait.trigger.event.data.action == answer_action }}
+        sequence:
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ ring_tag }}"
+          - service: !input notify_service
+            data:
+              message: command_webview
+              data:
+                command: "{{ dashboard_path }}"
+          - service: bticino_c300x.answer_doorbell_call
+          - service: !input notify_service
+            data:
+              title: "{{ title }}"
+              message: "Call active"
+              data:
+                url: "{{ dashboard_path }}"
+                clickAction: "{{ dashboard_path }}"
+                tag: "{{ active_tag }}"
+                group: c300x
+                channel: "{{ active_call_channel }}"
+                importance: low
+                priority: low
+                timeout: "{{ active_call_timeout_seconds | int(180) }}"
+                persistent: true
+                sticky: "true"
+                actions:
+                  - action: C300X_RING_HANGUP
+                    title: "{{ hangup_title }}"
+                    destructive: true
+                  - action: URI
+                    title: "{{ open_title }}"
+                    uri: "{{ dashboard_path }}"
+          - wait_for_trigger:
+              - platform: event
+                event_type: mobile_app_notification_action
+                event_data:
+                  action: C300X_RING_HANGUP
+            timeout: "{{ active_call_timeout_seconds | int(180) }}"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == hangup_action }}
+            then:
+              - service: bticino_c300x.hangup_doorbell_call
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ active_tag }}"
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ wait.trigger is not none
+                 and wait.trigger.event.data.action == hangup_action }}
+        sequence:
+          - service: bticino_c300x.hangup_doorbell_call
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ ring_tag }}"
+    default:
+      - service: !input notify_service
+        data:
+          message: clear_notification
+          data:
+            tag: "{{ ring_tag }}"

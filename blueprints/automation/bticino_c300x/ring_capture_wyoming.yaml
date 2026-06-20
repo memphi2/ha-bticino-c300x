@@ -49,11 +49,6 @@ blueprint:
           min: 1
           max: 15
           mode: slider
-    include_audio:
-      name: Include audio
-      default: true
-      selector:
-        boolean:
     capture_file_dir:
       name: Capture file directory
       default: /config/c300x
@@ -93,7 +88,7 @@ action:
     data:
       entry_id: "{{ entry_id }}"
       duration_seconds: !input duration_seconds
-      include_audio: !input include_audio
+      include_audio: true
       wav_output_dir: "{{ capture_file_dir }}"
   - service: bticino_c300x.run_ring_wyoming_analysis
     data:

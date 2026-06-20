@@ -92,12 +92,15 @@ def test_ring_capture_blueprint_calls_capture_without_analysis() -> None:
 def test_wyoming_blueprint_captures_then_transcribes_latest_files() -> None:
     data = _blueprint("ring_capture_wyoming.yaml")
     services = [action["service"] for action in data["action"]]
+    capture_data = data["action"][0]["data"]
     analysis_data = data["action"][1]["data"]
 
     assert services == [
         "bticino_c300x.capture_doorbell_call",
         "bticino_c300x.run_ring_wyoming_analysis",
     ]
+    assert "include_audio" not in data["blueprint"]["input"]
+    assert capture_data["include_audio"] is True
     assert analysis_data["capture_path"] == "{{ capture_dir }}/latest.capture.json"
     assert analysis_data["wav_path"] == "{{ capture_dir }}/latest.raw.wav"
     assert analysis_data["result_path"] == "{{ result_path }}"

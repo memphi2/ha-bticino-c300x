@@ -153,7 +153,7 @@ function dashboardPreviousPage(statusItem, pageItem) {
     loadDashboardPage(statusItem, pageItem)
 }
 
-function dashboardAction(item, statusItem, pageItem) {
+function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
     if (!item || !item.entity_id || !item.domain) {
         statusItem.text = uiText(pageItem, "invalid_action")
         statusItem.color = "#ff6b6b"
@@ -164,7 +164,9 @@ function dashboardAction(item, statusItem, pageItem) {
     getJson(path, function(data) {
         statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
         statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
-        dashboard(statusItem, pageItem)
+        if (refreshDashboard !== false) {
+            dashboard(statusItem, pageItem)
+        }
     }, function(error) {
         statusItem.text = error
         statusItem.color = "#ff6b6b"
@@ -766,6 +768,7 @@ function dashboardImages(source) {
             continue
         }
         images.push({
+            "kind": "image",
             "source": imageSource(source[i].source),
             "width": positiveNumber(source[i].width, 220),
             "height": positiveNumber(source[i].height, 120)

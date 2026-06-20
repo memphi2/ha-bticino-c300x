@@ -357,7 +357,7 @@ Page {
             }
         }
         if (alarmPageItem.kind === "button" || alarmPageItem.kind === "switch") {
-            Api.dashboardAction(alarmPageItem, status, page)
+            Api.dashboardAction(alarmPageItem, status, page, false)
             return
         }
         status.text = alarmPageItemDetail()

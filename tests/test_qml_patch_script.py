@@ -223,9 +223,9 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "d17f8121d4455d0c0ca1e26c8f3a33bfca919310fef50903621eab7ee0ced5ac",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
-    "Alarm.qml": "d742a0e46df4e1e9d86c6d66dbacc47a597ed8fde66035f9d477fdac17669e2b",
+    "Alarm.qml": "bf1d12647cb729c8ad904908b225085d52079292b5fac9fef8f70d5d224e5847",
     "HomeAssistant.qml": "806183eeed1075f5917b9174620edd10f2fd0a903e0f952c1c4dde69d85297e6",
-    "js/c300x_ha.js": "1aba7123f19a42d7e113e0408658a7571741294c6893819d6d313b723217b190",
+    "js/c300x_ha.js": "88163a0e93b4fcedbdb0f3e6eb08d2900f366448c5f13dc3ed64ac66dae78cfb",
     "js/c300x_i18n.js": "545cb310c7ffa1bf37232afdc70c48a1023b3020b2838f75ddbd28130ba0420d",
     "js/c300x_memos.js": "ad7138a69bb537a5e90f149a91f0e343185b7e7678054ecf5e8776dd0568cdb3",
 }
@@ -499,6 +499,34 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
     assert "+ encodeURIComponent(item.entity_id)" in dashboard_js
     assert '"&option=" + encodeURIComponent(option)' in dashboard_js
     assert 'item.entity_id + ":select:" + option' not in dashboard_js
+
+
+def test_home_assistant_mixed_dashboard_preserves_image_kind() -> None:
+    dashboard_js = (ROOT / "device_qml" / "js/c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+    dashboard_mixed_body = dashboard_js[
+        dashboard_js.index("function dashboardMixedItems") :
+        dashboard_js.index("function dashboardSliders")
+    ]
+    dashboard_images_body = dashboard_js[
+        dashboard_js.index("function dashboardImages") :
+        dashboard_js.index("function imageSource")
+    ]
+
+    assert 'kind === "image"' in dashboard_mixed_body
+    assert '"kind": "image"' in dashboard_images_body
+
+
+def test_alarm_quick_action_does_not_refresh_home_assistant_dashboard() -> None:
+    alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
+    dashboard_js = (ROOT / "device_qml" / "js/c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Api.dashboardAction(alarmPageItem, status, page, false)" in alarm_qml
+    assert "function dashboardAction(item, statusItem, pageItem, refreshDashboard)" in dashboard_js
+    assert "if (refreshDashboard !== false)" in dashboard_js
 
 
 def test_qml_i18n_catalogs_have_identical_key_sets() -> None:

@@ -5,14 +5,9 @@
 #include "string_util.h"
 
 #include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 
 #define C300X_SELF_TEST_API_VERSION "1.1"
@@ -21,17 +16,8 @@
 #define C300X_SELF_TEST_IPV6_FIREWALL_BEGIN "# c300x-native-agent ipv6 firewall begin"
 #define C300X_SELF_TEST_IPV6_FIREWALL_END "# c300x-native-agent ipv6 firewall end"
 #define C300X_SELF_TEST_FILE_MAX 49152
-#define C300X_SELF_TEST_QML_TIMEOUT_MS 3000
 #define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
 #define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
-
-struct self_test_qml_status {
-    int available;
-    int ok;
-    int media_user_label_patched;
-    char state[32];
-    char media_user_label_state[32];
-};
 
 static const char *bool_json(int value)
 {
@@ -200,197 +186,6 @@ static const char *read_firewall_state(
     return state;
 }
 
-static int json_find_field(const char *body, const char *field, const char **value)
-{
-    char pattern[96];
-    const char *found;
-
-    if (snprintf(pattern, sizeof(pattern), "\"%s\"", field) >= (int)sizeof(pattern)) {
-        return 0;
-    }
-    found = strstr(body, pattern);
-    if (found == NULL) {
-        return 0;
-    }
-    found += strlen(pattern);
-    while (*found == ' ' || *found == '\t' || *found == '\r' || *found == '\n') {
-        found++;
-    }
-    if (*found != ':') {
-        return 0;
-    }
-    found++;
-    while (*found == ' ' || *found == '\t' || *found == '\r' || *found == '\n') {
-        found++;
-    }
-    *value = found;
-    return 1;
-}
-
-static int json_bool_field(const char *body, const char *field, int *out)
-{
-    const char *value;
-
-    if (!json_find_field(body, field, &value)) {
-        return 0;
-    }
-    if (strncmp(value, "true", 4) == 0) {
-        *out = 1;
-        return 1;
-    }
-    if (strncmp(value, "false", 5) == 0) {
-        *out = 0;
-        return 1;
-    }
-    return 0;
-}
-
-static void json_string_field(const char *body, const char *field, char *out, size_t out_len)
-{
-    const char *value;
-    size_t used = 0;
-
-    if (out_len == 0) {
-        return;
-    }
-    out[0] = '\0';
-    if (!json_find_field(body, field, &value) || *value != '"') {
-        return;
-    }
-    value++;
-    while (*value != '\0' && *value != '"' && used + 1 < out_len) {
-        if (*value == '\\' && value[1] != '\0') {
-            value++;
-        }
-        out[used++] = *value++;
-    }
-    out[used] = '\0';
-}
-
-static int run_qml_status_script(const char *script, char *out, size_t out_len)
-{
-    int pipe_fd[2];
-    pid_t pid;
-    int status = 0;
-    size_t used = 0;
-    int waited_ms = 0;
-
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    if (script == NULL || script[0] == '\0' || access(script, X_OK) != 0) {
-        return 0;
-    }
-    if (pipe(pipe_fd) != 0) {
-        return 0;
-    }
-    pid = fork();
-    if (pid < 0) {
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return 0;
-    }
-    if (pid == 0) {
-        close(pipe_fd[0]);
-        if (dup2(pipe_fd[1], STDOUT_FILENO) < 0) {
-            _exit(127);
-        }
-        close(pipe_fd[1]);
-        execl(script, script, "status", (char *)NULL);
-        _exit(127);
-    }
-    close(pipe_fd[1]);
-    (void)fcntl(pipe_fd[0], F_SETFL, fcntl(pipe_fd[0], F_GETFL, 0) | O_NONBLOCK);
-    while (waited_ms <= C300X_SELF_TEST_QML_TIMEOUT_MS) {
-        struct pollfd pfd = {.fd = pipe_fd[0], .events = POLLIN};
-        int ready = poll(&pfd, 1, 100);
-        if (ready > 0 && (pfd.revents & POLLIN)) {
-            for (;;) {
-                char discard[256];
-                size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-                ssize_t read_size = read(
-                    pipe_fd[0],
-                    capacity > 0 ? out + used : discard,
-                    capacity > 0 ? capacity : sizeof(discard)
-                );
-                if (read_size > 0) {
-                    if (capacity > 0) {
-                        used += (size_t)read_size;
-                    }
-                    continue;
-                }
-                break;
-            }
-        }
-        if (waitpid(pid, &status, WNOHANG) == pid) {
-            break;
-        }
-        waited_ms += 100;
-    }
-    if (waited_ms > C300X_SELF_TEST_QML_TIMEOUT_MS) {
-        (void)kill(pid, SIGKILL);
-        (void)waitpid(pid, &status, 0);
-        close(pipe_fd[0]);
-        if (out_len > 0) {
-            out[used < out_len ? used : out_len - 1] = '\0';
-        }
-        return 0;
-    }
-    for (;;) {
-        char discard[256];
-        size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-        ssize_t read_size = read(
-            pipe_fd[0],
-            capacity > 0 ? out + used : discard,
-            capacity > 0 ? capacity : sizeof(discard)
-        );
-        if (read_size > 0) {
-            if (capacity > 0) {
-                used += (size_t)read_size;
-            }
-            continue;
-        }
-        break;
-    }
-    close(pipe_fd[0]);
-    if (out_len > 0) {
-        out[used < out_len ? used : out_len - 1] = '\0';
-    }
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-static struct self_test_qml_status qml_status(const struct c300x_config *config)
-{
-    struct self_test_qml_status status;
-    char output[4096];
-    int ok = 0;
-
-    memset(&status, 0, sizeof(status));
-    c300x_copy_string(status.state, sizeof(status.state), "unavailable");
-    c300x_copy_string(status.media_user_label_state, sizeof(status.media_user_label_state), "unavailable");
-    if (config == NULL || access(config->maintenance_qml_patch_script, X_OK) != 0) {
-        return status;
-    }
-    status.available = 1;
-    if (!run_qml_status_script(config->maintenance_qml_patch_script, output, sizeof(output))) {
-        c300x_copy_string(status.state, sizeof(status.state), "script_failed");
-        c300x_copy_string(status.media_user_label_state, sizeof(status.media_user_label_state), "script_failed");
-        return status;
-    }
-    (void)json_bool_field(output, "ok", &ok);
-    status.ok = ok;
-    (void)json_bool_field(output, "media_user_label_patched", &status.media_user_label_patched);
-    json_string_field(output, "state", status.state, sizeof(status.state));
-    json_string_field(output, "media_user_label_state", status.media_user_label_state, sizeof(status.media_user_label_state));
-    if (status.state[0] == '\0') {
-        c300x_copy_string(status.state, sizeof(status.state), "unknown");
-    }
-    if (status.media_user_label_state[0] == '\0') {
-        c300x_copy_string(status.media_user_label_state, sizeof(status.media_user_label_state), "unknown");
-    }
-    return status;
-}
-
 int c300x_self_test_json(
     const struct c300x_config *config,
     const struct c300x_video_status *video_status,
@@ -406,11 +201,8 @@ int c300x_self_test_json(
     char user_error_json[C300X_DEVICE_USER_ERROR_LEN * 6 + 3];
     char routing_state_json[96];
     char routing_error_json[C300X_DEVICE_ROUTING_ERROR_LEN * 6 + 3];
-    char qml_state_json[96];
-    char qml_media_user_label_state_json[96];
     struct c300x_device_user_status user_status;
     struct c300x_device_routing_status routing_status;
-    struct self_test_qml_status qml;
     int ipv4_exists = 0;
     int ipv6_exists = 0;
     int capabilities_ok = config != NULL;
@@ -434,7 +226,6 @@ int c300x_self_test_json(
 
     memset(&user_status, 0, sizeof(user_status));
     memset(&routing_status, 0, sizeof(routing_status));
-    qml = qml_status(config);
     if (config == NULL || out == NULL || out_len == 0) {
         return 0;
     }
@@ -532,8 +323,6 @@ int c300x_self_test_json(
     json_string(user_status.error, user_error_json, sizeof(user_error_json));
     json_string(routing_status.state, routing_state_json, sizeof(routing_state_json));
     json_string(routing_status.error, routing_error_json, sizeof(routing_error_json));
-    json_string(qml.state, qml_state_json, sizeof(qml_state_json));
-    json_string(qml.media_user_label_state, qml_media_user_label_state_json, sizeof(qml_media_user_label_state_json));
 
     out[0] = '\0';
     return c300x_appendf(
@@ -551,8 +340,7 @@ int c300x_self_test_json(
         "\"homeassistant_user\":{\"ok\":%s,\"reason\":\"%s\",\"supported\":%s,\"media_identity_available\":%s,"
         "\"homeassistant_user_present\":%s,\"routes_consistent\":%s,\"error\":%s},"
         "\"device_routing\":{\"ok\":%s,\"reason\":\"%s\",\"routing_supported\":%s,\"routing_applied\":%s,"
-        "\"routing_state\":%s,\"routing_error\":%s,\"qml_available\":%s,\"qml_ok\":%s,"
-        "\"qml_state\":%s,\"qml_media_user_label_state\":%s,\"qml_media_user_label_patched\":%s},"
+        "\"routing_state\":%s,\"routing_error\":%s},"
         "\"startup\":{\"ok\":%s,\"reason\":\"%s\",\"agent_init_script_present\":%s,\"agent_init_link_ok\":%s}"
         "}}\n",
         C300X_SELF_TEST_API_VERSION,
@@ -603,11 +391,6 @@ int c300x_self_test_json(
         bool_json(routing_status.patched),
         routing_state_json,
         routing_error_json,
-        bool_json(qml.available),
-        bool_json(qml.ok),
-        qml_state_json,
-        qml_media_user_label_state_json,
-        bool_json(qml.media_user_label_patched),
         bool_json(startup_ok),
         startup_reason,
         bool_json(agent_init_script_present),

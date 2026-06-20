@@ -405,9 +405,6 @@ def _self_test_reason_text(check_name: str, reason: str) -> str:
         "homeassistant_routes_inconsistent": "the Home Assistant media-user route files are inconsistent",
         "device_routing_status_failed": "the Home Assistant media routing setup status could not be read",
         "device_routing_missing": "the Home Assistant media routing setup is incomplete",
-        "media_user_label_status_unavailable": "the Home Assistant display label setup status is unavailable",
-        "media_user_label_status_failed": "the Home Assistant display label setup status command failed",
-        "media_user_label_missing": "the Home Assistant display label setup is incomplete",
         "agent_init_script_missing": "the device-agent startup script is missing",
         "startup_link_missing": "the device-agent startup link is missing",
     }

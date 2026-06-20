@@ -227,8 +227,8 @@ def test_native_agent_self_test_keeps_device_routing_independent_from_qml_label(
     )[1].split("if (!agent_init_script_present)", maxsplit=1)[0]
 
     assert "device_routing_ok = routing_read_ok\n                && routing_status.patched;" in block
-    assert "qml.media_user_label_patched" not in block
-    assert "qml_media_user_label_patched" in text
+    assert "media_user_label_patched" not in text
+    assert "run_qml_status_script" not in text
 
 
 def test_native_agent_device_user_keeps_homeassistant_out_of_external_route() -> None:

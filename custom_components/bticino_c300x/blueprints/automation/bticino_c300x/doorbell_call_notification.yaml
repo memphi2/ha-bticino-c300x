@@ -10,12 +10,6 @@ blueprint:
       selector:
         device:
           integration: bticino_c300x
-    entry_id:
-      name: Entry ID
-      description: Optional C300X config entry ID. Leave empty when there is only one C300X entry.
-      default: ""
-      selector:
-        text:
     dashboard_path:
       name: Dashboard path
       description: Dashboard path opened by the Answer action.
@@ -38,8 +32,9 @@ trigger:
 
 variables:
   c300x_device: !input c300x_device
-  entry_id: !input entry_id
   c300x_entities: "{{ device_entities(c300x_device) | list }}"
+  entry_id: "{{ trigger.event.data.entry_id | default('', true) }}"
+  event_camera_entity: "{{ trigger.event.data.camera_entity_id | default('', true) }}"
   forwarding_entity: >-
     {% set ns = namespace(entity='') %}
     {% for entity_id in c300x_entities %}
@@ -75,7 +70,7 @@ variables:
 condition:
   - condition: template
     value_template: >-
-      {{ not entry_id or trigger.event.data.entry_id == entry_id }}
+      {{ entry_id and event_camera_entity in c300x_entities }}
   - condition: template
     value_template: >-
       {{ states(forwarding_entity) == 'Home Assistant'

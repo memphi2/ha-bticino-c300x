@@ -38,9 +38,9 @@ run when the media setup is `ready` or `warning`.
 
 For Ring Call notifications, select the C300X device. The blueprints derive the
 matching forwarding select, media-readiness sensor and camera from that device.
-Forwarding must be set to **Home Assistant**. If you have more than one C300X
-entry, also enter the matching Entry ID so the automation only reacts to that
-device.
+Forwarding must be set to **Home Assistant**. The doorbell-event blueprints use
+the C300X event metadata to target the matching config entry, so no manual entry
+ID is needed for these workflows.
 
 Use the simple Doorbell notification blueprint only when you want an event
 notification and do not want to answer the call. It also starts from the C300X

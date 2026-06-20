@@ -38,6 +38,36 @@ from custom_components.bticino_c300x.data import (
 )
 
 
+def _stub_homeassistant_http() -> None:
+    components = sys.modules.setdefault(
+        "homeassistant.components",
+        types.ModuleType("homeassistant.components"),
+    )
+    http = sys.modules.setdefault(
+        "homeassistant.components.http",
+        types.ModuleType("homeassistant.components.http"),
+    )
+
+    if not hasattr(http, "HomeAssistantView"):
+
+        class HomeAssistantView:  # pragma: no cover - import-time stub only
+            pass
+
+        http.HomeAssistantView = HomeAssistantView
+
+    components.http = http
+
+    webhook = sys.modules.setdefault(
+        "homeassistant.components.webhook",
+        types.ModuleType("homeassistant.components.webhook"),
+    )
+    if not hasattr(webhook, "async_register"):
+        webhook.async_register = lambda *_args, **_kwargs: None
+    if not hasattr(webhook, "async_unregister"):
+        webhook.async_unregister = lambda *_args, **_kwargs: None
+    components.webhook = webhook
+
+
 def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     updates: list[dict[str, Any]] = []
     entry = SimpleNamespace(
@@ -115,6 +145,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
+    _stub_homeassistant_http()
     aiohttp_client = sys.modules.setdefault(
         "homeassistant.helpers.aiohttp_client",
         types.ModuleType("homeassistant.helpers.aiohttp_client"),
@@ -226,6 +257,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:
+    _stub_homeassistant_http()
     hass = SimpleNamespace(data={})
     entry = _entry(data={})
 

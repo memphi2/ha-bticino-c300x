@@ -47,6 +47,7 @@ def test_blueprints_are_valid_automation_blueprints() -> None:
     expected = {
         "doorbell_notification.yaml",
         "doorbell_call_notification.yaml",
+        "doorbell_call_ios.yaml",
         "doorbell_call_mobile_dashboard.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -76,6 +77,7 @@ def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
     for filename in {
         "doorbell_notification.yaml",
         "doorbell_call_notification.yaml",
+        "doorbell_call_ios.yaml",
         "doorbell_call_mobile_dashboard.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -200,6 +202,68 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     assert answer_sequence[3]["data"]["data"]["tag"] == "{{ active_tag }}"
     assert answer_sequence[3]["data"]["data"]["importance"] == "low"
     assert hangup_sequence[0]["service"] == "bticino_c300x.hangup_doorbell_call"
+    assert "homeassistant" in templates
+    assert "ready" in templates
+    assert "warning" in templates
+
+
+def test_ios_ring_call_blueprint_uses_unique_actions_and_entry_id() -> None:
+    data = _blueprint("doorbell_call_ios.yaml")
+    inputs = data["blueprint"]["input"]
+    notify_data = data["action"][0]["data"]["data"]
+    wait_trigger = data["action"][1]["wait_for_trigger"][0]
+    answer_sequence = data["action"][2]["choose"][0]["sequence"]
+    hangup_sequence = data["action"][2]["choose"][1]["sequence"]
+    templates = "\n".join(condition["value_template"] for condition in data["condition"])
+
+    assert inputs["c300x_device"]["selector"] == {
+        "device": {"integration": "bticino_c300x"}
+    }
+    assert inputs["entry_id"]["default"] == ""
+    assert inputs["notify_service"]["name"] == "iOS notify service"
+    assert data["variables"]["entry_id"] == "entry_id"
+    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
+    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
+    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
+    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
+    assert "this.entity_id" in data["variables"]["action_scope"]
+    assert data["variables"]["answer_action"].startswith(
+        "{{ 'C300X_IOS_RING_ANSWER_'"
+    )
+    assert data["variables"]["hangup_action"].startswith(
+        "{{ 'C300X_IOS_RING_HANGUP_'"
+    )
+    assert notify_data["push"]["sound"] == {
+        "name": "{{ critical_sound }}",
+        "critical": 1,
+        "volume": "{{ critical_volume | float(1) }}",
+    }
+    assert notify_data["push"]["interruption-level"] == "critical"
+    assert notify_data["actions"][0] == {
+        "action": "{{ answer_action }}",
+        "title": "{{ answer_title }}",
+        "activationMode": "foreground",
+        "authenticationRequired": False,
+    }
+    assert notify_data["actions"][1]["action"] == "{{ hangup_action }}"
+    assert notify_data["actions"][2] == {
+        "action": "URI",
+        "title": "{{ open_title }}",
+        "uri": "{{ dashboard_path }}",
+    }
+    assert wait_trigger == {
+        "platform": "event",
+        "event_type": "mobile_app_notification_action",
+    }
+    assert answer_sequence[1] == {
+        "service": "bticino_c300x.answer_doorbell_call",
+        "data": {"entry_id": "{{ entry_id }}"},
+    }
+    assert answer_sequence[3]["wait_for_trigger"][0] == wait_trigger
+    assert hangup_sequence[0] == {
+        "service": "bticino_c300x.hangup_doorbell_call",
+        "data": {"entry_id": "{{ entry_id }}"},
+    }
     assert "homeassistant" in templates
     assert "ready" in templates
     assert "warning" in templates

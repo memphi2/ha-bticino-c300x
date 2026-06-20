@@ -21,6 +21,7 @@ Blueprints**. Existing blueprint files are not overwritten.
 | C300X Doorbell notification | Run a notification action when the doorbell rings. Select the C300X device; the blueprint finds the camera entity. |
 | C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. Select the C300X device; the blueprint finds the matching entities. |
 | C300X Ring Call phone alert | Ring an Android phone with Answer, Hang Up and Open actions. |
+| C300X Ring Call iOS phone alert | Ring an iPhone with critical sound plus Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. Select the C300X device; the blueprint finds the media-readiness sensor. |
 | C300X Ring capture and Wyoming transcription | Capture and transcribe the latest raw WAV with a local Wyoming Whisper service. Select the C300X device; the blueprint finds the media-readiness sensor. |
 | C300X strict phrase decision | Evaluate an existing transcription with strict capture freshness and exact phrase matching. Optional unlock stays disabled by default. |
@@ -58,6 +59,11 @@ sensor from that device.
 The phone sound comes from the Android notification channel configured in the
 blueprint. Open the Home Assistant Companion App notification settings and set
 the sound for that channel to the ringtone you want.
+
+Use **C300X Ring Call iOS phone alert** for iPhones. It sends an iOS critical
+notification with **Answer**, **Hang Up** and **Open** actions. **Answer**
+opens the Companion App in the foreground, clears the ringing notification and
+calls `bticino_c300x.answer_doorbell_call`.
 
 For capture and transcription, the default paths are:
 

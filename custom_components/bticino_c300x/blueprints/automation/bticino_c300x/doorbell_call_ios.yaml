@@ -1,0 +1,271 @@
+blueprint:
+  name: C300X Ring Call iOS phone alert
+  description: Ring an iPhone for an answerable C300X Ring Call. The notification can open the configured dashboard, answer the call, and hang up.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/doorbell_call_ios.yaml
+  input:
+    c300x_device:
+      name: C300X device
+      description: Select the C300X device. The blueprint derives the camera, forwarding select and media-readiness sensor from this device.
+      selector:
+        device:
+          integration: bticino_c300x
+    entry_id:
+      name: Entry ID
+      description: Optional C300X config entry ID. Leave empty when there is only one C300X entry.
+      default: ""
+      selector:
+        text:
+    notify_service:
+      name: iOS notify service
+      description: Companion App notify service, for example notify.mobile_app_your_iphone.
+      selector:
+        text:
+    dashboard_path:
+      name: Dashboard path
+      description: Dashboard path opened when the notification is tapped.
+      default: /lovelace/c300x
+      selector:
+        text:
+    title:
+      name: Title
+      default: Doorbell
+      selector:
+        text:
+    message:
+      name: Message
+      default: Open Home Assistant or answer from this notification.
+      selector:
+        text:
+    answer_title:
+      name: Answer button
+      default: Answer
+      selector:
+        text:
+    hangup_title:
+      name: Hang up button
+      default: Hang up
+      selector:
+        text:
+    open_title:
+      name: Open dashboard button
+      default: Open
+      selector:
+        text:
+    critical_sound:
+      name: Ring sound
+      description: iOS critical notification sound name. Use default unless you configured a custom sound in the Companion App.
+      default: default
+      selector:
+        text:
+    critical_volume:
+      name: Ring volume
+      description: iOS critical notification volume.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.1
+          mode: slider
+    notification_timeout_seconds:
+      name: Ring notification timeout
+      description: Seconds to keep the answerable notification active.
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          step: 5
+          mode: box
+    active_call_timeout_seconds:
+      name: Active-call timeout
+      description: Seconds to keep listening for the Hang Up action after Answer.
+      default: 180
+      selector:
+        number:
+          min: 30
+          max: 900
+          step: 10
+          mode: box
+
+mode: restart
+
+trigger:
+  - platform: event
+    event_type: bticino_c300x_agent_event_received
+    event_data:
+      event_key: doorbell_pressed
+
+variables:
+  c300x_device: !input c300x_device
+  c300x_entities: "{{ device_entities(c300x_device) | list }}"
+  forwarding_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% set options = state_attr(entity_id, 'options') or [] %}
+      {% if entity_id.startswith('select.')
+            and 'Home Assistant' in options
+            and 'Blocked' in options %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
+  media_readiness_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% if entity_id.startswith('sensor.')
+            and state_attr(entity_id, 'agent_reachable') is not none
+            and state_attr(entity_id, 'media_user_ok') is not none
+            and state_attr(entity_id, 'ring_call_supported') is not none %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
+  camera_entity: >-
+    {% set ns = namespace(entity='') %}
+    {% for entity_id in c300x_entities %}
+      {% if not ns.entity and entity_id.startswith('camera.') %}
+        {% set ns.entity = entity_id %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.entity }}
+  entry_id: !input entry_id
+  dashboard_path: !input dashboard_path
+  title: !input title
+  message: !input message
+  answer_title: !input answer_title
+  hangup_title: !input hangup_title
+  open_title: !input open_title
+  critical_sound: !input critical_sound
+  critical_volume: !input critical_volume
+  notification_timeout_seconds: !input notification_timeout_seconds
+  active_call_timeout_seconds: !input active_call_timeout_seconds
+  action_scope: "{{ (this.entity_id | default('automation.c300x_ios_ring_call', true)) | replace('.', '_') | upper }}"
+  ring_tag: "{{ 'c300x_ios_ring_call_' ~ action_scope | lower }}"
+  active_tag: "{{ 'c300x_ios_ring_call_active_' ~ action_scope | lower }}"
+  answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope }}"
+  hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope }}"
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ states(forwarding_entity) == 'Home Assistant'
+         or states(forwarding_entity) == 'homeassistant'
+         or state_attr(forwarding_entity, 'state') == 'homeassistant'
+         or state_attr(forwarding_entity, 'mode') == 'homeassistant' }}
+  - condition: template
+    value_template: "{{ states(media_readiness_entity) in ['ready', 'warning'] }}"
+
+action:
+  - service: !input notify_service
+    data:
+      title: "{{ title }}"
+      message: "{{ message }}"
+      data:
+        url: "{{ dashboard_path }}"
+        clickAction: "{{ dashboard_path }}"
+        entity_id: "{{ camera_entity }}"
+        tag: "{{ ring_tag }}"
+        group: c300x
+        push:
+          sound:
+            name: "{{ critical_sound }}"
+            critical: 1
+            volume: "{{ critical_volume | float(1) }}"
+          interruption-level: critical
+          category: camera
+        actions:
+          - action: "{{ answer_action }}"
+            title: "{{ answer_title }}"
+            activationMode: foreground
+            authenticationRequired: false
+          - action: "{{ hangup_action }}"
+            title: "{{ hangup_title }}"
+            activationMode: background
+            authenticationRequired: false
+            destructive: true
+          - action: URI
+            title: "{{ open_title }}"
+            uri: "{{ dashboard_path }}"
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+    timeout: "{{ notification_timeout_seconds | int(60) }}"
+    continue_on_timeout: true
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ wait.trigger is not none
+                 and wait.trigger.event.data.action == answer_action }}
+        sequence:
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ ring_tag }}"
+          - service: bticino_c300x.answer_doorbell_call
+            data:
+              entry_id: "{{ entry_id }}"
+          - service: !input notify_service
+            data:
+              title: "{{ title }}"
+              message: "Call active"
+              data:
+                url: "{{ dashboard_path }}"
+                clickAction: "{{ dashboard_path }}"
+                tag: "{{ active_tag }}"
+                group: c300x
+                push:
+                  sound:
+                    name: none
+                  interruption-level: active
+                actions:
+                  - action: "{{ hangup_action }}"
+                    title: "{{ hangup_title }}"
+                    activationMode: background
+                    authenticationRequired: false
+                    destructive: true
+                  - action: URI
+                    title: "{{ open_title }}"
+                    uri: "{{ dashboard_path }}"
+          - wait_for_trigger:
+              - platform: event
+                event_type: mobile_app_notification_action
+            timeout: "{{ active_call_timeout_seconds | int(180) }}"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == hangup_action }}
+            then:
+              - service: bticino_c300x.hangup_doorbell_call
+                data:
+                  entry_id: "{{ entry_id }}"
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ active_tag }}"
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ wait.trigger is not none
+                 and wait.trigger.event.data.action == hangup_action }}
+        sequence:
+          - service: bticino_c300x.hangup_doorbell_call
+            data:
+              entry_id: "{{ entry_id }}"
+          - service: !input notify_service
+            data:
+              message: clear_notification
+              data:
+                tag: "{{ ring_tag }}"
+    default:
+      - service: !input notify_service
+        data:
+          message: clear_notification
+          data:
+            tag: "{{ ring_tag }}"

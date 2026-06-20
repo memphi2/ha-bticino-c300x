@@ -72,10 +72,16 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     DOMAIN,
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
-from custom_components.bticino_c300x.repairs import (  # noqa: E402
-    _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
+from custom_components.bticino_c300x.repair_flows_frontend import (  # noqa: E402
     _LOVELACE_DASHBOARD_FIELD,
     _LOVELACE_VIEW_FIELD,
+    FrontendCardSetupRepairFlow,
+    _async_setup_lovelace_cards,
+    _dashboard_select_options,
+    _normalize_lovelace_target,
+)
+from custom_components.bticino_c300x.repairs import (  # noqa: E402
+    _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
     AGENT_CAPABILITY_MISMATCH_ISSUE,
     DEVICE_AGENT_UPDATE_REQUIRED_ISSUE,
     DEVICE_CORE_QML_HOOK_REQUIRED_ISSUE,
@@ -87,21 +93,17 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     DeviceAgentUpdateRepairFlow,
     DeviceCoreQmlHookRepairFlow,
     DeviceUserRepairFlow,
-    FrontendCardSetupRepairFlow,
     MediaSetupRepairFlow,
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
     _async_reload_entry_after_agent_update,
     _async_repair_media_setup,
     _async_restore_external_patch_state,
-    _async_setup_lovelace_cards,
     _async_verify_agent_after_update,
     _async_wait_for_agent_after_update,
-    _dashboard_select_options,
     _ExternalPatchChanges,
     _ExternalPatchState,
     _media_setup_repair_placeholders,
-    _normalize_lovelace_target,
     _validated_callback_base_url,
     async_create_fix_flow,
 )
@@ -364,11 +366,11 @@ def test_frontend_card_repair_flow_init_ignores_internal_flow_data(monkeypatch) 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     flow = FrontendCardSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
     monkeypatch.setattr(
-        "custom_components.bticino_c300x.repairs._dashboard_selector",
+        "custom_components.bticino_c300x.repair_flows_frontend._dashboard_selector",
         lambda _hass: str,
     )
     monkeypatch.setattr(
-        "custom_components.bticino_c300x.repairs._text_selector",
+        "custom_components.bticino_c300x.repair_flows_frontend._text_selector",
         lambda: str,
     )
 
@@ -1012,7 +1014,7 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
         frontend_setups.append(setup_hass)
 
     monkeypatch.setattr(
-        "custom_components.bticino_c300x.repairs.async_setup_frontend",
+        "custom_components.bticino_c300x.repair_flows_frontend.async_setup_frontend",
         fake_async_setup_frontend,
     )
 

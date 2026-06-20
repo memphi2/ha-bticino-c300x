@@ -103,7 +103,8 @@ def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() ->
 def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     data = _blueprint("doorbell_call_mobile_dashboard.yaml")
     inputs = data["blueprint"]["input"]
-    action = data["action"][0]
+    wake_action = data["action"][0]
+    action = data["action"][1]
     notify_data = action["data"]["data"]
     templates = "\n".join(condition["value_template"] for condition in data["condition"])
     services = [
@@ -111,8 +112,8 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
         for item in data["action"]
         if isinstance(item, dict) and "service" in item
     ]
-    answer_sequence = data["action"][2]["choose"][0]["sequence"]
-    hangup_sequence = data["action"][2]["choose"][1]["sequence"]
+    answer_sequence = data["action"][3]["choose"][0]["sequence"]
+    hangup_sequence = data["action"][3]["choose"][1]["sequence"]
     answer_services = [
         item["service"]
         for item in answer_sequence
@@ -123,6 +124,8 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     assert "forwarding_entity" not in inputs
     assert "media_readiness_entity" not in inputs
     assert "camera_entity" not in inputs
+    assert inputs["notification_channel"]["default"] == "alarm_stream"
+    assert inputs["notification_media_stream"]["default"] == "alarm_stream"
     assert inputs["c300x_device"]["selector"] == {
         "device": {"integration": "bticino_c300x"}
     }
@@ -133,13 +136,24 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
     assert "media_user_ok" in data["variables"]["media_readiness_entity"]
     assert "ring_call_supported" in data["variables"]["media_readiness_entity"]
     assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
+    assert wake_action["service"] == "notify_service"
+    assert wake_action["data"]["message"] == "command_screen_on"
+    assert wake_action["data"]["data"]["command"] == "keep_screen_on"
     assert action["service"] == "notify_service"
     assert notify_data["url"] == "{{ dashboard_path }}"
     assert notify_data["clickAction"] == "{{ dashboard_path }}"
     assert notify_data["entity_id"] == "{{ camera_entity }}"
     assert notify_data["tag"] == "{{ ring_tag }}"
     assert notify_data["channel"] == "{{ notification_channel }}"
+    assert notify_data["media_stream"] == "{{ notification_media_stream }}"
     assert notify_data["importance"] == "max"
+    assert notify_data["push"]["sound"] == {
+        "name": "default",
+        "critical": 1,
+        "volume": 1,
+    }
+    assert notify_data["push"]["interruption-level"] == "critical"
+    assert notify_data["push"]["category"] == "camera"
     assert notify_data["persistent"] is True
     assert notify_data["sticky"] == "true"
     assert notify_data["actions"] == [
@@ -151,7 +165,7 @@ def test_mobile_dashboard_blueprint_opens_dashboard_from_notification() -> None:
         },
         {"action": "URI", "title": "{{ open_title }}", "uri": "{{ dashboard_path }}"},
     ]
-    assert services == ["notify_service"]
+    assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
         "notify_service",
         "notify_service",

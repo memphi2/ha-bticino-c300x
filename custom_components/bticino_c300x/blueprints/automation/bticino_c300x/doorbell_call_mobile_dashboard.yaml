@@ -48,8 +48,14 @@ blueprint:
         text:
     notification_channel:
       name: Ring notification channel
-      description: Android notification channel used for the ringing notification. Configure its sound in the Home Assistant Companion App notification settings.
-      default: C300X Doorbell
+      description: Android notification channel used for the ringing notification.
+      default: alarm_stream
+      selector:
+        text:
+    notification_media_stream:
+      name: Ring audio stream
+      description: Android audio stream used by the ringing notification.
+      default: alarm_stream
       selector:
         text:
     active_call_channel:
@@ -127,6 +133,7 @@ variables:
   hangup_title: !input hangup_title
   open_title: !input open_title
   notification_channel: !input notification_channel
+  notification_media_stream: !input notification_media_stream
   active_call_channel: !input active_call_channel
   notification_timeout_seconds: !input notification_timeout_seconds
   active_call_timeout_seconds: !input active_call_timeout_seconds
@@ -148,6 +155,11 @@ condition:
 action:
   - service: !input notify_service
     data:
+      message: command_screen_on
+      data:
+        command: keep_screen_on
+  - service: !input notify_service
+    data:
       title: "{{ title }}"
       message: "{{ message }}"
       data:
@@ -157,9 +169,17 @@ action:
         tag: "{{ ring_tag }}"
         group: c300x
         channel: "{{ notification_channel }}"
+        media_stream: "{{ notification_media_stream }}"
         importance: max
         priority: high
         ttl: 0
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1
+          interruption-level: critical
+          category: camera
         timeout: "{{ notification_timeout_seconds | int(60) }}"
         persistent: true
         sticky: "true"

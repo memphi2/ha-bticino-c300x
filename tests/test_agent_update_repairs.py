@@ -92,9 +92,11 @@ from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _async_apply_repaired_agent_setup,
     _async_capture_external_patch_state,
     _async_reload_entry_after_agent_update,
+    _async_repair_media_setup,
     _async_restore_external_patch_state,
     _async_setup_lovelace_cards,
     _async_verify_agent_after_update,
+    _async_wait_for_agent_after_update,
     _ExternalPatchChanges,
     _ExternalPatchState,
     async_create_fix_flow,
@@ -615,6 +617,102 @@ def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
     assert entry.runtime_data.event_state.smartphone_forwarding_mode == "homeassistant"
 
 
+def test_media_setup_repair_unreachable_agent_only_reloads_entry() -> None:
+    api = FakePatchApi()
+    runtime_data = FakeRuntimeData(api)
+    runtime_data.connection_state.available = False
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    hass = FakeHass(entry)
+
+    repaired = asyncio.run(_async_repair_media_setup(hass, entry))  # type: ignore[arg-type]
+
+    assert repaired == ["agent_reachable_check"]
+    assert hass.config_entries.reloads == ["entry-1"]
+    assert api.calls == []
+
+
+def test_media_setup_repair_capability_failure_refreshes_agent_setup(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    api = FakePatchApi()
+    calls: list[str] = []
+
+    async def validate_setup() -> dict[str, Any]:
+        api.calls.append("validate_setup")
+        return {
+            "version": "0.3.1",
+            "api_version": "1",
+            "capabilities": {"doorbell_video": {"supported": True}},
+        }
+
+    async def apply_setup(_hass: Any, target_entry: Any, setup_data: dict[str, Any]) -> None:
+        calls.append(f"apply_setup:{setup_data['version']}:{target_entry.entry_id}")
+
+    api.async_validate_setup = validate_setup  # type: ignore[method-assign]
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={"doorbell_video": {"supported": True}},
+        self_test_status={
+            "ok": False,
+            "checks": {
+                "capabilities": {"ok": False, "reason": "missing_required"},
+                "firewall": {"ok": True},
+                "rtsp": {"ok": False, "reason": "rtsp_not_ready"},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+                "startup": {"ok": True},
+            },
+        },
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+
+    repaired = asyncio.run(_async_repair_media_setup(FakeHass(entry), entry))  # type: ignore[arg-type]
+
+    assert repaired == ["agent_update_check"]
+    assert api.calls == ["validate_setup", "self_test", "device_user_status"]
+    assert calls == ["apply_setup:0.3.1:entry-1"]
+
+
+def test_media_setup_repair_reports_api_failures_on_form() -> None:
+    class FailingFirewallApi(FakePatchApi):
+        async def async_set_firewall_enabled(self, enabled: bool) -> dict[str, Any]:
+            self.calls.append(f"set_firewall_enabled:{enabled}")
+            raise C300XAgentApiError("failed")
+
+    api = FailingFirewallApi()
+    runtime_data = FakeRuntimeData(
+        api,
+        capabilities={"doorbell_video": {"supported": True}},
+        self_test_status={
+            "ok": False,
+            "checks": {
+                "capabilities": {"ok": True},
+                "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+                "rtsp": {"ok": True},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+                "startup": {"ok": True},
+            },
+        },
+    )
+    entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
+    flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "confirm"
+    assert result["errors"] == {"base": "media_setup_repair_failed"}
+    assert result["description_placeholders"]["failed_checks"] == "firewall"
+    assert api.calls == ["set_firewall_enabled:True"]
+
+
 def test_device_user_repair_flow_reports_agent_failures() -> None:
     class FailingDeviceUserApi(FakePatchApi):
         async def async_ensure_homeassistant_user(
@@ -953,6 +1051,58 @@ def test_verify_agent_update_waits_for_scheduled_restart(
     assert result["version"] == "0.3.1"
     assert sleeps == [_AGENT_UPDATE_RESTART_SETTLE_SECONDS]
     assert api.calls == ["validate_setup"]
+
+
+def test_wait_for_agent_after_update_retries_until_setup_succeeds(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    class RestartingApi:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def async_validate_setup(self) -> dict[str, Any]:
+            self.calls += 1
+            if self.calls < 3:
+                raise C300XAgentApiError("not ready")
+            return {"version": "0.3.1"}
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    api = RestartingApi()
+    monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
+
+    result = asyncio.run(_async_wait_for_agent_after_update(api, initial_delay=0.5))
+
+    assert result == {"version": "0.3.1"}
+    assert api.calls == 3
+    assert sleeps == [0.5, 1, 1]
+
+
+def test_wait_for_agent_after_update_raises_last_error(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    class OfflineApi:
+        async def async_validate_setup(self) -> dict[str, Any]:
+            raise C300XAgentApiError("offline")
+
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
+
+    try:
+        asyncio.run(_async_wait_for_agent_after_update(OfflineApi()))
+    except C300XAgentApiError as err:
+        assert "offline" in str(err)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("offline agent wait did not raise")
 
 
 def test_capture_external_patch_state_marks_unknown_firewall_status() -> None:

@@ -674,6 +674,7 @@ def test_feature_input_allows_empty_gui_optional_fields() -> None:
     assert data[CONF_DASHBOARD_ENTITIES] == []
     assert data[CONF_ACTIONS] == {}
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is True
     assert data[CONF_VIDEO_PORT] == 6554
     assert data[CONF_VIDEO_STREAM_PATH] == DEFAULT_VIDEO_STREAM_PATH
     assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
@@ -754,6 +755,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
             CONF_DASHBOARD_ENTITIES: ["switch.entry", "sensor.temperature"],
             CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
             CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: False,
         }
     )
 
@@ -771,6 +773,7 @@ def test_feature_input_keeps_selected_gui_features() -> None:
         }
     }
     assert data[CONF_DASHBOARD_PREVENT_RETURN] is False
+    assert data[CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
 
 
 def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:

@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.4.0 - 2026-06-20
+
+### Changed
+
+- Improves the C300X display dashboard weather page with clearer current and
+  forecast tiles plus humidity, wind and sunrise/sunset details.
+- Reduces display dashboard runtime load by avoiding hidden dashboard tile
+  trees and trimming stale display requests.
+
+### Fixed
+
+- Stops display dashboard event watching when the display page is hidden or the
+  screen turns off.
+- Reloads the C300X display GUI after a sustained high-CPU media watchdog event
+  so the device can recover from display-side load without a manual reload.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- If C300X display pages are enabled, update/reload the display patch from Home
+  Assistant so the new dashboard layout is active.
+
 ## v1.3.1 - 2026-06-20
 
 ### Added

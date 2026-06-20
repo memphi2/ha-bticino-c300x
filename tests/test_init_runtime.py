@@ -613,6 +613,107 @@ def test_refresh_self_test_updates_or_clears_status() -> None:
     asyncio.run(_run())
 
 
+def test_stabilize_media_user_startup_retries_read_only_until_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(integration.asyncio, "sleep", fake_sleep)
+    ready_device_user = {
+        "homeassistant_user_present": True,
+        "routes_consistent": True,
+        "device_routing_applied": True,
+        "media_user_label_applied": True,
+    }
+    entry = _entry(options={CONF_VIDEO_ENABLED: True})
+    api = _SequencedMediaStartupApi(
+        device_user_statuses=[ready_device_user],
+        self_test_statuses=[
+            {
+                "ok": True,
+                "checks": {
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                },
+            },
+        ],
+    )
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=api,
+        device_user_status=ready_device_user,
+        device_user_status_updated_at=None,
+        self_test_status={
+            "ok": False,
+            "checks": {
+                "homeassistant_user": {"ok": False},
+                "device_routing": {"ok": True},
+            },
+        },
+        self_test_status_updated_at=None,
+    )
+
+    asyncio.run(integration._async_stabilize_media_user_startup(entry))
+
+    assert delays == [2.0]
+    assert api.device_user_status_calls == 1
+    assert api.self_test_calls == 1
+    assert api.ensure_labels == []
+    assert entry.runtime_data.self_test_status["checks"]["homeassistant_user"] == {
+        "ok": True
+    }
+    assert integration._media_user_startup_status(entry) is True
+
+
+def test_stabilize_media_user_startup_skips_ready_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unexpected_sleep(_delay: float) -> None:
+        raise AssertionError("startup stabilization should not sleep when ready")
+
+    monkeypatch.setattr(integration.asyncio, "sleep", unexpected_sleep)
+    ready_device_user = {
+        "homeassistant_user_present": True,
+        "routes_consistent": True,
+        "device_routing_applied": True,
+        "media_user_label_applied": True,
+    }
+    entry = _entry(options={CONF_VIDEO_ENABLED: True})
+    api = _SequencedMediaStartupApi(
+        device_user_statuses=[ready_device_user],
+        self_test_statuses=[
+            {
+                "ok": True,
+                "checks": {
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                },
+            }
+        ],
+    )
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=api,
+        device_user_status=ready_device_user,
+        self_test_status={
+            "ok": True,
+            "checks": {
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+            },
+        },
+    )
+
+    asyncio.run(integration._async_stabilize_media_user_startup(entry))
+
+    assert api.device_user_status_calls == 0
+    assert api.self_test_calls == 0
+    assert api.ensure_labels == []
+
+
 def test_sync_device_ui_patch_refreshes_status(monkeypatch: pytest.MonkeyPatch) -> None:
     import custom_components.bticino_c300x.qml_patch as qml_patch
 
@@ -933,6 +1034,36 @@ class _SelfTestApi:
         if self._error is not None:
             raise self._error
         return self._status
+
+
+class _SequencedMediaStartupApi:
+    def __init__(
+        self,
+        *,
+        device_user_statuses: list[dict[str, Any]],
+        self_test_statuses: list[dict[str, Any]],
+    ) -> None:
+        self._device_user_statuses = list(device_user_statuses)
+        self._self_test_statuses = list(self_test_statuses)
+        self.device_user_status_calls = 0
+        self.self_test_calls = 0
+        self.ensure_labels: list[str] = []
+
+    async def async_device_user_status(self) -> dict[str, Any]:
+        self.device_user_status_calls += 1
+        if len(self._device_user_statuses) > 1:
+            return self._device_user_statuses.pop(0)
+        return self._device_user_statuses[0]
+
+    async def async_self_test(self) -> dict[str, Any]:
+        self.self_test_calls += 1
+        if len(self._self_test_statuses) > 1:
+            return self._self_test_statuses.pop(0)
+        return self._self_test_statuses[0]
+
+    async def async_ensure_homeassistant_user(self, *, account_label: str) -> dict[str, Any]:
+        self.ensure_labels.append(account_label)
+        return self._device_user_statuses[-1]
 
 
 class _SetupApi:

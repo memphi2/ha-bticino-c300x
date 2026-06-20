@@ -170,11 +170,22 @@ def media_user_ready(
     if not isinstance(device_user_status, Mapping):
         return None
     present = device_user_status.get("homeassistant_user_present")
+    media_identity = device_user_status.get("media_identity_available")
+    routes = device_user_status.get("routes_consistent")
     routing = device_user_status.get("device_routing_applied")
-    label = device_user_status.get("media_user_label_applied")
-    if present is None and routing is None and label is None:
+    if (
+        present is None
+        and media_identity is None
+        and routes is None
+        and routing is None
+    ):
         return None
-    return present is True and routing is not False and label is not False
+    return (
+        present is True
+        and media_identity is not False
+        and routes is not False
+        and routing is not False
+    )
 
 
 def event_callback_ready(connection_state: Any) -> bool | None:

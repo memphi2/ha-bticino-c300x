@@ -501,11 +501,15 @@ async def _async_refresh_device_user_status(
 def _device_user_needs_ensure(status: dict[str, Any]) -> bool:
     """Return true when the dedicated HA media user is absent or incomplete."""
 
+    if status.get("homeassistant_user_present") is False:
+        return True
+    if status.get("media_identity_available") is False:
+        return True
+    if status.get("routes_consistent") is False:
+        return True
     return (
-        status.get("homeassistant_user_present") is not True
-        or status.get("routes_consistent") is not True
-        or status.get("device_routing_applied") is not True
-        or status.get("media_user_label_applied") is not True
+        status.get("device_routing_supported") is not False
+        and status.get("device_routing_applied") is False
     )
 
 

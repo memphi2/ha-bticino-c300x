@@ -553,12 +553,6 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         and status.get("device_routing_applied") is False
     ):
         reason = "device_routing_missing"
-    elif (
-        status.get("homeassistant_user_present") is True
-        and "media_user_label_applied" in status
-        and status.get("media_user_label_applied") is False
-    ):
-        reason = "media_user_label_missing"
     if reason is None:
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return

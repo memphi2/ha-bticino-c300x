@@ -217,6 +217,20 @@ def test_native_agent_self_test_keeps_unavailable_device_user_unknown() -> None:
     assert "check_json(device_routing_ok)" in text
 
 
+def test_native_agent_self_test_keeps_device_routing_independent_from_qml_label() -> None:
+    text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(
+        encoding="utf-8"
+    )
+    block = text.split(
+        "if (user_status.status_available && user_status.homeassistant_user_present)",
+        maxsplit=1,
+    )[1].split("if (!agent_init_script_present)", maxsplit=1)[0]
+
+    assert "device_routing_ok = routing_read_ok\n                && routing_status.patched;" in block
+    assert "qml.media_user_label_patched" not in block
+    assert "qml_media_user_label_patched" in text
+
+
 def test_native_agent_device_user_keeps_homeassistant_out_of_external_route() -> None:
     text = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"

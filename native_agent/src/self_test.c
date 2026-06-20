@@ -511,20 +511,11 @@ int c300x_self_test_json(
         }
         if (user_status.status_available && user_status.homeassistant_user_present) {
             device_routing_ok = routing_read_ok
-                && routing_status.patched
-                && qml.available
-                && qml.ok
-                && qml.media_user_label_patched;
+                && routing_status.patched;
             if (!routing_read_ok) {
                 device_routing_reason = "device_routing_status_failed";
             } else if (!routing_status.patched) {
                 device_routing_reason = "device_routing_missing";
-            } else if (!qml.available) {
-                device_routing_reason = "media_user_label_status_unavailable";
-            } else if (!qml.ok) {
-                device_routing_reason = "media_user_label_status_failed";
-            } else if (!qml.media_user_label_patched) {
-                device_routing_reason = "media_user_label_missing";
             } else {
                 device_routing_reason = "device_routing_ok";
             }

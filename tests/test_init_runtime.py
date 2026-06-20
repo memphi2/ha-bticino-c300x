@@ -302,7 +302,28 @@ def test_device_user_and_activation_config_helpers() -> None:
     )
 
     assert integration._entry_create_homeassistant_user(entry) is False
-    assert integration._device_user_needs_ensure({}) is True
+    assert integration._device_user_needs_ensure({}) is False
+    assert (
+        integration._device_user_needs_ensure(
+            {
+                "homeassistant_user_present": True,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": False,
+            }
+        )
+        is False
+    )
+    assert (
+        integration._device_user_needs_ensure(
+            {
+                "homeassistant_user_present": False,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+            }
+        )
+        is True
+    )
     assert (
         integration._device_user_needs_ensure(
             {

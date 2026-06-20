@@ -1108,7 +1108,7 @@ def test_device_user_with_missing_device_routing_creates_repair_issue() -> None:
     assert issue["translation_placeholders"]["reason"] == "device_routing_missing"
 
 
-def test_device_user_with_missing_media_label_creates_repair_issue() -> None:
+def test_device_user_with_missing_media_label_clears_repair_issue() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
@@ -1128,8 +1128,8 @@ def test_device_user_with_missing_media_label_creates_repair_issue() -> None:
 
     async_sync_entry_repair_issues(FakeHass(), entry)
 
-    issue = CREATED_ISSUES[repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id)]
-    assert issue["translation_placeholders"]["reason"] == "media_user_label_missing"
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) in DELETED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
 
 
 def test_complete_device_user_status_clears_repair_issue() -> None:

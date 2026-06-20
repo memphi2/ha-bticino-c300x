@@ -454,8 +454,10 @@ def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> Non
             },
             device_user_status={
                 "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
                 "device_routing_applied": True,
-                "media_user_label_applied": True,
+                "media_user_label_applied": False,
             },
             self_test_status={
                 "ok": True,
@@ -482,6 +484,26 @@ def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> Non
     assert entity.extra_state_attributes["forwarding_state"] == "homeassistant"
     assert "https_microphone_ok" not in entity.extra_state_attributes
     assert entity.extra_state_attributes["failed_checks"] == []
+
+
+def test_media_readiness_fallback_ignores_display_label_status() -> None:
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            device_user_status={
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+                "media_user_label_applied": False,
+            },
+        ),
+    )
+
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["media_user_ok"] is True
 
 
 def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> None:

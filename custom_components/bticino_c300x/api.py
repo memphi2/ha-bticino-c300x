@@ -16,6 +16,7 @@ from .agent_contracts import (
     CapabilityPayload,
     DoorbellVideoStatus,
     FirewallStatus,
+    ForwardingStatus,
     HomeCallStatus,
     RingCallStatus,
     SelfTestStatus,
@@ -89,7 +90,7 @@ class C300XAgentApi:
             capabilities=capabilities if isinstance(capabilities, dict) else {},
         )
 
-    async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
+    async def async_smartphone_forwarding_status(self) -> ForwardingStatus:
         """Return smartphone forwarding status."""
 
         try:
@@ -104,13 +105,13 @@ class C300XAgentApi:
         data = await self._request_json("GET", "/api/v1/state")
         return data if isinstance(data, dict) else {}
 
-    async def async_smartphone_forwarding_cached_status(self) -> dict[str, Any]:
+    async def async_smartphone_forwarding_cached_status(self) -> ForwardingStatus:
         """Return cached smartphone forwarding status without touching the device."""
 
         data = await self._request_json("GET", "/api/v1/state")
         return normalize_smartphone_forwarding(data)
 
-    async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
+    async def async_set_smartphone_forwarding_mode(self, mode: str) -> ForwardingStatus:
         """Set the smartphone forwarding mode."""
 
         normalized_mode = normalize_smartphone_forwarding_mode(mode)
@@ -1618,7 +1619,7 @@ def normalize_smartphone_forwarding_mode(mode: Any) -> str:
     return value
 
 
-def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
+def normalize_smartphone_forwarding(data: Any) -> ForwardingStatus:
     """Normalize device-agent smartphone-forwarding responses."""
 
     if not isinstance(data, dict):
@@ -1626,10 +1627,10 @@ def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
     if "state" in data and isinstance(data["state"], dict):
         raw_value = data["state"].get("smartphone_forwarding")
         if raw_value is None:
-            return {"mode": None, "state": "unknown", "raw": data}
+            return ForwardingStatus(raw=data, mode=None, state="unknown")
         return _normalized_smartphone_forwarding(raw_value, raw_value, raw=data)
     if data.get("mode") is None and data.get("state") == "unknown":
-        return {"mode": None, "state": "unknown", "raw": data.get("raw", data)}
+        return ForwardingStatus(raw=data.get("raw", data), mode=None, state="unknown")
     if "enabled" in data:
         return _normalized_smartphone_forwarding(
             data["enabled"],
@@ -1639,11 +1640,12 @@ def normalize_smartphone_forwarding(data: Any) -> dict[str, Any]:
     normalized = coerce_forwarding_mode_state(data.get("mode"), data.get("state"))
     if normalized["mode"] is None:
         raise C300XAgentApiResponseError("smartphone-forwarding mode is missing")
-    return {
-        "mode": normalized["mode"],
-        "state": normalized["state"],
-        "raw": data.get("raw"),
-    }
+    mode_value = normalized["mode"]
+    return ForwardingStatus(
+        raw=data.get("raw"),
+        mode=mode_value if isinstance(mode_value, int) else None,
+        state=str(normalized["state"]),
+    )
 
 
 def _normalized_smartphone_forwarding(
@@ -1651,13 +1653,14 @@ def _normalized_smartphone_forwarding(
     state: Any,
     *,
     raw: Any,
-) -> dict[str, Any]:
+) -> ForwardingStatus:
     normalized = coerce_forwarding_mode_state(mode, state)
-    return {
-        "mode": normalized["mode"],
-        "state": normalized["state"],
-        "raw": raw,
-    }
+    mode_value = normalized["mode"]
+    return ForwardingStatus(
+        raw=raw,
+        mode=mode_value if isinstance(mode_value, int) else None,
+        state=str(normalized["state"]),
+    )
 
 
 def normalize_ringer(data: Any) -> dict[str, Any]:

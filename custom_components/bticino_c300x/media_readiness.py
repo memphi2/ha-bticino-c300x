@@ -11,6 +11,10 @@ from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
 from .device_user import device_user_ready
 from .entry_config import entry_config_value
+from .media_setup import (
+    media_readiness_action,
+    self_test_failure_is_optional_ipv6_only,
+)
 
 MEDIA_READINESS_STATUS_OPTIONS = ("ready", "warning", "blocked", "unavailable")
 MEDIA_READINESS_REQUIRED_SELF_TEST_CHECKS = (
@@ -58,7 +62,7 @@ def media_readiness(entry: ConfigEntry) -> dict[str, Any]:
     for name, ok in check_results.items():
         if ok is False:
             reason = self_test_check_reason(checks, name)
-            if media_readiness_optional_ipv6_failure(name, reason, checks):
+            if self_test_failure_is_optional_ipv6_only(name, reason, checks):
                 warnings.append(f"{name}:optional_ipv6")
             else:
                 failed.append(name)
@@ -135,29 +139,6 @@ def self_test_check_reason(checks: Mapping[str, Any], name: str) -> str:
     return reason if isinstance(reason, str) else ""
 
 
-def media_readiness_optional_ipv6_failure(
-    check_name: str,
-    reason: str,
-    checks: Mapping[str, Any],
-) -> bool:
-    """Return true when a self-test failure is only optional IPv6."""
-
-    if check_name == "firewall" and reason in {
-        "ipv6_media_ports_missing",
-        "media_ports_open_ipv6_optional_missing",
-    }:
-        return True
-    if check_name != "talkback_rtp" or reason != "talkback_rtp_firewall_missing":
-        return False
-    firewall = checks.get("firewall")
-    if not isinstance(firewall, Mapping):
-        return False
-    return firewall.get("reason") in {
-        "ipv6_media_ports_missing",
-        "media_ports_open_ipv6_optional_missing",
-    }
-
-
 def media_user_ready(
     device_user_status: Mapping[str, Any],
     checks: Mapping[str, Any],
@@ -191,28 +172,3 @@ def event_callback_ready(connection_state: Any) -> bool | None:
         "unknown",
     }
 
-
-def media_readiness_action(
-    status: str,
-    failed: list[str],
-    warnings: list[str],
-) -> str:
-    """Return a stable action code for the aggregated readiness state."""
-
-    if status == "ready":
-        return "no_action_needed"
-    if "agent_reachable" in failed:
-        return "check_agent_reachability_and_token"
-    if "capabilities" in failed or "media_capabilities_missing" in warnings:
-        return "update_or_reconfigure_device_agent"
-    if "firewall" in failed or "talkback_rtp" in failed or "rtsp" in failed:
-        return "apply_firewall_or_update_device_agent"
-    if "homeassistant_user" in failed or "device_routing" in failed:
-        return "run_homeassistant_media_user_setup"
-    if "forwarding_homeassistant" in failed:
-        return "set_forwarding_to_homeassistant"
-    if "callback_url" in failed:
-        return "configure_reachable_callback_url"
-    if "self_test_not_loaded" in warnings:
-        return "refresh_or_reload_integration"
-    return "check_media_readiness_details"

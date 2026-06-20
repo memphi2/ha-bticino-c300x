@@ -99,6 +99,13 @@ from custom_components.bticino_c300x.data import (  # noqa: E402
     C300XCallbackDiagnostics,
     C300XConnectionState,
 )
+from custom_components.bticino_c300x.media_setup import (  # noqa: E402
+    media_setup_fixable_checks,
+    media_setup_has_non_device_user_failure,
+    media_setup_has_only_device_user_failures,
+    self_test_failure_is_optional_ipv6_only,
+    self_test_repair_action,
+)
 from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     AGENT_CAPABILITY_MISMATCH_ISSUE,
     ALL_REPAIR_ISSUES,
@@ -114,8 +121,6 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
-    _self_test_failure_is_optional_ipv6_only,
-    _self_test_repair_action,
     async_clear_entry_repair_issues,
     async_create_media_watchdog_issue,
     async_delete_repair_issue,
@@ -823,7 +828,7 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
     }
 
     assert (
-        _self_test_failure_is_optional_ipv6_only(
+        self_test_failure_is_optional_ipv6_only(
             "talkback_rtp",
             "talkback_rtp_firewall_missing",
             {},
@@ -831,7 +836,7 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
         is False
     )
     assert (
-        _self_test_failure_is_optional_ipv6_only(
+        self_test_failure_is_optional_ipv6_only(
             "talkback_rtp",
             "talkback_rtp_firewall_missing",
             checks,
@@ -839,36 +844,36 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
         is True
     )
     assert (
-        _self_test_failure_is_optional_ipv6_only(
+        self_test_failure_is_optional_ipv6_only(
             "talkback_rtp",
             "unknown",
             checks,
         )
         is False
     )
-    assert "doorbell video is enabled" in _self_test_repair_action("rtsp", "failed")
-    assert "media-user setup" in _self_test_repair_action(
+    assert "doorbell video is enabled" in self_test_repair_action("rtsp", "failed")
+    assert "media-user setup" in self_test_repair_action(
         "homeassistant_user",
         "missing",
     )
-    assert "media-user setup" in _self_test_repair_action(
+    assert "media-user setup" in self_test_repair_action(
         "device_routing",
         "missing",
     )
-    assert "startup link" in _self_test_repair_action("startup", "missing")
-    assert "Update or reconfigure" in _self_test_repair_action(
+    assert "startup link" in self_test_repair_action("startup", "missing")
+    assert "Update or reconfigure" in self_test_repair_action(
         "capabilities",
         "missing",
     )
-    assert "IPv4 media and talkback ports" in _self_test_repair_action(
+    assert "IPv4 media and talkback ports" in self_test_repair_action(
         "firewall",
         "ipv4_media_ports_missing",
     )
-    assert "IPv6 is optional" in _self_test_repair_action(
+    assert "IPv6 is optional" in self_test_repair_action(
         "firewall",
         "ipv6_media_ports_missing",
     )
-    assert _self_test_repair_action("unknown", "missing") is None
+    assert self_test_repair_action("unknown", "missing") is None
 
 
 def test_ok_self_test_clears_repair_issue() -> None:
@@ -1353,14 +1358,14 @@ def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
     assert repair_issues._callback_problem(  # noqa: SLF001 - targeted helper coverage
         types.SimpleNamespace(runtime_data=None)
     ) is None
-    assert repair_issues._media_setup_fixable_checks(  # noqa: SLF001
+    assert media_setup_fixable_checks(
         ["capabilities", "rtsp"],
         {},
     ) == ["agent_update"]
-    assert repair_issues._media_setup_has_only_device_user_failures(  # noqa: SLF001
+    assert media_setup_has_only_device_user_failures(
         ["homeassistant_user", "device_routing"]
     )
-    assert repair_issues._media_setup_has_non_device_user_failure(  # noqa: SLF001
+    assert media_setup_has_non_device_user_failure(
         ["homeassistant_user", "firewall"]
     )
     assert repair_issues._entry_media_enabled(  # noqa: SLF001

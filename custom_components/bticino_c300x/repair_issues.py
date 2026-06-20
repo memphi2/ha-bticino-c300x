@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -26,10 +25,15 @@ from .const import (
     CONF_VIDEO_ENABLED,
     DOMAIN,
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
-    SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
 )
 from .device_user import device_user_repair_reason
 from .media_readiness import media_readiness
+from .media_setup import (
+    media_setup_fixable_checks,
+    media_setup_has_non_device_user_failure,
+    media_setup_has_only_device_user_failures,
+    summarize_self_test_failures,
+)
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"
@@ -285,29 +289,14 @@ def _sync_device_agent_self_test_issue(hass: HomeAssistant, entry: ConfigEntry) 
         )
         return
     checks = status.get("checks")
-    failed: list[str] = []
-    reasons: list[str] = []
-    actions: list[str] = []
+    failed: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+    actions: tuple[str, ...] = ()
     if isinstance(checks, Mapping):
-        for name, check in checks.items():
-            if isinstance(check, Mapping) and check.get("ok") is False:
-                check_name = str(name)
-                reason = check.get("reason")
-                reason_text = reason if isinstance(reason, str) else ""
-                if _self_test_failure_is_optional_ipv6_only(
-                    check_name,
-                    reason_text,
-                    checks,
-                ):
-                    continue
-                failed.append(check_name)
-                if reason_text:
-                    reasons.append(
-                        f"{check_name}: {_self_test_reason_text(check_name, reason_text)}"
-                    )
-                    action = _self_test_repair_action(check_name, reason_text)
-                    if action and action not in actions:
-                        actions.append(action)
+        summary = summarize_self_test_failures(checks)
+        failed = summary.failed
+        reasons = summary.reasons
+        actions = summary.actions
     if not failed:
         async_delete_repair_issue(
             hass,
@@ -388,77 +377,6 @@ def _sync_unsupported_callback_url_issue(
         is_fixable=True,
         placeholders=callback_problem,
     )
-
-
-def _self_test_reason_text(check_name: str, reason: str) -> str:
-    """Return a readable self-test reason while keeping the native reason code."""
-
-    descriptions = {
-        "config_missing": "the device-agent configuration is missing",
-        "ipv4_media_ports_missing": "the required IPv4 media and talkback firewall setup is missing",
-        "ipv6_media_ports_missing": "only the optional IPv6 media firewall setup is missing",
-        "media_ports_open_ipv6_optional_missing": "the required IPv4 media ports are open; only the optional IPv6 firewall setup is missing",
-        "talkback_rtp_firewall_missing": "UDP talkback port 40004 is not open through the required IPv4 firewall setup",
-        "video_runtime_unavailable": "the device-agent video runtime is unavailable",
-        "rtsp_server_not_running": "the device-agent RTSP server is not running",
-        "rtsp_config_missing": "the RTSP port or stream path is missing",
-        "media_identity_missing": "no usable C300X media identity is configured",
-        "homeassistant_routes_inconsistent": "the Home Assistant media-user route files are inconsistent",
-        "device_routing_status_failed": "the Home Assistant media routing setup status could not be read",
-        "device_routing_missing": "the Home Assistant media routing setup is incomplete",
-        "agent_init_script_missing": "the device-agent startup script is missing",
-        "startup_link_missing": "the device-agent startup link is missing",
-    }
-    return descriptions.get(
-        reason,
-        "the device-agent reported an unknown setup problem",
-    )
-
-
-def _self_test_failure_is_optional_ipv6_only(
-    check_name: str,
-    reason: str,
-    checks: Mapping,
-) -> bool:
-    """Return true for old-agent self-test failures caused only by optional IPv6."""
-
-    if reason in {
-        "ipv6_media_ports_missing",
-        "media_ports_open_ipv6_optional_missing",
-    }:
-        return check_name == "firewall"
-    if check_name != "talkback_rtp" or reason != "talkback_rtp_firewall_missing":
-        return False
-    firewall = checks.get("firewall")
-    if not isinstance(firewall, Mapping):
-        return False
-    return firewall.get("reason") in {
-        "ipv6_media_ports_missing",
-        "media_ports_open_ipv6_optional_missing",
-    }
-
-
-def _self_test_repair_action(check_name: str, reason: str) -> str | None:
-    """Return a user-facing next step for one failed self-test check."""
-
-    if check_name == "firewall":
-        if reason == "ipv4_media_ports_missing":
-            return "Turn on or apply the C300X Firewall switch. This opens the IPv4 media and talkback ports used by Home Assistant."
-        if reason == "ipv6_media_ports_missing":
-            return "IPv6 is optional; only turn on or apply the C300X IPv6 Firewall switch if this HA instance reaches the device over IPv6."
-    if check_name == "talkback_rtp" and reason == "talkback_rtp_firewall_missing":
-        return "Apply the C300X Firewall switch so UDP talkback port 40004 is open over IPv4. The IPv6 firewall switch is only needed for IPv6 setups."
-    if check_name == "rtsp":
-        return "Check that doorbell video is enabled and restart or update the C300X device agent if RTSP is not running."
-    if check_name == "homeassistant_user":
-        return "Open the integration options and run the Home Assistant media-user setup."
-    if check_name == "device_routing":
-        return "Open the integration options and run the Home Assistant media-user setup again."
-    if check_name == "startup":
-        return "Run the device-agent repair/update action to recreate the startup link."
-    if check_name == "capabilities":
-        return "Update or reconfigure the C300X device agent, then reload the integration."
-    return None
 
 
 def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -544,7 +462,7 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
         return
     readiness = media_readiness(entry)
     failed = readiness.get("failed_checks")
-    if _media_setup_has_non_device_user_failure(failed):
+    if media_setup_has_non_device_user_failure(failed):
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_USER_REQUIRED_ISSUE)
         return
     _create_issue(
@@ -579,14 +497,14 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
         )
         return
     capabilities = getattr(runtime_data, "capabilities", {})
-    if _media_setup_has_only_device_user_failures(failed):
+    if media_setup_has_only_device_user_failures(failed):
         async_delete_repair_issue(
             hass,
             entry.entry_id,
             MEDIA_SETUP_REPAIR_REQUIRED_ISSUE,
         )
         return
-    fixable_checks = _media_setup_fixable_checks(failed, capabilities)
+    fixable_checks = media_setup_fixable_checks(failed, capabilities)
     if not fixable_checks:
         async_delete_repair_issue(
             hass,
@@ -605,57 +523,6 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
             "fixable_checks": ", ".join(fixable_checks),
             "recommended_action": str(readiness.get("recommended_action") or "unknown"),
         },
-    )
-
-
-def _media_setup_fixable_checks(
-    failed: list[Any],
-    capabilities: Mapping[str, Any],
-) -> list[str]:
-    checks = {str(check) for check in failed}
-    fixable: list[str] = []
-    if "agent_reachable" in checks:
-        fixable.append("agent_reachable")
-    if checks & {"capabilities", "rtsp"}:
-        fixable.append("agent_update")
-    if checks & {"firewall", "talkback_rtp"} and maintenance_action_is_advertised(
-        capabilities,
-        "firewall_apply",
-    ):
-        fixable.append("firewall")
-    if checks & {"homeassistant_user", "device_routing"} and maintenance_action_is_advertised(
-        capabilities,
-        "device_user_ensure",
-    ):
-        fixable.append("homeassistant_user")
-    if "forwarding_homeassistant" in checks and capability_is_supported(
-        capabilities,
-        "smartphone_forwarding",
-    ):
-        fixable.append(SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT)
-    return fixable
-
-
-def _media_setup_has_only_device_user_failures(failed: object) -> bool:
-    if not isinstance(failed, list) or not failed:
-        return False
-    checks = {str(check) for check in failed}
-    return checks <= {"homeassistant_user", "device_routing"}
-
-
-def _media_setup_has_non_device_user_failure(failed: object) -> bool:
-    if not isinstance(failed, list):
-        return False
-    checks = {str(check) for check in failed}
-    return bool(
-        checks
-        & {
-            "capabilities",
-            "firewall",
-            "rtsp",
-            "talkback_rtp",
-            "forwarding_homeassistant",
-        }
     )
 
 

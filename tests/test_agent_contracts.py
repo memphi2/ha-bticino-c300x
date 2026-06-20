@@ -8,6 +8,7 @@ from custom_components.bticino_c300x.agent_contracts import (
     CapabilityPayload,
     DoorbellVideoStatus,
     FirewallStatus,
+    ForwardingStatus,
     HomeCallStatus,
     RingCallStatus,
     SelfTestStatus,
@@ -20,6 +21,7 @@ from custom_components.bticino_c300x.api import (
     normalize_firewall_status,
     normalize_home_call,
     normalize_self_test,
+    normalize_smartphone_forwarding,
 )
 
 
@@ -105,6 +107,21 @@ def test_agent_status_normalizers_return_typed_contracts() -> None:
         normalize_self_test({"ok": True, "checks": {}}),
         SelfTestStatus,
     )
+    assert isinstance(
+        normalize_smartphone_forwarding({"mode": "homeassistant"}),
+        ForwardingStatus,
+    )
+
+
+def test_forwarding_contract_keeps_raw_reply_and_mapping_access() -> None:
+    status = normalize_smartphone_forwarding({"mode": "homeassistant", "raw": "reply"})
+
+    assert isinstance(status, ForwardingStatus)
+    assert status.mode == 1
+    assert status.state == "homeassistant"
+    assert status.raw == "reply"
+    assert status["state"] == "homeassistant"
+    assert status == {"mode": 1, "state": "homeassistant", "raw": "reply"}
 
 
 def test_agent_json_status_contracts_preserve_mapping_fields() -> None:

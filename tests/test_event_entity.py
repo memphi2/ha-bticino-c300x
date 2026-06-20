@@ -172,9 +172,12 @@ class _FakeHass:
         self.config = SimpleNamespace(language=language)
 
 
-def test_device_event_entity_is_diagnostic_disabled_by_default() -> None:
+def test_device_event_entity_is_diagnostic_enabled_by_default() -> None:
     assert C300XDeviceAgentEventEntity._attr_entity_category == EntityCategory.DIAGNOSTIC
-    assert C300XDeviceAgentEventEntity._attr_entity_registry_enabled_default is False
+    assert not hasattr(
+        C300XDeviceAgentEventEntity,
+        "_attr_entity_registry_enabled_default",
+    )
 
 
 def test_async_setup_entry_adds_supported_event_entities() -> None:

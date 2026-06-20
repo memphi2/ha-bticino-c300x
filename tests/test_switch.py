@@ -118,6 +118,24 @@ from custom_components.bticino_c300x.switch import (  # noqa: E402
 )
 
 
+def test_config_switches_are_disabled_by_default() -> None:
+    config_switch_classes = (
+        C300XHomeAssistantMediaUserSetupSwitch,
+        C300XMaintenanceSshSwitch,
+        C300XGuiFunctionPatchSwitch,
+        C300XFirewallPatchSwitch,
+        C300XIpv6FirewallPatchSwitch,
+        C300XNativeMqttBridgeSwitch,
+        C300XLegacyMqttBridgeSwitch,
+        C300XNoAuthSwitch,
+        C300XMdnsDiscoverySwitch,
+        C300XMaintenanceNoAuthSwitch,
+    )
+
+    for switch_class in config_switch_classes:
+        assert switch_class._attr_entity_registry_enabled_default is False
+
+
 class _FakeApi:
     def __init__(self) -> None:
         self.active_smartphone_reads = 0

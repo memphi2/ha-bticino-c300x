@@ -147,6 +147,16 @@ from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
 )
 
 
+def test_maintenance_buttons_default_visibility() -> None:
+    for button_class in (
+        C300XRebootButton,
+        C300XRestartAgentButton,
+        C300XReloadGuiButton,
+    ):
+        assert not hasattr(button_class, "_attr_entity_registry_enabled_default")
+    assert C300XRemoveAgentButton._attr_entity_registry_enabled_default is False
+
+
 class _FakeHass:
     def __init__(self) -> None:
         self.data: dict[str, Any] = {}

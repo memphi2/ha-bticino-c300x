@@ -105,7 +105,6 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
     """Expose device-agent push callbacks as Home Assistant events."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "agent_event"
 

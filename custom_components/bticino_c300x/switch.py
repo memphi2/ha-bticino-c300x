@@ -77,6 +77,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_translation_key = "homeassistant_media_user_setup"
 
     def __init__(self, entry: ConfigEntry) -> None:
@@ -299,6 +300,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     """Start or stop SSH through the device-agent maintenance API."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "maintenance_ssh"
 
@@ -359,6 +361,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     """Apply or restore the device Display patch."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "gui_function_patch"
 
@@ -707,6 +710,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
     """Enable or disable the native MQTT bridge."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "native_mqtt_bridge"
 
@@ -1006,6 +1010,7 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
     """Enable or disable the native agent bootstrap noAuth mode."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "maintenance_no_auth"
     _uses_auth_config_status = True
@@ -1140,6 +1145,7 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
     """Allow noAuth requests to use maintenance endpoints."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_should_poll = False
     _attr_translation_key = "maintenance_no_auth_access"
     _uses_auth_config_status = True

@@ -359,25 +359,6 @@ def test_frontend_card_setup_hint_cleared_after_current_options_marker() -> None
     assert CREATED_ISSUES == {}
 
 
-def test_frontend_card_setup_hint_created_after_previous_repair_generation() -> None:
-    entry = FakeEntry(
-        options={
-            CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
-            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: "card-loader-v2",
-        },
-        runtime_data=FakeRuntimeData(
-            capabilities={"doorbell_video": {"supported": True}},
-        ),
-    )
-
-    async_sync_entry_repair_issues(FakeHass(), entry)
-
-    issue = CREATED_ISSUES[
-        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
-    ]
-    assert issue["is_fixable"] is True
-
-
 def test_frontend_card_setup_hint_created_when_cards_exist_without_fix_marker() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(

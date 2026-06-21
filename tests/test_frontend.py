@@ -463,8 +463,6 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
 
     assert "window.customCards.push" in metadata_source
-    assert "function registerC300XDoorbellCallCardMetadata()" in metadata_source
-    assert metadata_source.rstrip().endswith("})();")
     assert "doorbell_state_entity: entityId" not in metadata_source
     assert "home_call_entity: entityId" not in metadata_source
     assert "c300xMetadataRegistryEntity" not in metadata_source

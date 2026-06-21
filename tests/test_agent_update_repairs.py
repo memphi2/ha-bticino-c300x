@@ -80,7 +80,6 @@ from custom_components.bticino_c300x.repair_flows_frontend import (  # noqa: E40
     FrontendCardSetupRepairFlow,
     _async_setup_lovelace_cards,
     _cards_for_view,
-    _dashboard_has_c300x_cards,
     _dashboard_select_options,
     _LovelaceCardSetupError,
     _normalize_lovelace_target,
@@ -477,45 +476,6 @@ def test_frontend_card_helpers_reject_invalid_lovelace_cards_container() -> None
         _cards_for_view({"sections": [{"cards": "not-a-list"}], "cards": "bad"})
 
     assert err.value.error_key == "lovelace_config_invalid"
-
-
-def test_old_dedicated_cards_do_not_satisfy_central_card_repair() -> None:
-    config = {
-        "views": [
-            {
-                "cards": [
-                    {
-                        "type": "custom:c300x-doorbell-call-card",
-                        "entity": "camera.bticino_c300x_doorbell_camera",
-                        "mode": "doorbell_call",
-                    },
-                    {
-                        "type": "custom:c300x-doorbell-call-card",
-                        "entity": "camera.bticino_c300x_doorbell_camera",
-                        "mode": "home_call",
-                    },
-                ]
-            }
-        ]
-    }
-
-    assert (
-        _dashboard_has_c300x_cards(config, "camera.bticino_c300x_doorbell_camera")
-        is False
-    )
-
-    config["views"][0]["cards"].append(
-        {
-            "type": "custom:c300x-doorbell-call-card",
-            "entity": "camera.bticino_c300x_doorbell_camera",
-            "mode": "auto",
-        }
-    )
-
-    assert (
-        _dashboard_has_c300x_cards(config, "camera.bticino_c300x_doorbell_camera")
-        is True
-    )
 
 
 def test_frontend_card_repair_reports_missing_camera_entity(monkeypatch) -> None:

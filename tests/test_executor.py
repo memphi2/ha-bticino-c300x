@@ -89,6 +89,13 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
     CONF_WEATHER_ENTITY_ID,
     DASHBOARD_ENTITY_DOOR_UNLOCK,
+    DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+    DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
+    DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID,
+    DASHBOARD_ENTITY_SECONDARY_INFO_LAST_CHANGED,
+    DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
+    DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
+    DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
 from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
     _cached_weather_forecast,
@@ -100,6 +107,24 @@ from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
     dashboard_weather_payload,
 )
 from custom_components.bticino_c300x.executor import (  # noqa: E402
+    _button_secondary_label,
+    _dashboard_choice_payload,
+    _dashboard_first_attribute,
+    _dashboard_float,
+    _dashboard_image_source,
+    _dashboard_int,
+    _dashboard_slider_payload,
+    _dashboard_state_entity_id,
+    _dashboard_text,
+    _entity_name,
+    _entity_secondary_label,
+    _entity_state_color,
+    _entity_state_label,
+    _finalize_dashboard_items,
+    _finalize_dashboard_page,
+    _first_entity_id,
+    _raw_state_color,
+    _state_time_label,
     async_dashboard_payload,
     async_execute_action,
     async_execute_alarm_command,
@@ -254,6 +279,267 @@ class FakeEntry:
 
 def run(coro: Any) -> Any:
     return asyncio.run(coro)
+
+
+def test_dashboard_entity_name_secondary_label_and_color_helpers() -> None:
+    changed = datetime(2026, 6, 21, 14, 30, tzinfo=UTC)
+    state = FakeState(
+        "on",
+        last_changed=changed,
+        last_updated=changed,
+        attributes={"friendly_name": "Window", "device_class": "window"},
+    )
+
+    assert _entity_name("binary_sensor.window", state) == "Window"
+    assert (
+        _entity_name(
+            "binary_sensor.window",
+            state,
+            display=DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
+            custom_name="Kitchen window",
+        )
+        == "Kitchen window"
+    )
+    assert (
+        _entity_name(
+            "binary_sensor.window",
+            state,
+            display=DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID,
+        )
+        == "binary_sensor.window"
+    )
+    assert _entity_name("sensor.outside_temp", None) == "Outside Temp"
+
+    assert (
+        _entity_secondary_label(
+            state,
+            "binary_sensor.window",
+            DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID,
+        )
+        == "binary_sensor.window"
+    )
+    assert (
+        _entity_secondary_label(
+            state,
+            "binary_sensor.window",
+            DASHBOARD_ENTITY_SECONDARY_INFO_LAST_CHANGED,
+        )
+        == "21.06. 14:30"
+    )
+    assert (
+        _entity_secondary_label(
+            state,
+            "binary_sensor.window",
+            DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
+        )
+        == "21.06. 14:30"
+    )
+    assert (
+        _entity_secondary_label(
+            state,
+            "binary_sensor.window",
+            DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
+        )
+        == ""
+    )
+    assert (
+        _button_secondary_label(
+            state,
+            "button.restart",
+            DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+        )
+        == ""
+    )
+    assert (
+        _button_secondary_label(
+            state,
+            "button.restart",
+            DASHBOARD_ENTITY_SECONDARY_INFO_ENTITY_ID,
+        )
+        == "button.restart"
+    )
+
+    assert _entity_state_label(None, entity_id="sensor.missing") == "Offline"
+    assert (
+        _entity_state_label(
+            FakeState("21", attributes={"unit_of_measurement": "°C"}),
+            entity_id="sensor.temp",
+        )
+        == "21 °C"
+    )
+    assert (
+        _entity_state_label(
+            FakeState("on", attributes={"device_class": "window"}),
+            entity_id="binary_sensor.window",
+        )
+        == "Open"
+    )
+    assert (
+        _entity_state_label(
+            FakeState("custom"),
+            entity_id="sensor.custom",
+            fallback="Fallback",
+        )
+        == "custom"
+    )
+    assert (
+        _entity_state_label(
+            FakeState("unknown"),
+            entity_id="sensor.unknown",
+            fallback="Fallback",
+        )
+        == "Unknown"
+    )
+
+    assert _entity_state_color(None, entity_id="sensor.missing") == "#f1c40f"
+    assert (
+        _entity_state_color(
+            FakeState("on", attributes={"device_class": "window"}),
+            entity_id="binary_sensor.window",
+        )
+        == "#ff6b6b"
+    )
+    assert (
+        _entity_state_color(
+            FakeState("off", attributes={"device_class": "window"}),
+            entity_id="binary_sensor.window",
+        )
+        == "#58d68d"
+    )
+    assert (
+        _entity_state_color(FakeState("unlocked"), entity_id="lock.front_door")
+        == "#ff6b6b"
+    )
+
+
+def test_dashboard_payload_normalization_helpers() -> None:
+    slider = _dashboard_slider_payload(
+        FakeState(
+            "5.5",
+            attributes={
+                "native_min_value": "1",
+                "native_max_value": "10",
+                "native_step_value": "0",
+            },
+        )
+    )
+    assert slider == {"value": 5.5, "min": 1.0, "max": 10.0, "step": 1.0}
+    assert _dashboard_slider_payload(None) == {
+        "value": 0.0,
+        "min": 0.0,
+        "max": 100.0,
+        "step": 1.0,
+    }
+
+    choice = _dashboard_choice_payload(
+        FakeState(
+            "eco",
+            attributes={
+                "options": [
+                    "eco",
+                    "  comfort   mode  ",
+                    "",
+                    123,
+                    *[f"mode-{idx}" for idx in range(20)],
+                ]
+            },
+        )
+    )
+    assert choice["value"] == "eco"
+    assert choice["options"][:2] == [
+        {"label": "eco", "value": "eco"},
+        {"label": "comfort mode", "value": "  comfort   mode  "},
+    ]
+    assert len(choice["options"]) == 12
+
+    assert _dashboard_float("bad", 7.0) == 7.0
+    assert _dashboard_first_attribute({"min": "", "native_min": 0}, "min", "native_min") == 0
+    assert _dashboard_text("  a   b   c  ", "fallback", 80) == "a b c"
+    assert _dashboard_text("", "fallback", 4) == "fall"
+    assert _dashboard_int("-5", 9) == 0
+    assert _dashboard_int("bad", 9) == 9
+
+    finalized_items = _finalize_dashboard_items(
+        [
+            {"name": "B", "_order": 2, "_kind": "entity", "_page": "main"},
+            "bad",
+            {"name": "A", "_order": 1, "kind": "image"},
+        ]
+    )
+    assert finalized_items == [
+        {"name": "A", "kind": "image"},
+        {"name": "B", "kind": "entity"},
+    ]
+    assert _finalize_dashboard_items("bad") == []
+
+    assert _finalize_dashboard_page(
+        {
+            "title": "Main",
+            "badges": [{"name": "Ready"}],
+            "items": finalized_items,
+            "weather": {"state": "sunny"},
+            "flow": [{"page": "next"}],
+        }
+    ) == {
+        "title": "Main",
+        "badges": [{"name": "Ready"}],
+        "items": finalized_items,
+        "weather": {"state": "sunny"},
+        "flow": [{"page": "next"}],
+    }
+    assert _finalize_dashboard_page({}) == {"title": ""}
+
+
+def test_dashboard_source_and_state_helpers() -> None:
+    changed = datetime(2026, 6, 21, 14, 30, tzinfo=UTC)
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "sensor.image": FakeState("/local/pic.jpg"),
+                "sensor.blank": FakeState(""),
+            }
+        )
+    )
+
+    assert (
+        _dashboard_state_entity_id(
+            {"target": {"entity_id": "sensor.target"}},
+            {"entity_id": "sensor.dashboard"},
+        )
+        == "sensor.dashboard"
+    )
+    assert (
+        _dashboard_state_entity_id(
+            {"target": {"entity_id": ["sensor.target"]}},
+            {},
+        )
+        == "sensor.target"
+    )
+    assert _first_entity_id(["bad", ["sensor.nested"]]) == "sensor.nested"
+    assert _first_entity_id({"entity_id": "sensor.dict"}) is None
+    assert _first_entity_id(123) is None
+
+    assert (
+        _dashboard_image_source(hass, {}, {"entity_id": "sensor.image"})
+        == "/local/pic.jpg"
+    )
+    assert (
+        _dashboard_image_source(hass, {}, {"source": " /local/manual.jpg "})
+        == "/local/manual.jpg"
+    )
+    assert _dashboard_image_source(hass, {}, {"entity_id": "sensor.blank"}) is None
+    assert _dashboard_image_source(hass, {}, {}) is None
+
+    assert _raw_state_color("closed") == "#58d68d"
+    assert _raw_state_color("open") == "#ff6b6b"
+    assert _raw_state_color("unavailable") == "#f1c40f"
+    assert _raw_state_color("custom") is None
+
+    assert (
+        _state_time_label(FakeState("on", last_changed=changed), "last_changed")
+        == "21.06. 14:30"
+    )
+    assert _state_time_label(None, "last_changed") == ""
 
 
 @dataclass(slots=True)
@@ -1347,6 +1633,34 @@ def test_async_status_includes_alarm_delay_remaining() -> None:
     assert result["alarm"]["delay_remaining"] == 30
 
 
+def test_async_status_prefers_alarmo_delay_remaining() -> None:
+    alarmo_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo",
+        expiration=datetime.now(UTC).replace(year=datetime.now(UTC).year + 1),
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.alarmo": FakeState(
+                    "arming",
+                    attributes={"delay": 1},
+                ),
+            }
+        ),
+        data={"alarmo": {"master": alarmo_entity, "areas": {}}},
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo",
+            CONF_DEVICE_UI_ENABLED: True,
+        }
+    )
+
+    result = run(async_status(hass, entry))
+
+    assert result["alarm"]["delay_remaining"] > 1
+
+
 def test_async_status_includes_current_alarm_open_sensors() -> None:
     hass = FakeHass(
         states=FakeStates(
@@ -1382,6 +1696,38 @@ def test_async_status_includes_current_alarm_open_sensors() -> None:
             "name": "Fenster",
             "state": "open",
         }
+    ]
+
+
+def test_async_status_uses_alarmo_open_sensors_when_state_has_none() -> None:
+    alarmo_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo",
+        open_sensors={"binary_sensor.window": "open", "group_id": "ignored"},
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.alarmo": FakeState("triggered"),
+                "binary_sensor.window": FakeState(
+                    "on",
+                    attributes={"friendly_name": "Window"},
+                ),
+            }
+        ),
+        data={"alarmo": {"master": alarmo_entity, "areas": {}}},
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo",
+            CONF_DEVICE_UI_ENABLED: True,
+        }
+    )
+
+    result = run(async_status(hass, entry))
+
+    assert result["alarm"]["open_sensor_count"] == 1
+    assert result["alarm"]["open_sensors"] == [
+        {"entity_id": "binary_sensor.window", "name": "Window", "state": "open"}
     ]
 
 
@@ -1508,6 +1854,133 @@ def test_async_status_matches_single_alarmo_area_after_entity_rename() -> None:
     ]
     assert commands["arm_vacation"]["ready"] is True
     assert commands["arm_vacation"]["blocking_sensors"] == []
+
+
+def test_async_status_checks_all_alarmo_areas_for_master_alarm() -> None:
+    master_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo",
+        _config={
+            "code_arm_required": False,
+            "code_mode_change_required": False,
+            "code_disarm_required": False,
+        },
+    )
+    area_done = types.SimpleNamespace(
+        entity_id="alarm_control_panel.area_done",
+        area_id="done",
+        state="armed_away",
+    )
+    area_open = types.SimpleNamespace(
+        entity_id="alarm_control_panel.area_open",
+        area_id="open",
+        state="disarmed",
+    )
+    sensor_handler = FakeAlarmoSensorHandler(
+        responses={
+            ("done", "armed_away"): {"binary_sensor.should_skip": "open"},
+            ("open", "armed_away"): {"binary_sensor.front_door": "open"},
+        },
+        _config={"binary_sensor.front_door": {"type": "door"}},
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.alarmo": FakeState(
+                    "disarmed",
+                    attributes={"supported_features": 2},
+                ),
+                "binary_sensor.front_door": FakeState(
+                    "on",
+                    attributes={"friendly_name": "Front door"},
+                ),
+            }
+        ),
+        data={
+            "alarmo": {
+                "master": master_entity,
+                "areas": {"done": area_done, "open": area_open},
+                "sensor_handler": sensor_handler,
+            }
+        },
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo",
+            CONF_DEVICE_UI_ENABLED: True,
+        }
+    )
+
+    result = run(async_status(hass, entry))
+    command = next(
+        command
+        for command in result["alarm"]["commands"]
+        if command["command"] == "arm_away"
+    )
+
+    assert command["ready"] is False
+    assert command["blocking_sensors"] == [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "name": "Front door",
+            "state": "open",
+        }
+    ]
+
+
+def test_async_status_falls_back_to_alarmo_open_sensors_on_validation_error() -> None:
+    class FailingSensorHandler:
+        def validate_arming_event(self, *_args: Any, **_kwargs: Any) -> None:
+            raise KeyError("alarmo not ready")
+
+    alarmo_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo",
+        area_id="area-1",
+        _config={
+            "code_arm_required": False,
+            "code_mode_change_required": False,
+            "code_disarm_required": False,
+        },
+        open_sensors={"binary_sensor.window": "open"},
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.alarmo": FakeState(
+                    "disarmed",
+                    attributes={"supported_features": 2},
+                ),
+                "binary_sensor.window": FakeState(
+                    "on",
+                    attributes={"friendly_name": "Window"},
+                ),
+            }
+        ),
+        data={
+            "alarmo": {
+                "master": None,
+                "areas": {"area-1": alarmo_entity},
+                "sensor_handler": FailingSensorHandler(),
+            }
+        },
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo",
+            CONF_DEVICE_UI_ENABLED: True,
+        }
+    )
+
+    result = run(async_status(hass, entry))
+    command = next(
+        command
+        for command in result["alarm"]["commands"]
+        if command["command"] == "arm_away"
+    )
+
+    assert command["ready"] is False
+    assert command["blocking_sensors"] == [
+        {"entity_id": "binary_sensor.window", "name": "Window", "state": "open"}
+    ]
 
 
 def test_async_status_hides_display_ui_when_disabled() -> None:

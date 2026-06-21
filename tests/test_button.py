@@ -161,6 +161,7 @@ class _FakeHass:
     def __init__(self) -> None:
         self.data: dict[str, Any] = {}
         self.config = types.SimpleNamespace(config_dir="/tmp")
+        self.bus = types.SimpleNamespace(async_listen=lambda *_args: lambda: None)
 
     def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
         return asyncio.create_task(coro)
@@ -586,6 +587,44 @@ def test_maintenance_buttons_are_always_created_but_capability_gated() -> None:
         entry.runtime_data.capabilities["maintenance"]["gui_reload"] = True
         entry.runtime_data.capabilities["maintenance"]["reboot"] = True
         assert all(entity.available for entity in maintenance_entities.values())
+
+    asyncio.run(_run())
+
+
+def test_setup_entry_adds_stair_light_and_lock_buttons_from_capabilities() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                capabilities={
+                    "stair_light": {"supported": True},
+                    "locks": {
+                        "supported": True,
+                        "locks": [
+                            {"id": "front", "name": "Front door"},
+                            {"id": "", "name": "Ignored"},
+                        ],
+                    },
+                },
+            ),
+        )
+        entities: list[Any] = []
+
+        await async_setup_entry(
+            _FakeHass(),  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            entities.extend,
+        )
+
+        assert any(isinstance(entity, C300XStairLightButton) for entity in entities)
+        unlock_buttons = [
+            entity for entity in entities if isinstance(entity, C300XDoorUnlockButton)
+        ]
+        assert len(unlock_buttons) == 1
+        assert unlock_buttons[0]._attr_unique_id == f"{entry.entry_id}_door_unlock_front"
+        assert unlock_buttons[0]._attr_extra_state_attributes == {
+            "lock_id": "front",
+            "lock_name": "Front door",
+        }
 
     asyncio.run(_run())
 
@@ -1442,6 +1481,75 @@ def test_delete_latest_text_memo_button_translates_refresh_failure() -> None:
     asyncio.run(_run())
 
 
+def test_delete_latest_video_message_button_noops_when_missing_message() -> None:
+    async def _run() -> None:
+        api = _FakeMemoApi(
+            refreshed_video_messages={
+                "available": True,
+                "total": 0,
+                "unread": 0,
+                "messages": [],
+            },
+        )
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=api,
+                capabilities={
+                    "answering_machine": {
+                        "supported": True,
+                        "messages": {"supported": True, "delete": True},
+                    }
+                },
+                qml_patch_status={"available": True, "patched": True},
+                answering_machine_messages={"available": True, "messages": []},
+            ),
+        )
+        entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+
+        await entity.async_press()
+
+        assert api.video_delete_calls == []
+        assert api.video_messages_calls == 1
+        assert entry.runtime_data.answering_machine_messages_updated_at is not None
+        assert entity.available is True
+
+    asyncio.run(_run())
+
+
+def test_delete_latest_video_message_button_translates_refresh_failure() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=_FailingMemoApi(
+                    "answering_machine_messages",
+                    C300XAgentApiError("failed"),
+                ),
+                capabilities={
+                    "answering_machine": {
+                        "supported": True,
+                        "messages": {"supported": True, "delete": True},
+                    }
+                },
+                qml_patch_status={"available": True, "patched": True},
+                answering_machine_messages={"available": True, "messages": []},
+            ),
+        )
+        entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+
+        try:
+            await entity.async_press()
+        except exceptions.HomeAssistantError:
+            assert entity.available is False
+        else:
+            raise AssertionError("video-message refresh failure was not translated")
+
+    asyncio.run(_run())
+
+
 def test_delete_latest_buttons_translate_delete_failures() -> None:
     async def _run() -> None:
         cases = [
@@ -1496,6 +1604,37 @@ def test_delete_latest_buttons_translate_delete_failures() -> None:
                 pass
             else:
                 raise AssertionError("delete failure was not translated")
+
+    asyncio.run(_run())
+
+
+def test_delete_latest_buttons_translate_unsupported_memo_delete() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=_FailingMemoApi(
+                    "delete_memo",
+                    C300XAgentApiUnsupportedError("unsupported"),
+                ),
+                capabilities={"memos": {"supported": True, "delete": True}},
+                qml_patch_status={"available": True, "patched": True},
+                memos={
+                    "available": True,
+                    "text_total": 1,
+                    "memos": [{"id": "text/memo_1", "kind": "text"}],
+                },
+            ),
+        )
+        button = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+        button.hass = _FakeHass()
+
+        try:
+            await button.async_press()
+        except exceptions.HomeAssistantError:
+            pass
+        else:
+            raise AssertionError("unsupported memo delete was not translated")
 
     asyncio.run(_run())
 
@@ -1756,6 +1895,70 @@ def test_delete_latest_video_button_refreshes_from_agent_event_without_sensor() 
     asyncio.run(_run())
 
 
+def test_delete_button_callbacks_ignore_other_entries_and_refresh_on_own_entry() -> None:
+    entry = _FakeEntry(
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"memos": {"supported": True, "delete": True}},
+            qml_patch_status={"available": True, "patched": True},
+            memos={"available": True, "memos": []},
+        ),
+    )
+    entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+
+    entity._handle_memos_changed("other-entry")
+    assert not getattr(entity, "wrote_state", False)
+
+    entity._handle_qml_patch_changed("other-entry")
+    assert not getattr(entity, "wrote_state", False)
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={"entry_id": "other-entry", "event_key": "memos_changed"}
+        )
+    )
+    assert entry.runtime_data.memos_refresh_task is None
+
+    entity._handle_memos_changed(entry.entry_id)
+    assert entity.wrote_state is True
+
+
+def test_delete_video_button_callbacks_ignore_other_entries_and_refresh_on_own_entry() -> None:
+    entry = _FakeEntry(
+        options={CONF_DEVICE_UI_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "answering_machine": {
+                    "supported": True,
+                    "messages": {"supported": True, "delete": True},
+                }
+            },
+            qml_patch_status={"available": True, "patched": True},
+            answering_machine_messages={"available": True, "messages": []},
+        ),
+    )
+    entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
+
+    entity._handle_video_messages_changed("other-entry")
+    assert not getattr(entity, "wrote_state", False)
+
+    entity._handle_qml_patch_changed("other-entry")
+    assert not getattr(entity, "wrote_state", False)
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": "other-entry",
+                "event_key": "answering_machine_messages_changed",
+            }
+        )
+    )
+    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+
+    entity._handle_video_messages_changed(entry.entry_id)
+    assert entity.wrote_state is True
+
+
 def test_delete_latest_text_memo_button_is_unavailable_when_store_unavailable() -> None:
     entry = _FakeEntry(
         options={CONF_DEVICE_UI_ENABLED: True},
@@ -1841,3 +2044,31 @@ def test_delete_latest_text_memo_button_respects_connection_state() -> None:
     entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
 
     assert entity.available is False
+
+
+def test_delete_latest_text_memo_button_requires_display_patch_after_refresh() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            options={CONF_DEVICE_UI_ENABLED: True},
+            runtime_data=_FakeRuntimeData(
+                api=_FakeMemoApi(qml_status={"available": True, "patched": False}),
+                capabilities={"memos": {"supported": True, "delete": True}},
+                qml_patch_status={"available": True, "patched": False},
+                memos={
+                    "available": True,
+                    "text_total": 1,
+                    "memos": [{"id": "text/memo_1", "kind": "text"}],
+                },
+            ),
+        )
+        entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+
+        try:
+            await entity.async_press()
+        except exceptions.HomeAssistantError:
+            assert entry.runtime_data.qml_patch_status["patched"] is False
+        else:
+            raise AssertionError("missing Display patch was not rejected")
+
+    asyncio.run(_run())

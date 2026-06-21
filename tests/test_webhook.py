@@ -154,6 +154,8 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
     _normalize_event_type,
     _optional_bool,
     _optional_int,
+    async_register_agent_event_webhook,
+    async_register_webhook,
 )  # pylint: disable=wrong-import-position
 
 
@@ -322,6 +324,218 @@ def test_display_bridge_status_webhook_uses_registered_handler(monkeypatch) -> N
     )
 
     assert response.status == 200
+
+
+def test_webhook_registration_uses_entry_ids_and_unregisters(monkeypatch) -> None:  # noqa: ANN001
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={
+            "webhook_id": "display-webhook",
+            "event_webhook_id": "event-webhook",
+        },
+    )
+    registered: list[tuple[str, str, tuple[str, ...]]] = []
+    unregistered: list[str] = []
+
+    def _register(
+        hass_arg: object,
+        domain: str,
+        name: str,
+        webhook_id: str,
+        handler: object,
+        *,
+        local_only: bool,
+        allowed_methods: tuple[str, ...],
+    ) -> None:
+        assert hass_arg is hass
+        assert callable(handler)
+        assert local_only is False
+        registered.append((domain, name, webhook_id, allowed_methods))
+
+    monkeypatch.setattr(webhook_module.webhook, "async_register", _register)
+    monkeypatch.setattr(
+        webhook_module.webhook,
+        "async_unregister",
+        lambda hass_arg, webhook_id: unregistered.append(webhook_id),
+    )
+
+    unregister_display = async_register_webhook(
+        hass,  # type: ignore[arg-type]
+        entry,  # type: ignore[arg-type]
+    )
+    unregister_events = async_register_agent_event_webhook(
+        hass,  # type: ignore[arg-type]
+        entry,  # type: ignore[arg-type]
+        event_state,
+    )
+    unregister_display()
+    unregister_events()
+
+    assert registered == [
+        (
+            "bticino_c300x",
+            "C300X",
+            "display-webhook",
+            ("POST",),
+        ),
+        (
+            "bticino_c300x",
+            "C300X device-agent events",
+            "event-webhook",
+            ("POST",),
+        ),
+    ]
+    assert unregistered == ["display-webhook", "event-webhook"]
+
+
+def test_display_bridge_command_handlers_forward_payloads(monkeypatch) -> None:  # noqa: ANN001
+    hass = _FakeHass()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret"},
+        options={},
+    )
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    async def _action(hass_arg: object, entry_arg: object, action_id: str) -> dict:
+        calls.append(("action", (hass_arg, entry_arg, action_id), {}))
+        return {"ok": True, "kind": "action"}
+
+    async def _dashboard_action(
+        hass_arg: object,
+        entry_arg: object,
+        entity_id: str,
+        *,
+        option: str | None,
+    ) -> dict:
+        calls.append(
+            (
+                "dashboard_action",
+                (hass_arg, entry_arg, entity_id),
+                {"option": option},
+            )
+        )
+        return {"ok": True, "kind": "dashboard_action"}
+
+    async def _stair_light(
+        hass_arg: object,
+        entry_arg: object,
+        address: str | None,
+    ) -> dict:
+        calls.append(("stair_light", (hass_arg, entry_arg, address), {}))
+        return {"ok": True, "kind": "stair_light"}
+
+    async def _alarm_command(
+        hass_arg: object,
+        entry_arg: object,
+        command: str,
+        code: str | None,
+        *,
+        force: bool,
+        check: bool,
+    ) -> dict:
+        calls.append(
+            (
+                "alarm_command",
+                (hass_arg, entry_arg, command, code),
+                {"force": force, "check": check},
+            )
+        )
+        return {"ok": True, "kind": "alarm_command"}
+
+    monkeypatch.setattr(webhook_module, "async_execute_action", _action)
+    monkeypatch.setattr(
+        webhook_module,
+        "async_execute_dashboard_action",
+        _dashboard_action,
+    )
+    monkeypatch.setattr(webhook_module, "async_trigger_stair_light", _stair_light)
+    monkeypatch.setattr(webhook_module, "async_execute_alarm_command", _alarm_command)
+
+    for payload in (
+        {"type": "action", "action_id": "open"},
+        {
+            "type": "dashboard_action",
+            "entity_id": "select.mode",
+            "option": "Home Assistant",
+        },
+        {"type": "stair_light", "address": "77"},
+        {
+            "type": "alarm_command",
+            "command": "arm_home",
+            "code": "1234",
+            "force": True,
+            "check": True,
+        },
+    ):
+        response = asyncio.run(
+            _async_handle_webhook(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                _FakeRequest(
+                    "",
+                    payload,
+                    extra_headers={HEADER_SHARED_SECRET: "shared-secret"},
+                ),  # type: ignore[arg-type]
+            )
+        )
+        assert response.status == 200
+
+    assert calls == [
+        ("action", (hass, entry, "open"), {}),
+        (
+            "dashboard_action",
+            (hass, entry, "select.mode"),
+            {"option": "Home Assistant"},
+        ),
+        ("stair_light", (hass, entry, "77"), {}),
+        (
+            "alarm_command",
+            (hass, entry, "arm_home", "1234"),
+            {"force": True, "check": True},
+        ),
+    ]
+
+
+def test_display_bridge_command_errors_are_contained(monkeypatch) -> None:  # noqa: ANN001
+    hass = _FakeHass()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret"},
+        options={},
+    )
+
+    async def _raise(error: Exception) -> dict:
+        raise error
+
+    for error, status, message in (
+        (KeyError("missing"), 404, "unknown_action"),
+        (ValueError("bad_action"), 400, "bad_action"),
+        (RuntimeError("boom"), 500, "command_failed"),
+    ):
+        monkeypatch.setattr(
+            webhook_module,
+            "async_execute_action",
+            lambda *_args, _error=error: _raise(_error),
+        )
+        response = asyncio.run(
+            _async_handle_webhook(
+                hass,  # type: ignore[arg-type]
+                entry,  # type: ignore[arg-type]
+                _FakeRequest(
+                    "",
+                    {"type": "action", "action_id": "x"},
+                    extra_headers={HEADER_SHARED_SECRET: "shared-secret"},
+                ),  # type: ignore[arg-type]
+            )
+        )
+        assert response.status == status
+        assert json.loads(response.text) == {"ok": False, "error": message}
 
 
 def test_display_bridge_dashboard_webhook_returns_revision_and_not_modified(

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Run the current Python coverage gate.
 
-This is a ratchet toward the Home Assistant Platinum target. The local floor is
-kept at the currently verified level until HA fixture tests lift it toward 95%.
+This is the local Home Assistant Platinum coverage ratchet.
 """
 
 from __future__ import annotations
@@ -10,7 +9,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-MINIMUM_COVERAGE = 92
+MINIMUM_COVERAGE = 95
 
 
 def main() -> int:

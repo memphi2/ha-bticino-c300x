@@ -393,7 +393,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "return this._isHomeCallMode() ? 1 : 7;" in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
     assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
-    assert 'preview: true' in source
+    assert 'preview: false' in source
     assert "ll-rebuild" not in source
     assert 'formatEntityName' in source
     assert '<ha-form>' in source
@@ -463,6 +463,7 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
 
     assert "window.customCards.push" in metadata_source
+    assert "preview: false" in metadata_source
     assert "doorbell_state_entity: entityId" not in metadata_source
     assert "home_call_entity: entityId" not in metadata_source
     assert "c300xMetadataRegistryEntity" not in metadata_source
@@ -473,6 +474,7 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     assert "customElements.define" not in metadata_source
     assert "extends HTMLElement" not in metadata_source
     assert "window.customCards.push" in source
+    assert "preview: false" in source
     assert 'customElements.define(C300X_CARD_TAG, C300XDoorbellCallCard)' in source
 
 

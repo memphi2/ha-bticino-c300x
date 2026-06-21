@@ -7,7 +7,10 @@ This repository tracks quality-scale status in `custom_components/bticino_c300x/
 
 ## Current Position
 
-The integration is local-push based, capability-gated, async, unload-safe, and provides diagnostics plus repair issues.
+The integration is local-push based, capability-gated, async, unload-safe, and
+provides diagnostics plus repair issues. The local coverage ratchet is currently
+95%, and strict typing covers the media helpers, agent contracts, use-case
+commands, dashboard helpers, and selected shared helpers.
 
 ## Platinum Blockers
 

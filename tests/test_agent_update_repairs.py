@@ -79,10 +79,17 @@ from custom_components.bticino_c300x.repair_flows_frontend import (  # noqa: E40
     _LOVELACE_VIEW_FIELD,
     FrontendCardSetupRepairFlow,
     _async_setup_lovelace_cards,
+    _c300x_view,
     _cards_for_view,
     _dashboard_select_options,
+    _dashboard_selector_value,
+    _empty_placeholder_view,
+    _lovelace_dashboard_path,
     _LovelaceCardSetupError,
     _normalize_lovelace_target,
+    _remove_empty_placeholder_views,
+    _submitted_dashboard_path,
+    _submitted_view_path,
 )
 from custom_components.bticino_c300x.repairs import (  # noqa: E402
     _AGENT_UPDATE_RESTART_SETTLE_SECONDS,
@@ -193,6 +200,10 @@ class FakePatchApi:
         self.calls.append("self_test")
         return self.self_test_status
 
+    async def async_validate_setup(self) -> dict[str, Any]:
+        self.calls.append("validate_setup")
+        return {"version": "1.1.0", "capabilities": {}}
+
     async def async_device_user_status(self) -> dict[str, Any]:
         self.calls.append("device_user_status")
         return self.device_user_status
@@ -290,6 +301,24 @@ class FakeAgentUpdateState:
         }
 
 
+class FakeSelfUpdateState:
+    self_update_repair_supported = True
+    update_required = True
+
+    @property
+    def repair_placeholders(self) -> dict[str, str]:
+        return {
+            "installed_version": "1.0.0",
+            "available_version": "1.1.0",
+            "installed_api_version": "1",
+            "available_api_version": "1",
+            "installed_bundle_hash": "old",
+            "available_bundle_hash": "new",
+            "reason": "version_mismatch",
+            "update_path": "self_update",
+        }
+
+
 def setup_function() -> None:
     IGNORED_ISSUES.clear()
 
@@ -362,6 +391,292 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
     assert result["step_id"] == "ssh_install"
     assert result.get("errors") is None
     assert entry.runtime_data.api.calls == []
+
+
+def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    hass = FakeHass(entry)
+    flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    calls: list[str] = []
+
+    async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
+        calls.append("apply_update")
+        return {"ok": True, "restart_scheduled": False}
+
+    async def verify_update(_api: Any, result: dict[str, Any]) -> dict[str, Any]:
+        calls.append(f"verify:{result['ok']}")
+        return {"version": "1.1.0", "capabilities": {}}
+
+    async def restore_state(*_args: Any) -> None:
+        calls.append("restore")
+
+    async def migrate_mqtt(_api: Any) -> None:
+        calls.append("migrate_mqtt")
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        calls.append("apply_setup")
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    monkeypatch.setattr(repairs, "_async_verify_agent_after_update", verify_update)
+    monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    form = asyncio.run(flow.async_step_confirm())
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert form["type"] == "form"
+    assert form["step_id"] == "confirm"
+    assert result == {"type": "create_entry", "data": {}}
+    assert calls == [
+        "apply_update",
+        "verify:True",
+        "restore",
+        "migrate_mqtt",
+        "apply_setup",
+    ]
+    assert hass.config_entries.reloads == ["entry-1"]
+
+
+def test_agent_update_repair_self_update_reports_failures(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
+        raise C300XAgentApiError("upload failed")
+
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "confirm"
+    assert result["errors"] == {"base": "update_failed"}
+
+
+def test_agent_update_repair_self_update_normalizes_changed_config(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    class NormalizingApi(FakePatchApi):
+        async def async_normalize_agent_config(self) -> dict[str, Any]:
+            self.calls.append("normalize_config")
+            return {"ok": True}
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(NormalizingApi()))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "restart_scheduled": False,
+            "config_schema_changed": True,
+        }
+
+    async def restore_state(*_args: Any) -> None:
+        return None
+
+    async def migrate_mqtt(_api: Any) -> None:
+        return None
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "create_entry", "data": {}}
+    assert entry.runtime_data.api.calls.count("validate_setup") == 3
+    assert "normalize_config" in entry.runtime_data.api.calls
+
+
+def test_agent_update_repair_self_update_reports_verify_failure(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    async def verify_update(_api: Any, _result: dict[str, Any]) -> dict[str, Any]:
+        return {"version": "1.1.0", "capabilities": {}}
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        setup_entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+
+    async def restore_state(*_args: Any) -> None:
+        return None
+
+    async def migrate_mqtt(_api: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    monkeypatch.setattr(repairs, "_async_verify_agent_after_update", verify_update)
+    monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "update_verify_failed"}
+
+
+def test_agent_update_repair_aborts_when_entry_is_unloaded() -> None:
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    confirm = asyncio.run(flow.async_step_confirm({}))
+    ssh_install = asyncio.run(flow.async_step_ssh_install({}))
+
+    assert confirm == {"type": "abort", "reason": "entry_not_loaded"}
+    assert ssh_install == {"type": "abort", "reason": "entry_not_loaded"}
+
+
+def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={
+            "agent_host": "192.0.2.60",
+            "agent_port": 8091,
+            "agent_token": "agent-token",
+            "maintenance_token": "maintenance-token",
+        },
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    hass = FakeHass(entry)
+    flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    calls: list[str] = []
+
+    async def install_agent(request: Any, *, api_token: str, maintenance_token: str) -> Any:
+        calls.append(
+            f"install:{request.host}:{request.ssh_username}:{api_token}:{maintenance_token}"
+        )
+        return types.SimpleNamespace(changed_files=())
+
+    async def wait_for_agent(_api: Any) -> dict[str, Any]:
+        calls.append("wait")
+        return {"version": "1.1.0", "capabilities": {}}
+
+    async def migrate_mqtt(_api: Any) -> None:
+        calls.append("migrate_mqtt")
+
+    async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
+        calls.append("apply_setup")
+        setup_entry.runtime_data.agent_update_state = types.SimpleNamespace(
+            update_required=False
+        )
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(repairs, "_async_wait_for_agent_after_update", wait_for_agent)
+    monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
+    monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_ssh_install(
+            {
+                "bootstrap_ssh_username": "root",
+                "bootstrap_ssh_password": "secret",
+            }
+        )
+    )
+
+    assert result == {"type": "create_entry", "data": {}}
+    assert calls == [
+        "install:192.0.2.60:root:agent-token:maintenance-token",
+        "wait",
+        "migrate_mqtt",
+        "apply_setup",
+    ]
+    assert hass.config_entries.reloads == ["entry-1"]
+
+
+def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(FakePatchApi()),
+        data={
+            "agent_host": "192.0.2.60",
+            "agent_token": "agent-token",
+            "maintenance_token": "maintenance-token",
+        },
+    )
+    entry.runtime_data.agent_update_state = FakeAgentUpdateState()
+    flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def install_agent(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("ssh failed")
+
+    monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_ssh_install(
+            {
+                "bootstrap_ssh_username": "root",
+                "bootstrap_ssh_password": "secret",
+            }
+        )
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "ssh_install"
+    assert result["errors"] == {"base": "ssh_install_failed"}
+
+
+def test_capture_external_patch_state_tolerates_agent_status_errors() -> None:
+    class ErrorStatusApi(FakePatchApi):
+        async def async_qml_patch_status(self) -> dict[str, Any]:
+            self.calls.append("qml_status_error")
+            raise C300XAgentApiError("qml unavailable")
+
+        async def async_firewall_status(self) -> dict[str, Any]:
+            self.calls.append("firewall_status_error")
+            raise C300XAgentApiError("firewall unavailable")
+
+        async def async_ipv6_firewall_status(self) -> dict[str, Any]:
+            self.calls.append("ipv6_firewall_status_error")
+            raise C300XAgentApiError("ipv6 unavailable")
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(ErrorStatusApi()),
+        options={CONF_DEVICE_UI_ENABLED: True},
+    )
+
+    patch_state = asyncio.run(_async_capture_external_patch_state(entry))
+
+    assert patch_state.qml_patch_required is True
+    assert patch_state.firewall_patched is False
+    assert patch_state.firewall_status_known is False
+    assert patch_state.ipv6_firewall_patched is False
 
 
 def test_frontend_card_repair_flow_init_ignores_internal_flow_data(monkeypatch) -> None:
@@ -447,6 +762,68 @@ def test_frontend_card_repair_confirm_reports_invalid_target(monkeypatch) -> Non
     assert result["errors"] == {"base": "lovelace_config_invalid"}
 
 
+def test_frontend_card_repair_steps_abort_when_entry_missing() -> None:
+    flow = FrontendCardSetupRepairFlow(FakeHass(None), "missing")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    assert asyncio.run(flow.async_step_init()) == {
+        "type": "abort",
+        "reason": "entry_not_loaded",
+    }
+    assert asyncio.run(flow.async_step_confirm({})) == {
+        "type": "abort",
+        "reason": "entry_not_loaded",
+    }
+    assert asyncio.run(flow.async_step_ignore()) == {
+        "type": "abort",
+        "reason": "entry_not_loaded",
+    }
+
+
+def test_frontend_card_repair_confirm_reports_lovelace_setup_errors(
+    monkeypatch,
+) -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    flow = FrontendCardSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._dashboard_selector",
+        lambda _hass: str,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._text_selector",
+        lambda: str,
+    )
+
+    async def fail_setup(*_args: Any, **_kwargs: Any) -> str:
+        raise _LovelaceCardSetupError("lovelace_storage_unavailable")
+
+    async def setup_frontend(_hass: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._async_setup_lovelace_cards",
+        fail_setup,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend.async_setup_frontend",
+        setup_frontend,
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_confirm(
+            {
+                _LOVELACE_DASHBOARD_FIELD: "/dashboard-test/door",
+                _LOVELACE_VIEW_FIELD: "door",
+            }
+        )
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "lovelace_storage_unavailable"}
+    assert result["data_schema"] is not None
+
+
 def test_frontend_card_repair_can_be_ignored() -> None:
     """Ignoring the Lovelace card repair persists the dismissal."""
 
@@ -476,6 +853,209 @@ def test_frontend_card_helpers_reject_invalid_lovelace_cards_container() -> None
         _cards_for_view({"sections": [{"cards": "not-a-list"}], "cards": "bad"})
 
     assert err.value.error_key == "lovelace_config_invalid"
+
+
+def test_frontend_card_helpers_cover_lovelace_view_shapes() -> None:
+    keep = {"type": "sections", "path": "c300x", "sections": []}
+    placeholder = {
+        "sections": [
+            {"cards": [{"type": "heading", "heading": "New section"}]},
+        ],
+    }
+    invalid_placeholder = {"sections": [{"cards": [{"type": "button"}]}]}
+    views: list[Any] = [
+        {"ignored": True},
+        placeholder,
+        invalid_placeholder,
+        keep,
+    ]
+
+    assert _c300x_view([{"title": "C300X"}], "c300x") == {"title": "C300X"}
+    assert _empty_placeholder_view(views) is placeholder
+    assert _remove_empty_placeholder_views(views, keep=keep) is True
+    assert placeholder not in views
+    assert invalid_placeholder in views
+    assert _cards_for_view({"cards": []}) == []
+
+
+def test_frontend_card_helpers_normalize_dashboard_targets(monkeypatch) -> None:
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+
+    default_dashboard = types.SimpleNamespace(
+        mode="storage",
+        config={"title": "Default dashboard"},
+    )
+    selected_dashboard = types.SimpleNamespace(
+        mode="storage",
+        config={"title": "Wall tablet"},
+    )
+    yaml_dashboard = types.SimpleNamespace(
+        mode="yaml",
+        config={"title": "YAML"},
+    )
+    hass = FakeHass(FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi())))
+    hass.data["lovelace"] = types.SimpleNamespace(
+        dashboards={
+            None: default_dashboard,
+            "wall": selected_dashboard,
+            "yaml": yaml_dashboard,
+        }
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+
+    assert _dashboard_select_options(hass) == [
+        {"value": "__default__", "label": "Default dashboard (/lovelace)"},
+        {"value": "wall", "label": "Wall tablet (/wall)"},
+    ]
+    assert _dashboard_selector_value(None) == "__default__"
+    assert _dashboard_selector_value("wall") == "wall"
+    assert _lovelace_dashboard_path(None) == "/lovelace/c300x"
+    assert _lovelace_dashboard_path("wall", "door") == "/wall/door"
+    assert _normalize_lovelace_target("__default__", "/wall/door") == (
+        "wall",
+        "door",
+    )
+    assert _normalize_lovelace_target("wall", "/lovelace/door") == (
+        None,
+        "door",
+    )
+    assert (
+        _submitted_dashboard_path({_LOVELACE_DASHBOARD_FIELD: "/wall/"})
+        == "wall"
+    )
+    assert _submitted_dashboard_path({_LOVELACE_DASHBOARD_FIELD: "__default__"}) is None
+    assert _submitted_view_path({_LOVELACE_VIEW_FIELD: ""}) == "c300x"
+    assert _submitted_view_path({_LOVELACE_VIEW_FIELD: "/door/"}) == "door"
+
+
+def test_frontend_card_repair_recovers_from_lovelace_load_failure(monkeypatch) -> None:
+    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+
+    class FakeEntityRegistry:
+        def async_get_entity_id(
+            self,
+            domain: str,
+            platform: str,
+            unique_id: str,
+        ) -> str | None:
+            assert platform == "bticino_c300x"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            return None
+
+    class FailingLoadDashboard:
+        mode = "storage"
+
+        def __init__(self) -> None:
+            self.saved: dict[str, Any] | None = None
+
+        async def async_load(self, _force: bool) -> dict[str, Any]:
+            raise RuntimeError("not generated yet")
+
+        async def async_save(self, config: dict[str, Any]) -> None:
+            self.saved = config
+
+    dashboard = FailingLoadDashboard()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    hass.entity_registry = FakeEntityRegistry()
+    hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
+    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.helpers.entity_registry",
+        entity_registry,
+    )
+    monkeypatch.setattr(
+        sys.modules["homeassistant.helpers"],
+        "entity_registry",
+        entity_registry,
+        raising=False,
+    )
+    entity_registry.async_get = lambda _hass: hass.entity_registry
+
+    path = asyncio.run(_async_setup_lovelace_cards(hass, entry))  # type: ignore[arg-type]
+
+    assert path == "/lovelace/c300x"
+    assert dashboard.saved is not None
+    assert dashboard.saved["views"][0]["sections"][0]["cards"][0]["mode"] == "auto"
+
+
+def test_frontend_card_repair_rejects_invalid_lovelace_configs(monkeypatch) -> None:
+    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+
+    class FakeEntityRegistry:
+        def async_get_entity_id(
+            self,
+            domain: str,
+            platform: str,
+            unique_id: str,
+        ) -> str | None:
+            assert platform == "bticino_c300x"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            return None
+
+    class FakeLovelaceDashboard:
+        mode = "storage"
+
+        def __init__(self, config: Any) -> None:
+            self.config = config
+
+        async def async_load(self, _force: bool) -> Any:
+            return self.config
+
+        async def async_save(self, _config: dict[str, Any]) -> None:
+            raise AssertionError("invalid config must not be saved")
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    hass.entity_registry = FakeEntityRegistry()
+    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.helpers.entity_registry",
+        entity_registry,
+    )
+    monkeypatch.setattr(
+        sys.modules["homeassistant.helpers"],
+        "entity_registry",
+        entity_registry,
+        raising=False,
+    )
+    entity_registry.async_get = lambda _hass: hass.entity_registry
+
+    for config in ("bad", {"views": "bad"}):
+        hass.data["lovelace"] = types.SimpleNamespace(
+            dashboards={None: FakeLovelaceDashboard(config)}
+        )
+        with pytest.raises(_LovelaceCardSetupError) as err:
+            asyncio.run(_async_setup_lovelace_cards(hass, entry))  # type: ignore[arg-type]
+        assert err.value.error_key == "lovelace_config_invalid"
 
 
 def test_frontend_card_repair_reports_missing_camera_entity(monkeypatch) -> None:
@@ -846,6 +1426,119 @@ def test_media_setup_repair_unreachable_agent_only_reloads_entry() -> None:
     assert api.calls == []
 
 
+def test_callback_url_repair_aborts_when_entry_is_unloaded() -> None:
+    flow = CallbackUrlRepairFlow(FakeHass(None), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_configure({}))
+
+    assert result == {"type": "abort", "reason": "entry_not_loaded"}
+
+
+def test_core_qml_hook_repair_aborts_when_unsupported() -> None:
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {"maintenance": {"supported": True}}
+    entry = FakeEntry(runtime_data=runtime_data)
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "abort", "reason": "core_patch_unsupported"}
+
+
+def test_core_qml_hook_repair_reports_agent_failure(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {
+        "maintenance": {"supported": True, "qml_core_patch": True}
+    }
+    runtime_data.qml_patch_status = {"core_state": "original"}
+    entry = FakeEntry(runtime_data=runtime_data)
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def apply_core_patch(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise C300XAgentApiError("patch failed")
+
+    monkeypatch.setattr(
+        repairs,
+        "async_apply_qml_core_patch_and_confirm",
+        apply_core_patch,
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "confirm"
+    assert result["errors"] == {"base": "core_patch_failed"}
+    assert result["description_placeholders"] == {"qml_patch_status": "original"}
+
+
+def test_core_qml_hook_repair_reports_verify_failure(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {
+        "maintenance": {"supported": True, "qml_core_patch": True}
+    }
+    runtime_data.qml_patch_status = {"state": "patched"}
+    entry = FakeEntry(runtime_data=runtime_data)
+    flow = DeviceCoreQmlHookRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+
+    async def apply_core_patch(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {"core_patched": False, "core_state": "original"}
+
+    monkeypatch.setattr(
+        repairs,
+        "async_apply_qml_core_patch_and_confirm",
+        apply_core_patch,
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "confirm"
+    assert result["errors"] == {"base": "core_patch_verify_failed"}
+    assert result["description_placeholders"] == {"qml_patch_status": "patched"}
+
+
+def test_core_qml_hook_repair_success_finishes_repair(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    runtime_data = FakeRuntimeData(FakePatchApi())
+    runtime_data.capabilities = {
+        "maintenance": {"supported": True, "qml_core_patch": True}
+    }
+    entry = FakeEntry(runtime_data=runtime_data)
+    hass = FakeHass(entry)
+    flow = DeviceCoreQmlHookRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    dispatched: list[tuple[Any, ...]] = []
+
+    async def apply_core_patch(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        return {"core_patched": True, "core_state": "patched"}
+
+    monkeypatch.setattr(
+        repairs,
+        "async_apply_qml_core_patch_and_confirm",
+        apply_core_patch,
+    )
+    monkeypatch.setattr(
+        repairs,
+        "async_dispatcher_send",
+        lambda *args: dispatched.append(args),
+    )
+    flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+
+    assert result == {"type": "create_entry", "data": {}}
+    assert hass.config_entries.reloads == []
+    assert dispatched == []
+
+
 def test_media_setup_repair_capability_failure_refreshes_agent_setup(
     monkeypatch,
 ) -> None:
@@ -1037,6 +1730,100 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
     assert "'state_entity':" not in str(cards)
     assert "home_call_entity" not in str(cards)
     assert "doorbell_state_entity" not in str(cards)
+
+
+def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
+    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+
+    class FakeEntityRegistry:
+        def async_get_entity_id(
+            self,
+            domain: str,
+            platform: str,
+            unique_id: str,
+        ) -> str | None:
+            assert platform == "bticino_c300x"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            return None
+
+    class FakeLovelaceDashboard:
+        mode = "storage"
+
+        def __init__(self) -> None:
+            self.config: dict[str, Any] = {
+                "views": [
+                    {
+                        "type": "sections",
+                        "title": "C300X",
+                        "path": "c300x",
+                        "sections": [
+                            {
+                                "type": "grid",
+                                "cards": [
+                                    {
+                                        "type": "custom:c300x-doorbell-call-card",
+                                        "entity": "camera.bticino_c300x_doorbell_camera",
+                                        "mode": "doorbell_call",
+                                    },
+                                    {
+                                        "type": "custom:c300x-doorbell-call-card",
+                                        "entity": "camera.bticino_c300x_doorbell_camera",
+                                        "mode": "home_call",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+
+        async def async_load(self, _force: bool) -> dict[str, Any]:
+            return self.config
+
+        async def async_save(self, config: dict[str, Any]) -> None:
+            self.config = config
+
+    dashboard = FakeLovelaceDashboard()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    hass.entity_registry = FakeEntityRegistry()
+    hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
+    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.helpers.entity_registry",
+        entity_registry,
+    )
+    monkeypatch.setattr(
+        sys.modules["homeassistant.helpers"],
+        "entity_registry",
+        entity_registry,
+        raising=False,
+    )
+    entity_registry.async_get = lambda _hass: hass.entity_registry
+
+    path = asyncio.run(_async_setup_lovelace_cards(hass, entry))  # type: ignore[arg-type]
+
+    assert path == "/lovelace/c300x"
+    cards = dashboard.config["views"][0]["sections"][0]["cards"]
+    assert cards == [
+        {
+            "type": "custom:c300x-doorbell-call-card",
+            "entity": "camera.bticino_c300x_doorbell_camera",
+            "mode": "auto",
+            "grid_options": {"columns": 12, "rows": 7},
+        }
+    ]
 
 
 def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(

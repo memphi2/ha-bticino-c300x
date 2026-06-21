@@ -148,8 +148,10 @@ class _FakeApi:
         self.answering_machine_status_error = False
         self.ssh_reads = 0
         self.ssh_sets: list[bool] = []
+        self.ssh_status_error = False
         self.qml_patch_status_reads = 0
         self.qml_patch_actions: list[str] = []
+        self.qml_patch_status_error = False
         self.firewall_status_reads = 0
         self.firewall_actions: list[str] = []
         self.firewall_supported = True
@@ -162,6 +164,7 @@ class _FakeApi:
         self.ipv6_firewall_config_enabled = True
         self.ipv6_firewall_enable_sets: list[bool] = []
         self.auth_config_reads = 0
+        self.auth_config_error = False
         self.device_user_status_reads = 0
         self.device_user_actions: list[str] = []
         self.device_user_status_error = False
@@ -207,6 +210,8 @@ class _FakeApi:
 
     async def async_ssh_status(self) -> dict[str, Any]:
         self.ssh_reads += 1
+        if self.ssh_status_error:
+            raise C300XAgentApiConnectionError("offline")
         return {"running": True}
 
     async def async_set_ssh_enabled(self, enabled: bool) -> dict[str, Any]:
@@ -215,6 +220,8 @@ class _FakeApi:
 
     async def async_qml_patch_status(self) -> dict[str, Any]:
         self.qml_patch_status_reads += 1
+        if self.qml_patch_status_error:
+            raise C300XAgentApiConnectionError("offline")
         if self.qml_patch_actions[-1:] == ["apply"]:
             return {"available": True, "patched": True, "state": "patched"}
         if self.qml_patch_actions[-1:] == ["restore"]:
@@ -332,6 +339,8 @@ class _FakeApi:
 
     async def async_auth_config_status(self) -> dict[str, Any]:
         self.auth_config_reads += 1
+        if self.auth_config_error:
+            raise C300XAgentApiConnectionError("offline")
         return {
             "no_auth": True,
             "api_token_configured": False,
@@ -542,6 +551,30 @@ class _FakeEntry:
     runtime_data: _FakeRuntimeData = field(default_factory=_FakeRuntimeData)
 
 
+def test_setup_entry_adds_capability_backed_switches() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "ringer": {"supported": True},
+                "answering_machine": {"supported": True},
+                "device_user": {"supported": True},
+                "doorbell_video": {"supported": True},
+            }
+        ),
+        options={"video_enabled": True},
+    )
+    entities: list[Any] = []
+
+    asyncio.run(async_setup_entry(None, entry, entities.extend))  # type: ignore[arg-type]
+
+    assert any(isinstance(entity, C300XRingerMuteSwitch) for entity in entities)
+    assert any(isinstance(entity, C300XAnsweringMachineSwitch) for entity in entities)
+    assert any(
+        isinstance(entity, C300XHomeAssistantMediaUserSetupSwitch)
+        for entity in entities
+    )
+
+
 def test_ringer_unmuted_event_updates_switch_state() -> None:
     entity = C300XRingerMuteSwitch(_FakeEntry())  # type: ignore[arg-type]
 
@@ -645,6 +678,34 @@ def test_maintenance_ssh_switch_stops_ssh() -> None:
     assert entity.is_on is False
 
 
+def test_maintenance_ssh_switch_starts_ssh() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"maintenance": {"supported": True, "ssh_start": True}},
+        )
+    )
+    entity = C300XMaintenanceSshSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_turn_on())
+
+    assert entry.runtime_data.api.ssh_sets == [True]
+    assert entity.is_on is True
+
+
+def test_maintenance_ssh_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"maintenance": {"supported": True, "ssh_start": True}},
+        )
+    )
+    entry.runtime_data.api.ssh_status_error = True
+    entity = C300XMaintenanceSshSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
 def test_homeassistant_media_user_setup_refreshes_before_hass_is_bound() -> None:
     entry = _FakeEntry()
     entity = C300XHomeAssistantMediaUserSetupSwitch(entry)  # type: ignore[arg-type]
@@ -711,6 +772,27 @@ def test_homeassistant_media_user_setup_marks_unavailable_when_refresh_fails() -
     assert entity.is_on is None
 
 
+def test_homeassistant_media_user_setup_translates_agent_errors() -> None:
+    entry = _FakeEntry()
+    entity = C300XHomeAssistantMediaUserSetupSwitch(entry)  # type: ignore[arg-type]
+    entity.hass = SimpleNamespace(config=SimpleNamespace(location_name="Test"))
+
+    async def unsupported_ensure(*, account_label: str | None = None) -> dict[str, Any]:
+        _ = account_label
+        raise C300XAgentApiUnsupportedError("unsupported")
+
+    async def failed_restore() -> dict[str, Any]:
+        raise C300XAgentApiConnectionError("offline")
+
+    entry.runtime_data.api.async_ensure_homeassistant_user = unsupported_ensure  # type: ignore[method-assign]
+    with pytest.raises(Exception, match="does not support device-user setup"):
+        asyncio.run(entity.async_turn_on())
+
+    entry.runtime_data.api.async_restore_homeassistant_media_user_setup = failed_restore  # type: ignore[method-assign]
+    with pytest.raises(Exception, match="media user restore failed"):
+        asyncio.run(entity.async_turn_off())
+
+
 def test_gui_function_patch_switch_uses_read_only_status() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -755,6 +837,65 @@ def test_gui_function_patch_switch_applies_and_restores_patch() -> None:
     assert entry.runtime_data.api.qml_patch_actions == ["apply", "restore"]
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entity.is_on is False
+
+
+def test_gui_function_patch_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "qml_status": True,
+                    "qml_patch": True,
+                    "qml_restore": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.qml_patch_status_error = True
+    entity = C300XGuiFunctionPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
+def test_gui_function_patch_dispatch_is_noop_without_hass() -> None:
+    entity = C300XGuiFunctionPatchSwitch(_FakeEntry())  # type: ignore[arg-type]
+
+    entity._dispatch_qml_patch_changed()
+
+    assert not getattr(entity, "wrote_state", False)
+
+
+def test_gui_function_patch_dispatch_sends_entry_signal_when_hass_is_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, str, str]] = []
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.switch.async_dispatcher_send",
+        lambda hass, signal, entry_id: calls.append((hass, signal, entry_id)),
+    )
+    entity = C300XGuiFunctionPatchSwitch(_FakeEntry())  # type: ignore[arg-type]
+    entity.hass = SimpleNamespace()
+
+    entity._dispatch_qml_patch_changed()
+
+    assert calls == [(entity.hass, "bticino_c300x_qml_patch_changed", "entry-1")]
+
+
+def test_gui_function_patch_push_updates_matching_entry_only() -> None:
+    entry = _FakeEntry()
+    entity = C300XGuiFunctionPatchSwitch(entry)  # type: ignore[arg-type]
+
+    entity._handle_qml_patch_changed("other")
+    assert entity.is_on is None
+
+    entry.runtime_data.qml_patch_status = {"available": True, "patched": True}
+    entity._handle_qml_patch_changed("entry-1")
+
+    assert entity.is_on is True
+    assert getattr(entity, "wrote_state", False) is True
 
 
 def test_firewall_patch_switch_uses_read_only_status() -> None:
@@ -848,6 +989,60 @@ def test_firewall_patch_switch_recovers_when_maintenance_is_disabled() -> None:
     assert entry.runtime_data.api.firewall_enable_sets == [True]
     assert entry.runtime_data.api.firewall_actions == ["apply"]
     assert entity.is_on is True
+
+
+def test_firewall_patch_switch_marks_unavailable_when_endpoint_is_unsupported() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "firewall_status": True,
+                    "firewall_apply": True,
+                    "firewall_restore": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.firewall_supported = False
+    entity = C300XFirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
+def test_firewall_patch_switch_marks_unavailable_when_status_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "firewall_status": True,
+                    "firewall_apply": True,
+                    "firewall_restore": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.maintenance_config_enabled = False
+    entity = C300XFirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
+def test_firewall_disabled_check_is_false_when_auth_status_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    entity = C300XFirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    assert asyncio.run(entity._async_configured_endpoint_disabled()) is False
 
 
 def test_ipv6_firewall_patch_switch_uses_read_only_status() -> None:
@@ -945,6 +1140,60 @@ def test_ipv6_firewall_patch_switch_recovers_when_maintenance_is_disabled() -> N
     assert entry.runtime_data.api.ipv6_firewall_enable_sets == [True]
     assert entry.runtime_data.api.ipv6_firewall_actions == ["apply"]
     assert entity.is_on is True
+
+
+def test_ipv6_firewall_patch_switch_marks_unavailable_when_endpoint_is_unsupported() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "ipv6_firewall_status": True,
+                    "ipv6_firewall_apply": True,
+                    "ipv6_firewall_restore": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.ipv6_firewall_supported = False
+    entity = C300XIpv6FirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
+def test_ipv6_firewall_patch_switch_marks_unavailable_when_status_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "ipv6_firewall_status": True,
+                    "ipv6_firewall_apply": True,
+                    "ipv6_firewall_restore": True,
+                }
+            },
+        )
+    )
+    entry.runtime_data.api.maintenance_config_enabled = False
+    entity = C300XIpv6FirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
+def test_ipv6_firewall_disabled_check_is_false_when_auth_status_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    entity = C300XIpv6FirewallPatchSwitch(entry)  # type: ignore[arg-type]
+
+    assert asyncio.run(entity._async_configured_endpoint_disabled()) is False
 
 
 def test_native_mqtt_bridge_switch_uses_read_only_status_and_toggles() -> None:
@@ -1163,6 +1412,35 @@ def test_no_auth_switch_disables_bootstrap_mode() -> None:
     assert entity.extra_state_attributes["maintenance_no_auth_allowed"] is False
 
 
+def test_no_auth_switch_enables_bootstrap_mode_without_tokens() -> None:
+    entry = _FakeEntry(
+        data={
+            "agent_token": "configured-agent-token",
+            "maintenance_token": "configured-maintenance-token",
+        }
+    )
+    entity = C300XNoAuthSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_turn_on())
+
+    assert entry.runtime_data.api.no_auth_sets == [(True, None, None, None)]
+    assert entity.is_on is True
+
+
+def test_no_auth_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    entity = C300XNoAuthSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
 def test_mdns_discovery_switch_updates_bootstrap_config() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -1180,6 +1458,34 @@ def test_mdns_discovery_switch_updates_bootstrap_config() -> None:
     assert entry.runtime_data.api.mdns_sets == [False]
 
 
+def test_mdns_discovery_switch_enables_bootstrap_discovery() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entity = C300XMdnsDiscoverySwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_turn_on())
+
+    assert entity.is_on is True
+    assert entry.runtime_data.api.mdns_sets == [True]
+
+
+def test_mdns_discovery_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    entity = C300XMdnsDiscoverySwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+
+
 def test_maintenance_no_auth_switch_updates_bootstrap_config() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -1195,6 +1501,34 @@ def test_maintenance_no_auth_switch_updates_bootstrap_config() -> None:
     assert entity.extra_state_attributes == {"no_auth": True}
     assert entry.runtime_data.api.auth_config_reads == 1
     assert entry.runtime_data.api.maintenance_no_auth_sets == [True]
+
+
+def test_maintenance_no_auth_switch_disables_bootstrap_access() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entity = C300XMaintenanceNoAuthSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_turn_off())
+
+    assert entity.is_on is False
+    assert entry.runtime_data.api.maintenance_no_auth_sets == [False]
+
+
+def test_maintenance_no_auth_switch_marks_unavailable_when_refresh_fails() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    entity = C300XMaintenanceNoAuthSwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
 
 
 def test_auth_config_switches_share_initial_refresh() -> None:
@@ -1217,3 +1551,85 @@ def test_auth_config_switches_share_initial_refresh() -> None:
     assert no_auth.is_on is True
     assert maintenance_no_auth.is_on is False
     assert mdns.is_on is True
+
+
+def test_auth_config_initial_refresh_marks_all_unavailable_on_error() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entry.runtime_data.api.auth_config_error = True
+    no_auth = C300XNoAuthSwitch(entry)  # type: ignore[arg-type]
+    maintenance_no_auth = C300XMaintenanceNoAuthSwitch(entry)  # type: ignore[arg-type]
+    mdns = C300XMdnsDiscoverySwitch(entry)  # type: ignore[arg-type]
+
+    asyncio.run(
+        _async_refresh_initial_states(
+            [no_auth, maintenance_no_auth, mdns]  # type: ignore[list-item]
+        )
+    )
+
+    assert no_auth.available is False
+    assert maintenance_no_auth.available is False
+    assert mdns.available is False
+
+
+def test_auth_config_push_updates_matching_switch_only() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"auth": {"supported": True, "configurable": True}},
+        )
+    )
+    entity = C300XMdnsDiscoverySwitch(entry)  # type: ignore[arg-type]
+
+    entity._handle_auth_config_status(
+        "other",
+        {"mdns_enabled": False},
+    )
+    assert entity.is_on is None
+
+    entity._handle_auth_config_status(
+        "entry-1",
+        {"mdns_enabled": False},
+    )
+
+    assert entity.is_on is False
+    assert getattr(entity, "wrote_state", False) is True
+
+
+def test_mqtt_push_updates_matching_native_and_legacy_switches() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={
+                "maintenance": {
+                    "supported": True,
+                    "mqtt_status": True,
+                    "mqtt_config": True,
+                    "legacy_mqtt_status": True,
+                    "legacy_mqtt_config": True,
+                }
+            },
+        )
+    )
+    native = C300XNativeMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+    legacy = C300XLegacyMqttBridgeSwitch(entry)  # type: ignore[arg-type]
+
+    native._handle_mqtt_status("other", {"native_enabled": True})
+    legacy._handle_mqtt_status("other", {"legacy_enabled": True})
+    assert native.is_on is None
+    assert legacy.is_on is None
+
+    native._handle_mqtt_status("entry-1", {"native_enabled": True})
+    legacy._handle_mqtt_status(
+        "entry-1",
+        {
+            "legacy_enabled": True,
+            "legacy_installed": True,
+            "native_enabled": False,
+            "exclusive": True,
+        },
+    )
+
+    assert native.is_on is True
+    assert legacy.is_on is True

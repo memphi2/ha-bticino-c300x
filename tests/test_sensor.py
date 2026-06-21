@@ -164,6 +164,8 @@ class _FakeApi:
         self.doorbell_video_status_calls = 0
         self.validate_setup_calls = 0
         self.system_metrics_error: Exception | None = None
+        self.answering_machine_messages_error: Exception | None = None
+        self.memos_error: Exception | None = None
         self.validate_setup_error: Exception | None = None
         self.doorbell_video_status_error: Exception | None = None
         self.doorbell_video_status: dict[str, Any] = {
@@ -198,6 +200,8 @@ class _FakeApi:
 
     async def async_memos(self) -> dict[str, Any]:
         self.memos_calls += 1
+        if self.memos_error is not None:
+            raise self.memos_error
         return {
             "available": True,
             "total": 2,
@@ -233,6 +237,8 @@ class _FakeApi:
 
     async def async_answering_machine_messages(self) -> dict[str, Any]:
         self.answering_machine_messages_calls += 1
+        if self.answering_machine_messages_error is not None:
+            raise self.answering_machine_messages_error
         return {
             "available": True,
             "total": 1,
@@ -1774,6 +1780,38 @@ def test_system_metric_sensor_goes_unavailable_on_api_error() -> None:
     asyncio.run(_run())
 
 
+def test_device_load_sensor_calculates_percent_from_load_and_cpu_count() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            system_metrics={
+                "load_1m": 0.5,
+                "load_5m": 0.25,
+                "load_15m": 0.125,
+                "cpu_count": 2,
+            }
+        )
+    )
+    entity = C300XDeviceLoadSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == 25.0
+    assert entity.extra_state_attributes["load_average_1m"] == 0.5
+
+
+def test_temperature_metric_sensor_exposes_source() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            system_metrics={
+                "temperature_c": 42.5,
+                "temperature_source": "thermal_zone0",
+            }
+        )
+    )
+    entity = C300XDeviceTemperatureSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == 42.5
+    assert entity.extra_state_attributes == {"source": "thermal_zone0"}
+
+
 def test_text_memos_sensor_exposes_counters_and_latest_text_metadata() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -1978,6 +2016,98 @@ def test_message_sensors_load_one_startup_snapshot() -> None:
         assert voice_sensor.native_value == 1
 
     asyncio.run(_run())
+
+
+def test_message_sensor_update_marks_unavailable_on_api_error() -> None:
+    api = _FakeApi()
+    api.answering_machine_messages_error = C300XAgentApiError("offline")
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    entity = C300XVoicemailMessagesSensor(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert api.answering_machine_messages_calls == 1
+
+
+def test_memo_sensor_update_marks_unavailable_on_api_error() -> None:
+    api = _FakeApi()
+    api.memos_error = C300XAgentApiError("offline")
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    entity = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False
+    assert api.memos_calls == 1
+
+
+def test_video_message_event_updates_cached_counts_and_schedules_refresh() -> None:
+    async def _run() -> None:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                answering_machine_messages={
+                    "available": True,
+                    "messages": [
+                        {
+                            "id": "message_1",
+                            "read": False,
+                            "has_video": True,
+                        }
+                    ],
+                }
+            )
+        )
+        entity = C300XVoicemailMessagesSensor(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+        event = types.SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "answering_machine_messages_changed",
+                "voicemail": {"available": True, "total": 2, "unread": 2},
+            }
+        )
+
+        entity._handle_agent_event(event)
+        await _drain_tasks()
+
+        assert entity.native_value == 1
+        assert entry.runtime_data.answering_machine_messages["total"] == 1
+        assert entry.runtime_data.api.answering_machine_messages_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_memo_refresh_signal_updates_availability() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(memos={"available": False, "text_total": 0})
+    )
+    entity = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
+
+    entity._handle_memos_refreshed("other")
+    assert getattr(entity, "wrote_state", False) is False
+
+    entity._handle_memos_refreshed("entry-1")
+
+    assert entity.available is False
+    assert entity.wrote_state is True
+
+
+def test_video_messages_refresh_signal_updates_availability() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            answering_machine_messages={"available": False, "total": 0}
+        )
+    )
+    entity = C300XVoicemailMessagesSensor(entry)  # type: ignore[arg-type]
+
+    entity._handle_video_messages_refreshed("other")
+    assert getattr(entity, "wrote_state", False) is False
+
+    entity._handle_video_messages_refreshed("entry-1")
+
+    assert entity.available is False
+    assert entity.wrote_state is True
 
 
 def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:

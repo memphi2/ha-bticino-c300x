@@ -12,8 +12,11 @@ import sys
 
 STRICT_TARGETS = (
     "custom_components/bticino_c300x/action.py",
+    "custom_components/bticino_c300x/agent_contracts",
     "custom_components/bticino_c300x/capabilities.py",
     "custom_components/bticino_c300x/config_schemas.py",
+    "custom_components/bticino_c300x/dashboard_entities.py",
+    "custom_components/bticino_c300x/dashboard_labels.py",
     "custom_components/bticino_c300x/data.py",
     "custom_components/bticino_c300x/discovery.py",
     "custom_components/bticino_c300x/event_payload.py",
@@ -23,6 +26,8 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/camera_media/sdp.py",
     "custom_components/bticino_c300x/camera_media/state_machine.py",
     "custom_components/bticino_c300x/camera_media/webrtc_session.py",
+    "custom_components/bticino_c300x/forwarding.py",
+    "custom_components/bticino_c300x/media_status.py",
     "custom_components/bticino_c300x/memos.py",
     "custom_components/bticino_c300x/use_cases/common.py",
     "custom_components/bticino_c300x/use_cases/device_actions.py",
@@ -34,6 +39,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/use_cases/ring_analysis.py",
     "custom_components/bticino_c300x/use_cases/ring_call.py",
     "custom_components/bticino_c300x/use_cases/ring_capture.py",
+    "custom_components/bticino_c300x/value_parsing.py",
     "custom_components/bticino_c300x/video.py",
     "custom_components/bticino_c300x/video_messages.py",
     "scripts/check_quality_scale.py",

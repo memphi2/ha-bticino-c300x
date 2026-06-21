@@ -1,14 +1,41 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 import json
 import os
+import sys
 import time
+import types
 import wave
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+homeassistant = sys.modules.setdefault(
+    "homeassistant",
+    types.ModuleType("homeassistant"),
+)
+homeassistant.__path__ = []
+exceptions = sys.modules.setdefault(
+    "homeassistant.exceptions",
+    types.ModuleType("homeassistant.exceptions"),
+)
+
+
+class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+    pass
+
+
+exceptions.HomeAssistantError = getattr(
+    exceptions,
+    "HomeAssistantError",
+    _HomeAssistantError,
+)
+homeassistant.exceptions = exceptions
+sys.modules["homeassistant.exceptions"] = exceptions
+
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import ring_ai as ring_ai_module
@@ -18,12 +45,16 @@ from custom_components.bticino_c300x.ring_ai import (
     DEFAULT_RING_CAPTURE_METADATA_GLOB,
     _async_read_wav,
     _async_read_wyoming_event,
+    _async_ring_analysis_source,
     _async_ring_wav_path,
     _async_write_wyoming_event,
     _async_wyoming_transcribe,
+    _latest_ring_capture_metadata_path,
     _normalize_wyoming_result,
+    _read_capture_metadata,
     _result_path,
     _ring_analysis_source,
+    _ring_capture_metadata_path,
     _ring_wav_path,
     _safe_mtime,
     async_run_wyoming_ring_analysis,
@@ -124,6 +155,66 @@ def test_ring_ai_prefers_latest_capture_metadata_by_default(tmp_path: Path) -> N
     assert source["wav_path"] == wav
     assert source["capture_path"] == capture
     assert source["capture_payload"]["capture_id"] == "capture-1"
+
+
+def test_ring_ai_selects_newest_capture_metadata(tmp_path: Path) -> None:
+    hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+    c300x = tmp_path / "c300x"
+    older = c300x / "older.capture.json"
+    newer = c300x / "newer.capture.json"
+    wav = c300x / "latest.raw.wav"
+    _write_wav(wav)
+    older.write_text(
+        json.dumps({"capture_id": "old", "raw_wav_path": str(wav)}),
+        encoding="utf-8",
+    )
+    newer.write_text(
+        json.dumps({"capture_id": "new", "raw_wav_path": str(wav)}),
+        encoding="utf-8",
+    )
+    old_time = time.time() - 60
+    os.utime(older, (old_time, old_time))
+
+    assert _latest_ring_capture_metadata_path(hass) == newer
+    assert _ring_capture_metadata_path(hass, str(newer)) == newer
+
+
+def test_ring_ai_rejects_invalid_capture_metadata(tmp_path: Path) -> None:
+    hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+    capture = tmp_path / "c300x" / "latest.capture.json"
+    capture.parent.mkdir(parents=True)
+
+    capture.write_text("{bad-json", encoding="utf-8")
+    with pytest.raises(HomeAssistantError, match="invalid JSON"):
+        _read_capture_metadata(capture)
+
+    capture.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    with pytest.raises(HomeAssistantError, match="must be a JSON object"):
+        _read_capture_metadata(capture)
+
+    capture.write_text(json.dumps({"raw_wav_path": "/config/c300x/latest.raw.wav"}), encoding="utf-8")
+    with pytest.raises(HomeAssistantError, match="has no capture_id"):
+        _read_capture_metadata(capture)
+
+    with pytest.raises(HomeAssistantError, match="capture JSON file"):
+        _ring_capture_metadata_path(hass, str(capture.with_name("latest.json")))
+
+
+def test_ring_ai_async_source_uses_executor_when_available(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path)
+    wav = tmp_path / "c300x" / "latest.raw.wav"
+    _write_wav(wav)
+
+    source = asyncio.run(
+        _async_ring_analysis_source(
+            hass,
+            capture_path=None,
+            wav_path=str(wav),
+        )
+    )
+
+    assert source == {"wav_path": wav}
+    assert hass.executor_jobs == ["<lambda>"]
 
 
 def test_ring_ai_rejects_wav_that_does_not_match_capture_metadata(tmp_path: Path) -> None:

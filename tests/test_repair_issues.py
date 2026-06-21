@@ -315,6 +315,25 @@ def test_frontend_card_setup_hint_created_after_legacy_dismissal() -> None:
     )
 
 
+def test_frontend_card_setup_hint_created_after_previous_generation_marker() -> None:
+    entry = FakeEntry(
+        data={
+            CONF_FRONTEND_CARD_SETUP_DISMISSED: True,
+            CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION: "card-loader-v2",
+        },
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+        ),
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(FRONTEND_CARD_SETUP_HINT_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is True
+
+
 def test_frontend_card_setup_hint_cleared_after_current_repair_handled() -> None:
     entry = FakeEntry(
         data={

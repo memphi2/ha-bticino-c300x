@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import socket
 import sys
 import types
 from dataclasses import dataclass, field
@@ -84,10 +85,16 @@ from custom_components.bticino_c300x.data import (
 from custom_components.bticino_c300x.diagnostics import (
     _agent_info_diagnostics,
     _agent_write_diagnostics,
+    _async_installer_bundle_status,
+    _async_network_diagnostics,
     _capability_diagnostics,
+    _connection_diagnostics,
     _entity_domain_counts,
+    _event_state_diagnostics,
     _host_private_address,
     _isoformat,
+    _redact_error_message,
+    _route_diagnostics,
     _safe_error_summary,
     _safe_status_dict,
     _safe_system_metrics,
@@ -334,6 +341,132 @@ def test_config_entry_diagnostics_describe_unloaded_installation() -> None:
     }
 
 
+def test_network_diagnostics_uses_direct_route_without_executor(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.diagnostics._route_diagnostics",
+        lambda host, port: {
+            "resolved": True,
+            "selected_source_type": "ipv4",
+            "selected_target_type": "ipv4",
+            "same_lan_prefix_guess": host == "c300x.local" and port == 8091,
+            "error": None,
+        },
+    )
+    entry = _FakeEntry(data={CONF_AGENT_HOST: "c300x.local", CONF_AGENT_PORT: "bad"})
+
+    diagnostics = asyncio.run(
+        _async_network_diagnostics(SimpleNamespace(), entry)  # type: ignore[arg-type]
+    )
+
+    assert diagnostics["agent_endpoint"]["port"] == 8091
+    assert diagnostics["route"] == {
+        "resolved": True,
+        "selected_source_type": "ipv4",
+        "selected_target_type": "ipv4",
+        "same_lan_prefix_guess": True,
+        "error": None,
+    }
+
+
+def test_route_diagnostics_reports_resolution_and_unusable_route_errors(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("dns failed")),
+    )
+
+    assert _route_diagnostics("c300x.local", 8091)["error"] == "OSError"
+
+    class _FailingSocket:
+        def __enter__(self) -> _FailingSocket:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            _ = args
+
+        def connect(self, sockaddr: tuple[str, int]) -> None:
+            _ = sockaddr
+            raise OSError("route failed")
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (
+                socket.AF_INET,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("192.0.2.60", 8091),
+            )
+        ],
+    )
+    monkeypatch.setattr(socket, "socket", lambda *_args: _FailingSocket())
+
+    result = _route_diagnostics("c300x.local", 8091)
+
+    assert result["resolved"] is True
+    assert result["error"] == "no_usable_route"
+
+
+def test_route_diagnostics_reports_selected_udp_route(
+    monkeypatch: Any,
+) -> None:
+    class _FakeSocket:
+        def __enter__(self) -> _FakeSocket:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            _ = args
+
+        def connect(self, sockaddr: tuple[str, int]) -> None:
+            self.sockaddr = sockaddr
+
+        def getsockname(self) -> tuple[str, int]:
+            return ("192.0.2.20", 54321)
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (
+                socket.AF_INET,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("192.0.2.60", 8091),
+            )
+        ],
+    )
+    monkeypatch.setattr(socket, "socket", lambda *_args: _FakeSocket())
+
+    assert _route_diagnostics("c300x.local", 8091) == {
+        "resolved": True,
+        "selected_source_type": "ipv4",
+        "selected_target_type": "ipv4",
+        "same_lan_prefix_guess": True,
+        "error": None,
+    }
+
+
+def test_installer_bundle_status_uses_direct_call_without_executor(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.diagnostics.installer_bundle_status",
+        lambda: {"available": True, "reason": None},
+    )
+
+    assert asyncio.run(_async_installer_bundle_status(SimpleNamespace())) == {
+        "available": True,
+        "reason": None,
+    }
+
+
 def test_config_entry_diagnostics_reject_localhost_callback_override() -> None:
     entry = _FakeEntry(
         data={
@@ -551,6 +684,10 @@ def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
 def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
     assert _agent_info_diagnostics(None) is None
     assert _agent_info_diagnostics(SimpleNamespace(agent_info=[])) is None
+    assert _connection_diagnostics(None) is None
+    assert _connection_diagnostics(SimpleNamespace(connection_state=None)) is None
+    assert _event_state_diagnostics(None) is None
+    assert _event_state_diagnostics(SimpleNamespace(event_state=None)) is None
     assert _capability_diagnostics(None) is None
     assert _capability_diagnostics(SimpleNamespace(capabilities=[])) is None
     assert _safe_system_metrics(None) is None
@@ -558,6 +695,7 @@ def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
     empty_writes = _agent_write_diagnostics(_FakeEntry())  # type: ignore[arg-type]
     assert isinstance(empty_writes, dict)
     assert empty_writes["agent_write_count"] is None
+    assert _agent_write_diagnostics(SimpleNamespace()) is None  # type: ignore[arg-type]
     assert (
         _agent_write_diagnostics(  # type: ignore[arg-type]
             _FakeEntry(runtime_data=SimpleNamespace(agent_diagnostics=[]))
@@ -597,6 +735,14 @@ def test_diagnostics_value_helpers_redact_and_normalize_values() -> None:
         "message": "failed <url> for <ipv4> and <ipv6>",
     }
     assert _safe_error_summary("") is None
+    assert _safe_error_summary("   ") is None
+    assert _safe_error_summary("ConnectionError:   ") == {
+        "type": "ConnectionError",
+        "message": None,
+    }
+    assert _redact_error_message("failed via fe80::abcd%eth0 and port 8091") == (
+        "failed via <ipv6> and port 8091"
+    )
 
     private_a = ".".join(("192", "168", "1", "10"))
     private_b = ".".join(("192", "168", "1", "20"))

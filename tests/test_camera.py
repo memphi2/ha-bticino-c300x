@@ -104,6 +104,7 @@ from custom_components.bticino_c300x.camera import (
     C300XDoorbellCamera,
     _NativeWebRTCSession,
     _preload_dns_mdns_modules,
+    async_setup_entry,
 )
 from custom_components.bticino_c300x.camera_media import talkback as talkback_module
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
@@ -239,6 +240,33 @@ class _FakeEntry:
 
 def test_doorbell_camera_sets_visible_entity_icon() -> None:
     assert C300XDoorbellCamera._attr_icon == "mdi:cctv"
+
+
+def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> None:
+    async def _run() -> None:
+        unsupported = _FakeEntry()
+        unsupported.runtime_data.capabilities = {"doorbell_video": {"supported": False}}
+        supported = _FakeEntry()
+        supported.runtime_data.capabilities = {"doorbell_video": {"supported": True}}
+        unsupported_entities: list[Any] = []
+        supported_entities: list[Any] = []
+
+        await async_setup_entry(
+            SimpleNamespace(),  # type: ignore[arg-type]
+            unsupported,  # type: ignore[arg-type]
+            unsupported_entities.extend,
+        )
+        await async_setup_entry(
+            SimpleNamespace(),  # type: ignore[arg-type]
+            supported,  # type: ignore[arg-type]
+            supported_entities.extend,
+        )
+
+        assert unsupported_entities == []
+        assert len(supported_entities) == 1
+        assert isinstance(supported_entities[0], C300XDoorbellCamera)
+
+    asyncio.run(_run())
 
 
 def test_doorbell_camera_advertises_native_webrtc_frontend_stream() -> None:
@@ -493,6 +521,46 @@ def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
     assert camera._attr_is_streaming is True
     assert camera._audio_stream_path == "/doorbell"
     assert camera._recorder_stream_path == "/doorbell-recorder"
+
+
+def test_doorbell_camera_refresh_failure_marks_entity_unavailable() -> None:
+    class _FailingApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            raise RuntimeError("offline")
+
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=_FailingApi()))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    asyncio.run(camera.async_update())
+
+    assert camera._bridge_available is False
+    assert camera.available is False
+
+
+def test_doorbell_camera_webrtc_offer_reports_missing_aiortc() -> None:
+    async def _load_aiortc_modules() -> SimpleNamespace:
+        raise ImportError("aiortc")
+
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+    sent_messages: list[Any] = []
+
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(
+            camera.async_handle_async_webrtc_offer(
+                "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+                "session-1",
+                sent_messages.append,
+            )
+        )
+
+    assert sent_messages == [
+        {
+            "type": "error",
+            "code": "bticino_webrtc_unavailable",
+            "message": "aiortc is not installed",
+        }
+    ]
 
 
 def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:
@@ -979,6 +1047,166 @@ def test_doorbell_camera_on_demand_closes_stale_webrtc_before_admission() -> Non
     assert player.stopped is True
     assert api.stop_calls == 1
     assert api.activate_calls == [False]
+
+
+def test_doorbell_camera_on_demand_closes_finished_home_call_before_admission() -> None:
+    class _IdleAfterHomeCallApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            active = bool(self.activate_calls)
+            status["media_owner"] = "agent" if active else "idle"
+            status["window_available"] = active
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "agent" if active else "idle",
+                "home_call_running": False,
+                "home_call_active": False,
+                "home_call_answered": False,
+                "clients": 0,
+            }
+            return status
+
+        async def async_home_call_status(self) -> dict[str, Any]:
+            self.home_call_status_calls += 1
+            return {
+                "available": True,
+                "running": False,
+                "active": False,
+                "answered": False,
+                "rtp_proxy": False,
+                "target_audio_port": 0,
+                "rtp_packets": 7,
+                "rtcp_packets": 1,
+            }
+
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class _Player:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    api = _IdleAfterHomeCallApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._video_owner = "home_call"
+    camera._bridge_status = {
+        "media_owner": "home_call",
+        "home_call_running": True,
+        "home_call_active": True,
+        "home_call_answered": True,
+    }
+    sent_messages: list[Any] = []
+    peer = _Peer()
+    player = _Player()
+    session = _NativeWebRTCSession(
+        peer,
+        owner="home_call",
+        send_message=sent_messages.append,
+    )
+    session.player = player
+    camera._webrtc_sessions["home-call"] = session
+    _stub_rtsp_ready(camera)
+
+    stream_url = asyncio.run(camera._async_prepare_rtsp_stream(audio=False))
+
+    assert stream_url == "rtsp://127.0.0.1:6554/doorbell-video"
+    assert camera._webrtc_sessions == {}
+    assert peer.closed is True
+    assert player.stopped is True
+    assert sent_messages == [{"type": "closed", "reason": "home_call_ended"}]
+    assert api.home_call_status_calls == 1
+    assert api.home_call_stop_calls == 0
+    assert api.stop_calls == 0
+    assert api.activate_calls == [False]
+    assert camera.extra_state_attributes["video_owner"] == "agent"
+
+
+def test_doorbell_camera_keeps_active_home_call_session_during_preflight() -> None:
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    peer = _Peer()
+    camera._webrtc_sessions["home-call"] = _NativeWebRTCSession(
+        peer,
+        owner="home_call",
+    )
+
+    asyncio.run(camera._async_close_finished_home_call_sessions())
+
+    assert "home-call" in camera._webrtc_sessions
+    assert peer.closed is False
+    assert entry.runtime_data.api.home_call_status_calls == 1
+    assert camera._bridge_status["home_call_active"] is True
+    assert camera.extra_state_attributes["video_owner"] == "home_call"
+
+
+def test_doorbell_camera_keeps_home_call_session_when_status_refresh_fails() -> None:
+    class _FailingHomeCallApi(_FakeApi):
+        async def async_home_call_status(self) -> dict[str, Any]:
+            self.home_call_status_calls += 1
+            raise RuntimeError("status failed")
+
+    class _Peer:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    api = _FailingHomeCallApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    peer = _Peer()
+    camera._webrtc_sessions["home-call"] = _NativeWebRTCSession(
+        peer,
+        owner="home_call",
+    )
+
+    asyncio.run(camera._async_close_finished_home_call_sessions())
+
+    assert "home-call" in camera._webrtc_sessions
+    assert peer.closed is False
+    assert api.home_call_status_calls == 1
+
+
+def test_doorbell_camera_refresh_video_status_or_none_suppresses_errors() -> None:
+    class _FailingApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            raise RuntimeError("offline")
+
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=_FailingApi()))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    status = asyncio.run(camera._async_refresh_video_status_or_none())
+
+    assert status is None
+
+
+def test_doorbell_camera_audio_gain_is_clamped_and_uses_default_on_invalid() -> None:
+    low_entry = _FakeEntry(data={"doorstation_audio_gain_db": -99})
+    high_entry = _FakeEntry(data={"doorstation_audio_gain_db": 99})
+    invalid_entry = _FakeEntry(data={"doorstation_audio_gain_db": "bad"})
+
+    assert C300XDoorbellCamera(low_entry)._doorstation_audio_gain_db() == -12.0  # type: ignore[arg-type]
+    assert C300XDoorbellCamera(high_entry)._doorstation_audio_gain_db() == 12.0  # type: ignore[arg-type]
+    assert C300XDoorbellCamera(invalid_entry)._doorstation_audio_gain_db() == 9.5  # type: ignore[arg-type]
 
 
 def test_doorbell_camera_rtsp_policy_allows_second_ring_preview_when_agent_shares() -> None:

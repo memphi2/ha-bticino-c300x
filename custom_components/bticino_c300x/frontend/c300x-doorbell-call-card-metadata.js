@@ -6,23 +6,19 @@ const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doo
 const C300X_METADATA_TRANSLATIONS = {
   en: {
     card_description: "Doorbell video and Home Call controls for BTicino C300X.",
-    doorbell_call: "Doorbell / On-demand",
-    home_call: "Home Call",
+    doorstation_card: "Doorstation card",
   },
   de: {
     card_description: "Türvideo- und Home-Call-Bedienung für BTicino C300X.",
-    doorbell_call: "Türklingel / On-Demand",
-    home_call: "Home Call",
+    doorstation_card: "Türstation-Card",
   },
   fr: {
     card_description: "Contrôles vidéo de sonnette et Home Call pour BTicino C300X.",
-    doorbell_call: "Sonnette / à la demande",
-    home_call: "Home Call",
+    doorstation_card: "Carte platine",
   },
   it: {
     card_description: "Controlli video campanello e Home Call per BTicino C300X.",
-    doorbell_call: "Campanello / on-demand",
-    home_call: "Home Call",
+    doorstation_card: "Scheda postazione porta",
   },
 };
 
@@ -56,7 +52,7 @@ function c300xMetadataEntityId(domain, baseObjectId, suffix) {
 function c300xMetadataStubConfig(entity) {
   return {
     entity: entity || c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID),
-    mode: "doorbell_call",
+    mode: "auto",
     hangup_script: "",
   };
 }
@@ -74,18 +70,10 @@ function c300xMetadataEntitySuggestion(hass, entityId) {
     }
     return [
       {
-        label: c300xMetadataLocalize(hass, "doorbell_call"),
+        label: c300xMetadataLocalize(hass, "doorstation_card"),
         config: {
           type: C300X_CARD_TYPE,
           ...c300xMetadataStubConfig(entityId),
-        },
-      },
-      {
-        label: c300xMetadataLocalize(hass, "home_call"),
-        config: {
-          type: C300X_CARD_TYPE,
-          ...c300xMetadataStubConfig(entityId),
-          mode: "home_call",
         },
       },
     ];

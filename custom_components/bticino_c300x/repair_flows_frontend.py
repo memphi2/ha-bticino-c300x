@@ -183,10 +183,7 @@ async def _async_setup_lovelace_cards(
         return _lovelace_dashboard_path(dashboard_path, view_path)
 
     cards = _cards_for_view(view)
-    if not _dashboard_has_c300x_card(view, camera_entity_id, "home_call"):
-        cards.append(_home_call_card(camera_entity_id))
-    if not _dashboard_has_c300x_card(view, camera_entity_id, "doorbell_call"):
-        cards.append(_doorbell_card(camera_entity_id))
+    cards.append(_doorstation_card(camera_entity_id))
 
     await dashboard.async_save(config)
     return _lovelace_dashboard_path(dashboard_path, view_path)
@@ -366,22 +363,19 @@ def _cards_for_view(view: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _dashboard_has_c300x_cards(config: dict[str, Any], camera_entity_id: str) -> bool:
-    """Return true when both generated C300X card modes already exist."""
+    """Return true when the generated central C300X card already exists."""
 
-    return _dashboard_has_c300x_card(
-        config,
-        camera_entity_id,
-        "home_call",
-    ) and _dashboard_has_c300x_card(config, camera_entity_id, "doorbell_call")
+    modes = _dashboard_c300x_card_modes(config, camera_entity_id)
+    return "auto" in modes or {"doorbell_call", "home_call"}.issubset(modes)
 
 
-def _dashboard_has_c300x_card(
+def _dashboard_c300x_card_modes(
     config: dict[str, Any],
     camera_entity_id: str,
-    mode: str,
-) -> bool:
-    """Return true when a generated C300X card mode already exists."""
+) -> set[str]:
+    """Return generated C300X card modes already present in a dashboard."""
 
+    modes: set[str] = set()
     for card in _iter_lovelace_cards(config):
         if not isinstance(card, dict):
             continue
@@ -389,10 +383,10 @@ def _dashboard_has_c300x_card(
             continue
         if card.get("entity") != camera_entity_id:
             continue
-        card_mode = str(card.get("mode") or "doorbell_call")
-        if card_mode == mode:
-            return True
-    return False
+        card_mode = str(card.get("mode") or "auto")
+        if card_mode in {"auto", "doorbell_call", "home_call"}:
+            modes.add(card_mode)
+    return modes
 
 
 def _remove_state_entity_overrides_from_existing_cards(
@@ -430,28 +424,15 @@ def _iter_lovelace_cards(value: Any):
             yield from _iter_lovelace_cards(item)
 
 
-def _home_call_card(
+def _doorstation_card(
     camera_entity_id: str,
 ) -> dict[str, Any]:
-    """Return the generated Home Call Lovelace card config."""
+    """Return the generated central doorstation Lovelace card config."""
 
     return {
         "type": _DOORBELL_CALL_CARD_TYPE,
         "entity": camera_entity_id,
-        "mode": "home_call",
-        "name": "C300X Home Call",
-        "grid_options": {"columns": 6, "rows": 1},
-    }
-
-
-def _doorbell_card(
-    camera_entity_id: str,
-) -> dict[str, Any]:
-    """Return the generated Doorbell / On-demand Lovelace card config."""
-
-    return {
-        "type": _DOORBELL_CALL_CARD_TYPE,
-        "entity": camera_entity_id,
+        "mode": "auto",
         "grid_options": {"columns": 12, "rows": 7},
     }
 
@@ -633,5 +614,3 @@ def _mark_frontend_card_setup_dismissed(hass: HomeAssistant, entry: Any) -> None
             ),
         },
     )
-
-

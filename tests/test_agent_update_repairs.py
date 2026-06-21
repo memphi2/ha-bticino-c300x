@@ -1030,13 +1030,7 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
         {
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
-            "mode": "home_call",
-            "name": "C300X Home Call",
-            "grid_options": {"columns": 6, "rows": 1},
-        },
-        {
-            "type": "custom:c300x-doorbell-call-card",
-            "entity": "camera.bticino_c300x_doorbell_camera",
+            "mode": "auto",
             "grid_options": {"columns": 12, "rows": 7},
         },
     ]
@@ -1163,12 +1157,10 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
     view = selected_dashboard.config["views"][0]
     assert view["path"] == "door"
     assert view["title"] == "C300X"
-    assert [card["mode"] for card in view["sections"][0]["cards"][:1]] == [
-        "home_call"
-    ]
+    assert [card["mode"] for card in view["sections"][0]["cards"][:1]] == ["auto"]
     assert "home_call_entity" not in view["sections"][0]["cards"][0]
-    assert view["sections"][0]["cards"][1]["type"] == "custom:c300x-doorbell-call-card"
-    assert "doorbell_state_entity" not in view["sections"][0]["cards"][1]
+    assert view["sections"][0]["cards"][0]["type"] == "custom:c300x-doorbell-call-card"
+    assert "doorbell_state_entity" not in view["sections"][0]["cards"][0]
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:

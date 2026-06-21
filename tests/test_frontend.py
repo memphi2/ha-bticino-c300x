@@ -380,7 +380,10 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "type: C300X_CARD_TYPE" in source
     assert "return {\n      type: C300X_CARD_TYPE," not in source
     assert 'throw new Error("entity is required")' not in source
-    assert 'entity: config.entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID)' in source
+    assert 'mode: "auto"' in resolver_source
+    assert "c300xResolveEntity" in source
+    assert "c300xRelatedEntity" in source
+    assert "C300X_MEDIA_READINESS_OBJECT_ID" in source
     assert 'getGridOptions()' in source
     assert "rows: 5" in source
     assert "columns: 12" in source
@@ -405,6 +408,8 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "C300X_HOME_CALL_TRANSLATION_KEY" not in source
     assert ".filter((entityId)" not in source
     assert ".sort((left, right)" not in source
+    assert '{ value: "auto", label: this._label("auto_mode") }' in source
+    assert 'required: false' in source
     assert 'name: "state_entity"' not in source
     assert 'name: "state_label"' not in source
     assert 'name: "doorbell_state_entity"' not in source
@@ -422,12 +427,35 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "config.doorbell_state_entity" not in resolver_source
     assert "config.home_call_entity" not in resolver_source
     assert "bticino_c300x_doorbell_camera" in resolver_source
+    assert "bticino_c300x_media_readiness" in resolver_source
     assert "script.c300x_stop_doorbell_call_simulation" not in source
     assert "<ha-button" not in source
     assert "Answer / Talkback" not in source
     assert "Offer Audio" not in source
     assert "this._closing || !this._pc" in webrtc_source
     assert "unsub();" in webrtc_source
+
+
+def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
+    resolver_source = CARD_RESOLVER_SOURCE.read_text(encoding="utf-8")
+    translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
+
+    assert 'mode: "auto"' in resolver_source
+    assert 'mode: "auto"' in metadata_source
+    assert 'label: c300xLocalize(hass, "doorstation_card")' in source
+    assert 'label: c300xMetadataLocalize(hass, "doorstation_card")' in metadata_source
+    assert 'mode: "home_call"' not in metadata_source
+    assert 'mode: "doorbell_call"' not in metadata_source
+    assert 'class="home-action hidden"' in source
+    assert "_handleHomeCallAction" in source
+    assert "_activeHomeCallSession" in source
+    assert "doorstationBlockedByHomeCall" in source
+    assert 'class="readiness hidden"' in source
+    assert '"/config/repairs"' in source
+    assert "media_ready" in translations_source
+    assert "open_repairs" in translations_source
 
 
 def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
@@ -475,7 +503,7 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'action === "external_call"' in state_source
     assert 'action === "busy"' in state_source
     assert 'action === "unavailable"' in state_source
-    assert "this._actionButtonEl.disabled = view.actionDisabled;" in source
+    assert "this._actionButtonEl.disabled = view.actionDisabled || doorstationBlockedByHomeCall;" in source
     assert 'if (action === "external_call") {' in source
     assert "return attributes.external_media_active === true" in state_source
     assert 'attributes.video_owner === "external_media"' in state_source
@@ -655,7 +683,7 @@ def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() ->
     assert 'from "./c300x-ringback-tone.js"' in source
     assert "new C300XRingbackTone" in source
     assert "c300xIsHomeCallRinging(cameraEntity)" in state_source
-    assert "this._syncRingbackTone(view.ringbackActive);" in source
+    assert "this._syncRingbackTone(view.ringbackActive || (autoMode && homeView.ringbackActive));" in source
     assert "this._stopRingbackTone();" in source
     assert 'mediaState === "home_call_starting"' in state_source
     assert 'mediaState === "home_call_ringing"' in state_source

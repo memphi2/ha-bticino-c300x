@@ -6,6 +6,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from ..value_parsing import (
+    optional_int as _optional_int,
+)
+from ..value_parsing import (
+    optional_string as _optional_string,
+)
+
 
 class MediaState(StrEnum):
     """Derived C300X media state."""
@@ -309,25 +316,6 @@ def _status_bool(
     if status is not None and key in status:
         return bool(status.get(key))
     return fallback
-
-
-def _optional_int(value: object) -> int | None:
-    if value is None:
-        return None
-    if not isinstance(value, (int, float, str)):
-        return None
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return None
-    return result
-
-
-def _optional_string(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _output(

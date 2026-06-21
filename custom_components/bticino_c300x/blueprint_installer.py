@@ -14,6 +14,11 @@ _LOGGER = logging.getLogger(__name__)
 
 _SOURCE_DIR = Path(__file__).with_name("blueprints") / "automation" / DOMAIN
 _TARGET_RELATIVE_DIR = ("blueprints", "automation", DOMAIN)
+_OBSOLETE_BLUEPRINT_FILES = frozenset(
+    {
+        "doorbell_call_notification.yaml",
+    }
+)
 
 
 async def async_install_bundled_blueprints(hass: HomeAssistant) -> None:
@@ -32,6 +37,12 @@ def install_bundled_blueprints(target_dir: Path) -> list[Path]:
         _LOGGER.debug("C300X bundled blueprint directory is missing: %s", _SOURCE_DIR)
         return []
     target_dir.mkdir(parents=True, exist_ok=True)
+    removed = 0
+    for filename in _OBSOLETE_BLUEPRINT_FILES:
+        target = target_dir / filename
+        if target.exists():
+            target.unlink()
+            removed += 1
     installed: list[Path] = []
     for source in sorted(_SOURCE_DIR.glob("*.yaml")):
         target = target_dir / source.name
@@ -43,6 +54,12 @@ def install_bundled_blueprints(target_dir: Path) -> list[Path]:
         _LOGGER.info(
             "Installed %d C300X automation blueprint(s) into %s",
             len(installed),
+            target_dir,
+        )
+    if removed:
+        _LOGGER.info(
+            "Removed %d obsolete C300X automation blueprint(s) from %s",
+            removed,
             target_dir,
         )
     return installed

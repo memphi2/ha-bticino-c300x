@@ -303,13 +303,6 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
                 self._handle_agent_info_changed,
             )
         )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_SYSTEM_METRICS_CHANGED,
-                self._handle_system_metrics_changed,
-            )
-        )
 
     @property
     def native_value(self) -> str:
@@ -373,11 +366,6 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
 
     @callback
     def _handle_agent_info_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_system_metrics_changed(self, entry_id: str) -> None:
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
 

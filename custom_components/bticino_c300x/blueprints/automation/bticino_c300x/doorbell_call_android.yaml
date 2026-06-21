@@ -179,13 +179,6 @@ action:
         importance: max
         priority: high
         ttl: 0
-        push:
-          sound:
-            name: default
-            critical: 1
-            volume: 1
-          interruption-level: critical
-          category: camera
         timeout: "{{ notification_timeout_seconds | int(60) }}"
         persistent: true
         sticky: "true"

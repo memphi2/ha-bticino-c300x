@@ -313,6 +313,13 @@ def maintenance_action_is_advertised(
     )
 
 
+def entry_maintenance_action_is_advertised(entry: Any, action: str) -> bool:
+    """Return true when a config entry advertises a maintenance action."""
+
+    capabilities = getattr(entry.runtime_data, "capabilities", {})
+    return maintenance_action_is_advertised(capabilities, action)
+
+
 def answering_machine_messages_supported(capabilities: dict[str, Any]) -> bool:
     """Return true when answering-machine video message metadata is supported."""
 

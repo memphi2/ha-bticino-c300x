@@ -6,6 +6,8 @@ import types
 from dataclasses import dataclass, field
 from typing import Any
 
+import pytest
+
 homeassistant = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
 homeassistant.__path__ = []
 components = sys.modules.setdefault(
@@ -77,7 +79,9 @@ from custom_components.bticino_c300x.repair_flows_frontend import (  # noqa: E40
     _LOVELACE_VIEW_FIELD,
     FrontendCardSetupRepairFlow,
     _async_setup_lovelace_cards,
+    _cards_for_view,
     _dashboard_select_options,
+    _LovelaceCardSetupError,
     _normalize_lovelace_target,
 )
 from custom_components.bticino_c300x.repairs import (  # noqa: E402
@@ -394,6 +398,55 @@ def test_frontend_card_repair_flow_init_ignores_internal_flow_data(monkeypatch) 
     }
 
 
+def test_frontend_card_repair_confirm_shows_form(monkeypatch) -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    flow = FrontendCardSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._dashboard_selector",
+        lambda _hass: str,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._text_selector",
+        lambda: str,
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "confirm"
+    assert result["description_placeholders"] == {
+        "dashboard_path": "/lovelace/c300x",
+        "entry_title": "entry-1",
+    }
+
+
+def test_frontend_card_repair_confirm_reports_invalid_target(monkeypatch) -> None:
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    flow = FrontendCardSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._dashboard_selector",
+        lambda _hass: str,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_flows_frontend._text_selector",
+        lambda: str,
+    )
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_confirm(
+            {
+                _LOVELACE_DASHBOARD_FIELD: "dashboard-test",
+                _LOVELACE_VIEW_FIELD: "door/camera",
+            }
+        )
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "lovelace_config_invalid"}
+
+
 def test_frontend_card_repair_can_be_ignored() -> None:
     """Ignoring the Lovelace card repair persists the dismissal."""
 
@@ -416,6 +469,67 @@ def test_frontend_card_repair_can_be_ignored() -> None:
     assert IGNORED_ISSUES == [
         (DOMAIN, "frontend_card_setup_hint_entry-1", True),
     ]
+
+
+def test_frontend_card_helpers_reject_invalid_lovelace_cards_container() -> None:
+    with pytest.raises(_LovelaceCardSetupError) as err:
+        _cards_for_view({"sections": [{"cards": "not-a-list"}], "cards": "bad"})
+
+    assert err.value.error_key == "lovelace_config_invalid"
+
+
+def test_frontend_card_repair_reports_missing_camera_entity(monkeypatch) -> None:
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+
+    class FakeEntityRegistry:
+        def async_get_entity_id(
+            self,
+            _domain: str,
+            _platform: str,
+            _unique_id: str,
+        ) -> None:
+            return None
+
+    class FakeLovelaceDashboard:
+        mode = "storage"
+
+        async def async_load(self, _force: bool) -> dict[str, Any]:
+            return {"views": []}
+
+        async def async_save(self, _config: dict[str, Any]) -> None:
+            raise AssertionError("dashboard must not be saved without a camera entity")
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    hass.entity_registry = FakeEntityRegistry()
+    hass.data["lovelace"] = types.SimpleNamespace(
+        dashboards={None: FakeLovelaceDashboard()}
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.helpers.entity_registry",
+        entity_registry,
+    )
+    monkeypatch.setattr(
+        sys.modules["homeassistant.helpers"],
+        "entity_registry",
+        entity_registry,
+        raising=False,
+    )
+    entity_registry.async_get = lambda _hass: hass.entity_registry
+
+    with pytest.raises(_LovelaceCardSetupError) as err:
+        asyncio.run(_async_setup_lovelace_cards(hass, entry))  # type: ignore[arg-type]
+
+    assert err.value.error_key == "camera_entity_missing"
 
 
 def test_callback_url_repair_flow_stores_valid_override_and_reloads(monkeypatch) -> None:

@@ -12,6 +12,7 @@ from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .json_io import async_write_json_file
 from .ring_capture import DEFAULT_RING_CAPTURE_METADATA_GLOB, _safe_c300x_path
 
 DEFAULT_RING_WAV_GLOB = "/config/c300x/*.raw.wav"
@@ -51,7 +52,7 @@ async def async_run_wyoming_ring_analysis(
         wav,
         language=language,
     )
-    await _async_write_json(
+    await async_write_json_file(
         hass,
         target,
         _normalize_wyoming_result(
@@ -406,16 +407,3 @@ def _normalize_wyoming_result(
             }
         )
     return result
-
-
-async def _async_write_json(hass: Any, path: Path, payload: dict[str, Any]) -> None:
-    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-
-    def _write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-
-    if hasattr(hass, "async_add_executor_job"):
-        await hass.async_add_executor_job(_write)
-        return
-    await asyncio.to_thread(_write)

@@ -12,14 +12,15 @@ to:
 ```
 
 They then appear in Home Assistant under **Settings -> Automations & scenes ->
-Blueprints**. Existing blueprint files are not overwritten.
+Blueprints**. Existing current blueprint files are not overwritten. Obsolete
+C300X blueprint files that were bundled by earlier releases can be removed from
+this integration's blueprint folder during startup.
 
 ## Included Blueprints
 
 | Blueprint | Purpose |
 | --- | --- |
 | C300X Doorbell notification | Run a notification action when the doorbell rings. Select the C300X device; the blueprint finds the camera entity. |
-| C300X Doorbell call notification | Notify only when Ring Call can be answered from Home Assistant. Select the C300X device; the blueprint finds the matching entities. |
 | C300X Ring Call Android phone alert | Ring an Android phone with Answer, Hang Up and Open actions. |
 | C300X Ring Call iOS phone alert | Ring an iPhone with critical sound plus Answer, Hang Up and Open actions. |
 | C300X Ring capture | Capture a short MP4 plus local WAV/JPEG files when the doorbell rings. Select the C300X device; the blueprint finds the media-readiness sensor. |
@@ -36,7 +37,7 @@ Blueprint**.
 Start with **Media readiness**. Ring Call notification and capture should only
 run when the media setup is `ready` or `warning`.
 
-For Ring Call notifications, select the C300X device. The blueprints derive the
+For Ring Call phone alerts, select the C300X device. The blueprints derive the
 matching forwarding select, media-readiness sensor and camera from that device.
 Forwarding must be set to **Home Assistant**. The doorbell-event blueprints use
 the C300X event metadata to target the matching config entry, so no manual entry
@@ -78,11 +79,12 @@ For capture and transcription, the default paths are:
 The capture files below `/config/c300x/` are overwritten on each run so the
 directory does not grow indefinitely.
 
-## Notification Actions
+## Custom Notification Actions
 
-The event and generic call notification blueprints intentionally leave the
-notification action to you.
-That keeps mobile-app, persistent-notification and script-based setups possible.
+The simple Doorbell notification blueprint intentionally leaves the notification
+action to you. That keeps mobile-app, persistent-notification and script-based
+setups possible when you only want a doorbell event and do not want to answer a
+Ring Call.
 
 The action can use these blueprint variables:
 

@@ -12,13 +12,13 @@ import pytest
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import ring_ai as ring_ai_module
+from custom_components.bticino_c300x.json_io import async_write_json_file
 from custom_components.bticino_c300x.ring_ai import (
     DEFAULT_RING_AI_RESULT_PATH,
     DEFAULT_RING_CAPTURE_METADATA_GLOB,
     _async_read_wav,
     _async_read_wyoming_event,
     _async_ring_wav_path,
-    _async_write_json,
     _async_write_wyoming_event,
     _async_wyoming_transcribe,
     _normalize_wyoming_result,
@@ -467,7 +467,7 @@ def test_write_json_uses_thread_fallback(tmp_path: Path) -> None:
     target = tmp_path / "c300x" / "analysis" / "result.json"
 
     asyncio.run(
-        _async_write_json(
+        async_write_json_file(
             SimpleNamespace(config=_FakeConfig(tmp_path)),
             target,
             {"transcript": "Open"},

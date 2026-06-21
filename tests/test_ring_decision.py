@@ -1,12 +1,39 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import asyncio
 import json
+import sys
+import types
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+homeassistant = sys.modules.setdefault(
+    "homeassistant",
+    types.ModuleType("homeassistant"),
+)
+homeassistant.__path__ = getattr(homeassistant, "__path__", [])
+exceptions = sys.modules.setdefault(
+    "homeassistant.exceptions",
+    types.ModuleType("homeassistant.exceptions"),
+)
+
+
+class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+    pass
+
+
+exceptions.HomeAssistantError = getattr(
+    exceptions,
+    "HomeAssistantError",
+    _HomeAssistantError,
+)
+homeassistant.exceptions = exceptions
+
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import ring_decision as ring_decision_module
@@ -18,6 +45,7 @@ from custom_components.bticino_c300x.ring_decision import (
     _ring_decision_path,
     _ring_result_path,
     async_evaluate_ring_analysis,
+    async_mark_ring_capture_used,
 )
 
 
@@ -281,6 +309,146 @@ def test_evaluate_ring_analysis_blocks_stale_capture_for_unlock(tmp_path: Path) 
     assert evaluated.matched is False
     payload = json.loads(decision.read_text(encoding="utf-8"))
     assert payload["capture_guardrail_reasons"] == ["capture_stale"]
+
+
+def test_mark_ring_capture_used_ignores_empty_capture_id(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path)
+
+    asyncio.run(async_mark_ring_capture_used(hass, ""))
+    asyncio.run(async_mark_ring_capture_used(hass, None))
+
+    assert not (tmp_path / "c300x" / "analysis" / "used_captures.json").exists()
+
+
+def test_evaluate_ring_analysis_requires_capture_metadata(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path)
+    result = tmp_path / "c300x" / "analysis" / "result.json"
+    decision = tmp_path / "c300x" / "analysis" / "decision.json"
+    result.parent.mkdir(parents=True)
+    result.write_text(
+        json.dumps({"transcript": "Open", "phrase_match": True}),
+        encoding="utf-8",
+    )
+
+    evaluated = asyncio.run(
+        async_evaluate_ring_analysis(
+            hass,
+            result_path=str(result),
+            decision_path=str(decision),
+            require_capture=True,
+        )
+    )
+
+    assert evaluated.phrase_match is True
+    assert evaluated.matched is False
+    payload = json.loads(decision.read_text(encoding="utf-8"))
+    assert payload["capture_guardrail_reasons"] == [
+        "missing_capture_id",
+        "missing_capture_path",
+    ]
+
+
+def test_evaluate_ring_analysis_blocks_mismatched_capture_metadata(
+    tmp_path: Path,
+) -> None:
+    hass = _FakeHass(tmp_path)
+    result_wav = tmp_path / "c300x" / "result.raw.wav"
+    capture_wav = tmp_path / "c300x" / "capture.raw.wav"
+    capture = tmp_path / "c300x" / "latest.capture.json"
+    result = tmp_path / "c300x" / "analysis" / "result.json"
+    decision = tmp_path / "c300x" / "analysis" / "decision.json"
+    result_wav.parent.mkdir(parents=True)
+    result.parent.mkdir(parents=True)
+    result_wav.write_bytes(b"result")
+    capture_wav.write_bytes(b"capture")
+    capture.write_text(
+        json.dumps(
+            {
+                "capture_id": "other-capture",
+                "created_at": "not-a-date",
+                "raw_wav_path": str(capture_wav),
+            }
+        ),
+        encoding="utf-8",
+    )
+    result.write_text(
+        json.dumps(
+            {
+                "capture_id": "capture-1",
+                "capture_path": str(capture),
+                "wav_path": str(result_wav),
+                "transcript": "Open",
+                "phrase_match": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evaluated = asyncio.run(
+        async_evaluate_ring_analysis(
+            hass,
+            result_path=str(result),
+            decision_path=str(decision),
+            consume_on_match=True,
+        )
+    )
+
+    assert evaluated.matched is False
+    payload = json.loads(decision.read_text(encoding="utf-8"))
+    assert payload["capture_guardrail_reasons"] == [
+        "capture_id_mismatch",
+        "capture_wav_mismatch",
+        "capture_stale",
+    ]
+
+
+def test_evaluate_ring_analysis_treats_invalid_used_capture_file_as_unused(
+    tmp_path: Path,
+) -> None:
+    hass = _FakeHass(tmp_path)
+    wav = tmp_path / "c300x" / "latest.raw.wav"
+    capture = tmp_path / "c300x" / "latest.capture.json"
+    used = tmp_path / "c300x" / "analysis" / "used_captures.json"
+    result = tmp_path / "c300x" / "analysis" / "result.json"
+    decision = tmp_path / "c300x" / "analysis" / "decision.json"
+    wav.parent.mkdir(parents=True)
+    used.parent.mkdir(parents=True)
+    wav.write_bytes(b"fake wav")
+    used.write_text("{", encoding="utf-8")
+    capture.write_text(
+        json.dumps(
+            {
+                "capture_id": "capture-1",
+                "created_at": datetime.now(UTC).isoformat(),
+                "raw_wav_path": str(wav),
+            }
+        ),
+        encoding="utf-8",
+    )
+    result.write_text(
+        json.dumps(
+            {
+                "capture_id": "capture-1",
+                "capture_path": str(capture),
+                "wav_path": str(wav),
+                "transcript": "Open",
+                "phrase_match": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evaluated = asyncio.run(
+        async_evaluate_ring_analysis(
+            hass,
+            result_path=str(result),
+            decision_path=str(decision),
+            consume_on_match=True,
+        )
+    )
+
+    assert evaluated.matched is True
+    assert json.loads(used.read_text(encoding="utf-8"))["capture_id"] == "capture-1"
 
 
 def test_evaluate_ring_analysis_uses_payload_match_without_executor(

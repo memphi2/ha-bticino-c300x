@@ -72,6 +72,7 @@ helpers.entity = entity
 helpers.selector = None
 sys.modules.pop("homeassistant.helpers.selector", None)
 
+import custom_components.bticino_c300x.executor as executor_module  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
     dashboard_entity_display_overrides_from_fields,
 )
@@ -211,6 +212,7 @@ class FakeApi:
     stair_light_calls: int = 0
     last_stair_light_address: str | None = None
     unlock_calls: list[str] = field(default_factory=list)
+    answering_machine_enabled: bool = False
 
     async def async_stair_light(self, address: str) -> dict[str, bool]:
         self.stair_light_calls += 1
@@ -220,6 +222,16 @@ class FakeApi:
     async def async_unlock_door(self, lock_id: str) -> dict[str, bool]:
         self.unlock_calls.append(lock_id)
         return {"ok": True}
+
+    async def async_answering_machine_status(self) -> dict[str, bool]:
+        return {"enabled": self.answering_machine_enabled}
+
+    async def async_set_answering_machine_enabled(
+        self,
+        enabled: bool,
+    ) -> dict[str, bool]:
+        self.answering_machine_enabled = enabled
+        return {"enabled": enabled}
 
 
 @dataclass(slots=True)
@@ -452,6 +464,134 @@ def test_async_execute_dashboard_action_selects_input_select_option() -> None:
             True,
         )
     ]
+
+
+def test_async_execute_dashboard_action_turns_on_selected_scene_and_script() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(
+        options={
+            CONF_DASHBOARD_ENTITIES: [
+                "scene.evening",
+                "script.leave_home",
+            ]
+        }
+    )
+
+    scene_result = run(async_execute_dashboard_action(hass, entry, "scene.evening"))
+    script_result = run(
+        async_execute_dashboard_action(hass, entry, "script.leave_home")
+    )
+
+    assert scene_result == {"ok": True, "action_id": "scene.evening"}
+    assert script_result == {"ok": True, "action_id": "script.leave_home"}
+    assert hass.services.calls == [
+        ("scene", "turn_on", {"entity_id": "scene.evening"}, True),
+        ("script", "turn_on", {"entity_id": "script.leave_home"}, True),
+    ]
+
+
+def test_async_execute_dashboard_action_rejects_read_only_entity() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["sensor.temperature"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "sensor.temperature"))
+    except ValueError as err:
+        assert str(err) == "read_only_dashboard_entity"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("read-only dashboard entity should fail")
+
+
+def test_async_execute_dashboard_action_rejects_invalid_slider_action() -> None:
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "input_number.target": FakeState(
+                    "18",
+                    attributes={"min": 15, "max": 20, "step": 1},
+                )
+            }
+        )
+    )
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_number.target"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "input_number.target"))
+    except ValueError as err:
+        assert str(err) == "invalid_dashboard_slider_action"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("invalid slider action should fail")
+
+
+def test_async_execute_dashboard_action_rejects_unavailable_slider() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_number.target"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "input_number.target:increment"))
+    except ValueError as err:
+        assert str(err) == "dashboard_entity_unavailable"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("unavailable slider should fail")
+
+
+def test_async_execute_dashboard_action_rejects_invalid_slider_state() -> None:
+    hass = FakeHass(
+        states=FakeStates({"input_number.target": FakeState("unknown")})
+    )
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["input_number.target"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "input_number.target:increment"))
+    except ValueError as err:
+        assert str(err) == "invalid_dashboard_slider_state"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("invalid slider state should fail")
+
+
+def test_async_execute_dashboard_action_cycles_choice_without_exact_option() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["select.mode"]})
+
+    result = run(async_execute_dashboard_action(hass, entry, "select.mode:next"))
+
+    assert result == {"ok": True, "action_id": "select.mode"}
+    assert hass.services.calls == [
+        ("select", "select_next", {"entity_id": "select.mode", "cycle": True}, True)
+    ]
+
+
+def test_async_execute_dashboard_action_rejects_empty_choice_option() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(options={CONF_DASHBOARD_ENTITIES: ["select.mode"]})
+
+    try:
+        run(async_execute_dashboard_action(hass, entry, "select.mode", option=""))
+    except ValueError as err:
+        assert str(err) == "invalid_dashboard_choice_action"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("empty choice option should fail")
+
+
+def test_async_execute_dashboard_action_toggles_answering_machine() -> None:
+    hass = FakeHass()
+    api = FakeApi(answering_machine_enabled=False)
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api=api))
+
+    result = run(
+        async_execute_dashboard_action(
+            hass,
+            entry,
+            "answering_machine",
+        )
+    )
+
+    assert result == {
+        "ok": True,
+        "action_id": "answering_machine",
+        "enabled": True,
+    }
+    assert api.answering_machine_enabled is True
 
 
 def test_async_execute_action_rejects_unknown_action() -> None:
@@ -1533,6 +1673,26 @@ def test_async_dashboard_payload_uses_main_page_for_status_and_actions_page() ->
         "name": "leave_home",
         "state_label": "",
     } in buttons
+
+
+def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) -> None:
+    async def fail_status(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("dashboard payload should not build full display status")
+
+    monkeypatch.setattr(executor_module, "async_status", fail_status)
+    hass = FakeHass(
+        states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_DEVICE_UI_ENABLED: True,
+        },
+    )
+
+    result = run(async_dashboard_payload(hass, entry))
+
+    assert result["data"]["pages"][0]["badges"][1] == {"state": "Alarm\nAus"}
 
 
 def test_async_dashboard_payload_includes_configured_weather() -> None:

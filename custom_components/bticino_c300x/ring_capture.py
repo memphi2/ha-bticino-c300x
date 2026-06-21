@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -43,6 +42,7 @@ from .const import (
     DEFAULT_VIDEO_STREAM_PATH,
 )
 from .entry_config import entry_config_value
+from .json_io import async_write_json_file
 from .ring_talkback import (
     async_keep_talkback_alive_when_ready as _async_keep_talkback_alive_when_ready,
 )
@@ -115,7 +115,7 @@ async def async_capture_doorbell_ring_call(
                 talkback_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await talkback_task
-        await _async_write_capture_metadata(
+        await async_write_json_file(
             hass,
             _capture_metadata_path(work_dir),
             _capture_metadata_payload(
@@ -450,23 +450,6 @@ async def _async_mkdir(hass: Any, path: Path) -> None:
         await hass.async_add_executor_job(lambda: path.mkdir(parents=True, exist_ok=True))
         return
     await asyncio.to_thread(path.mkdir, parents=True, exist_ok=True)
-
-
-async def _async_write_capture_metadata(
-    hass: Any,
-    path: Path,
-    payload: dict[str, Any],
-) -> None:
-    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-
-    def _write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-
-    if hasattr(hass, "async_add_executor_job"):
-        await hass.async_add_executor_job(_write)
-        return
-    await asyncio.to_thread(_write)
 
 
 async def _async_run_ffmpeg(

@@ -11,6 +11,7 @@ from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .json_io import async_write_json_file
 from .ring_ai import _read_capture_metadata, _ring_capture_metadata_path
 from .ring_capture import _safe_c300x_path
 
@@ -65,7 +66,7 @@ async def async_evaluate_ring_analysis(
         "expected_phrase": expected_phrase or "",
         "transcript": str(payload.get("transcript") or "").strip(),
     }
-    await _async_write_json(hass, decision, decision_payload)
+    await async_write_json_file(hass, decision, decision_payload)
     if matched and consume_on_match and guardrail["capture_id"]:
         await _async_mark_capture_used(hass, guardrail["capture_id"])
     return RingAnalysisDecision(
@@ -128,19 +129,6 @@ async def _async_read_json(hass: Any, path: Path) -> dict[str, Any]:
     if hasattr(hass, "async_add_executor_job"):
         return await hass.async_add_executor_job(_read)
     return await asyncio.to_thread(_read)
-
-
-async def _async_write_json(hass: Any, path: Path, payload: dict[str, Any]) -> None:
-    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-
-    def _write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-
-    if hasattr(hass, "async_add_executor_job"):
-        await hass.async_add_executor_job(_write)
-        return
-    await asyncio.to_thread(_write)
 
 
 async def _async_capture_guardrail_result(

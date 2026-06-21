@@ -205,6 +205,31 @@ def _audio_gain_multiplier(gain_db: float) -> float:
     return math.pow(10.0, float(gain_db) / 20.0)
 
 
+def _init_restarting_rtsp_track(track: Any) -> None:
+    """Initialize shared RTSP restart state on a WebRTC media track."""
+
+    track._player = None
+    track._track = None
+    track._opened_once = False
+    track._restart_pending = False
+    track._restart_attempts = 0
+    track._retry_delay = 0.2
+    track._stopped = False
+    track._lock = asyncio.Lock()
+
+
+async def _ensure_restarting_rtsp_reader(track: Any) -> None:
+    """Open a shared RTSP reader once for a restart-capable media track."""
+
+    if track._track is not None:
+        return
+
+    async with track._lock:
+        if track._track is not None:
+            return
+        await track._async_open_reader()
+
+
 def _new_restarting_rtsp_video_track(
     video_stream_track_cls: Any,
     media_stream_error_cls: type[Exception],
@@ -220,14 +245,7 @@ def _new_restarting_rtsp_video_track(
 
         def __init__(self) -> None:
             super().__init__()
-            self._player: Any | None = None
-            self._track: Any | None = None
-            self._opened_once = False
-            self._restart_pending = False
-            self._restart_attempts = 0
-            self._retry_delay = 0.2
-            self._stopped = False
-            self._lock = asyncio.Lock()
+            _init_restarting_rtsp_track(self)
 
         async def recv(self) -> Any:
             while not self._stopped:
@@ -253,13 +271,7 @@ def _new_restarting_rtsp_video_track(
             raise media_stream_error_cls
 
         async def _ensure_reader(self) -> None:
-            if self._track is not None:
-                return
-
-            async with self._lock:
-                if self._track is not None:
-                    return
-                await self._async_open_reader()
+            await _ensure_restarting_rtsp_reader(self)
 
         async def _async_open_reader(self) -> None:
             await self._async_close_reader()
@@ -334,14 +346,7 @@ def _new_restarting_rtsp_audio_track(
 
         def __init__(self) -> None:
             super().__init__()
-            self._player: Any | None = None
-            self._track: Any | None = None
-            self._opened_once = False
-            self._restart_pending = False
-            self._restart_attempts = 0
-            self._retry_delay = 0.2
-            self._stopped = False
-            self._lock = asyncio.Lock()
+            _init_restarting_rtsp_track(self)
 
         async def recv(self) -> Any:
             while not self._stopped:
@@ -370,13 +375,7 @@ def _new_restarting_rtsp_audio_track(
             raise media_stream_error_cls
 
         async def _ensure_reader(self) -> None:
-            if self._track is not None:
-                return
-
-            async with self._lock:
-                if self._track is not None:
-                    return
-                await self._async_open_reader()
+            await _ensure_restarting_rtsp_reader(self)
 
         async def _async_open_reader(self) -> None:
             await self._async_close_reader()

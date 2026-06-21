@@ -503,9 +503,9 @@ async def async_dashboard_payload(
 ) -> dict[str, Any]:
     """Return data in the c300x-dashboard `/homeassistant` JSON shape."""
 
-    status = await async_status(hass, entry)
+    device_ui_enabled = bool(entry_device_ui_enabled_or_patch_active(entry))
     prevent_return = configured_dashboard_prevent_return(entry)
-    if not status.get("device_ui_enabled"):
+    if not device_ui_enabled:
         return {
             "preventReturnToHomepage": prevent_return,
             "refreshInterval": 0,
@@ -516,10 +516,17 @@ async def async_dashboard_payload(
     main_page = _dashboard_page(pages, _DASHBOARD_DEFAULT_PAGE)
     badges = [{"state": "HA\nonline", "color": "#58d68d"}]
 
-    alarm = status.get("alarm")
-    if isinstance(alarm, dict):
+    alarm_entity_id = configured_alarm_entity_id(entry)
+    if alarm_entity_id is not None:
+        alarm_state = hass.states.get(alarm_entity_id)
         badges.append(
-            {"state": f"Alarm\n{_dashboard_alarm_state(alarm.get('state'), language)}"}
+            {
+                "state": "Alarm\n"
+                + _dashboard_alarm_state(
+                    alarm_state.state if alarm_state is not None else "unavailable",
+                    language,
+                )
+            }
         )
 
     badges.append({"state": _dashboard_datetime_label()})

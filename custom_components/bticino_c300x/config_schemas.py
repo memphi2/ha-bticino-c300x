@@ -10,6 +10,7 @@ from .activation_address import (
     normalize_stair_light_part,
 )
 from .config_audio import audio_gain_db
+from .config_flow_forms import optional_suggested as _optional_suggested
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
@@ -221,11 +222,3 @@ def _media_feature_schema(
         }
     )
     return vol.Schema(fields)
-
-
-def _optional_suggested(key: str, suggested_value: Any) -> vol.Optional:
-    """Return an optional form key that can be cleared by the user."""
-
-    if suggested_value in (None, ""):
-        return vol.Optional(key)
-    return vol.Optional(key, description={"suggested_value": suggested_value})

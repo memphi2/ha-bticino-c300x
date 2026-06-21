@@ -59,6 +59,16 @@ from .executor import (
 )
 from .forwarding import forwarding_state_from_value
 from .media_watchdog import handle_runtime_cpu_metrics_changed
+from .value_parsing import (
+    DEFAULT_FALSE_VALUES,
+    DEFAULT_TRUE_VALUES,
+)
+from .value_parsing import (
+    optional_bool as _parse_optional_bool,
+)
+from .value_parsing import (
+    optional_int as _optional_int,
+)
 from .video import (
     optional_string,
     resolve_doorbell_camera_entity_id,
@@ -657,27 +667,15 @@ def _event_type_value(payload: dict[str, Any]) -> Any:
 
 
 def _optional_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if text in {"true", "1", "on", "muted"}:
-        return True
-    if text in {"false", "0", "off", "unmuted"}:
-        return False
-    return None
+    return _parse_optional_bool(
+        value,
+        true_values=DEFAULT_TRUE_VALUES | {"muted"},
+        false_values=DEFAULT_FALSE_VALUES | {"unmuted"},
+    )
 
 
 def _optional_forwarding_mode(value: Any) -> str | None:
     return forwarding_state_from_value(value)
-
-
-def _optional_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _is_snapshot_payload(payload: dict[str, Any]) -> bool:

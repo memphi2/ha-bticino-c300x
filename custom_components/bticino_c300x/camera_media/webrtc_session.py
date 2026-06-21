@@ -251,9 +251,10 @@ def patch_aioice_turn_transport_sendto(aioice_turn_module: Any | None = None) ->
 
     if aioice_turn_module is None:
         try:
-            from aioice import turn as aioice_turn_module
+            from aioice import turn as imported_aioice_turn_module
         except ImportError:
             return
+        aioice_turn_module = imported_aioice_turn_module
 
     turn_transport = getattr(aioice_turn_module, "TurnTransport", None)
     if turn_transport is None:

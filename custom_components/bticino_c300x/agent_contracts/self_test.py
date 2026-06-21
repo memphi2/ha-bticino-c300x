@@ -6,6 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..value_parsing import (
+    optional_bool as _optional_bool,
+)
+from ..value_parsing import (
+    optional_string as _optional_string,
+)
 from .base import AgentContract
 
 
@@ -62,23 +68,3 @@ def normalize_self_test_contract(
         ok=_optional_bool(data.get("ok")) is True,
         checks=checks,
     )
-
-
-def _optional_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if text in {"true", "1", "on", "enabled", "yes"}:
-        return True
-    if text in {"false", "0", "off", "disabled", "no"}:
-        return False
-    return None
-
-
-def _optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None

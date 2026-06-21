@@ -130,6 +130,7 @@ if "homeassistant.components.sensor" not in sys.modules:
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import agent_diagnostics
+from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
 )
@@ -162,7 +163,9 @@ class _FakeApi:
         self.diagnostics_calls = 0
         self.doorbell_video_status_calls = 0
         self.validate_setup_calls = 0
+        self.system_metrics_error: Exception | None = None
         self.validate_setup_error: Exception | None = None
+        self.doorbell_video_status_error: Exception | None = None
         self.doorbell_video_status: dict[str, Any] = {
             "available": True,
             "media_owner": "idle",
@@ -173,6 +176,8 @@ class _FakeApi:
 
     async def async_system_metrics(self) -> dict[str, Any]:
         self.metrics_calls += 1
+        if self.system_metrics_error is not None:
+            raise self.system_metrics_error
         return {
             "cpu_count": 2,
             "cpu_usage_percent": 3.5,
@@ -310,6 +315,8 @@ class _FakeApi:
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         self.doorbell_video_status_calls += 1
+        if self.doorbell_video_status_error is not None:
+            raise self.doorbell_video_status_error
         return self.doorbell_video_status
 
 
@@ -1617,6 +1624,63 @@ def test_doorbell_state_sensor_writes_initial_idle_when_added_to_hass() -> None:
     assert entry.runtime_data.api.doorbell_video_status_calls == 1
 
 
+def test_doorbell_state_sensor_keeps_existing_idle_without_extra_write() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity.hass = _FakeHass()
+    entity._state = "idle"
+    entity.wrote_state = False
+
+    asyncio.run(entity.async_added_to_hass())
+
+    assert entity.native_value == "idle"
+    assert entity.available is True
+    assert entity.wrote_state is False
+    assert entry.runtime_data.api.doorbell_video_status_calls == 1
+
+
+def test_doorbell_state_sensor_goes_unavailable_on_status_error() -> None:
+    api = _FakeApi()
+    api.doorbell_video_status_error = C300XAgentApiError("offline")
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.native_value is None
+    assert entity.available is False
+    assert api.doorbell_video_status_calls == 1
+
+
+def test_doorbell_state_sensor_ignores_wrong_entry_and_unknown_events() -> None:
+    entry = _FakeEntry()
+    entity = C300XDoorbellStateSensor(entry)  # type: ignore[arg-type]
+    entity._state = "idle"
+    entity.wrote_state = False
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": "other",
+                "event_key": "doorbell_pressed",
+                "event_at": "2026-06-01T10:00:00Z",
+            }
+        )
+    )
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "unknown_event",
+                "event_at": "2026-06-01T10:00:00Z",
+            }
+        )
+    )
+
+    assert entity.native_value == "idle"
+    assert entity.wrote_state is False
+
+
 def test_doorbell_state_sensor_does_not_clear_active_ring_from_status_refresh() -> None:
     api = _FakeApi()
     api.doorbell_video_status = {
@@ -1691,6 +1755,21 @@ def test_system_metric_sensor_recovers_when_cached_metric_is_unknown() -> None:
 
         assert entry.runtime_data.api.metrics_calls == 1
         assert entity.native_value == 5.5
+
+    asyncio.run(_run())
+
+
+def test_system_metric_sensor_goes_unavailable_on_api_error() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        api.system_metrics_error = C300XAgentApiError("offline")
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        entity = C300XDeviceCpuSensor(entry)  # type: ignore[arg-type]
+
+        await entity.async_update()
+
+        assert api.metrics_calls == 1
+        assert entity.available is False
 
     asyncio.run(_run())
 

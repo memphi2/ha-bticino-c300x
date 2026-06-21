@@ -15,7 +15,6 @@ def test_install_bundled_blueprints_copies_missing_files(tmp_path: Path) -> None
     assert {path.name for path in installed} == {
         "doorbell_call_android.yaml",
         "doorbell_call_ios.yaml",
-        "doorbell_call_notification.yaml",
         "doorbell_notification.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -35,3 +34,14 @@ def test_install_bundled_blueprints_preserves_existing_files(tmp_path: Path) -> 
     assert existing.read_text(encoding="utf-8") == "user edited\n"
     assert existing not in installed
     assert (target / "doorbell_notification.yaml").exists()
+
+
+def test_install_bundled_blueprints_removes_obsolete_bundles(tmp_path: Path) -> None:
+    target = tmp_path / "blueprints" / "automation" / "bticino_c300x"
+    target.mkdir(parents=True)
+    obsolete = target / "doorbell_call_notification.yaml"
+    obsolete.write_text("old bundled blueprint\n", encoding="utf-8")
+
+    install_bundled_blueprints(target)
+
+    assert not obsolete.exists()

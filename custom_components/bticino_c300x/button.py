@@ -22,8 +22,8 @@ from .capabilities import (
     answering_machine_message_delete_supported,
     entry_device_ui_enabled_or_patch_active,
     entry_gui_function_patch_active,
+    entry_maintenance_action_is_advertised,
     locks_for_capabilities,
-    maintenance_action_is_advertised,
     memo_delete_supported,
 )
 from .const import (
@@ -220,7 +220,7 @@ class C300XMaintenanceButton(C300XEntity, ButtonEntity):
     def available(self) -> bool:
         """Return true when the maintenance action is currently advertised."""
 
-        return super().available and _supports_maintenance_action(
+        return super().available and entry_maintenance_action_is_advertised(
             self._entry,
             self._maintenance_action,
         )
@@ -601,11 +601,6 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
     def _handle_qml_patch_changed(self, entry_id: str) -> None:
         if entry_id == self._entry.entry_id:
             self.async_write_ha_state()
-
-
-def _supports_maintenance_action(entry: ConfigEntry, action: str) -> bool:
-    capabilities = getattr(entry.runtime_data, "capabilities", {})
-    return maintenance_action_is_advertised(capabilities, action)
 
 
 async def _async_activation_items(entry: ConfigEntry) -> list[dict[str, Any]]:

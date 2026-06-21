@@ -14,6 +14,7 @@ from .device_user import media_user_attributes
 from .entity import C300XEntity, supports_capability
 from .event_payload import agent_event_key
 from .media_status import home_call_payload as _home_call_payload
+from .value_parsing import optional_int as _optional_int
 
 PARALLEL_UPDATES = 0
 HOME_CALL_EVENTS = {"home_call_started", "home_call_answered", "home_call_ended"}
@@ -142,10 +143,3 @@ class C300XHomeCallActiveBinarySensor(C300XEntity, BinarySensorEntity):
         self._last_error = (
             str(status["last_error"]) if status.get("last_error") else None
         )
-
-
-def _optional_int(value: Any, default: int | None = None) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

@@ -18,7 +18,7 @@ from .api import (
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
 )
-from .capabilities import auth_config_supported, maintenance_action_is_advertised
+from .capabilities import auth_config_supported, entry_maintenance_action_is_advertised
 from .const import (
     CONF_AGENT_TOKEN,
     CONF_MAINTENANCE_TOKEN,
@@ -319,7 +319,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     def available(self) -> bool:
         """Return true when the SSH maintenance action is advertised."""
 
-        return super().available and _supports_maintenance_action(
+        return super().available and entry_maintenance_action_is_advertised(
             self._entry,
             "ssh_start",
         )
@@ -339,7 +339,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     async def async_update(self) -> None:
         """Refresh SSH state through the maintenance API."""
 
-        if not _supports_maintenance_action(self._entry, "ssh_start"):
+        if not entry_maintenance_action_is_advertised(self._entry, "ssh_start"):
             return
         try:
             status = await self._entry.runtime_data.api.async_ssh_status()
@@ -582,8 +582,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
         )
 
     def _apply_status(self, status: dict) -> None:
-        self._status = status
-        self._attr_available = bool(status.get("available", True))
+        _apply_patch_switch_status(self, status)
 
 
 class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
@@ -702,8 +701,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
         )
 
     def _apply_status(self, status: dict) -> None:
-        self._status = status
-        self._attr_available = bool(status.get("available", True))
+        _apply_patch_switch_status(self, status)
 
 
 class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
@@ -1236,13 +1234,13 @@ async def _async_refresh_initial_states(entities: list[SwitchEntity]) -> None:
         await entity.async_update()
 
 
-def _supports_maintenance_action(entry: ConfigEntry, action: str) -> bool:
-    capabilities = getattr(entry.runtime_data, "capabilities", {})
-    return maintenance_action_is_advertised(capabilities, action)
-
-
 def _supports_maintenance_actions(entry: ConfigEntry, *actions: str) -> bool:
-    return all(_supports_maintenance_action(entry, action) for action in actions)
+    return all(entry_maintenance_action_is_advertised(entry, action) for action in actions)
+
+
+def _apply_patch_switch_status(entity: C300XEntity, status: dict) -> None:
+    entity._status = status
+    entity._attr_available = bool(status.get("available", True))
 
 
 def _supports_firewall_switch(entry: ConfigEntry) -> bool:

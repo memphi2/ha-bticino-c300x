@@ -44,6 +44,15 @@ from .const import (
 from .fingerprint import fnv1a64_fingerprint
 from .forwarding import coerce_forwarding_mode_state
 from .validation_patterns import ACTIVATION_ID_RE
+from .value_parsing import (
+    optional_bool as _optional_bool,
+)
+from .value_parsing import (
+    optional_int as _optional_int,
+)
+from .value_parsing import (
+    optional_string as _optional_string,
+)
 
 _SETUP_TIMEOUT = 2.0
 
@@ -1853,35 +1862,6 @@ def _normalize_activation(data: Any) -> dict[str, Any] | None:
         "source": source,
         "executable": _optional_bool(data.get("executable")) is True,
     }
-
-
-def _optional_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if text in {"true", "1", "on", "enabled", "yes"}:
-        return True
-    if text in {"false", "0", "off", "disabled", "no"}:
-        return False
-    return None
-
-
-def _optional_int(value: Any, default: int | None = None) -> int | None:
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _optional_float(value: Any) -> float | None:

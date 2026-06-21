@@ -47,7 +47,6 @@ def test_blueprints_are_valid_automation_blueprints() -> None:
     expected = {
         "doorbell_notification.yaml",
         "doorbell_call_android.yaml",
-        "doorbell_call_notification.yaml",
         "doorbell_call_ios.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -77,7 +76,6 @@ def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
     for filename in {
         "doorbell_notification.yaml",
         "doorbell_call_android.yaml",
-        "doorbell_call_notification.yaml",
         "doorbell_call_ios.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -94,7 +92,6 @@ def test_doorbell_blueprints_use_event_entry_and_selected_device() -> None:
     for filename in {
         "doorbell_notification.yaml",
         "doorbell_call_android.yaml",
-        "doorbell_call_notification.yaml",
         "doorbell_call_ios.yaml",
         "ring_capture.yaml",
         "ring_capture_wyoming.yaml",
@@ -135,34 +132,6 @@ def test_doorbell_notification_derives_camera_from_device() -> None:
     )
     assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
     assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
-
-
-def test_doorbell_call_notification_gates_on_media_readiness_and_forwarding() -> None:
-    data = _blueprint("doorbell_call_notification.yaml")
-    inputs = data["blueprint"]["input"]
-    conditions = data["condition"]
-    templates = "\n".join(condition["value_template"] for condition in conditions)
-
-    assert inputs["c300x_device"]["selector"] == {
-        "device": {"integration": "bticino_c300x"}
-    }
-    assert "entry_id" not in inputs
-    assert "forwarding_entity" not in inputs
-    assert "media_readiness_entity" not in inputs
-    assert "camera_entity" not in inputs
-    assert (
-        data["variables"]["entry_id"]
-        == "{{ trigger.event.data.entry_id | default('', true) }}"
-    )
-    assert "device_entities(c300x_device)" in data["variables"]["c300x_entities"]
-    assert "'Home Assistant' in options" in data["variables"]["forwarding_entity"]
-    assert "media_user_ok" in data["variables"]["media_readiness_entity"]
-    assert "entity_id.startswith('camera.')" in data["variables"]["camera_entity"]
-    assert "Home Assistant" in templates
-    assert "homeassistant" in templates
-    assert "ready" in templates
-    assert "warning" in templates
-    assert data["variables"]["dashboard_path"] == "dashboard_path"
 
 
 def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None:
@@ -224,13 +193,7 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     assert notify_data["channel"] == "{{ notification_channel }}"
     assert notify_data["media_stream"] == "{{ notification_media_stream }}"
     assert notify_data["importance"] == "max"
-    assert notify_data["push"]["sound"] == {
-        "name": "default",
-        "critical": 1,
-        "volume": 1,
-    }
-    assert notify_data["push"]["interruption-level"] == "critical"
-    assert notify_data["push"]["category"] == "camera"
+    assert "push" not in notify_data
     assert notify_data["persistent"] is True
     assert notify_data["sticky"] == "true"
     assert notify_data["actions"] == [

@@ -6,6 +6,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from ..value_parsing import (
+    optional_int as _optional_int,
+)
+from ..value_parsing import (
+    optional_string as _optional_string,
+)
+
 
 class RtspConsumer(StrEnum):
     """Known HA-side RTSP consumers."""
@@ -212,22 +219,3 @@ def _is_shareable(consumer: RtspConsumer, owner: RtspSessionOwner) -> bool:
 
 def _mapping_or_empty(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
-
-
-def _optional_int(value: object) -> int | None:
-    if value is None:
-        return None
-    if not isinstance(value, (int, float, str)):
-        return None
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return None
-    return result
-
-
-def _optional_string(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None

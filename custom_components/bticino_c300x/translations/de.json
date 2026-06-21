@@ -566,7 +566,7 @@
         "step": {
           "init": {
             "title": "C300X Lovelace-Card einrichten",
-            "description": "Home Assistant kann die generierte C300X-Dashboard-View unter {dashboard_path} erstellen oder aktualisieren. Fuehre diesen Repair nach diesem Update einmal aus, wenn alte C300X-Cards oder die Card-Auswahl noch falsch reagieren, oder ignoriere ihn, wenn dein Dashboard bereits passt.",
+            "description": "Dieses Update erfordert eine Aktualisierung der generierten C300X-Lovelace-Cards. Fuehre diesen Repair einmal aus, um die C300X-Dashboard-View unter {dashboard_path} zu aktualisieren und alte generierte Split-Card-Layouts zu ersetzen. Ignoriere ihn nur, wenn du alle C300X-Cards bereits manuell aktualisiert hast.",
             "menu_options": {
               "confirm": "Card erstellen oder aktualisieren",
               "ignore": "Diesen Hinweis ignorieren"

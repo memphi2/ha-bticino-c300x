@@ -566,7 +566,7 @@
         "step": {
           "init": {
             "title": "Configurer la carte Lovelace C300X",
-            "description": "Home Assistant peut creer ou actualiser la vue de dashboard C300X generee dans {dashboard_path}. Executez cette reparation une seule fois apres cette mise a jour si d'anciennes cartes C300X ou le selecteur de cartes se comportent encore mal, ou ignorez-la si votre dashboard est deja correct.",
+            "description": "Cette mise a jour exige d'actualiser les cartes Lovelace C300X generees. Executez cette reparation une seule fois pour actualiser la vue de dashboard C300X dans {dashboard_path} et remplacer les anciens layouts generes avec cartes separees. Ignorez-la uniquement si vous avez deja actualise toutes les cartes C300X manuellement.",
             "menu_options": {
               "confirm": "Creer ou actualiser la carte",
               "ignore": "Ignorer cette indication"

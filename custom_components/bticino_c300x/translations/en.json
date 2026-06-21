@@ -566,7 +566,7 @@
         "step": {
           "init": {
             "title": "Set up the C300X Lovelace card",
-            "description": "Home Assistant can create or refresh the generated C300X dashboard view at {dashboard_path}. Run this once after this update if old C300X cards or the card picker still behave incorrectly, or ignore it when your dashboard is already correct.",
+            "description": "This update requires the generated C300X Lovelace cards to be refreshed. Run this repair once to update the C300X dashboard view at {dashboard_path} and replace old generated split-card layouts. Ignore it only if you already updated every C300X card manually.",
             "menu_options": {
               "confirm": "Create or refresh card",
               "ignore": "Ignore this hint"

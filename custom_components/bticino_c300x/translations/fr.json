@@ -565,16 +565,16 @@
       "fix_flow": {
         "step": {
           "init": {
-            "title": "Configurer les cartes Lovelace C300X",
-            "description": "Home Assistant peut ajouter les cartes C300X recommandees a {dashboard_path}, ou vous pouvez ignorer cette indication.",
+            "title": "Configurer la carte Lovelace C300X",
+            "description": "Home Assistant peut creer ou actualiser la vue de dashboard C300X generee dans {dashboard_path}. Executez cette reparation une seule fois apres cette mise a jour si d'anciennes cartes C300X ou le selecteur de cartes se comportent encore mal, ou ignorez-la si votre dashboard est deja correct.",
             "menu_options": {
-              "confirm": "Creer les cartes",
+              "confirm": "Creer ou actualiser la carte",
               "ignore": "Ignorer cette indication"
             }
           },
           "confirm": {
-            "title": "Creer les cartes Lovelace C300X",
-            "description": "Home Assistant ajoutera une vue C300X a un dashboard Lovelace en mode storage. La vue contient une carte Sonnette / a la demande et une carte Home Call pour {entry_title}.",
+            "title": "Creer ou actualiser la carte Lovelace C300X",
+            "description": "Home Assistant ajoutera ou actualisera une vue C300X dans un dashboard Lovelace en mode storage. La vue contient la carte Doorstation/Home Call consolidee pour {entry_title}. Les anciens layouts generes avec cartes separees sur cette vue sont remplaces.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "Chemin de la vue"

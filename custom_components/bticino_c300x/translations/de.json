@@ -565,16 +565,16 @@
       "fix_flow": {
         "step": {
           "init": {
-            "title": "C300X Lovelace-Cards einrichten",
-            "description": "Home Assistant kann die empfohlenen C300X-Cards zu {dashboard_path} hinzufuegen, oder du kannst diesen Hinweis ignorieren.",
+            "title": "C300X Lovelace-Card einrichten",
+            "description": "Home Assistant kann die generierte C300X-Dashboard-View unter {dashboard_path} erstellen oder aktualisieren. Fuehre diesen Repair nach diesem Update einmal aus, wenn alte C300X-Cards oder die Card-Auswahl noch falsch reagieren, oder ignoriere ihn, wenn dein Dashboard bereits passt.",
             "menu_options": {
-              "confirm": "Cards erstellen",
+              "confirm": "Card erstellen oder aktualisieren",
               "ignore": "Diesen Hinweis ignorieren"
             }
           },
           "confirm": {
-            "title": "C300X Lovelace-Cards erstellen",
-            "description": "Home Assistant fuegt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu. Die View enthaelt eine Card fuer Tuerklingel / On-Demand und eine Home-Call-Card fuer {entry_title}.",
+            "title": "C300X Lovelace-Card erstellen oder aktualisieren",
+            "description": "Home Assistant fuegt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu oder aktualisiert sie. Die View enthaelt die zusammengefuehrte Doorstation/Home-Call-Card fuer {entry_title}. Alte generierte Split-Card-Layouts auf dieser View werden ersetzt.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View-Pfad"

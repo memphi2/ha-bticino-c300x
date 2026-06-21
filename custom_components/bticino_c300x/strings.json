@@ -547,16 +547,16 @@
       "fix_flow": {
         "step": {
           "init": {
-            "title": "Set up C300X Lovelace cards",
-            "description": "Home Assistant can add the recommended C300X cards to {dashboard_path}, or you can ignore this hint.",
+            "title": "Set up the C300X Lovelace card",
+            "description": "Home Assistant can create or refresh the generated C300X dashboard view at {dashboard_path}. Run this once after this update if old C300X cards or the card picker still behave incorrectly, or ignore it when your dashboard is already correct.",
             "menu_options": {
-              "confirm": "Create cards",
+              "confirm": "Create or refresh card",
               "ignore": "Ignore this hint"
             }
           },
           "confirm": {
-            "title": "Create C300X Lovelace cards",
-            "description": "Home Assistant will add a C300X view to a storage-mode Lovelace dashboard. The view contains one Doorbell / On-demand card and one Home Call card for {entry_title}.",
+            "title": "Create or refresh the C300X Lovelace card",
+            "description": "Home Assistant will add or update a C300X view in a storage-mode Lovelace dashboard. The view contains the consolidated Doorstation/Home Call card for {entry_title}. Older generated split-card layouts on that view are replaced.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View path"

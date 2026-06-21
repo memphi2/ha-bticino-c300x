@@ -87,7 +87,7 @@ window.customCards = window.customCards.filter((card) => card.type !== C300X_CAR
 window.customCards.push({
   type: C300X_CARD_TAG,
   name: "C300X Doorbell Call Card",
-  preview: true,
+  preview: false,
   description: C300X_METADATA_TRANSLATIONS.en.card_description,
   documentationURL: C300X_DOCUMENTATION_URL,
   getEntitySuggestion: c300xMetadataEntitySuggestion,

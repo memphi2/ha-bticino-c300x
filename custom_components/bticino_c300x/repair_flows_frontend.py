@@ -174,6 +174,7 @@ async def _async_setup_lovelace_cards(
     config_changed = any(
         (
             _remove_state_entity_overrides_from_existing_cards(view, camera_entity_id),
+            _remove_legacy_split_c300x_cards(view, camera_entity_id),
             config_changed,
         )
     )
@@ -366,7 +367,7 @@ def _dashboard_has_c300x_cards(config: dict[str, Any], camera_entity_id: str) ->
     """Return true when the generated central C300X card already exists."""
 
     modes = _dashboard_c300x_card_modes(config, camera_entity_id)
-    return "auto" in modes or {"doorbell_call", "home_call"}.issubset(modes)
+    return "auto" in modes
 
 
 def _dashboard_c300x_card_modes(
@@ -408,6 +409,51 @@ def _remove_state_entity_overrides_from_existing_cards(
                 del card[key]
                 changed = True
     return changed
+
+
+def _remove_legacy_split_c300x_cards(
+    config: dict[str, Any],
+    camera_entity_id: str,
+) -> bool:
+    """Remove generated pre-consolidation Doorbell/Home Call cards."""
+
+    changed = False
+    for cards in _iter_lovelace_card_lists(config):
+        original_len = len(cards)
+        cards[:] = [
+            card
+            for card in cards
+            if not _is_legacy_split_c300x_card(card, camera_entity_id)
+        ]
+        changed = changed or len(cards) != original_len
+    return changed
+
+
+def _iter_lovelace_card_lists(value: Any):
+    """Yield mutable Lovelace card lists from a config tree."""
+
+    if isinstance(value, dict):
+        cards = value.get("cards")
+        if isinstance(cards, list):
+            yield cards
+        for key in ("views", "sections", "entities"):
+            yield from _iter_lovelace_card_lists(value.get(key))
+        return
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_lovelace_card_lists(item)
+
+
+def _is_legacy_split_c300x_card(card: Any, camera_entity_id: str) -> bool:
+    """Return true for generated split-mode C300X card configs."""
+
+    if not isinstance(card, dict):
+        return False
+    if card.get("type") != _DOORBELL_CALL_CARD_TYPE:
+        return False
+    if card.get("entity") != camera_entity_id:
+        return False
+    return card.get("mode") in {"doorbell_call", "home_call"}
 
 
 def _iter_lovelace_cards(value: Any):

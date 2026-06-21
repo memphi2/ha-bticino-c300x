@@ -220,7 +220,7 @@ SOURCE_INSTALLED_FILES = (
 )
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
-    "HomePage.qml": "d17f8121d4455d0c0ca1e26c8f3a33bfca919310fef50903621eab7ee0ced5ac",
+    "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "1c28e909b9196909117cc58d2781d6c39a2e1d72f294786f77633050d862ad0d",
     "Alarm.qml": "25871ecab4824d2fc70b3515ecf7d3009e6760a76f618eb48d9ede7d8803e5eb",
@@ -554,6 +554,29 @@ def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() ->
         assert "eventRequest" in cleanup_body
         assert "eventWatching === true" in cleanup_body
         assert "removeConnection(xhr)" in script[script.index("function getJson") :]
+
+
+def test_home_page_message_watch_stops_on_hide(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+
+    status = _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    assert status["state"] == "patched"
+
+    home_page = (gui_dir / "HomePage.qml").read_text(encoding="utf-8")
+    start_body = home_page[
+        home_page.index("function startMessageNotificationWatch") :
+        home_page.index("function stopMessageNotificationWatch")
+    ]
+
+    assert "onVisibleChanged: {" in home_page
+    assert "if (!visible) {" in home_page
+    assert "stopMessageNotificationWatch()" in home_page
+    assert start_body.index("stopMessageNotificationWatch()") < start_body.index(
+        "MemoSync.startEventWatch(handleMessageNotificationEvent)"
+    )
 
 
 def test_alarm_quick_action_uses_single_line_large_label() -> None:

@@ -365,6 +365,7 @@ patch_home_page() {
             print "    }"
             print ""
             print "    function startMessageNotificationWatch() {"
+            print "        stopMessageNotificationWatch()"
             print "        refreshMessageNotifications()"
             print "        MemoSync.startEventWatch(handleMessageNotificationEvent)"
             print "    }"
@@ -480,6 +481,16 @@ patch_home_page() {
             print
             print_home_notification_helpers()
             print_display_bridge_button_helpers()
+            next
+        }
+        $0 == "    property bool smallDateTimePresent: homeLinksModel.count > 0 || buttonHolder.buttonCount() > 2" {
+            print "    onVisibleChanged: {"
+            print "        if (!visible) {"
+            print "            stopMessageNotificationWatch()"
+            print "        }"
+            print "    }"
+            print ""
+            print
             next
         }
         $0 == "    function aboutToShow() {" {

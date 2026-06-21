@@ -5,7 +5,6 @@ export const C300X_MEDIA_READINESS_OBJECT_ID = "bticino_c300x_media_readiness";
 export const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
 export const C300X_DEFAULT_CONFIG = {
   mode: "auto",
-  hangup_script: "",
   ringback_tone: true,
   ringback_volume: 12,
 };

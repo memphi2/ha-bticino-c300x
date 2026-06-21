@@ -53,7 +53,6 @@ function c300xMetadataStubConfig(entity) {
   return {
     entity: entity || c300xMetadataEntityId("camera", C300X_CAMERA_OBJECT_ID),
     mode: "auto",
-    hangup_script: "",
   };
 }
 

@@ -383,6 +383,9 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'mode: "auto"' in resolver_source
     assert "card_height" not in resolver_source
     assert "card_height" not in translations_source
+    assert "hangup_script" not in source
+    assert "hangup_script" not in resolver_source
+    assert "optional_hangup_script" not in translations_source
     assert "c300xResolveEntity" in source
     assert "c300xRelatedEntity" in source
     assert "C300X_MEDIA_READINESS_OBJECT_ID" in source
@@ -448,6 +451,7 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
 
     assert 'mode: "auto"' in resolver_source
     assert 'mode: "auto"' in metadata_source
+    assert "hangup_script" not in metadata_source
     assert 'label: c300xLocalize(hass, "doorstation_card")' in source
     assert 'label: c300xMetadataLocalize(hass, "doorstation_card")' in metadata_source
     assert 'mode: "home_call"' not in metadata_source
@@ -458,9 +462,12 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert "doorstationBlockedByHomeCall" not in source
     assert 'class="readiness hidden"' in source
     assert '"/config/repairs"' in source
-    assert 'state !== "ready"' in source
+    assert 'this._config?.show_media_readiness !== false' in source
+    assert 'show_media_readiness: this._config.show_media_readiness !== false' in source
+    assert 'delete nextConfig.show_media_readiness' in source
     assert "media_forwarding_required" in source
     assert "media_ready" in translations_source
+    assert 'show_media_readiness: "Show media readiness line"' in translations_source
     assert "media_forwarding_required" in translations_source
     assert "open_repairs" in translations_source
 
@@ -493,8 +500,11 @@ def test_bundled_card_handles_missing_microphone_without_breaking_stream() -> No
     assert 'this._label("microphone_required")' in source
     assert 'this._label("microphone_stream_only")' in source
     assert "this._notice" in source
-    assert 'this._notice = this._label("microphone_required")' in source
-    assert 'this._notice = this._label("microphone_stream_only")' in source
+    assert "const C300X_NOTICE_TIMEOUT_MS = 2000;" in source
+    assert 'this._showTemporaryNotice(this._label("microphone_required"));' in source
+    assert 'this._showTemporaryNotice(this._label("microphone_stream_only"));' in source
+    assert "window.setTimeout(() =>" in source
+    assert "this._clearNotice();" in source
     assert 'throw new Error(this._label("microphone_required"))' not in source
     assert 'pc.addTransceiver("video", { direction: "recvonly" });' in webrtc_source
     assert 'pc.addTransceiver("audio", { direction: "recvonly" });' in webrtc_source
@@ -676,6 +686,9 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
         assert condition in function_body
         assert button in function_body
         assert function_body.index(condition) < function_body.index(button)
+    action_start = state_source.index("export function c300xDoorstationAction")
+    action_end = state_source.index("export function c300xStateMachineDoorstationAction")
+    assert 'return "stream";' in state_source[action_start:action_end]
 
 
 def test_bundled_card_uses_camera_state_machine_without_state_entity_overrides() -> None:
@@ -719,5 +732,5 @@ def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() ->
     assert "C300X_RINGBACK_ON_MS" in ringback_source
     assert "ringback_tone: true" in resolver_source
     assert "ringback_volume: 12" in resolver_source
-    assert 'ringback_tone: "Ringback tone"' in translations_source
-    assert 'ringback_volume: "Ringback volume"' in translations_source
+    assert 'ringback_tone: "Home Call ringback tone"' in translations_source
+    assert 'ringback_volume: "Home Call ringback volume"' in translations_source

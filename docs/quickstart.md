@@ -97,6 +97,8 @@ After Media Readiness is ready:
 
 Use one normal card in **Auto** mode for Doorbell, On-demand and Home Call.
 Use separate Doorbell/Home Call modes only for hand-built special dashboards.
+The card shows the Media Readiness line by default. Disable that line in the
+card editor only if you want a cleaner dashboard.
 
 If Home Assistant shows a C300X Lovelace card Repair after an update, run it
 once. It refreshes the generated C300X dashboard view and replaces old generated

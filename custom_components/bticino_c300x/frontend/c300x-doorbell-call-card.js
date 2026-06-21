@@ -25,6 +25,8 @@ import {
 import { C300XRingbackTone } from "./c300x-ringback-tone.js";
 import { C300XWebrtcClient } from "./c300x-webrtc-client.js";
 
+const C300X_NOTICE_TIMEOUT_MS = 2000;
+
 function c300xFireConfigChanged(element, config) {
   element.dispatchEvent(new CustomEvent("config-changed", {
     detail: { config },
@@ -111,6 +113,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._activeHomeCallSession = false;
     this._error = "";
     this._notice = "";
+    this._noticeTimer = null;
     this._ringbackTone = new C300XRingbackTone({
       getEnabled: () => this._config?.ringback_tone !== false,
       getVolume: () => this._config?.ringback_volume,
@@ -135,6 +138,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._clearNoticeTimer();
     this._stopRingbackTone();
     this._closePeer(false);
   }
@@ -566,7 +570,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._startingCall = true;
     this._activeHomeCallSession = true;
     this._error = "";
-    this._notice = "";
+    this._clearNotice();
 
     try {
       await this._startTalkback({ homeCall: true });
@@ -605,7 +609,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       return;
     }
     this._error = "";
-    this._notice = "";
+    this._clearNotice();
 
     try {
       if (microphone) {
@@ -638,7 +642,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       return;
     }
     this._error = "";
-    this._notice = "";
+    this._clearNotice();
     await this._prepareMicrophone();
 
     const previous = this._webrtc;
@@ -704,7 +708,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     const mediaDevices = globalThis.navigator?.mediaDevices;
     const getUserMedia = mediaDevices?.getUserMedia;
     if (typeof getUserMedia !== "function") {
-      this._notice = this._label("microphone_required");
+      this._showTemporaryNotice(this._label("microphone_required"));
       return;
     }
     try {
@@ -719,7 +723,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._applyMicMuted();
     } catch (err) {
       console.warn("C300X microphone unavailable; starting receive-only stream", err);
-      this._notice = this._label("microphone_stream_only");
+      this._showTemporaryNotice(this._label("microphone_stream_only"));
     }
   }
 
@@ -791,7 +795,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._transitionVideoEl) {
       this._transitionVideoEl.srcObject = null;
     }
-    this._notice = "";
+    this._clearNotice();
     if (clearStatus) {
       this._error = "";
     }
@@ -928,7 +932,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     const entity = this._mediaReadinessEntity();
     const state = entity?.state;
-    const visible = !!entity && this._isAutoMode() && state !== "ready";
+    const visible = !!entity && this._config?.show_media_readiness !== false;
     this._readinessEl.classList.toggle("hidden", !visible);
     if (!visible) {
       return;
@@ -965,6 +969,32 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _stopRingbackTone() {
     this._ringbackTone?.stop();
+  }
+
+  _showTemporaryNotice(notice) {
+    this._clearNoticeTimer();
+    this._notice = notice;
+    this._updateState();
+    this._noticeTimer = window.setTimeout(() => {
+      if (this._notice === notice) {
+        this._notice = "";
+        this._updateState();
+      }
+      this._noticeTimer = null;
+    }, C300X_NOTICE_TIMEOUT_MS);
+  }
+
+  _clearNotice() {
+    this._clearNoticeTimer();
+    this._notice = "";
+  }
+
+  _clearNoticeTimer() {
+    if (!this._noticeTimer) {
+      return;
+    }
+    window.clearTimeout(this._noticeTimer);
+    this._noticeTimer = null;
   }
 
   _doorstationView() {
@@ -1031,10 +1061,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (!this._hass) {
       return;
     }
-    if (this._config.hangup_script) {
-      await this._runScript(this._config.hangup_script);
-      return;
-    }
     await this._hass.callService("bticino_c300x", "stop_doorbell_video", this._serviceData());
   }
 
@@ -1065,13 +1091,6 @@ class C300XDoorbellCallCard extends HTMLElement {
         this._closePeer(ok);
       }
     }
-  }
-
-  async _runScript(entityId) {
-    if (!entityId || !this._hass) {
-      return;
-    }
-    await this._hass.callService("script", "turn_on", {}, { entity_id: entityId });
   }
 
   _openRepairs() {
@@ -1107,7 +1126,6 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
       return;
     }
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-    const homeCallMode = this._config.mode === "home_call";
     const doorbellOnlyMode = this._config.mode === "doorbell_call";
     root.innerHTML = `
       <ha-form></ha-form>
@@ -1115,7 +1133,10 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
 
     const form = root.querySelector("ha-form");
     form.hass = this._hass;
-    form.data = this._config;
+    form.data = {
+      ...this._config,
+      show_media_readiness: this._config.show_media_readiness !== false,
+    };
     form.schema = [
       {
         name: "mode",
@@ -1141,10 +1162,10 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
         selector: { entity_name: {} },
         context: { entity: "entity" },
       },
-      ...(homeCallMode ? [] : [{
-        name: "hangup_script",
-        selector: { entity: { domain: "script" } },
-      }]),
+      {
+        name: "show_media_readiness",
+        selector: { boolean: {} },
+      },
       ...(doorbellOnlyMode ? [] : [
         {
           name: "ringback_tone",
@@ -1166,9 +1187,9 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     ];
     form.computeLabel = (schema) => this._label(
       {
-        hangup_script: "optional_hangup_script",
         ringback_tone: "ringback_tone",
         ringback_volume: "ringback_volume",
+        show_media_readiness: "show_media_readiness",
       }[schema.name] || schema.name,
     );
     form.addEventListener("value-changed", (event) => {
@@ -1184,8 +1205,8 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
         delete nextConfig[key];
       }
     }
-    if (nextConfig.mode === "home_call") {
-      delete nextConfig.hangup_script;
+    if (nextConfig.show_media_readiness !== false) {
+      delete nextConfig.show_media_readiness;
     }
     if (nextConfig.mode === "doorbell_call") {
       delete nextConfig.ringback_tone;

@@ -30,6 +30,8 @@ Most users only need:
 
 - Use the Doorbell/On-demand card for live view and Ring Call handling.
 - Use the Home Call card for audio-only calls to the C300X display.
+- Keep the card's Media Readiness line visible unless you intentionally want to
+  hide all readiness status from that card.
 - Keep **Forwarding** set to **Home Assistant** when you want Ring Calls to be
   answerable from Home Assistant.
 - Start troubleshooting with **Media readiness** before editing card YAML.

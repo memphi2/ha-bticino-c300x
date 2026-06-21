@@ -556,7 +556,7 @@
           },
           "confirm": {
             "title": "Create or refresh the C300X Lovelace card",
-            "description": "Home Assistant will add or update a C300X view in a storage-mode Lovelace dashboard. The view contains the consolidated Doorstation/Home Call card for {entry_title}. Older generated split-card layouts on that view are replaced.",
+            "description": "Home Assistant will add or update a C300X view in a storage-mode Lovelace dashboard. The view contains the consolidated Doorstation/Home Call card for {entry_title}. Older generated split-card layouts in the selected dashboard are replaced.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View path"

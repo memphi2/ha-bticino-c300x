@@ -676,7 +676,7 @@ def run_smoke(
             assert_json_field(capabilities["device"], "firmware", "1.7.19")
             self_test = api_get(api_port, "/api/v1/self-test")
             assert_json_field(self_test, "api_version", "1.1")
-            assert_json_field(self_test, "agent_version", "1.3.0")
+            assert_json_field(self_test, "agent_version", "1.4.0")
             assert_json_field(self_test, "firmware_family", "1.7.x")
             for check_name in (
                 "capabilities",

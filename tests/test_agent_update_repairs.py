@@ -1826,6 +1826,116 @@ def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
     ]
 
 
+def test_frontend_card_repair_cleans_all_lovelace_views(monkeypatch) -> None:
+    lovelace_package = types.ModuleType("homeassistant.components.lovelace")
+    lovelace_const = types.ModuleType("homeassistant.components.lovelace.const")
+    lovelace_const.LOVELACE_DATA = "lovelace"
+    lovelace_const.MODE_STORAGE = "storage"
+    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+
+    class FakeEntityRegistry:
+        def async_get_entity_id(
+            self,
+            domain: str,
+            platform: str,
+            unique_id: str,
+        ) -> str | None:
+            assert platform == "bticino_c300x"
+            if domain == "camera" and unique_id == "entry-1_doorbell_camera":
+                return "camera.bticino_c300x_doorbell_camera"
+            return None
+
+    class FakeLovelaceDashboard:
+        mode = "storage"
+
+        def __init__(self) -> None:
+            self.config: dict[str, Any] = {
+                "views": [
+                    {
+                        "type": "sections",
+                        "title": "C300X",
+                        "path": "c300x",
+                        "sections": [
+                            {
+                                "type": "grid",
+                                "cards": [
+                                    {
+                                        "type": "custom:c300x-doorbell-call-card",
+                                        "entity": "camera.bticino_c300x_doorbell_camera",
+                                        "mode": "auto",
+                                        "doorbell_state_entity": "sensor.old",
+                                        "home_call_entity": "binary_sensor.old",
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "type": "sections",
+                        "title": "C300X More",
+                        "path": "c300x-more",
+                        "sections": [
+                            {
+                                "type": "grid",
+                                "cards": [
+                                    {
+                                        "type": "custom:c300x-doorbell-call-card",
+                                        "entity": "camera.bticino_c300x_doorbell_camera",
+                                        "mode": "home_call",
+                                    },
+                                    {
+                                        "type": "custom:c300x-doorbell-call-card",
+                                        "entity": "camera.bticino_c300x_doorbell_camera",
+                                        "mode": "doorbell_call",
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                ]
+            }
+
+        async def async_load(self, _force: bool) -> dict[str, Any]:
+            return self.config
+
+        async def async_save(self, config: dict[str, Any]) -> None:
+            self.config = config
+
+    dashboard = FakeLovelaceDashboard()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    hass.entity_registry = FakeEntityRegistry()
+    hass.data["lovelace"] = types.SimpleNamespace(dashboards={None: dashboard})
+    monkeypatch.setitem(sys.modules, "homeassistant.components.lovelace", lovelace_package)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.lovelace.const",
+        lovelace_const,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.helpers.entity_registry",
+        entity_registry,
+    )
+    monkeypatch.setattr(
+        sys.modules["homeassistant.helpers"],
+        "entity_registry",
+        entity_registry,
+        raising=False,
+    )
+    entity_registry.async_get = lambda _hass: hass.entity_registry
+
+    path = asyncio.run(_async_setup_lovelace_cards(hass, entry))  # type: ignore[arg-type]
+
+    assert path == "/lovelace/c300x"
+    dashboard_text = str(dashboard.config)
+    assert "doorbell_state_entity" not in dashboard_text
+    assert "home_call_entity" not in dashboard_text
+    assert "'mode': 'doorbell_call'" not in dashboard_text
+    assert "'mode': 'home_call'" not in dashboard_text
+    assert dashboard_text.count("'mode': 'auto'") == 1
+
+
 def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
     monkeypatch,
 ) -> None:

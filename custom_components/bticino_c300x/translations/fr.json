@@ -574,7 +574,7 @@
           },
           "confirm": {
             "title": "Creer ou actualiser la carte Lovelace C300X",
-            "description": "Home Assistant ajoutera ou actualisera une vue C300X dans un dashboard Lovelace en mode storage. La vue contient la carte Doorstation/Home Call consolidee pour {entry_title}. Les anciens layouts generes avec cartes separees sur cette vue sont remplaces.",
+            "description": "Home Assistant ajoutera ou actualisera une vue C300X dans un dashboard Lovelace en mode storage. La vue contient la carte Doorstation/Home Call consolidee pour {entry_title}. Les anciens layouts generes avec cartes separees dans le dashboard selectionne sont remplaces.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "Chemin de la vue"

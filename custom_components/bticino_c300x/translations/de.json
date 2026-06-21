@@ -574,7 +574,7 @@
           },
           "confirm": {
             "title": "C300X Lovelace-Card erstellen oder aktualisieren",
-            "description": "Home Assistant fuegt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu oder aktualisiert sie. Die View enthaelt die zusammengefuehrte Doorstation/Home-Call-Card fuer {entry_title}. Alte generierte Split-Card-Layouts auf dieser View werden ersetzt.",
+            "description": "Home Assistant fuegt einem Lovelace-Dashboard im Storage-Modus eine C300X-View hinzu oder aktualisiert sie. Die View enthaelt die zusammengefuehrte Doorstation/Home-Call-Card fuer {entry_title}. Alte generierte Split-Card-Layouts im ausgewaehlten Dashboard werden ersetzt.",
             "data": {
               "dashboard_path": "Dashboard",
               "view_path": "View-Pfad"

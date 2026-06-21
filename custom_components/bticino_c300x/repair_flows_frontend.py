@@ -173,12 +173,12 @@ async def _async_setup_lovelace_cards(
 
     config_changed = any(
         (
-            _remove_state_entity_overrides_from_existing_cards(view, camera_entity_id),
-            _remove_legacy_split_c300x_cards(view, camera_entity_id),
+            _remove_state_entity_overrides_from_existing_cards(config, camera_entity_id),
+            _remove_legacy_split_c300x_cards(config, camera_entity_id),
             config_changed,
         )
     )
-    if _dashboard_has_c300x_cards(view, camera_entity_id):
+    if _dashboard_has_c300x_cards(config, camera_entity_id):
         if config_changed:
             await dashboard.async_save(config)
         return _lovelace_dashboard_path(dashboard_path, view_path)

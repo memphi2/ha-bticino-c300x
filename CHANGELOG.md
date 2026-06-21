@@ -12,6 +12,7 @@
 
 ### Added
 
+- Updates the packaged native C300X device agent to `1.4.0`.
 - Adds separate Android and iOS Ring Call phone alert blueprints that target the
   selected C300X device.
 
@@ -28,6 +29,8 @@
   so the device can recover from display-side load without a manual reload.
 - Closes finished local Home Call WebRTC sessions before starting on-demand
   video, so the first stream request after Home Call can start cleanly.
+- Cleans up old generated split-card layouts across all Lovelace dashboard
+  views when the one-time C300X card Repair runs.
 
 ### Upgrade Notes
 

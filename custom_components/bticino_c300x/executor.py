@@ -1360,7 +1360,16 @@ def _finalize_dashboard_items(items: Any) -> list[dict[str, Any]]:
         items,
         key=lambda value: (
             _dashboard_int(value.get("_order") if isinstance(value, dict) else None, 1000),
-            str(value.get("name") or value.get("entity_id") or value.get("source") or ""),
+            str(
+                (
+                    value.get("name")
+                    or value.get("entity_id")
+                    or value.get("source")
+                    or ""
+                )
+                if isinstance(value, dict)
+                else ""
+            ),
         ),
     ):
         if not isinstance(item, dict):

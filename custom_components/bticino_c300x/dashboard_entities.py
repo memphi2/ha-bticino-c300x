@@ -164,7 +164,7 @@ def _normalize_dashboard_entity_id(value: Any, *, strict: bool) -> str | None:
     return entity_id
 
 
-def _invalid_dashboard_entity(strict: bool) -> None:
+def _invalid_dashboard_entity(strict: bool) -> str | None:
     if strict:
         raise ValueError("invalid dashboard entity")
     return None

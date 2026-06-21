@@ -117,6 +117,58 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert 'ui_event_notify(runtime, "media.closed")' in http
 
 
+def test_native_agent_ignores_transient_on_demand_media_closed_during_start() -> None:
+    video = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
+        encoding="utf-8"
+    )
+    header = (ROOT / "native_agent" / "src" / "video_rtsp.h").read_text(
+        encoding="utf-8"
+    )
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+
+    media_starting_body = video[
+        video.index("void c300x_video_bridge_media_starting") :
+        video.index("void c300x_video_bridge_media_started")
+    ]
+    media_started_body = video[
+        video.index("void c300x_video_bridge_media_started") :
+        video.index("void c300x_video_bridge_ring_media_started")
+    ]
+    media_stopped_body = video[
+        video.index("void c300x_video_bridge_media_stopped") :
+        video.index("void c300x_video_bridge_set_error")
+    ]
+    ignore_body = video[video.index("int c300x_video_ignore_transient_media_closed") :]
+    transient_filter_body = http[
+        http.index("static int doorbell_media_closed_is_ondemand_start_transition") :
+        http.index("static void handle_udp_event")
+    ]
+
+    assert "#define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500" in video
+    assert "long long media_closed_grace_until_ms;" in video
+    assert "void c300x_video_bridge_media_starting" in header
+    assert "int c300x_video_ignore_transient_media_closed" in header
+    assert "c300x_video_bridge_media_starting(bridge->video);" in media_bridge
+    assert "video->media_starting = 1;" in media_starting_body
+    assert "video->media_closed_grace_until_ms =" in media_starting_body
+    assert "clear_external_media_active_locked(video);" in media_starting_body
+    assert "video->media_starting = 0;" in media_started_body
+    assert "video->media_closed_grace_until_ms =" in media_started_body
+    assert "video->media_closed_grace_until_ms = 0;" in media_stopped_body
+    assert "video->clients > 0" in ignore_body
+    assert "video->call_active || video->media_starting" in ignore_body
+    assert "now < video->media_closed_grace_until_ms" in ignore_body
+    assert 'strncmp(msg, "*8*3#1#4*"' in transient_filter_body
+    assert 'strncmp(msg, "*8*3#5#4*"' in transient_filter_body
+    assert (
+        "c300x_video_ignore_transient_media_closed(runtime->video)"
+        in transient_filter_body
+    )
+
+
 def test_native_agent_reports_media_ownership_and_external_block_state() -> None:
     header = (ROOT / "native_agent" / "src" / "video_rtsp.h").read_text(
         encoding="utf-8"

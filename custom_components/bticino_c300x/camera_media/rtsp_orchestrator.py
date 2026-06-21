@@ -192,8 +192,6 @@ class CameraRtspOrchestrator:
                         self._owner._build_stream_url(audio=audio)
                     )
                     return
-            await self._owner._entry.runtime_data.api.async_stop_doorbell_video()
-            await asyncio.sleep(1.0)
             await self.async_warmup_video(audio=audio)
             await self.async_wait_for_rtsp_ready(
                 self._owner._build_stream_url(audio=audio)

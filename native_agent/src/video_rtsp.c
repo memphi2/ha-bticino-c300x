@@ -19,6 +19,7 @@
 #define C300X_VIDEO_EVENT_DATA_LEN 512
 #define C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS 30
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
+#define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
 
 struct c300x_video;
 static void clear_external_media_active_locked(struct c300x_video *video);
@@ -37,6 +38,7 @@ struct c300x_video {
     int call_active;
     int clients;
     int media_starting;
+    long long media_closed_grace_until_ms;
     int stream_audio;
     int external_event_active;
     long long external_event_expires_ms;
@@ -96,7 +98,7 @@ static int external_media_active_locked(struct c300x_video *video)
         clear_external_media_active_locked(video);
         return 0;
     }
-    return video->call_active == 0 && video->external_event_active;
+    return video->call_active == 0 && video->media_starting == 0 && video->external_event_active;
 }
 
 static int external_media_guard_ttl_seconds(int ttl_seconds)
@@ -547,6 +549,19 @@ void c300x_video_bridge_client_disconnected(struct c300x_video *video)
     pthread_mutex_unlock(&video->mutex);
 }
 
+void c300x_video_bridge_media_starting(struct c300x_video *video)
+{
+    if (video == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&video->mutex);
+    video->media_starting = 1;
+    video->media_closed_grace_until_ms =
+        monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
+    clear_external_media_active_locked(video);
+    pthread_mutex_unlock(&video->mutex);
+}
+
 void c300x_video_bridge_media_started(struct c300x_video *video, int include_audio)
 {
     if (video == NULL) {
@@ -558,6 +573,8 @@ void c300x_video_bridge_media_started(struct c300x_video *video, int include_aud
     }
     video->call_active = 1;
     video->media_starting = 0;
+    video->media_closed_grace_until_ms =
+        monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     video->last_block_reason[0] = '\0';
@@ -596,6 +613,7 @@ void c300x_video_bridge_media_stopped(struct c300x_video *video)
     }
     video->call_active = 0;
     video->media_starting = 0;
+    video->media_closed_grace_until_ms = 0;
     video->stream_audio = 0;
     pthread_mutex_unlock(&video->mutex);
 }
@@ -643,4 +661,24 @@ void c300x_video_note_event(struct c300x_video *video, const char *event_type, i
         clear_external_media_active_locked(video);
     }
     pthread_mutex_unlock(&video->mutex);
+}
+
+int c300x_video_ignore_transient_media_closed(struct c300x_video *video)
+{
+    long long now;
+    int ignore;
+
+    if (video == NULL) {
+        return 0;
+    }
+    now = monotonic_ms();
+    pthread_mutex_lock(&video->mutex);
+    ignore = (
+        video->clients > 0
+        && (video->call_active || video->media_starting)
+        && video->media_closed_grace_until_ms > 0
+        && now < video->media_closed_grace_until_ms
+    );
+    pthread_mutex_unlock(&video->mutex);
+    return ignore;
 }

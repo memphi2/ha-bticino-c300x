@@ -4395,6 +4395,7 @@ static bool start_media_session(media_bridge_t *bridge) {
         return false;
     }
     pthread_mutex_unlock(&bridge->mutex);
+    c300x_video_bridge_media_starting(bridge->video);
 
     if (!send_sip_setup(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "ondemand_sip_setup_failed");

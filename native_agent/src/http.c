@@ -6143,6 +6143,25 @@ static int doorbell_media_closed_is_answer_transition(struct agent_runtime *runt
     );
 }
 
+static int doorbell_media_closed_is_ondemand_start_transition(
+    struct agent_runtime *runtime,
+    const char *msg
+)
+{
+    if (
+        runtime == NULL
+        || runtime->video == NULL
+        || msg == NULL
+        || (
+            strncmp(msg, "*8*3#1#4*", strlen("*8*3#1#4*")) != 0
+            && strncmp(msg, "*8*3#5#4*", strlen("*8*3#5#4*")) != 0
+        )
+    ) {
+        return 0;
+    }
+    return c300x_video_ignore_transient_media_closed(runtime->video);
+}
+
 static void handle_udp_event(
     int udp_fd,
     const struct c300x_config *config,
@@ -6196,7 +6215,10 @@ static void handle_udp_event(
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
         if (
             strcmp(type, "doorbell.media.closed") == 0
-            && doorbell_media_closed_is_answer_transition(runtime)
+            && (
+                doorbell_media_closed_is_answer_transition(runtime)
+                || doorbell_media_closed_is_ondemand_start_transition(runtime, msg)
+            )
         ) {
             return;
         }

@@ -119,7 +119,7 @@ def test_restart_video_reader_restarts_on_demand_media(monkeypatch: pytest.Monke
 
     asyncio.run(orchestrator.async_restart_video_reader(audio=False))
 
-    assert owner.api.stop_calls == 1
+    assert owner.api.stop_calls == 0
     assert owner.api.activate_audio == [False]
     assert ready_urls == ["rtsp://agent.local:6554/doorbell-video"]
 

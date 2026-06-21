@@ -4,41 +4,39 @@
 
 ### Breaking Changes
 
-- The generated Lovelace dashboard now uses the consolidated C300X
-  Doorstation/Home Call card. Older generated split-card layouts and older
-  manually maintained card configurations are not supported by the generated
-  dashboard anymore. Run the one-time Lovelace card Repair or replace manual
-  YAML dashboards with the consolidated card configuration.
+- Generated Lovelace dashboards now use the consolidated C300X Doorstation card.
+  Older split-card dashboard layouts must be refreshed with the one-time
+  Lovelace card Repair or replaced with the new card configuration.
 
 ### Added
 
 - Updates the packaged native C300X device agent to `1.4.0`.
-- Adds separate Android and iOS Ring Call phone alert blueprints that target the
-  selected C300X device.
+- Adds Android and iOS Ring Call blueprints for phone alerts with Answer,
+  Hang Up and dashboard actions.
 
 ### Changed
 
-- Reduces C300X display dashboard runtime load by avoiding hidden dashboard tile
-  trees, stopping hidden page event watches and trimming stale display requests.
-- Makes Media Readiness and setup checks more consistent at startup without
-  redundant device writes.
+- Consolidates the Doorstation and Home Call Lovelace experience into one card.
+- Reduces display dashboard load, especially while pages are hidden or the
+  display is idle.
+- Improves the Media Readiness flow and Repair guidance for local media setup.
 
 ### Fixed
 
-- Reloads the C300X display GUI after a sustained high-CPU media watchdog event
-  so the device can recover from display-side load without a manual reload.
-- Closes finished local Home Call WebRTC sessions before starting on-demand
-  video, so the first stream request after Home Call can start cleanly.
-- Cleans up old generated split-card layouts across all Lovelace dashboard
-  views when the one-time C300X card Repair runs.
+- Improves on-demand video startup after Home Assistant restarts and after Home
+  Calls.
+- Keeps the card state correct after calls end.
+- Improves display-side recovery after sustained high CPU load.
+- Refreshes old generated C300X dashboard cards across Lovelace views when the
+  one-time card Repair runs.
 
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
-- Run the one-time Lovelace card Repair if Home Assistant offers it. It refreshes
-  the generated C300X dashboard card for this release.
+- Update the native C300X device agent from Home Assistant.
+- Run the one-time Lovelace card Repair if Home Assistant offers it.
 - Hard-reload the browser or clear the Home Assistant app/WebView cache if the
-  card picker or dashboard still shows old card behavior after updating.
+  card picker or dashboard still shows old card behavior.
 - If C300X display pages are enabled, update/reload the display patch from Home
   Assistant so the new dashboard layout is active.
 

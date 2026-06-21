@@ -16,6 +16,7 @@ _SOURCE_DIR = Path(__file__).with_name("blueprints") / "automation" / DOMAIN
 _TARGET_RELATIVE_DIR = ("blueprints", "automation", DOMAIN)
 _OBSOLETE_BLUEPRINT_FILES = frozenset(
     {
+        "doorbell_call_mobile_dashboard.yaml",
         "doorbell_call_notification.yaml",
     }
 )

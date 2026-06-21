@@ -281,8 +281,8 @@ int c300x_self_test_json(
         talkback_reason = talkback_ok ? "talkback_rtp_ready" : "talkback_rtp_firewall_missing";
 
         if (!c300x_device_user_read_status(&user_status)) {
-            user_ok = -1;
-            device_routing_ok = -1;
+            user_ok = 0;
+            device_routing_ok = 0;
             user_reason = "device_user_status_unavailable";
             device_routing_reason = "not_checked_device_user_status_unavailable";
         } else if (!user_status.media_identity_available) {

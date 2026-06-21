@@ -39,9 +39,13 @@ def test_install_bundled_blueprints_preserves_existing_files(tmp_path: Path) -> 
 def test_install_bundled_blueprints_removes_obsolete_bundles(tmp_path: Path) -> None:
     target = tmp_path / "blueprints" / "automation" / "bticino_c300x"
     target.mkdir(parents=True)
-    obsolete = target / "doorbell_call_notification.yaml"
-    obsolete.write_text("old bundled blueprint\n", encoding="utf-8")
+    obsolete_files = {
+        target / "doorbell_call_mobile_dashboard.yaml",
+        target / "doorbell_call_notification.yaml",
+    }
+    for obsolete in obsolete_files:
+        obsolete.write_text("old bundled blueprint\n", encoding="utf-8")
 
     install_bundled_blueprints(target)
 
-    assert not obsolete.exists()
+    assert all(not obsolete.exists() for obsolete in obsolete_files)

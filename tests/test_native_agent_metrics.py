@@ -205,13 +205,13 @@ def test_native_agent_device_user_status_reports_read_availability() -> None:
     assert "status->status_available = 0;" in read_status
 
 
-def test_native_agent_self_test_keeps_unavailable_device_user_unknown() -> None:
+def test_native_agent_self_test_marks_unavailable_device_user_failed() -> None:
     text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(
         encoding="utf-8"
     )
 
-    assert "user_ok = -1;" in text
-    assert "device_routing_ok = -1;" in text
+    assert "user_ok = 0;" in text
+    assert "device_routing_ok = 0;" in text
     assert 'user_reason = "device_user_status_unavailable";' in text
     assert "check_json(user_ok)" in text
     assert "check_json(device_routing_ok)" in text

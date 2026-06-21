@@ -2,6 +2,12 @@
 
 ## v1.4.0 - 2026-06-20
 
+### Breaking Changes
+
+- The old separate Lovelace card modes (`doorbell_call` and `home_call`) are no
+  longer treated as complete dashboard setup. Use the central C300X Doorstation
+  card instead and run the Lovelace card repair after updating.
+
 ### Changed
 
 - Improves the C300X display dashboard weather page with clearer current and
@@ -19,6 +25,8 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
+- Run the Lovelace card repair once after updating if an existing C300X card no
+  longer renders. Then hard-reload the browser or clear the frontend cache.
 - If C300X display pages are enabled, update/reload the display patch from Home
   Assistant so the new dashboard layout is active.
 

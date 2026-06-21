@@ -1,26 +1,27 @@
-const C300X_CARD_TAG = "c300x-doorbell-call-card";
-const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
-const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
-const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
+(function registerC300XDoorbellCallCardMetadata() {
+  const C300X_CARD_TAG = "c300x-doorbell-call-card";
+  const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
+  const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
+  const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
 
-const C300X_METADATA_TRANSLATIONS = {
-  en: {
-    card_description: "Doorbell video and Home Call controls for BTicino C300X.",
-    doorstation_card: "Doorstation card",
-  },
-  de: {
-    card_description: "Türvideo- und Home-Call-Bedienung für BTicino C300X.",
-    doorstation_card: "Türstation-Card",
-  },
-  fr: {
-    card_description: "Contrôles vidéo de sonnette et Home Call pour BTicino C300X.",
-    doorstation_card: "Carte platine",
-  },
-  it: {
-    card_description: "Controlli video campanello e Home Call per BTicino C300X.",
-    doorstation_card: "Scheda postazione porta",
-  },
-};
+  const C300X_METADATA_TRANSLATIONS = {
+    en: {
+      card_description: "Doorbell video and Home Call controls for BTicino C300X.",
+      doorstation_card: "Doorstation card",
+    },
+    de: {
+      card_description: "Türvideo- und Home-Call-Bedienung für BTicino C300X.",
+      doorstation_card: "Türstation-Card",
+    },
+    fr: {
+      card_description: "Contrôles vidéo de sonnette et Home Call pour BTicino C300X.",
+      doorstation_card: "Carte platine",
+    },
+    it: {
+      card_description: "Controlli video campanello e Home Call per BTicino C300X.",
+      doorstation_card: "Scheda postazione porta",
+    },
+  };
 
 function c300xMetadataLanguage(hass) {
   const language = (hass?.language || hass?.locale?.language || "en").toLowerCase();
@@ -92,3 +93,4 @@ window.customCards.push({
   documentationURL: C300X_DOCUMENTATION_URL,
   getEntitySuggestion: c300xMetadataEntitySuggestion,
 });
+})();

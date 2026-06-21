@@ -366,7 +366,7 @@ def _dashboard_has_c300x_cards(config: dict[str, Any], camera_entity_id: str) ->
     """Return true when the generated central C300X card already exists."""
 
     modes = _dashboard_c300x_card_modes(config, camera_entity_id)
-    return "auto" in modes or {"doorbell_call", "home_call"}.issubset(modes)
+    return "auto" in modes
 
 
 def _dashboard_c300x_card_modes(
@@ -384,7 +384,7 @@ def _dashboard_c300x_card_modes(
         if card.get("entity") != camera_entity_id:
             continue
         card_mode = str(card.get("mode") or "auto")
-        if card_mode in {"auto", "doorbell_call", "home_call"}:
+        if card_mode == "auto":
             modes.add(card_mode)
     return modes
 

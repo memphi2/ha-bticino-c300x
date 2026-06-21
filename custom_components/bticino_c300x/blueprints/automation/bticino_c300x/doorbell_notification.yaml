@@ -48,7 +48,7 @@ variables:
 condition:
   - condition: template
     value_template: >-
-      {{ entry_id and event_camera_entity in c300x_entities }}
+      {{ entry_id and (not event_camera_entity or event_camera_entity in c300x_entities) }}
 
 action:
   - choose:

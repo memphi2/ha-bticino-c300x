@@ -90,7 +90,6 @@ def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:
 
 def test_doorbell_blueprints_use_event_entry_and_selected_device() -> None:
     for filename in {
-        "doorbell_notification.yaml",
         "doorbell_call_android.yaml",
         "doorbell_call_ios.yaml",
         "ring_capture.yaml",
@@ -115,6 +114,20 @@ def test_doorbell_blueprints_use_event_entry_and_selected_device() -> None:
                 "{{ entry_id and event_camera_entity in c300x_entities }}"
             ),
         }
+
+
+def test_doorbell_notification_allows_camera_less_events() -> None:
+    data = _blueprint("doorbell_notification.yaml")
+    inputs = data["blueprint"]["input"]
+    first_condition = data["condition"][0]
+
+    assert "entry_id" not in inputs
+    assert first_condition == {
+        "condition": "template",
+        "value_template": (
+            "{{ entry_id and (not event_camera_entity or event_camera_entity in c300x_entities) }}"
+        ),
+    }
 
 
 def test_doorbell_notification_derives_camera_from_device() -> None:

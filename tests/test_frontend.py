@@ -524,7 +524,10 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'action === "unavailable"' in state_source
     assert "this._actionButtonEl.disabled = view.actionDisabled;" in source
     assert 'if (action === "external_call") {' in source
-    assert "return attributes.external_media_active === true" in state_source
+    assert 'stateMachineAction === "unavailable"' in state_source
+    assert 'mediaState === "idle" || primaryAction === "start_stream"' in state_source
+    assert "return false;" in state_source
+    assert "attributes.external_media_active === true" in state_source
     assert 'attributes.video_owner === "external_media"' in state_source
     assert 'attributes.external_owner === "external_media"' in state_source
 
@@ -662,10 +665,23 @@ def test_bundled_card_treats_media_primary_action_as_authoritative() -> None:
     assert state_source.index("const stateMachineAction = c300xStateMachineDoorstationAction") < state_source.index(
         "c300xIsRingCallPending(cameraEntity)"
     )
+    assert state_source.index("const stateMachineAction = c300xStateMachineDoorstationAction") < state_source.index(
+        "if (c300xIsExternalDoorstationMedia(cameraEntity))"
+    )
     assert (
         'doorbellAnswered && (!stateMachineAction || stateMachineAction === "answer")'
         in state_source
     )
+
+
+def test_bundled_card_shows_idle_status_for_idle_stream_action() -> None:
+    state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+
+    assert "function c300xDoorstationStatusKey(cameraEntity, action, active)" in state_source
+    assert "secondaryKey: c300xDoorstationStatusKey(cameraEntity, action, active)" in state_source
+    assert 'action === "stream"' in state_source
+    assert 'mediaState === "idle" || cameraEntity?.state === "idle"' in state_source
+    assert 'return "idle";' in state_source
 
 
 def test_bundled_state_model_maps_media_actions_to_buttons() -> None:

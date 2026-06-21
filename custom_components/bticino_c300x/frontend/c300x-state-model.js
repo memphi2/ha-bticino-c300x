@@ -104,7 +104,7 @@ export function c300xCardViewModel({
     actionAnswerable: action === "answer",
     actionBlocked: actionDisabled,
     actionRecording: active,
-    secondaryKey: action,
+    secondaryKey: c300xDoorstationStatusKey(cameraEntity, action, active),
     showMedia: true,
     showEmpty: !active,
     ringbackActive: false,
@@ -132,15 +132,21 @@ export function c300xDoorstationAction({
   previewStarting,
   ringPreviewActive,
 }) {
-  if (c300xIsExternalDoorstationMedia(cameraEntity)) {
-    return "external_call";
-  }
   const stateMachineAction = c300xStateMachineDoorstationAction(cameraEntity, active);
   if (doorbellAnswered && (!stateMachineAction || stateMachineAction === "answer")) {
     return "hang_up";
   }
   if (stateMachineAction) {
+    if (
+      stateMachineAction === "unavailable"
+      && c300xIsExternalDoorstationMedia(cameraEntity)
+    ) {
+      return "external_call";
+    }
     return stateMachineAction;
+  }
+  if (c300xIsExternalDoorstationMedia(cameraEntity)) {
+    return "external_call";
   }
   if (c300xIsRingCallPending(cameraEntity)) {
     return "answer";
@@ -158,6 +164,18 @@ export function c300xDoorstationAction({
     return "hang_up";
   }
   return "stream";
+}
+
+export function c300xDoorstationStatusKey(cameraEntity, action, active) {
+  const mediaState = c300xMediaState(cameraEntity);
+  if (
+    action === "stream"
+    && !active
+    && (mediaState === "idle" || cameraEntity?.state === "idle")
+  ) {
+    return "idle";
+  }
+  return action;
 }
 
 export function c300xStateMachineDoorstationAction(cameraEntity, active) {
@@ -229,6 +247,11 @@ export function c300xIsRingCallAvailable(cameraEntity) {
 
 export function c300xIsExternalDoorstationMedia(cameraEntity) {
   const attributes = cameraEntity?.attributes || {};
+  const mediaState = c300xMediaState(cameraEntity);
+  const primaryAction = c300xMediaPrimaryAction(cameraEntity);
+  if (mediaState === "idle" || primaryAction === "start_stream") {
+    return false;
+  }
   return attributes.external_media_active === true
     || attributes.video_owner === "external_media"
     || attributes.external_owner === "external_media";

@@ -455,7 +455,7 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert 'class="home-action hidden"' in source
     assert "_handleHomeCallAction" in source
     assert "_activeHomeCallSession" in source
-    assert "doorstationBlockedByHomeCall" in source
+    assert "doorstationBlockedByHomeCall" not in source
     assert 'class="readiness hidden"' in source
     assert '"/config/repairs"' in source
     assert 'state !== "ready"' in source
@@ -512,7 +512,7 @@ def test_bundled_card_marks_external_doorstation_calls_not_controllable() -> Non
     assert 'action === "external_call"' in state_source
     assert 'action === "busy"' in state_source
     assert 'action === "unavailable"' in state_source
-    assert "this._actionButtonEl.disabled = view.actionDisabled || doorstationBlockedByHomeCall;" in source
+    assert "this._actionButtonEl.disabled = view.actionDisabled;" in source
     assert 'if (action === "external_call") {' in source
     assert "return attributes.external_media_active === true" in state_source
     assert 'attributes.video_owner === "external_media"' in state_source
@@ -548,6 +548,19 @@ def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:
     assert "this._ringPreviewActive = true;" in source
     assert "this._startTalkback({ microphone: false, receiveAudio: false })" in source
     assert "} else if (receiveAudio) {" in webrtc_source
+
+
+def test_bundled_card_does_not_drop_first_doorstation_click_on_stale_home_call_state() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    handler = source[
+        source.index("async _handlePrimaryAction()") : source.index(
+            "if (this._isConfiguredCallActive() || this._startingCall)"
+        )
+    ]
+
+    assert "this._isConfiguredCallActive()" not in handler
+    assert "doorstationBlockedByHomeCall" not in source
+    assert "await this._startTalkback();" in handler
 
 
 def test_bundled_card_mutes_only_local_microphone_tracks() -> None:

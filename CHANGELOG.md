@@ -4,27 +4,28 @@
 
 ### Breaking Changes
 
-- The generated Lovelace dashboard setup now uses the consolidated C300X
-  Doorstation/Home Call card. Older generated split-card layouts are replaced
-  by the one-time Lovelace card Repair for this release. Manually maintained
-  YAML dashboards must be updated manually if they still use old split-card
-  layouts.
+- The generated Lovelace dashboard now uses the consolidated C300X
+  Doorstation/Home Call card. Older generated split-card layouts and older
+  manually maintained card configurations are not supported by the generated
+  dashboard anymore. Run the one-time Lovelace card Repair or replace manual
+  YAML dashboards with the consolidated card configuration.
+
+### Added
+
+- Adds separate Android and iOS Ring Call phone alert blueprints that target the
+  selected C300X device.
 
 ### Changed
 
-- Improves the C300X display dashboard weather page with clearer current and
-  forecast tiles plus humidity, wind and sunrise/sunset details.
-- Reduces display dashboard runtime load by avoiding hidden dashboard tile
-  trees and trimming stale display requests.
+- Reduces C300X display dashboard runtime load by avoiding hidden dashboard tile
+  trees, stopping hidden page event watches and trimming stale display requests.
+- Makes Media Readiness and setup checks more consistent at startup without
+  redundant device writes.
 
 ### Fixed
 
-- Stops display dashboard event watching when the display page is hidden or the
-  screen turns off.
 - Reloads the C300X display GUI after a sustained high-CPU media watchdog event
   so the device can recover from display-side load without a manual reload.
-- Fixes the Lovelace card picker spinner by disabling frontend preview
-  rendering for the custom card and correcting the card editor schema.
 - Closes finished local Home Call WebRTC sessions before starting on-demand
   video, so the first stream request after Home Call can start cleanly.
 

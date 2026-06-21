@@ -481,7 +481,6 @@ class C300XDoorbellCallCard extends HTMLElement {
       previewStarting: false,
       ringPreviewActive: false,
     });
-    const doorstationBlockedByHomeCall = !homeCallMode && homeView.actionActive;
     const actionLabel = this._label(view.actionLabelKey);
 
     this._titleEl.textContent = name;
@@ -491,11 +490,11 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._actionIconEl.setAttribute("icon", view.actionIcon);
     this._actionButtonEl.title = actionLabel;
     this._actionButtonEl.setAttribute("aria-label", actionLabel);
-    this._actionButtonEl.disabled = view.actionDisabled || doorstationBlockedByHomeCall;
+    this._actionButtonEl.disabled = view.actionDisabled;
     this._actionButtonEl.classList.toggle("active", view.actionActive);
     this._actionButtonEl.classList.toggle("dialing", view.actionDialing);
     this._actionButtonEl.classList.toggle("answerable", view.actionAnswerable);
-    this._actionButtonEl.classList.toggle("blocked", view.actionBlocked || doorstationBlockedByHomeCall);
+    this._actionButtonEl.classList.toggle("blocked", view.actionBlocked);
     this._actionButtonEl.classList.toggle("recording", view.actionRecording);
     this._updateHomeActionButton(homeView, autoMode, doorstationActive);
     this._updateMicButton();
@@ -515,7 +514,7 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   async _handlePrimaryAction() {
     if (!this._isHomeCallMode()) {
-      if (this._isConfiguredCallActive() || this._activeHomeCallSession) {
+      if (this._activeHomeCallSession) {
         return;
       }
       const action = this._doorstationView().action;

@@ -737,6 +737,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Activate video and return a URL only after RTSP answers."""
 
         await self._async_close_stale_webrtc_sessions()
+        await self._async_close_finished_home_call_sessions()
         return await self._rtsp_orchestrator.async_prepare_rtsp_stream(audio=audio)
 
     async def _async_close_stale_webrtc_sessions(self) -> None:
@@ -749,6 +750,30 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     notify_client=True,
                     reason="webrtc_closed",
                 )
+
+    async def _async_close_finished_home_call_sessions(self) -> None:
+        """Close stale local Home Call sessions before starting doorbell media."""
+
+        session_ids = self._webrtc_session_registry.session_ids_by_owner("home_call")
+        if not session_ids:
+            return
+
+        try:
+            status = await self._entry.runtime_data.api.async_home_call_status()
+        except Exception:  # noqa: BLE001 - keep active-looking local sessions on status errors
+            return
+        if _home_call_status_has_media(status):
+            self._apply_home_call_status(status)
+            return
+
+        self._apply_home_call_ended(dict(status))
+        for session_id in session_ids:
+            await self._async_close_webrtc_session(
+                session_id,
+                stop_media=False,
+                notify_client=True,
+                reason="home_call_ended",
+            )
 
     async def _async_wait_for_call_media_after_external_event(
         self,

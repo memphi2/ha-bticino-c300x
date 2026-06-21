@@ -80,7 +80,7 @@ class NativeWebRTCSessionRegistry:
     def session_ids_by_owner(self, owner: str) -> list[str]:
         """Return session IDs for a given logical media owner."""
 
-        return self.session_ids_matching(lambda session: session.owner == owner)
+        return self.session_ids_matching(lambda session: getattr(session, "owner", None) == owner)
 
     def session_ids_for_ring_call(self) -> list[str]:
         """Return session IDs for active ring-call sessions."""

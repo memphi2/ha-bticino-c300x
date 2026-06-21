@@ -1,6 +1,14 @@
 # Changelog
 
-## v1.4.0 - 2026-06-20
+## v1.4.0 - 2026-06-21
+
+### Breaking Changes
+
+- The generated Lovelace dashboard setup now uses the consolidated C300X
+  Doorstation/Home Call card. Older generated split-card layouts are replaced
+  by the one-time Lovelace card Repair for this release. Manually maintained
+  YAML dashboards must be updated manually if they still use old split-card
+  layouts.
 
 ### Changed
 
@@ -15,10 +23,18 @@
   screen turns off.
 - Reloads the C300X display GUI after a sustained high-CPU media watchdog event
   so the device can recover from display-side load without a manual reload.
+- Fixes the Lovelace card picker spinner by disabling frontend preview
+  rendering for the custom card and correcting the card editor schema.
+- Closes finished local Home Call WebRTC sessions before starting on-demand
+  video, so the first stream request after Home Call can start cleanly.
 
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
+- Run the one-time Lovelace card Repair if Home Assistant offers it. It refreshes
+  the generated C300X dashboard card for this release.
+- Hard-reload the browser or clear the Home Assistant app/WebView cache if the
+  card picker or dashboard still shows old card behavior after updating.
 - If C300X display pages are enabled, update/reload the display patch from Home
   Assistant so the new dashboard layout is active.
 

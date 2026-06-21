@@ -95,8 +95,12 @@ After Media Readiness is ready:
 3. Select **C300X Doorbell Call Card**.
 4. Choose the C300X camera entity.
 
-Use one normal card for Doorbell/On-demand. Add a second card in **Home Call**
-mode when you want Home Call.
+Use one normal card in **Auto** mode for Doorbell, On-demand and Home Call.
+Use separate Doorbell/Home Call modes only for hand-built special dashboards.
+
+If Home Assistant shows a C300X Lovelace card Repair after an update, run it
+once. It refreshes the generated C300X dashboard view and replaces old generated
+split-card layouts with the current consolidated card.
 
 After an update, hard-reload the browser or clear the Home Assistant frontend
 cache if the card still looks old.

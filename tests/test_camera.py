@@ -1132,6 +1132,98 @@ def test_doorbell_camera_on_demand_closes_finished_home_call_before_admission() 
     assert camera.extra_state_attributes["video_owner"] == "agent"
 
 
+def test_doorbell_camera_on_demand_clears_finished_home_call_without_local_session() -> None:
+    class _IdleAfterHomeCallApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            active = bool(self.activate_calls)
+            status["media_owner"] = "agent" if active else "idle"
+            status["window_available"] = active
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "agent" if active else "idle",
+                "home_call_running": False,
+                "home_call_active": False,
+                "home_call_answered": False,
+                "clients": 0,
+            }
+            return status
+
+        async def async_home_call_status(self) -> dict[str, Any]:
+            self.home_call_status_calls += 1
+            return {
+                "available": True,
+                "running": False,
+                "active": False,
+                "answered": False,
+                "rtp_proxy": False,
+                "target_audio_port": 0,
+                "rtp_packets": 9,
+                "rtcp_packets": 2,
+            }
+
+    api = _IdleAfterHomeCallApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._video_owner = "home_call"
+    camera._bridge_status = {
+        "media_owner": "home_call",
+        "home_call_running": True,
+        "home_call_active": True,
+        "home_call_answered": True,
+    }
+    _stub_rtsp_ready(camera)
+
+    stream_url = asyncio.run(camera._async_prepare_rtsp_stream(audio=False))
+
+    assert stream_url == "rtsp://127.0.0.1:6554/doorbell-video"
+    assert api.home_call_status_calls == 1
+    assert api.activate_calls == [False]
+    assert camera.extra_state_attributes["video_owner"] == "agent"
+    assert camera._bridge_status["home_call_active"] is False
+
+
+def test_doorbell_camera_on_demand_blocks_active_home_call_without_local_session() -> None:
+    class _ActiveHomeCallApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "home_call"
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "home_call",
+                "home_call_running": True,
+                "home_call_active": True,
+                "home_call_answered": True,
+                "clients": 0,
+            }
+            return status
+
+    api = _ActiveHomeCallApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera._video_owner = "home_call"
+    camera._bridge_status = {
+        "media_owner": "home_call",
+        "home_call_running": True,
+        "home_call_active": True,
+        "home_call_answered": True,
+    }
+    _stub_rtsp_ready(camera)
+
+    with pytest.raises(HomeAssistantError, match="home_call_active"):
+        asyncio.run(camera._async_prepare_rtsp_stream(audio=False))
+
+    assert api.home_call_status_calls == 1
+    assert api.activate_calls == []
+    assert camera.extra_state_attributes["last_video_block_reason"] == "home_call_active"
+
+
 def test_doorbell_camera_keeps_active_home_call_session_during_preflight() -> None:
     class _Peer:
         def __init__(self) -> None:

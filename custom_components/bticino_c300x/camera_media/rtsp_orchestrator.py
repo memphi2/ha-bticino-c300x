@@ -231,6 +231,10 @@ class CameraRtspOrchestrator:
                     if status is not None
                     else None
                 )
+            if decision is not None and decision.state in HOME_CALL_STATES:
+                self._owner._last_video_block_reason = "home_call_active"
+                self._owner._refresh_derived_media_state()
+                raise HomeAssistantError("C300X RTSP busy: home_call_active")
             if decision is None or not media_decision_is_call_media(decision):
                 if status is not None and decision is not None:
                     self.raise_if_rtsp_admission_denied(

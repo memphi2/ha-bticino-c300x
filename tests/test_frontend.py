@@ -381,16 +381,20 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "return {\n      type: C300X_CARD_TYPE," not in source
     assert 'throw new Error("entity is required")' not in source
     assert 'mode: "auto"' in resolver_source
+    assert "card_height: 5" in resolver_source
     assert "c300xResolveEntity" in source
     assert "c300xRelatedEntity" in source
     assert "C300X_MEDIA_READINESS_OBJECT_ID" in source
     assert 'getGridOptions()' in source
-    assert "rows: 5" in source
+    assert "const rows = this._cardHeightRows();" in source
+    assert "rows," in source
     assert "columns: 12" in source
-    assert "min_rows: 5" in source
-    assert "max_rows: 5" in source
+    assert "min_rows: 3" in source
+    assert "max_rows: 10" in source
     assert "min_columns: 6" in source
-    assert "return this._isHomeCallMode() ? 1 : 7;" in source
+    assert "return this._isHomeCallMode() ? 1 : this._cardHeightRows() + 2;" in source
+    assert 'name: "card_height"' in source
+    assert 'mode: "box"' in source
     assert 'getEntitySuggestion: (hass, entityId)' in source
     assert 'documentationURL: C300X_DOCUMENTATION_URL' in source
     assert 'preview: false' in source
@@ -454,7 +458,10 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert "doorstationBlockedByHomeCall" in source
     assert 'class="readiness hidden"' in source
     assert '"/config/repairs"' in source
+    assert 'state !== "ready"' in source
+    assert "media_forwarding_required" in source
     assert "media_ready" in translations_source
+    assert "media_forwarding_required" in translations_source
     assert "open_repairs" in translations_source
 
 

@@ -85,11 +85,12 @@ class C300XDoorbellCallCard extends HTMLElement {
         min_columns: 3,
       };
     }
+    const rows = this._cardHeightRows();
     return {
-      rows: 5,
+      rows,
       columns: 12,
-      min_rows: 5,
-      max_rows: 5,
+      min_rows: 3,
+      max_rows: 10,
       min_columns: 6,
     };
   }
@@ -141,7 +142,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._isHomeCallMode() ? 1 : 7;
+    return this._isHomeCallMode() ? 1 : this._cardHeightRows() + 2;
   }
 
   _ensureRendered() {
@@ -855,6 +856,14 @@ class C300XDoorbellCallCard extends HTMLElement {
     return this._config?.mode === "auto";
   }
 
+  _cardHeightRows() {
+    const value = Number(this._config?.card_height);
+    if (!Number.isFinite(value)) {
+      return 5;
+    }
+    return Math.min(10, Math.max(3, Math.round(value)));
+  }
+
   _resolvedCameraEntityId() {
     return c300xResolveEntity(this._hass, this._config, "camera", C300X_CAMERA_OBJECT_ID);
   }
@@ -930,7 +939,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     const entity = this._mediaReadinessEntity();
     const state = entity?.state;
-    const visible = !!entity && this._isAutoMode();
+    const visible = !!entity && this._isAutoMode() && state !== "ready";
     this._readinessEl.classList.toggle("hidden", !visible);
     if (!visible) {
       return;
@@ -941,7 +950,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     for (const value of ["ready", "warning", "blocked", "unavailable", "unknown"]) {
       this._readinessEl.classList.toggle(value, normalized === value);
     }
-    this._readinessTextEl.textContent = this._label(`media_${normalized}`);
+    this._readinessTextEl.textContent = this._readinessLabel(entity, normalized);
     this._readinessEl.title = this._label("open_repairs");
     this._readinessEl.setAttribute("role", "button");
     this._readinessEl.setAttribute("aria-label", this._label("open_repairs"));
@@ -991,6 +1000,21 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _labelOrRaw(key) {
     return C300X_TRANSLATIONS.en[key] ? this._label(key) : key;
+  }
+
+  _readinessLabel(entity, normalized) {
+    const attributes = entity?.attributes || {};
+    const failedChecks = Array.isArray(attributes.failed_checks)
+      ? attributes.failed_checks
+      : [];
+    if (
+      normalized === "blocked"
+      && attributes.forwarding_homeassistant === false
+      && failedChecks.includes("forwarding_homeassistant")
+    ) {
+      return this._label("media_forwarding_required");
+    }
+    return this._label(`media_${normalized}`);
   }
 
   async _stopHomeCall() {
@@ -1129,6 +1153,17 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
         context: { entity: "entity" },
       },
       ...(homeCallMode ? [] : [{
+        name: "card_height",
+        selector: {
+          number: {
+            min: 3,
+            max: 10,
+            step: 1,
+            mode: "box",
+          },
+        },
+      }]),
+      ...(homeCallMode ? [] : [{
         name: "hangup_script",
         selector: { entity: { domain: "script" } },
       }]),
@@ -1153,6 +1188,7 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     ];
     form.computeLabel = (schema) => this._label(
       {
+        card_height: "card_height",
         hangup_script: "optional_hangup_script",
         ringback_tone: "ringback_tone",
         ringback_volume: "ringback_volume",
@@ -1173,6 +1209,7 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     }
     if (nextConfig.mode === "home_call") {
       delete nextConfig.hangup_script;
+      delete nextConfig.card_height;
     }
     if (nextConfig.mode === "doorbell_call") {
       delete nextConfig.ringback_tone;

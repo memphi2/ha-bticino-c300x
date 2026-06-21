@@ -755,7 +755,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Close stale local Home Call sessions before starting doorbell media."""
 
         session_ids = self._webrtc_session_registry.session_ids_by_owner("home_call")
-        if not session_ids:
+        if not session_ids and not self._cached_home_call_state_needs_refresh():
             return
 
         try:
@@ -774,6 +774,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 notify_client=True,
                 reason="home_call_ended",
             )
+
+    def _cached_home_call_state_needs_refresh(self) -> bool:
+        """Return true when cached media facts still look like Home Call."""
+
+        return (
+            self._video_owner == "home_call"
+            or self._bridge_status.get("media_owner") == "home_call"
+            or bool(self._bridge_status.get("home_call_running"))
+            or bool(self._bridge_status.get("home_call_active"))
+            or bool(self._bridge_status.get("home_call_answered"))
+        )
 
     async def _async_wait_for_call_media_after_external_event(
         self,

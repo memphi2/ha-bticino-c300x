@@ -8,6 +8,7 @@ export const C300X_DEFAULT_CONFIG = {
   hangup_script: "",
   ringback_tone: true,
   ringback_volume: 12,
+  card_height: 5,
 };
 
 export function c300xObjectSuffix(objectId, baseObjectId) {

@@ -85,9 +85,7 @@ class C300XDoorbellCallCard extends HTMLElement {
         min_columns: 3,
       };
     }
-    const rows = this._cardHeightRows();
     return {
-      rows,
       columns: 12,
       min_rows: 3,
       max_rows: 10,
@@ -142,7 +140,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._isHomeCallMode() ? 1 : this._cardHeightRows() + 2;
+    return this._isHomeCallMode() ? 1 : 7;
   }
 
   _ensureRendered() {
@@ -855,14 +853,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     return this._config?.mode === "auto";
   }
 
-  _cardHeightRows() {
-    const value = Number(this._config?.card_height);
-    if (!Number.isFinite(value)) {
-      return 5;
-    }
-    return Math.min(10, Math.max(3, Math.round(value)));
-  }
-
   _resolvedCameraEntityId() {
     return c300xResolveEntity(this._hass, this._config, "camera", C300X_CAMERA_OBJECT_ID);
   }
@@ -1152,17 +1142,6 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
         context: { entity: "entity" },
       },
       ...(homeCallMode ? [] : [{
-        name: "card_height",
-        selector: {
-          number: {
-            min: 3,
-            max: 10,
-            step: 1,
-            mode: "box",
-          },
-        },
-      }]),
-      ...(homeCallMode ? [] : [{
         name: "hangup_script",
         selector: { entity: { domain: "script" } },
       }]),
@@ -1187,7 +1166,6 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     ];
     form.computeLabel = (schema) => this._label(
       {
-        card_height: "card_height",
         hangup_script: "optional_hangup_script",
         ringback_tone: "ringback_tone",
         ringback_volume: "ringback_volume",
@@ -1208,7 +1186,6 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
     }
     if (nextConfig.mode === "home_call") {
       delete nextConfig.hangup_script;
-      delete nextConfig.card_height;
     }
     if (nextConfig.mode === "doorbell_call") {
       delete nextConfig.ringback_tone;

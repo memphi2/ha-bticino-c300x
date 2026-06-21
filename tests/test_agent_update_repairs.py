@@ -1724,7 +1724,7 @@ def test_frontend_card_repair_adds_storage_lovelace_view(monkeypatch) -> None:
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
             "mode": "auto",
-            "grid_options": {"columns": 12, "rows": 7},
+            "grid_options": {"columns": 12},
         },
     ]
     assert "'state_entity':" not in str(cards)
@@ -1821,7 +1821,7 @@ def test_frontend_card_repair_replaces_legacy_split_cards(monkeypatch) -> None:
             "type": "custom:c300x-doorbell-call-card",
             "entity": "camera.bticino_c300x_doorbell_camera",
             "mode": "auto",
-            "grid_options": {"columns": 12, "rows": 7},
+            "grid_options": {"columns": 12},
         }
     ]
 

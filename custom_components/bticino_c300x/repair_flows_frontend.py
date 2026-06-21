@@ -479,7 +479,7 @@ def _doorstation_card(
         "type": _DOORBELL_CALL_CARD_TYPE,
         "entity": camera_entity_id,
         "mode": "auto",
-        "grid_options": {"columns": 12, "rows": 7},
+        "grid_options": {"columns": 12},
     }
 
 

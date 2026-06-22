@@ -417,7 +417,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'formatEntityName' in source
     assert '<ha-form>' in source
     assert 'selector: { entity_name: {} }' in source
-    assert 'context: { entity_id: "entity" }' in source
+    assert 'context: { entity: "entity" }' in source
     assert 'config_entry_id' in resolver_source
     assert "function c300xAutoRelatedEntityId" not in resolver_source
     assert "function c300xFirstRelatedEntityId" not in resolver_source

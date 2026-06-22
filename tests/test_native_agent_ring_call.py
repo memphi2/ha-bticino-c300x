@@ -466,7 +466,7 @@ def test_native_agent_home_call_emits_authoritative_state_events() -> None:
         in http
     )
     assert (
-        "dispatch_event(runtime->config, runtime, event_type, data_json, ttl_seconds);"
+        "dispatch_event_internal(runtime->config, runtime, event_type, data_json, ttl_seconds, 0, 0);"
         in http
     )
 

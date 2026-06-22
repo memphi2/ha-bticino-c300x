@@ -111,6 +111,15 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in event_body
     assert 'clear_external_media_active_locked(video)' in event_body
     assert "c300x_video_note_event(runtime->video, event_type, ttl_seconds)" in http
+    assert "if (update_video_state && runtime->video != NULL)" in http
+    assert (
+        "dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0, 1)"
+        in http
+    )
+    assert (
+        "dispatch_event_internal(runtime->config, runtime, event_type, data_json, ttl_seconds, 0, 0)"
+        in http
+    )
     assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
     assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http

@@ -5512,7 +5512,8 @@ static void dispatch_event_internal(
     const char *event_type,
     const char *data_json,
     int ttl_seconds,
-    int snapshot
+    int snapshot,
+    int update_video_state
 )
 {
     char occurred_at[40];
@@ -5521,7 +5522,7 @@ static void dispatch_event_internal(
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
     int written;
 
-    if (runtime->video != NULL) {
+    if (update_video_state && runtime->video != NULL) {
         c300x_video_note_event(runtime->video, event_type, ttl_seconds);
     }
     build_event_data_json(config, runtime, event_type, data_json, merged_json, sizeof(merged_json));
@@ -5585,7 +5586,7 @@ static void dispatch_event(
     int ttl_seconds
 )
 {
-    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0);
+    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0, 1);
 }
 
 static void dispatch_event_snapshot(
@@ -5596,7 +5597,7 @@ static void dispatch_event_snapshot(
     int ttl_seconds
 )
 {
-    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 1);
+    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 1, 1);
 }
 
 static void dispatch_video_event(
@@ -5611,7 +5612,7 @@ static void dispatch_video_event(
     if (runtime == NULL || runtime->config == NULL) {
         return;
     }
-    dispatch_event(runtime->config, runtime, event_type, data_json, ttl_seconds);
+    dispatch_event_internal(runtime->config, runtime, event_type, data_json, ttl_seconds, 0, 0);
 }
 
 static int has_matching_subscription(

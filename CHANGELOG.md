@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.4.0 - 2026-06-21
+## v1.4.1 - 2026-06-22
 
 ### Breaking Changes
 
@@ -10,7 +10,7 @@
 
 ### Added
 
-- Updates the packaged native C300X device agent to `1.4.0`.
+- Updates the packaged native C300X device agent to `1.4.1`.
 - Adds Android and iOS Ring Call blueprints for phone alerts with Answer,
   Hang Up and dashboard actions.
 
@@ -25,6 +25,7 @@
 
 - Improves on-demand video startup after Home Assistant restarts and after Home
   Calls.
+- Keeps on-demand stop/hangup from briefly reporting an external media session.
 - Keeps the card state correct after calls end.
 - Improves display-side recovery after sustained high CPU load.
 - Refreshes old generated C300X dashboard cards across Lovelace views when the

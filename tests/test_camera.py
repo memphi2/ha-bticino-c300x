@@ -423,7 +423,6 @@ def test_doorbell_camera_flushes_buffered_ice_candidate_after_remote_description
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
     peer = _Peer()
     session = _NativeWebRTCSession(peer)
-    session.answer_sent = True
     session.pending_ice_candidates.append(SimpleNamespace(sdp="candidate-1"))
     camera._webrtc_sessions["session-1"] = session
 
@@ -451,7 +450,6 @@ def test_doorbell_camera_forwards_ice_candidate_after_remote_description() -> No
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
     peer = _Peer()
     session = _NativeWebRTCSession(peer)
-    session.answer_sent = True
     camera._webrtc_sessions["session-1"] = session
     camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
 

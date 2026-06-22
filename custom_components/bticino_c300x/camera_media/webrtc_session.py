@@ -34,7 +34,6 @@ class NativeWebRTCSession:
         self.ring_preview = False
         self.talkback_active = False
         self.talkback_packets_sent = 0
-        self.answer_sent = False
         self.pending_ice_candidates: list[Any | None] = []
 
 
@@ -202,10 +201,7 @@ def rtc_candidate_from_message(aiortc_modules: Any, candidate: Any) -> Any | Non
 async def async_flush_pending_webrtc_candidates(session: NativeWebRTCSession) -> None:
     """Replay ICE candidates that arrived before the remote description."""
 
-    if (
-        getattr(session.peer, "remoteDescription", None) is None
-        or not session.answer_sent
-    ):
+    if getattr(session.peer, "remoteDescription", None) is None:
         return
     while session.pending_ice_candidates:
         await session.peer.addIceCandidate(session.pending_ice_candidates.pop(0))

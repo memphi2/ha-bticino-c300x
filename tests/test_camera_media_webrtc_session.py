@@ -193,7 +193,6 @@ def test_flush_pending_candidates_replays_after_remote_description() -> None:
 
     peer = _Peer()
     session = NativeWebRTCSession(peer)
-    session.answer_sent = True
     session.pending_ice_candidates.append(SimpleNamespace(sdp="candidate-1"))
 
     asyncio.run(async_flush_pending_webrtc_candidates(session))
@@ -201,26 +200,6 @@ def test_flush_pending_candidates_replays_after_remote_description() -> None:
     assert len(peer.candidates) == 1
     assert peer.candidates[0].sdp == "candidate-1"
     assert session.pending_ice_candidates == []
-
-
-def test_flush_pending_candidates_waits_for_answer_to_be_sent() -> None:
-    class _Peer:
-        remoteDescription = object()
-
-        def __init__(self) -> None:
-            self.candidates: list[Any] = []
-
-        async def addIceCandidate(self, candidate: Any) -> None:  # noqa: N802
-            self.candidates.append(candidate)
-
-    peer = _Peer()
-    session = NativeWebRTCSession(peer)
-    session.pending_ice_candidates.append(SimpleNamespace(sdp="candidate-1"))
-
-    asyncio.run(async_flush_pending_webrtc_candidates(session))
-
-    assert peer.candidates == []
-    assert len(session.pending_ice_candidates) == 1
 
 
 def test_rtc_candidate_from_message_drops_link_local_candidates() -> None:

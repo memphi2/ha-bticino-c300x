@@ -608,7 +608,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     _filter_link_local_sdp_candidates(peer.localDescription.sdp)
                 )
             )
-            session.answer_sent = True
             self._schedule_pending_webrtc_candidate_flush(session_id)
             session.renew_task = self.hass.async_create_task(
                 self._async_renew_webrtc_until_closed(session_id)
@@ -634,9 +633,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
 
         if getattr(session.peer, "remoteDescription", None) is None:
-            session.pending_ice_candidates.append(rtc_candidate)
-            return
-        if not session.answer_sent:
             session.pending_ice_candidates.append(rtc_candidate)
             return
 

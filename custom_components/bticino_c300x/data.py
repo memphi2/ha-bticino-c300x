@@ -204,6 +204,8 @@ class BticinoC300XRuntimeData:
     on_runtime_registration_created: Callable[[], Awaitable[None]] | None
     unregister_display_bridge_updates: Callable[[], None] | None
     loaded_platforms: tuple[str, ...]
+    prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
+    prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
     system_metrics: dict[str, Any] = field(default_factory=dict)
     system_metrics_updated_at: datetime | None = None
     agent_cpu_watchdog: AgentCpuWatchdog = field(default_factory=AgentCpuWatchdog)

@@ -674,10 +674,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""
 
+        self._entry.runtime_data.prepare_doorbell_video_stop = None
+        self._entry.runtime_data.prepare_home_call_stop = None
         for session_id in self._webrtc_session_registry.session_ids():
             await self._async_close_webrtc_session(session_id)
         with suppress(Exception):
             await self._entry.runtime_data.api.async_stop_doorbell_video()
+
+    async def async_prepare_doorbell_video_stop(self) -> None:
+        """Close HA-owned doorbell media before an explicit agent stop."""
+
+        for session_id in self._webrtc_session_registry.session_ids_by_owner("doorbell"):
+            await self._async_close_webrtc_session(
+                session_id,
+                stop_media=False,
+                notify_client=True,
+                reason="doorbell_video_stopped",
+            )
+
+    async def async_prepare_home_call_stop(self) -> None:
+        """Close HA-owned Home Call media before an explicit agent stop."""
+
+        for session_id in self._webrtc_session_registry.session_ids_by_owner("home_call"):
+            await self._async_close_webrtc_session(
+                session_id,
+                stop_media=False,
+                notify_client=True,
+                reason="home_call_stopped",
+            )
 
     async def _async_close_webrtc_session(
         self,
@@ -1046,6 +1070,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Subscribe to runtime event-state updates."""
 
         await super().async_added_to_hass()
+        self._entry.runtime_data.prepare_doorbell_video_stop = (
+            self.async_prepare_doorbell_video_stop
+        )
+        self._entry.runtime_data.prepare_home_call_stop = self.async_prepare_home_call_stop
         self.async_on_remove(
             self.hass.bus.async_listen(
                 EVENT_AGENT_EVENT_RECEIVED,

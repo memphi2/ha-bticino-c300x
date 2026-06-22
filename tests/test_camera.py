@@ -19,6 +19,7 @@ if "homeassistant.components.camera" not in sys.modules:
     camera = types.ModuleType("homeassistant.components.camera")
     stream = types.ModuleType("homeassistant.components.stream")
     config_entries = types.ModuleType("homeassistant.config_entries")
+    const = types.ModuleType("homeassistant.const")
     core = types.ModuleType("homeassistant.core")
     exceptions = types.ModuleType("homeassistant.exceptions")
     entity_platform = types.ModuleType("homeassistant.helpers.entity_platform")
@@ -54,10 +55,12 @@ if "homeassistant.components.camera" not in sys.modules:
     }
     camera.WebRTCSendMessage = object
     config_entries.ConfigEntry = ConfigEntry
+    const.ATTR_ENTITY_ID = "entity_id"
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     exceptions.HomeAssistantError = Exception
+    exceptions.ServiceValidationError = Exception
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
@@ -77,6 +80,7 @@ if "homeassistant.components.camera" not in sys.modules:
     sys.modules["homeassistant.components.camera"] = camera
     sys.modules["homeassistant.components.stream"] = stream
     sys.modules["homeassistant.config_entries"] = config_entries
+    sys.modules["homeassistant.const"] = const
     sys.modules["homeassistant.core"] = core
     sys.modules["homeassistant.exceptions"] = exceptions
     sys.modules["homeassistant.helpers"] = helpers
@@ -108,6 +112,10 @@ from custom_components.bticino_c300x.camera import (
 )
 from custom_components.bticino_c300x.camera_media import talkback as talkback_module
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
+from custom_components.bticino_c300x.const import CONF_VIDEO_ENABLED
+from custom_components.bticino_c300x.use_cases.doorbell_video import DoorbellVideoUseCase
+from custom_components.bticino_c300x.use_cases.home_call import HomeCallUseCase
+from custom_components.bticino_c300x.use_cases.ring_call import RingCallUseCase
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 dispatcher_signals: list[tuple[str, str]] = []
@@ -207,8 +215,13 @@ class _FakeRuntimeData:
     connection_state: Any = field(
         default_factory=lambda: SimpleNamespace(available=True),
     )
+    capabilities: dict[str, Any] = field(
+        default_factory=lambda: {"doorbell_video": {"supported": True}},
+    )
     agent_cpu_watchdog: Any = field(default_factory=media_watchdog.AgentCpuWatchdog)
     agent_cpu_watchdog_task: Any = None
+    prepare_doorbell_video_stop: Any = None
+    prepare_home_call_stop: Any = None
 
 
 def _webrtc_message_value(message: Any, key: str) -> Any:
@@ -685,6 +698,136 @@ def test_doorbell_camera_closing_last_webrtc_session_stops_video_call() -> None:
     assert peer.closed is True
     assert player.stopped is True
     assert camera.extra_state_attributes["video_window_available"] is False
+
+
+def test_doorbell_camera_registers_explicit_stop_hook() -> None:
+    class _Bus:
+        def async_listen(self, *_args: Any, **_kwargs: Any) -> Any:
+            return lambda: None
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace(bus=_Bus())
+    camera.async_on_remove = lambda _remove: None  # type: ignore[method-assign]
+    camera.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+
+    asyncio.run(camera.async_added_to_hass())
+
+    assert entry.runtime_data.prepare_doorbell_video_stop is not None
+
+
+def test_doorbell_video_stop_closes_local_webrtc_before_agent_stop() -> None:
+    order: list[str] = []
+
+    class _Peer:
+        async def close(self) -> None:
+            order.append("peer_close")
+
+    class _Player:
+        def stop(self) -> None:
+            order.append("player_stop")
+
+    class _Api(_FakeApi):
+        async def async_stop_doorbell_video(self) -> dict[str, Any]:
+            order.append("agent_stop")
+            return await super().async_stop_doorbell_video()
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=_FakeRuntimeData(api=_Api()),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    session = _NativeWebRTCSession(_Peer(), owner="doorbell")
+    session.player = _Player()
+    camera._webrtc_sessions["session-1"] = session
+    entry.runtime_data.prepare_doorbell_video_stop = camera.async_prepare_doorbell_video_stop
+
+    asyncio.run(DoorbellVideoUseCase(entry).stop())
+
+    assert "session-1" not in camera._webrtc_sessions
+    assert entry.runtime_data.api.stop_calls == 1
+    assert entry.runtime_data.api.activate_calls == []
+    assert order == ["player_stop", "peer_close", "agent_stop"]
+
+
+def test_ring_call_hangup_closes_local_webrtc_before_agent_hangup() -> None:
+    order: list[str] = []
+
+    class _Peer:
+        async def close(self) -> None:
+            order.append("peer_close")
+
+    class _Player:
+        def stop(self) -> None:
+            order.append("player_stop")
+
+    class _Api(_FakeApi):
+        async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+            order.append("agent_hangup")
+            return await super().async_hangup_doorbell_call()
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            api=_Api(),
+            capabilities={"doorbell_call": {"supported": True}},
+        ),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    session = _NativeWebRTCSession(_Peer(), owner="doorbell")
+    session.ring_call = True
+    session.player = _Player()
+    camera._webrtc_sessions["ring-session"] = session
+    entry.runtime_data.prepare_doorbell_video_stop = camera.async_prepare_doorbell_video_stop
+
+    asyncio.run(RingCallUseCase(entry).hangup())
+
+    assert "ring-session" not in camera._webrtc_sessions
+    assert entry.runtime_data.api.hangup_calls == 1
+    assert entry.runtime_data.api.activate_calls == []
+    assert entry.runtime_data.api.stop_calls == 0
+    assert order == ["player_stop", "peer_close", "agent_hangup"]
+
+
+def test_home_call_stop_closes_local_webrtc_before_agent_stop() -> None:
+    order: list[str] = []
+
+    class _Peer:
+        async def close(self) -> None:
+            order.append("peer_close")
+
+    class _Player:
+        def stop(self) -> None:
+            order.append("player_stop")
+
+    class _Api(_FakeApi):
+        async def async_stop_home_call(self) -> dict[str, Any]:
+            order.append("agent_home_stop")
+            return await super().async_stop_home_call()
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=_FakeRuntimeData(
+            api=_Api(),
+            capabilities={"home_call": {"supported": True}},
+        ),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    session = _NativeWebRTCSession(_Peer(), owner="home_call")
+    session.player = _Player()
+    camera._webrtc_sessions["home-session"] = session
+    entry.runtime_data.prepare_home_call_stop = camera.async_prepare_home_call_stop
+
+    asyncio.run(HomeCallUseCase(entry).stop())
+
+    assert "home-session" not in camera._webrtc_sessions
+    assert entry.runtime_data.api.home_call_stop_calls == 1
+    assert entry.runtime_data.api.activate_calls == []
+    assert entry.runtime_data.api.stop_calls == 0
+    assert order == ["player_stop", "peer_close", "agent_home_stop"]
 
 
 def test_doorbell_camera_closing_one_of_multiple_webrtc_sessions_keeps_agent_state() -> None:

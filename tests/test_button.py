@@ -438,6 +438,7 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     api: _FakeMemoApi | None = None
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
+    prepare_doorbell_video_stop: Any = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
     answering_machine_messages_refresh_task: asyncio.Task[Any] | None = None
@@ -752,12 +753,24 @@ def test_device_activation_button_translates_agent_errors() -> None:
 
 def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
     async def _run() -> None:
-        api = _FakeMemoApi()
+        calls: list[str] = []
+
+        class _Api(_FakeMemoApi):
+            async def async_stop_doorbell_video(self) -> dict[str, Any]:
+                calls.append("agent_stop")
+                return await super().async_stop_doorbell_video()
+
+        api = _Api()
+
+        async def _prepare_stop() -> None:
+            calls.append("prepare_stop")
+
         entry = _FakeEntry(
             data={CONF_VIDEO_ENABLED: True},
             runtime_data=_FakeRuntimeData(
                 capabilities={"doorbell_video": {"supported": True}},
                 api=api,
+                prepare_doorbell_video_stop=_prepare_stop,
             ),
         )
         entities: list[Any] = []
@@ -778,6 +791,7 @@ def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
         await stop_button.async_press()
 
         assert api.stop_video_calls == 1
+        assert calls == ["prepare_stop", "agent_stop"]
 
     asyncio.run(_run())
 

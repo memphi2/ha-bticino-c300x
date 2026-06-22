@@ -202,6 +202,13 @@ class C300XStopDoorbellVideoButton(C300XEntity, ButtonEntity):
         """Stop the active doorbell video session."""
 
         try:
+            prepare_stop = getattr(
+                self._entry.runtime_data,
+                "prepare_doorbell_video_stop",
+                None,
+            )
+            if prepare_stop is not None:
+                await prepare_stop()
             await self._entry.runtime_data.api.async_stop_doorbell_video()
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(

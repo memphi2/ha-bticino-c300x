@@ -20,7 +20,7 @@ jobs:
             homeassistant: "2026.6.1"
     name: validate (${{ matrix.name }})
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
@@ -58,7 +58,7 @@ jobs:
   dependabot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Dependabot configuration
         run: |
           test -f .github/dependabot.yml
@@ -68,7 +68,7 @@ jobs:
   hacs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: HACS validation
         uses: hacs/action@main
         with:
@@ -80,6 +80,6 @@ jobs:
   hassfest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Hassfest
         uses: home-assistant/actions/hassfest@master

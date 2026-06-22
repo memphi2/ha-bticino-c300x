@@ -1,6 +1,10 @@
+import "./c300x-doorbell-call-card.js?v=7822e6f487c445af";
+
 const C300X_CARD_TAG = "c300x-doorbell-call-card";
 const C300X_CARD_TYPE = `custom:${C300X_CARD_TAG}`;
+const C300X_PLATFORM = "bticino_c300x";
 const C300X_CAMERA_OBJECT_ID = "bticino_c300x_doorbell_camera";
+const C300X_CAMERA_TRANSLATION_KEY = "doorbell_camera";
 const C300X_DOCUMENTATION_URL = "https://github.com/memphi2/ha-bticino-c300x#doorbell-video-ring-calls-and-talkback";
 
 const C300X_METADATA_TRANSLATIONS = {
@@ -56,29 +60,39 @@ function c300xMetadataStubConfig(entity) {
   };
 }
 
-function c300xMetadataEntitySuggestion(hass, entityId) {
+function c300xMetadataIsDoorbellCamera(hass, entityId) {
   const [domain, objectId] = entityId.split(".");
-  if (!domain || !objectId) {
+  if (domain !== "camera") {
+    return false;
+  }
+  const registryEntry = hass?.entities?.[entityId];
+  const uniqueId = String(registryEntry?.unique_id || "");
+  return (
+    c300xMetadataObjectSuffix(objectId, C300X_CAMERA_OBJECT_ID) !== null
+    || (
+      registryEntry?.platform === C300X_PLATFORM
+      && (
+        registryEntry?.translation_key === C300X_CAMERA_TRANSLATION_KEY
+        || uniqueId.endsWith(`_${C300X_CAMERA_TRANSLATION_KEY}`)
+      )
+    )
+  );
+}
+
+function c300xMetadataEntitySuggestion(hass, entityId) {
+  if (!entityId || !c300xMetadataIsDoorbellCamera(hass, entityId)) {
     return null;
   }
 
-  if (domain === "camera") {
-    const suffix = c300xMetadataObjectSuffix(objectId, C300X_CAMERA_OBJECT_ID);
-    if (suffix === null) {
-      return null;
-    }
-    return [
-      {
-        label: c300xMetadataLocalize(hass, "doorstation_card"),
-        config: {
-          type: C300X_CARD_TYPE,
-          ...c300xMetadataStubConfig(entityId),
-        },
+  return [
+    {
+      label: c300xMetadataLocalize(hass, "doorstation_card"),
+      config: {
+        type: C300X_CARD_TYPE,
+        ...c300xMetadataStubConfig(entityId),
       },
-    ];
-  }
-
-  return null;
+    },
+  ];
 }
 
 window.customCards = window.customCards || [];

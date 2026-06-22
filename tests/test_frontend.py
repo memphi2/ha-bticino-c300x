@@ -4,9 +4,11 @@ import asyncio
 import builtins
 import json
 import os
+import re
 import sys
 import types
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +34,16 @@ CARD_STATE_SOURCE = FRONTEND_DIR / "c300x-state-model.js"
 CARD_TRANSLATIONS_SOURCE = FRONTEND_DIR / "c300x-translations.js"
 CARD_WEBRTC_SOURCE = FRONTEND_DIR / "c300x-webrtc-client.js"
 MANIFEST_SOURCE = Path("custom_components/bticino_c300x/manifest.json")
+FRONTEND_MODULE_SOURCES = (
+    CARD_SOURCE,
+    CARD_METADATA_SOURCE,
+    CARD_RESOLVER_SOURCE,
+    CARD_RINGBACK_SOURCE,
+    CARD_STATE_SOURCE,
+    CARD_TRANSLATIONS_SOURCE,
+    CARD_WEBRTC_SOURCE,
+)
+FRONTEND_IMPORT_VERSION_PATTERN = re.compile(r"\?v=[0-9a-f]{16}")
 
 
 @dataclass
@@ -405,12 +417,12 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'formatEntityName' in source
     assert '<ha-form>' in source
     assert 'selector: { entity_name: {} }' in source
-    assert 'context: { entity: "entity" }' in source
+    assert 'context: { entity_id: "entity" }' in source
     assert 'config_entry_id' in resolver_source
     assert "function c300xAutoRelatedEntityId" not in resolver_source
     assert "function c300xFirstRelatedEntityId" not in resolver_source
-    assert "translation_key" not in resolver_source
-    assert "unique_id" not in resolver_source
+    assert "translation_key" in resolver_source
+    assert "unique_id" in resolver_source
     assert "C300X_DOORBELL_STATE_TRANSLATION_KEY" not in source
     assert "C300X_HOME_CALL_TRANSLATION_KEY" not in source
     assert ".filter((entityId)" not in source
@@ -482,8 +494,8 @@ def test_picker_metadata_is_split_from_card_custom_element_module() -> None:
     assert "home_call_entity: entityId" not in metadata_source
     assert "c300xMetadataRegistryEntity" not in metadata_source
     assert "c300xMetadataRelatedCamera" not in metadata_source
-    assert "translation_key" not in metadata_source
-    assert "unique_id" not in metadata_source
+    assert "translation_key" in metadata_source
+    assert "unique_id" in metadata_source
     assert "getEntitySuggestion: c300xMetadataEntitySuggestion" in metadata_source
     assert "customElements.define" not in metadata_source
     assert "extends HTMLElement" not in metadata_source
@@ -731,7 +743,7 @@ def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() ->
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
     translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
 
-    assert 'from "./c300x-ringback-tone.js"' in source
+    assert 'from "./c300x-ringback-tone.js?v=' in source
     assert "new C300XRingbackTone" in source
     assert "c300xIsHomeCallRinging(cameraEntity)" in state_source
     assert "this._syncRingbackTone(view.ringbackActive || (autoMode && homeView.ringbackActive));" in source
@@ -750,3 +762,48 @@ def test_bundled_home_call_card_uses_local_ringback_tone_only_while_ringing() ->
     assert "ringback_volume: 12" in resolver_source
     assert 'ringback_tone: "Home Call ringback tone"' in translations_source
     assert 'ringback_volume: "Home Call ringback volume"' in translations_source
+
+
+def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None:
+    def normalized_bytes(path: Path) -> bytes:
+        return FRONTEND_IMPORT_VERSION_PATTERN.sub(
+            "?v=__C300X_FRONTEND_BUNDLE__",
+            path.read_text(encoding="utf-8"),
+        ).encode()
+
+    digest = sha256()
+    for source_path in FRONTEND_MODULE_SOURCES:
+        digest.update(source_path.name.encode())
+        digest.update(b"\0")
+        digest.update(normalized_bytes(source_path))
+        digest.update(b"\0")
+    bundle_version = digest.hexdigest()[:16]
+
+    card_source = CARD_SOURCE.read_text(encoding="utf-8")
+    metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
+    for helper_name in (
+        "c300x-translations.js",
+        "c300x-entity-resolver.js",
+        "c300x-state-model.js",
+        "c300x-ringback-tone.js",
+        "c300x-webrtc-client.js",
+    ):
+        assert f'from "./{helper_name}?v={bundle_version}"' in card_source
+    assert f'import "./{DOORBELL_CALL_CARD_FILENAME}?v={bundle_version}";' in metadata_source
+    assert "1.4.1-dev" not in card_source
+    assert "1.4.1-dev" not in metadata_source
+
+
+def test_doorstation_hangup_only_calls_ring_hangup_for_ring_sessions() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    hangup_start = source.index("async _hangupDoorstation()")
+    hangup_end = source.index("  _hasDoorbellRingCallSession()", hangup_start)
+    hangup_body = source[hangup_start:hangup_end]
+
+    assert "if (this._hasDoorbellRingCallSession())" in hangup_body
+    assert hangup_body.index("if (this._hasDoorbellRingCallSession())") < hangup_body.index(
+        "await this._hangupDoorbellCall({ closePeer: false });"
+    )
+    assert "await this._stopDoorbellVideo();" in hangup_body
+    assert 'mediaState === "ring_active"' in source
+    assert 'mediaState === "ring_hanging_up"' in source

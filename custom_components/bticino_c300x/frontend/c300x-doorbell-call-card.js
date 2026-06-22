@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js";
+} from "./c300x-translations.js?v=7822e6f487c445af";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js";
+} from "./c300x-entity-resolver.js?v=7822e6f487c445af";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js";
+} from "./c300x-state-model.js?v=7822e6f487c445af";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=7822e6f487c445af";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=7822e6f487c445af";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -748,11 +748,13 @@ class C300XDoorbellCallCard extends HTMLElement {
   async _hangupDoorstation() {
     this._startingCall = false;
     let ok = true;
-    try {
-      await this._hangupDoorbellCall({ closePeer: false });
-    } catch (err) {
-      console.error("C300X ring-call hangup failed", err);
-      ok = false;
+    if (this._hasDoorbellRingCallSession()) {
+      try {
+        await this._hangupDoorbellCall({ closePeer: false });
+      } catch (err) {
+        console.error("C300X ring-call hangup failed", err);
+        ok = false;
+      }
     }
     try {
       await this._stopDoorbellVideo();
@@ -763,6 +765,15 @@ class C300XDoorbellCallCard extends HTMLElement {
     } finally {
       this._closePeer(ok);
     }
+  }
+
+  _hasDoorbellRingCallSession() {
+    const mediaState = c300xMediaState(this._cameraEntity());
+    return this._doorbellAnswered
+      || this._ringPreviewActive
+      || mediaState === "ring_answering"
+      || mediaState === "ring_active"
+      || mediaState === "ring_hanging_up";
   }
 
   _closePeer(clearStatus, options = {}) {
@@ -1160,7 +1171,7 @@ class C300XDoorbellCallCardEditor extends HTMLElement {
       {
         name: "name",
         selector: { entity_name: {} },
-        context: { entity: "entity" },
+        context: { entity_id: "entity" },
       },
       {
         name: "show_media_readiness",

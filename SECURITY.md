@@ -61,4 +61,4 @@ Please report security-related issues privately if possible, or through GitHub
 issues without including tokens, private hosts, usernames, or device-specific
 files:
 
-https://github.com/bticino-c300x/ha-bticino-c300x/issues
+https://github.com/memphi2/ha-bticino-c300x/issues

@@ -6,7 +6,11 @@ The integration is designed for local Home Assistant use. Normal operation sends
 device events from the native C300X agent to Home Assistant webhooks and sends
 Home Assistant service requests back to the local agent.
 
-The project does not intentionally send device data to a cloud service.
+The project does not intentionally send device data to a cloud service. The
+project maintainers do not operate a service that collects or receives device
+data. In normal use, camera, audio, event, and diagnostic data is handled only
+by the user's local device and Home Assistant installation unless the user
+explicitly shares it.
 
 ## Data Stored by Home Assistant
 

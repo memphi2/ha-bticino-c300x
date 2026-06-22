@@ -10,7 +10,6 @@
 
 ### Added
 
-- Updates the packaged native C300X device agent to `1.4.2`.
 - Adds Android and iOS Ring Call blueprints for phone alerts with Answer,
   Hang Up and dashboard actions.
 
@@ -36,12 +35,11 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
-- Update the native C300X device agent from Home Assistant.
+- Update the native C300X device agent from Home Assistant if it is older than
+  `1.4.1`.
 - Run the one-time Lovelace card Repair if Home Assistant offers it.
 - Hard-reload the browser or clear the Home Assistant app/WebView cache if the
   card picker or dashboard still shows old card behavior.
-- If C300X display pages are enabled, update/reload the display patch from Home
-  Assistant so the new dashboard layout is active.
 
 ## v1.3.1 - 2026-06-20
 

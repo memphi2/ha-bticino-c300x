@@ -113,7 +113,9 @@ from custom_components.bticino_c300x.camera import (
 from custom_components.bticino_c300x.camera_media import talkback as talkback_module
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
 from custom_components.bticino_c300x.const import CONF_VIDEO_ENABLED
-from custom_components.bticino_c300x.use_cases.doorbell_video import DoorbellVideoUseCase
+from custom_components.bticino_c300x.use_cases.doorbell_video import (
+    DoorbellVideoUseCase,
+)
 from custom_components.bticino_c300x.use_cases.home_call import HomeCallUseCase
 from custom_components.bticino_c300x.use_cases.ring_call import RingCallUseCase
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id

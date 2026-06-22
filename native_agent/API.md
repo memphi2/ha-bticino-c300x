@@ -20,7 +20,7 @@ The endpoint aggregates existing read-only state into a single status payload:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.4.1",
+  "agent_version": "1.4.2",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -58,7 +58,7 @@ must not contain tokens, SIP secrets, webhook URLs, or raw file contents.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.4.1 | 1.1 | 1.7.x | Current packaged agent. |
+| 1.4.2 | 1.1 | 1.7.x | Current packaged agent. |
 | 1.3.0 | 1.1 | 1.7.x | Adds display watchdog recovery and bundled mobile Ring Call workflow support. |
 | 1.2.3 | 1.1 | 1.7.x | Consolidates display UI actions and dashboard traffic handling. |
 | 1.2.2 | 1.1 | 1.7.x | Bootstraps and requires the dedicated Home Assistant media user for local media identity. |

@@ -157,6 +157,8 @@ RTSP_FAILURE_COOLDOWN_SECONDS = 20.0
 RING_CALL_WAIT_INTERVAL_SECONDS = 0.2
 RING_CALL_WAIT_TIMEOUT_SECONDS = 4.0
 WEBRTC_RENEW_SECONDS = 60
+MAX_PRESESSION_WEBRTC_SESSIONS = 16
+MAX_PRESESSION_WEBRTC_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
 
@@ -335,6 +337,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         )
         self._agent_cpu_watchdog = AgentCpuWatchdog()
         self._webrtc_sessions: dict[str, _NativeWebRTCSession] = {}
+        self._presession_webrtc_candidates: dict[str, list[Any]] = {}
         self._webrtc_session_registry = _NativeWebRTCSessionRegistry(
             self._webrtc_sessions
         )
@@ -470,6 +473,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         try:
             aiortc_modules = await self._async_load_aiortc_modules()
         except ImportError as err:
+            self._presession_webrtc_candidates.pop(session_id, None)
             send_message(
                 WebRTCError("bticino_webrtc_unavailable", "aiortc is not installed")
             )
@@ -499,6 +503,14 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         session = _NativeWebRTCSession(peer, owner=owner, send_message=send_message)
         session.talkback_requested = talkback_requested
         self._webrtc_sessions[session_id] = session
+        presession_candidates = self._presession_webrtc_candidates.pop(session_id, [])
+        for presession_candidate in presession_candidates:
+            rtc_candidate = _rtc_candidate_from_message(
+                aiortc_modules,
+                presession_candidate,
+            )
+            if rtc_candidate is not None:
+                session.pending_ice_candidates.append(rtc_candidate)
 
         @peer.on("connectionstatechange")
         async def _on_connectionstatechange() -> None:
@@ -621,6 +633,15 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         session = self._webrtc_sessions.get(session_id)
         if session is None:
+            pending = self._presession_webrtc_candidates.get(session_id)
+            if pending is None:
+                if len(self._presession_webrtc_candidates) >= MAX_PRESESSION_WEBRTC_SESSIONS:
+                    oldest_session_id = next(iter(self._presession_webrtc_candidates))
+                    self._presession_webrtc_candidates.pop(oldest_session_id, None)
+                pending = []
+                self._presession_webrtc_candidates[session_id] = pending
+            if len(pending) < MAX_PRESESSION_WEBRTC_CANDIDATES:
+                pending.append(candidate)
             return
 
         try:
@@ -717,6 +738,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             notify_client=notify_client,
             reason=reason,
         )
+        self._presession_webrtc_candidates.pop(session_id, None)
         if session is None:
             return
 

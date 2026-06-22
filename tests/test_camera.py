@@ -45,6 +45,15 @@ if "homeassistant.components.camera" not in sys.modules:
     class DeviceInfo(dict):  # pragma: no cover - import-time stub only
         pass
 
+    class ServiceValidationError(Exception):  # pragma: no cover - import-time stub only
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args)
+            self.translation_key = kwargs.get("translation_key")
+            self.translation_domain = kwargs.get("translation_domain")
+            self.translation_placeholders = kwargs.get(
+                "translation_placeholders",
+            )
+
     camera.Camera = Camera
     camera.CameraEntityFeature = types.SimpleNamespace(STREAM=1)
     camera.WebRTCAnswer = lambda sdp: {"type": "answer", "sdp": sdp}
@@ -60,7 +69,7 @@ if "homeassistant.components.camera" not in sys.modules:
     core.callback = lambda func: func
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     exceptions.HomeAssistantError = Exception
-    exceptions.ServiceValidationError = Exception
+    exceptions.ServiceValidationError = ServiceValidationError
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)

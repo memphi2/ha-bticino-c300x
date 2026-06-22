@@ -3,36 +3,11 @@ from __future__ import annotations
 # ruff: noqa: E402
 import asyncio
 import json
-import sys
-import types
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-homeassistant.__path__ = getattr(homeassistant, "__path__", [])
-exceptions = sys.modules.setdefault(
-    "homeassistant.exceptions",
-    types.ModuleType("homeassistant.exceptions"),
-)
-
-
-class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
-exceptions.HomeAssistantError = getattr(
-    exceptions,
-    "HomeAssistantError",
-    _HomeAssistantError,
-)
-homeassistant.exceptions = exceptions
-
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import ring_decision as ring_decision_module

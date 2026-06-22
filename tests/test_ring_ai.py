@@ -4,40 +4,15 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 import time
-import types
 import wave
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-homeassistant.__path__ = []
-exceptions = sys.modules.setdefault(
-    "homeassistant.exceptions",
-    types.ModuleType("homeassistant.exceptions"),
-)
-
-
-class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
-exceptions.HomeAssistantError = getattr(
-    exceptions,
-    "HomeAssistantError",
-    _HomeAssistantError,
-)
-homeassistant.exceptions = exceptions
-sys.modules["homeassistant.exceptions"] = exceptions
-
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.bticino_c300x import json_io as json_io_module
 from custom_components.bticino_c300x import ring_ai as ring_ai_module
 from custom_components.bticino_c300x.json_io import async_write_json_file
 from custom_components.bticino_c300x.ring_ai import (
@@ -96,6 +71,10 @@ class _FakeWyomingWriter:
 
     async def wait_closed(self) -> None:
         pass
+
+
+async def _to_thread_inline(func, /, *args, **kwargs):  # noqa: ANN001
+    return func(*args, **kwargs)
 
 
 def _write_wav(path: Path, *, channels: int = 1, width: int = 2) -> None:
@@ -275,10 +254,14 @@ def test_read_wav_accepts_mono_16_bit_audio(tmp_path: Path) -> None:
     assert hass.executor_jobs == ["_read"]
 
 
-def test_async_ring_wav_path_and_read_wav_use_thread_fallback(tmp_path: Path) -> None:
+def test_async_ring_wav_path_and_read_wav_use_thread_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = tmp_path / "c300x" / "latest.raw.wav"
     _write_wav(source)
     hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+    monkeypatch.setattr(ring_ai_module.asyncio, "to_thread", _to_thread_inline)
 
     assert asyncio.run(_async_ring_wav_path(hass, str(source))) == source
     assert asyncio.run(_async_read_wav(hass, source))["audio"] == b"\x01\x00\x02\x00"
@@ -554,8 +537,12 @@ def test_wyoming_transcribe_rejects_empty_transcript(
         )
 
 
-def test_write_json_uses_thread_fallback(tmp_path: Path) -> None:
+def test_write_json_uses_thread_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     target = tmp_path / "c300x" / "analysis" / "result.json"
+    monkeypatch.setattr(json_io_module.asyncio, "to_thread", _to_thread_inline)
 
     asyncio.run(
         async_write_json_file(

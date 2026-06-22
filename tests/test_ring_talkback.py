@@ -42,6 +42,10 @@ def _load_ring_talkback() -> Any:
 ring_talkback = _load_ring_talkback()
 
 
+async def _to_thread_inline(func, /, *args, **kwargs):  # noqa: ANN001
+    return func(*args, **kwargs)
+
+
 def test_build_talkback_rtp_packet_sets_marker_payload_and_header() -> None:
     packet = ring_talkback._build_talkback_rtp_packet(
         b"payload",
@@ -416,6 +420,7 @@ def test_async_play_and_keepalive_map_worker_errors(
     monkeypatch.setattr(ring_talkback, "HomeAssistantError", TalkbackError)
     monkeypatch.setattr(ring_talkback, "_play_announcement_sync", broken_play)
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
+    monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
     with pytest.raises(TalkbackError, match="announcement playback failed"):
         asyncio.run(
@@ -455,6 +460,7 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
     monkeypatch.setattr(ring_talkback, "_async_wait_talkback_ready", ok_wait)
     monkeypatch.setattr(ring_talkback, "_play_announcement_sync", broken_play)
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", broken_keepalive)
+    monkeypatch.setattr(ring_talkback.asyncio, "to_thread", _to_thread_inline)
 
     with pytest.raises(ring_talkback.HomeAssistantError, match="expected play failure"):
         asyncio.run(

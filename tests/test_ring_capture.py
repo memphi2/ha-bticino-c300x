@@ -149,6 +149,10 @@ async def _noop_talkback(*_args: Any, **_kwargs: Any) -> None:
     return None
 
 
+async def _to_thread_inline(func, /, *args, **kwargs):  # noqa: ANN001
+    return func(*args, **kwargs)
+
+
 def test_capture_stream_path_prefers_audio_path_when_audio_is_requested() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(_FakeApi({})),
@@ -369,12 +373,16 @@ def test_announcement_path_accepts_ha_www_alias(tmp_path: Path) -> None:
     assert _announcement_input_path(hass, "/www/c300x/announce.wav") == announcement
 
 
-def test_announcement_path_async_fallback_without_executor(tmp_path: Path) -> None:
+def test_announcement_path_async_fallback_without_executor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config_root = tmp_path / "config"
     announcement = config_root / "www" / "c300x" / "announce.wav"
     announcement.parent.mkdir(parents=True)
     announcement.write_bytes(b"fake")
     hass = types.SimpleNamespace(config=_FakeConfig(config_root))
+    monkeypatch.setattr(asyncio, "to_thread", _to_thread_inline)
 
     assert (
         asyncio.run(_async_announcement_input_path(hass, str(announcement)))
@@ -403,8 +411,12 @@ def test_resolve_root_returns_original_path_on_os_error(
     assert _resolve_root(target) == target
 
 
-def test_async_mkdir_uses_thread_fallback(tmp_path: Path) -> None:
+def test_async_mkdir_uses_thread_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     target = tmp_path / "config" / "c300x" / "analysis"
+    monkeypatch.setattr(asyncio, "to_thread", _to_thread_inline)
 
     asyncio.run(_async_mkdir(types.SimpleNamespace(), target))
 

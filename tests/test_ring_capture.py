@@ -77,6 +77,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_rtsp_options,
     _async_run_ffmpeg,
     _async_run_ffmpeg_command,
+    _async_wait_rtsp_ready,
     _capture_audio_gain_db,
     _capture_frame_offsets,
     _capture_metadata_path,
@@ -546,6 +547,54 @@ def test_rtsp_options_probe_rejects_bad_responses(
 def test_rtsp_options_probe_rejects_invalid_rtsp_url() -> None:
     with pytest.raises(HomeAssistantError, match="Invalid C300X RTSP URL"):
         asyncio.run(_async_rtsp_options("http://192.0.2.10:6554/doorbell"))
+
+
+def test_wait_rtsp_ready_returns_after_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    async def _probe(rtsp_url: str) -> None:
+        calls.append(rtsp_url)
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_rtsp_options",
+        _probe,
+    )
+
+    asyncio.run(_async_wait_rtsp_ready("rtsp://192.0.2.10:6554/doorbell"))
+
+    assert calls == ["rtsp://192.0.2.10:6554/doorbell"]
+
+
+def test_wait_rtsp_ready_raises_after_probe_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    async def _probe(_rtsp_url: str) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise OSError("not ready")
+
+    async def _sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_rtsp_options",
+        _probe,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._RTSP_READY_TIMEOUT_SECONDS",
+        0.001,
+    )
+    monkeypatch.setattr(asyncio, "sleep", _sleep)
+
+    with pytest.raises(HomeAssistantError, match="RTSP stream was not ready") as err:
+        asyncio.run(_async_wait_rtsp_ready("rtsp://192.0.2.10:6554/doorbell"))
+
+    assert attempts > 0
+    assert isinstance(err.value.__cause__, OSError)
 
 
 def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

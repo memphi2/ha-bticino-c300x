@@ -757,6 +757,48 @@ def test_feature_input_rejects_audio_gain_outside_supported_range() -> None:
     assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
 
 
+def test_feature_input_collects_activation_and_dashboard_errors() -> None:
+    data, errors = _feature_input(
+        {
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_DEVICE_ACTIVATION_MODE: "bad",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "A1",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "100",
+            CONF_ACTIONS_JSON: "{bad-json",
+            CONF_ALARM_ENTITY_ID: "light.entry",
+            CONF_ALARM_PAGE_ENTITY_ID: "media_player.tv",
+            CONF_WEATHER_ENTITY_ID: "sensor.outdoor",
+            CONF_DASHBOARD_ENTITIES: ["media_player.tv"],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
+                "sensor.temperature": {"name": "bad"}
+            },
+        }
+    )
+
+    assert errors == {
+        CONF_DEVICE_ACTIVATION_MODE: "invalid_device_activation_mode",
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "invalid_stair_light_part",
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "invalid_stair_light_part",
+        CONF_ACTIONS_JSON: "invalid_action_map",
+        CONF_ALARM_ENTITY_ID: "invalid_alarm_entity",
+        CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity",
+        CONF_WEATHER_ENTITY_ID: "invalid_weather_entity",
+        CONF_DASHBOARD_ENTITIES: "invalid_dashboard_entities",
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: (
+            "invalid_dashboard_entity_display_overrides"
+        ),
+    }
+    assert data[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
+    assert data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
+    assert data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
+    assert data[CONF_ACTIONS] == {}
+    assert data[CONF_ALARM_ENTITY_ID] == ""
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == ""
+    assert data[CONF_WEATHER_ENTITY_ID] == ""
+    assert data[CONF_DASHBOARD_ENTITIES] == []
+    assert data[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {}
+
+
 def test_feature_input_disables_homeassistant_user_when_media_disabled() -> None:
     data, errors = _feature_input(
         {

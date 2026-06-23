@@ -457,6 +457,62 @@ def test_api_command_methods_use_expected_endpoint_and_payload(
         assert calls[0][2]["json_data"] == expected_json
 
 
+def test_api_control_methods_normalize_payloads_before_posting() -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        if path == "/api/v1/smartphone-forwarding":
+            return {"mode": "enabled"}
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    forwarding = asyncio.run(api.async_set_smartphone_forwarding_mode(" enabled "))
+    stair_light = asyncio.run(api.async_stair_light(" 21 "))
+    unlock = asyncio.run(api.async_unlock_door(" front_door "))
+
+    assert forwarding["state"] == "enabled"
+    assert stair_light == {"ok": True}
+    assert unlock == {"ok": True}
+    assert calls == [
+        (
+            "POST",
+            "/api/v1/smartphone-forwarding",
+            {"json_data": {"mode": "enabled"}},
+        ),
+        (
+            "POST",
+            "/api/v1/stair-light/actions/activate",
+            {"json_data": {"address": "21"}},
+        ),
+        (
+            "POST",
+            "/api/v1/locks/front_door/actions/unlock",
+            {},
+        ),
+    ]
+
+
+def test_memo_audio_rejects_text_memo_id_before_request() -> None:
+    session = _FakeSession()
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiResponseError, match="voice memo"):
+        asyncio.run(api.async_memo_audio("text/memo_1"))
+
+    assert session.requests == []
+
+
 def test_api_maintenance_auth_methods_include_safe_payloads_and_headers() -> None:
     calls: list[tuple[str, str, dict[str, object]]] = []
     api = C300XAgentApi(
@@ -530,6 +586,95 @@ def test_api_maintenance_auth_methods_include_safe_payloads_and_headers() -> Non
         {"firewallEnabled": True, "maintenanceEnabled": True},
         {"maintenanceNoAuthAllowed": True, "maintenanceEnabled": True},
     ]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "message"),
+    [
+        ("async_register_event_subscription", "event subscription"),
+        ("async_display_bridge_status", "display bridge status"),
+        ("async_notify_display_bridge_event", "display bridge event"),
+        ("async_diagnostics", "diagnostics"),
+    ],
+)
+def test_api_object_methods_reject_non_object_json(
+    method_name: str,
+    message: str,
+) -> None:
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    async def request_json(
+        _method: str,
+        _path: str,
+        **_request_kwargs: object,
+    ) -> list[str]:
+        return ["not", "an", "object"]
+
+    api._request_json = request_json  # type: ignore[method-assign]
+    call_args: tuple[object, ...] = ()
+    if method_name == "async_register_event_subscription":
+        call_args = ("http://ha.local/api/webhook/events", "token", ["doorbell.pressed"])
+    elif method_name == "async_notify_display_bridge_event":
+        call_args = ("alarm",)
+
+    with pytest.raises(C300XAgentApiResponseError, match=message):
+        asyncio.run(getattr(api, method_name)(*call_args))
+
+
+def test_api_delete_subscription_and_update_status_use_expected_headers() -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    api = C300XAgentApi(
+        _FakeSession(),  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        "maintenance-token",
+    )
+
+    async def request_json(method: str, path: str, **request_kwargs: object) -> dict[str, object]:
+        calls.append((method, path, request_kwargs))
+        return {"ok": True}
+
+    api._request_json = request_json  # type: ignore[method-assign]
+
+    asyncio.run(api.async_delete_event_subscription("sub-1"))
+    assert asyncio.run(api.async_agent_update_status()) == {"ok": True}
+
+    assert calls == [
+        ("DELETE", "/api/v1/events/subscriptions/sub-1", {}),
+        (
+            "GET",
+            "/api/v1/maintenance/update/status",
+            {"extra_headers": {HEADER_MAINTENANCE_TOKEN: "maintenance-token"}},
+        ),
+    ]
+
+
+def test_byte_request_merges_extra_headers() -> None:
+    session = _FakeSession(
+        "",
+        response_body=b"voice",
+        content_type="audio/wav; charset=binary",
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    body, content_type = asyncio.run(
+        api._request_bytes("GET", "/api/v1/test.bin", extra_headers={"X-Test": "1"})
+    )
+
+    assert body == b"voice"
+    assert content_type == "audio/wav"
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+        "X-Test": "1",
+    }
 
 
 def test_api_update_upload_encodes_chunks_and_uses_long_timeout() -> None:
@@ -1801,6 +1946,46 @@ def test_activate_doorbell_video_accepts_active_ring_conflict() -> None:
         "GET",
         "http://agent.local:8080/api/v1/video/doorbell/status",
     )
+
+
+def test_activate_doorbell_video_reraises_unrelated_conflict() -> None:
+    session = _FakeSession(
+        '{"ok": false, "error": "busy"}',
+        response_status=409,
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError, match="busy"):
+        asyncio.run(api.async_activate_doorbell_video(audio=False))
+
+
+def test_activate_doorbell_video_reraises_external_conflict_without_ring() -> None:
+    session = _QueuedSession(
+        [
+            (
+                409,
+                '{"ok": false, "error": "external_session_active"}',
+            ),
+            (
+                200,
+                '{"available": true, "window_available": false, '
+                '"stream_path": "/doorbell-video", '
+                '"bridge": {"media_owner": "device_display"}}',
+            ),
+        ]
+    )
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    with pytest.raises(C300XAgentApiConnectionError, match="external_session_active"):
+        asyncio.run(api.async_activate_doorbell_video(audio=True))
 
 
 def test_doorbell_video_status_uses_reference_status_endpoint() -> None:

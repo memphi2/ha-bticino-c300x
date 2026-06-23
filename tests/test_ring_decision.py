@@ -15,9 +15,14 @@ from custom_components.bticino_c300x.ring_decision import (
     DEFAULT_RING_ANALYSIS_DECISION_PATH,
     DEFAULT_RING_ANALYSIS_RESULT_PATH,
     DEFAULT_USED_RING_CAPTURES_PATH,
+    _capture_guardrail_result,
+    _capture_is_stale,
+    _capture_result_paths_match,
+    _last_used_capture_id,
     _phrase_match,
     _ring_decision_path,
     _ring_result_path,
+    _used_captures_path,
     async_evaluate_ring_analysis,
     async_mark_ring_capture_used,
 )
@@ -480,3 +485,80 @@ def test_evaluate_ring_analysis_rejects_bad_json_payloads(
                 decision_path=str(decision),
             )
         )
+
+
+def test_capture_guardrail_reports_unavailable_metadata(tmp_path: Path) -> None:
+    hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+
+    guardrail = _capture_guardrail_result(
+        hass,
+        {
+            "capture_id": "capture-1",
+            "capture_path": str(tmp_path / "c300x" / "missing.capture.json"),
+        },
+        capture_path=None,
+        required=True,
+    )
+    optional = _capture_guardrail_result(
+        hass,
+        {},
+        capture_path=None,
+        required=False,
+    )
+
+    assert guardrail["ok"] is False
+    assert guardrail["reasons"] == ["capture_metadata_unavailable"]
+    assert optional["ok"] is True
+    assert optional["reasons"] == []
+
+
+def test_capture_path_match_rejects_missing_or_unsafe_paths(tmp_path: Path) -> None:
+    hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+    c300x_wav = tmp_path / "c300x" / "capture.raw.wav"
+
+    assert _capture_result_paths_match(hass, {}, {}) is False
+    assert (
+        _capture_result_paths_match(
+            hass,
+            {"wav_path": str(tmp_path / "outside.raw.wav")},
+            {"raw_wav_path": str(c300x_wav)},
+        )
+        is False
+    )
+
+
+def test_capture_stale_handles_missing_and_naive_timestamps() -> None:
+    assert _capture_is_stale({}) is True
+    assert _capture_is_stale({"created_at": datetime.now().isoformat()}) is False
+
+
+def test_used_capture_helpers_fall_back_without_hass_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = SimpleNamespace()
+    used = tmp_path / "used_captures.json"
+    monkeypatch.setattr(ring_decision_module, "DEFAULT_USED_RING_CAPTURES_PATH", str(used))
+    monkeypatch.setattr(
+        ring_decision_module,
+        "_safe_c300x_path",
+        lambda _hass, target, _path_kind: target,
+    )
+
+    used.write_text("[]", encoding="utf-8")
+
+    assert _used_captures_path(hass) == used
+    assert _last_used_capture_id(hass) == ""
+
+
+def test_mark_capture_used_uses_thread_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = SimpleNamespace(config=_FakeConfig(tmp_path))
+    monkeypatch.setattr(ring_decision_module.asyncio, "to_thread", _to_thread_inline)
+
+    asyncio.run(async_mark_ring_capture_used(hass, "capture-thread"))
+
+    used = tmp_path / "c300x" / "analysis" / "used_captures.json"
+    assert json.loads(used.read_text(encoding="utf-8"))["capture_id"] == "capture-thread"

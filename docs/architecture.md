@@ -22,6 +22,12 @@ Responsibilities:
 
 Path: `native_agent/`
 
+Source docs:
+
+- [Native agent runtime notes](native-agent.md)
+- [Native agent source README](../native_agent/README.md)
+- [Native agent API contract](../native_agent/API.md)
+
 Responsibilities:
 
 - Local `/api/v1` HTTP API with bearer auth.
@@ -34,10 +40,15 @@ Responsibilities:
 
 Path: `device_qml/`
 
+Source docs:
+
+- [Device QML UI README](../device_qml/README.md)
+
 Responsibilities:
 
 - Render native C300X dashboard pages.
 - Call the local agent UI API on loopback.
+- Avoid Lovelace embedding on the device.
 - Never store or expose HA tokens.
 
 ## Data Flow

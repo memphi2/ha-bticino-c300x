@@ -1,5 +1,10 @@
 # Native Agent
 
+This page describes the Home Assistant and release-facing native-agent model.
+For the full HTTP endpoint contract, use
+[Native Agent API Contract](../native_agent/API.md). For source-local build
+notes, use [native_agent/README.md](../native_agent/README.md).
+
 ## Runtime target
 
 The device runtime is a native C binary from `native_agent/`. Node.js and `node_modules` are not part of the runtime path.
@@ -89,49 +94,15 @@ to the agent API: Home Assistant may connect through HTTPS if a local reverse
 proxy terminates TLS, but the shipped native binary itself stays plain HTTP to
 avoid TLS library dependencies and idle CPU/memory cost on the C300X.
 
-## API surface
+## API contract
 
-Public:
+The agent exposes a versioned local HTTP API under `/api/v1`, plus a small
+loopback-only UI listener for C300X QML pages. Endpoint paths, auth rules,
+payloads, side effects, and compatibility notes are maintained in
+[Native Agent API Contract](../native_agent/API.md).
 
-- `GET /health`
-- `GET /api/v1/health`
-
-Loopback-only display endpoints:
-
-- `GET /ui/memos`
-- `GET /ui/answering-machine/messages`
-
-Authenticated with bearer token:
-
-- `GET /api/v1/capabilities`
-- `GET /api/v1/state`
-- `GET /api/v1/events/recent`
-- `GET/POST /api/v1/events/subscriptions`
-- `DELETE /api/v1/events/subscriptions/{id}`
-- `POST /api/v1/locks/{id}/actions/unlock`
-- `POST /api/v1/stair-light/actions/activate`
-- `GET /api/v1/activations`
-- `POST /api/v1/activations/{id}/actions/run`
-- `GET/POST /api/v1/ringer`
-- `GET/POST /api/v1/smartphone-forwarding`
-- `GET/POST /api/v1/answering-machine`
-- `GET /api/v1/answering-machine/messages`
-- `GET /api/v1/answering-machine/messages/{id}/video`
-- `POST /api/v1/answering-machine/messages/actions/delete`
-- `GET /api/v1/memos`
-- `POST /api/v1/memos/actions/delete`
-- `GET /api/v1/system/metrics`
-- `GET /api/v1/video/doorbell`
-- `GET /api/v1/video/doorbell/status`
-- `POST /api/v1/video/doorbell/actions/activate`
-- `POST /api/v1/video/doorbell/actions/stop`
-- `POST /api/v1/maintenance/ssh/actions/start`
-- `POST /api/v1/maintenance/reboot`
-- `POST /api/v1/maintenance/agent/actions/remove`
-- `POST /api/v1/maintenance/gui/actions/reload`
-- `GET /api/v1/maintenance/qml-patch`
-- `POST /api/v1/maintenance/qml-patch/actions/apply`
-- `POST /api/v1/maintenance/qml-patch/actions/restore`
+Keep new endpoint details in that file. This page should stay focused on
+runtime packaging, setup defaults, security posture, and release behavior.
 
 Activation items use `addressMode: "manual"` when the configured `address`
 contains the OpenWebNet `where` value. `addressMode: "auto"` is reserved for

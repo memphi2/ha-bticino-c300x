@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIN_HOME_ASSISTANT_VERSION = "2025.5.0"
 CURRENT_HOME_ASSISTANT_VERSION = "2026.6.1"
-CURRENT_RELEASE_VERSION = "1.4.3"
+CURRENT_RELEASE_VERSION = "1.5.0"
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
 TEXT_SUFFIXES = {
     ".c",
@@ -75,7 +75,6 @@ REQUIRED_PATHS = [
     "custom_components/bticino_c300x/diagnostics.py",
     "custom_components/bticino_c300x/repair_issues.py",
     "docs/architecture.md",
-    "docs/device-ui-feasibility.md",
     "docs/legal.md",
     "docs/native-agent.md",
     "docs/quality-scale.md",
@@ -89,12 +88,15 @@ REQUIRED_PATHS = [
     "requirements-dev.txt",
     "hacs.json",
     "native_agent/Makefile",
+    "native_agent/API.md",
+    "native_agent/README.md",
     "native_agent/config.example.json",
     "native_agent/scripts/bootstrap_firewall.sh",
     "native_agent/scripts/qml_patch.sh",
     "native_agent/src/main.c",
     "native_agent/test/smoke.py",
     "device_qml/Alarm.qml",
+    "device_qml/README.md",
     "device_qml/HomeAssistant.qml",
     "device_qml/js/c300x_ha.js",
     "device_qml/js/c300x_i18n.js",

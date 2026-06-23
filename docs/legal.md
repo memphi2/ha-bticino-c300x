@@ -82,3 +82,7 @@ and any jurisdiction-specific patent or licensing requirements.
 `scripts/check_repo.py` is the local and CI gate for this policy. It rejects
 common firmware/archive payloads, foreign runtime directories, tracked stock QML
 pages, private values, and third-party reference markers in runtime code.
+
+Historical local provenance evidence is retained under
+[docs/audits](audits/2026-06-22-provenance.md). Those files are audit snapshots,
+not live legal opinions.

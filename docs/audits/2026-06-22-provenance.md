@@ -1,6 +1,9 @@
-# Provenance Audit
+# Provenance Audit Snapshot
 
 Audit date: 2026-06-22
+
+This is a historical local audit snapshot for the listed commit. It is retained
+as release evidence and may reference files that changed later.
 
 Audit base:
 

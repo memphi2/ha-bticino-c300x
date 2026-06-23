@@ -26,3 +26,9 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   display bridge, or their configs.
 - Restarting the GUI is required after a patch, but this repository does not run any device commands.
 - PINs are sent only to the local loopback agent API and must never be logged.
+
+## Related Documentation
+
+- [Architecture](../docs/architecture.md)
+- [Native agent runtime notes](../docs/native-agent.md)
+- [Native Agent API Contract](../native_agent/API.md#loopback-ui-api)

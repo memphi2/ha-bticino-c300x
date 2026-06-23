@@ -4,6 +4,8 @@ Target: Platinum
 Current status: Not Platinum yet
 
 This repository tracks quality-scale status in `custom_components/bticino_c300x/quality_scale.yaml`.
+This page explains the current blocker set and is validated by
+`scripts/check_quality_scale.py`.
 
 ## Current Position
 

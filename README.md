@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v1.4.3-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.5.0-0366d6?style=flat-square)](CHANGELOG.md)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -104,7 +104,7 @@ and hard-reload the browser if the card picker still shows old frontend state.
 
 ## Documentation
 
-| Start here | Link |
+| User documentation | Link |
 | --- | --- |
 | 5-minute setup path | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
@@ -114,14 +114,16 @@ and hard-reload the browser if the card picker still shows old frontend state.
 | SSH, firewall, Display patch, remove agent | [Advanced maintenance](docs/advanced-maintenance.md) |
 | Hardware release checks | [Release validation](docs/release-validation.md) |
 
-More project details:
-
-- [Architecture](docs/architecture.md)
-- [Native agent](docs/native-agent.md)
-- [Privacy](PRIVACY.md)
-- [Security](SECURITY.md)
-- [Legal notes](docs/legal.md)
-- [Changelog](CHANGELOG.md)
+| Maintainer documentation | Link |
+| --- | --- |
+| Architecture and data flow | [Architecture](docs/architecture.md) |
+| Native agent runtime and packaging | [Native agent](docs/native-agent.md) |
+| Native agent HTTP API contract | [Native Agent API](native_agent/API.md) |
+| Device QML display pages | [Device QML UI](device_qml/README.md) |
+| Quality scale tracking | [Quality scale](docs/quality-scale.md) |
+| Privacy, security, and legal notes | [Privacy](PRIVACY.md), [Security](SECURITY.md), [Legal notes](docs/legal.md) |
+| Historical evidence and baselines | [Provenance audit](docs/audits/2026-06-22-provenance.md), [Media refactor baseline](docs/dev/media-refactor-baseline.md) |
+| Release history | [Changelog](CHANGELOG.md) |
 
 ## Project Status
 

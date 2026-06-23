@@ -83,6 +83,7 @@ REQUIRED_PATHS = [
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
     "scripts/check_typing.py",
+    "scripts/check_validate.py",
     "scripts/verify_media_reference_flow.py",
     "scripts/smoke_ha.py",
     "requirements-dev.txt",
@@ -319,6 +320,7 @@ def check_legal_hygiene() -> list[str]:
         "PRIVACY.md",
         "SECURITY.md",
         "scripts/check_repo.py",
+        "scripts/check_validate.py",
     }
 
     for line in result.stdout.splitlines():

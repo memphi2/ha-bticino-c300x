@@ -46,6 +46,7 @@ STRICT_TARGETS = (
     "scripts/check_coverage.py",
     "scripts/check_repo.py",
     "scripts/check_typing.py",
+    "scripts/check_validate.py",
 )
 
 

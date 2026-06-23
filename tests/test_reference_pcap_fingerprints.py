@@ -82,18 +82,6 @@ def test_pcap_fixtures_are_anonymized() -> None:
 
 
 def test_repository_does_not_expose_forbidden_reference_source_phrasing() -> None:
-    app = "ap" + "p"
-    forbidden_phrases = (
-        f"{app}-reference",
-        f"{app} reference",
-        f"reference {app}",
-        f"official {app}",
-        f"{app}-pcap",
-        f"{app} pcap",
-        f"{app} capture",
-        f"mobile {app} capture",
-        "official " + "mobile",
-    )
     paths = [
         *ROOT.glob("README.md"),
         *ROOT.glob("CHANGELOG.md"),
@@ -106,15 +94,64 @@ def test_repository_does_not_expose_forbidden_reference_source_phrasing() -> Non
     ]
 
     offenders = [
-        str(path.relative_to(ROOT))
+        offender
         for path in paths
-        if any(
-            phrase in path.read_text(encoding="utf-8").lower()
-            for phrase in forbidden_phrases
-        )
+        for offender in _forbidden_reference_source_phrasing(path)
     ]
 
     assert offenders == []
+
+
+def test_reference_source_phrasing_check_does_not_cross_word_boundaries(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "doc.md"
+    document.write_text(
+        "The reference appears only as a generic noun here.\n",
+        encoding="utf-8",
+    )
+
+    assert _forbidden_reference_source_phrasing(document) == []
+
+
+def test_reference_source_phrasing_reports_line_and_phrase(tmp_path: Path) -> None:
+    document = tmp_path / "doc.md"
+    app = "ap" + "p"
+    document.write_text(f"Do not mention a reference {app} here.\n", encoding="utf-8")
+
+    assert _forbidden_reference_source_phrasing(document) == [
+        "doc.md:1: forbidden reference source phrase: reference application"
+    ]
+
+
+def _forbidden_reference_source_phrasing(path: Path) -> list[str]:
+    patterns = _forbidden_reference_source_patterns()
+    offenders: list[str] = []
+    relative = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path.name
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        for label, pattern in patterns:
+            if pattern.search(line):
+                offenders.append(
+                    f"{relative}:{line_number}: forbidden reference source phrase: {label}"
+                )
+    return offenders
+
+
+def _forbidden_reference_source_patterns() -> tuple[tuple[str, re.Pattern[str]], ...]:
+    app = "ap" + "p"
+    official_mobile = "official " + "mobile"
+    return (
+        ("application reference", re.compile(rf"\b{app}\b\s*-?\s*reference\b", re.IGNORECASE)),
+        ("reference application", re.compile(rf"\breference\s+{app}\b", re.IGNORECASE)),
+        ("official application", re.compile(rf"\bofficial\s+{app}\b", re.IGNORECASE)),
+        ("application pcap", re.compile(rf"\b{app}\b\s*-?\s*pcap\b", re.IGNORECASE)),
+        ("application capture", re.compile(rf"\b{app}\b\s+capture\b", re.IGNORECASE)),
+        (
+            "mobile application capture",
+            re.compile(rf"\bmobile\s+{app}\b\s+capture\b", re.IGNORECASE),
+        ),
+        (official_mobile, re.compile(r"\bofficial\s+mobile\b", re.IGNORECASE)),
+    )
 
 
 def test_pcap_fingerprint_extractor_redacts_keys_and_addresses() -> None:

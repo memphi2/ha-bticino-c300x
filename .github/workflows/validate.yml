@@ -34,26 +34,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
-      - name: Repository checks
-        run: python scripts/check_repo.py
-      - name: Native agent ARMHF checks
-        run: |
-          make -C native_agent armhf-stack-check
-          if [ -n "${C300X_DEVICE_SYSROOT:-}" ] && [ -d "$C300X_DEVICE_SYSROOT/lib" ]; then
-            make -C native_agent armhf-abi-check
-          else
-            echo "Skipping ARMHF ABI check: C300X_DEVICE_SYSROOT is not available on this runner."
-          fi
-      - name: Quality scale checks
-        run: python scripts/check_quality_scale.py
-      - name: Ruff
-        run: ruff check .
-      - name: Python tests
-        run: python -m pytest
-      - name: Python coverage ratchet
-        run: python scripts/check_coverage.py
-      - name: Python typing ratchet
-        run: python scripts/check_typing.py
+      - name: Validation gates
+        run: python scripts/check_validate.py
 
   dependabot:
     runs-on: ubuntu-latest

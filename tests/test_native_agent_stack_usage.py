@@ -61,9 +61,13 @@ def test_validate_workflow_runs_armhf_stack_check() -> None:
     workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
         encoding="utf-8"
     )
+    validate_script = (ROOT / "scripts" / "check_validate.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "gcc-arm-linux-gnueabihf" in workflow
     assert "binutils-arm-linux-gnueabihf" in workflow
-    assert "make -C native_agent armhf-stack-check" in workflow
-    assert "C300X_DEVICE_SYSROOT" in workflow
-    assert "make -C native_agent armhf-abi-check" in workflow
+    assert "python scripts/check_validate.py" in workflow
+    assert '"make", "-C", "native_agent", "armhf-stack-check"' in validate_script
+    assert "C300X_DEVICE_SYSROOT" in validate_script
+    assert '"make", "-C", "native_agent", "armhf-abi-check"' in validate_script

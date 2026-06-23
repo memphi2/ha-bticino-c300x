@@ -1,6 +1,11 @@
 # Changelog
 
-## v1.4.3 - Unreleased
+## v1.4.3 - 2026-06-23
+
+### Fixed
+
+- Publishes the v1.4.2 package line as a stable maintenance update with the
+  same packaged native C300X device agent bundle from v1.4.1/v1.4.2.
 
 ## v1.4.2 - 2026-06-22
 

@@ -139,6 +139,65 @@ def test_stage_bundle_strips_elf_agent_binary(
     ]
 
 
+def test_bundle_hash_ignores_integration_version_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stager = _load_bundle_stager()
+    agent_binary = tmp_path / "c300x-agent-native"
+    version_file = tmp_path / "VERSION"
+    agent_binary.write_bytes(b"same-agent-binary")
+    version_file.write_text("0.3.1\n", encoding="utf-8")
+    monkeypatch.setattr(stager, "AGENT_BINARY", agent_binary)
+    monkeypatch.setattr(stager, "AGENT_VERSION_FILE", version_file)
+
+    first_component = tmp_path / "first" / "bticino_c300x"
+    second_component = tmp_path / "second" / "bticino_c300x"
+    stager.stage_bundle(first_component, version="1.0.0", skip_build=True)
+    stager.stage_bundle(second_component, version="1.0.1", skip_build=True)
+
+    first = json.loads(
+        (first_component / "device_agent" / "bundle.json").read_text(encoding="utf-8")
+    )
+    second = json.loads(
+        (second_component / "device_agent" / "bundle.json").read_text(encoding="utf-8")
+    )
+
+    assert first["integration_version"] == "1.0.0"
+    assert second["integration_version"] == "1.0.1"
+    assert first["bundle_hash"] == second["bundle_hash"]
+
+
+def test_bundle_hash_changes_with_native_agent_version_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stager = _load_bundle_stager()
+    agent_binary = tmp_path / "c300x-agent-native"
+    version_file = tmp_path / "VERSION"
+    agent_binary.write_bytes(b"same-agent-binary")
+    monkeypatch.setattr(stager, "AGENT_BINARY", agent_binary)
+    monkeypatch.setattr(stager, "AGENT_VERSION_FILE", version_file)
+
+    first_component = tmp_path / "first" / "bticino_c300x"
+    second_component = tmp_path / "second" / "bticino_c300x"
+    version_file.write_text("0.3.1\n", encoding="utf-8")
+    stager.stage_bundle(first_component, version="1.0.0", skip_build=True)
+    version_file.write_text("0.3.2\n", encoding="utf-8")
+    stager.stage_bundle(second_component, version="1.0.0", skip_build=True)
+
+    first = json.loads(
+        (first_component / "device_agent" / "bundle.json").read_text(encoding="utf-8")
+    )
+    second = json.loads(
+        (second_component / "device_agent" / "bundle.json").read_text(encoding="utf-8")
+    )
+
+    assert first["agent_version"] == "0.3.1"
+    assert second["agent_version"] == "0.3.2"
+    assert first["bundle_hash"] != second["bundle_hash"]
+
+
 def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     """The native apply list must cover every staged self-update file."""
 

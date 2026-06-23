@@ -10,6 +10,7 @@ from custom_components.bticino_c300x.camera_media import rtsp_reader
 from custom_components.bticino_c300x.camera_media.rtsp_reader import (
     DOORSTATION_AUDIO_GAIN,
     RTSP_MAX_SESSION_RESTARTS,
+    SharedRTSPMediaSource,
     _apply_audio_gain,
     _audio_gain_multiplier,
     _new_restarting_rtsp_audio_track,
@@ -83,6 +84,100 @@ def test_restarting_rtsp_tracks_share_one_audio_video_reader() -> None:
     assert video_frame.pts == 1
     assert video_frame.time_base == "1/90000"
     assert audio_frame.pts is None
+
+
+def test_shared_rtsp_media_source_reuses_reader_until_last_subscriber_stops() -> None:
+    opened_urls: list[str] = []
+    stopped: list[str] = []
+
+    class _Frame:
+        pts: int | None = None
+        time_base: object | None = None
+
+    class _SourceTrack:
+        def __init__(self, kind: str) -> None:
+            self.kind = kind
+
+        async def recv(self) -> _Frame:
+            return _Frame()
+
+        def stop(self) -> None:
+            stopped.append(self.kind)
+
+    class _VideoTrack:
+        kind = "video"
+
+        async def next_timestamp(self) -> tuple[int, str]:
+            return 9, "1/90000"
+
+        def stop(self) -> None:
+            stopped.append("video-wrapper")
+
+    class _AudioTrack:
+        kind = "audio"
+
+        def stop(self) -> None:
+            stopped.append("audio-wrapper")
+
+    class _MediaPlayer:
+        def __init__(self, url: str, options: dict[str, str]) -> None:
+            opened_urls.append(url)
+            self.video = _SourceTrack("video")
+            self.audio = _SourceTrack("audio")
+
+    class _RelayTrack:
+        def __init__(self, track: Any) -> None:
+            self.kind = track.kind
+            self._track = track
+            self.stopped = False
+
+        async def recv(self) -> Any:
+            return await self._track.recv()
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    class _MediaRelay:
+        def subscribe(self, track: Any) -> _RelayTrack:
+            return _RelayTrack(track)
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def _run() -> tuple[Any, Any, Any, Any, Any]:
+        source = SharedRTSPMediaSource(
+            resource_id="ring:test-entry",
+            av_module=SimpleNamespace(),
+            media_relay_cls=_MediaRelay,
+            video_stream_track_cls=_VideoTrack,
+            audio_stream_track_cls=_AudioTrack,
+            media_stream_error_cls=Exception,
+            media_player_cls=_MediaPlayer,
+            hass=_Hass(),
+            stream_url="rtsp://agent.local:6554/doorbell",
+            restart_callback=lambda: None,
+        )
+        first_handle, first_video, first_audio = source.acquire(include_audio=False)
+        second_handle, second_video, second_audio = source.acquire(include_audio=True)
+        first_frame = await first_video.recv()
+        second_frame = await second_video.recv()
+        first_handle.stop()
+        closed_after_first = source.closed
+        second_handle.stop()
+        return first_audio, second_audio, first_frame, second_frame, closed_after_first
+
+    first_audio, second_audio, first_frame, second_frame, closed_after_first = asyncio.run(
+        _run()
+    )
+
+    assert first_audio is None
+    assert second_audio is not None
+    assert first_frame.pts == 9
+    assert second_frame.pts == 9
+    assert opened_urls == ["rtsp://agent.local:6554/doorbell"]
+    assert closed_after_first is False
+    assert stopped == ["video", "audio"]
 
 
 def test_restarting_rtsp_audio_track_accepts_home_call_audio_only_reader() -> None:

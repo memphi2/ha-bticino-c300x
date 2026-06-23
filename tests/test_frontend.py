@@ -659,7 +659,7 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
 def test_bundled_card_uses_media_state_for_answered_ring_call() -> None:
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
 
-    assert 'action === "hangup" || action === "stop_stream"' in state_source
+    assert 'action === "hangup"' in state_source
     assert 'mediaState === "ring_answering"' in state_source
     assert 'mediaState === "ring_active"' in state_source
     assert 'mediaState === "ring_hanging_up"' in state_source
@@ -704,9 +704,8 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
 
     expected_mappings = {
         'if (action === "answer_ring")': 'return "answer";',
-        'if (action === "hangup" || action === "stop_stream")': (
-            'return "hang_up";'
-        ),
+        'if (action === "hangup")': 'return "hang_up";',
+        'if (action === "stop_stream")': 'return active ? "hang_up" : "busy";',
         'if (action === "start_stream")': 'return active ? "hang_up" : "stream";',
         'if (action === "wait")': 'return "busy";',
     }
@@ -717,6 +716,19 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
     action_start = state_source.index("export function c300xDoorstationAction")
     action_end = state_source.index("export function c300xStateMachineDoorstationAction")
     assert 'return "stream";' in state_source[action_start:action_end]
+
+
+def test_bundled_card_blocks_passive_on_demand_stop_button() -> None:
+    state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+
+    stop_stream_block = state_source[
+        state_source.index('if (action === "stop_stream")') : state_source.index(
+            'if (action === "start_stream")'
+        )
+    ]
+
+    assert 'return active ? "hang_up" : "busy";' in stop_stream_block
+    assert 'action === "busy"' in state_source
 
 
 def test_bundled_card_uses_camera_state_machine_without_state_entity_overrides() -> None:

@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=dedfff5e19c09cfa";
+} from "./c300x-translations.js?v=a4624a28a4b63b94";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=dedfff5e19c09cfa";
+} from "./c300x-entity-resolver.js?v=a4624a28a4b63b94";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=dedfff5e19c09cfa";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=dedfff5e19c09cfa";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=dedfff5e19c09cfa";
+} from "./c300x-state-model.js?v=a4624a28a4b63b94";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=a4624a28a4b63b94";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=a4624a28a4b63b94";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 

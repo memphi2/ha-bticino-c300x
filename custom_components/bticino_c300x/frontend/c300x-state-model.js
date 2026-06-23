@@ -186,8 +186,11 @@ export function c300xStateMachineDoorstationAction(cameraEntity, active) {
   if (action === "answer_ring") {
     return "answer";
   }
-  if (action === "hangup" || action === "stop_stream") {
+  if (action === "hangup") {
     return "hang_up";
+  }
+  if (action === "stop_stream") {
+    return active ? "hang_up" : "busy";
   }
   if (action === "start_stream") {
     return active ? "hang_up" : "stream";

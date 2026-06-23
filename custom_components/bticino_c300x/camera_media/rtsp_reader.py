@@ -36,6 +36,7 @@ def _new_restarting_rtsp_tracks(
     stream_url: str,
     restart_callback: RestartCallback,
     audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
+    require_audio: bool = True,
 ) -> tuple[Any, Any, Any]:
     """Create shared audio/video tracks over one C300X RTSP reader."""
 
@@ -102,7 +103,7 @@ def _new_restarting_rtsp_tracks(
                     options=_RTSP_PLAYER_OPTIONS,
                 )
             )
-            if player.video is None or player.audio is None:
+            if player.video is None or (require_audio and player.audio is None):
                 with suppress(Exception):
                     if player.video is not None:
                         player.video.stop()
@@ -165,6 +166,104 @@ def _new_restarting_rtsp_tracks(
             super().stop()
 
     return media, RestartingRTSPVideoTrack(), RestartingRTSPAudioTrack()
+
+
+class SharedRTSPMediaHandle:
+    """Reference-counted subscription to one shared RTSP source."""
+
+    def __init__(
+        self,
+        source: SharedRTSPMediaSource,
+        tracks: list[Any],
+    ) -> None:
+        self.resource_id = source.resource_id
+        self._source = source
+        self._tracks = tracks
+        self._stopped = False
+
+    def stop(self) -> None:
+        """Stop this subscriber without stopping other subscribers."""
+
+        if self._stopped:
+            return
+        self._stopped = True
+        for track in self._tracks:
+            with suppress(Exception):
+                track.stop()
+        self._source.release()
+
+
+class SharedRTSPMediaSource:
+    """Fan out one restarting RTSP reader to multiple WebRTC peers."""
+
+    def __init__(
+        self,
+        *,
+        resource_id: str,
+        av_module: Any,
+        media_relay_cls: Any,
+        video_stream_track_cls: Any,
+        audio_stream_track_cls: Any,
+        media_stream_error_cls: type[Exception],
+        media_player_cls: Any,
+        hass: Any,
+        stream_url: str,
+        restart_callback: RestartCallback,
+        audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
+    ) -> None:
+        self.resource_id = resource_id
+        self.stream_url = stream_url
+        self._relay = media_relay_cls()
+        self._ref_count = 0
+        self._closed = False
+        self._media, self._video_source, self._audio_source = _new_restarting_rtsp_tracks(
+            av_module,
+            video_stream_track_cls,
+            audio_stream_track_cls,
+            media_stream_error_cls,
+            media_player_cls,
+            hass,
+            stream_url,
+            restart_callback,
+            audio_gain_db=audio_gain_db,
+            require_audio=False,
+        )
+
+    @property
+    def closed(self) -> bool:
+        """Return true once the shared source has been stopped."""
+
+        return self._closed
+
+    def acquire(self, *, include_audio: bool) -> tuple[SharedRTSPMediaHandle, Any, Any | None]:
+        """Return per-peer relay tracks backed by this shared source."""
+
+        if self._closed:
+            raise RuntimeError("shared RTSP source is closed")
+        self._ref_count += 1
+        video_track = self._relay.subscribe(self._video_source)
+        tracks = [video_track]
+        audio_track = None
+        if include_audio:
+            audio_track = self._relay.subscribe(self._audio_source)
+            tracks.append(audio_track)
+        return SharedRTSPMediaHandle(self, tracks), video_track, audio_track
+
+    def release(self) -> None:
+        """Release one subscriber and stop the source after the last one."""
+
+        if self._ref_count > 0:
+            self._ref_count -= 1
+        if self._ref_count == 0:
+            self.stop()
+
+    def stop(self) -> None:
+        """Stop the underlying RTSP reader."""
+
+        if self._closed:
+            return
+        self._closed = True
+        self._media.stop()
 
 
 def _apply_audio_gain(av_module: Any, frame: Any, gain: float) -> Any:

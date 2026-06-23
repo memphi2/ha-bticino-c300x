@@ -61,11 +61,17 @@ class NativeWebRTCSessionRegistry:
     def active_media_sessions(self) -> int:
         """Return sessions that currently own a media player/track."""
 
-        return sum(
-            1
-            for session in self._sessions.values()
-            if session.player is not None and not webrtc_session_peer_closed(session)
-        )
+        unique_resources: set[str] = set()
+        standalone_sessions = 0
+        for session in self._sessions.values():
+            if session.player is None or webrtc_session_peer_closed(session):
+                continue
+            resource_id = getattr(session.player, "resource_id", None)
+            if isinstance(resource_id, str) and resource_id:
+                unique_resources.add(resource_id)
+            else:
+                standalone_sessions += 1
+        return standalone_sessions + len(unique_resources)
 
     def has_sessions(self) -> bool:
         """Return true when at least one WebRTC session remains registered."""

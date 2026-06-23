@@ -40,6 +40,7 @@ from .camera_media.rtsp_orchestrator import (
     rtsp_consumer_for_doorbell_request as _rtsp_consumer_for_doorbell_request,
 )
 from .camera_media.rtsp_reader import (
+    SharedRTSPMediaSource,
     _new_restarting_rtsp_audio_track,
     _new_restarting_rtsp_tracks,
     _new_restarting_rtsp_video_track,
@@ -229,7 +230,7 @@ def _load_aiortc_modules() -> SimpleNamespace:
             RTCRtpSender,
             RTCSessionDescription,
         )
-        from aiortc.contrib.media import MediaPlayer
+        from aiortc.contrib.media import MediaPlayer, MediaRelay
         from aiortc.mediastreams import (
             AudioStreamTrack,
             MediaStreamError,
@@ -244,6 +245,7 @@ def _load_aiortc_modules() -> SimpleNamespace:
         AudioStreamTrack=AudioStreamTrack,
         candidate_from_sdp=candidate_from_sdp,
         MediaPlayer=MediaPlayer,
+        MediaRelay=MediaRelay,
         MediaStreamError=MediaStreamError,
         RTCConfiguration=RTCConfiguration,
         RTCIceServer=RTCIceServer,
@@ -341,6 +343,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._webrtc_session_registry = _NativeWebRTCSessionRegistry(
             self._webrtc_sessions
         )
+        self._shared_ring_rtsp_source: SharedRTSPMediaSource | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -554,6 +557,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     await self._async_restart_video_reader(audio=wants_audio)
                 return None
 
+            async def _restart_shared_ring_reader() -> bool | None:
+                status = await self._async_refresh_video_status_or_none(
+                    apply_status=False
+                )
+                decision = (
+                    self._derive_media_decision(status)
+                    if status is not None
+                    else self._last_media_decision
+                )
+                if not _media_decision_is_ring_call(decision):
+                    return False
+                await self._async_restart_video_reader(audio=True)
+                return None
+
             if owner == "home_call":
                 await self._entry.runtime_data.api.async_start_home_call(
                     duration_seconds=duration_seconds
@@ -562,12 +579,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 home_call_audio_only = True
             else:
                 stream_url = await self._async_prepare_rtsp_stream(audio=wants_audio)
+                prepared_stream_url = stream_url
                 decision = self._last_media_decision
                 session.ring_call = _media_decision_is_ring_call(decision)
                 home_call_audio_only = wants_audio and _media_decision_is_home_call(
                     decision
                 )
                 session.ring_preview = _media_decision_is_unanswered_ring(decision)
+                if session.ring_call:
+                    stream_url = self._build_stream_url(audio=True)
+                    if stream_url != prepared_stream_url:
+                        await self._async_wait_for_rtsp_ready(stream_url)
 
             if home_call_audio_only:
                 audio_track = _new_restarting_rtsp_audio_track(
@@ -582,6 +604,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
                 session.player = audio_track
                 peer.addTrack(audio_track)
+            elif session.ring_call:
+                shared_handle, video_track, audio_track = self._ring_rtsp_tracks(
+                    aiortc_modules,
+                    stream_url,
+                    restart_callback=_restart_shared_ring_reader,
+                    include_audio=wants_audio,
+                )
+                session.player = shared_handle
+                peer.addTrack(video_track)
+                if audio_track is not None:
+                    peer.addTrack(audio_track)
             elif wants_audio:
                 media, video_track, audio_track = _new_restarting_rtsp_tracks(
                     aiortc_modules.av,
@@ -627,6 +660,40 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         except Exception as err:
             send_message(WebRTCError("bticino_webrtc_offer_failed", str(err)))
             await self._async_close_webrtc_session(session_id)
+
+    def _ring_rtsp_tracks(
+        self,
+        aiortc_modules: SimpleNamespace,
+        stream_url: str,
+        *,
+        restart_callback: Any,
+        include_audio: bool,
+    ) -> tuple[Any, Any, Any | None]:
+        """Return relay tracks for Ring Call media backed by one RTSP reader."""
+
+        source = self._shared_ring_rtsp_source
+        if (
+            source is None
+            or source.closed
+            or source.stream_url != stream_url
+        ):
+            if source is not None:
+                source.stop()
+            source = SharedRTSPMediaSource(
+                resource_id=f"ring:{self._entry.entry_id}",
+                av_module=aiortc_modules.av,
+                media_relay_cls=aiortc_modules.MediaRelay,
+                video_stream_track_cls=aiortc_modules.VideoStreamTrack,
+                audio_stream_track_cls=aiortc_modules.AudioStreamTrack,
+                media_stream_error_cls=aiortc_modules.MediaStreamError,
+                media_player_cls=aiortc_modules.MediaPlayer,
+                hass=self.hass,
+                stream_url=stream_url,
+                restart_callback=restart_callback,
+                audio_gain_db=self._doorstation_audio_gain_db(),
+            )
+            self._shared_ring_rtsp_source = source
+        return source.acquire(include_audio=include_audio)
 
     async def async_on_webrtc_candidate(self, session_id: str, candidate: Any) -> None:
         """Forward browser ICE candidates to the native WebRTC peer."""
@@ -705,24 +772,36 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def async_prepare_doorbell_video_stop(self) -> None:
         """Close HA-owned doorbell media before an explicit agent stop."""
 
-        for session_id in self._webrtc_session_registry.session_ids_by_owner("doorbell"):
-            await self._async_close_webrtc_session(
-                session_id,
-                stop_media=False,
-                notify_client=True,
-                reason="doorbell_video_stopped",
+        await asyncio.gather(
+            *(
+                self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="doorbell_video_stopped",
+                )
+                for session_id in self._webrtc_session_registry.session_ids_by_owner(
+                    "doorbell"
+                )
             )
+        )
 
     async def async_prepare_home_call_stop(self) -> None:
         """Close HA-owned Home Call media before an explicit agent stop."""
 
-        for session_id in self._webrtc_session_registry.session_ids_by_owner("home_call"):
-            await self._async_close_webrtc_session(
-                session_id,
-                stop_media=False,
-                notify_client=True,
-                reason="home_call_stopped",
+        await asyncio.gather(
+            *(
+                self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="home_call_stopped",
+                )
+                for session_id in self._webrtc_session_registry.session_ids_by_owner(
+                    "home_call"
+                )
             )
+        )
 
     async def _async_close_webrtc_session(
         self,

@@ -266,6 +266,7 @@
           "memos_changed": "Memos changed",
           "ringer_muted": "Ringer muted",
           "ringer_unmuted": "Ringer unmuted",
+          "ringer_volume_changed": "Ringer volume changed",
           "smartphone_forwarding_changed": "Smartphone forwarding changed",
           "stair_light_activated": "Stair light activated",
           "activation_executed": "Device activation executed"
@@ -280,6 +281,11 @@
           "homeassistant": "Home Assistant",
           "blocked": "Blocked"
         }
+      }
+    },
+    "number": {
+      "ringer_volume": {
+        "name": "Ringer volume"
       }
     },
     "sensor": {

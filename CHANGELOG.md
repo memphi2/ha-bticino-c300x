@@ -1,6 +1,34 @@
 # Changelog
 
-## v1.5.0 - Unreleased
+## v1.5.0 - 2026-06-23
+
+### Added
+
+- Allows multiple Home Assistant browser sessions to watch the same doorbell
+  call stream while keeping Answer and Hang Up controlled by the active call
+  session.
+- Adds a Home Assistant number entity for the C300X device ringer volume when
+  the installed native device agent exposes ringer-volume support.
+
+### Changed
+
+- Updates the native C300X device agent API to expose ringer mute and volume
+  state through the existing local ringer endpoint.
+
+### Fixed
+
+- Keeps other browser previews from ending the active doorbell stream when one
+  viewer closes its preview.
+- Keeps on-demand Hang Up from stopping media when the current browser session
+  is not the active stream owner.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant to `1.5.0` so the
+  ringer volume entity is available.
+- Hard-reload the browser or clear the Home Assistant app/WebView cache if the
+  doorstation card still shows old stream behavior.
 
 ## v1.4.3 - 2026-06-23
 

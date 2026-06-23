@@ -736,6 +736,36 @@ def test_ringer_event_updates_state_and_public_event_data() -> None:
     assert hass.bus.events[-1][1]["event_key"] == "ringer_muted"
 
 
+def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {"event": "ringer.volume_changed", "data": {"volume": 70}},
+    )
+
+    response = asyncio.run(
+        _async_handle_agent_event(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            event_state,
+            request,  # type: ignore[arg-type]
+        )
+    )
+
+    assert response.status == 200
+    assert event_state.ringer_volume == 70
+    assert event_state.last_event_data["volume"] == 70
+    assert hass.bus.events[-1][1]["event_key"] == "ringer_volume_changed"
+
+
 def test_smartphone_forwarding_event_updates_state_and_public_event_data() -> None:
     hass = _FakeHass()
     event_state = C300XEventState()

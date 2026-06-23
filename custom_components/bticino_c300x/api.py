@@ -172,7 +172,7 @@ class C300XAgentApi:
         return _ok_response(data)
 
     async def async_ringer_status(self) -> dict[str, Any]:
-        """Return ringer mute status."""
+        """Return ringer mute and volume status."""
 
         try:
             data = await self._request_json("GET", "/api/v1/ringer")
@@ -382,6 +382,16 @@ class C300XAgentApi:
             "POST",
             "/api/v1/ringer",
             json_data={"muted": muted},
+        )
+        return normalize_ringer(data)
+
+    async def async_set_ringer_volume(self, volume: int) -> dict[str, Any]:
+        """Set the device ringer volume."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/ringer",
+            json_data={"volume": int(volume)},
         )
         return normalize_ringer(data)
 
@@ -1673,26 +1683,51 @@ def _normalized_smartphone_forwarding(
 
 
 def normalize_ringer(data: Any) -> dict[str, Any]:
-    """Normalize device-agent ringer mute responses."""
+    """Normalize device-agent ringer responses."""
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("ringer returned non-object JSON")
     raw_value: Any
     if "state" in data and isinstance(data["state"], dict):
         raw_value = data["state"].get("ringer_muted")
+        volume_value = data["state"].get("ringer_volume")
+        has_volume = "ringer_volume" in data["state"]
         raw = data
     else:
         raw_value = data.get("muted")
+        volume_value = data.get("volume")
+        has_volume = "volume" in data
         raw = data.get("raw", data)
+    result: dict[str, Any] = {"muted": None, "raw": raw}
     if raw_value is None:
-        return {"muted": None, "raw": raw}
-    if isinstance(raw_value, str):
+        result["muted"] = None
+    elif isinstance(raw_value, str):
         normalized = raw_value.strip().lower()
         if normalized in {"true", "1", "on", "muted"}:
-            return {"muted": True, "raw": raw}
-        if normalized in {"false", "0", "off", "unmuted"}:
-            return {"muted": False, "raw": raw}
-    return {"muted": bool(raw_value), "raw": raw}
+            result["muted"] = True
+        elif normalized in {"false", "0", "off", "unmuted"}:
+            result["muted"] = False
+        else:
+            result["muted"] = bool(raw_value)
+    else:
+        result["muted"] = bool(raw_value)
+    if has_volume:
+        result["volume"] = _normalize_ringer_volume(volume_value)
+    return result
+
+
+def _normalize_ringer_volume(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    try:
+        volume = int(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= volume <= 100:
+        return volume
+    return None
 
 
 def normalize_answering_machine(data: Any) -> dict[str, Any]:

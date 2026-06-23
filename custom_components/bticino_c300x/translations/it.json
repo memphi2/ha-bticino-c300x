@@ -266,6 +266,7 @@
           "memos_changed": "Memo aggiornati",
           "ringer_muted": "Suoneria disattivata",
           "ringer_unmuted": "Suoneria attivata",
+          "ringer_volume_changed": "Volume suoneria modificato",
           "smartphone_forwarding_changed": "Inoltro smartphone modificato",
           "stair_light_activated": "Luce scale attivata",
           "activation_executed": "Attivazione dispositivo eseguita"
@@ -280,6 +281,11 @@
           "homeassistant": "Home Assistant",
           "blocked": "Blocked"
         }
+      }
+    },
+    "number": {
+      "ringer_volume": {
+        "name": "Volume suoneria"
       }
     },
     "sensor": {

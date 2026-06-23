@@ -138,6 +138,7 @@ class _FakeEventState:
     last_event_data: dict[str, Any] = field(default_factory=dict)
     smartphone_forwarding_mode: str | None = None
     ringer_muted: bool | None = None
+    ringer_volume: int | None = None
     voicemail_total: int | None = None
     voicemail_unread: int | None = None
 

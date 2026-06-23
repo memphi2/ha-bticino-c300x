@@ -266,6 +266,7 @@
           "memos_changed": "Memos mis a jour",
           "ringer_muted": "Sonnerie coupee",
           "ringer_unmuted": "Sonnerie activee",
+          "ringer_volume_changed": "Volume sonnerie modifie",
           "smartphone_forwarding_changed": "Renvoi smartphone modifie",
           "stair_light_activated": "Lumiere d'escalier activee",
           "activation_executed": "Activation appareil executee"
@@ -280,6 +281,11 @@
           "homeassistant": "Home Assistant",
           "blocked": "Blocked"
         }
+      }
+    },
+    "number": {
+      "ringer_volume": {
+        "name": "Volume sonnerie"
       }
     },
     "sensor": {

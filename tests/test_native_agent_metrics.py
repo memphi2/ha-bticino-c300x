@@ -607,6 +607,10 @@ def test_native_agent_ringer_events_are_change_based() -> None:
         "static int note_ringer_muted_changed",
         maxsplit=1,
     )[1].split("static void refresh_smartphone_forwarding_mode", maxsplit=1)[0]
+    volume_note_body = text.split(
+        "static int note_ringer_volume_changed",
+        maxsplit=1,
+    )[1].split("static void sync_ring_receiver_for_forwarding", maxsplit=1)[0]
     state_body = text.split("static void api_state", maxsplit=1)[1].split(
         "static void handle_doorbell_video_get",
         maxsplit=1,
@@ -614,12 +618,21 @@ def test_native_agent_ringer_events_are_change_based() -> None:
 
     assert "int ringer_muted_known;" in text
     assert "int ringer_muted;" in text
+    assert "int ringer_volume_known;" in text
+    assert "int ringer_volume;" in text
     assert "note_ringer_muted_changed(runtime, muted)" in event_body
+    assert "ringer_volume_from_reply(msg, &code)" in event_body
+    assert "note_ringer_volume_changed(runtime, code)" in event_body
+    assert 'c300x_copy_string(type, type_len, "ringer.volume_changed")' in event_body
     assert "return 0;" in note_body
     assert "runtime->ringer_muted == muted" in note_body
     assert "remember_ringer_muted(runtime, muted)" in note_body
-    assert "remember_ringer_muted(runtime, readback)" in text
+    assert "runtime->ringer_volume == volume" in volume_note_body
+    assert "remember_ringer_volume(runtime, volume)" in volume_note_body
+    assert "remember_ringer_muted(runtime, muted_readback)" in text
+    assert "remember_ringer_volume(runtime, volume_readback)" in text
     assert '\\"ringer_muted\\":%s' in state_body
+    assert '\\"ringer_volume\\":%s' in state_body
 
 
 def test_native_agent_maps_device_doorbell_answer_and_close_frames() -> None:

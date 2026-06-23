@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.4.1`
+- Current packaged agent version: `1.5.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -135,8 +135,8 @@ Status endpoints use boolean flags and fingerprints instead.
 | `POST` | `/api/v1/activations/{id}/actions/run` | API | Runs one configured activation. |
 | `GET` | `/api/v1/smartphone-forwarding` | API | Reads forwarding state. |
 | `POST` | `/api/v1/smartphone-forwarding` | API | Changes forwarding mode. |
-| `GET` | `/api/v1/ringer` | API | Reads ringer mute state. |
-| `POST` | `/api/v1/ringer` | API | Changes ringer mute state. |
+| `GET` | `/api/v1/ringer` | API | Reads ringer mute and volume state. |
+| `POST` | `/api/v1/ringer` | API | Changes ringer mute state or volume. |
 | `GET` | `/api/v1/answering-machine` | API | Reads answering-machine state. |
 | `POST` | `/api/v1/answering-machine` | API | Changes answering-machine enabled state. |
 | `GET` | `/api/v1/answering-machine/messages` | API | Lists video messages. |
@@ -204,7 +204,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.4.1"}
+{"ok": true, "agent": "native-c", "version": "1.5.0"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -234,8 +234,8 @@ Authentication: normal API token.
 Side effects: none.
 
 Returns a cached aggregate state. Older Home Assistant code may use this as a
-fallback for smartphone forwarding, ringer, and answering-machine status when a
-dedicated endpoint is not available.
+fallback for smartphone forwarding, ringer, ringer volume, and
+answering-machine status when a dedicated endpoint is not available.
 
 ### `GET /api/v1/diagnostics`
 
@@ -280,7 +280,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.4.1",
+  "agent_version": "1.5.0",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -481,19 +481,33 @@ Allowed modes are normalized by Home Assistant before the request.
 
 Authentication: normal API token.
 
-Side effects: reads ringer mute state.
+Side effects: reads ringer mute state with `*#8**33##` and ringer volume with
+`*#8**41##`.
+
+The response includes `muted` when the mute read can be decoded and `volume`
+when the volume read can be decoded. `volume` is the device ringtone volume in
+percent. The firmware UI treats `0` as the mute transition, so Home Assistant
+uses the active volume range `10..100` and keeps mute as a separate switch.
 
 ### `POST /api/v1/ringer`
 
 Authentication: normal API token.
 
-Side effects: changes ringer mute state.
+Side effects: changes ringer mute state or ringer volume.
 
 Request fields:
 
 ```json
 {"muted": true}
 ```
+
+```json
+{"volume": 50}
+```
+
+`muted` sends `*#8**#33*0##` or `*#8**#33*1##`. `volume` sends
+`*#8**#41*<volume>##`; the accepted device API range is `0..100`, while Home
+Assistant exposes the active ringtone range `10..100`.
 
 ### `GET /api/v1/answering-machine`
 
@@ -899,7 +913,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.4.1"
+  "agent_version": "1.5.0"
 }
 ```
 
@@ -1113,7 +1127,8 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.4.1 | 1.1 | 1.7.x | Current packaged agent. |
+| 1.5.0 | 1.1 | 1.7.x | Current packaged agent; adds ringer volume read/write support. |
+| 1.4.1 | 1.1 | 1.7.x | Adds consolidated doorstation card and Ring Call support. |
 | 1.3.0 | 1.1 | 1.7.x | Adds display watchdog recovery and bundled mobile Ring Call workflow support. |
 | 1.2.3 | 1.1 | 1.7.x | Consolidates display UI actions and dashboard traffic handling. |
 | 1.2.2 | 1.1 | 1.7.x | Bootstraps and requires the dedicated Home Assistant media user for local media identity. |

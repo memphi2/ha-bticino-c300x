@@ -854,6 +854,7 @@ def run_smoke(
             if dashboard_callback["body"].get("option") != "Home Assistant, manual":
                 raise AssertionError("dashboard choice option was not forwarded")
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "muted", False)
+            assert_json_field(api_get(api_port, "/api/v1/ringer"), "volume", 10)
             assert_json_field(
                 api_get(api_port, "/api/v1/smartphone-forwarding"),
                 "mode",
@@ -1710,6 +1711,8 @@ def assert_runtime_bridge_binds_ui_when_disabled(
 def reply_for_openwebnet_frame(server: OpenWebNetServer, frame: str) -> str:
     if frame == "*#8**33##":
         return "*#8**33*1##"
+    if frame == "*#8**41##":
+        return "*#8**41*10##"
     if frame == "*#8**37##":
         return f"*#8**37*{server.smartphone_forwarding_code}##"
     for code in (0, 1, 2):

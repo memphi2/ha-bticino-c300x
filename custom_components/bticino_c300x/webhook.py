@@ -383,6 +383,10 @@ def _apply_ringer_event(context: _AgentEventContext) -> None:
     context.event_state.ringer_muted = context.event_type == "ringer_muted"
 
 
+def _apply_ringer_volume_event(context: _AgentEventContext) -> None:
+    context.event_state.ringer_volume = _optional_int(context.data.get("volume"))
+
+
 def _apply_smartphone_forwarding_event(context: _AgentEventContext) -> None:
     context.event_state.smartphone_forwarding_mode = _optional_forwarding_mode(
         context.data.get("mode")
@@ -411,6 +415,7 @@ _AGENT_EVENT_STATE_HANDLERS: dict[str, _AgentEventStateHandler] = {
     "call_ended": _apply_call_event,
     "ringer_muted": _apply_ringer_event,
     "ringer_unmuted": _apply_ringer_event,
+    "ringer_volume_changed": _apply_ringer_volume_event,
     "smartphone_forwarding_changed": _apply_smartphone_forwarding_event,
     "answering_machine_messages_changed": _apply_voicemail_event_context,
     "memos_changed": _apply_memos_event_context,
@@ -492,6 +497,8 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
         event_data["address"] = context.data.get("address")
     elif context.event_type in {"ringer_muted", "ringer_unmuted"}:
         event_data["muted"] = context.event_state.ringer_muted
+    elif context.event_type == "ringer_volume_changed":
+        event_data["volume"] = context.event_state.ringer_volume
     elif context.event_type == "smartphone_forwarding_changed":
         event_data["mode"] = context.event_state.smartphone_forwarding_mode
     elif context.event_type == "answering_machine_messages_changed":

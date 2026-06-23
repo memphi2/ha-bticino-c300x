@@ -70,7 +70,15 @@ if TYPE_CHECKING:
 else:
     BticinoC300XConfigEntry = Any
 
-BASE_PLATFORMS = ("binary_sensor", "button", "event", "sensor", "select", "switch")
+BASE_PLATFORMS = (
+    "binary_sensor",
+    "button",
+    "event",
+    "number",
+    "sensor",
+    "select",
+    "switch",
+)
 CAMERA_PLATFORM = "camera"
 _LOGGER = logging.getLogger(__name__)
 _GUI_DEPENDENT_ENTITY_KEYS = (

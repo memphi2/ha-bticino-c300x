@@ -39,6 +39,19 @@ from custom_components.bticino_c300x.data import (
 
 
 def _stub_homeassistant_http() -> None:
+    core = sys.modules.setdefault(
+        "homeassistant.core",
+        types.ModuleType("homeassistant.core"),
+    )
+    if not hasattr(core, "ServiceCall"):
+        core.ServiceCall = type("ServiceCall", (), {})
+    dispatcher = sys.modules.setdefault(
+        "homeassistant.helpers.dispatcher",
+        types.ModuleType("homeassistant.helpers.dispatcher"),
+    )
+    if not hasattr(dispatcher, "async_dispatcher_send"):
+        dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
+
     components = sys.modules.setdefault(
         "homeassistant.components",
         types.ModuleType("homeassistant.components"),
@@ -251,7 +264,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "repair-sync",
         "services",
         "media-view",
-        "forward:binary_sensor,button,event,sensor,select,switch,camera",
+        "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
     ]
     assert entry.added_listeners
 

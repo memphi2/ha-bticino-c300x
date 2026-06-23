@@ -139,6 +139,7 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
             "video_available": data.get("video_available"),
             "smartphone_forwarding_mode": data.get("mode"),
             "ringer_muted": data.get("muted"),
+            "ringer_volume": data.get("volume"),
             "voicemail_total": data.get("voicemail_total")
             if data.get("voicemail_total") is not None
             else _nested_dict_value(data, "voicemail", "total"),

@@ -75,6 +75,7 @@ def test_events_for_capabilities_includes_future_real_capabilities() -> None:
         "call.ended",
         "ringer.muted",
         "ringer.unmuted",
+        "ringer.volume_changed",
         "smartphone_forwarding.changed",
         "agent.restarted",
     ]
@@ -232,6 +233,7 @@ def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:
         "call_ended",
         "ringer_muted",
         "ringer_unmuted",
+        "ringer_volume_changed",
         "smartphone_forwarding_changed",
         "answering_machine_messages_changed",
         "memos_changed",
@@ -247,6 +249,7 @@ def test_event_label_returns_localized_event_names() -> None:
     assert event_label("stair_light_activated", "de") == "Treppenlicht aktiviert"
     assert event_label("activation_executed", "de") == "Geräteaktion ausgeführt"
     assert event_label("ringer_unmuted", "de") == "Klingelton aktiviert"
+    assert event_label("ringer_volume_changed", "de") == "Klingel-Lautstärke geändert"
     assert event_label("smartphone_forwarding_changed", "it") == (
         "Inoltro smartphone modificato"
     )

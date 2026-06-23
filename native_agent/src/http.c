@@ -81,6 +81,10 @@
 #define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
+#define C300X_RINGER_VOLUME_MIN 0
+#define C300X_RINGER_VOLUME_ACTIVE_MIN 10
+#define C300X_RINGER_VOLUME_MAX 100
+#define C300X_RINGER_VOLUME_STEP 10
 #define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
     c300x_system_metrics_cpu_watchdog_apply( \
         (runtime)->video, \
@@ -228,6 +232,8 @@ struct agent_runtime {
     int smartphone_forwarding_mode_code;
     int ringer_muted_known;
     int ringer_muted;
+    int ringer_volume_known;
+    int ringer_volume;
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
@@ -395,6 +401,7 @@ static const char *json_string(const char *value, char *out, size_t out_len);
 static void json_string_field(const char *body, const char *field, char *out, size_t out_len);
 static int json_bool_field(const char *body, const char *field, int *out);
 static int json_int_field(const char *body, const char *field, int *out);
+static int ringer_volume_from_reply(const char *reply, int *volume);
 static int constant_time_equal(const char *left, size_t left_len, const char *right);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
@@ -6000,6 +6007,37 @@ static int note_ringer_muted_changed(struct agent_runtime *runtime, int muted)
     return 1;
 }
 
+static void remember_ringer_volume(struct agent_runtime *runtime, int volume)
+{
+    if (runtime == NULL) {
+        return;
+    }
+    if (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX) {
+        return;
+    }
+    runtime->ringer_volume_known = 1;
+    runtime->ringer_volume = volume;
+}
+
+static int note_ringer_volume_changed(struct agent_runtime *runtime, int volume)
+{
+    if (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX) {
+        return 0;
+    }
+    if (runtime == NULL) {
+        return 1;
+    }
+    if (!runtime->ringer_volume_known) {
+        remember_ringer_volume(runtime, volume);
+        return 0;
+    }
+    if (runtime->ringer_volume == volume) {
+        return 0;
+    }
+    remember_ringer_volume(runtime, volume);
+    return 1;
+}
+
 static void sync_ring_receiver_for_forwarding(struct agent_runtime *runtime);
 
 static void refresh_smartphone_forwarding_mode(
@@ -6060,6 +6098,14 @@ static int map_openwebnet_event(
     }
     json_string(msg, raw_json, sizeof(raw_json));
 
+    if (ringer_volume_from_reply(msg, &code)) {
+        size_t used = 0;
+        if (!note_ringer_volume_changed(runtime, code)) {
+            return 0;
+        }
+        c300x_copy_string(type, type_len, "ringer.volume_changed");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"volume\":%d}", raw_json, code);
+    }
     if (sscanf(msg, "*#8**33*%d##", &code) == 1 || sscanf(msg, "*#8**#33*%d##", &code) == 1) {
         size_t used = 0;
         int muted;
@@ -6690,7 +6736,7 @@ static void api_capabilities(
         "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
         "\"activations\":{\"supported\":%s,\"count\":%d},"
         "\"call_events\":false,"
-        "\"ringer\":true,"
+        "\"ringer\":{\"supported\":true,\"mute\":true,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
         "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
         "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
         "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s,\"write_text\":%s},"
@@ -6726,6 +6772,9 @@ static void api_capabilities(
         lock_name,
         (config->activations_enabled && activations_count > 0) ? "true" : "false",
         activations_count,
+        C300X_RINGER_VOLUME_ACTIVE_MIN,
+        C300X_RINGER_VOLUME_MAX,
+        C300X_RINGER_VOLUME_STEP,
         config->answering_machine_messages_enabled ? "true" : "false",
         (config->answering_machine_messages_enabled && config->answering_machine_messages_watch) ? "true" : "false",
         config->answering_machine_messages_enabled ? "true" : "false",
@@ -6794,6 +6843,7 @@ static void api_state(
     char video_path_escaped[C300X_MAX_PATH_JSON_LEN];
     char smartphone_forwarding_json[32];
     char ringer_muted_json[8];
+    char ringer_volume_json[16];
     struct c300x_video_status video_status;
     int video_available = 0;
     const char *smartphone_forwarding = NULL;
@@ -6819,6 +6869,11 @@ static void api_state(
     } else {
         snprintf(ringer_muted_json, sizeof(ringer_muted_json), "null");
     }
+    if (runtime != NULL && runtime->ringer_volume_known) {
+        snprintf(ringer_volume_json, sizeof(ringer_volume_json), "%d", runtime->ringer_volume);
+    } else {
+        snprintf(ringer_volume_json, sizeof(ringer_volume_json), "null");
+    }
 
     if (video_path != NULL) {
         json_escape_string(video_path, video_path_escaped, sizeof(video_path_escaped));
@@ -6832,13 +6887,15 @@ static void api_state(
             "\"video_stream_path\":\"%s\","
             "\"smartphone_forwarding\":%s,"
             "\"ringer_muted\":%s,"
+            "\"ringer_volume\":%s,"
             "\"answering_machine_enabled\":null"
             "}"
             "}\n",
             video_available ? "true" : "false",
             video_path_escaped,
             smartphone_forwarding_json,
-            ringer_muted_json
+            ringer_muted_json,
+            ringer_volume_json
         );
     } else {
         snprintf(
@@ -6851,11 +6908,13 @@ static void api_state(
             "\"video_stream_path\":null,"
             "\"smartphone_forwarding\":%s,"
             "\"ringer_muted\":%s,"
+            "\"ringer_volume\":%s,"
             "\"answering_machine_enabled\":null"
             "}"
             "}\n",
             smartphone_forwarding_json,
-            ringer_muted_json
+            ringer_muted_json,
+            ringer_volume_json
         );
     }
     send_json(client_fd, 200, "OK", body);
@@ -7465,6 +7524,30 @@ static int ringer_muted_from_reply(const char *reply, int *muted)
     return 0;
 }
 
+static int ringer_volume_from_reply(const char *reply, int *volume)
+{
+    int value;
+    int consumed = 0;
+
+    if (reply == NULL || volume == NULL) {
+        return 0;
+    }
+    if (
+        (
+            sscanf(reply, "*#8**41*%d##%n", &value, &consumed) == 1
+            || sscanf(reply, "*#8**#41*%d##%n", &value, &consumed) == 1
+        )
+        && consumed > 0
+        && reply[consumed] == '\0'
+        && value >= C300X_RINGER_VOLUME_MIN
+        && value <= C300X_RINGER_VOLUME_MAX
+    ) {
+        *volume = value;
+        return 1;
+    }
+    return 0;
+}
+
 static int answering_enabled_from_reply(const char *reply, int fallback, int *enabled, int *greeting)
 {
     const char *prefix = "*#8**40*";
@@ -7909,23 +7992,63 @@ static void handle_ringer_get(
     struct agent_runtime *runtime
 )
 {
-    char reply[C300X_MAX_FRAME_LEN];
+    char muted_reply[C300X_MAX_FRAME_LEN];
+    char volume_reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[2048];
-    char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char muted_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char volume_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char muted_json[8];
+    char volume_json[16];
+    char muted_status_part[32];
+    char volume_status_part[40];
+    char volume_raw_part[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 32];
     int muted;
+    int volume;
 
-    if (!c300x_openwebnet_send(config, "*#8**33##", reply, sizeof(reply), error, sizeof(error))) {
+    muted_status_part[0] = '\0';
+    volume_status_part[0] = '\0';
+    volume_raw_part[0] = '\0';
+
+    if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
         send_device_error(client_fd, error);
         return;
     }
-    json_string(reply, reply_json, sizeof(reply_json));
-    if (ringer_muted_from_reply(reply, &muted)) {
+    json_string(muted_reply, muted_reply_json, sizeof(muted_reply_json));
+    if (ringer_muted_from_reply(muted_reply, &muted)) {
         remember_ringer_muted(runtime, muted);
-        snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n", muted ? "true" : "false", reply_json);
+        snprintf(muted_json, sizeof(muted_json), "%s", muted ? "true" : "false");
     } else {
-        snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
+        snprintf(muted_json, sizeof(muted_json), "null");
+        snprintf(muted_status_part, sizeof(muted_status_part), ",\"status\":\"unknown\"");
     }
+
+    if (c300x_openwebnet_send(config, "*#8**41##", volume_reply, sizeof(volume_reply), error, sizeof(error))) {
+        json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
+        snprintf(volume_raw_part, sizeof(volume_raw_part), ",\"volume_raw\":%s", volume_reply_json);
+        if (ringer_volume_from_reply(volume_reply, &volume)) {
+            remember_ringer_volume(runtime, volume);
+            snprintf(volume_json, sizeof(volume_json), "%d", volume);
+        } else {
+            snprintf(volume_json, sizeof(volume_json), "null");
+            snprintf(volume_status_part, sizeof(volume_status_part), ",\"volume_status\":\"unknown\"");
+        }
+    } else {
+        snprintf(volume_json, sizeof(volume_json), "null");
+        snprintf(volume_status_part, sizeof(volume_status_part), ",\"volume_status\":\"unknown\"");
+    }
+
+    snprintf(
+        body,
+        sizeof(body),
+        "{\"ok\":true,\"muted\":%s,\"volume\":%s%s%s,\"raw\":%s%s}\n",
+        muted_json,
+        volume_json,
+        muted_status_part,
+        volume_status_part,
+        muted_reply_json,
+        volume_raw_part
+    );
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -7936,34 +8059,95 @@ static void handle_ringer_post(
     const struct request *request
 )
 {
-    char reply[C300X_MAX_FRAME_LEN];
+    char muted_reply[C300X_MAX_FRAME_LEN];
+    char volume_reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[2048];
-    char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char muted_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char volume_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char command[64];
     int muted;
     int enabled;
-    int readback;
-    const char *command;
+    int has_muted;
+    int volume;
+    int has_volume;
+    int muted_readback = 0;
+    int volume_readback = 0;
 
-    if (!json_bool_field(request->body, "muted", &muted)) {
+    muted_reply_json[0] = '\0';
+    volume_reply_json[0] = '\0';
+
+    has_muted = json_bool_field(request->body, "muted", &muted);
+    if (!has_muted) {
         if (json_bool_field(request->body, "enabled", &enabled)) {
             muted = !enabled;
-        } else {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
-            return;
+            has_muted = 1;
         }
     }
-    command = muted ? "*#8**#33*0##" : "*#8**#33*1##";
-    if (!c300x_openwebnet_send(config, command, reply, sizeof(reply), error, sizeof(error))) {
-        send_device_error(client_fd, error);
+    has_volume = json_int_field(request->body, "volume", &volume);
+    if (!has_muted && !has_volume) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
         return;
     }
-    if (!ringer_muted_from_reply(reply, &readback)) {
-        readback = muted;
+    if (has_volume && (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_volume\"}\n");
+        return;
     }
-    remember_ringer_muted(runtime, readback);
-    json_string(reply, reply_json, sizeof(reply_json));
-    snprintf(body, sizeof(body), "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n", readback ? "true" : "false", reply_json);
+
+    if (has_muted) {
+        snprintf(command, sizeof(command), "%s", muted ? "*#8**#33*0##" : "*#8**#33*1##");
+        if (!c300x_openwebnet_send(config, command, muted_reply, sizeof(muted_reply), error, sizeof(error))) {
+            send_device_error(client_fd, error);
+            return;
+        }
+        if (!ringer_muted_from_reply(muted_reply, &muted_readback)) {
+            muted_readback = muted;
+        }
+        remember_ringer_muted(runtime, muted_readback);
+        json_string(muted_reply, muted_reply_json, sizeof(muted_reply_json));
+    }
+
+    if (has_volume) {
+        snprintf(command, sizeof(command), "*#8**#41*%d##", volume);
+        if (!c300x_openwebnet_send(config, command, volume_reply, sizeof(volume_reply), error, sizeof(error))) {
+            send_device_error(client_fd, error);
+            return;
+        }
+        if (!ringer_volume_from_reply(volume_reply, &volume_readback)) {
+            volume_readback = volume;
+        }
+        remember_ringer_volume(runtime, volume_readback);
+        json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
+    }
+
+    if (has_muted && !has_volume) {
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":true,\"muted\":%s,\"raw\":%s}\n",
+            muted_readback ? "true" : "false",
+            muted_reply_json
+        );
+    } else if (has_volume && !has_muted) {
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":true,\"volume\":%d,\"raw\":%s}\n",
+            volume_readback,
+            volume_reply_json
+        );
+    } else {
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":true,\"muted\":%s,\"volume\":%d,\"raw\":%s,\"muted_raw\":%s,\"volume_raw\":%s}\n",
+            muted_readback ? "true" : "false",
+            volume_readback,
+            volume_reply_json,
+            muted_reply_json,
+            volume_reply_json
+        );
+    }
     send_json(client_fd, 200, "OK", body);
 }
 

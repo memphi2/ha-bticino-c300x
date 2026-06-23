@@ -75,6 +75,11 @@
         "default": "mdi:microphone-message"
       }
     },
+    "number": {
+      "ringer_volume": {
+        "default": "mdi:volume-high"
+      }
+    },
     "switch": {
       "answering_machine": {
         "default": "mdi:voicemail"

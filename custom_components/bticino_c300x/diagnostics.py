@@ -504,6 +504,7 @@ def _event_state_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         )
         is not None,
         "ringer_known": getattr(state, "ringer_muted", None) is not None,
+        "ringer_volume_known": getattr(state, "ringer_volume", None) is not None,
         "voicemail_total": getattr(state, "voicemail_total", None),
         "voicemail_unread": getattr(state, "voicemail_unread", None),
         "memos_total": getattr(state, "memos_total", None),

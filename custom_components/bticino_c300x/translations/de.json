@@ -266,6 +266,7 @@
           "memos_changed": "Memos aktualisiert",
           "ringer_muted": "Klingelton stummgeschaltet",
           "ringer_unmuted": "Klingelton aktiviert",
+          "ringer_volume_changed": "Klingel-Lautstärke geändert",
           "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
           "stair_light_activated": "Treppenlicht aktiviert",
           "activation_executed": "Geräteaktion ausgeführt"
@@ -280,6 +281,11 @@
           "homeassistant": "Home Assistant",
           "blocked": "Blocked"
         }
+      }
+    },
+    "number": {
+      "ringer_volume": {
+        "name": "Klingel-Lautstärke"
       }
     },
     "sensor": {

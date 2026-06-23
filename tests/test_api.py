@@ -2723,7 +2723,7 @@ def test_ringer_status_falls_back_to_state_endpoint() -> None:
     session = _QueuedSession(
         [
             (500, '{"error": "ringer_unavailable"}'),
-            (200, '{"state": {"ringer_muted": true}}'),
+            (200, '{"state": {"ringer_muted": true, "ringer_volume": 30}}'),
         ]
     )
     api = C300XAgentApi(
@@ -2732,7 +2732,9 @@ def test_ringer_status_falls_back_to_state_endpoint() -> None:
         "agent-token",
     )
 
-    assert asyncio.run(api.async_ringer_status())["muted"] is True
+    status = asyncio.run(api.async_ringer_status())
+    assert status["muted"] is True
+    assert status["volume"] == 30
     assert [request["args"] for request in session.requests] == [
         ("GET", "http://agent.local:8080/api/v1/ringer"),
         ("GET", "http://agent.local:8080/api/v1/state"),
@@ -2774,17 +2776,24 @@ def test_ringer_and_answering_machine_setters_post_payloads() -> None:
     ) -> dict[str, object]:
         calls.append((method, path, request_kwargs))
         if path == "/api/v1/ringer":
-            return {"muted": request_kwargs["json_data"]["muted"]}  # type: ignore[index]
+            payload = request_kwargs["json_data"]  # type: ignore[index]
+            return {
+                key: payload[key]  # type: ignore[index]
+                for key in ("muted", "volume")
+                if key in payload
+            }
         return {"enabled": request_kwargs["json_data"]["enabled"]}  # type: ignore[index]
 
     api._request_json = request_json  # type: ignore[method-assign]
 
     assert asyncio.run(api.async_set_ringer_muted(True))["muted"] is True
+    assert asyncio.run(api.async_set_ringer_volume(30))["volume"] == 30
     assert asyncio.run(api.async_set_answering_machine_enabled(False))[
         "enabled"
     ] is False
     assert calls == [
         ("POST", "/api/v1/ringer", {"json_data": {"muted": True}}),
+        ("POST", "/api/v1/ringer", {"json_data": {"volume": 30}}),
         ("POST", "/api/v1/answering-machine", {"json_data": {"enabled": False}}),
     ]
 
@@ -3216,15 +3225,19 @@ def test_normalize_smartphone_forwarding_rejects_missing_mode() -> None:
 
 
 def test_normalize_ringer_from_agent_state() -> None:
-    assert normalize_ringer({"state": {"ringer_muted": True}}) == {
+    assert normalize_ringer({"state": {"ringer_muted": True, "ringer_volume": 10}}) == {
         "muted": True,
-        "raw": {"state": {"ringer_muted": True}},
+        "volume": 10,
+        "raw": {"state": {"ringer_muted": True, "ringer_volume": 10}},
     }
 
 
 def test_normalize_ringer_from_command_response() -> None:
-    assert normalize_ringer({"muted": False, "raw": "*#8**33*1##"}) == {
+    assert normalize_ringer(
+        {"muted": False, "volume": "50", "raw": "*#8**33*1##"}
+    ) == {
         "muted": False,
+        "volume": 50,
         "raw": "*#8**33*1##",
     }
 
@@ -3241,8 +3254,9 @@ def test_normalize_ringer_accepts_string_state() -> None:
 
 
 def test_normalize_ringer_accepts_unknown_state() -> None:
-    assert normalize_ringer({"muted": None, "raw": "state"}) == {
+    assert normalize_ringer({"muted": None, "volume": "not-a-volume", "raw": "state"}) == {
         "muted": None,
+        "volume": None,
         "raw": "state",
     }
 

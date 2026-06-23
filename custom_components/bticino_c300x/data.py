@@ -169,6 +169,7 @@ class C300XEventState:
     video_stream_path: str | None = None
     smartphone_forwarding_mode: str | None = None
     ringer_muted: bool | None = None
+    ringer_volume: int | None = None
     door_unlock_state: str | None = None
     call_active: bool = False
     voicemail_available: bool | None = None

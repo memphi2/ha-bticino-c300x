@@ -932,6 +932,83 @@ def test_doorbell_camera_counts_shared_ring_rtsp_as_one_local_session() -> None:
     assert camera._active_local_media_sessions() == 2
 
 
+def test_doorbell_camera_renews_shared_ring_resource_once() -> None:
+    class _RingApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.status_calls = 0
+
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            self.status_calls += 1
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "ring"
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+            }
+            return status
+
+    peer = SimpleNamespace(
+        connectionState="connected",
+        iceConnectionState="completed",
+        signalingState="stable",
+    )
+    api = _RingApi()
+    camera = C300XDoorbellCamera(  # type: ignore[arg-type]
+        _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    )
+    first = _NativeWebRTCSession(peer)
+    first.player = SimpleNamespace(resource_id="ring:entry-1")
+    first.ring_call = True
+    second = _NativeWebRTCSession(peer)
+    second.player = SimpleNamespace(resource_id="ring:entry-1")
+    second.ring_call = True
+    camera._webrtc_sessions["first-ring-viewer"] = first
+    camera._webrtc_sessions["second-ring-viewer"] = second
+
+    asyncio.run(camera._async_renew_webrtc_resource_once("ring:entry-1"))
+
+    assert api.status_calls == 1
+    assert set(camera._webrtc_sessions) == {"first-ring-viewer", "second-ring-viewer"}
+
+
+def test_doorbell_camera_schedules_one_renewal_task_per_shared_resource(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    monkeypatch.setattr(camera_module, "WEBRTC_RENEW_SECONDS", 60)
+
+    class _Hass:
+        def __init__(self) -> None:
+            self.tasks: list[asyncio.Task[Any]] = []
+
+        def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
+            task = asyncio.create_task(coro)
+            self.tasks.append(task)
+            return task
+
+    async def _run() -> None:
+        camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+        camera.hass = _Hass()  # type: ignore[assignment]
+        first = _NativeWebRTCSession(SimpleNamespace())
+        first.player = SimpleNamespace(resource_id="ring:entry-1")
+        second = _NativeWebRTCSession(SimpleNamespace())
+        second.player = SimpleNamespace(resource_id="ring:entry-1")
+        camera._webrtc_sessions["first-ring-viewer"] = first
+        camera._webrtc_sessions["second-ring-viewer"] = second
+
+        camera._schedule_webrtc_renewal("first-ring-viewer")
+        camera._schedule_webrtc_renewal("second-ring-viewer")
+
+        assert len(camera.hass.tasks) == 1
+        assert set(camera._webrtc_resource_renew_tasks) == {"ring:entry-1"}
+        camera.hass.tasks[0].cancel()
+        await asyncio.gather(*camera.hass.tasks, return_exceptions=True)
+
+    asyncio.run(_run())
+
+
 def test_doorbell_camera_closing_unanswered_ring_preview_keeps_ring_media() -> None:
     class _RingPreviewApi(_FakeApi):
         async def async_doorbell_video_status(self) -> dict[str, Any]:

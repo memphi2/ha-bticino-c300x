@@ -346,6 +346,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._webrtc_session_registry = _NativeWebRTCSessionRegistry(
             self._webrtc_sessions
         )
+        self._webrtc_resource_renew_tasks: dict[str, asyncio.Task[Any]] = {}
         self._shared_ring_rtsp_source: SharedRTSPMediaSource | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
@@ -701,9 +702,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
             )
             self._schedule_pending_webrtc_candidate_flush(session_id)
-            session.renew_task = self.hass.async_create_task(
-                self._async_renew_webrtc_until_closed(session_id)
-            )
+            self._schedule_webrtc_renewal(session_id)
         except Exception as err:
             send_message(WebRTCError("bticino_webrtc_offer_failed", str(err)))
             await self._async_close_webrtc_session(session_id)
@@ -886,6 +885,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         if session is None:
             return
 
+        self._cancel_webrtc_resource_renewal_if_unused(session)
+
         if session.ring_preview:
             with suppress(Exception):
                 session.ring_preview = _media_decision_is_unanswered_ring(
@@ -1062,55 +1063,180 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_renew_webrtc_until_closed(self, session_id: str) -> None:
         while session_id in self._webrtc_sessions:
             await asyncio.sleep(WEBRTC_RENEW_SECONDS)
+            await self._async_renew_webrtc_session_once(session_id)
+
+    def _schedule_webrtc_renewal(self, session_id: str) -> None:
+        session = self._webrtc_sessions.get(session_id)
+        if session is None:
+            return
+        resource_id = _webrtc_session_resource_id(session)
+        if resource_id is None:
+            session.renew_task = self.hass.async_create_task(
+                self._async_renew_webrtc_until_closed(session_id)
+            )
+            return
+        task = self._webrtc_resource_renew_tasks.get(resource_id)
+        if task is not None and not task.done():
+            return
+        self._webrtc_resource_renew_tasks[resource_id] = self.hass.async_create_task(
+            self._async_renew_webrtc_resource_until_closed(resource_id)
+        )
+
+    async def _async_renew_webrtc_resource_until_closed(self, resource_id: str) -> None:
+        try:
+            while self._webrtc_session_ids_for_resource(resource_id):
+                await asyncio.sleep(WEBRTC_RENEW_SECONDS)
+                await self._async_renew_webrtc_resource_once(resource_id)
+        finally:
+            if self._webrtc_resource_renew_tasks.get(resource_id) is asyncio.current_task():
+                self._webrtc_resource_renew_tasks.pop(resource_id, None)
+
+    async def _async_renew_webrtc_resource_once(self, resource_id: str) -> None:
+        session_ids = self._webrtc_session_ids_for_resource(resource_id)
+        if not session_ids:
+            return
+        for session_id in tuple(session_ids):
             session = self._webrtc_sessions.get(session_id)
-            if session is None:
+            if session is None or not _webrtc_session_peer_closed(session):
+                continue
+            await self._async_close_webrtc_session(
+                session_id,
+                notify_client=True,
+                reason="webrtc_closed",
+            )
+
+        session_ids = self._webrtc_session_ids_for_resource(resource_id)
+        home_call_session_ids = [
+            session_id
+            for session_id in session_ids
+            if self._webrtc_sessions[session_id].owner == "home_call"
+        ]
+        for session_id in home_call_session_ids:
+            await self._async_renew_webrtc_session_once(session_id)
+
+        session_ids = self._webrtc_session_ids_for_resource(resource_id)
+        doorbell_session_ids = [
+            session_id
+            for session_id in session_ids
+            if self._webrtc_sessions[session_id].owner != "home_call"
+        ]
+        if not doorbell_session_ids:
+            return
+        with suppress(Exception):
+            decision = self._derive_media_decision(
+                await self._async_refresh_video_status(apply_status=False)
+            )
+            if _media_decision_is_call_media(decision):
                 return
-            if _webrtc_session_peer_closed(session):
-                await self._async_close_webrtc_session(
-                    session_id,
+            if not decision.webrtc_keepalive_allowed:
+                await self._async_close_webrtc_sessions(
+                    doorbell_session_ids,
+                    stop_media=False,
                     notify_client=True,
-                    reason="webrtc_closed",
+                    reason=f"media_state_{decision.state.value}",
                 )
-                continue
-            if session.owner == "home_call":
-                try:
-                    home_call_status = await self._entry.runtime_data.api.async_home_call_status()
-                except Exception:  # noqa: BLE001 - transient status errors must not tear down active calls
-                    continue
-                if not _home_call_status_has_media(home_call_status):
-                    self._apply_home_call_ended(dict(home_call_status))
-                    await self._async_close_webrtc_session(
-                        session_id,
-                        stop_media=False,
-                        notify_client=True,
-                        reason="home_call_ended",
-                    )
-                    continue
-                continue
+                return
+
+        ring_session_ids = [
+            session_id
+            for session_id in doorbell_session_ids
+            if self._webrtc_sessions.get(session_id) is not None
+            and self._webrtc_sessions[session_id].ring_call
+        ]
+        if ring_session_ids:
+            await self._async_close_webrtc_sessions(
+                ring_session_ids,
+                stop_media=False,
+                notify_client=True,
+                reason="ring_call_closed",
+            )
+        if len(ring_session_ids) < len(doorbell_session_ids):
             with suppress(Exception):
-                decision = self._derive_media_decision(
-                    await self._async_refresh_video_status(apply_status=False)
-                )
-                if _media_decision_is_call_media(decision):
-                    continue
-                if not decision.webrtc_keepalive_allowed:
-                    await self._async_close_webrtc_session(
-                        session_id,
-                        stop_media=False,
-                        notify_client=True,
-                        reason=f"media_state_{decision.state.value}",
-                    )
-                    continue
-            if session.ring_call:
+                await self._async_warmup_video()
+
+    async def _async_renew_webrtc_session_once(self, session_id: str) -> None:
+        session = self._webrtc_sessions.get(session_id)
+        if session is None:
+            return
+        if _webrtc_session_peer_closed(session):
+            await self._async_close_webrtc_session(
+                session_id,
+                notify_client=True,
+                reason="webrtc_closed",
+            )
+            return
+        if session.owner == "home_call":
+            try:
+                home_call_status = await self._entry.runtime_data.api.async_home_call_status()
+            except Exception:  # noqa: BLE001 - transient status errors must not tear down active calls
+                return
+            if not _home_call_status_has_media(home_call_status):
+                self._apply_home_call_ended(dict(home_call_status))
                 await self._async_close_webrtc_session(
                     session_id,
                     stop_media=False,
                     notify_client=True,
-                    reason="ring_call_closed",
+                    reason="home_call_ended",
                 )
-                continue
-            with suppress(Exception):
-                await self._async_warmup_video()
+            return
+        with suppress(Exception):
+            decision = self._derive_media_decision(
+                await self._async_refresh_video_status(apply_status=False)
+            )
+            if _media_decision_is_call_media(decision):
+                return
+            if not decision.webrtc_keepalive_allowed:
+                await self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason=f"media_state_{decision.state.value}",
+                )
+                return
+        if session.ring_call:
+            await self._async_close_webrtc_session(
+                session_id,
+                stop_media=False,
+                notify_client=True,
+                reason="ring_call_closed",
+            )
+            return
+        with suppress(Exception):
+            await self._async_warmup_video()
+
+    async def _async_close_webrtc_sessions(
+        self,
+        session_ids: list[str],
+        *,
+        stop_media: bool = True,
+        notify_client: bool = False,
+        reason: str = "closed",
+    ) -> None:
+        for session_id in tuple(session_ids):
+            await self._async_close_webrtc_session(
+                session_id,
+                stop_media=stop_media,
+                notify_client=notify_client,
+                reason=reason,
+            )
+
+    def _webrtc_session_ids_for_resource(self, resource_id: str) -> list[str]:
+        return [
+            session_id
+            for session_id, session in self._webrtc_sessions.items()
+            if _webrtc_session_resource_id(session) == resource_id
+        ]
+
+    def _cancel_webrtc_resource_renewal_if_unused(
+        self,
+        session: _NativeWebRTCSession,
+    ) -> None:
+        resource_id = _webrtc_session_resource_id(session)
+        if resource_id is None or self._webrtc_session_ids_for_resource(resource_id):
+            return
+        task = self._webrtc_resource_renew_tasks.pop(resource_id, None)
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
 
     def _talkback_supported(self) -> bool:
         """Return true when the bridge can accept WebRTC microphone audio."""
@@ -1526,6 +1652,15 @@ def _safe_stream_path_for_log(stream_url: str) -> str:
         return urlsplit(stream_url).path or "/"
     except ValueError:
         return "<invalid>"
+
+
+def _webrtc_session_resource_id(session: _NativeWebRTCSession) -> str | None:
+    """Return a shared media resource id for grouped session maintenance."""
+
+    resource_id = getattr(session.player, "resource_id", None)
+    if not isinstance(resource_id, str) or not resource_id:
+        return None
+    return resource_id
 
 
 def _webrtc_session_peer_closed(session: _NativeWebRTCSession) -> bool:

@@ -875,6 +875,9 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     assert calls == []
 
     state_callbacks[0](SimpleNamespace(data={"entity_id": "binary_sensor.unlisted"}))
+    assert calls == []
+
+    state_callbacks[0](SimpleNamespace(data={"entity_id": "binary_sensor.front_door"}))
     assert calls == ["notify"]
 
     state_callbacks[0](

@@ -686,11 +686,17 @@ def _async_track_display_bridge_updates(
     from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
+    alarm_sensor_entity_ids = set(_alarmo_sensor_entity_ids(hass))
+
+    def _refresh_alarm_sensor_entity_ids() -> None:
+        alarm_sensor_entity_ids.clear()
+        alarm_sensor_entity_ids.update(_alarmo_sensor_entity_ids(hass))
+
     @callback
     def _handle_alarm_state_change(event: Any) -> None:
         if not _display_bridge_alarm_state_event_relevant(
-            hass,
             str(alarm_entity_id),
+            alarm_sensor_entity_ids,
             event,
         ):
             return
@@ -698,6 +704,7 @@ def _async_track_display_bridge_updates(
 
     @callback
     def _handle_alarmo_event(*_args: Any) -> None:
+        _refresh_alarm_sensor_entity_ids()
         _async_schedule_display_bridge_notify(hass, entry)
 
     bus = getattr(hass, "bus", None)
@@ -722,8 +729,8 @@ def _async_track_display_bridge_updates(
 
 
 def _display_bridge_alarm_state_event_relevant(
-    hass: HomeAssistant,
     alarm_entity_id: str,
+    alarm_sensor_entity_ids: set[str],
     event: Any,
 ) -> bool:
     """Return whether a HA state change can affect the display alarm page."""
@@ -736,10 +743,7 @@ def _display_bridge_alarm_state_event_relevant(
         return False
     if changed_entity_id == alarm_entity_id:
         return True
-    sensor_entity_ids = set(_alarmo_sensor_entity_ids(hass))
-    if changed_entity_id in sensor_entity_ids:
-        return True
-    return changed_entity_id.startswith("binary_sensor.") and _alarmo_runtime_available(hass)
+    return changed_entity_id in alarm_sensor_entity_ids
 
 
 def _alarmo_sensor_entity_ids(hass: HomeAssistant) -> tuple[str, ...]:
@@ -769,12 +773,6 @@ def _alarmo_sensor_entity_ids(hass: HomeAssistant) -> tuple[str, ...]:
                     if isinstance(entity_id, str) and "." in entity_id
                 )
     return tuple(entity_ids)
-
-
-def _alarmo_runtime_available(hass: HomeAssistant) -> bool:
-    """Return whether Alarmo runtime data is currently present."""
-
-    return isinstance(_alarmo_runtime_data(hass), dict)
 
 
 def _alarmo_runtime_data(hass: HomeAssistant) -> Any:

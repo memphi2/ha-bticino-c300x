@@ -83,6 +83,7 @@ _DOORBELL_EVENT_STATES = {
     "doorbell_view_requested": DOORBELL_STATE_VIEW_REQUESTED,
     "doorbell_media_closed": DOORBELL_STATE_IDLE,
 }
+_EntityStateSnapshot = tuple[Any, Any, Any]
 _AGENT_RUNTIME_DIAGNOSTIC_KEYS = (
     "last_wake_reason",
     "loop_iterations",
@@ -150,6 +151,31 @@ _AGENT_DIAGNOSTICS_STATUS_OPTIONS = (
     "media_resources_open",
     "idle",
 )
+
+
+def _entity_state_snapshot(entity: Any) -> _EntityStateSnapshot:
+    """Return the HA-visible state surface used for write de-duplication."""
+
+    return (
+        getattr(entity, "native_value", None),
+        getattr(entity, "available", True),
+        _freeze_state_value(getattr(entity, "extra_state_attributes", {})),
+    )
+
+
+def _freeze_state_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return tuple(
+            (str(key), _freeze_state_value(item))
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_freeze_state_value(item) for item in value), key=repr))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_state_value(item) for item in value)
+    return value
+
+
 def _agent_diagnostic_attributes(
     diagnostics: Mapping[str, Any],
     keys: tuple[str, ...],
@@ -480,6 +506,7 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "media_readiness")
+        self._last_state_snapshot: _EntityStateSnapshot | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to connection and diagnostic updates used by readiness."""
@@ -525,14 +552,21 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
     def _handle_readiness_changed(self, *args: Any) -> None:
         entry_id = args[0] if args else None
         if entry_id in (None, self._entry.entry_id):
-            self.async_write_ha_state()
+            self._async_write_ha_state_if_changed()
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) == "smartphone_forwarding_changed":
-            self.async_write_ha_state()
+            self._async_write_ha_state_if_changed()
+
+    def _async_write_ha_state_if_changed(self) -> None:
+        snapshot = _entity_state_snapshot(self)
+        if snapshot == self._last_state_snapshot:
+            return
+        self._last_state_snapshot = snapshot
+        self.async_write_ha_state()
 
 
 def _agent_diagnostics_status(
@@ -751,6 +785,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
     def __init__(self, entry: ConfigEntry, key: str) -> None:
         super().__init__(entry, key)
         self._recovery_refresh_task: Task[None] | None = None
+        self._last_state_snapshot: _EntityStateSnapshot | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to pushed metric events and one-shot recovery refreshes."""
@@ -794,14 +829,14 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
         if entry_id != self._entry.entry_id:
             return
         self._schedule_recovery_refresh_if_needed()
-        self.async_write_ha_state()
+        self._async_write_ha_state_if_changed()
 
     @callback
     def _handle_system_metrics_changed(self, entry_id: str) -> None:
         if entry_id != self._entry.entry_id:
             return
         self._attr_available = True
-        self.async_write_ha_state()
+        self._async_write_ha_state_if_changed()
 
     @callback
     def _schedule_recovery_refresh_if_needed(self, *, force: bool = False) -> None:
@@ -823,6 +858,13 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
             await self.async_update()
         finally:
             self._recovery_refresh_task = None
+        self._async_write_ha_state_if_changed()
+
+    def _async_write_ha_state_if_changed(self) -> None:
+        snapshot = _entity_state_snapshot(self)
+        if snapshot == self._last_state_snapshot:
+            return
+        self._last_state_snapshot = snapshot
         self.async_write_ha_state()
 
     def _needs_recovery_refresh(self) -> bool:

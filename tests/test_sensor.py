@@ -565,6 +565,20 @@ def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
     assert entity.wrote_state is True
 
 
+def test_media_readiness_sensor_skips_unchanged_state_writes() -> None:
+    entry = _FakeEntry()
+    entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+    writes: list[str] = []
+    entity.async_write_ha_state = lambda: writes.append("write")  # type: ignore[method-assign]
+
+    entity._handle_readiness_changed(entry.entry_id)
+    entity._handle_readiness_changed(entry.entry_id)
+    entry.runtime_data.connection_state.available = False
+    entity._handle_readiness_changed(entry.entry_id)
+
+    assert writes == ["write", "write"]
+
+
 def test_media_readiness_sensor_ignores_unrelated_agent_events() -> None:
     entry = _FakeEntry()
     entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
@@ -1451,6 +1465,34 @@ def test_system_metric_sensor_uses_pushed_metrics_without_api_call() -> None:
     assert entity.native_value == 12.0
     assert entity.available is True
     assert entity.wrote_state is True
+
+
+def test_system_metric_sensor_skips_unchanged_state_writes() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            system_metrics={
+                "load_1m": 0.12,
+                "load_5m": 0.0,
+                "load_15m": 0.0,
+                "load_1m_percent": 12.0,
+                "load_5m_percent": 0.0,
+                "load_15m_percent": 0.0,
+                "cpu_count": 1,
+                "raw": {},
+            }
+        )
+    )
+    entity = C300XDeviceLoadSensor(entry)  # type: ignore[arg-type]
+    writes: list[str] = []
+    entity.async_write_ha_state = lambda: writes.append("write")  # type: ignore[method-assign]
+
+    entity._handle_system_metrics_changed("entry-1")
+    entity._handle_system_metrics_changed("entry-1")
+    entry.runtime_data.system_metrics["load_1m_percent"] = 13.0
+    entity._handle_system_metrics_changed("entry-1")
+
+    assert entry.runtime_data.api.metrics_calls == 0
+    assert writes == ["write", "write"]
 
 
 def test_cpu_metric_sensor_uses_pushed_cpu_percent() -> None:

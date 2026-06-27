@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import time
 import warnings
 from collections.abc import Mapping
 from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import urlsplit
 
 from homeassistant.components.camera import (
     Camera,
@@ -162,6 +164,7 @@ MAX_PRESESSION_WEBRTC_SESSIONS = 16
 MAX_PRESESSION_WEBRTC_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
 STILL_IMAGE_BYTES = b"""<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#111820"/><g fill="none" stroke="#8da2b5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M216 152h178v96H216z"/><path d="M394 180l82-46v132l-82-46z"/><path d="M250 152l-32-56h174l-32 56"/><path d="M305 248v48"/><path d="M250 296h142"/></g></svg>"""
+_LOGGER = logging.getLogger(__name__)
 
 _AIORTC_MODULES: SimpleNamespace | None = None
 _MDNS_CACHE_FLUSH_BIT = 0x8000
@@ -601,6 +604,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     _restart_reader,
                     av_module=getattr(aiortc_modules, "av", None),
                     audio_gain_db=self._doorstation_audio_gain_db(),
+                    diagnostic_label=self._webrtc_diagnostic_label(
+                        session_id,
+                        owner=owner,
+                        stream_url=stream_url,
+                        wants_audio=wants_audio,
+                        mode="home_call_audio",
+                    ),
                 )
                 session.player = audio_track
                 peer.addTrack(audio_track)
@@ -610,6 +620,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     stream_url,
                     restart_callback=_restart_shared_ring_reader,
                     include_audio=wants_audio,
+                    diagnostic_label=self._webrtc_diagnostic_label(
+                        session_id,
+                        owner=owner,
+                        stream_url=stream_url,
+                        wants_audio=wants_audio,
+                        mode="ring_shared",
+                    ),
                 )
                 session.player = shared_handle
                 peer.addTrack(video_track)
@@ -626,6 +643,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     stream_url,
                     _restart_reader,
                     audio_gain_db=self._doorstation_audio_gain_db(),
+                    diagnostic_label=self._webrtc_diagnostic_label(
+                        session_id,
+                        owner=owner,
+                        stream_url=stream_url,
+                        wants_audio=wants_audio,
+                        mode="audio_video",
+                    ),
                 )
                 session.player = media
                 peer.addTrack(video_track)
@@ -638,9 +662,32 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     self.hass,
                     stream_url,
                     _restart_reader,
+                    diagnostic_label=self._webrtc_diagnostic_label(
+                        session_id,
+                        owner=owner,
+                        stream_url=stream_url,
+                        wants_audio=wants_audio,
+                        mode="video",
+                    ),
                 )
                 session.player = video_track
                 peer.addTrack(video_track)
+            _LOGGER.debug(
+                "C300X WebRTC session prepared: %s path=%s has_audio=%s talkback=%s "
+                "ring_call=%s ring_preview=%s",
+                self._webrtc_diagnostic_label(
+                    session_id,
+                    owner=owner,
+                    stream_url=stream_url,
+                    wants_audio=wants_audio,
+                    mode="prepared",
+                ),
+                _safe_stream_path_for_log(stream_url),
+                has_audio_media,
+                talkback_requested,
+                session.ring_call,
+                session.ring_preview,
+            )
             _prefer_webrtc_codecs(peer, aiortc_modules)
             await peer.setRemoteDescription(
                 aiortc_modules.RTCSessionDescription(sdp=offer_sdp, type="offer")
@@ -668,6 +715,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         *,
         restart_callback: Any,
         include_audio: bool,
+        diagnostic_label: str,
     ) -> tuple[Any, Any, Any | None]:
         """Return relay tracks for Ring Call media backed by one RTSP reader."""
 
@@ -691,9 +739,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 stream_url=stream_url,
                 restart_callback=restart_callback,
                 audio_gain_db=self._doorstation_audio_gain_db(),
+                diagnostic_label=diagnostic_label,
             )
             self._shared_ring_rtsp_source = source
         return source.acquire(include_audio=include_audio)
+
+    def _webrtc_diagnostic_label(
+        self,
+        session_id: str,
+        *,
+        owner: str,
+        stream_url: str,
+        wants_audio: bool,
+        mode: str,
+    ) -> str:
+        """Return a compact, non-secret label for intermittent media RCA logs."""
+
+        return (
+            f"session={_short_session_id(session_id)} owner={owner} mode={mode} "
+            f"audio={wants_audio}"
+        )
 
     async def async_on_webrtc_candidate(self, session_id: str, candidate: Any) -> None:
         """Forward browser ICE candidates to the native WebRTC peer."""
@@ -1443,6 +1508,24 @@ def _home_call_status_has_media(status: Mapping[str, Any]) -> bool:
         or status.get("rtp_proxy")
         or status.get("target_audio_port")
     )
+
+
+def _short_session_id(session_id: str) -> str:
+    """Return a compact WebRTC session id fragment for logs."""
+
+    text = str(session_id)
+    if len(text) <= 12:
+        return text
+    return f"...{text[-8:]}"
+
+
+def _safe_stream_path_for_log(stream_url: str) -> str:
+    """Return only the stream path, avoiding host data in production logs."""
+
+    try:
+        return urlsplit(stream_url).path or "/"
+    except ValueError:
+        return "<invalid>"
 
 
 def _webrtc_session_peer_closed(session: _NativeWebRTCSession) -> bool:

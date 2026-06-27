@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 TOKEN = "local-test-token"
+NATIVE_AGENT_DIR = Path(__file__).resolve().parents[1]
+EXPECTED_AGENT_VERSION = (NATIVE_AGENT_DIR / "VERSION").read_text(encoding="utf-8").strip()
 
 
 class OpenWebNetServer(socketserver.ThreadingTCPServer):
@@ -676,7 +678,7 @@ def run_smoke(
             assert_json_field(capabilities["device"], "firmware", "1.7.19")
             self_test = api_get(api_port, "/api/v1/self-test")
             assert_json_field(self_test, "api_version", "1.1")
-            assert_json_field(self_test, "agent_version", "1.4.1")
+            assert_json_field(self_test, "agent_version", EXPECTED_AGENT_VERSION)
             assert_json_field(self_test, "firmware_family", "1.7.x")
             for check_name in (
                 "capabilities",

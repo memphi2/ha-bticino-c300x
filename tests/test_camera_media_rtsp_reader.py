@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -510,6 +511,103 @@ def test_restarting_shared_rtsp_tracks_restart_after_first_frame_failure(
     assert frame.pts == 17
     assert opened == [0, 1]
     assert restarts == ["restart"]
+
+
+def test_restarting_rtsp_tracks_logs_once_when_video_stalls_after_audio(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[int] = []
+
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_reader.asyncio, "sleep", no_sleep)
+
+    class _MediaError(Exception):
+        pass
+
+    class _Frame:
+        pts: int | None = None
+        time_base: object | None = None
+
+    class _SourceTrack:
+        def __init__(self, kind: str) -> None:
+            self.kind = kind
+
+        async def recv(self) -> _Frame:
+            if self.kind == "video":
+                raise TimeoutError("video frame timeout")
+            return _Frame()
+
+        def stop(self) -> None:
+            return None
+
+    class _VideoTrack:
+        kind = "video"
+
+        async def next_timestamp(self) -> tuple[int, str]:
+            return 1, "1/90000"
+
+        def stop(self) -> None:
+            return None
+
+    class _AudioTrack:
+        kind = "audio"
+
+        def stop(self) -> None:
+            return None
+
+    class _MediaPlayer:
+        def __init__(self, _url: str, options: dict[str, str]) -> None:
+            assert options["rtsp_transport"] == "tcp"
+            opened.append(len(opened))
+            self.video = _SourceTrack("video")
+            self.audio = _SourceTrack("audio")
+
+    class _Hass:
+        async def async_add_executor_job(self, func: Any) -> Any:
+            return func()
+
+    async def restart_callback() -> bool:
+        return False
+
+    async def _run() -> None:
+        media, video_track, audio_track = _new_restarting_rtsp_tracks(
+            SimpleNamespace(),
+            _VideoTrack,
+            _AudioTrack,
+            _MediaError,
+            _MediaPlayer,
+            _Hass(),
+            "rtsp://agent.local:6554/doorbell",
+            restart_callback,
+            diagnostic_label="session=test owner=doorbell mode=audio_video audio=True",
+        )
+        try:
+            await audio_track.recv()
+            with pytest.raises(_MediaError):
+                await video_track.recv()
+        finally:
+            media.stop()
+
+    with caplog.at_level(
+        logging.DEBUG,
+        logger="custom_components.bticino_c300x.camera_media.rtsp_reader",
+    ):
+        asyncio.run(_run())
+
+    stall_logs = [
+        record
+        for record in caplog.records
+        if "C300X WebRTC RTSP video frame stalled" in record.message
+    ]
+    assert len(stall_logs) == 1
+    assert "path=/doorbell" in stall_logs[0].message
+    assert "audio_frames=1" in stall_logs[0].message
+    assert "video_frames=0" in stall_logs[0].message
+    assert "reason=TimeoutError" in stall_logs[0].message
+    assert opened == [0]
 
 
 def test_restarting_rtsp_audio_track_restarts_after_first_frame_failure(

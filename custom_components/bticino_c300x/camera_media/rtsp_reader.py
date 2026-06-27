@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
+import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..const import DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 
 RTSP_FRAME_TIMEOUT_SECONDS = 5.0
 RTSP_MAX_SESSION_RESTARTS = 3
+RTSP_DIAGNOSTIC_LOG_INTERVAL_SECONDS = 30.0
 DOORSTATION_AUDIO_GAIN_DB = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 DOORSTATION_AUDIO_GAIN = 10 ** (DOORSTATION_AUDIO_GAIN_DB / 20)
 RestartCallback = Callable[[], Awaitable[bool | None]]
+_LOGGER = logging.getLogger(__name__)
 
 _RTSP_PLAYER_OPTIONS = {
     "rtsp_transport": "tcp",
@@ -37,11 +42,16 @@ def _new_restarting_rtsp_tracks(
     restart_callback: RestartCallback,
     audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
     require_audio: bool = True,
+    diagnostic_label: str = "shared",
 ) -> tuple[Any, Any, Any]:
     """Create shared audio/video tracks over one C300X RTSP reader."""
 
     class RestartingRTSPMedia:
         def __init__(self) -> None:
+            self._diagnostics = _RTSPReaderDiagnostics(
+                stream_url,
+                diagnostic_label=diagnostic_label,
+            )
             self._player: Any | None = None
             self._video_track: Any | None = None
             self._audio_track: Any | None = None
@@ -65,10 +75,19 @@ def _new_restarting_rtsp_tracks(
                         track.recv(),
                         timeout=RTSP_FRAME_TIMEOUT_SECONDS,
                     )
+                    self._diagnostics.record_frame(kind)
                     self._restart_attempts = 0
                     self._retry_delay = 0.2
                     return frame
-                except Exception:
+                except Exception as err:
+                    self._diagnostics.record_failure(
+                        kind,
+                        err,
+                        had_reader=had_reader,
+                        opened_once=self._opened_once,
+                        restart_attempts=self._restart_attempts,
+                        retry_delay=self._retry_delay,
+                    )
                     if had_reader and self._opened_once:
                         self._restart_pending = True
                     await self._async_close_reader()
@@ -104,6 +123,10 @@ def _new_restarting_rtsp_tracks(
                 )
             )
             if player.video is None or (require_audio and player.audio is None):
+                if player.video is None:
+                    self._diagnostics.record_missing_track("video")
+                if require_audio and player.audio is None:
+                    self._diagnostics.record_missing_track("audio")
                 with suppress(Exception):
                     if player.video is not None:
                         player.video.stop()
@@ -210,6 +233,7 @@ class SharedRTSPMediaSource:
         stream_url: str,
         restart_callback: RestartCallback,
         audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
+        diagnostic_label: str = "shared",
     ) -> None:
         self.resource_id = resource_id
         self.stream_url = stream_url
@@ -227,6 +251,7 @@ class SharedRTSPMediaSource:
             restart_callback,
             audio_gain_db=audio_gain_db,
             require_audio=False,
+            diagnostic_label=diagnostic_label,
         )
 
     @property
@@ -336,6 +361,7 @@ def _new_restarting_rtsp_video_track(
     hass: Any,
     stream_url: str,
     restart_callback: RestartCallback,
+    diagnostic_label: str = "video",
 ) -> Any:
     """Create the proven video-only RTSP track for the C300X bridge."""
 
@@ -345,6 +371,10 @@ def _new_restarting_rtsp_video_track(
         def __init__(self) -> None:
             super().__init__()
             _init_restarting_rtsp_track(self)
+            self._diagnostics = _RTSPReaderDiagnostics(
+                stream_url,
+                diagnostic_label=diagnostic_label,
+            )
 
         async def recv(self) -> Any:
             while not self._stopped:
@@ -356,11 +386,20 @@ def _new_restarting_rtsp_video_track(
                         self._track.recv(),
                         timeout=RTSP_FRAME_TIMEOUT_SECONDS,
                     )
+                    self._diagnostics.record_frame("video")
                     frame.pts, frame.time_base = await self.next_timestamp()
                     self._restart_attempts = 0
                     self._retry_delay = 0.2
                     return frame
-                except Exception:
+                except Exception as err:
+                    self._diagnostics.record_failure(
+                        "video",
+                        err,
+                        had_reader=had_reader,
+                        opened_once=self._opened_once,
+                        restart_attempts=self._restart_attempts,
+                        retry_delay=self._retry_delay,
+                    )
                     if had_reader and self._opened_once:
                         self._restart_pending = True
                     await self._async_close_reader()
@@ -390,6 +429,7 @@ def _new_restarting_rtsp_video_track(
                 )
             )
             if player.video is None:
+                self._diagnostics.record_missing_track("video")
                 with suppress(Exception):
                     if player.audio is not None:
                         player.audio.stop()
@@ -437,6 +477,7 @@ def _new_restarting_rtsp_audio_track(
     restart_callback: RestartCallback,
     av_module: Any | None = None,
     audio_gain_db: float = DOORSTATION_AUDIO_GAIN_DB,
+    diagnostic_label: str = "audio",
 ) -> Any:
     """Create an audio-only RTSP track for local Home Call media."""
 
@@ -446,6 +487,10 @@ def _new_restarting_rtsp_audio_track(
         def __init__(self) -> None:
             super().__init__()
             _init_restarting_rtsp_track(self)
+            self._diagnostics = _RTSPReaderDiagnostics(
+                stream_url,
+                diagnostic_label=diagnostic_label,
+            )
 
         async def recv(self) -> Any:
             while not self._stopped:
@@ -457,6 +502,7 @@ def _new_restarting_rtsp_audio_track(
                         self._track.recv(),
                         timeout=RTSP_FRAME_TIMEOUT_SECONDS,
                     )
+                    self._diagnostics.record_frame("audio")
                     self._restart_attempts = 0
                     self._retry_delay = 0.2
                     return _apply_audio_gain(
@@ -464,7 +510,15 @@ def _new_restarting_rtsp_audio_track(
                         frame,
                         _audio_gain_multiplier(audio_gain_db),
                     )
-                except Exception:
+                except Exception as err:
+                    self._diagnostics.record_failure(
+                        "audio",
+                        err,
+                        had_reader=had_reader,
+                        opened_once=self._opened_once,
+                        restart_attempts=self._restart_attempts,
+                        retry_delay=self._retry_delay,
+                    )
                     if had_reader and self._opened_once:
                         self._restart_pending = True
                     await self._async_close_reader()
@@ -494,6 +548,7 @@ def _new_restarting_rtsp_audio_track(
                 )
             )
             if player.audio is None:
+                self._diagnostics.record_missing_track("audio")
                 with suppress(Exception):
                     if player.video is not None:
                         player.video.stop()
@@ -532,3 +587,104 @@ def _new_restarting_rtsp_audio_track(
             super().stop()
 
     return RestartingRTSPAudioTrack()
+
+
+class _RTSPReaderDiagnostics:
+    """Rate-limited media-reader breadcrumbs for intermittent production RCA."""
+
+    def __init__(self, stream_url: str, *, diagnostic_label: str) -> None:
+        self._stream_path = _safe_rtsp_path(stream_url)
+        self._diagnostic_label = diagnostic_label
+        self._frame_counts = {"audio": 0, "video": 0}
+        self._failure_counts = {"audio": 0, "video": 0}
+        self._missing_track_logged: set[str] = set()
+        self._last_video_log_at = 0.0
+
+    def record_frame(self, kind: str) -> None:
+        if kind in self._frame_counts:
+            self._frame_counts[kind] += 1
+
+    def record_missing_track(self, kind: str) -> None:
+        if kind in self._missing_track_logged:
+            return
+        self._missing_track_logged.add(kind)
+        _LOGGER.debug(
+            "C300X WebRTC RTSP reader opened without %s track: %s path=%s "
+            "audio_frames=%d video_frames=%d",
+            kind,
+            self._diagnostic_label,
+            self._stream_path,
+            self._frame_counts["audio"],
+            self._frame_counts["video"],
+        )
+
+    def record_failure(
+        self,
+        kind: str,
+        err: BaseException,
+        *,
+        had_reader: bool,
+        opened_once: bool,
+        restart_attempts: int,
+        retry_delay: float,
+    ) -> None:
+        if kind not in self._failure_counts:
+            return
+        self._failure_counts[kind] += 1
+        if kind != "video":
+            _LOGGER.debug(
+                "C300X WebRTC RTSP %s frame failed: %s path=%s failures=%d reason=%s",
+                kind,
+                self._diagnostic_label,
+                self._stream_path,
+                self._failure_counts[kind],
+                type(err).__name__,
+            )
+            return
+
+        now = time.monotonic()
+        should_log = (
+            self._failure_counts["video"] == 1
+            or now - self._last_video_log_at
+            >= RTSP_DIAGNOSTIC_LOG_INTERVAL_SECONDS
+        )
+        if not should_log:
+            _LOGGER.debug(
+                "C300X WebRTC RTSP video frame still failing: %s path=%s "
+                "video_failures=%d audio_frames=%d video_frames=%d reason=%s",
+                self._diagnostic_label,
+                self._stream_path,
+                self._failure_counts["video"],
+                self._frame_counts["audio"],
+                self._frame_counts["video"],
+                type(err).__name__,
+            )
+            return
+
+        self._last_video_log_at = now
+        _LOGGER.debug(
+            "C300X WebRTC RTSP video frame stalled: %s path=%s "
+            "video_failures=%d audio_frames=%d video_frames=%d "
+            "had_reader=%s opened_once=%s restart_attempts=%d retry_delay=%.1f "
+            "reason=%s",
+            self._diagnostic_label,
+            self._stream_path,
+            self._failure_counts["video"],
+            self._frame_counts["audio"],
+            self._frame_counts["video"],
+            had_reader,
+            opened_once,
+            restart_attempts,
+            retry_delay,
+            type(err).__name__,
+        )
+
+
+def _safe_rtsp_path(stream_url: str) -> str:
+    """Return only the RTSP path for logs, avoiding host/token-style data."""
+
+    try:
+        path = urlsplit(stream_url).path
+    except ValueError:
+        return "<invalid>"
+    return path or "/"

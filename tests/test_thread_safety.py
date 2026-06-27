@@ -20,9 +20,9 @@ def test_display_bridge_alarm_notify_uses_thread_safe_scheduling() -> None:
     assert "@callback\n    def _handle_alarm_state_change" in tracker_body
     assert "@callback\n    def _handle_alarmo_event" in tracker_body
     assert "lambda _event: _async_schedule_display_bridge_notify" not in tracker_body
-    assert "hass.add_job(_async_notify_display_bridge_alarm, entry)" in text
+    assert "hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry)" in text
     assert (
-        "hass.async_create_task(_async_notify_display_bridge_alarm(entry))"
+        "hass.async_create_task(_async_notify_display_bridge_alarm_if_listening(entry))"
         not in text
     )
 

@@ -1610,6 +1610,63 @@ def test_async_status_uses_alarmo_ready_modes_and_open_sensors() -> None:
     assert commands["arm_night"]["ready"] is False
 
 
+def test_async_status_ignores_stale_alarmo_blockers_for_closed_binary_sensors() -> None:
+    alarmo_entity = types.SimpleNamespace(
+        entity_id="alarm_control_panel.alarmo",
+        area_id="area-1",
+        _config={
+            "code_arm_required": False,
+            "code_mode_change_required": False,
+            "code_disarm_required": False,
+        },
+        _ready_to_arm_modes=["armed_away"],
+        open_sensors={"binary_sensor.front_door": "open"},
+    )
+    sensor_handler = FakeAlarmoSensorHandler(
+        responses={
+            ("area-1", "armed_away"): {"binary_sensor.front_door": "open"},
+        },
+        _config={"binary_sensor.front_door": {"type": "door"}},
+    )
+    hass = FakeHass(
+        states=FakeStates(
+            {
+                "alarm_control_panel.alarmo": FakeState(
+                    "disarmed",
+                    attributes={"supported_features": 2},
+                ),
+                "binary_sensor.front_door": FakeState(
+                    "off",
+                    attributes={"friendly_name": "Haustuer"},
+                ),
+            }
+        ),
+        data={
+            "alarmo": {
+                "master": None,
+                "areas": {"area-1": alarmo_entity},
+                "sensor_handler": sensor_handler,
+            }
+        },
+    )
+    entry = FakeEntry(
+        data={
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.alarmo",
+            CONF_DEVICE_UI_ENABLED: True,
+        }
+    )
+
+    result = run(async_status(hass, entry))
+    commands = {
+        command["command"]: command for command in result["alarm"]["commands"]
+    }
+
+    assert "open_sensors" not in result["alarm"]
+    assert commands["arm_away"]["ready"] is True
+    assert commands["arm_away"]["blocking_sensor_count"] == 0
+    assert commands["arm_away"]["blocking_sensors"] == []
+
+
 def test_async_status_includes_alarm_delay_remaining() -> None:
     hass = FakeHass(
         states=FakeStates(

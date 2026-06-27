@@ -677,7 +677,7 @@ def _async_track_display_bridge_updates(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> Any:
-    """Wake the C300X display bridge for HA-side alarm state changes."""
+    """Wake the C300X display bridge for HA-side alarm display changes."""
 
     alarm_entity_id = _entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
     if not _entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False) or not alarm_entity_id:
@@ -685,23 +685,27 @@ def _async_track_display_bridge_updates(
 
     from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
-    from homeassistant.helpers.event import async_track_state_change_event
 
     @callback
-    def _handle_alarm_state_change(_event: Any) -> None:
+    def _handle_alarm_state_change(event: Any) -> None:
+        if not _display_bridge_alarm_state_event_relevant(
+            hass,
+            str(alarm_entity_id),
+            event,
+        ):
+            return
         _async_schedule_display_bridge_notify(hass, entry)
 
     @callback
     def _handle_alarmo_event(*_args: Any) -> None:
         _async_schedule_display_bridge_notify(hass, entry)
 
-    unsubscribers = [
-        async_track_state_change_event(
-            hass,
-            [str(alarm_entity_id)],
-            _handle_alarm_state_change,
-        )
-    ]
+    bus = getattr(hass, "bus", None)
+    async_listen = getattr(bus, "async_listen", None)
+    if not callable(async_listen):
+        return None
+
+    unsubscribers = [async_listen("state_changed", _handle_alarm_state_change)]
     unsubscribers.append(
         async_dispatcher_connect(
             hass,
@@ -717,6 +721,84 @@ def _async_track_display_bridge_updates(
     return _unsub_all
 
 
+def _display_bridge_alarm_state_event_relevant(
+    hass: HomeAssistant,
+    alarm_entity_id: str,
+    event: Any,
+) -> bool:
+    """Return whether a HA state change can affect the display alarm page."""
+
+    data = getattr(event, "data", None)
+    if not isinstance(data, dict):
+        return False
+    changed_entity_id = data.get("entity_id")
+    if not isinstance(changed_entity_id, str) or not changed_entity_id:
+        return False
+    if changed_entity_id == alarm_entity_id:
+        return True
+    sensor_entity_ids = set(_alarmo_sensor_entity_ids(hass))
+    if changed_entity_id in sensor_entity_ids:
+        return True
+    return changed_entity_id.startswith("binary_sensor.") and _alarmo_runtime_available(hass)
+
+
+def _alarmo_sensor_entity_ids(hass: HomeAssistant) -> tuple[str, ...]:
+    """Return Alarmo sensor entity ids relevant for live display refreshes."""
+
+    alarmo_data = _alarmo_runtime_data(hass)
+    if not isinstance(alarmo_data, dict):
+        return ()
+
+    entity_ids: set[str] = set()
+    sensor_handler = alarmo_data.get("sensor_handler")
+    sensor_config = getattr(sensor_handler, "_config", None)
+    if isinstance(sensor_config, dict):
+        entity_ids.update(
+            str(entity_id)
+            for entity_id in sensor_config
+            if isinstance(entity_id, str) and "." in entity_id
+        )
+
+    for alarmo_entity in _alarmo_display_entities(alarmo_data):
+        for open_sensors_name in ("open_sensors", "_open_sensors"):
+            open_sensors = getattr(alarmo_entity, open_sensors_name, None)
+            if isinstance(open_sensors, dict):
+                entity_ids.update(
+                    str(entity_id)
+                    for entity_id in open_sensors
+                    if isinstance(entity_id, str) and "." in entity_id
+                )
+    return tuple(entity_ids)
+
+
+def _alarmo_runtime_available(hass: HomeAssistant) -> bool:
+    """Return whether Alarmo runtime data is currently present."""
+
+    return isinstance(_alarmo_runtime_data(hass), dict)
+
+
+def _alarmo_runtime_data(hass: HomeAssistant) -> Any:
+    """Return Alarmo runtime data from Home Assistant."""
+
+    hass_data = getattr(hass, "data", None)
+    if not isinstance(hass_data, dict):
+        return None
+    return hass_data.get("alarmo")
+
+
+def _alarmo_display_entities(alarmo_data: dict[str, Any]) -> tuple[Any, ...]:
+    """Return Alarmo master and area entities known to the runtime."""
+
+    entities: list[Any] = []
+    master = alarmo_data.get("master")
+    if master is not None:
+        entities.append(master)
+    areas = alarmo_data.get("areas")
+    if isinstance(areas, dict):
+        entities.extend(area for area in areas.values() if area is not None)
+    return tuple(entities)
+
+
 def _async_schedule_display_bridge_notify(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
@@ -727,13 +809,19 @@ def _async_schedule_display_bridge_notify(
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not connection_state.available:
         return
-    hass.add_job(_async_notify_display_bridge_alarm, entry)
+    hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry)
 
 
-async def _async_notify_display_bridge_alarm(entry: BticinoC300XConfigEntry) -> None:
-    """Notify the local display bridge that alarm display data changed."""
+async def _async_notify_display_bridge_alarm_if_listening(
+    entry: BticinoC300XConfigEntry,
+) -> None:
+    """Notify the display bridge only while a local QML page is listening."""
 
     try:
+        diagnostics = await entry.runtime_data.api.async_diagnostics()
+        waiters = diagnostics.get("ui_event_waiters")
+        if not isinstance(waiters, int) or waiters <= 0:
+            return
         await entry.runtime_data.api.async_notify_display_bridge_event("alarm")
     except C300XAgentApiUnsupportedError:
         _LOGGER.debug("C300X device agent does not support display bridge events")

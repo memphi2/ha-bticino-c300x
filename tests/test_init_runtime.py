@@ -817,6 +817,9 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     calls: list[str] = []
     dispatch_unsubs: list[str] = []
     state_unsubs: list[str] = []
+    dispatcher_callbacks: list[Any] = []
+    state_callbacks: list[Any] = []
+    listened_events: list[str] = []
 
     monkeypatch.setattr(
         integration,
@@ -825,22 +828,17 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     )
 
     import homeassistant.helpers.dispatcher as dispatcher
-    import homeassistant.helpers.event as event_helper
 
-    def track_state_change(_hass: Any, _entities: Any, callback: Any) -> Any:
-        callback(None)
-        return lambda: state_unsubs.append("state")
+    class FakeBus:
+        def async_listen(self, event_type: str, callback: Any) -> Any:
+            listened_events.append(event_type)
+            state_callbacks.append(callback)
+            return lambda: state_unsubs.append("state")
 
     def connect_dispatcher(_hass: Any, _signal: str, callback: Any) -> Any:
-        callback()
+        dispatcher_callbacks.append(callback)
         return lambda: dispatch_unsubs.append("dispatch")
 
-    monkeypatch.setattr(
-        event_helper,
-        "async_track_state_change_event",
-        track_state_change,
-        raising=False,
-    )
     monkeypatch.setattr(
         dispatcher,
         "async_dispatcher_connect",
@@ -854,10 +852,38 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
         }
     )
-    unsubscribe = integration._async_track_display_bridge_updates("hass", entry)
+    hass = SimpleNamespace(
+        data={
+            "alarmo": {
+                "sensor_handler": SimpleNamespace(
+                    _config={
+                        "binary_sensor.front_door": {"type": "door"},
+                        "binary_sensor.window": {"type": "window"},
+                    }
+                )
+            }
+        },
+        bus=FakeBus(),
+    )
+    unsubscribe = integration._async_track_display_bridge_updates(hass, entry)
 
     assert callable(unsubscribe)
+    assert listened_events == ["state_changed"]
+    assert calls == []
+
+    state_callbacks[0](SimpleNamespace(data={"entity_id": "sensor.temperature"}))
+    assert calls == []
+
+    state_callbacks[0](SimpleNamespace(data={"entity_id": "binary_sensor.unlisted"}))
+    assert calls == ["notify"]
+
+    state_callbacks[0](
+        SimpleNamespace(data={"entity_id": "alarm_control_panel.home"})
+    )
     assert calls == ["notify", "notify"]
+
+    dispatcher_callbacks[0]()
+    assert calls == ["notify", "notify", "notify"]
     unsubscribe()
     assert state_unsubs == ["state"]
     assert dispatch_unsubs == ["dispatch"]
@@ -891,6 +917,31 @@ def test_display_bridge_notify_skips_offline_entries() -> None:
     integration._async_schedule_display_bridge_notify(hass, entry)
 
     assert jobs == []
+
+
+def test_display_bridge_notify_requires_active_ui_waiter() -> None:
+    calls: list[str] = []
+
+    class FakeApi:
+        def __init__(self, waiters: int | None) -> None:
+            self.waiters = waiters
+
+        async def async_diagnostics(self) -> dict[str, Any]:
+            calls.append(f"diagnostics:{self.waiters}")
+            return {"ui_event_waiters": self.waiters}
+
+        async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+            calls.append(f"event:{topic}")
+            return {"ok": True}
+
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(api=FakeApi(0))
+    asyncio.run(integration._async_notify_display_bridge_alarm_if_listening(entry))
+
+    entry.runtime_data.api = FakeApi(1)
+    asyncio.run(integration._async_notify_display_bridge_alarm_if_listening(entry))
+
+    assert calls == ["diagnostics:0", "diagnostics:1", "event:alarm"]
 
 
 def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> None:  # noqa: ANN001

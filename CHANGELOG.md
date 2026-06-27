@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.5.0 - 2026-06-23
+## v1.5.0 - 2026-06-27
 
 ### Added
 
@@ -21,6 +21,10 @@
   viewer closes its preview.
 - Keeps on-demand Hang Up from stopping media when the current browser session
   is not the active stream owner.
+- Keeps the C300X display alarm page in sync when an Alarmo sensor changes
+  while the page is open.
+- Prevents stale Alarmo blocker data from showing already closed binary sensors
+  as open on the C300X display alarm page.
 
 ### Upgrade Notes
 

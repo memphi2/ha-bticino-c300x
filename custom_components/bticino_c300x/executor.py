@@ -1520,10 +1520,10 @@ def _alarmo_command_preflight(
         filter_readiness_sensors=not for_command,
     )
     blocking_sensors = _alarm_blocking_sensor_payloads(hass, blocking_sensor_map)
-    if sensor_handler is None and not blocking_sensor_map:
+    if sensor_handler is None and not blocking_sensors:
         ready = ready_from_alarmo is not False
     else:
-        ready = not blocking_sensor_map
+        ready = not blocking_sensors
     return {
         "ready": bool(ready),
         "blocking_sensors": blocking_sensors[:_MAX_ALARM_BLOCKING_SENSORS],
@@ -1802,6 +1802,8 @@ def _alarm_blocking_sensor_payloads(
         if entity_id_text == "group_id":
             continue
         sensor = hass.states.get(entity_id_text)
+        if _alarmo_sensor_is_currently_closed(entity_id_text, sensor):
+            continue
         attributes = getattr(sensor, "attributes", None)
         friendly_name = (
             attributes.get("friendly_name")
@@ -1816,6 +1818,14 @@ def _alarm_blocking_sensor_payloads(
             }
         )
     return payloads
+
+
+def _alarmo_sensor_is_currently_closed(entity_id: str, sensor: Any) -> bool:
+    """Return whether a stale Alarmo blocker is closed in current HA state."""
+
+    if entity_id.split(".", 1)[0] != "binary_sensor":
+        return False
+    return str(getattr(sensor, "state", "") or "").lower() in {"off", "closed"}
 
 
 def _default_alarm_commands(code_policy: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1898,6 +1908,8 @@ def _alarm_sensor_payload(
     if not isinstance(open_sensors, dict) or not open_sensors:
         return {}
     sensor_payloads = _alarm_blocking_sensor_payloads(hass, open_sensors)
+    if not sensor_payloads:
+        return {}
     return {
         "open_sensors": sensor_payloads[:_MAX_ALARM_BLOCKING_SENSORS],
         "open_sensor_count": len(sensor_payloads),

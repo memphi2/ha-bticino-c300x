@@ -655,11 +655,13 @@ class _ExternalPatchChanges:
     def __init__(
         self,
         *,
+        runtime_changed: bool = False,
         qml_patch_changed: bool = False,
         firewall_patch_changed: bool = False,
         ipv6_firewall_patch_changed: bool = False,
         config_schema_changed: bool = False,
     ) -> None:
+        self.runtime_changed = runtime_changed
         self.qml_patch_changed = qml_patch_changed
         self.firewall_patch_changed = firewall_patch_changed
         self.ipv6_firewall_patch_changed = ipv6_firewall_patch_changed
@@ -670,6 +672,7 @@ class _ExternalPatchChanges:
         """Return changed groups reported by native self-update."""
 
         return cls(
+            runtime_changed=update_result.get("runtime_changed") is True,
             qml_patch_changed=update_result.get("qml_patch_changed") is True,
             firewall_patch_changed=update_result.get("firewall_patch_changed") is True,
             ipv6_firewall_patch_changed=(
@@ -683,6 +686,11 @@ class _ExternalPatchChanges:
         """Return changed groups from the SSH installer result."""
 
         changed_files = tuple(getattr(install_result, "changed_files", ()))
+        runtime_changed = any(
+            path.endswith("/c300x-agent-native")
+            or path.endswith("/c300x-native-agent")
+            for path in changed_files
+        )
         config_changed = any(path.endswith("/config.json") for path in changed_files)
         firewall_source_changed = any(
             path.endswith("/bootstrap_firewall.sh") for path in changed_files
@@ -692,6 +700,7 @@ class _ExternalPatchChanges:
             for path in changed_files
         )
         return cls(
+            runtime_changed=runtime_changed,
             qml_patch_changed=qml_changed,
             firewall_patch_changed=firewall_source_changed,
             ipv6_firewall_patch_changed=config_changed or firewall_source_changed,
@@ -756,6 +765,8 @@ async def _async_restore_external_patch_state(
             await async_apply_qml_patch_and_confirm(entry)
         await api.async_reload_gui()
         entry.runtime_data.qml_patch_status = await api.async_qml_patch_status()
+    elif changed.runtime_changed and patch_state.qml_patch_required:
+        await api.async_reload_gui()
 
 
 def _ssh_install_schema() -> vol.Schema:

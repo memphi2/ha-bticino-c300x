@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.5.4 - 2026-06-27
+
+### Changed
+
+- Reduces C300X display alarm refresh work by tracking the configured Alarmo
+  blocker sensors instead of scanning unrelated binary sensors.
+- Reduces duplicate WebRTC renewal work when several browser sessions share the
+  same media resource.
+- Avoids redundant media readiness and native-agent metrics state writes when
+  the published sensor data has not changed.
+
+### Fixed
+
+- Reloads the C300X device GUI after a native-agent runtime update when the
+  device UI is active, so the running display reconnects cleanly after the
+  agent restart.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- No native C300X device agent update is required when already running the
+  v1.5.3 agent.
+
 ## v1.5.3 - 2026-06-27
 
 ### Added

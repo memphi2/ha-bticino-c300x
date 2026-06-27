@@ -2271,6 +2271,46 @@ def test_restore_external_patch_state_applies_only_changed_active_patches() -> N
     assert entry.runtime_data.qml_patch_status["state"] == "patched"
 
 
+def test_restore_external_patch_state_reloads_gui_after_runtime_update_when_ui_active() -> None:
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+
+    asyncio.run(
+        _async_restore_external_patch_state(
+            entry,
+            _ExternalPatchState(
+                qml_patch_required=True,
+                firewall_patched=False,
+                firewall_status_known=True,
+                ipv6_firewall_patched=False,
+            ),
+            _ExternalPatchChanges(runtime_changed=True),
+        )
+    )
+
+    assert api.calls == ["reload_gui"]
+
+
+def test_restore_external_patch_state_skips_gui_reload_after_runtime_update_when_ui_inactive() -> None:
+    api = FakePatchApi()
+    entry = FakeEntry(runtime_data=FakeRuntimeData(api))
+
+    asyncio.run(
+        _async_restore_external_patch_state(
+            entry,
+            _ExternalPatchState(
+                qml_patch_required=False,
+                firewall_patched=False,
+                firewall_status_known=True,
+                ipv6_firewall_patched=False,
+            ),
+            _ExternalPatchChanges(runtime_changed=True),
+        )
+    )
+
+    assert api.calls == []
+
+
 def test_restore_external_patch_state_reenables_ipv6_endpoint_before_apply() -> None:
     api = FakePatchApi()
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
@@ -2324,9 +2364,40 @@ def test_install_result_config_change_restores_active_ipv6_firewall_patch() -> N
     )
 
     assert changes.config_schema_changed is True
+    assert changes.runtime_changed is False
     assert changes.qml_patch_changed is False
     assert changes.firewall_patch_changed is False
     assert changes.ipv6_firewall_patch_changed is True
+
+
+def test_install_result_agent_runtime_change_refreshes_active_device_ui() -> None:
+    changes = _ExternalPatchChanges.from_install_result(
+        types.SimpleNamespace(
+            changed_files=(
+                "/home/bticino/cfg/extra/c300x-native-agent/c300x-agent-native",
+            )
+        )
+    )
+
+    assert changes.runtime_changed is True
+    assert changes.qml_patch_changed is False
+    assert changes.firewall_patch_changed is False
+    assert changes.ipv6_firewall_patch_changed is False
+
+
+def test_update_result_agent_runtime_change_refreshes_active_device_ui() -> None:
+    changes = _ExternalPatchChanges.from_update_result(
+        {
+            "runtime_changed": True,
+            "qml_patch_changed": False,
+            "firewall_patch_changed": False,
+        }
+    )
+
+    assert changes.runtime_changed is True
+    assert changes.qml_patch_changed is False
+    assert changes.firewall_patch_changed is False
+    assert changes.ipv6_firewall_patch_changed is False
 
 
 def test_install_result_firewall_script_change_restores_firewall_patches() -> None:

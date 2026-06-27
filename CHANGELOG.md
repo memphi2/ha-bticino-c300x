@@ -1,13 +1,6 @@
 # Changelog
 
-## v1.5.1 - 2026-06-27
-
-### Changed
-
-- Uses the C300X device ringer volume scale directly as `0` to `10`, where
-  `0` mutes the ringer on the device.
-
-## v1.5.0 - 2026-06-27
+## v1.5.2 - 2026-06-27
 
 ### Added
 
@@ -21,6 +14,8 @@
 
 - Updates the native C300X device agent API to expose ringer mute and volume
   state through the existing local ringer endpoint.
+- Uses the C300X device UI scale for ringer volume: `0` to `10`, where `0`
+  mutes the ringer on the device.
 
 ### Fixed
 
@@ -36,7 +31,7 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
-- Update the native C300X device agent from Home Assistant to `1.5.0` so the
+- Update the native C300X device agent from Home Assistant to `1.5.2` so the
   ringer volume entity is available.
 - Hard-reload the browser or clear the Home Assistant app/WebView cache if the
   doorstation card still shows old stream behavior.

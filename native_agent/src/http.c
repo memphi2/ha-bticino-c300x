@@ -85,6 +85,8 @@
 #define C300X_RINGER_VOLUME_ACTIVE_MIN 0
 #define C300X_RINGER_VOLUME_MAX 10
 #define C300X_RINGER_VOLUME_STEP 1
+#define C300X_RINGER_VOLUME_OPENWEBNET_MAX 100
+#define C300X_RINGER_VOLUME_OPENWEBNET_STEP 10
 #define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
     c300x_system_metrics_cpu_watchdog_apply( \
         (runtime)->video, \
@@ -402,6 +404,8 @@ static void json_string_field(const char *body, const char *field, char *out, si
 static int json_bool_field(const char *body, const char *field, int *out);
 static int json_int_field(const char *body, const char *field, int *out);
 static int ringer_volume_from_reply(const char *reply, int *volume);
+static int ringer_volume_from_openwebnet_code(int code);
+static int ringer_volume_to_openwebnet_code(int volume);
 static int constant_time_equal(const char *left, size_t left_len, const char *right);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
@@ -7540,12 +7544,23 @@ static int ringer_volume_from_reply(const char *reply, int *volume)
         && consumed > 0
         && reply[consumed] == '\0'
         && value >= C300X_RINGER_VOLUME_MIN
-        && value <= C300X_RINGER_VOLUME_MAX
+        && value <= C300X_RINGER_VOLUME_OPENWEBNET_MAX
+        && value % C300X_RINGER_VOLUME_OPENWEBNET_STEP == 0
     ) {
-        *volume = value;
+        *volume = ringer_volume_from_openwebnet_code(value);
         return 1;
     }
     return 0;
+}
+
+static int ringer_volume_from_openwebnet_code(int code)
+{
+    return code / C300X_RINGER_VOLUME_OPENWEBNET_STEP;
+}
+
+static int ringer_volume_to_openwebnet_code(int volume)
+{
+    return volume * C300X_RINGER_VOLUME_OPENWEBNET_STEP;
 }
 
 static int answering_enabled_from_reply(const char *reply, int fallback, int *enabled, int *greeting)
@@ -8108,7 +8123,7 @@ static void handle_ringer_post(
     }
 
     if (has_volume) {
-        snprintf(command, sizeof(command), "*#8**#41*%d##", volume);
+        snprintf(command, sizeof(command), "*#8**#41*%d##", ringer_volume_to_openwebnet_code(volume));
         if (!c300x_openwebnet_send(config, command, volume_reply, sizeof(volume_reply), error, sizeof(error))) {
             send_device_error(client_fd, error);
             return;

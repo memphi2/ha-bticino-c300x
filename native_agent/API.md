@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.5.1`
+- Current packaged agent version: `1.5.2`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -204,7 +204,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.5.1"}
+{"ok": true, "agent": "native-c", "version": "1.5.2"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -280,7 +280,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.5.1",
+  "agent_version": "1.5.2",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -485,8 +485,11 @@ Side effects: reads ringer mute state with `*#8**33##` and ringer volume with
 `*#8**41##`.
 
 The response includes `muted` when the mute read can be decoded and `volume`
-when the volume read can be decoded. `volume` is the device ringtone volume on
-the native C300X scale `0..10`. The firmware treats `0` as muted.
+when the volume read can be decoded. `volume` is the C300X UI ringtone volume
+on the `0..10` scale. The firmware treats `0` as muted. OpenWebNet `41` stores
+the same UI value in tens, so the agent maps raw code `20` to API/UI volume
+`2`, raw code `10` to API/UI volume `1`, and raw code `0` to API/UI volume
+`0`.
 
 ### `POST /api/v1/ringer`
 
@@ -504,9 +507,9 @@ Request fields:
 {"volume": 5}
 ```
 
-`muted` sends `*#8**#33*0##` or `*#8**#33*1##`. `volume` sends
-`*#8**#41*<volume>##`; the accepted device API range is `0..10`, where `0`
-mutes the ringer on the device.
+`muted` sends `*#8**#33*0##` or `*#8**#33*1##`. `volume` accepts the C300X UI
+range `0..10` and translates it to the OpenWebNet `41` tens code before sending
+`*#8**#41*<code>##`.
 
 ### `GET /api/v1/answering-machine`
 
@@ -912,7 +915,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.5.1"
+  "agent_version": "1.5.2"
 }
 ```
 
@@ -1126,8 +1129,8 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.5.1 | 1.1 | 1.7.x | Current packaged agent; aligns ringer volume read/write support to the C300X `0..10` scale. |
-| 1.5.0 | 1.1 | 1.7.x | Adds ringer volume read/write support. |
+| 1.5.2 | 1.1 | 1.7.x | Current packaged agent; adds multi-client doorbell viewing and C300X UI-scale ringer volume support. |
+| 1.5.0 | 1.1 | 1.7.x | Adds initial ringer volume read/write support. |
 | 1.4.1 | 1.1 | 1.7.x | Adds consolidated doorstation card and Ring Call support. |
 | 1.3.0 | 1.1 | 1.7.x | Adds display watchdog recovery and bundled mobile Ring Call workflow support. |
 | 1.2.3 | 1.1 | 1.7.x | Consolidates display UI actions and dashboard traffic handling. |

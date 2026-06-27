@@ -624,6 +624,12 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert "#define C300X_RINGER_VOLUME_ACTIVE_MIN 0" in text
     assert "#define C300X_RINGER_VOLUME_MAX 10" in text
     assert "#define C300X_RINGER_VOLUME_STEP 1" in text
+    assert "#define C300X_RINGER_VOLUME_OPENWEBNET_MAX 100" in text
+    assert "#define C300X_RINGER_VOLUME_OPENWEBNET_STEP 10" in text
+    assert "static int ringer_volume_from_openwebnet_code(int code)" in text
+    assert "static int ringer_volume_to_openwebnet_code(int volume)" in text
+    assert "code / C300X_RINGER_VOLUME_OPENWEBNET_STEP" in text
+    assert "volume * C300X_RINGER_VOLUME_OPENWEBNET_STEP" in text
     assert "note_ringer_muted_changed(runtime, muted)" in event_body
     assert "ringer_volume_from_reply(msg, &code)" in event_body
     assert "note_ringer_volume_changed(runtime, code)" in event_body

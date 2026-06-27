@@ -856,7 +856,15 @@ def run_smoke(
             if dashboard_callback["body"].get("option") != "Home Assistant, manual":
                 raise AssertionError("dashboard choice option was not forwarded")
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "muted", False)
-            assert_json_field(api_get(api_port, "/api/v1/ringer"), "volume", 10)
+            assert_json_field(api_get(api_port, "/api/v1/ringer"), "volume", 2)
+            ringer_before = len(openwebnet.frames)
+            assert_json_field(
+                api_post(api_port, "/api/v1/ringer", {"volume": 2}),
+                "volume",
+                2,
+            )
+            if "*#8**#41*20##" not in openwebnet.frames[ringer_before:]:
+                raise AssertionError("ringer volume 2 must send OpenWebNet code 20")
             assert_json_field(
                 api_get(api_port, "/api/v1/smartphone-forwarding"),
                 "mode",
@@ -1714,7 +1722,10 @@ def reply_for_openwebnet_frame(server: OpenWebNetServer, frame: str) -> str:
     if frame == "*#8**33##":
         return "*#8**33*1##"
     if frame == "*#8**41##":
-        return "*#8**41*10##"
+        return "*#8**41*20##"
+    for code in range(0, 101, 10):
+        if frame in (f"*#8**#41*{code}##", f"*#8**41*{code}##"):
+            return f"*#8**41*{code}##"
     if frame == "*#8**37##":
         return f"*#8**37*{server.smartphone_forwarding_code}##"
     for code in (0, 1, 2):

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.1 - 2026-06-27
+
+### Changed
+
+- Uses the C300X device ringer volume scale directly as `0` to `10`, where
+  `0` mutes the ringer on the device.
+
 ## v1.5.0 - 2026-06-27
 
 ### Added

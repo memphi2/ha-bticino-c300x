@@ -748,7 +748,7 @@ def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
     )
     request = _FakeRequest(
         "event-token",
-        {"event": "ringer.volume_changed", "data": {"volume": 70}},
+        {"event": "ringer.volume_changed", "data": {"volume": 7}},
     )
 
     response = asyncio.run(
@@ -761,8 +761,8 @@ def test_ringer_volume_event_updates_state_and_public_event_data() -> None:
     )
 
     assert response.status == 200
-    assert event_state.ringer_volume == 70
-    assert event_state.last_event_data["volume"] == 70
+    assert event_state.ringer_volume == 7
+    assert event_state.last_event_data["volume"] == 7
     assert hass.bus.events[-1][1]["event_key"] == "ringer_volume_changed"
 
 

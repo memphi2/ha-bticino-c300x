@@ -2723,7 +2723,7 @@ def test_ringer_status_falls_back_to_state_endpoint() -> None:
     session = _QueuedSession(
         [
             (500, '{"error": "ringer_unavailable"}'),
-            (200, '{"state": {"ringer_muted": true, "ringer_volume": 30}}'),
+            (200, '{"state": {"ringer_muted": true, "ringer_volume": 3}}'),
         ]
     )
     api = C300XAgentApi(
@@ -2734,7 +2734,7 @@ def test_ringer_status_falls_back_to_state_endpoint() -> None:
 
     status = asyncio.run(api.async_ringer_status())
     assert status["muted"] is True
-    assert status["volume"] == 30
+    assert status["volume"] == 3
     assert [request["args"] for request in session.requests] == [
         ("GET", "http://agent.local:8080/api/v1/ringer"),
         ("GET", "http://agent.local:8080/api/v1/state"),
@@ -2787,13 +2787,13 @@ def test_ringer_and_answering_machine_setters_post_payloads() -> None:
     api._request_json = request_json  # type: ignore[method-assign]
 
     assert asyncio.run(api.async_set_ringer_muted(True))["muted"] is True
-    assert asyncio.run(api.async_set_ringer_volume(30))["volume"] == 30
+    assert asyncio.run(api.async_set_ringer_volume(3))["volume"] == 3
     assert asyncio.run(api.async_set_answering_machine_enabled(False))[
         "enabled"
     ] is False
     assert calls == [
         ("POST", "/api/v1/ringer", {"json_data": {"muted": True}}),
-        ("POST", "/api/v1/ringer", {"json_data": {"volume": 30}}),
+        ("POST", "/api/v1/ringer", {"json_data": {"volume": 3}}),
         ("POST", "/api/v1/answering-machine", {"json_data": {"enabled": False}}),
     ]
 
@@ -3234,10 +3234,10 @@ def test_normalize_ringer_from_agent_state() -> None:
 
 def test_normalize_ringer_from_command_response() -> None:
     assert normalize_ringer(
-        {"muted": False, "volume": "50", "raw": "*#8**33*1##"}
+        {"muted": False, "volume": "5", "raw": "*#8**33*1##"}
     ) == {
         "muted": False,
-        "volume": 50,
+        "volume": 5,
         "raw": "*#8**33*1##",
     }
 
@@ -3258,6 +3258,14 @@ def test_normalize_ringer_accepts_unknown_state() -> None:
         "muted": None,
         "volume": None,
         "raw": "state",
+    }
+
+
+def test_normalize_ringer_rejects_volume_outside_device_scale() -> None:
+    assert normalize_ringer({"muted": False, "volume": 11}) == {
+        "muted": False,
+        "volume": None,
+        "raw": {"muted": False, "volume": 11},
     }
 
 

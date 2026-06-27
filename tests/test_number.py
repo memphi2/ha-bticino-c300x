@@ -120,7 +120,7 @@ from custom_components.bticino_c300x.number import (  # noqa: E402
 
 
 class _FakeApi:
-    def __init__(self, *, volume: int | None = 30, fail_status: bool = False) -> None:
+    def __init__(self, *, volume: int | None = 3, fail_status: bool = False) -> None:
         self.volume = volume
         self.fail_status = fail_status
         self.ringer_reads = 0
@@ -169,7 +169,7 @@ def test_number_setup_adds_supported_entity_after_initial_refresh() -> None:
     entity = added[0][0]
     assert isinstance(entity, C300XRingerVolumeNumber)
     assert entry.runtime_data.api.ringer_reads == 1
-    assert entity.native_value == 30
+    assert entity.native_value == 3
 
 
 def test_number_setup_skips_legacy_boolean_ringer_capability() -> None:
@@ -184,18 +184,19 @@ def test_number_setup_skips_legacy_boolean_ringer_capability() -> None:
     assert entry.runtime_data.api.ringer_reads == 0
 
 
-def test_ringer_volume_number_sets_volume() -> None:
+@pytest.mark.parametrize("value", [0, 4, 10])
+def test_ringer_volume_number_sets_volume(value: int) -> None:
     entry = _FakeEntry()
     entity = C300XRingerVolumeNumber(entry)  # type: ignore[arg-type]
 
-    asyncio.run(entity.async_set_native_value(40))
+    asyncio.run(entity.async_set_native_value(value))
 
-    assert entry.runtime_data.api.volume_sets == [40]
-    assert entity.native_value == 40
+    assert entry.runtime_data.api.volume_sets == [value]
+    assert entity.native_value == value
     assert entity.available is True
 
 
-@pytest.mark.parametrize("value", [0, 9, 101, 10.5, "invalid"])
+@pytest.mark.parametrize("value", [-1, 11, 10.5, "invalid"])
 def test_ringer_volume_number_rejects_invalid_volume(value: Any) -> None:
     entry = _FakeEntry()
     entity = C300XRingerVolumeNumber(entry)  # type: ignore[arg-type]
@@ -214,12 +215,12 @@ def test_ringer_volume_event_updates_number() -> None:
             data={
                 "entry_id": "entry-1",
                 "event_type": "ringer_volume_changed",
-                "volume": 70,
+                "volume": 7,
             }
         )
     )
 
-    assert entity.native_value == 70
+    assert entity.native_value == 7
     assert entity.available is True
 
 

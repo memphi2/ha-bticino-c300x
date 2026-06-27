@@ -7,7 +7,6 @@ from typing import Any
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -18,9 +17,9 @@ from .entity import C300XEntity
 from .event_payload import agent_event_key
 
 PARALLEL_UPDATES = 1
-_RINGER_VOLUME_MIN = 10
-_RINGER_VOLUME_MAX = 100
-_RINGER_VOLUME_STEP = 10
+_RINGER_VOLUME_MIN = 0
+_RINGER_VOLUME_MAX = 10
+_RINGER_VOLUME_STEP = 1
 
 
 async def async_setup_entry(
@@ -46,7 +45,6 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
     _attr_native_min_value = _RINGER_VOLUME_MIN
     _attr_native_max_value = _RINGER_VOLUME_MAX
     _attr_native_step = _RINGER_VOLUME_STEP
-    _attr_native_unit_of_measurement = PERCENTAGE
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "ringer_volume")
@@ -64,7 +62,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
 
         volume = _coerce_active_ringer_volume(value)
         if volume is None:
-            raise HomeAssistantError("Ringer volume must be between 10 and 100")
+            raise HomeAssistantError("Ringer volume must be between 0 and 10")
         try:
             status = await self._entry.runtime_data.api.async_set_ringer_volume(volume)
         except C300XAgentApiError as err:

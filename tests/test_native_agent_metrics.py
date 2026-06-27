@@ -620,6 +620,10 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert "int ringer_muted;" in text
     assert "int ringer_volume_known;" in text
     assert "int ringer_volume;" in text
+    assert "#define C300X_RINGER_VOLUME_MIN 0" in text
+    assert "#define C300X_RINGER_VOLUME_ACTIVE_MIN 0" in text
+    assert "#define C300X_RINGER_VOLUME_MAX 10" in text
+    assert "#define C300X_RINGER_VOLUME_STEP 1" in text
     assert "note_ringer_muted_changed(runtime, muted)" in event_body
     assert "ringer_volume_from_reply(msg, &code)" in event_body
     assert "note_ringer_volume_changed(runtime, code)" in event_body

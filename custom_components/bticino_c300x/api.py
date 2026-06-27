@@ -1725,7 +1725,7 @@ def _normalize_ringer_volume(value: Any) -> int | None:
         volume = int(value)
     except (TypeError, ValueError):
         return None
-    if 0 <= volume <= 100:
+    if 0 <= volume <= 10:
         return volume
     return None
 

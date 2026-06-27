@@ -82,9 +82,9 @@
 #define C300X_LARGE_RESPONSE_SIZE 32768
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
 #define C300X_RINGER_VOLUME_MIN 0
-#define C300X_RINGER_VOLUME_ACTIVE_MIN 10
-#define C300X_RINGER_VOLUME_MAX 100
-#define C300X_RINGER_VOLUME_STEP 10
+#define C300X_RINGER_VOLUME_ACTIVE_MIN 0
+#define C300X_RINGER_VOLUME_MAX 10
+#define C300X_RINGER_VOLUME_STEP 1
 #define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
     c300x_system_metrics_cpu_watchdog_apply( \
         (runtime)->video, \

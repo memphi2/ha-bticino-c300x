@@ -66,8 +66,10 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
         try:
             status = await self._entry.runtime_data.api.async_set_ringer_volume(volume)
         except C300XAgentApiError as err:
+            await self.async_update()
+            self.async_write_ha_state()
             raise HomeAssistantError("C300X ringer volume update failed") from err
-        self._apply_status(status, fallback=volume)
+        self._apply_status(status)
         self.async_write_ha_state()
 
     async def async_update(self) -> None:
@@ -80,10 +82,8 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
             return
         self._apply_status(status)
 
-    def _apply_status(self, status: Mapping[str, Any], *, fallback: int | None = None) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         volume = _coerce_active_ringer_volume(status.get("volume"))
-        if volume is None:
-            volume = fallback
         self._volume = volume
         self._attr_available = volume is not None
 

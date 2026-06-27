@@ -120,9 +120,18 @@ from custom_components.bticino_c300x.number import (  # noqa: E402
 
 
 class _FakeApi:
-    def __init__(self, *, volume: int | None = 3, fail_status: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        volume: int | None = 3,
+        fail_status: bool = False,
+        fail_set: bool = False,
+        set_response: dict[str, Any] | None = None,
+    ) -> None:
         self.volume = volume
         self.fail_status = fail_status
+        self.fail_set = fail_set
+        self.set_response = set_response
         self.ringer_reads = 0
         self.volume_sets: list[int] = []
 
@@ -134,6 +143,10 @@ class _FakeApi:
 
     async def async_set_ringer_volume(self, volume: int) -> dict[str, Any]:
         self.volume_sets.append(volume)
+        if self.fail_set:
+            raise C300XAgentApiError("not applied")
+        if self.set_response is not None:
+            return self.set_response
         self.volume = volume
         return {"volume": volume}
 
@@ -194,6 +207,35 @@ def test_ringer_volume_number_sets_volume(value: int) -> None:
     assert entry.runtime_data.api.volume_sets == [value]
     assert entity.native_value == value
     assert entity.available is True
+
+
+def test_ringer_volume_number_does_not_keep_unconfirmed_set_value() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(api=_FakeApi(set_response={"raw": "*#*1##"}))
+    )
+    entity = C300XRingerVolumeNumber(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_set_native_value(8))
+
+    assert entry.runtime_data.api.volume_sets == [8]
+    assert entity.native_value is None
+    assert entity.available is False
+
+
+def test_ringer_volume_number_refreshes_actual_value_after_set_failure() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(api=_FakeApi(volume=3, fail_set=True))
+    )
+    entity = C300XRingerVolumeNumber(entry)  # type: ignore[arg-type]
+
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(entity.async_set_native_value(8))
+
+    assert entry.runtime_data.api.volume_sets == [8]
+    assert entry.runtime_data.api.ringer_reads == 1
+    assert entity.native_value == 3
+    assert entity.available is True
+    assert entity.wrote_state is True
 
 
 @pytest.mark.parametrize("value", [-1, 11, 10.5, "invalid"])

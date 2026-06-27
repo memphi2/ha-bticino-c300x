@@ -599,6 +599,7 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
 
 def test_native_agent_ringer_events_are_change_based() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    openwebnet_text = (ROOT / "native_agent" / "src" / "openwebnet.c").read_text(encoding="utf-8")
     event_body = text.split("static int map_openwebnet_event", maxsplit=1)[1].split(
         "static void handle_udp_event",
         maxsplit=1,
@@ -641,6 +642,14 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert "remember_ringer_volume(runtime, volume)" in volume_note_body
     assert "remember_ringer_muted(runtime, muted_readback)" in text
     assert "remember_ringer_volume(runtime, volume_readback)" in text
+    assert "ringer_volume_not_applied" in text
+    assert "ringer_volume_readback_failed" in text
+    assert "#define C300X_RINGER_VOLUME_SETTLE_MS 1000" in text
+    assert "c300x_openwebnet_write_readback(" in text
+    assert "c300x_openwebnet_write_readback(" in openwebnet_text
+    assert "drain_openwebnet_frames(fd)" in openwebnet_text
+    assert '"*#8**41##"' in text
+    assert "volume_readback = volume;" not in text
     assert '\\"ringer_muted\\":%s' in state_body
     assert '\\"ringer_volume\\":%s' in state_body
 

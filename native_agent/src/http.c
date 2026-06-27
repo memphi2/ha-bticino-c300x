@@ -87,6 +87,7 @@
 #define C300X_RINGER_VOLUME_STEP 1
 #define C300X_RINGER_VOLUME_OPENWEBNET_MAX 100
 #define C300X_RINGER_VOLUME_OPENWEBNET_STEP 10
+#define C300X_RINGER_VOLUME_SETTLE_MS 1000
 #define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
     c300x_system_metrics_cpu_watchdog_apply( \
         (runtime)->video, \
@@ -8076,10 +8077,12 @@ static void handle_ringer_post(
 {
     char muted_reply[C300X_MAX_FRAME_LEN];
     char volume_reply[C300X_MAX_FRAME_LEN];
+    char volume_readback_reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     char body[2048];
     char muted_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
     char volume_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char volume_readback_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
     char command[64];
     int muted;
     int enabled;
@@ -8091,6 +8094,7 @@ static void handle_ringer_post(
 
     muted_reply_json[0] = '\0';
     volume_reply_json[0] = '\0';
+    volume_readback_reply_json[0] = '\0';
 
     has_muted = json_bool_field(request->body, "muted", &muted);
     if (!has_muted) {
@@ -8124,15 +8128,48 @@ static void handle_ringer_post(
 
     if (has_volume) {
         snprintf(command, sizeof(command), "*#8**#41*%d##", ringer_volume_to_openwebnet_code(volume));
-        if (!c300x_openwebnet_send(config, command, volume_reply, sizeof(volume_reply), error, sizeof(error))) {
+        if (!c300x_openwebnet_write_readback(
+            config,
+            command,
+            C300X_RINGER_VOLUME_SETTLE_MS,
+            "*#8**41##",
+            volume_reply,
+            sizeof(volume_reply),
+            volume_readback_reply,
+            sizeof(volume_readback_reply),
+            error,
+            sizeof(error)
+        )) {
             send_device_error(client_fd, error);
             return;
         }
-        if (!ringer_volume_from_reply(volume_reply, &volume_readback)) {
-            volume_readback = volume;
+        json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
+        json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
+        if (!ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
+            snprintf(
+                body,
+                sizeof(body),
+                "{\"ok\":false,\"error\":\"ringer_volume_readback_failed\",\"raw\":%s,\"volume_raw\":%s}\n",
+                volume_reply_json,
+                volume_readback_reply_json
+            );
+            send_json(client_fd, 502, "Bad Gateway", body);
+            return;
         }
         remember_ringer_volume(runtime, volume_readback);
-        json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
+        if (volume_readback != volume) {
+            snprintf(
+                body,
+                sizeof(body),
+                "{\"ok\":false,\"error\":\"ringer_volume_not_applied\",\"expected\":%d,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
+                volume,
+                volume_readback,
+                volume_reply_json,
+                volume_readback_reply_json
+            );
+            send_json(client_fd, 409, "Conflict", body);
+            return;
+        }
     }
 
     if (has_muted && !has_volume) {
@@ -8147,9 +8184,10 @@ static void handle_ringer_post(
         snprintf(
             body,
             sizeof(body),
-            "{\"ok\":true,\"volume\":%d,\"raw\":%s}\n",
+            "{\"ok\":true,\"volume\":%d,\"raw\":%s,\"volume_raw\":%s}\n",
             volume_readback,
-            volume_reply_json
+            volume_reply_json,
+            volume_readback_reply_json
         );
     } else {
         snprintf(
@@ -8160,7 +8198,7 @@ static void handle_ringer_post(
             volume_readback,
             volume_reply_json,
             muted_reply_json,
-            volume_reply_json
+            volume_readback_reply_json
         );
     }
     send_json(client_fd, 200, "OK", body);

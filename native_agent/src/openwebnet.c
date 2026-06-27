@@ -14,6 +14,8 @@
 
 #define OPENWEBNET_ACK "*#*1##"
 #define OPENWEBNET_HANDSHAKE "*99*0##"
+#define OPENWEBNET_DRAIN_TIMEOUT_MS 250
+#define OPENWEBNET_MAX_READBACK_FRAMES 4
 
 static void set_error(char *error, size_t error_len, const char *message)
 {
@@ -93,6 +95,62 @@ static int read_frame(int fd, char *frame, size_t frame_len)
             return 1;
         }
     }
+    return 0;
+}
+
+static int wait_readable(int fd, int timeout_ms)
+{
+    int result;
+
+    do {
+        fd_set readfds;
+        struct timeval timeout;
+
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        result = select(fd + 1, &readfds, NULL, NULL, &timeout);
+    } while (result < 0 && errno == EINTR);
+
+    return result > 0;
+}
+
+static void drain_openwebnet_frames(int fd)
+{
+    char frame[C300X_MAX_FRAME_LEN];
+
+    while (wait_readable(fd, OPENWEBNET_DRAIN_TIMEOUT_MS)) {
+        if (!read_frame(fd, frame, sizeof(frame))) {
+            return;
+        }
+    }
+}
+
+static int read_non_ack_frame(
+    int fd,
+    const char *stage,
+    char *reply,
+    size_t reply_len,
+    char *error,
+    size_t error_len
+)
+{
+    char frame[C300X_MAX_FRAME_LEN];
+    int index;
+
+    for (index = 0; index < OPENWEBNET_MAX_READBACK_FRAMES; index++) {
+        if (!read_frame(fd, frame, sizeof(frame))) {
+            snprintf(error, error_len, "%s_timeout", stage);
+            return 0;
+        }
+        if (strcmp(frame, OPENWEBNET_ACK) == 0) {
+            continue;
+        }
+        snprintf(reply, reply_len, "%s", frame);
+        return 1;
+    }
+    snprintf(error, error_len, "%s_ack_only", stage);
     return 0;
 }
 
@@ -198,6 +256,65 @@ int c300x_openwebnet_sequence(
         close(fd);
         return 0;
     }
+    close(fd);
+    return 1;
+}
+
+int c300x_openwebnet_write_readback(
+    const struct c300x_config *config,
+    const char *write_command,
+    int delay_ms,
+    const char *readback_command,
+    char *write_reply,
+    size_t write_reply_len,
+    char *readback_reply,
+    size_t readback_reply_len,
+    char *error,
+    size_t error_len
+)
+{
+    int fd = connect_openwebnet(config, error, error_len);
+    char frame[C300X_MAX_FRAME_LEN];
+
+    if (fd < 0) {
+        return 0;
+    }
+    if (!handshake(fd, error, error_len)) {
+        close(fd);
+        return 0;
+    }
+    if (!write_all(fd, write_command)) {
+        set_error(error, error_len, "openwebnet_write_command_failed");
+        close(fd);
+        return 0;
+    }
+    if (!read_frame(fd, frame, sizeof(frame))) {
+        set_error(error, error_len, "openwebnet_write_response_timeout");
+        close(fd);
+        return 0;
+    }
+    snprintf(write_reply, write_reply_len, "%s", frame);
+    drain_openwebnet_frames(fd);
+    if (delay_ms > 0) {
+        sleep_ms(delay_ms);
+    }
+    if (!write_all(fd, readback_command)) {
+        set_error(error, error_len, "openwebnet_readback_write_failed");
+        close(fd);
+        return 0;
+    }
+    if (!read_non_ack_frame(
+            fd,
+            "openwebnet_readback_response",
+            readback_reply,
+            readback_reply_len,
+            error,
+            error_len
+        )) {
+        close(fd);
+        return 0;
+    }
+    drain_openwebnet_frames(fd);
     close(fd);
     return 1;
 }

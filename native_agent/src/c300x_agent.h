@@ -182,5 +182,17 @@ int c300x_openwebnet_sequence(
     char *error,
     size_t error_len
 );
+int c300x_openwebnet_write_readback(
+    const struct c300x_config *config,
+    const char *write_command,
+    int delay_ms,
+    const char *readback_command,
+    char *write_reply,
+    size_t write_reply_len,
+    char *readback_reply,
+    size_t readback_reply_len,
+    char *error,
+    size_t error_len
+);
 
 #endif

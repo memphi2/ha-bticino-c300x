@@ -34,6 +34,7 @@ class OpenWebNetServer(socketserver.ThreadingTCPServer):
         self.frames: list[str] = []
         self.delete_paths: dict[str, Path] = {}
         self.smartphone_forwarding_code = 2
+        self.ringer_volume_code = 20
 
 
 class OpenWebNetHandler(socketserver.BaseRequestHandler):
@@ -859,12 +860,15 @@ def run_smoke(
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "volume", 2)
             ringer_before = len(openwebnet.frames)
             assert_json_field(
-                api_post(api_port, "/api/v1/ringer", {"volume": 2}),
+                api_post(api_port, "/api/v1/ringer", {"volume": 4}),
                 "volume",
-                2,
+                4,
             )
-            if "*#8**#41*20##" not in openwebnet.frames[ringer_before:]:
-                raise AssertionError("ringer volume 2 must send OpenWebNet code 20")
+            ringer_frames = openwebnet.frames[ringer_before:]
+            if "*#8**#41*40##" not in ringer_frames:
+                raise AssertionError("ringer volume 4 must send OpenWebNet code 40")
+            if "*#8**41##" not in ringer_frames:
+                raise AssertionError("ringer volume write must be confirmed by readback")
             assert_json_field(
                 api_get(api_port, "/api/v1/smartphone-forwarding"),
                 "mode",
@@ -1722,10 +1726,11 @@ def reply_for_openwebnet_frame(server: OpenWebNetServer, frame: str) -> str:
     if frame == "*#8**33##":
         return "*#8**33*1##"
     if frame == "*#8**41##":
-        return "*#8**41*20##"
+        return f"*#8**41*{server.ringer_volume_code}##"
     for code in range(0, 101, 10):
         if frame in (f"*#8**#41*{code}##", f"*#8**41*{code}##"):
-            return f"*#8**41*{code}##"
+            server.ringer_volume_code = code
+            return f"*#8**41*{code}##*#*1##"
     if frame == "*#8**37##":
         return f"*#8**37*{server.smartphone_forwarding_code}##"
     for code in (0, 1, 2):

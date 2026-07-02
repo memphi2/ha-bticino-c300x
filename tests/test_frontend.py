@@ -812,6 +812,9 @@ def test_doorstation_hangup_only_calls_ring_hangup_for_ring_sessions() -> None:
     hangup_end = source.index("  _hasDoorbellRingCallSession()", hangup_start)
     hangup_body = source[hangup_start:hangup_end]
 
+    assert "if (this._hangupInProgress)" in hangup_body
+    assert "this._hangupInProgress = true;" in hangup_body
+    assert "this._hangupInProgress = false;" in hangup_body
     assert "if (this._hasDoorbellRingCallSession())" in hangup_body
     assert hangup_body.index("if (this._hasDoorbellRingCallSession())") < hangup_body.index(
         "await this._hangupDoorbellCall({ closePeer: false });"

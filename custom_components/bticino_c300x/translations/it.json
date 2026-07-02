@@ -43,7 +43,6 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
-          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
@@ -90,7 +89,6 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
-          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
@@ -162,7 +160,6 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
-          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",

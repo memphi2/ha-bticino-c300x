@@ -2344,6 +2344,29 @@ static bool home_call_active_locked(const media_bridge_t *bridge) {
     return (bridge->home_call_started || bridge->home_call_active) && !bridge->home_call_stop;
 }
 
+static bool doorbell_media_session_active_locked(const media_bridge_t *bridge) {
+    return (
+        !bridge->stop_in_progress
+        && !home_call_active_locked(bridge)
+        && (
+            bridge->media_active
+            || bridge->media_starting
+            || bridge->relay_started
+            || bridge->sip_monitor_started
+            || bridge->ondemand_media_started
+            || bridge->talkback_started
+            || bridge->rtp_fd >= 0
+            || bridge->audio_rtp_fd >= 0
+            || bridge->ondemand_audio_rtp_fd >= 0
+            || bridge->ondemand_audio_rtcp_fd >= 0
+            || bridge->ondemand_video_rtp_fd >= 0
+            || bridge->ondemand_video_rtcp_fd >= 0
+            || bridge->sip_fd >= 0
+            || bridge->talkback_fd >= 0
+        )
+    );
+}
+
 static bool request_home_call_media_if_active(media_bridge_t *bridge, bool audio) {
     bool active;
 
@@ -2358,7 +2381,7 @@ static bool stop_ring_call_if_active(bool send_bye, bool close_client) {
     bool active;
 
     pthread_mutex_lock(&g_bridge.mutex);
-    active = g_bridge.ring_call_active || g_bridge.ring_media_active;
+    active = (g_bridge.ring_call_active || g_bridge.ring_media_active) && !g_bridge.ring_call_stop;
     if (active) {
         g_bridge.ring_call_stop = true;
         g_bridge.ring_send_bye = g_bridge.ring_send_bye || send_bye;
@@ -2401,7 +2424,7 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     bridge->ring_srtp_state = NULL;
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_stopped(bridge->video);
-    if (was_active) {
+    if (was_active && c300x_video_consume_media_closed_event(bridge->video)) {
         c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0);
     }
 }
@@ -5084,6 +5107,10 @@ static void stop_media_session(bool close_client);
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&bridge->mutex);
+    if (bridge->stop_in_progress) {
+        pthread_mutex_unlock(&bridge->mutex);
+        return false;
+    }
     if (bridge->media_active || bridge->media_starting) {
         pthread_mutex_unlock(&bridge->mutex);
         return true;
@@ -5311,23 +5338,44 @@ static void stop_media_session(bool close_client) {
 
 void c300x_media_session_stop(struct c300x_video *video) {
     bool dispatch_closed;
+    bool owned;
+    bool ring_dispatch_closed;
 
     pthread_mutex_lock(&g_bridge.mutex);
-    dispatch_closed = g_bridge.video == video && !home_call_active_locked(&g_bridge);
+    owned = g_bridge.video == video;
+    ring_dispatch_closed = (
+        owned
+        && !home_call_active_locked(&g_bridge)
+        && !g_bridge.ring_call_stop
+        && (g_bridge.ring_call_active || g_bridge.ring_media_active)
+    );
+    dispatch_closed = owned && doorbell_media_session_active_locked(&g_bridge);
     pthread_mutex_unlock(&g_bridge.mutex);
 
     if (stop_ring_call_if_active(true, true)) {
         c300x_video_bridge_media_stopped(g_bridge.video);
-        if (dispatch_closed) {
+        if (
+            ring_dispatch_closed
+            && c300x_video_consume_media_closed_event(video)
+        ) {
             c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);
         }
         return;
     }
     stop_media_session(true);
     c300x_video_bridge_media_stopped(g_bridge.video);
-    if (dispatch_closed) {
+    if (dispatch_closed && c300x_video_consume_media_closed_event(video)) {
         c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);
     }
+}
+
+bool c300x_media_session_stop_in_progress(const struct c300x_video *video) {
+    bool stopping;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    stopping = g_bridge.video == video && g_bridge.stop_in_progress;
+    pthread_mutex_unlock(&g_bridge.mutex);
+    return stopping;
 }
 
 bool c300x_media_session_keepalive(struct c300x_video *video, bool audio) {

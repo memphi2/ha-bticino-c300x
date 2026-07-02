@@ -43,7 +43,6 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
-          "doorstation_audio_gain_db": "Live-Tuerstations-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
@@ -90,7 +89,6 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
-          "doorstation_audio_gain_db": "Live-Tuerstations-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
@@ -162,7 +160,6 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
-          "doorstation_audio_gain_db": "Live-Tuerstations-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",

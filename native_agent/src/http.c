@@ -6,6 +6,7 @@
 #include "http_util.h"
 #include "device_routing.h"
 #include "memo_store.h"
+#include "media_bridge.h"
 #include "mdns.h"
 #include "mqtt_bridge.h"
 #include "recent_events.h"
@@ -3588,7 +3589,13 @@ static void handle_ui_media_closed(
 )
 {
     if (runtime != NULL) {
-        dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
+        if (
+            runtime->video != NULL
+            && !c300x_media_session_stop_in_progress(runtime->video)
+            && c300x_video_consume_media_closed_event(runtime->video)
+        ) {
+            dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0);
+        }
         ui_event_notify(runtime, "media.closed");
     }
     send_json(client_fd, 200, "OK", "{\"ok\":true,\"event\":\"media.closed\"}\n");
@@ -6271,6 +6278,14 @@ static void handle_udp_event(
                 doorbell_media_closed_is_answer_transition(runtime)
                 || doorbell_media_closed_is_ondemand_start_transition(runtime, msg)
             )
+        ) {
+            return;
+        }
+        if (
+            strcmp(type, "doorbell.media.closed") == 0
+            && runtime != NULL
+            && runtime->video != NULL
+            && !c300x_video_consume_media_closed_event(runtime->video)
         ) {
             return;
         }

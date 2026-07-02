@@ -143,7 +143,6 @@ Completed media modules:
 
 - `camera_media/sdp.py`
 - `camera_media/talkback.py`
-- `camera_media/rtsp_reader.py`
 - `camera_media/rtsp_policy.py`
 - `camera_media/webrtc_session.py`
 - `camera_media/state_machine.py`

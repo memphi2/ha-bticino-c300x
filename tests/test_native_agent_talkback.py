@@ -108,6 +108,7 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert "if (!video->call_active && !ring_call_active)" in event_body
     assert "set_external_media_active_locked" not in pressed_block
     assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in view_block
+    assert "video->media_closed_event_armed = 1;" in view_block
     assert 'set_external_media_active_locked(video, "external_media", ttl_seconds)' in event_body
     assert 'clear_external_media_active_locked(video)' in event_body
     assert "c300x_video_note_event(runtime->video, event_type, ttl_seconds)" in http
@@ -123,6 +124,8 @@ def test_native_agent_blocks_ha_video_when_external_media_is_active() -> None:
     assert 'http_status = strcmp(error, "external_session_active") == 0 ? 409 : 503' in http
     assert 'strcmp(request->path, "/ui/media-closed") == 0' in http
     assert 'dispatch_event(config, runtime, "doorbell.media.closed", "{}", 0)' in http
+    assert "c300x_media_session_stop_in_progress(runtime->video)" in http
+    assert "c300x_video_consume_media_closed_event(runtime->video)" in http
     assert 'ui_event_notify(runtime, "media.closed")' in http
 
 
@@ -155,6 +158,10 @@ def test_native_agent_ignores_transient_on_demand_media_closed_during_start() ->
         http.index("static int doorbell_media_closed_is_ondemand_start_transition") :
         http.index("static void handle_udp_event")
     ]
+    udp_event_body = http[
+        http.index("static void handle_udp_event") :
+        http.index("static int join_udp_event_multicast_group")
+    ]
 
     assert "#define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500" in video
     assert "long long media_closed_grace_until_ms;" in video
@@ -165,8 +172,12 @@ def test_native_agent_ignores_transient_on_demand_media_closed_during_start() ->
     assert "video->media_closed_grace_until_ms =" in media_starting_body
     assert "clear_external_media_active_locked(video);" in media_starting_body
     assert "video->media_starting = 0;" in media_started_body
+    assert "video->media_closed_event_armed = 1;" in media_started_body
     assert "video->media_closed_grace_until_ms =" in media_started_body
     assert "video->media_closed_grace_until_ms = 0;" in media_stopped_body
+    assert "int c300x_video_consume_media_closed_event" in header
+    assert "int c300x_video_consume_media_closed_event" in video
+    assert "video->media_closed_event_armed = 0;" in video
     assert "video->clients > 0" in ignore_body
     assert "video->call_active || video->media_starting" in ignore_body
     assert "now < video->media_closed_grace_until_ms" in ignore_body
@@ -176,6 +187,7 @@ def test_native_agent_ignores_transient_on_demand_media_closed_during_start() ->
         "c300x_video_ignore_transient_media_closed(runtime->video)"
         in transient_filter_body
     )
+    assert "!c300x_video_consume_media_closed_event(runtime->video)" in udp_event_body
 
 
 def test_native_agent_reports_media_ownership_and_external_block_state() -> None:

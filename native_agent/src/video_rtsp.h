@@ -100,6 +100,7 @@ void c300x_video_bridge_media_stopped(struct c300x_video *video);
 void c300x_video_bridge_rtp_packet(struct c300x_video *video);
 void c300x_video_bridge_set_error(struct c300x_video *video, const char *message);
 void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds);
+int c300x_video_consume_media_closed_event(struct c300x_video *video);
 int c300x_video_ignore_transient_media_closed(struct c300x_video *video);
 
 #endif

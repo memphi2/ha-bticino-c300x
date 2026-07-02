@@ -43,7 +43,6 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",
@@ -90,7 +89,6 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",
@@ -162,7 +160,6 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Live doorstation audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",

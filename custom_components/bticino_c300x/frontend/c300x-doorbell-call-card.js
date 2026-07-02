@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=a4624a28a4b63b94";
+} from "./c300x-translations.js?v=cfac0797bc32fff8";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=a4624a28a4b63b94";
+} from "./c300x-entity-resolver.js?v=cfac0797bc32fff8";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=a4624a28a4b63b94";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=a4624a28a4b63b94";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=a4624a28a4b63b94";
+} from "./c300x-state-model.js?v=cfac0797bc32fff8";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=cfac0797bc32fff8";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=cfac0797bc32fff8";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -108,6 +108,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._previewStarting = false;
     this._ringPreviewStarted = false;
     this._answeringDoorbell = false;
+    this._hangupInProgress = false;
     this._ringPreviewActive = false;
     this._doorbellAnswered = false;
     this._activeHomeCallSession = false;
@@ -728,6 +729,10 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _hangup() {
+    if (this._hangupInProgress) {
+      return;
+    }
+    this._hangupInProgress = true;
     this._startingCall = false;
     let ok = true;
     try {
@@ -741,11 +746,16 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
+      this._hangupInProgress = false;
       this._closePeer(ok);
     }
   }
 
   async _hangupDoorstation() {
+    if (this._hangupInProgress) {
+      return;
+    }
+    this._hangupInProgress = true;
     this._startingCall = false;
     let ok = true;
     if (this._hasDoorbellRingCallSession()) {
@@ -763,6 +773,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
+      this._hangupInProgress = false;
       this._closePeer(ok);
     }
   }
@@ -1055,6 +1066,10 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _hangupHomeCall() {
+    if (this._hangupInProgress) {
+      return;
+    }
+    this._hangupInProgress = true;
     this._startingCall = false;
     let ok = true;
     try {
@@ -1064,6 +1079,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
+      this._hangupInProgress = false;
       this._closePeer(ok);
     }
   }

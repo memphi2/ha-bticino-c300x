@@ -2,17 +2,33 @@
 
 ## v1.6.0 - Unreleased
 
+This release moves browser media to Home Assistant's WebRTC provider/go2rtc
+path and removes the integration-local `aiortc` WebRTC runtime.
+
 ### Changed
 
-- Moves browser WebRTC handling to Home Assistant's WebRTC provider path, so
-  video no longer depends on the optional `aiortc` Python runtime inside the
-  integration.
+- Moves browser WebRTC handling for on-demand video, Ring Call and Home Call to
+  Home Assistant's WebRTC provider/go2rtc path.
+- Removes the integration-local `aiortc` media runtime so Home Assistant package
+  resolution no longer has to satisfy an exact `aiortc` pin for video startup.
+- Uses the same audio+video RTSP source for normal on-demand camera entity
+  streams and the bundled card. Unanswered Ring Call previews stay video-only so
+  multiple browser previews can keep sharing the ring media source.
 
 ### Added
 
 - Adds native-agent RTSP backchannel support for browser microphone audio,
   forwarding go2rtc talkback audio into the existing local Speex/SRTP device
   media path.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant to `1.6.0`; the
+  go2rtc talkback path needs the matching native-agent RTSP backchannel support.
+- Browser microphone/talkback still requires a secure frontend context such as
+  HTTPS or Home Assistant Cloud. Receive-only viewing continues without
+  microphone access.
 
 ## v1.5.4 - 2026-06-27
 

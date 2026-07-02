@@ -61,6 +61,7 @@ if "homeassistant.components.camera" not in sys.modules:
     }
     camera.WebRTCSendMessage = object
     config_entries.ConfigEntry = ConfigEntry
+    core.CALLBACK_TYPE = object
     const.ATTR_ENTITY_ID = "entity_id"
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
@@ -990,16 +991,6 @@ def test_doorbell_camera_refresh_video_status_or_none_suppresses_errors() -> Non
     status = asyncio.run(camera._async_refresh_video_status_or_none())
 
     assert status is None
-
-
-def test_doorbell_camera_audio_gain_is_clamped_and_uses_default_on_invalid() -> None:
-    low_entry = _FakeEntry(data={"doorstation_audio_gain_db": -99})
-    high_entry = _FakeEntry(data={"doorstation_audio_gain_db": 99})
-    invalid_entry = _FakeEntry(data={"doorstation_audio_gain_db": "bad"})
-
-    assert C300XDoorbellCamera(low_entry)._doorstation_audio_gain_db() == -12.0  # type: ignore[arg-type]
-    assert C300XDoorbellCamera(high_entry)._doorstation_audio_gain_db() == 12.0  # type: ignore[arg-type]
-    assert C300XDoorbellCamera(invalid_entry)._doorstation_audio_gain_db() == 9.5  # type: ignore[arg-type]
 
 
 def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(

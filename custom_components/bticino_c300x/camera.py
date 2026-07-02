@@ -62,10 +62,8 @@ from .camera_media.state_machine import (
 )
 from .const import (
     CONF_AGENT_HOST,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
     EVENT_AGENT_EVENT_RECEIVED,
@@ -904,21 +902,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Return the agent host in a form accepted in RTSP URLs."""
 
         return _agent_host_for_url(self._agent_host())
-
-    def _doorstation_audio_gain_db(self) -> float:
-        """Return the configured live doorstation audio gain in dB."""
-
-        try:
-            gain = float(
-                entry_config_value(
-                    self._entry,
-                    CONF_DOORSTATION_AUDIO_GAIN_DB,
-                    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-                )
-            )
-        except (TypeError, ValueError):
-            return DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-        return min(12.0, max(-12.0, gain))
 
     def _build_stream_url(self, *, audio: bool = False) -> str:
         if audio:

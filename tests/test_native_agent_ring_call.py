@@ -529,6 +529,15 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         media_bridge.index("void c300x_media_session_stop") :
         media_bridge.index("bool c300x_media_session_keepalive")
     ]
+    session_start_start = media_bridge.index(
+        "static bool start_media_session(media_bridge_t *bridge) {"
+    )
+    session_start_body = media_bridge[
+        session_start_start : media_bridge.index(
+            "static void stop_media_session",
+            session_start_start,
+        )
+    ]
     bridge_stop_body = media_bridge[media_bridge.index("void c300x_media_bridge_stop") :]
 
     create_body = video[
@@ -557,14 +566,21 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "c300x_media_session_stop(video);" in stop_body
     assert "c300x_media_bridge_stop(video);" not in stop_body
     assert "video->running = 0;" not in stop_body
+    assert session_start_body.index("if (bridge->stop_in_progress)") < (
+        session_start_body.index("if (bridge->media_active || bridge->media_starting)")
+    )
     assert "stop_ring_call_if_active(true, true)" in session_stop_body
-    assert "dispatch_closed = g_bridge.video == video && !home_call_active_locked(&g_bridge);" in session_stop_body
+    assert "ring_dispatch_closed =" in session_stop_body
+    assert "dispatch_closed = owned && doorbell_media_session_active_locked(&g_bridge);" in session_stop_body
     assert session_stop_body.index("stop_ring_call_if_active") < session_stop_body.index(
         "stop_media_session(true)"
     )
+    assert "c300x_video_consume_media_closed_event(video)" in session_stop_body
     assert session_stop_body.count(
         'c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);'
     ) == 2
+    assert "active = (g_bridge.ring_call_active || g_bridge.ring_media_active) && !g_bridge.ring_call_stop;" in media_bridge
+    assert "bool c300x_media_session_stop_in_progress" in media_bridge
     assert "ring_sleep_seconds(bridge, RING_RETRY_SECONDS)" in media_bridge
     assert "pthread_join(ring_thread, NULL)" in media_bridge
     assert (

@@ -20,12 +20,10 @@ from .const import (
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-    CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_STAIR_LIGHT_N,
@@ -54,7 +52,6 @@ def setup_features_schema(
     default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
-    default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
@@ -68,7 +65,6 @@ def setup_features_schema(
         default_device_activation_stair_light_p=default_device_activation_stair_light_p,
         default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
     )
 
@@ -108,7 +104,6 @@ def reconfigure_features_schema(
     default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
-    default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
@@ -122,7 +117,6 @@ def reconfigure_features_schema(
         default_device_activation_stair_light_p=default_device_activation_stair_light_p,
         default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
     )
 
@@ -172,7 +166,6 @@ def _media_feature_schema(
     default_device_activation_stair_light_p: str,
     default_device_activation_stair_light_n: str,
     default_create_homeassistant_user: bool,
-    default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
 ) -> vol.Schema:
     default_p = normalize_stair_light_part(
@@ -193,12 +186,6 @@ def _media_feature_schema(
                 default=default_create_homeassistant_user,
             )
         ] = bool
-        fields[
-            vol.Optional(
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                default=default_doorstation_audio_gain_db,
-            )
-        ] = audio_gain_db_selector()
         fields[
             vol.Optional(
                 CONF_RING_CAPTURE_AUDIO_GAIN_DB,

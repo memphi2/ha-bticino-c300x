@@ -43,7 +43,6 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
@@ -90,7 +89,6 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
@@ -162,7 +160,6 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
-          "doorstation_audio_gain_db": "Gain audio live du portier (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",

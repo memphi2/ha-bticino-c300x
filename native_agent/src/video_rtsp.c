@@ -38,6 +38,7 @@ struct c300x_video {
     int call_active;
     int clients;
     int media_starting;
+    int media_closed_event_armed;
     long long media_closed_grace_until_ms;
     int stream_audio;
     int external_event_active;
@@ -573,6 +574,7 @@ void c300x_video_bridge_media_started(struct c300x_video *video, int include_aud
     }
     video->call_active = 1;
     video->media_starting = 0;
+    video->media_closed_event_armed = 1;
     video->media_closed_grace_until_ms =
         monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
     video->stream_audio = include_audio != 0;
@@ -591,6 +593,7 @@ void c300x_video_bridge_ring_media_started(struct c300x_video *video, int includ
     pthread_mutex_lock(&video->mutex);
     video->call_active = 1;
     video->media_starting = 0;
+    video->media_closed_event_armed = 1;
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     video->last_block_reason[0] = '\0';
@@ -653,14 +656,38 @@ void c300x_video_note_event(struct c300x_video *video, const char *event_type, i
     } else if (strcmp(event_type, "doorbell.view_requested") == 0) {
         if (!video->call_active && !ring_call_active) {
             set_external_media_active_locked(video, "external_media", ttl_seconds);
+            video->media_closed_event_armed = 1;
         }
     } else if (
         strcmp(event_type, "doorbell.media.closed") == 0
         || strcmp(event_type, "media.closed") == 0
     ) {
+        video->media_closed_event_armed = 0;
         clear_external_media_active_locked(video);
     }
     pthread_mutex_unlock(&video->mutex);
+}
+
+int c300x_video_consume_media_closed_event(struct c300x_video *video)
+{
+    int armed;
+
+    if (video == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&video->mutex);
+    armed = (
+        video->media_closed_event_armed
+        || video->call_active
+        || video->media_starting
+        || external_media_active_locked(video)
+    );
+    if (armed) {
+        video->media_closed_event_armed = 0;
+        clear_external_media_active_locked(video);
+    }
+    pthread_mutex_unlock(&video->mutex);
+    return armed;
 }
 
 int c300x_video_ignore_transient_media_closed(struct c300x_video *video)

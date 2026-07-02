@@ -53,3 +53,14 @@ def test_manifest_loads_required_webhook_dependency() -> None:
 
     assert "webhook" in manifest["dependencies"]
     assert "webhook" not in manifest.get("after_dependencies", [])
+
+
+def test_manifest_loads_required_go2rtc_dependency() -> None:
+    manifest = json.loads(
+        (ROOT / "custom_components/bticino_c300x/manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert "go2rtc" in manifest["dependencies"]
+    assert "go2rtc" not in manifest.get("after_dependencies", [])

@@ -482,6 +482,95 @@ def test_doorbell_camera_webrtc_offer_reports_missing_provider(
     ]
 
 
+def test_doorbell_camera_provider_offer_error_closes_local_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offer_sources.append(await camera.stream_source())
+            self.offers.append((session_id, offer_sdp))
+            send_message(camera_module.WebRTCError("go2rtc_offer_failed", "boom"))
+
+    api = _FakeApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _ErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+
+    asyncio.run(
+        camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-error",
+            sent_messages.append,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert camera._presession_webrtc_candidates == {}
+    assert provider.closed == ["session-error"]
+    assert api.stop_calls == 1
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "go2rtc_offer_failed"
+    ]
+
+
+def test_doorbell_camera_home_call_provider_offer_error_stops_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offer_sources.append(await camera.stream_source())
+            self.offers.append((session_id, offer_sdp))
+            send_message(camera_module.WebRTCError("go2rtc_offer_failed", "boom"))
+
+    api = _FakeApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _ErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+
+    asyncio.run(
+        camera.async_handle_home_call_webrtc_offer(
+            "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n",
+            "session-home-error",
+            sent_messages.append,
+            duration_seconds=30,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert provider.closed == ["session-home-error"]
+    assert api.home_call_start_calls == [30]
+    assert api.home_call_stop_calls == 1
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "go2rtc_offer_failed"
+    ]
+
+
 def test_doorbell_camera_buffers_provider_ice_candidate_before_offer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

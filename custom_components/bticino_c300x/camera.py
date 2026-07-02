@@ -153,6 +153,18 @@ def _capability_supported_if_known(entry: ConfigEntry, capability: str) -> bool:
     return supports_capability(entry, capability)
 
 
+def _webrtc_message_is_error(message: Any) -> bool:
+    if isinstance(message, Mapping):
+        return message.get("type") == "error"
+    as_dict = getattr(message, "as_dict", None)
+    if callable(as_dict):
+        with suppress(Exception):
+            data = as_dict()
+            if isinstance(data, Mapping):
+                return data.get("type") == "error"
+    return isinstance(WebRTCError, type) and isinstance(message, WebRTCError)
+
+
 async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Camera) -> Any:
     """Return HA's active WebRTC provider without importing it in test stubs."""
 
@@ -518,14 +530,28 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session.ring_preview,
                 getattr(provider, "domain", type(provider).__name__),
             )
+            provider_offer_failed = False
+
+            def _send_provider_message(message: Any) -> None:
+                nonlocal provider_offer_failed
+                if _webrtc_message_is_error(message):
+                    provider_offer_failed = True
+                send_message(message)
+
             await provider.async_handle_async_webrtc_offer(
                 self,
                 offer_sdp,
                 session_id,
-                send_message,
+                _send_provider_message,
             )
             current_session = self._provider_webrtc_sessions.get(session_id)
             if current_session is session:
+                if provider_offer_failed:
+                    await self._async_close_webrtc_session(
+                        session_id,
+                        notify_client=False,
+                    )
+                    return
                 session.ready = True
                 await self._async_flush_provider_webrtc_candidates(session_id)
         finally:

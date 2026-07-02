@@ -171,6 +171,10 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     start_body = media_bridge[
         start_pos : media_bridge.index("static void stop_media_session", start_pos)
     ]
+    stop_body = media_bridge[
+        media_bridge.index("static void stop_media_session(bool close_client)") :
+        media_bridge.index("void c300x_media_session_stop")
+    ]
     rtsp_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
         media_bridge.index("static int create_rtsp_listener")
@@ -197,6 +201,10 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert "start_bt_av_media(bridge)" in media_bridge
+    assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
+    assert stop_body.index("send_sip_bye(") < stop_body.index(
+        "send_bt_av_media_stop();"
+    )
     assert "request_ring_answer_if_active" not in start_body
     assert "sdp_audio_video" in rtsp_body
     assert "sdp_ring_audio_video" in rtsp_body

@@ -5254,6 +5254,14 @@ static void stop_media_session(bool close_client) {
     }
     pthread_mutex_unlock(&g_bridge.mutex);
 
+    if (sip_fd >= 0) {
+        send_sip_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
+        shutdown(sip_fd, SHUT_RDWR);
+    }
+    if (sip_monitor_started && !pthread_equal(sip_thread, pthread_self())) {
+        pthread_join(sip_thread, NULL);
+    }
+
     if (relay_started) {
         pthread_join(g_bridge.relay_thread, NULL);
     }
@@ -5264,20 +5272,11 @@ static void stop_media_session(bool close_client) {
         pthread_join(ondemand_media_thread_id, NULL);
     }
 
-    if (send_media_stop) {
-        send_bt_av_media_stop();
-    }
-    if (sip_fd >= 0) {
-        send_sip_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
-    }
-    if (sip_fd >= 0) {
-        shutdown(sip_fd, SHUT_RDWR);
-    }
-    if (sip_monitor_started && !pthread_equal(sip_thread, pthread_self())) {
-        pthread_join(sip_thread, NULL);
-    }
     if (sip_fd >= 0) {
         close(sip_fd);
+    }
+    if (send_media_stop) {
+        send_bt_av_media_stop();
     }
 
     pthread_mutex_lock(&g_bridge.mutex);

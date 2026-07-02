@@ -237,6 +237,28 @@ def test_wait_for_rtsp_ready_retries_and_resets_cooldown(
     assert owner._rtsp_cooldown_scope is None
 
 
+def test_wait_for_rtsp_ready_waits_for_native_stop_to_finish(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(rtsp_orchestrator.asyncio, "sleep", no_sleep)
+    owner = _FakeOwner(
+        status_queue=[
+            {"media_owner": "agent", "bridge": {"stop_in_progress": True}},
+            {"media_owner": "idle", "bridge": {"stop_in_progress": False}},
+        ],
+    )
+    orchestrator = _orchestrator(owner)
+    ready_urls: list[str] = []
+    orchestrator.async_probe_rtsp = _record_probe(ready_urls)  # type: ignore[method-assign]
+
+    asyncio.run(orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell"))
+
+    assert ready_urls == ["rtsp://agent.local/doorbell"]
+
+
 def test_wait_for_rtsp_ready_records_failure_without_retry_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

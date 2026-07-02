@@ -335,15 +335,19 @@ class CameraRtspOrchestrator:
             deadline = loop.time() + self._settings.rtsp_ready_timeout_seconds
             last_error: Exception | None = None
             while True:
-                try:
-                    await self.async_probe_rtsp(stream_url)
-                except Exception as err:  # noqa: BLE001 - probe errors become HA errors
-                    last_error = err
+                block_reason = await self._async_rtsp_start_block_reason()
+                if block_reason is not None:
+                    last_error = HomeAssistantError(f"native bridge {block_reason}")
                 else:
-                    self._owner._last_rtsp_error = None
-                    self._owner._rtsp_unavailable_until = 0.0
-                    self._owner._rtsp_cooldown_scope = None
-                    return
+                    try:
+                        await self.async_probe_rtsp(stream_url)
+                    except Exception as err:  # noqa: BLE001 - probe errors become HA errors
+                        last_error = err
+                    else:
+                        self._owner._last_rtsp_error = None
+                        self._owner._rtsp_unavailable_until = 0.0
+                        self._owner._rtsp_cooldown_scope = None
+                        return
 
                 if loop.time() >= deadline:
                     self._owner._last_rtsp_error = (
@@ -355,6 +359,20 @@ class CameraRtspOrchestrator:
                         f"C300X RTSP bridge did not become ready: {last_error}"
                     ) from last_error
                 await asyncio.sleep(self._settings.rtsp_ready_interval_seconds)
+
+    async def _async_rtsp_start_block_reason(self) -> str | None:
+        """Return the native bridge state that would make RTSP PLAY fail."""
+
+        status = await self._owner._async_refresh_video_status_or_none()
+        if status is None:
+            return None
+        bridge_data = status.get("bridge")
+        bridge = bridge_data if isinstance(bridge_data, Mapping) else {}
+        if bool(bridge.get("stop_in_progress")) or bool(
+            status.get("video_bridge_stop_in_progress")
+        ):
+            return "stop_in_progress"
+        return None
 
     def raise_if_rtsp_cooling_down(self, *, cooldown_scope: str = "doorbell") -> None:
         """Clear stale RTSP readiness cooldown markers before a new attempt."""

@@ -1,5 +1,7 @@
 # Changelog
 
+## v1.6.1 - Unreleased
+
 ## v1.6.0 - 2026-07-03
 
 This release moves browser media to Home Assistant's WebRTC provider/go2rtc

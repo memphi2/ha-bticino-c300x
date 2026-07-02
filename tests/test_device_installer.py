@@ -1247,14 +1247,34 @@ def test_installer_rejects_unvalidated_paramiko_versions() -> None:
         raise AssertionError("Expected installer_dependency_missing")
 
 
-def test_manifest_pins_paramiko_with_legacy_ssh_rsa_support() -> None:
+def test_manifest_does_not_require_optional_paramiko() -> None:
     manifest = json.loads(
         (ROOT / "custom_components" / "bticino_c300x" / "manifest.json").read_text(
             encoding="utf-8"
         )
     )
 
-    assert "paramiko==3.5.1" in manifest["requirements"]
+    assert not any(
+        requirement.startswith("paramiko") for requirement in manifest["requirements"]
+    )
+
+
+def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:
+    requirements_dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+
+    assert "paramiko==3.5.1" in requirements_dev.splitlines()
+
+
+def test_manifest_does_not_require_aiortc() -> None:
+    manifest = json.loads(
+        (ROOT / "custom_components" / "bticino_c300x" / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert not any(
+        requirement.startswith("aiortc") for requirement in manifest["requirements"]
+    )
 
 
 def test_bootstrap_firewall_logic_lives_in_project_script() -> None:

@@ -36,3 +36,6 @@ updates:
       - dependency-name: "paramiko"
         versions:
           - ">=4"
+      - dependency-name: "PyTurboJPEG"
+        versions:
+          - ">=2.4"

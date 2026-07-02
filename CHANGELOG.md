@@ -16,6 +16,9 @@
 - Reloads the C300X device GUI after a native-agent runtime update when the
   device UI is active, so the running display reconnects cleanly after the
   agent restart.
+- Keeps Home Assistant integration setup from failing when optional WebRTC or
+  SSH installer dependencies cannot be resolved by the current Home Assistant
+  runtime.
 
 ### Upgrade Notes
 

@@ -406,7 +406,7 @@ def check_release_metadata() -> list[str]:
 
 
 def check_installer_dependency_pins() -> list[str]:
-    """Keep the C300X first-install SSH path on its validated Paramiko pin."""
+    """Keep optional installer SSH support pinned without blocking HA setup."""
 
     failures: list[str] = []
     required_pin = f"paramiko=={REQUIRED_PARAMIKO_VERSION}"
@@ -415,9 +415,13 @@ def check_installer_dependency_pins() -> list[str]:
             encoding="utf-8"
         )
     )
-    if required_pin not in manifest.get("requirements", []):
+    if any(str(requirement).startswith("paramiko") for requirement in manifest.get("requirements", [])):
         failures.append(
-            f"manifest.json must pin {required_pin} for legacy C300X SSH install"
+            "manifest.json must not require Paramiko; SSH install loads it lazily"
+        )
+    if any(str(requirement).startswith("aiortc") for requirement in manifest.get("requirements", [])):
+        failures.append(
+            "manifest.json must not require aiortc; HA 2026.7 stream uses av 17"
         )
 
     requirements_dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
@@ -435,6 +439,11 @@ def check_installer_dependency_pins() -> list[str]:
     dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
+    if (
+        'dependency-name: "PyTurboJPEG"' not in dependabot
+        or '">=2.4"' not in dependabot
+    ):
+        failures.append("Dependabot must ignore PyTurboJPEG >=2.4 for dev env stability")
     return failures
 
 

@@ -237,7 +237,7 @@ def test_wait_for_rtsp_ready_retries_and_resets_cooldown(
     assert owner._rtsp_cooldown_scope is None
 
 
-def test_wait_for_rtsp_ready_sets_failure_cooldown(
+def test_wait_for_rtsp_ready_records_failure_without_retry_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def no_sleep(_delay: float) -> None:
@@ -256,21 +256,26 @@ def test_wait_for_rtsp_ready_sets_failure_cooldown(
         asyncio.run(orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell"))
 
     assert owner._last_rtsp_error == "RuntimeError"
-    assert owner._rtsp_unavailable_until > 0.0
-    assert owner._rtsp_cooldown_scope == "doorbell"
+    assert owner._rtsp_unavailable_until == 0.0
+    assert owner._rtsp_cooldown_scope is None
 
 
-def test_rtsp_cooldown_blocks_ready_wait() -> None:
+def test_rtsp_cooldown_marker_is_cleared_before_ready_wait() -> None:
     owner = _FakeOwner()
     orchestrator = _orchestrator(owner)
+    ready_urls: list[str] = []
+    orchestrator.async_probe_rtsp = _record_probe(ready_urls)  # type: ignore[method-assign]
 
     async def _run() -> None:
         owner._last_rtsp_error = "RuntimeError"
         owner._rtsp_unavailable_until = asyncio.get_running_loop().time() + 10.0
-        with pytest.raises(HomeAssistantError, match="cooling down"):
-            await orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell")
+        await orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell")
 
     asyncio.run(_run())
+
+    assert ready_urls == ["rtsp://agent.local/doorbell"]
+    assert owner._rtsp_unavailable_until == 0.0
+    assert owner._rtsp_cooldown_scope is None
 
 
 def test_home_call_rtsp_cooldown_does_not_block_doorbell_wait() -> None:

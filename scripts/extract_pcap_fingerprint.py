@@ -111,6 +111,7 @@ def _extract_media_sections(text: str) -> list[dict[str, Any]]:
         sections.append(
             {
                 "kind": match.group(1),
+                "role": _media_role(text, match.start()),
                 "payloads": match.group(2).split(),
                 "codecs": codecs,
                 "crypto_suites": crypto_suites,
@@ -119,18 +120,54 @@ def _extract_media_sections(text: str) -> list[dict[str, Any]]:
     return sections
 
 
+def _media_role(text: str, position: int) -> str | None:
+    role: str | None = None
+    role_start = -1
+    for match in SIP_REQUEST_RE.finditer(text, 0, position):
+        if match.start() > role_start:
+            role_start = match.start()
+            role = "offer" if match.group(1) == "INVITE" else None
+    for match in SIP_STATUS_RE.finditer(text, 0, position):
+        if match.start() > role_start:
+            role_start = match.start()
+            role = "answer" if match.group(1) == "200" else None
+    return role
+
+
 def _offer_answer_from_media(
     medias: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     offer: dict[str, Any] = {}
     answer: dict[str, Any] = {}
+    if any(media.get("role") is not None for media in medias):
+        for media in medias:
+            role = media.get("role")
+            kind = str(media["kind"])
+            if role == "offer" and kind not in offer:
+                offer[kind] = {
+                    key: value
+                    for key, value in media.items()
+                    if key not in {"kind", "role"}
+                }
+            elif role == "answer" and kind not in answer:
+                answer[kind] = {
+                    key: value
+                    for key, value in media.items()
+                    if key not in {"kind", "role"}
+                }
+        return offer, answer
+
     seen: dict[str, int] = {"audio": 0, "video": 0}
     for media in medias:
         kind = str(media["kind"])
         target = offer if seen[kind] == 0 else answer if seen[kind] == 1 else None
         seen[kind] += 1
         if target is not None:
-            target[kind] = {key: value for key, value in media.items() if key != "kind"}
+            target[kind] = {
+                key: value
+                for key, value in media.items()
+                if key not in {"kind", "role"}
+            }
     return offer, answer
 
 

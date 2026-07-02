@@ -51,7 +51,10 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "#define RING_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
     assert "#define RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS 300000" in media_bridge
     assert "#define RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS 30000" in media_bridge
-    assert "#define RTSP_AUDIO_PAYLOAD_TYPE 110" in media_bridge
+    assert "#define RTSP_AUDIO_PAYLOAD_TYPE 0" in media_bridge
+    assert '#define C300X_RTSP_AUDIO_CODEC "PCMU/8000"' in (
+        ROOT / "native_agent" / "src" / "video_rtsp.h"
+    ).read_text(encoding="utf-8")
     assert "bridge->ring_call_active" in ring_preview_share_body
     assert "bridge->ring_media_active" in ring_preview_share_body
     assert "!bridge->ring_audio_active" in ring_preview_share_body
@@ -113,11 +116,15 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
     assert "media_srtp_init_inbound(&srtp" in ring_invite_body
     assert "srtp_unprotect" in media_bridge
-    assert "forward_rtsp_packet(bridge, packet, packet_len, audio)" in media_bridge
-    assert (
-        "packet[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);"
-        in media_bridge
-    )
+    assert "forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len)" in media_bridge
+    assert "speex_decode_audio_frame(" in media_bridge
+    assert "encode_pcmu_sample(samples[index])" in media_bridge
+    assert "payload_type == RING_AUDIO_PAYLOAD_TYPE" in media_bridge
+    assert "payload_type == MEDIA_AUDIO_PAYLOAD_TYPE" in media_bridge
+    assert "payload_type == C300X_TALKBACK_RTP_PAYLOAD_TYPE" not in media_bridge[
+        media_bridge.index("static bool rtsp_audio_payload_is_speex_8khz") :
+        media_bridge.index("static bool forward_rtsp_audio_pcmu_packet")
+    ]
     assert "if (answer_requested && !answered)" in ring_media_loop_body
     assert "shutdown_ring_preview_clients_locked(bridge);" not in ring_media_loop_body
     assert 'send_ring_response(bridge, sip_fd, invite, 200, "Ok"' in ring_media_loop_body
@@ -194,8 +201,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "sdp_audio_video" in rtsp_body
     assert "sdp_ring_audio_video" in rtsp_body
     assert "sdp_home_call_audio" in rtsp_body
-    assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_body
-    assert '"a=fmtp:110 vbr=on\\r\\n"' in rtsp_body
+    assert '"m=audio 0 RTP/AVP 0\\r\\n"' in rtsp_body
+    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_body
     assert '"m=audio 0 RTP/AVP 8 0\\r\\n"' in rtsp_body
     assert '"a=rtpmap:8 PCMA/8000\\r\\n"' in rtsp_body
     assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_body
@@ -340,7 +347,8 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert '"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"' in home_call_body
     assert '"m=video' not in home_call_body
     assert '"s=BTicino Home Call\\r\\n"' in rtsp_home_call_sdp
-    assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_home_call_sdp
+    assert '"m=audio 0 RTP/AVP 0\\r\\n"' in rtsp_home_call_sdp
+    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_home_call_sdp
     assert '"m=audio 0 RTP/AVP 8 0\\r\\n"' in rtsp_home_call_sdp
     assert '"a=control:streamid=2\\r\\n"' in rtsp_home_call_sdp
     assert '"a=sendonly\\r\\n"' in rtsp_home_call_sdp
@@ -358,11 +366,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
     assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
-    assert "forward_rtsp_packet(bridge, packet, packet_len, true)" in drain_home_call_body
-    assert (
-        "packet[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);"
-        in drain_home_call_body
-    )
+    assert "forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len)" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
     assert "bridge->home_call_last_talkback_ms = monotonic_ms();" in home_call_talkback_body
@@ -385,7 +389,8 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
 
     assert "#define RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE 8" in media_bridge
     assert "#define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0" in media_bridge
-    assert "#define RTSP_BACKCHANNEL_FRAME_SAMPLES 160" in media_bridge
+    assert "#define RTSP_AUDIO_FRAME_SAMPLES 160" in media_bridge
+    assert "#define RTSP_BACKCHANNEL_FRAME_SAMPLES RTSP_AUDIO_FRAME_SAMPLES" in media_bridge
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
     assert "decode_pcma_sample(sample)" in pcm_body

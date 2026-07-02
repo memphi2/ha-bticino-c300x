@@ -361,10 +361,16 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
         media_bridge.index("static void *ondemand_media_thread") :
         media_bridge.index("static bool send_sip_setup")
     ]
+    send_sip_setup_body = media_bridge[
+        media_bridge.index("static bool send_sip_setup") :
+        media_bridge.index("static bool send_bt_av_media_command")
+    ]
 
     assert 'dlopen("libsrtp.so.1", RTLD_NOW | RTLD_LOCAL)' in media_bridge
     assert 'srtp_load_symbol(handle, "srtp_protect"' in media_bridge
     assert '"srtp_protect_rtcp"' in media_bridge
+    assert '"srtp_unprotect"' in media_bridge
+    assert '"srtp_unprotect_rtcp"' in media_bridge
     assert '"crypto_policy_set_rtp_default"' in media_bridge
     assert '"crypto_policy_set_rtcp_default"' in media_bridge
     assert "crypto_policy_set_aes_cm_128_hmac_sha1_80" not in media_bridge
@@ -372,12 +378,20 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "MEDIA_AUDIO_PACKET_MS 20" in media_bridge
     assert "MEDIA_AUDIO_PAYLOAD_TYPE 98" in media_bridge
     assert "#define MEDIA_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
+    assert 'parse_sdp_sdes_key(response, "\\r\\nm=audio ", answer_audio_key_raw' in send_sip_setup_body
+    assert 'parse_sdp_sdes_key(response, "\\r\\nm=video ", answer_video_key_raw' in send_sip_setup_body
+    assert "bridge->ondemand_audio_srtp_in_key" in send_sip_setup_body
+    assert "bridge->ondemand_video_srtp_in_key" in send_sip_setup_body
+    assert "media_srtp_init_inbound(&srtp, audio_in_key, video_in_key)" in ondemand_media_body
     assert "bridge->ondemand_srtp_state = &srtp;" in ondemand_media_body
     assert 'c300x_video_bridge_set_error(bridge->video, "ondemand_media_no_fds")' in ondemand_media_body
     assert ondemand_media_body.index("if (max_fd < 0)") < ondemand_media_body.index(
         "select(max_fd + 1"
     )
     assert "send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in ondemand_media_body
+    assert "drain_ondemand_media_socket(bridge, audio_rtp_fd, srtp.audio_in, false, true, NULL)" in ondemand_media_body
+    assert "drain_ondemand_media_socket(bridge, audio_rtcp_fd, srtp.audio_in, true, true, NULL)" in ondemand_media_body
+    assert "drain_ondemand_media_socket(bridge, video_rtp_fd, srtp.video_in, false, false, &video_ssrc)" in ondemand_media_body
     assert "ondemand_talkback_recent_locked(bridge, now)" in ondemand_media_body
     assert "forward_ondemand_talkback_packet" in media_bridge
     assert "bridge->ondemand_target_audio_port" in media_bridge[

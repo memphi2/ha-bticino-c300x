@@ -170,7 +170,7 @@ class _FakeApi:
             "recorder_stream_path": "/doorbell-recorder",
             "bridge": {
                 "running": True,
-                "audio_codec": "speex/8000",
+                "audio_codec": "PCMU/8000",
                 "talkback_supported": True,
                 "talkback_running": True,
                 "talkback_payload_type": 97,
@@ -651,7 +651,7 @@ def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:
                     "clients": 0,
                     "media_owner": "idle",
                     "running": True,
-                    "audio_codec": "speex/8000",
+                    "audio_codec": "PCMU/8000",
                     "talkback_supported": True,
                     "talkback_running": True,
                     "talkback_payload_type": 97,
@@ -2582,22 +2582,22 @@ def test_doorbell_camera_stream_url_brackets_ipv6_host() -> None:
     assert camera._agent_host_for_socket() == "fe80::1%wlan0"
 
 
-def test_doorbell_camera_rtsp_cooldown_avoids_repeated_activate() -> None:
+def test_doorbell_camera_rtsp_cooldown_marker_does_not_block_retry() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 9})
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera._rtsp_unavailable_until = 999999999.0
     camera._last_rtsp_error = "ConnectionRefusedError"
+    _stub_rtsp_ready(camera)
 
-    async def _run() -> None:
-        try:
-            await camera.stream_source()
-        except Exception:
-            return
-        raise AssertionError("stream_source did not fail during RTSP cooldown")
+    async def _run() -> str:
+        return await camera.stream_source()
 
-    asyncio.run(_run())
+    source = asyncio.run(_run())
 
-    assert entry.runtime_data.api.activate_calls == []
+    assert source == "rtsp://127.0.0.1:9/doorbell-video"
+    assert entry.runtime_data.api.activate_calls == [False]
+    assert camera._rtsp_unavailable_until == 0.0
+    assert camera._rtsp_cooldown_scope is None
 
 
 def test_doorbell_camera_webrtc_stream_url_uses_options_agent_host() -> None:

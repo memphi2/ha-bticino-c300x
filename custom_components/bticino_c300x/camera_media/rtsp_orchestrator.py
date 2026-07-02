@@ -349,27 +349,23 @@ class CameraRtspOrchestrator:
                     self._owner._last_rtsp_error = (
                         type(last_error).__name__ if last_error else "timeout"
                     )
-                    self._owner._rtsp_unavailable_until = (
-                        loop.time() + self._settings.rtsp_failure_cooldown_seconds
-                    )
-                    self._owner._rtsp_cooldown_scope = cooldown_scope
+                    self._owner._rtsp_unavailable_until = 0.0
+                    self._owner._rtsp_cooldown_scope = None
                     raise HomeAssistantError(
                         f"C300X RTSP bridge did not become ready: {last_error}"
                     ) from last_error
                 await asyncio.sleep(self._settings.rtsp_ready_interval_seconds)
 
     def raise_if_rtsp_cooling_down(self, *, cooldown_scope: str = "doorbell") -> None:
-        """Raise while RTSP readiness is in failure cooldown."""
+        """Clear stale RTSP readiness cooldown markers before a new attempt."""
 
         loop = asyncio.get_running_loop()
         if (
             self._owner._rtsp_unavailable_until > loop.time()
             and self._owner._rtsp_cooldown_scope in {None, cooldown_scope}
         ):
-            raise HomeAssistantError(
-                "C300X RTSP bridge is cooling down after failure: "
-                f"{self._owner._last_rtsp_error}"
-            )
+            self._owner._rtsp_unavailable_until = 0.0
+            self._owner._rtsp_cooldown_scope = None
 
     async def async_probe_rtsp(self, stream_url: str) -> None:
         """Open a lightweight RTSP OPTIONS request against the native bridge."""

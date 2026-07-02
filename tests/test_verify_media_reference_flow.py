@@ -185,3 +185,47 @@ def test_single_on_demand_pcap_check_accepts_media_without_full_stop_sequence() 
     ]
 
     assert failed == []
+
+
+def test_on_demand_fingerprint_uses_200_ok_answer_after_proxy_invite() -> None:
+    module = _script_module()
+    text = (
+        "2026-06-12 18:00:00.000000 IP 192.0.2.10.1 > 198.51.100.20.2: SIP, length 200\n"
+        "INVITE sip:c300x@example.invalid SIP/2.0\r\n"
+        "m=audio 1234 RTP/SAVP 96 97 98 0 8 101 99 100\r\n"
+        "a=rtpmap:96 opus/48000/2\r\n"
+        "a=rtpmap:97 speex/16000\r\n"
+        "a=rtpmap:98 speex/8000\r\n"
+        "a=crypto:1 AEAD_AES_128_GCM inline:secret\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+        "m=video 5678 RTP/SAVP 96 97 98 99\r\n"
+        "a=rtpmap:98 H264/90000\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+        "2026-06-12 18:00:00.100000 IP 198.51.100.20.2 > 192.0.2.10.1: SIP, length 200\n"
+        "INVITE sip:c300x@127.0.0.1 SIP/2.0\r\n"
+        "m=audio 4321 RTP/SAVP 96 97 98 0 8 101 99 100\r\n"
+        "a=rtpmap:96 opus/48000/2\r\n"
+        "a=rtpmap:98 speex/8000\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+        "m=video 8765 RTP/SAVP 96 97 98 99\r\n"
+        "a=rtpmap:98 H264/90000\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+        "2026-06-12 18:00:01.000000 IP 198.51.100.20.2 > 192.0.2.10.1: SIP, length 200\n"
+        "SIP/2.0 200 Ok\r\n"
+        "m=audio 7078 RTP/SAVP 98 100\r\n"
+        "a=rtpmap:98 speex/8000\r\n"
+        "a=rtpmap:100 telephone-event/8000\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+        "m=video 9078 RTP/SAVP 98\r\n"
+        "a=rtpmap:98 H264/90000\r\n"
+        "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:secret\r\n"
+    )
+
+    fingerprint = module.fingerprint_from_text(text)
+
+    assert fingerprint["answer"]["audio"]["payloads"] == ["98", "100"]
+    assert fingerprint["answer"]["audio"]["codecs"] == [
+        "speex/8000",
+        "telephone-event/8000",
+    ]
+    assert fingerprint["answer"]["video"]["payloads"] == ["98"]

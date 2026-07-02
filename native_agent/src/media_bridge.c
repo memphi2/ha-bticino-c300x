@@ -56,11 +56,12 @@
 #define RING_VIDEO_RTP_PORT 16718
 #define RING_VIDEO_RTCP_PORT 16719
 #define RING_AUDIO_PAYLOAD_TYPE 96
-#define RTSP_AUDIO_PAYLOAD_TYPE 110
+#define RTSP_AUDIO_PAYLOAD_TYPE 0
 #define RTSP_BACKCHANNEL_STREAM_ID 2
 #define RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE 8
 #define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0
-#define RTSP_BACKCHANNEL_FRAME_SAMPLES 160
+#define RTSP_AUDIO_FRAME_SAMPLES 160
+#define RTSP_BACKCHANNEL_FRAME_SAMPLES RTSP_AUDIO_FRAME_SAMPLES
 #define RTSP_BACKCHANNEL_SPEEX_BITS_STORAGE 2048
 #define RING_REGISTER_EXPIRES_SECONDS 300
 #define RING_REGISTER_RENEW_SECONDS 240
@@ -76,6 +77,10 @@ static int bind_udp_port(int port);
 static int bind_udp_loopback_port(int port);
 static void fill_random_bytes(unsigned char *out, size_t len);
 static void secure_zero(void *ptr, size_t len);
+static int16_t decode_pcmu_sample(unsigned char value);
+static int16_t decode_pcma_sample(unsigned char value);
+static unsigned char encode_pcmu_sample(int16_t sample);
+static uint16_t load_be16(const unsigned char *in);
 
 static bool rtsp_peer_ipv4_address(
     const struct sockaddr_storage *peer,
@@ -210,6 +215,8 @@ typedef struct {
     void *home_call_srtp_state;
     unsigned char ondemand_audio_srtp_key[MEDIA_SRTP_MASTER_KEY_LEN];
     unsigned char ondemand_video_srtp_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_audio_srtp_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_video_srtp_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
     bool transport_tcp;
     bool rtsp_audio_enabled;
     int video_interleaved_channel;
@@ -513,8 +520,12 @@ typedef struct {
     void (*speex_bits_init)(void *bits);
     void (*speex_bits_destroy)(void *bits);
     void (*speex_bits_reset)(void *bits);
+    void (*speex_bits_read_from)(void *bits, char *bytes, int len);
     int (*speex_bits_write)(void *bits, char *bytes, int max_len);
     int (*speex_encode_int)(void *state, const int16_t *in, void *bits);
+    void *(*speex_decoder_init)(const void *mode);
+    void (*speex_decoder_destroy)(void *state);
+    int (*speex_decode_int)(void *state, void *bits, int16_t *out);
 } c300x_speex_api_t;
 
 typedef union {
@@ -526,11 +537,12 @@ typedef struct {
     void *state;
     c300x_speex_bits_storage_t bits;
     int initialized;
-} c300x_speex_encoder_t;
+} c300x_speex_state_t;
 
 static pthread_mutex_t g_speex_mutex = PTHREAD_MUTEX_INITIALIZER;
 static c300x_speex_api_t g_speex_api;
-static c300x_speex_encoder_t g_speex_encoder;
+static c300x_speex_state_t g_speex_encoder;
+static c300x_speex_state_t g_speex_decoder;
 
 static int srtp_load_symbol(void *handle, const char *name, void *out, size_t out_len) {
     void *symbol = dlsym(handle, name);
@@ -647,9 +659,33 @@ static c300x_speex_api_t *speex_api(void) {
             )
             && srtp_load_symbol(
                 handle,
+                "speex_bits_read_from",
+                &g_speex_api.speex_bits_read_from,
+                sizeof(g_speex_api.speex_bits_read_from)
+            )
+            && srtp_load_symbol(
+                handle,
                 "speex_encode_int",
                 &g_speex_api.speex_encode_int,
                 sizeof(g_speex_api.speex_encode_int)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_decoder_init",
+                &g_speex_api.speex_decoder_init,
+                sizeof(g_speex_api.speex_decoder_init)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_decoder_destroy",
+                &g_speex_api.speex_decoder_destroy,
+                sizeof(g_speex_api.speex_decoder_destroy)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_decode_int",
+                &g_speex_api.speex_decode_int,
+                sizeof(g_speex_api.speex_decode_int)
             )) {
             g_speex_api.handle = handle;
             g_speex_api.available = 1;
@@ -704,6 +740,50 @@ static bool speex_encode_pcm_frame(
             *encoded_len = (size_t)written;
             ok = true;
         }
+    }
+    pthread_mutex_unlock(&g_speex_mutex);
+    return ok;
+}
+
+static bool speex_decode_audio_frame(
+    const unsigned char *payload,
+    size_t payload_len,
+    int16_t *samples,
+    size_t sample_count
+) {
+    bool ok = false;
+    c300x_speex_api_t *api = speex_api();
+
+    if (
+        api == NULL
+        || payload == NULL
+        || payload_len == 0
+        || samples == NULL
+        || sample_count < RTSP_AUDIO_FRAME_SAMPLES
+    ) {
+        return false;
+    }
+    pthread_mutex_lock(&g_speex_mutex);
+    if (!g_speex_decoder.initialized) {
+        const void *mode = api->speex_lib_get_mode(0);
+        g_speex_decoder.state = mode != NULL ? api->speex_decoder_init(mode) : NULL;
+        if (g_speex_decoder.state != NULL) {
+            api->speex_bits_init(g_speex_decoder.bits.bytes);
+            g_speex_decoder.initialized = 1;
+        }
+    }
+    if (g_speex_decoder.initialized && g_speex_decoder.state != NULL) {
+        api->speex_bits_reset(g_speex_decoder.bits.bytes);
+        api->speex_bits_read_from(
+            g_speex_decoder.bits.bytes,
+            (char *)payload,
+            (int)payload_len
+        );
+        ok = api->speex_decode_int(
+            g_speex_decoder.state,
+            g_speex_decoder.bits.bytes,
+            samples
+        ) == 0;
     }
     pthread_mutex_unlock(&g_speex_mutex);
     return ok;
@@ -2085,6 +2165,89 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
     }
 }
 
+static bool rtp_payload_offset(const unsigned char *packet, int packet_len, size_t *payload_offset) {
+    size_t header_len;
+
+    if (packet == NULL || payload_offset == NULL || packet_len < 12 || (packet[0] & 0xc0) != 0x80) {
+        return false;
+    }
+    header_len = 12 + ((size_t)(packet[0] & 0x0f) * 4);
+    if ((size_t)packet_len < header_len) {
+        return false;
+    }
+    if ((packet[0] & 0x10) != 0) {
+        uint16_t extension_words;
+        if ((size_t)packet_len < header_len + 4) {
+            return false;
+        }
+        extension_words = load_be16(packet + header_len + 2);
+        header_len += 4 + ((size_t)extension_words * 4);
+        if ((size_t)packet_len < header_len) {
+            return false;
+        }
+    }
+    *payload_offset = header_len;
+    return true;
+}
+
+static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
+    return payload_type == RING_AUDIO_PAYLOAD_TYPE
+        || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
+}
+
+static bool forward_rtsp_audio_pcmu_packet(
+    media_bridge_t *bridge,
+    const unsigned char *packet,
+    int packet_len
+) {
+    unsigned char payload_type;
+    size_t payload_offset;
+    size_t payload_len;
+    int16_t samples[RTSP_AUDIO_FRAME_SAMPLES];
+    unsigned char out[12 + RTSP_AUDIO_FRAME_SAMPLES];
+
+    if (!rtp_payload_offset(packet, packet_len, &payload_offset) || (size_t)packet_len <= payload_offset) {
+        return false;
+    }
+
+    payload_type = packet[1] & 0x7f;
+    payload_len = (size_t)packet_len - payload_offset;
+    if (payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE) {
+        forward_rtsp_packet(bridge, packet, packet_len, true);
+        return true;
+    }
+    if (payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE) {
+        if (payload_len > RTSP_AUDIO_FRAME_SAMPLES) {
+            payload_len = RTSP_AUDIO_FRAME_SAMPLES;
+        }
+        memset(out, 0, sizeof(out));
+        memcpy(out, packet, 12);
+        out[0] = 0x80;
+        out[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
+        for (size_t index = 0; index < payload_len; index++) {
+            out[12 + index] = encode_pcmu_sample(decode_pcma_sample(packet[payload_offset + index]));
+        }
+        forward_rtsp_packet(bridge, out, (int)(12 + payload_len), true);
+        return true;
+    }
+    if (!rtsp_audio_payload_is_speex_8khz(payload_type)) {
+        return false;
+    }
+    if (!speex_decode_audio_frame(packet + payload_offset, payload_len, samples, RTSP_AUDIO_FRAME_SAMPLES)) {
+        return false;
+    }
+
+    memset(out, 0, sizeof(out));
+    memcpy(out, packet, 12);
+    out[0] = 0x80;
+    out[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
+    for (size_t index = 0; index < RTSP_AUDIO_FRAME_SAMPLES; index++) {
+        out[12 + index] = encode_pcmu_sample(samples[index]);
+    }
+    forward_rtsp_packet(bridge, out, (int)sizeof(out), true);
+    return true;
+}
+
 static void drain_ring_srtp_socket(
     media_bridge_t *bridge,
     int fd,
@@ -2108,8 +2271,10 @@ static void drain_ring_srtp_socket(
             ? api->srtp_unprotect_rtcp(session, packet, &packet_len) == 0
             : api->srtp_unprotect(session, packet, &packet_len) == 0;
         if (ok && !rtcp) {
-            if (audio && packet_len >= 2 && (packet[0] & 0xc0) == 0x80) {
-                packet[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
+            if (audio) {
+                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
+                from_len = sizeof(from);
+                continue;
             }
             if (!audio && video_ssrc != NULL && packet_len >= 12 && (packet[0] & 0xc0) == 0x80) {
                 *video_ssrc = ((uint32_t)packet[8] << 24)
@@ -3126,6 +3291,33 @@ static int16_t decode_pcma_sample(unsigned char value) {
     return (int16_t)((value & 0x80) ? sample : -sample);
 }
 
+static unsigned char encode_pcmu_sample(int16_t sample) {
+    const int bias = 0x84;
+    const int clip = 32635;
+    int sign = 0;
+    int magnitude = sample;
+    int exponent = 7;
+    int exponent_mask = 0x4000;
+    int mantissa;
+    unsigned char value;
+
+    if (magnitude < 0) {
+        sign = 0x80;
+        magnitude = -magnitude;
+    }
+    if (magnitude > clip) {
+        magnitude = clip;
+    }
+    magnitude += bias;
+    while (exponent > 0 && (magnitude & exponent_mask) == 0) {
+        exponent--;
+        exponent_mask >>= 1;
+    }
+    mantissa = (magnitude >> (exponent + 3)) & 0x0f;
+    value = (unsigned char)(sign | (exponent << 4) | mantissa);
+    return (unsigned char)~value;
+}
+
 static bool forward_speex_talkback_packet(
     media_bridge_t *bridge,
     const unsigned char *packet,
@@ -3262,21 +3454,40 @@ static bool handle_rtsp_backchannel_frame(
     return true;
 }
 
-static void drain_ondemand_media_socket(int fd, uint32_t *video_ssrc) {
+static void drain_ondemand_media_socket(
+    media_bridge_t *bridge,
+    int fd,
+    c300x_srtp_t session,
+    bool rtcp,
+    bool audio,
+    uint32_t *video_ssrc
+) {
+    c300x_srtp_api_t *api = srtp_api();
     unsigned char packet[2048];
     struct sockaddr_in from;
     socklen_t from_len = sizeof(from);
     ssize_t n;
 
-    if (fd < 0) {
+    if (api == NULL || bridge == NULL || fd < 0 || session == NULL) {
         return;
     }
     while ((n = recvfrom(fd, packet, sizeof(packet), MSG_DONTWAIT, (struct sockaddr *)&from, &from_len)) > 0) {
-        if (video_ssrc != NULL && n >= 12 && (packet[0] & 0xc0) == 0x80) {
-            *video_ssrc = ((uint32_t)packet[8] << 24)
-                | ((uint32_t)packet[9] << 16)
-                | ((uint32_t)packet[10] << 8)
-                | (uint32_t)packet[11];
+        int packet_len = (int)n;
+        bool ok = rtcp
+            ? api->srtp_unprotect_rtcp(session, packet, &packet_len) == 0
+            : api->srtp_unprotect(session, packet, &packet_len) == 0;
+        if (ok && !rtcp) {
+            if (audio) {
+                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
+                from_len = sizeof(from);
+                continue;
+            }
+            if (video_ssrc != NULL && packet_len >= 12 && (packet[0] & 0xc0) == 0x80) {
+                *video_ssrc = ((uint32_t)packet[8] << 24)
+                    | ((uint32_t)packet[9] << 16)
+                    | ((uint32_t)packet[10] << 8)
+                    | (uint32_t)packet[11];
+            }
         }
         from_len = sizeof(from);
     }
@@ -3287,6 +3498,8 @@ static void *ondemand_media_thread(void *arg) {
     uint32_t video_ssrc = 0;
     unsigned char audio_key[MEDIA_SRTP_MASTER_KEY_LEN];
     unsigned char video_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char audio_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char video_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
     media_srtp_state_t srtp;
     long long next_media_keepalive = 0;
     long long next_audio_rtp = 0;
@@ -3294,13 +3507,22 @@ static void *ondemand_media_thread(void *arg) {
     long long next_sip_keepalive = 0;
     long long next_bt_av_renew = monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
 
+    memset(&srtp, 0, sizeof(srtp));
     pthread_mutex_lock(&bridge->mutex);
     memcpy(audio_key, bridge->ondemand_audio_srtp_key, sizeof(audio_key));
     memcpy(video_key, bridge->ondemand_video_srtp_key, sizeof(video_key));
+    memcpy(audio_in_key, bridge->ondemand_audio_srtp_in_key, sizeof(audio_in_key));
+    memcpy(video_in_key, bridge->ondemand_video_srtp_in_key, sizeof(video_in_key));
     pthread_mutex_unlock(&bridge->mutex);
-    if (!media_srtp_init_state(&srtp, audio_key, video_key)) {
+    if (
+        !media_srtp_init_state(&srtp, audio_key, video_key)
+        || !media_srtp_init_inbound(&srtp, audio_in_key, video_in_key)
+    ) {
         secure_zero(audio_key, sizeof(audio_key));
         secure_zero(video_key, sizeof(video_key));
+        secure_zero(audio_in_key, sizeof(audio_in_key));
+        secure_zero(video_in_key, sizeof(video_in_key));
+        media_srtp_deinit_state(&srtp);
         pthread_mutex_lock(&bridge->mutex);
         bridge->ondemand_media_started = false;
         if (bridge->ondemand_audio_rtp_fd >= 0) {
@@ -3324,6 +3546,8 @@ static void *ondemand_media_thread(void *arg) {
     }
     secure_zero(audio_key, sizeof(audio_key));
     secure_zero(video_key, sizeof(video_key));
+    secure_zero(audio_in_key, sizeof(audio_in_key));
+    secure_zero(video_in_key, sizeof(video_in_key));
 
     pthread_mutex_lock(&bridge->mutex);
     bridge->ondemand_last_talkback_ms = 0;
@@ -3383,16 +3607,16 @@ static void *ondemand_media_thread(void *arg) {
         struct timeval timeout = {0, MEDIA_AUDIO_PACKET_MS * 1000};
         if (select(max_fd + 1, &readfds, NULL, NULL, &timeout) > 0) {
             if (audio_rtp_fd >= 0 && FD_ISSET(audio_rtp_fd, &readfds)) {
-                drain_ondemand_media_socket(audio_rtp_fd, NULL);
+                drain_ondemand_media_socket(bridge, audio_rtp_fd, srtp.audio_in, false, true, NULL);
             }
             if (audio_rtcp_fd >= 0 && FD_ISSET(audio_rtcp_fd, &readfds)) {
-                drain_ondemand_media_socket(audio_rtcp_fd, NULL);
+                drain_ondemand_media_socket(bridge, audio_rtcp_fd, srtp.audio_in, true, true, NULL);
             }
             if (video_rtp_fd >= 0 && FD_ISSET(video_rtp_fd, &readfds)) {
-                drain_ondemand_media_socket(video_rtp_fd, &video_ssrc);
+                drain_ondemand_media_socket(bridge, video_rtp_fd, srtp.video_in, false, false, &video_ssrc);
             }
             if (video_rtcp_fd >= 0 && FD_ISSET(video_rtcp_fd, &readfds)) {
-                drain_ondemand_media_socket(video_rtcp_fd, NULL);
+                drain_ondemand_media_socket(bridge, video_rtcp_fd, srtp.video_in, true, false, NULL);
             }
         }
 
@@ -3481,6 +3705,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     int target_video_port = 9078;
     unsigned char audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
     unsigned char video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
     char audio_key[64];
     char video_key[64];
     char audio_crypto_aead128[64];
@@ -3490,6 +3716,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     char video_crypto_aead256[96];
     char video_crypto_aes256[96];
 
+    memset(answer_audio_key_raw, 0, sizeof(answer_audio_key_raw));
+    memset(answer_video_key_raw, 0, sizeof(answer_video_key_raw));
     (void)sip_domain_from_config(bridge->config, domain_hint, sizeof(domain_hint));
     if (
         !media_identity_from_flexisip(
@@ -3751,6 +3979,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     if (status < 200 || status >= 300) {
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
+        secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
+        secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
         close(fd);
         close(ondemand_audio_rtp_fd);
         close(ondemand_audio_rtcp_fd);
@@ -3760,6 +3990,21 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     }
     target_audio_port = parse_sdp_media_port(response, "\r\nm=audio ", target_audio_port);
     target_video_port = parse_sdp_media_port(response, "\r\nm=video ", target_video_port);
+    if (
+        !parse_sdp_sdes_key(response, "\r\nm=audio ", answer_audio_key_raw, sizeof(answer_audio_key_raw))
+        || !parse_sdp_sdes_key(response, "\r\nm=video ", answer_video_key_raw, sizeof(answer_video_key_raw))
+    ) {
+        secure_zero(audio_key_raw, sizeof(audio_key_raw));
+        secure_zero(video_key_raw, sizeof(video_key_raw));
+        secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
+        secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
+        close(fd);
+        close(ondemand_audio_rtp_fd);
+        close(ondemand_audio_rtcp_fd);
+        close(ondemand_video_rtp_fd);
+        close(ondemand_video_rtcp_fd);
+        return false;
+    }
 
     char to_header[512];
     char contact_header[512];
@@ -3790,6 +4035,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     bridge->ondemand_srtp_state = NULL;
     memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw, sizeof(bridge->ondemand_audio_srtp_key));
     memcpy(bridge->ondemand_video_srtp_key, video_key_raw, sizeof(bridge->ondemand_video_srtp_key));
+    memcpy(bridge->ondemand_audio_srtp_in_key, answer_audio_key_raw, sizeof(bridge->ondemand_audio_srtp_in_key));
+    memcpy(bridge->ondemand_video_srtp_in_key, answer_video_key_raw, sizeof(bridge->ondemand_video_srtp_in_key));
     snprintf(bridge->domain, sizeof(bridge->domain), "%s", domain);
     snprintf(bridge->from_aor, sizeof(bridge->from_aor), "%s", from_aor);
     snprintf(bridge->to_aor, sizeof(bridge->to_aor), "%s", to_aor);
@@ -3808,6 +4055,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     pthread_mutex_unlock(&bridge->mutex);
     secure_zero(audio_key_raw, sizeof(audio_key_raw));
     secure_zero(video_key_raw, sizeof(video_key_raw));
+    secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
+    secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
     return monitor_started && ondemand_media_started;
 }
 
@@ -3993,10 +4242,7 @@ static void drain_home_call_srtp_socket(
             }
             pthread_mutex_unlock(&bridge->mutex);
             if (!rtcp) {
-                if (packet_len >= 2 && (packet[0] & 0xc0) == 0x80) {
-                    packet[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
-                }
-                forward_rtsp_packet(bridge, packet, packet_len, true);
+                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
             }
         }
         from_len = sizeof(from);
@@ -4669,7 +4915,7 @@ static void *rtp_relay_thread(void *arg) {
         if (audio_rtp_fd >= 0 && FD_ISSET(audio_rtp_fd, &readfds)) {
             ssize_t n = recv(audio_rtp_fd, packet, sizeof(packet), 0);
             if (n > 0) {
-                forward_rtsp_packet(bridge, packet, (int)n, true);
+                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, (int)n);
             }
         }
         if (!FD_ISSET(rtp_fd, &readfds)) {
@@ -5366,9 +5612,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "s=BTicino Doorbell\r\n"
                 "c=IN IP4 0.0.0.0\r\n"
                 "t=0 0\r\n"
-                "m=audio 0 RTP/AVP 110\r\n"
-                "a=rtpmap:110 speex/8000\r\n"
-                "a=fmtp:110 vbr=on\r\n"
+                "m=audio 0 RTP/AVP 0\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
@@ -5389,9 +5634,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "s=BTicino Doorbell\r\n"
                 "c=IN IP4 0.0.0.0\r\n"
                 "t=0 0\r\n"
-                "m=audio 0 RTP/AVP 110\r\n"
-                "a=rtpmap:110 speex/8000\r\n"
-                "a=fmtp:110 vbr=on\r\n"
+                "m=audio 0 RTP/AVP 0\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
@@ -5412,9 +5656,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "s=BTicino Home Call\r\n"
                 "c=IN IP4 0.0.0.0\r\n"
                 "t=0 0\r\n"
-                "m=audio 0 RTP/AVP 110\r\n"
-                "a=rtpmap:110 speex/8000\r\n"
-                "a=fmtp:110 vbr=on\r\n"
+                "m=audio 0 RTP/AVP 0\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=0\r\n"
                 "m=audio 0 RTP/AVP 8 0\r\n"
                 "a=rtpmap:8 PCMA/8000\r\n"

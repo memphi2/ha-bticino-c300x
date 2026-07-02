@@ -2895,7 +2895,7 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
             "bridge": {
                 "enabled": True,
                 "running": True,
-                "audio_codec": "speex/8000",
+                "audio_codec": "PCMU/8000",
                 "talkback_supported": True,
                 "talkback_payload_type": 97,
             },
@@ -2913,7 +2913,7 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
         "bridge": {
             "enabled": True,
             "running": True,
-            "audio_codec": "speex/8000",
+            "audio_codec": "PCMU/8000",
             "talkback_supported": True,
             "talkback_payload_type": 97,
         },
@@ -2926,7 +2926,7 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
             "bridge": {
                 "enabled": True,
                 "running": True,
-                "audio_codec": "speex/8000",
+                "audio_codec": "PCMU/8000",
                 "talkback_supported": True,
                 "talkback_payload_type": 97,
             },

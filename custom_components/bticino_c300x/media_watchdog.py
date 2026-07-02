@@ -101,7 +101,7 @@ def handle_agent_cpu_metrics_changed(camera: Any, entry_id: str) -> None:
     if not getattr(watchdog, "tripped", False):
         return
     camera._agent_cpu_watchdog = watchdog
-    if camera._webrtc_sessions:
+    if camera._webrtc_session_ids():
         camera.hass.async_create_task(
             async_handle_agent_cpu_watchdog(
                 camera,
@@ -213,8 +213,9 @@ async def async_handle_agent_cpu_watchdog(
             duration_seconds=duration_seconds,
         )
 
-    if camera._webrtc_sessions:
-        for session_id in list(camera._webrtc_sessions):
+    session_ids = camera._webrtc_session_ids()
+    if session_ids:
+        for session_id in session_ids:
             await camera._async_close_webrtc_session(
                 session_id,
                 stop_media=False,

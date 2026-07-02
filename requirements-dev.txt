@@ -1,5 +1,4 @@
 aiohttp
-aiortc==1.14.0
 av==16.1.0
 homeassistant==2026.6.4
 mypy

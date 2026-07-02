@@ -87,7 +87,7 @@ rules:
 
   async-dependency:
     status: done
-    comment: Optional WebRTC media dependencies are lazy-loaded only when a browser session starts, so missing aiortc cannot block integration setup.
+    comment: WebRTC browser sessions use Home Assistant's provider, so optional media packages cannot block integration setup.
   inject-websession:
     status: done
     comment: Device-agent HTTP calls use Home Assistant's shared aiohttp client session.

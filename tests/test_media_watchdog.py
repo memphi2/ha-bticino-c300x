@@ -112,8 +112,10 @@ def test_agent_cpu_metric_signal_ignores_wrong_or_untripped_entry() -> None:
 
     class _Camera:
         _entry = _Entry()
-        _webrtc_sessions: dict[str, object] = {}
         writes = 0
+
+        def _webrtc_session_ids(self) -> list[str]:
+            return []
 
         def _async_write_ha_state_if_ready(self) -> None:
             self.writes += 1
@@ -301,7 +303,6 @@ def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions()
         hass = object()
         _entry = entry
         _agent_cpu_watchdog = runtime_data.agent_cpu_watchdog
-        _webrtc_sessions: dict[str, object] = {}
         _video_owner = "agent"
         _video_window_available = True
         _external_media_active = False
@@ -311,6 +312,9 @@ def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions()
         async def _async_refresh_video_status(self, *, apply_status: bool) -> None:
             assert apply_status is True
             self.refreshed = True
+
+        def _webrtc_session_ids(self) -> list[str]:
+            return []
 
     camera = _Camera()
 

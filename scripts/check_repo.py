@@ -444,6 +444,13 @@ def check_installer_dependency_pins() -> list[str]:
         or '">=2.4"' not in dependabot
     ):
         failures.append("Dependabot must ignore PyTurboJPEG >=2.4 for dev env stability")
+    if (
+        'dependency-name: "homeassistant"' not in dependabot
+        or '">=2026.7"' not in dependabot
+    ):
+        failures.append(
+            "Dependabot must ignore Home Assistant dev pins; CI uses validate.yml"
+        )
     return failures
 
 

@@ -39,3 +39,6 @@ updates:
       - dependency-name: "PyTurboJPEG"
         versions:
           - ">=2.4"
+      - dependency-name: "homeassistant"
+        versions:
+          - ">=2026.7"

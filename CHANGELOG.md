@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.6.0 - Unreleased
+## v1.6.0 - 2026-07-03
 
 This release moves browser media to Home Assistant's WebRTC provider/go2rtc
 path and removes the integration-local `aiortc` WebRTC runtime.
@@ -20,6 +20,12 @@ path and removes the integration-local `aiortc` WebRTC runtime.
 - Adds native-agent RTSP backchannel support for browser microphone audio,
   forwarding go2rtc talkback audio into the existing local Speex/SRTP device
   media path.
+
+### Fixed
+
+- Loads Home Assistant's go2rtc integration as a required WebRTC provider and
+  cleans up failed provider offers so rejected browser streams do not leave
+  local media sessions active.
 
 ### Upgrade Notes
 

@@ -196,6 +196,14 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "sdp_home_call_audio" in rtsp_body
     assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_body
     assert '"a=fmtp:110 vbr=on\\r\\n"' in rtsp_body
+    assert '"m=audio 0 RTP/AVP 8 0\\r\\n"' in rtsp_body
+    assert '"a=rtpmap:8 PCMA/8000\\r\\n"' in rtsp_body
+    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_body
+    assert '"a=control:streamid=2\\r\\n"' in rtsp_body
+    assert '"a=sendonly\\r\\n"' in rtsp_body
+    assert "read_rtsp_request_or_interleaved(" in rtsp_body
+    assert "handle_rtsp_backchannel_frame(" in rtsp_body
+    assert "slot->backchannel_enabled = true;" in rtsp_body
     assert rtsp_body.count('"a=fmtp:96 profile-level-id=42801F\\r\\n"') >= 3
     assert rtsp_body.count('"a=rtcp-fb:* trr-int 5000\\r\\n"') >= 3
     assert rtsp_body.count('"a=rtcp-fb:* ccm tmmbr\\r\\n"') >= 3
@@ -333,6 +341,9 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert '"m=video' not in home_call_body
     assert '"s=BTicino Home Call\\r\\n"' in rtsp_home_call_sdp
     assert '"m=audio 0 RTP/AVP 110\\r\\n"' in rtsp_home_call_sdp
+    assert '"m=audio 0 RTP/AVP 8 0\\r\\n"' in rtsp_home_call_sdp
+    assert '"a=control:streamid=2\\r\\n"' in rtsp_home_call_sdp
+    assert '"a=sendonly\\r\\n"' in rtsp_home_call_sdp
     assert '"m=video' not in rtsp_home_call_sdp
     assert '"Session: %s\\r\\nRTP-Info: url=%s/streamid=%d;seq=0;rtptime=0\\r\\n"' in rtsp_body
     assert "home_call_session ? 0 : 1" in rtsp_body
@@ -355,6 +366,34 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
     assert "bridge->home_call_last_talkback_ms = monotonic_ms();" in home_call_talkback_body
+
+
+def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path() -> None:
+    media_bridge = _read_media_bridge()
+    backchannel_body = media_bridge[
+        media_bridge.index("static bool forward_rtsp_backchannel_packet") :
+        media_bridge.index("static bool handle_rtsp_backchannel_frame")
+    ]
+    pcm_body = media_bridge[
+        media_bridge.index("static bool forward_pcm_backchannel_packet") :
+        media_bridge.index("static bool forward_rtsp_backchannel_packet")
+    ]
+    speex_body = media_bridge[
+        media_bridge.index("static c300x_speex_api_t *speex_api") :
+        media_bridge.index("static int create_srtp_session")
+    ]
+
+    assert "#define RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE 8" in media_bridge
+    assert "#define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0" in media_bridge
+    assert "#define RTSP_BACKCHANNEL_FRAME_SAMPLES 160" in media_bridge
+    assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
+    assert "speex_encode_int" in speex_body
+    assert "decode_pcma_sample(sample)" in pcm_body
+    assert "decode_pcmu_sample(sample)" in pcm_body
+    assert "| C300X_TALKBACK_RTP_PAYLOAD_TYPE" in pcm_body
+    assert "forward_speex_talkback_packet(" in backchannel_body
+    assert "RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in backchannel_body
+    assert "RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in backchannel_body
 
 
 def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:

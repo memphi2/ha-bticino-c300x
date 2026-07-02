@@ -57,6 +57,11 @@
 #define RING_VIDEO_RTCP_PORT 16719
 #define RING_AUDIO_PAYLOAD_TYPE 96
 #define RTSP_AUDIO_PAYLOAD_TYPE 110
+#define RTSP_BACKCHANNEL_STREAM_ID 2
+#define RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE 8
+#define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0
+#define RTSP_BACKCHANNEL_FRAME_SAMPLES 160
+#define RTSP_BACKCHANNEL_SPEEX_BITS_STORAGE 2048
 #define RING_REGISTER_EXPIRES_SECONDS 300
 #define RING_REGISTER_RENEW_SECONDS 240
 #define RING_RETRY_SECONDS 5
@@ -110,8 +115,10 @@ typedef struct {
     bool transport_tcp;
     bool audio_enabled;
     bool recorder;
+    bool backchannel_enabled;
     int video_interleaved_channel;
     int audio_interleaved_channel;
+    int backchannel_interleaved_channel;
     struct sockaddr_in udp_client;
     char session_id[32];
 } rtsp_client_slot_t;
@@ -345,6 +352,7 @@ static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slo
         slot->transport_tcp = true;
         slot->video_interleaved_channel = 0;
         slot->audio_interleaved_channel = 0;
+        slot->backchannel_interleaved_channel = -1;
         snprintf(slot->session_id, sizeof(slot->session_id), "%ld-%zu", (long)time(NULL), index);
         if (slot_index != NULL) {
             *slot_index = (int)index;
@@ -495,6 +503,35 @@ typedef struct {
 static pthread_mutex_t g_srtp_mutex = PTHREAD_MUTEX_INITIALIZER;
 static c300x_srtp_api_t g_srtp_api;
 
+typedef struct {
+    void *handle;
+    int initialized;
+    int available;
+    const void *(*speex_lib_get_mode)(int mode);
+    void *(*speex_encoder_init)(const void *mode);
+    void (*speex_encoder_destroy)(void *state);
+    void (*speex_bits_init)(void *bits);
+    void (*speex_bits_destroy)(void *bits);
+    void (*speex_bits_reset)(void *bits);
+    int (*speex_bits_write)(void *bits, char *bytes, int max_len);
+    int (*speex_encode_int)(void *state, const int16_t *in, void *bits);
+} c300x_speex_api_t;
+
+typedef union {
+    long double align;
+    unsigned char bytes[RTSP_BACKCHANNEL_SPEEX_BITS_STORAGE];
+} c300x_speex_bits_storage_t;
+
+typedef struct {
+    void *state;
+    c300x_speex_bits_storage_t bits;
+    int initialized;
+} c300x_speex_encoder_t;
+
+static pthread_mutex_t g_speex_mutex = PTHREAD_MUTEX_INITIALIZER;
+static c300x_speex_api_t g_speex_api;
+static c300x_speex_encoder_t g_speex_encoder;
+
 static int srtp_load_symbol(void *handle, const char *name, void *out, size_t out_len) {
     void *symbol = dlsym(handle, name);
     if (symbol == NULL || out == NULL || out_len != sizeof(symbol)) {
@@ -558,6 +595,118 @@ static c300x_srtp_api_t *srtp_api(void) {
     c300x_srtp_api_t *api = g_srtp_api.available ? &g_srtp_api : NULL;
     pthread_mutex_unlock(&g_srtp_mutex);
     return api;
+}
+
+static c300x_speex_api_t *speex_api(void) {
+    pthread_mutex_lock(&g_speex_mutex);
+    if (!g_speex_api.initialized) {
+        void *handle = dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL);
+        g_speex_api.initialized = 1;
+        if (handle != NULL
+            && srtp_load_symbol(
+                handle,
+                "speex_lib_get_mode",
+                &g_speex_api.speex_lib_get_mode,
+                sizeof(g_speex_api.speex_lib_get_mode)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_encoder_init",
+                &g_speex_api.speex_encoder_init,
+                sizeof(g_speex_api.speex_encoder_init)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_encoder_destroy",
+                &g_speex_api.speex_encoder_destroy,
+                sizeof(g_speex_api.speex_encoder_destroy)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_bits_init",
+                &g_speex_api.speex_bits_init,
+                sizeof(g_speex_api.speex_bits_init)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_bits_destroy",
+                &g_speex_api.speex_bits_destroy,
+                sizeof(g_speex_api.speex_bits_destroy)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_bits_reset",
+                &g_speex_api.speex_bits_reset,
+                sizeof(g_speex_api.speex_bits_reset)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_bits_write",
+                &g_speex_api.speex_bits_write,
+                sizeof(g_speex_api.speex_bits_write)
+            )
+            && srtp_load_symbol(
+                handle,
+                "speex_encode_int",
+                &g_speex_api.speex_encode_int,
+                sizeof(g_speex_api.speex_encode_int)
+            )) {
+            g_speex_api.handle = handle;
+            g_speex_api.available = 1;
+        } else {
+            if (handle != NULL) {
+                dlclose(handle);
+            }
+            memset(&g_speex_api, 0, sizeof(g_speex_api));
+            g_speex_api.initialized = 1;
+        }
+    }
+    c300x_speex_api_t *api = g_speex_api.available ? &g_speex_api : NULL;
+    pthread_mutex_unlock(&g_speex_mutex);
+    return api;
+}
+
+static bool speex_encode_pcm_frame(
+    const int16_t *samples,
+    unsigned char *out,
+    size_t out_len,
+    size_t *encoded_len
+) {
+    bool ok = false;
+    c300x_speex_api_t *api = speex_api();
+
+    if (api == NULL || samples == NULL || out == NULL || encoded_len == NULL) {
+        return false;
+    }
+    pthread_mutex_lock(&g_speex_mutex);
+    if (!g_speex_encoder.initialized) {
+        const void *mode = api->speex_lib_get_mode(0);
+        g_speex_encoder.state = mode != NULL ? api->speex_encoder_init(mode) : NULL;
+        if (g_speex_encoder.state != NULL) {
+            api->speex_bits_init(g_speex_encoder.bits.bytes);
+            g_speex_encoder.initialized = 1;
+        }
+    }
+    if (g_speex_encoder.initialized && g_speex_encoder.state != NULL) {
+        int written;
+        api->speex_bits_reset(g_speex_encoder.bits.bytes);
+        (void)api->speex_encode_int(
+            g_speex_encoder.state,
+            samples,
+            g_speex_encoder.bits.bytes
+        );
+        written = api->speex_bits_write(
+            g_speex_encoder.bits.bytes,
+            (char *)out,
+            (int)out_len
+        );
+        if (written > 0 && (size_t)written <= out_len) {
+            *encoded_len = (size_t)written;
+            ok = true;
+        }
+    }
+    pthread_mutex_unlock(&g_speex_mutex);
+    return ok;
 }
 
 static int create_srtp_session(c300x_srtp_api_t *api, const unsigned char *key, c300x_srtp_t *session) {
@@ -1024,6 +1173,139 @@ static int read_message_poll(int fd, char *buffer, size_t buffer_size, int timeo
         return -1;
     }
     return read_message(fd, buffer, buffer_size, timeout_seconds);
+}
+
+typedef enum {
+    RTSP_READ_ERROR = -1,
+    RTSP_READ_TIMEOUT = 0,
+    RTSP_READ_REQUEST = 1,
+    RTSP_READ_INTERLEAVED = 2,
+} rtsp_read_result_t;
+
+static int recv_exact_timeout(
+    int fd,
+    unsigned char *buffer,
+    size_t len,
+    int timeout_seconds
+) {
+    size_t used = 0;
+
+    while (used < len) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+        struct timeval timeout = {timeout_seconds, 0};
+        int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
+        if (ready <= 0) {
+            return used > 0 ? -1 : 0;
+        }
+        ssize_t n = recv(fd, buffer + used, len - used, 0);
+        if (n <= 0) {
+            return -1;
+        }
+        used += (size_t)n;
+    }
+    return 1;
+}
+
+static void drain_rtsp_interleaved_payload(
+    int fd,
+    size_t len,
+    int timeout_seconds
+) {
+    unsigned char scratch[256];
+    size_t remaining = len;
+
+    while (remaining > 0) {
+        size_t chunk = remaining < sizeof(scratch) ? remaining : sizeof(scratch);
+        int ok = recv_exact_timeout(fd, scratch, chunk, timeout_seconds);
+        if (ok <= 0) {
+            return;
+        }
+        remaining -= chunk;
+    }
+}
+
+static rtsp_read_result_t read_rtsp_request_or_interleaved(
+    int fd,
+    char *request,
+    size_t request_size,
+    unsigned char *interleaved,
+    size_t interleaved_size,
+    int *interleaved_channel,
+    size_t *interleaved_len,
+    int timeout_seconds
+) {
+    unsigned char first;
+    size_t used;
+    int ok;
+
+    if (
+        request == NULL
+        || request_size < 2
+        || interleaved == NULL
+        || interleaved_channel == NULL
+        || interleaved_len == NULL
+    ) {
+        return RTSP_READ_ERROR;
+    }
+    request[0] = '\0';
+    *interleaved_channel = -1;
+    *interleaved_len = 0;
+
+    ok = recv_exact_timeout(fd, &first, 1, timeout_seconds);
+    if (ok == 0) {
+        return RTSP_READ_TIMEOUT;
+    }
+    if (ok < 0) {
+        return RTSP_READ_ERROR;
+    }
+    if (first == '$') {
+        unsigned char header[3];
+        size_t frame_len;
+        ok = recv_exact_timeout(fd, header, sizeof(header), timeout_seconds);
+        if (ok <= 0) {
+            return RTSP_READ_ERROR;
+        }
+        frame_len = ((size_t)header[1] << 8) | header[2];
+        *interleaved_channel = header[0];
+        if (frame_len > interleaved_size) {
+            drain_rtsp_interleaved_payload(fd, frame_len, timeout_seconds);
+            return RTSP_READ_INTERLEAVED;
+        }
+        ok = recv_exact_timeout(fd, interleaved, frame_len, timeout_seconds);
+        if (ok <= 0) {
+            return RTSP_READ_ERROR;
+        }
+        *interleaved_len = frame_len;
+        return RTSP_READ_INTERLEAVED;
+    }
+
+    used = 1;
+    request[0] = (char)first;
+    request[1] = '\0';
+    while (used < request_size - 1) {
+        char *header_end = strstr(request, "\r\n\r\n");
+        if (header_end != NULL) {
+            size_t header_len = (size_t)(header_end + 4 - request);
+            int body_len = content_length(request);
+            if ((int)(used - header_len) >= body_len) {
+                return RTSP_READ_REQUEST;
+            }
+        }
+        ok = recv_exact_timeout(
+            fd,
+            (unsigned char *)request + used,
+            1,
+            timeout_seconds
+        );
+        if (ok <= 0) {
+            return RTSP_READ_ERROR;
+        }
+        used++;
+        request[used] = '\0';
+    }
+    return RTSP_READ_REQUEST;
 }
 
 static bool read_sip_domain(char *domain, size_t domain_len) {
@@ -2523,11 +2805,22 @@ static void store_be16(unsigned char *out, uint16_t value) {
     out[1] = (unsigned char)(value & 0xff);
 }
 
+static uint16_t load_be16(const unsigned char *in) {
+    return (uint16_t)(((uint16_t)in[0] << 8) | in[1]);
+}
+
 static void store_be32(unsigned char *out, uint32_t value) {
     out[0] = (unsigned char)((value >> 24) & 0xff);
     out[1] = (unsigned char)((value >> 16) & 0xff);
     out[2] = (unsigned char)((value >> 8) & 0xff);
     out[3] = (unsigned char)(value & 0xff);
+}
+
+static uint32_t load_be32(const unsigned char *in) {
+    return ((uint32_t)in[0] << 24)
+        | ((uint32_t)in[1] << 16)
+        | ((uint32_t)in[2] << 8)
+        | (uint32_t)in[3];
 }
 
 static int protect_and_send_srtp(c300x_srtp_t session, int fd, int port, unsigned char *packet, int packet_len) {
@@ -2802,6 +3095,170 @@ static bool forward_ondemand_talkback_packet(
         bridge->ondemand_last_talkback_ms = monotonic_ms();
     }
     pthread_mutex_unlock(&bridge->mutex);
+    return true;
+}
+
+static int16_t decode_pcmu_sample(unsigned char value) {
+    const int bias = 0x84;
+    int magnitude;
+
+    value = (unsigned char)~value;
+    magnitude = ((value & 0x0f) << 3) + bias;
+    magnitude <<= (value & 0x70) >> 4;
+    return (int16_t)((value & 0x80) ? (bias - magnitude) : (magnitude - bias));
+}
+
+static int16_t decode_pcma_sample(unsigned char value) {
+    int exponent;
+    int mantissa;
+    int sample;
+
+    value ^= 0x55;
+    exponent = (value & 0x70) >> 4;
+    mantissa = value & 0x0f;
+    sample = mantissa << 4;
+    if (exponent == 0) {
+        sample += 8;
+    } else {
+        sample += 0x108;
+        sample <<= exponent - 1;
+    }
+    return (int16_t)((value & 0x80) ? sample : -sample);
+}
+
+static bool forward_speex_talkback_packet(
+    media_bridge_t *bridge,
+    const unsigned char *packet,
+    ssize_t packet_len
+) {
+    return forward_ring_talkback_packet(bridge, packet, packet_len)
+        || forward_home_call_talkback_packet(bridge, packet, packet_len)
+        || forward_ondemand_talkback_packet(bridge, packet, packet_len);
+}
+
+static bool forward_pcm_backchannel_packet(
+    media_bridge_t *bridge,
+    const unsigned char *packet,
+    size_t packet_len,
+    size_t header_len,
+    unsigned char payload_type
+) {
+    const unsigned char *payload = packet + header_len;
+    size_t payload_len = packet_len - header_len;
+    size_t offset = 0;
+    bool consumed = false;
+
+    while (payload_len - offset >= RTSP_BACKCHANNEL_FRAME_SAMPLES) {
+        int16_t samples[RTSP_BACKCHANNEL_FRAME_SAMPLES];
+        unsigned char speex_payload[256];
+        unsigned char out[512];
+        size_t speex_len = 0;
+
+        for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
+            unsigned char sample = payload[offset + index];
+            samples[index] = payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
+                ? decode_pcma_sample(sample)
+                : decode_pcmu_sample(sample);
+        }
+        if (!speex_encode_pcm_frame(
+            samples,
+            speex_payload,
+            sizeof(speex_payload),
+            &speex_len
+        )) {
+            return true;
+        }
+        if (12 + speex_len > sizeof(out)) {
+            return true;
+        }
+        memset(out, 0, sizeof(out));
+        out[0] = 0x80;
+        out[1] = (unsigned char)(
+            (offset == 0 ? (packet[1] & 0x80) : 0)
+            | C300X_TALKBACK_RTP_PAYLOAD_TYPE
+        );
+        store_be16(out + 2, load_be16(packet + 2));
+        store_be32(out + 4, load_be32(packet + 4) + (uint32_t)offset);
+        store_be32(out + 8, load_be32(packet + 8));
+        memcpy(out + 12, speex_payload, speex_len);
+        consumed = forward_speex_talkback_packet(
+            bridge,
+            out,
+            (ssize_t)(12 + speex_len)
+        ) || consumed;
+        offset += RTSP_BACKCHANNEL_FRAME_SAMPLES;
+    }
+    return consumed || payload_len > 0;
+}
+
+static bool forward_rtsp_backchannel_packet(
+    media_bridge_t *bridge,
+    const unsigned char *packet,
+    size_t packet_len
+) {
+    size_t csrc_count;
+    size_t header_len;
+    unsigned char payload_type;
+
+    if (bridge == NULL || packet == NULL || packet_len < 12) {
+        return false;
+    }
+    if ((packet[0] & 0xc0) != 0x80 || (packet[0] & 0x10) != 0) {
+        return true;
+    }
+    csrc_count = (size_t)(packet[0] & 0x0f);
+    header_len = 12 + (csrc_count * 4);
+    if (packet_len <= header_len) {
+        return true;
+    }
+    payload_type = packet[1] & 0x7f;
+    if (
+        payload_type == C300X_TALKBACK_RTP_PAYLOAD_TYPE
+        || payload_type == RING_AUDIO_PAYLOAD_TYPE
+        || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE
+    ) {
+        return forward_speex_talkback_packet(
+            bridge,
+            packet,
+            (ssize_t)packet_len
+        );
+    }
+    if (
+        payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
+        || payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+    ) {
+        return forward_pcm_backchannel_packet(
+            bridge,
+            packet,
+            packet_len,
+            header_len,
+            payload_type
+        );
+    }
+    return true;
+}
+
+static bool handle_rtsp_backchannel_frame(
+    media_bridge_t *bridge,
+    int slot_index,
+    int channel,
+    const unsigned char *packet,
+    size_t packet_len
+) {
+    bool matches_backchannel = false;
+
+    pthread_mutex_lock(&bridge->mutex);
+    rtsp_client_slot_t *slot = rtsp_client_slot_locked(bridge, slot_index);
+    matches_backchannel = slot != NULL
+        && slot->backchannel_enabled
+        && slot->transport_tcp
+        && channel == slot->backchannel_interleaved_channel;
+    pthread_mutex_unlock(&bridge->mutex);
+
+    if (!matches_backchannel) {
+        return false;
+    }
+    (void)forward_rtsp_backchannel_packet(bridge, packet, packet_len);
     return true;
 }
 
@@ -4803,6 +5260,7 @@ static void send_rtsp_response(
 
 static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     char *request = calloc(1, RTSP_BUFFER_SIZE);
+    unsigned char interleaved[2048];
     char method[16];
     char uri[512];
     char cseq[64];
@@ -4829,7 +5287,31 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     c300x_video_bridge_client_connected(g_bridge.video);
 
     while (g_bridge.running) {
-        if (read_message(fd, request, RTSP_BUFFER_SIZE, media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30) < 0) {
+        int interleaved_channel = -1;
+        size_t interleaved_len = 0;
+        rtsp_read_result_t read_result = read_rtsp_request_or_interleaved(
+            fd,
+            request,
+            RTSP_BUFFER_SIZE,
+            interleaved,
+            sizeof(interleaved),
+            &interleaved_channel,
+            &interleaved_len,
+            media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30
+        );
+        if (read_result == RTSP_READ_INTERLEAVED) {
+            if (interleaved_len > 0) {
+                (void)handle_rtsp_backchannel_frame(
+                    &g_bridge,
+                    slot_index,
+                    interleaved_channel,
+                    interleaved,
+                    interleaved_len
+                );
+            }
+            continue;
+        }
+        if (read_result != RTSP_READ_REQUEST) {
             break;
         }
         method[0] = '\0';
@@ -4869,6 +5351,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 slot->recorder = recorder;
                 slot->video_interleaved_channel = wants_audio ? 2 : 0;
                 slot->audio_interleaved_channel = 0;
+                slot->backchannel_enabled = false;
+                slot->backchannel_interleaved_channel = -1;
                 sync_legacy_rtsp_client_locked(&g_bridge);
             }
             pthread_mutex_unlock(&g_bridge.mutex);
@@ -4893,7 +5377,12 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=rtcp-fb:* ccm tmmbr\r\n"
                 "a=rtcp-fb:96 nack pli\r\n"
                 "a=rtcp-fb:96 ccm fir\r\n"
-                "a=control:streamid=1\r\n";
+                "a=control:streamid=1\r\n"
+                "m=audio 0 RTP/AVP 8 0\r\n"
+                "a=rtpmap:8 PCMA/8000\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
+                "a=control:streamid=2\r\n"
+                "a=sendonly\r\n";
             const char *sdp_ring_audio_video =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"
@@ -4911,7 +5400,12 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=rtcp-fb:* ccm tmmbr\r\n"
                 "a=rtcp-fb:96 nack pli\r\n"
                 "a=rtcp-fb:96 ccm fir\r\n"
-                "a=control:streamid=1\r\n";
+                "a=control:streamid=1\r\n"
+                "m=audio 0 RTP/AVP 8 0\r\n"
+                "a=rtpmap:8 PCMA/8000\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
+                "a=control:streamid=2\r\n"
+                "a=sendonly\r\n";
             const char *sdp_home_call_audio =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"
@@ -4921,7 +5415,12 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "m=audio 0 RTP/AVP 110\r\n"
                 "a=rtpmap:110 speex/8000\r\n"
                 "a=fmtp:110 vbr=on\r\n"
-                "a=control:streamid=0\r\n";
+                "a=control:streamid=0\r\n"
+                "m=audio 0 RTP/AVP 8 0\r\n"
+                "a=rtpmap:8 PCMA/8000\r\n"
+                "a=rtpmap:0 PCMU/8000\r\n"
+                "a=control:streamid=2\r\n"
+                "a=sendonly\r\n";
             const char *sdp_video =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"
@@ -4953,10 +5452,19 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
             bool rtsp_audio_enabled = slot != NULL && slot->audio_enabled;
             pthread_mutex_unlock(&g_bridge.mutex);
-            bool is_audio = rtsp_audio_enabled && strstr(uri, "streamid=0") != NULL;
+            bool is_backchannel = rtsp_audio_enabled
+                && (
+                    strstr(uri, "streamid=2") != NULL
+                    || strstr(uri, "backchannel") != NULL
+                );
+            bool is_audio = rtsp_audio_enabled
+                && !is_backchannel
+                && strstr(uri, "streamid=0") != NULL;
             int server_port = is_audio ? audio_rtp_port(g_bridge.config) : video_rtp_port(g_bridge.config);
             if (interleaved_channel < 0) {
-                interleaved_channel = is_audio ? 0 : (rtsp_audio_enabled ? 2 : 0);
+                interleaved_channel = is_backchannel
+                    ? 4
+                    : (is_audio ? 0 : (rtsp_audio_enabled ? 2 : 0));
             }
             pthread_mutex_lock(&g_bridge.mutex);
             slot = rtsp_client_slot_locked(&g_bridge, slot_index);
@@ -4965,7 +5473,10 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 break;
             }
             slot->transport_tcp = tcp;
-            if (is_audio) {
+            if (is_backchannel) {
+                slot->backchannel_enabled = true;
+                slot->backchannel_interleaved_channel = interleaved_channel;
+            } else if (is_audio) {
                 slot->audio_interleaved_channel = interleaved_channel;
             } else {
                 slot->video_interleaved_channel = interleaved_channel;

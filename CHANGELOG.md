@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6.0 - Unreleased
+
+### Changed
+
+- Moves browser WebRTC handling to Home Assistant's WebRTC provider path, so
+  video no longer depends on the optional `aiortc` Python runtime inside the
+  integration.
+
+### Added
+
+- Adds native-agent RTSP backchannel support for browser microphone audio,
+  forwarding go2rtc talkback audio into the existing local Speex/SRTP device
+  media path.
+
 ## v1.5.4 - 2026-06-27
 
 ### Changed

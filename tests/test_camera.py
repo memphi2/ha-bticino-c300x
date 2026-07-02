@@ -243,6 +243,54 @@ def _webrtc_message_value(message: Any, key: str) -> Any:
     return getattr(message, key, None)
 
 
+class _FakeWebRTCProvider:
+    domain = "go2rtc"
+
+    def __init__(self) -> None:
+        self.support_sources: list[str] = []
+        self.offer_sources: list[str] = []
+        self.offers: list[tuple[str, str]] = []
+        self.candidates: list[tuple[str, Any]] = []
+        self.closed: list[str] = []
+
+    async def async_handle_async_webrtc_offer(
+        self,
+        camera: C300XDoorbellCamera,
+        offer_sdp: str,
+        session_id: str,
+        send_message: Any,
+    ) -> None:
+        self.offer_sources.append(await camera.stream_source())
+        self.offers.append((session_id, offer_sdp))
+        send_message({"type": "answer", "sdp": "v=0\r\n"})
+
+    async def async_on_webrtc_candidate(
+        self,
+        session_id: str,
+        candidate: Any,
+    ) -> None:
+        self.candidates.append((session_id, candidate))
+
+    def async_close_session(self, session_id: str) -> None:
+        self.closed.append(session_id)
+
+
+def _install_fake_webrtc_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    provider: _FakeWebRTCProvider | None,
+) -> None:
+    async def _provider(hass: Any, camera: C300XDoorbellCamera) -> Any:
+        if provider is not None:
+            provider.support_sources.append(await camera.stream_source())
+        return provider
+
+    monkeypatch.setattr(
+        camera_module,
+        "_async_get_supported_webrtc_provider",
+        _provider,
+    )
+
+
 def test_resolve_doorbell_camera_entity_id_handles_missing_registry() -> None:
     assert (
         resolve_doorbell_camera_entity_id(
@@ -562,28 +610,29 @@ def test_doorbell_camera_refresh_failure_marks_entity_unavailable() -> None:
     assert camera.available is False
 
 
-def test_doorbell_camera_webrtc_offer_reports_missing_aiortc() -> None:
-    async def _load_aiortc_modules() -> SimpleNamespace:
-        raise ImportError("aiortc")
-
+def test_doorbell_camera_webrtc_offer_reports_missing_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
-    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+    camera.hass = SimpleNamespace()
     sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, None)
 
-    with pytest.raises(HomeAssistantError):
-        asyncio.run(
-            camera.async_handle_async_webrtc_offer(
-                "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
-                "session-1",
-                sent_messages.append,
-            )
+    asyncio.run(
+        camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-1",
+            sent_messages.append,
         )
+    )
 
     assert sent_messages == [
         {
             "type": "error",
             "code": "bticino_webrtc_unavailable",
-            "message": "aiortc is not installed",
+            "message": (
+                "No Home Assistant WebRTC provider is available for the C300X RTSP stream"
+            ),
         }
     ]
 
@@ -1247,23 +1296,18 @@ def test_doorbell_camera_ring_reader_restart_does_not_restart_on_demand() -> Non
     assert api.activate_calls == []
 
 
-def test_doorbell_camera_ring_preview_restart_stops_after_answer_state() -> None:
+def test_doorbell_camera_webrtc_offer_uses_provider_without_aiortc_fallback() -> None:
     source = Path("custom_components/bticino_c300x/camera.py").read_text(
         encoding="utf-8"
     )
-    callback_block = source[
-        source.index("async def _restart_reader()")
-        : source.index("if owner == \"home_call\":", source.index("async def _restart_reader()"))
+    offer_block = source[
+        source.index("async def _async_handle_webrtc_offer(")
+        : source.index("async def _async_handle_provider_webrtc_offer(")
     ]
 
-    assert "current_session = self._webrtc_sessions.get(session_id)" in callback_block
-    assert "if current_session is None:" in callback_block
-    assert "return False" in callback_block
-    assert "if current_session.ring_preview:" in callback_block
-    assert "await self._async_refresh_video_status_or_none(" in callback_block
-    assert "apply_status=False" in callback_block
-    assert "not _media_decision_is_unanswered_ring(decision)" in callback_block
-    assert "current_session.ring_preview = False" in callback_block
+    assert "_async_handle_provider_webrtc_offer(" in offer_block
+    assert "_async_load_aiortc_modules" not in offer_block
+    assert "aiortc is not installed" not in offer_block
 
 
 def test_doorbell_camera_rtsp_policy_blocks_second_on_demand_browser() -> None:
@@ -1640,7 +1684,9 @@ def test_doorbell_camera_rtsp_policy_allows_second_ring_preview_when_agent_share
     assert api.activate_calls == []
 
 
-def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source() -> None:
+def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sent_messages: list[Any] = []
     ready_urls: list[str] = []
     peers: list[Any] = []
@@ -1768,7 +1814,8 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source() -> None:
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera.hass = _FakeHass()
-    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+    provider = _FakeWebRTCProvider()
+    _install_fake_webrtc_provider(monkeypatch, provider)
     _stub_rtsp_ready(camera, ready_urls)
 
     preview_offer = "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly\r\n"
@@ -1797,35 +1844,22 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source() -> None:
     asyncio.run(_run())
 
     preview_sessions = [
-        camera._webrtc_sessions[f"ring-preview-browser-{browser_index}"]
+        camera._provider_webrtc_sessions[f"ring-preview-browser-{browser_index}"]
         for browser_index in range(4)
     ]
-    answer_session = camera._webrtc_sessions["ring-answer-browser"]
-    assert all(session.player.resource_id == "ring:entry-1" for session in preview_sessions)
-    assert answer_session.player.resource_id == "ring:entry-1"
-    assert all(session.player is not answer_session.player for session in preview_sessions)
+    answer_session = camera._provider_webrtc_sessions["ring-answer-browser"]
+    assert all(session.resource_id == "ring:entry-1" for session in preview_sessions)
+    assert answer_session.resource_id == "ring:entry-1"
+    assert answer_session.wants_audio is True
+    assert all(session.ready for session in preview_sessions)
+    assert answer_session.ready is True
     assert camera._active_local_media_sessions() == 1
-    assert camera._shared_ring_rtsp_source is not None
-    assert (
-        camera._shared_ring_rtsp_source.stream_url
-        == "rtsp://127.0.0.1:6554/doorbell"
-    )
-    assert [[track.kind for track in peer.tracks] for peer in peers[:4]] == [
-        ["video"],
-        ["video"],
-        ["video"],
-        ["video"],
-    ]
-    assert [track.kind for track in peers[4].tracks] == ["video", "audio"]
+    assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
+    assert provider.support_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
+    assert len(provider.offers) == 5
     assert api.activate_calls == []
     assert ready_urls == [
-        "rtsp://127.0.0.1:6554/doorbell-video",
-        "rtsp://127.0.0.1:6554/doorbell",
-        "rtsp://127.0.0.1:6554/doorbell-video",
-        "rtsp://127.0.0.1:6554/doorbell",
-        "rtsp://127.0.0.1:6554/doorbell-video",
-        "rtsp://127.0.0.1:6554/doorbell",
-        "rtsp://127.0.0.1:6554/doorbell-video",
+        *(["rtsp://127.0.0.1:6554/doorbell-video"] * 8),
         "rtsp://127.0.0.1:6554/doorbell",
         "rtsp://127.0.0.1:6554/doorbell",
     ]
@@ -1942,7 +1976,9 @@ def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
     assert api.max_active_activate_calls == 1
 
 
-def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> None:
+def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sent_messages: list[Any] = []
     ready_urls: list[str] = []
     peers: list[Any] = []
@@ -2029,7 +2065,8 @@ def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> N
     )
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     camera.hass = _FakeHass()
-    camera._async_load_aiortc_modules = _load_aiortc_modules  # type: ignore[method-assign]
+    provider = _FakeWebRTCProvider()
+    _install_fake_webrtc_provider(monkeypatch, provider)
     _stub_rtsp_ready(camera, ready_urls)
 
     offer = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n"
@@ -2042,10 +2079,10 @@ def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> N
             duration_seconds=30,
         )
 
-        session = camera._webrtc_sessions["session-home"]
+        session = camera._provider_webrtc_sessions["session-home"]
         assert session.owner == "home_call"
-        assert session.talkback_requested is True
-        assert peers[0].tracks and peers[0].tracks[0].kind == "audio"
+        assert session.wants_audio is True
+        assert session.ready is True
         assert entry.runtime_data.event_state.video_available is False
         assert camera.extra_state_attributes["video_owner"] == "home_call"
         assert camera.extra_state_attributes["video_window_available"] is False
@@ -2059,26 +2096,31 @@ def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session() -> N
             duration_seconds=30,
         )
 
-        listen_session = camera._webrtc_sessions["session-home-listen"]
+        listen_session = camera._provider_webrtc_sessions["session-home-listen"]
         assert listen_session.owner == "home_call"
-        assert listen_session.talkback_requested is False
-        assert peers[1].tracks and peers[1].tracks[0].kind == "audio"
+        assert listen_session.wants_audio is True
+        assert listen_session.ready is True
 
         await camera._async_close_webrtc_session("session-home-listen")
 
     asyncio.run(_run())
 
     assert api.home_call_start_calls == [30, 30]
-    assert api.home_call_status_calls == 2
+    assert api.home_call_status_calls == 4
     assert api.home_call_stop_calls == 2
     assert api.activate_calls == []
     assert api.stop_calls == 0
     assert ready_urls == [
         "rtsp://127.0.0.1:6554/doorbell",
         "rtsp://127.0.0.1:6554/doorbell",
+        "rtsp://127.0.0.1:6554/doorbell",
+        "rtsp://127.0.0.1:6554/doorbell",
     ]
-    assert peers[0].closed is True
-    assert peers[1].closed is True
+    assert provider.offer_sources == [
+        "rtsp://127.0.0.1:6554/doorbell#backchannel=1",
+        "rtsp://127.0.0.1:6554/doorbell#backchannel=1",
+    ]
+    assert provider.closed == ["session-home", "session-home-listen"]
     assert any(
         _webrtc_message_value(message, "type") == "answer"
         for message in sent_messages

@@ -14,6 +14,11 @@
       ]
     }
   },
+  "ha_reference": {
+    "audio_rtsp_path": "/doorbell",
+    "start_action": "/api/v1/calls/home/actions/start",
+    "stop_action": "/api/v1/calls/home/actions/stop"
+  },
   "mode": "home_call",
   "offer": {
     "audio": {
@@ -42,6 +47,18 @@
         "100"
       ]
     }
+  },
+  "rtsp_contract": {
+    "methods": [
+      "DESCRIBE",
+      "SETUP",
+      "PLAY",
+      "TEARDOWN"
+    ],
+    "paths": [
+      "/doorbell"
+    ],
+    "teardown_required": true
   },
   "schema_version": 1,
   "sip_sequence": [

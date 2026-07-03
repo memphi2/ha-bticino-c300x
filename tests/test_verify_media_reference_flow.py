@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import sys
 from pathlib import Path
@@ -81,6 +82,20 @@ def test_fixture_gate_checks_cover_all_media_modes() -> None:
     ]
 
     assert failed == []
+
+
+def test_fixture_rtsp_contract_rejects_missing_teardown() -> None:
+    module = _script_module()
+    fixture = copy.deepcopy(module._fixture("on_demand"))
+    fixture["rtsp_contract"]["methods"] = ["DESCRIBE", "SETUP", "PLAY"]
+
+    failed = [
+        check.name
+        for check in module._collect_rtsp_contract_checks("on_demand", fixture)
+        if not check.ok
+    ]
+
+    assert failed == ["fixture.on_demand.rtsp.methods"]
 
 
 def test_ring_reference_pcap_comparison_accepts_matching_flow() -> None:

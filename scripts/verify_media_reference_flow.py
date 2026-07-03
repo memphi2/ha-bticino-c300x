@@ -291,7 +291,7 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
     if mode in ("all", "on_demand"):
         checks.extend(_collect_on_demand_code_checks(media_bridge, root))
     if mode in ("all", "home_call"):
-        checks.extend(_collect_home_call_code_checks(media_bridge))
+        checks.extend(_collect_home_call_code_checks(media_bridge, root))
     if mode not in ("all", "ring_call"):
         return checks
 
@@ -385,6 +385,9 @@ def _collect_session_fixture_checks(mode: str, fixture: dict[str, Any]) -> list[
     expected_sequence = ["INVITE", "100", "180", "200", "ACK", "BYE", "200"]
     offer = fixture.get("offer") if isinstance(fixture.get("offer"), dict) else {}
     answer = fixture.get("answer") if isinstance(fixture.get("answer"), dict) else {}
+    ha_reference = (
+        fixture.get("ha_reference") if isinstance(fixture.get("ha_reference"), dict) else {}
+    )
     checks = [
         Check(
             f"fixture.{mode}.sip_sequence",
@@ -416,6 +419,49 @@ def _collect_session_fixture_checks(mode: str, fixture: dict[str, Any]) -> list[
             mode != "home_call" or "video" not in offer,
         )
     )
+    checks.extend(_collect_rtsp_contract_checks(mode, fixture))
+    if mode == "on_demand":
+        checks.extend(
+            [
+                Check(
+                    "fixture.on_demand.audio_video_path",
+                    ha_reference.get("audio_video_rtsp_path") == "/doorbell",
+                ),
+                Check(
+                    "fixture.on_demand.video_path",
+                    ha_reference.get("video_rtsp_path") == "/doorbell-video",
+                ),
+                Check(
+                    "fixture.on_demand.activate_action",
+                    ha_reference.get("activate_action")
+                    == "/api/v1/video/doorbell/actions/activate",
+                ),
+                Check(
+                    "fixture.on_demand.stop_action",
+                    ha_reference.get("stop_action")
+                    == "/api/v1/video/doorbell/actions/stop",
+                ),
+            ]
+        )
+    elif mode == "home_call":
+        checks.extend(
+            [
+                Check(
+                    "fixture.home_call.audio_path",
+                    ha_reference.get("audio_rtsp_path") == "/doorbell",
+                ),
+                Check(
+                    "fixture.home_call.start_action",
+                    ha_reference.get("start_action")
+                    == "/api/v1/calls/home/actions/start",
+                ),
+                Check(
+                    "fixture.home_call.stop_action",
+                    ha_reference.get("stop_action")
+                    == "/api/v1/calls/home/actions/stop",
+                ),
+            ]
+        )
     return checks
 
 
@@ -479,6 +525,7 @@ def _collect_ring_fixture_checks(fixture: dict[str, Any]) -> list[Check]:
             detail=_diff_detail(phases, expected_phases),
         ),
     ]
+    checks.extend(_collect_rtsp_contract_checks("ring_call", fixture))
     if native_dict:
         checks.extend(
             _collect_media_fingerprint_checks(
@@ -496,12 +543,60 @@ def _collect_ring_fixture_checks(fixture: dict[str, Any]) -> list[Check]:
     return checks
 
 
+def _collect_rtsp_contract_checks(mode: str, fixture: dict[str, Any]) -> list[Check]:
+    expected = {
+        "ring_call": {
+            "methods": ["PLAY", "TEARDOWN"],
+            "paths": ["/doorbell-video", "/doorbell"],
+            "teardown_required": True,
+        },
+        "on_demand": {
+            "methods": ["DESCRIBE", "SETUP", "PLAY", "TEARDOWN"],
+            "paths": ["/doorbell", "/doorbell-video"],
+            "teardown_required": True,
+        },
+        "home_call": {
+            "methods": ["DESCRIBE", "SETUP", "PLAY", "TEARDOWN"],
+            "paths": ["/doorbell"],
+            "teardown_required": True,
+        },
+    }[mode]
+    contract = (
+        fixture.get("rtsp_contract")
+        if isinstance(fixture.get("rtsp_contract"), dict)
+        else {}
+    )
+    return [
+        Check(
+            f"fixture.{mode}.rtsp.methods",
+            contract.get("methods") == expected["methods"],
+            detail=_diff_detail(contract.get("methods"), expected["methods"]),
+        ),
+        Check(
+            f"fixture.{mode}.rtsp.paths",
+            contract.get("paths") == expected["paths"],
+            detail=_diff_detail(contract.get("paths"), expected["paths"]),
+        ),
+        Check(
+            f"fixture.{mode}.rtsp.teardown_required",
+            contract.get("teardown_required") is expected["teardown_required"],
+        ),
+    ]
+
+
 def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]:
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
         "static bool send_bt_av_media_command",
     )
+    rtsp_body = _section(
+        media_bridge,
+        "static void handle_rtsp_client",
+        "static int create_rtsp_listener",
+    )
+    api = _read(root / "custom_components" / "bticino_c300x" / "api.py")
+    camera = _read(root / "custom_components" / "bticino_c300x" / "camera.py")
     const = _read(root / "custom_components" / "bticino_c300x" / "const.py")
     offer = _fixture("on_demand")["offer"]
     checks = _collect_media_code_checks(
@@ -521,6 +616,11 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
                 "code.on_demand.default_preview_path",
                 'DEFAULT_VIDEO_STREAM_PATH = "/doorbell-video"' in const,
             ),
+            Check("code.on_demand.audio_rtsp_path", 'path = self._audio_stream_path' in camera),
+            Check("code.on_demand.activate_action", "/api/v1/video/doorbell/actions/activate" in api),
+            Check("code.on_demand.stop_action", "/api/v1/video/doorbell/actions/stop" in api),
+            Check("code.on_demand.rtsp_teardown", 'strcmp(method, "TEARDOWN") == 0' in rtsp_body),
+            Check("code.on_demand.teardown_stops_last_client", "remaining_clients == 0" in rtsp_body),
             Check(
                 "code.on_demand.no_static_pcmu_rtpmap",
                 '"a=rtpmap:0 PCMU/8000\\r\\n"' not in setup_body,
@@ -534,12 +634,19 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
     return checks
 
 
-def _collect_home_call_code_checks(media_bridge: str) -> list[Check]:
+def _collect_home_call_code_checks(media_bridge: str, root: Path) -> list[Check]:
     home_call_body = _section(
         media_bridge,
         "static bool build_home_call_sdp",
         "static bool send_home_call_register",
     )
+    rtsp_body = _section(
+        media_bridge,
+        "static void handle_rtsp_client",
+        "static int create_rtsp_listener",
+    )
+    api = _read(root / "custom_components" / "bticino_c300x" / "api.py")
+    camera = _read(root / "custom_components" / "bticino_c300x" / "camera.py")
     offer = _fixture("home_call")["offer"]
     checks = _collect_media_code_checks(
         home_call_body,
@@ -561,6 +668,11 @@ def _collect_home_call_code_checks(media_bridge: str) -> list[Check]:
                 and "home_call.answered" in media_bridge
                 and "home_call.ended" in media_bridge,
             ),
+            Check("code.home_call.start_action", "/api/v1/calls/home/actions/start" in api),
+            Check("code.home_call.stop_action", "/api/v1/calls/home/actions/stop" in api),
+            Check("code.home_call.audio_rtsp_path", "async_prepare_home_call_rtsp_stream" in camera),
+            Check("code.home_call.rtsp_media_request", "request_home_call_media_if_active" in rtsp_body),
+            Check("code.home_call.rtsp_teardown", 'strcmp(method, "TEARDOWN") == 0' in rtsp_body),
         ]
     )
     return checks

@@ -49,6 +49,17 @@
       ]
     }
   },
+  "rtsp_contract": {
+    "methods": [
+      "PLAY",
+      "TEARDOWN"
+    ],
+    "paths": [
+      "/doorbell-video",
+      "/doorbell"
+    ],
+    "teardown_required": true
+  },
   "schema_version": 1,
   "sip_sequence": [
     "INVITE",

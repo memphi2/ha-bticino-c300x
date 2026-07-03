@@ -25,6 +25,12 @@
       ]
     }
   },
+  "ha_reference": {
+    "activate_action": "/api/v1/video/doorbell/actions/activate",
+    "audio_video_rtsp_path": "/doorbell",
+    "stop_action": "/api/v1/video/doorbell/actions/stop",
+    "video_rtsp_path": "/doorbell-video"
+  },
   "mode": "on_demand",
   "offer": {
     "audio": {
@@ -73,6 +79,19 @@
         "99"
       ]
     }
+  },
+  "rtsp_contract": {
+    "methods": [
+      "DESCRIBE",
+      "SETUP",
+      "PLAY",
+      "TEARDOWN"
+    ],
+    "paths": [
+      "/doorbell",
+      "/doorbell-video"
+    ],
+    "teardown_required": true
   },
   "schema_version": 1,
   "sip_sequence": [

@@ -1205,6 +1205,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self.hass.async_create_task(_close_sessions())
 
     def _apply_home_call_ended(self, status: dict[str, Any]) -> None:
+        self._mark_home_call_sessions_inactive()
         was_home_call = (
             self._video_owner == "home_call"
             or self._bridge_status.get("media_owner") == "home_call"
@@ -1215,6 +1216,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             "home_call_running": False,
             "home_call_active": False,
             "home_call_answered": False,
+            "home_call_stopping": False,
             "home_call_rtp_proxy": False,
             "home_call_target_audio_port": 0,
             "home_call_rtp_packets": status.get("rtp_packets", 0),
@@ -1222,6 +1224,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         }
         if was_home_call:
             self._bridge_status["media_owner"] = "idle"
+            self._bridge_status["media_active"] = False
+            self._bridge_status["media_starting"] = False
+            self._bridge_status["stop_in_progress"] = False
+            self._bridge_status["call_active"] = False
+            self._bridge_status["clients"] = 0
             self._video_owner = "idle"
             self._video_window_available = False
             self._attr_is_streaming = False
@@ -1229,6 +1236,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             self._audio_stream_path = None
             self._recorder_stream_path = None
         self._refresh_derived_media_state()
+
+    def _mark_home_call_sessions_inactive(self) -> None:
+        for session in self._provider_webrtc_sessions.values():
+            if session.owner == "home_call":
+                session.ready = False
 
     def _clear_video_window(self) -> None:
         self._video_window_available = False

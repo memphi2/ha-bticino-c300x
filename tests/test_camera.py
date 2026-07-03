@@ -2293,6 +2293,54 @@ def test_doorbell_camera_home_call_answered_then_ended_event_sequence() -> None:
     assert entry.runtime_data.api.home_call_status_calls == 0
 
 
+def test_doorbell_camera_home_call_ended_clears_stale_busy_state() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _FakeWebRTCProvider()
+    camera._video_owner = "home_call"
+    camera._bridge_status = {
+        "media_owner": "home_call",
+        "media_active": True,
+        "media_starting": False,
+        "stop_in_progress": False,
+        "call_active": True,
+        "clients": 1,
+        "home_call_running": True,
+        "home_call_active": True,
+        "home_call_answered": True,
+    }
+    camera._provider_webrtc_sessions["session-home"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="home_call",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=True,
+        resource_id="home_call:entry-1",
+        ready=True,
+    )
+    camera._refresh_derived_media_state()
+    assert camera._last_media_state is MediaState.HOME_CALL_ACTIVE
+
+    camera._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "home_call_ended",
+                "home_call": {"rtp_packets": 377, "rtcp_packets": 1},
+            }
+        )
+    )
+
+    assert camera._provider_webrtc_sessions["session-home"].ready is False
+    assert camera._bridge_status["media_owner"] == "idle"
+    assert camera._bridge_status["media_active"] is False
+    assert camera._bridge_status["call_active"] is False
+    assert camera._bridge_status["clients"] == 0
+    assert camera._last_media_state is MediaState.IDLE
+    assert camera.extra_state_attributes["media_state"] == "idle"
+    assert camera.extra_state_attributes["media_primary_action"] == "start_stream"
+
+
 def test_doorbell_camera_home_call_ended_keeps_other_video_owner() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]

@@ -8,9 +8,7 @@ import time
 from collections.abc import Mapping
 from contextlib import suppress
 from contextvars import ContextVar
-from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlsplit
 
 from homeassistant.components.camera import (
     Camera,
@@ -59,6 +57,18 @@ from .camera_media.state_machine import (
     MediaStateOutput,
     derive_media_state,
     media_state_input_from_video_status,
+)
+from .camera_media.webrtc_session import (
+    ProviderWebRTCSession as _ProviderWebRTCSession,
+)
+from .camera_media.webrtc_session import (
+    ProviderWebRTCStreamContext as _ProviderWebRTCStreamContext,
+)
+from .camera_media.webrtc_session import (
+    short_session_id as _short_session_id,
+)
+from .camera_media.webrtc_session import (
+    webrtc_message_is_error as _webrtc_message_is_error,
 )
 from .const import (
     CONF_AGENT_HOST,
@@ -154,18 +164,6 @@ def _capability_supported_if_known(entry: ConfigEntry, capability: str) -> bool:
     return supports_capability(entry, capability)
 
 
-def _webrtc_message_is_error(message: Any) -> bool:
-    if isinstance(message, Mapping):
-        return message.get("type") == "error"
-    as_dict = getattr(message, "as_dict", None)
-    if callable(as_dict):
-        with suppress(Exception):
-            data = as_dict()
-            if isinstance(data, Mapping):
-                return data.get("type") == "error"
-    return isinstance(WebRTCError, type) and isinstance(message, WebRTCError)
-
-
 def _camera_state_snapshot(camera: C300XDoorbellCamera) -> _CameraStateSnapshot:
     """Return the HA-visible camera state surface used for write de-duplication."""
 
@@ -197,27 +195,6 @@ async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Came
     )
 
     return await async_get_supported_provider(hass, camera)
-
-
-@dataclass(frozen=True)
-class _ProviderWebRTCStreamContext:
-    owner: str
-    wants_audio: bool
-    wants_backchannel: bool
-
-
-@dataclass
-class _ProviderWebRTCSession:
-    provider: Any
-    owner: str
-    send_message: WebRTCSendMessage
-    wants_audio: bool
-    wants_backchannel: bool
-    resource_id: str
-    ring_call: bool = False
-    ring_preview: bool = False
-    ready: bool = False
-    pending_candidates: list[Any] = field(default_factory=list)
 
 
 async def async_setup_entry(
@@ -1408,24 +1385,6 @@ def _home_call_status_has_media(status: Mapping[str, Any]) -> bool:
         or status.get("rtp_proxy")
         or status.get("target_audio_port")
     )
-
-
-def _short_session_id(session_id: str) -> str:
-    """Return a compact WebRTC session id fragment for logs."""
-
-    text = str(session_id)
-    if len(text) <= 12:
-        return text
-    return f"...{text[-8:]}"
-
-
-def _safe_stream_path_for_log(stream_url: str) -> str:
-    """Return only the stream path, avoiding host data in production logs."""
-
-    try:
-        return urlsplit(stream_url).path or "/"
-    except ValueError:
-        return "<invalid>"
 
 
 @callback

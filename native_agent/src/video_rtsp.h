@@ -49,9 +49,19 @@ struct c300x_video_status {
     unsigned long long rtp_packets;
     unsigned long long home_call_rtp_packets;
     unsigned long long home_call_rtcp_packets;
+    unsigned long long rtsp_options_requests;
+    unsigned long long rtsp_describe_requests;
+    unsigned long long rtsp_setup_requests;
+    unsigned long long rtsp_play_requests;
+    unsigned long long rtsp_teardown_requests;
+    unsigned long long rtsp_rejected_clients;
+    unsigned long long rtsp_rejected_describes;
+    unsigned long long rtsp_play_failures;
     char last_rtp_at[40];
     char last_media_started_at[40];
     char last_error[128];
+    char last_rtsp_method[16];
+    char last_rtsp_reject_reason[64];
 };
 
 struct c300x_video;

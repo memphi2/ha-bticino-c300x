@@ -6977,9 +6977,19 @@ static void handle_doorbell_video_get(
     char media_owner_json[C300X_JSON_QUOTED_LEN(32)];
     char external_owner_json[C300X_JSON_QUOTED_LEN(32)];
     char last_block_reason_json[C300X_JSON_QUOTED_LEN(64)];
+    char last_rtsp_method_json[C300X_JSON_QUOTED_LEN(16)];
+    char last_rtsp_reject_reason_json[C300X_JSON_QUOTED_LEN(64)];
     unsigned long long rtp_packets = 0;
     unsigned long long home_call_rtp_packets = 0;
     unsigned long long home_call_rtcp_packets = 0;
+    unsigned long long rtsp_options_requests = 0;
+    unsigned long long rtsp_describe_requests = 0;
+    unsigned long long rtsp_setup_requests = 0;
+    unsigned long long rtsp_play_requests = 0;
+    unsigned long long rtsp_teardown_requests = 0;
+    unsigned long long rtsp_rejected_clients = 0;
+    unsigned long long rtsp_rejected_describes = 0;
+    unsigned long long rtsp_play_failures = 0;
     unsigned long long bt_media_start_attempts = 0;
     unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
@@ -7000,6 +7010,8 @@ static void handle_doorbell_video_get(
     json_string("idle", media_owner_json, sizeof(media_owner_json));
     json_string("", external_owner_json, sizeof(external_owner_json));
     json_string("", last_block_reason_json, sizeof(last_block_reason_json));
+    json_string("", last_rtsp_method_json, sizeof(last_rtsp_method_json));
+    json_string("", last_rtsp_reject_reason_json, sizeof(last_rtsp_reject_reason_json));
     if (runtime != NULL && runtime->video != NULL) {
         c300x_video_status(runtime->video, &video_status);
         running = video_status.running;
@@ -7035,6 +7047,24 @@ static void handle_doorbell_video_get(
         rtp_packets = video_status.rtp_packets;
         home_call_rtp_packets = video_status.home_call_rtp_packets;
         home_call_rtcp_packets = video_status.home_call_rtcp_packets;
+        rtsp_options_requests = video_status.rtsp_options_requests;
+        rtsp_describe_requests = video_status.rtsp_describe_requests;
+        rtsp_setup_requests = video_status.rtsp_setup_requests;
+        rtsp_play_requests = video_status.rtsp_play_requests;
+        rtsp_teardown_requests = video_status.rtsp_teardown_requests;
+        rtsp_rejected_clients = video_status.rtsp_rejected_clients;
+        rtsp_rejected_describes = video_status.rtsp_rejected_describes;
+        rtsp_play_failures = video_status.rtsp_play_failures;
+        json_string(
+            video_status.last_rtsp_method,
+            last_rtsp_method_json,
+            sizeof(last_rtsp_method_json)
+        );
+        json_string(
+            video_status.last_rtsp_reject_reason,
+            last_rtsp_reject_reason_json,
+            sizeof(last_rtsp_reject_reason_json)
+        );
         last_rtp_at_json = json_string_or_null(
             video_status.last_rtp_at,
             last_rtp_at_quoted,
@@ -7107,6 +7137,16 @@ static void handle_doorbell_video_get(
         "\"audio_enabled\":%s,"
         "\"bt_media_start_attempts\":%llu,"
         "\"bt_media_stop_attempts\":%llu,"
+        "\"rtsp_options_requests\":%llu,"
+        "\"rtsp_describe_requests\":%llu,"
+        "\"rtsp_setup_requests\":%llu,"
+        "\"rtsp_play_requests\":%llu,"
+        "\"rtsp_teardown_requests\":%llu,"
+        "\"rtsp_rejected_clients\":%llu,"
+        "\"rtsp_rejected_describes\":%llu,"
+        "\"rtsp_play_failures\":%llu,"
+        "\"last_rtsp_method\":%s,"
+        "\"last_rtsp_reject_reason\":%s,"
         "\"rtp_packets\":%llu,"
         "\"last_rtp_at\":%s,"
         "\"last_media_started_at\":%s,"
@@ -7162,6 +7202,16 @@ static void handle_doorbell_video_get(
         stream_audio ? "true" : "false",
         bt_media_start_attempts,
         bt_media_stop_attempts,
+        rtsp_options_requests,
+        rtsp_describe_requests,
+        rtsp_setup_requests,
+        rtsp_play_requests,
+        rtsp_teardown_requests,
+        rtsp_rejected_clients,
+        rtsp_rejected_describes,
+        rtsp_play_failures,
+        last_rtsp_method_json,
+        last_rtsp_reject_reason_json,
         rtp_packets,
         last_rtp_at_json,
         last_media_started_at_json,

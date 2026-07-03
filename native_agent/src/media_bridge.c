@@ -219,6 +219,14 @@ typedef struct {
     int home_call_duration_seconds;
     unsigned long long home_call_rtp_packets;
     unsigned long long home_call_rtcp_packets;
+    unsigned long long rtsp_options_requests;
+    unsigned long long rtsp_describe_requests;
+    unsigned long long rtsp_setup_requests;
+    unsigned long long rtsp_play_requests;
+    unsigned long long rtsp_teardown_requests;
+    unsigned long long rtsp_rejected_clients;
+    unsigned long long rtsp_rejected_describes;
+    unsigned long long rtsp_play_failures;
     long long ondemand_last_talkback_ms;
     long long ring_last_talkback_ms;
     long long home_call_last_talkback_ms;
@@ -260,6 +268,8 @@ typedef struct {
     char ondemand_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
     char ring_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
     char home_call_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
+    char last_rtsp_method[16];
+    char last_rtsp_reject_reason[64];
     int invite_cseq;
     const struct c300x_config *config;
     struct c300x_video *video;
@@ -386,6 +396,13 @@ static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slo
     int active_clients = rtsp_client_count_locked(bridge);
 
     if (active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS) {
+        bridge->rtsp_rejected_clients++;
+        snprintf(
+            bridge->last_rtsp_reject_reason,
+            sizeof(bridge->last_rtsp_reject_reason),
+            "%s",
+            "client_capacity"
+        );
         return false;
     }
 
@@ -409,6 +426,51 @@ static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slo
         return true;
     }
     return false;
+}
+
+static void rtsp_note_request(media_bridge_t *bridge, const char *method) {
+    pthread_mutex_lock(&bridge->mutex);
+    snprintf(bridge->last_rtsp_method, sizeof(bridge->last_rtsp_method), "%s", method);
+    if (strcmp(method, "OPTIONS") == 0) {
+        bridge->rtsp_options_requests++;
+    }
+    if (strcmp(method, "DESCRIBE") == 0) {
+        bridge->rtsp_describe_requests++;
+    }
+    if (strcmp(method, "SETUP") == 0) {
+        bridge->rtsp_setup_requests++;
+    }
+    if (strcmp(method, "PLAY") == 0) {
+        bridge->rtsp_play_requests++;
+    }
+    if (strcmp(method, "TEARDOWN") == 0) {
+        bridge->rtsp_teardown_requests++;
+    }
+    pthread_mutex_unlock(&bridge->mutex);
+}
+
+static void rtsp_note_describe_reject(media_bridge_t *bridge, const char *reason) {
+    pthread_mutex_lock(&bridge->mutex);
+    bridge->rtsp_rejected_describes++;
+    snprintf(
+        bridge->last_rtsp_reject_reason,
+        sizeof(bridge->last_rtsp_reject_reason),
+        "%s",
+        reason
+    );
+    pthread_mutex_unlock(&bridge->mutex);
+}
+
+static void rtsp_note_play_failure(media_bridge_t *bridge, const char *reason) {
+    pthread_mutex_lock(&bridge->mutex);
+    bridge->rtsp_play_failures++;
+    snprintf(
+        bridge->last_rtsp_reject_reason,
+        sizeof(bridge->last_rtsp_reject_reason),
+        "%s",
+        reason
+    );
+    pthread_mutex_unlock(&bridge->mutex);
 }
 
 static bool rtsp_existing_clients_compatible_locked(
@@ -5826,6 +5888,26 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         status->home_call_target_audio_port = g_bridge.home_call_target_audio_port;
         status->home_call_rtp_packets = g_bridge.home_call_rtp_packets;
         status->home_call_rtcp_packets = g_bridge.home_call_rtcp_packets;
+        status->rtsp_options_requests = g_bridge.rtsp_options_requests;
+        status->rtsp_describe_requests = g_bridge.rtsp_describe_requests;
+        status->rtsp_setup_requests = g_bridge.rtsp_setup_requests;
+        status->rtsp_play_requests = g_bridge.rtsp_play_requests;
+        status->rtsp_teardown_requests = g_bridge.rtsp_teardown_requests;
+        status->rtsp_rejected_clients = g_bridge.rtsp_rejected_clients;
+        status->rtsp_rejected_describes = g_bridge.rtsp_rejected_describes;
+        status->rtsp_play_failures = g_bridge.rtsp_play_failures;
+        snprintf(
+            status->last_rtsp_method,
+            sizeof(status->last_rtsp_method),
+            "%s",
+            g_bridge.last_rtsp_method
+        );
+        snprintf(
+            status->last_rtsp_reject_reason,
+            sizeof(status->last_rtsp_reject_reason),
+            "%s",
+            g_bridge.last_rtsp_reject_reason
+        );
         status->max_clients = rtsp_client_sharing_allowed_locked(&g_bridge)
             ? C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS
             : 1;
@@ -5981,6 +6063,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         header_value(request, "Transport:", transport, sizeof(transport));
         bool recorder = strstr(uri, "/doorbell-recorder") != NULL;
         bool preview_path = strstr(uri, "/doorbell-video") != NULL || recorder;
+        rtsp_note_request(&g_bridge, method);
 
         if (strcmp(method, "OPTIONS") == 0) {
             send_rtsp_response(fd, 200, cseq, "Public: OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN, GET_PARAMETER\r\n", NULL);
@@ -6030,6 +6113,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             }
             pthread_mutex_unlock(&g_bridge.mutex);
             if (!allow_shared_path) {
+                rtsp_note_describe_reject(&g_bridge, "incompatible_path");
                 send_rtsp_response(fd, 453, cseq, NULL, NULL);
                 break;
             }
@@ -6202,11 +6286,13 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             if (recorder && !ring_session && !home_call_session) {
                 ring_session = wait_for_ring_session_active(&g_bridge, 1500);
                 if (!ring_session) {
+                    rtsp_note_play_failure(&g_bridge, "ring_session_timeout");
                     send_rtsp_response(fd, 503, cseq, NULL, NULL);
                     break;
                 }
             }
             if (!ring_session && !home_call_session && !start_media_session(&g_bridge)) {
+                rtsp_note_play_failure(&g_bridge, "media_start_failed");
                 send_rtsp_response(fd, 500, cseq, NULL, NULL);
                 break;
             }

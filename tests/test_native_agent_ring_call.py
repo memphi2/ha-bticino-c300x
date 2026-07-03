@@ -710,6 +710,27 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     ):
         assert f"int {field};" in video_header or f"unsigned long long {field};" in video_header
         assert f'\\"{field}\\":{marker}' in http
+    for field in (
+        "rtsp_options_requests",
+        "rtsp_describe_requests",
+        "rtsp_setup_requests",
+        "rtsp_play_requests",
+        "rtsp_teardown_requests",
+        "rtsp_rejected_clients",
+        "rtsp_rejected_describes",
+        "rtsp_play_failures",
+    ):
+        assert f"unsigned long long {field};" in video_header
+        assert f"status->{field} = g_bridge.{field};" in media_bridge
+        assert f'\\"{field}\\":%llu' in http
+    for field in ("last_rtsp_method", "last_rtsp_reject_reason"):
+        assert f"char {field}" in video_header
+        assert f"status->{field}" in media_bridge
+        assert f'\\"{field}\\":%s' in http
+    assert "static void rtsp_note_request" in media_bridge
+    assert 'rtsp_note_describe_reject(&g_bridge, "incompatible_path")' in media_bridge
+    assert 'rtsp_note_play_failure(&g_bridge, "ring_session_timeout")' in media_bridge
+    assert 'rtsp_note_play_failure(&g_bridge, "media_start_failed")' in media_bridge
     assert "int window_available = 0;" in http
     assert "ring_call_active" in http
     assert "ring_media_active" in http

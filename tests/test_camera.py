@@ -2378,6 +2378,38 @@ def test_doorbell_camera_home_call_ended_keeps_other_video_owner() -> None:
     assert entry.runtime_data.api.home_call_status_calls == 0
 
 
+def test_doorbell_camera_deduplicates_unchanged_agent_event_state_writes() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    writes: list[str] = []
+    camera.async_write_ha_state = lambda: writes.append("write")  # type: ignore[method-assign]
+    event_data = {
+        "entry_id": entry.entry_id,
+        "event_key": "doorbell_view_requested",
+        "video_window_available": True,
+        "video_available": True,
+        "stream_path": "/doorbell-video",
+        "audio_stream_path": "/doorbell",
+        "recorder_stream_path": "/doorbell-recorder",
+        "bridge": {
+            "media_owner": "doorbell",
+            "media_active": True,
+            "clients": 1,
+        },
+    }
+
+    camera._handle_agent_event(SimpleNamespace(data=event_data))
+    camera._handle_agent_event(SimpleNamespace(data=dict(event_data)))
+
+    assert writes == ["write"]
+
+    camera._handle_agent_event(
+        SimpleNamespace(data={**event_data, "last_block_reason": "rtsp_busy"})
+    )
+
+    assert writes == ["write", "write"]
+
+
 def test_doorbell_camera_does_not_infer_runtime_video_window() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(

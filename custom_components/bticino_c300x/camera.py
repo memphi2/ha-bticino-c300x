@@ -81,6 +81,7 @@ from .video import (
     optional_string,
 )
 
+_CameraStateSnapshot = tuple[Any, Any, Any]
 PARALLEL_UPDATES = 0
 VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
 VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
@@ -163,6 +164,29 @@ def _webrtc_message_is_error(message: Any) -> bool:
             if isinstance(data, Mapping):
                 return data.get("type") == "error"
     return isinstance(WebRTCError, type) and isinstance(message, WebRTCError)
+
+
+def _camera_state_snapshot(camera: C300XDoorbellCamera) -> _CameraStateSnapshot:
+    """Return the HA-visible camera state surface used for write de-duplication."""
+
+    return (
+        getattr(camera, "_attr_is_streaming", False),
+        getattr(camera, "_attr_available", True),
+        _freeze_state_value(camera.extra_state_attributes),
+    )
+
+
+def _freeze_state_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return tuple(
+            (str(key), _freeze_state_value(item))
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_freeze_state_value(item) for item in value), key=repr))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_state_value(item) for item in value)
+    return value
 
 
 async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Camera) -> Any:
@@ -257,6 +281,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._agent_cpu_watchdog = AgentCpuWatchdog()
         self._presession_webrtc_candidates: dict[str, list[Any]] = {}
         self._provider_webrtc_sessions: dict[str, _ProviderWebRTCSession] = {}
+        self._last_state_snapshot: _CameraStateSnapshot | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
         self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
@@ -1271,8 +1296,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._refresh_derived_media_state()
 
     def _async_write_ha_state_if_ready(self) -> None:
-        if hasattr(self, "async_write_ha_state"):
-            self.async_write_ha_state()
+        if not hasattr(self, "async_write_ha_state"):
+            return
+        snapshot = _camera_state_snapshot(self)
+        if snapshot == self._last_state_snapshot:
+            return
+        self._last_state_snapshot = snapshot
+        self.async_write_ha_state()
 
     def _refresh_derived_media_state(self) -> None:
         self._last_media_decision = self._derive_media_decision()

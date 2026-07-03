@@ -1,11 +1,23 @@
 # Changelog
 
-## v1.6.1 - Unreleased
+## v1.6.1 - 2026-07-03
 
 ### Fixed
 
-- Fix browser microphone talkback negotiation through Home Assistant's
-  WebRTC provider/go2rtc path.
+- Fix browser microphone talkback through Home Assistant's WebRTC
+  provider/go2rtc path.
+- Return the bundled card to idle after a Home Call is ended from the C300X
+  display.
+- Close passive Ring Call preview cards once another browser answers the call.
+- Avoid short RTSP retry storms by waiting for native media-ready events before
+  retrying a stream start.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the new integration version.
+- Update the native C300X device agent from Home Assistant to `1.6.1`.
 
 ## v1.6.0 - 2026-07-03
 

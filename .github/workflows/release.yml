@@ -1,28 +1,169 @@
-name: Build HACS Release
+name: Release
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, for example v1.6.2"
+        required: false
+        type: string
 
 permissions:
   contents: read
 
+env:
+  RELEASE_ZIP: .release/ha-bticino-c300x.zip
+  RELEASE_SHA256SUMS: .release/SHA256SUMS
+  RELEASE_METADATA: .release/build-metadata.json
+  RELEASE_SBOM: .release/sbom.spdx.json
+
 jobs:
-  build-hacs-release:
+  validate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: min-ha
+            python-version: "3.13"
+            homeassistant: "2025.5.0"
+          - name: current-ha
+            python-version: "3.14"
+            homeassistant: "2026.6.1"
+    name: validate (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Python validation tools
+        run: |
+          python -m pip install --upgrade pip
+          grep -v '^homeassistant==' requirements-dev.txt > /tmp/c300x-requirements-dev-no-ha.txt
+          python -m pip install --upgrade -r /tmp/c300x-requirements-dev-no-ha.txt
+          python -m pip install --upgrade "homeassistant==${{ matrix.homeassistant }}"
+      - name: Install native agent toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+      - name: Validation gates
+        run: python scripts/check_validate.py
+
+  hacs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - name: HACS validation
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
+        with:
+          category: integration
+          # The integration uses zip_release; these checks need the release asset,
+          # so branch/PR validation covers the remaining HACS repository gates.
+          ignore: hacsjson integration_manifest
+
+  hassfest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c # master
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs:
+      - validate
+      - hacs
+      - hassfest
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
+      - name: Resolve release tag
+        id: release-tag
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          python scripts/check_release_tag.py "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Install ARMHF toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+      - name: Release validation gates
+        run: python scripts/check_repo.py
       - name: Build HACS release zip
         run: scripts/build_hacs_release.py
+      - name: Generate release metadata
+        run: |
+          scripts/write_release_assets.py \
+            --zip "$RELEASE_ZIP" \
+            --tag "${{ steps.release-tag.outputs.tag }}" \
+            --repository "$GITHUB_REPOSITORY" \
+            --sha256sums "$RELEASE_SHA256SUMS" \
+            --metadata "$RELEASE_METADATA" \
+            --sbom "$RELEASE_SBOM"
+      - name: Verify release assets
+        run: |
+          test -s "$RELEASE_ZIP"
+          test -s "$RELEASE_SHA256SUMS"
+          test -s "$RELEASE_METADATA"
+          test -s "$RELEASE_SBOM"
+          (cd .release && sha256sum -c SHA256SUMS)
       - name: Upload workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ha-bticino-c300x
-          path: .release/ha-bticino-c300x.zip
+          name: ha-bticino-c300x-release
+          path: |
+            ${{ env.RELEASE_ZIP }}
+            ${{ env.RELEASE_SHA256SUMS }}
+            ${{ env.RELEASE_METADATA }}
+            ${{ env.RELEASE_SBOM }}
           if-no-files-found: error
+      - name: Generate artifact attestation
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4
+        with:
+          subject-path: ${{ env.RELEASE_ZIP }}
+      - name: Generate SBOM attestation
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4
+        with:
+          subject-path: ${{ env.RELEASE_ZIP }}
+          sbom-path: ${{ env.RELEASE_SBOM }}
+      - name: Publish GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          assets=(
+            "$RELEASE_ZIP"
+            "$RELEASE_SHA256SUMS"
+            "$RELEASE_METADATA"
+            "$RELEASE_SBOM"
+          )
+          notes_file=".github/release-notes/${RELEASE_TAG}.md"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --title "$RELEASE_TAG" \
+              --notes-file "$notes_file" \
+              --verify-tag
+          fi

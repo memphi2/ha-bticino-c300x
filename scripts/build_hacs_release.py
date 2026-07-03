@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import zipfile
@@ -18,6 +20,8 @@ DOMAIN = "bticino_c300x"
 COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
 RELEASE_ROOT = ROOT / ".release"
 PACKAGE_ROOT = RELEASE_ROOT / "package"
+AUTO_DEVICE_SYSROOT = ROOT.parent / "c300x-fwpatch" / "work" / "rootfs-1.7.19"
+ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 PACKAGE_METADATA = (
     "LICENSE",
     "NOTICE",
@@ -44,7 +48,19 @@ def main() -> int:
 
     version = _integration_version()
     if not args.skip_build:
-        _run(["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"])
+        sysroot = _release_sysroot()
+        if sysroot is None:
+            sys.stderr.write(
+                "C300X_DEVICE_SYSROOT is required for release ARMHF builds. "
+                "Use --skip-build only with a verified existing agent binary.\n"
+            )
+            return 1
+        env = os.environ.copy()
+        env["C300X_DEVICE_SYSROOT"] = str(sysroot)
+        _run(
+            ["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"],
+            env=env,
+        )
     if not AGENT_BINARY.exists():
         sys.stderr.write("Missing ARMHF agent binary. Run without --skip-build first.\n")
         return 1
@@ -89,11 +105,34 @@ def _write_zip(output: Path) -> None:
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(PACKAGE_ROOT.rglob("*")):
             if path.is_file():
-                archive.write(path, path.relative_to(PACKAGE_ROOT))
+                archive.writestr(_zip_info(path), path.read_bytes())
 
 
-def _run(args: list[str]) -> None:
-    subprocess.run(args, cwd=ROOT, check=True)
+def _zip_info(path: Path) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(
+        filename=path.relative_to(PACKAGE_ROOT).as_posix(),
+        date_time=ZIP_TIMESTAMP,
+    )
+    info.compress_type = zipfile.ZIP_DEFLATED
+    mode = path.stat().st_mode & 0o777
+    info.external_attr = (stat.S_IFREG | mode) << 16
+    return info
+
+
+def _release_sysroot() -> Path | None:
+    explicit = os.environ.get("C300X_DEVICE_SYSROOT")
+    if explicit:
+        path = Path(explicit).expanduser()
+        return path if _is_device_sysroot(path) else None
+    return AUTO_DEVICE_SYSROOT if _is_device_sysroot(AUTO_DEVICE_SYSROOT) else None
+
+
+def _is_device_sysroot(path: Path) -> bool:
+    return (path / "lib" / "libc.so.6").exists()
+
+
+def _run(args: list[str], *, env: dict[str, str] | None = None) -> None:
+    subprocess.run(args, cwd=ROOT, check=True, env=env)
 
 
 if __name__ == "__main__":

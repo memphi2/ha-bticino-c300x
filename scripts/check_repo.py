@@ -81,9 +81,11 @@ REQUIRED_PATHS = [
     "docs/user-guide.md",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
+    "scripts/check_release_tag.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
     "scripts/verify_media_reference_flow.py",
+    "scripts/write_release_assets.py",
     "scripts/smoke_ha.py",
     "requirements-dev.txt",
     "hacs.json",
@@ -524,8 +526,23 @@ def check_hacs_metadata() -> list[str]:
     release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
-    if ".release/ha-bticino-c300x.zip" not in release_workflow:
-        failures.append("release workflow must build and upload the HACS zip asset")
+    required_release_tokens = {
+        "push:\n    tags:": "release workflow must run from immutable release tags",
+        "scripts/check_release_tag.py": "release workflow must validate tag metadata",
+        "scripts/build_hacs_release.py": "release workflow must build the HACS zip asset",
+        "scripts/write_release_assets.py": "release workflow must write release metadata assets",
+        ".release/ha-bticino-c300x.zip": "release workflow must produce the HACS zip asset",
+        ".release/SHA256SUMS": "release workflow must attach SHA256SUMS",
+        ".release/build-metadata.json": "release workflow must attach build metadata",
+        ".release/sbom.spdx.json": "release workflow must attach an SPDX SBOM",
+        "sha256sum -c SHA256SUMS": "release workflow must verify release checksums",
+        "actions/attest@": "release workflow must generate GitHub artifact attestations",
+        "gh release create": "release workflow must publish GitHub Release assets",
+        "gh release upload": "release workflow must update existing GitHub Release assets",
+    }
+    for token, message in required_release_tokens.items():
+        if token not in release_workflow:
+            failures.append(message)
     return failures
 
 
@@ -546,6 +563,18 @@ def check_github_automation() -> list[str]:
             failures.append(f"{relative(path)} must pin the runner image instead of ubuntu-latest")
         if "permissions:" not in text or "contents: read" not in text:
             failures.append(f"{relative(path)} must declare least-privilege contents: read permissions")
+        if path.name != "release.yml" and "contents: write" in text:
+            failures.append(f"{relative(path)} must not grant contents: write")
+        if path.name == "release.yml":
+            for permission in (
+                "contents: write",
+                "attestations: write",
+                "id-token: write",
+            ):
+                if permission not in text:
+                    failures.append(
+                        f"{relative(path)} publish job must grant {permission}"
+                    )
         for action in deprecated_actions:
             if action in text:
                 failures.append(f"{relative(path)} must not use deprecated {action}")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "build_hacs_release.py"
 STAGE_SCRIPT = ROOT / "scripts" / "stage_device_agent_bundle.py"
+RELEASE_ASSETS_SCRIPT = ROOT / "scripts" / "write_release_assets.py"
+RELEASE_TAG_SCRIPT = ROOT / "scripts" / "check_release_tag.py"
 
 
 def _load_release_builder():
@@ -25,6 +28,26 @@ def _load_bundle_stager():
     spec = importlib.util.spec_from_file_location("stage_device_agent_bundle", STAGE_SCRIPT)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_release_assets():
+    spec = importlib.util.spec_from_file_location("write_release_assets", RELEASE_ASSETS_SCRIPT)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_release_tag_checker():
+    spec = importlib.util.spec_from_file_location("check_release_tag", RELEASE_TAG_SCRIPT)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
@@ -53,12 +76,18 @@ def test_hacs_release_zip_uses_component_root_layout(
 
     builder._prepare_package("0.3.1")
     builder._write_zip(output)
+    for path in package_root.rglob("*"):
+        if path.is_file():
+            os.utime(path, (1_900_000_000, 1_900_000_000))
+    second_output = tmp_path / "second-ha-bticino-c300x.zip"
+    builder._write_zip(second_output)
 
     assert (package_root / "manifest.json").exists()
     assert not (package_root / "custom_components").exists()
 
     with zipfile.ZipFile(output) as archive:
         names = set(archive.namelist())
+        timestamps = {info.date_time for info in archive.infolist()}
 
     assert "manifest.json" in names
     assert "LICENSE" in names
@@ -73,6 +102,86 @@ def test_hacs_release_zip_uses_component_root_layout(
     assert "device_agent/bundle.json" in names
     assert "device_agent/scripts/bootstrap_firewall.sh" in names
     assert not any(name.startswith("custom_components/") for name in names)
+    assert timestamps == {builder.ZIP_TIMESTAMP}
+    assert output.read_bytes() == second_output.read_bytes()
+
+
+def test_release_builder_requires_verified_device_sysroot(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    builder = _load_release_builder()
+    missing_sysroot = tmp_path / "missing"
+    valid_sysroot = tmp_path / "rootfs"
+    (valid_sysroot / "lib").mkdir(parents=True)
+    (valid_sysroot / "lib" / "libc.so.6").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(builder, "AUTO_DEVICE_SYSROOT", missing_sysroot)
+    monkeypatch.delenv("C300X_DEVICE_SYSROOT", raising=False)
+    assert builder._release_sysroot() is None
+
+    monkeypatch.setenv("C300X_DEVICE_SYSROOT", str(valid_sysroot))
+    assert builder._release_sysroot() == valid_sysroot
+
+
+def test_release_tag_checker_matches_current_metadata() -> None:
+    checker = _load_release_tag_checker()
+
+    assert checker.validate_release_tag("v1.6.2") == []
+    assert checker.validate_release_tag("1.6.2") == [
+        "release tag must use vX.Y.Z format, got '1.6.2'"
+    ]
+
+
+def test_release_assets_are_reproducible_for_same_zip(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    zip_path = tmp_path / "ha-bticino-c300x.zip"
+    bundle = {
+        "agent_version": "1.6.1",
+        "api_version": "1",
+        "architecture": "armhf",
+        "bundle_hash": "bundle-sha",
+    }
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("manifest.json", "{}\n")
+        archive.writestr("device_agent/bundle.json", json.dumps(bundle) + "\n")
+
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for output_dir in (first, second):
+        writer.write_release_assets(
+            zip_path=zip_path,
+            tag="v1.6.2",
+            repository="example/repo",
+            sha256sums_path=output_dir / "SHA256SUMS",
+            metadata_path=output_dir / "build-metadata.json",
+            sbom_path=output_dir / "sbom.spdx.json",
+        )
+
+    assert (first / "build-metadata.json").read_bytes() == (
+        second / "build-metadata.json"
+    ).read_bytes()
+    assert (first / "sbom.spdx.json").read_bytes() == (
+        second / "sbom.spdx.json"
+    ).read_bytes()
+    assert (first / "SHA256SUMS").read_bytes() == (second / "SHA256SUMS").read_bytes()
+
+    metadata = json.loads((first / "build-metadata.json").read_text(encoding="utf-8"))
+    assert metadata["release_tag"] == "v1.6.2"
+    assert metadata["repository"] == "example/repo"
+    assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
+
+    checksum_lines = (first / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+    assert any(line.endswith("  ha-bticino-c300x.zip") for line in checksum_lines)
+    assert any(line.endswith("  build-metadata.json") for line in checksum_lines)
+    assert any(line.endswith("  sbom.spdx.json") for line in checksum_lines)
+
+    sbom = json.loads((first / "sbom.spdx.json").read_text(encoding="utf-8"))
+    assert sbom["spdxVersion"] == "SPDX-2.3"
+    assert {file["fileName"] for file in sbom["files"]} == {
+        "device_agent/bundle.json",
+        "manifest.json",
+    }
 
 
 def test_staged_self_update_bundle_contains_agent_managed_files(

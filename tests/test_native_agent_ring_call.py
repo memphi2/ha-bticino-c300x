@@ -626,6 +626,18 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         media_bridge.index("void c300x_media_session_stop") :
         media_bridge.index("bool c300x_media_session_keepalive")
     ]
+    stop_ring_call_body = media_bridge[
+        media_bridge.index("static bool stop_ring_call_if_active") :
+        media_bridge.index("static void close_ring_media_fds_locked")
+    ]
+    stop_media_body = media_bridge[
+        media_bridge.index("static void stop_media_session(bool close_client)") :
+        media_bridge.index("void c300x_media_session_stop")
+    ]
+    rtsp_drain_body = media_bridge[
+        media_bridge.index("static bool wait_for_rtsp_clients_to_drain") :
+        media_bridge.index("static bool ring_talkback_recent_locked")
+    ]
     session_start_start = media_bridge.index(
         "static bool start_media_session(media_bridge_t *bridge) {"
     )
@@ -666,6 +678,13 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert session_start_body.index("if (bridge->stop_in_progress)") < (
         session_start_body.index("if (bridge->media_active || bridge->media_starting)")
     )
+    assert "#define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800" in media_bridge
+    assert "#define RTSP_CLIENT_DRAIN_POLL_MS 50" in media_bridge
+    assert "rtsp_client_count_locked(bridge)" in rtsp_drain_body
+    assert "shutdown_all_rtsp_clients_locked(bridge);" in rtsp_drain_body
+    assert "shutdown_rtsp_clients_after_drain(&g_bridge);" in stop_ring_call_body
+    assert "shutdown_rtsp_clients_after_drain(&g_bridge);" in stop_media_body
+    assert "shutdown_all_rtsp_clients_locked(&g_bridge);" not in stop_media_body
     assert "stop_ring_call_if_active(true, true)" in session_stop_body
     assert "ring_dispatch_closed =" in session_stop_body
     assert "dispatch_closed = owned && doorbell_media_session_active_locked(&g_bridge);" in session_stop_body

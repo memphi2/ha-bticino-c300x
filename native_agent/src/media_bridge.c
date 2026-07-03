@@ -31,6 +31,8 @@
 #define DEFAULT_SIP_PORT 5060
 #define BT_AV_MEDIA_PORT 30007
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
+#define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800
+#define RTSP_CLIENT_DRAIN_POLL_MS 50
 #define TALKBACK_TARGET_PORT 4000
 #define MEDIA_AUDIO_RTP_PORT 26986
 #define MEDIA_AUDIO_RTCP_PORT 26987
@@ -1325,6 +1327,35 @@ static long long monotonic_ms(void) {
     struct timeval now;
     gettimeofday(&now, NULL);
     return ((long long)now.tv_sec * 1000LL) + ((long long)now.tv_usec / 1000LL);
+}
+
+static bool wait_for_rtsp_clients_to_drain(media_bridge_t *bridge, int timeout_ms) {
+    long long deadline = monotonic_ms() + timeout_ms;
+
+    while (true) {
+        int clients;
+
+        pthread_mutex_lock(&bridge->mutex);
+        clients = rtsp_client_count_locked(bridge);
+        pthread_mutex_unlock(&bridge->mutex);
+        if (clients <= 0) {
+            return true;
+        }
+        if (monotonic_ms() >= deadline) {
+            return false;
+        }
+        usleep(RTSP_CLIENT_DRAIN_POLL_MS * 1000);
+    }
+}
+
+static void shutdown_rtsp_clients_after_drain(media_bridge_t *bridge) {
+    if (wait_for_rtsp_clients_to_drain(bridge, RTSP_CLIENT_DRAIN_TIMEOUT_MS)) {
+        return;
+    }
+
+    pthread_mutex_lock(&bridge->mutex);
+    shutdown_all_rtsp_clients_locked(bridge);
+    pthread_mutex_unlock(&bridge->mutex);
 }
 
 static bool ring_talkback_recent_locked(const media_bridge_t *bridge, long long now) {
@@ -2683,6 +2714,7 @@ static bool request_home_call_media_if_active(media_bridge_t *bridge, bool audio
 
 static bool stop_ring_call_if_active(bool send_bye, bool close_client) {
     bool active;
+    bool drain_clients = false;
 
     pthread_mutex_lock(&g_bridge.mutex);
     active = (g_bridge.ring_call_active || g_bridge.ring_media_active) && !g_bridge.ring_call_stop;
@@ -2691,9 +2723,12 @@ static bool stop_ring_call_if_active(bool send_bye, bool close_client) {
         g_bridge.ring_send_bye = g_bridge.ring_send_bye || send_bye;
     }
     if (active && close_client) {
-        shutdown_all_rtsp_clients_locked(&g_bridge);
+        drain_clients = true;
     }
     pthread_mutex_unlock(&g_bridge.mutex);
+    if (drain_clients) {
+        shutdown_rtsp_clients_after_drain(&g_bridge);
+    }
     return active;
 }
 
@@ -5606,6 +5641,7 @@ static void stop_media_session(bool close_client) {
     bool ondemand_media_started = false;
     bool talkback_started = false;
     bool send_media_stop = false;
+    bool drain_clients = false;
     pthread_t sip_thread;
     pthread_t ondemand_media_thread_id;
     pthread_t talkback_thread;
@@ -5622,9 +5658,12 @@ static void stop_media_session(bool close_client) {
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.stop_in_progress) {
         if (close_client) {
-            shutdown_all_rtsp_clients_locked(&g_bridge);
+            drain_clients = true;
         }
         pthread_mutex_unlock(&g_bridge.mutex);
+        if (drain_clients) {
+            shutdown_rtsp_clients_after_drain(&g_bridge);
+        }
         return;
     }
     if (
@@ -5644,9 +5683,12 @@ static void stop_media_session(bool close_client) {
         && g_bridge.talkback_fd < 0
     ) {
         if (close_client) {
-            shutdown_all_rtsp_clients_locked(&g_bridge);
+            drain_clients = true;
         }
         pthread_mutex_unlock(&g_bridge.mutex);
+        if (drain_clients) {
+            shutdown_rtsp_clients_after_drain(&g_bridge);
+        }
         return;
     }
     g_bridge.stop_in_progress = true;
@@ -5676,9 +5718,13 @@ static void stop_media_session(bool close_client) {
     snprintf(contact_uri, sizeof(contact_uri), "%s", g_bridge.contact_uri);
     g_bridge.sip_fd = -1;
     if (close_client) {
-        shutdown_all_rtsp_clients_locked(&g_bridge);
+        drain_clients = true;
     }
     pthread_mutex_unlock(&g_bridge.mutex);
+
+    if (drain_clients) {
+        shutdown_rtsp_clients_after_drain(&g_bridge);
+    }
 
     if (sip_fd >= 0) {
         send_sip_bye(sip_fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);

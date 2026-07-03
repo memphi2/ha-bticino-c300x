@@ -131,6 +131,8 @@ RTSP_READY_TIMEOUT_SECONDS = 6.0
 RTSP_FAILURE_COOLDOWN_SECONDS = 20.0
 RING_CALL_WAIT_INTERVAL_SECONDS = 0.2
 RING_CALL_WAIT_TIMEOUT_SECONDS = 4.0
+WEBRTC_PROVIDER_CLOSE_DRAIN_INTERVAL_SECONDS = 0.05
+WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS = 1.0
 MAX_PRESESSION_WEBRTC_SESSIONS = 16
 MAX_PRESESSION_WEBRTC_CANDIDATES = 64
 STILL_IMAGE_CONTENT_TYPE = "image/svg+xml"
@@ -188,6 +190,23 @@ def _freeze_state_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_state_value(item) for item in value)
     return value
+
+
+def _rtsp_client_count_from_status(status: Mapping[str, Any] | None) -> int | None:
+    """Return the native RTSP client count if the agent reported it."""
+
+    if status is None:
+        return None
+    bridge = status.get("bridge")
+    if not isinstance(bridge, Mapping):
+        return None
+    clients = bridge.get("clients")
+    if clients is None:
+        return None
+    try:
+        return int(clients)
+    except (TypeError, ValueError):
+        return None
 
 
 async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Camera) -> Any:
@@ -685,6 +704,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def async_prepare_doorbell_video_stop(self) -> None:
         """Close HA-owned doorbell media before an explicit agent stop."""
 
+        session_ids = self._webrtc_session_ids_by_owner("doorbell")
         await asyncio.gather(
             *(
                 self._async_close_webrtc_session(
@@ -693,13 +713,16 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     notify_client=True,
                     reason="doorbell_video_stopped",
                 )
-                for session_id in self._webrtc_session_ids_by_owner("doorbell")
+                for session_id in session_ids
             )
         )
+        if session_ids:
+            await self._async_wait_for_provider_rtsp_clients_to_drain()
 
     async def async_prepare_home_call_stop(self) -> None:
         """Close HA-owned Home Call media before an explicit agent stop."""
 
+        session_ids = self._webrtc_session_ids_by_owner("home_call")
         await asyncio.gather(
             *(
                 self._async_close_webrtc_session(
@@ -708,9 +731,29 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     notify_client=True,
                     reason="home_call_stopped",
                 )
-                for session_id in self._webrtc_session_ids_by_owner("home_call")
+                for session_id in session_ids
             )
         )
+        if session_ids:
+            await self._async_wait_for_provider_rtsp_clients_to_drain()
+
+    async def _async_wait_for_provider_rtsp_clients_to_drain(self) -> None:
+        """Let the WebRTC provider close RTSP before the agent is stopped."""
+
+        deadline = asyncio.get_running_loop().time() + (
+            WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS
+        )
+        while True:
+            status = await self._async_refresh_video_status_or_none(apply_status=False)
+            clients = _rtsp_client_count_from_status(status)
+            if clients is None or clients <= 0:
+                return
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(
+                min(WEBRTC_PROVIDER_CLOSE_DRAIN_INTERVAL_SECONDS, remaining)
+            )
 
     async def _async_close_webrtc_session(
         self,

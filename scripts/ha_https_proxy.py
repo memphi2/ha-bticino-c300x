@@ -10,7 +10,7 @@ import signal
 import ssl
 import subprocess
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -161,7 +161,7 @@ def proxy_headers(
     return headers
 
 
-def response_headers(headers: object) -> dict[str, str]:
+def response_headers(headers: Mapping[str, str]) -> dict[str, str]:
     """Return upstream response headers safe to send to the browser."""
 
     return {
@@ -322,11 +322,12 @@ async def main_async() -> None:
             await asyncio.wait_for(runner.cleanup(), timeout=3.0)
 
 
-def main() -> None:
+def main() -> int:
     """Entrypoint."""
 
     with suppress(KeyboardInterrupt):
         asyncio.run(main_async())
+    return 0
 
 
 if __name__ == "__main__":

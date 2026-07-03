@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.6.2 - Unreleased
+## v1.6.2 - 2026-07-04
 
 ### Changed
 
@@ -15,6 +15,8 @@
 
 - Update Home Assistant to `2026.5.0` or newer before installing this release.
 - Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the new integration version.
 - Update the native C300X device agent from Home Assistant to `1.6.2`.
 
 ## v1.6.1 - 2026-07-03

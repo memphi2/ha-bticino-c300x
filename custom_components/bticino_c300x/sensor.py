@@ -5,7 +5,7 @@ from __future__ import annotations
 from asyncio import Task
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -176,6 +176,14 @@ def _freeze_state_value(value: Any) -> Any:
     return value
 
 
+def _strict_number(value: Any) -> float | None:
+    """Return a non-bool numeric value as float."""
+
+    if type(value) not in (int, float):
+        return None
+    return float(value)
+
+
 def _agent_diagnostic_attributes(
     diagnostics: Mapping[str, Any],
     keys: tuple[str, ...],
@@ -207,13 +215,13 @@ def _agent_info_attributes(agent_info: Mapping[str, Any]) -> dict[str, Any]:
 def _poll_wakeups_per_loop(diagnostics: Mapping[str, Any]) -> float | None:
     """Return a compact poll wakeup ratio for idle diagnostics."""
 
-    loop_iterations = diagnostics.get("loop_iterations")
-    poll_wakeups = diagnostics.get("poll_wakeups")
-    if type(loop_iterations) not in (int, float) or loop_iterations <= 0:
+    loop_iterations = _strict_number(diagnostics.get("loop_iterations"))
+    poll_wakeups = _strict_number(diagnostics.get("poll_wakeups"))
+    if loop_iterations is None or loop_iterations <= 0:
         return None
-    if type(poll_wakeups) not in (int, float) or poll_wakeups < 0:
+    if poll_wakeups is None or poll_wakeups < 0:
         return None
-    return round(float(poll_wakeups) / float(loop_iterations), 4)
+    return round(poll_wakeups / loop_iterations, 4)
 
 
 async def async_setup_entry(
@@ -295,7 +303,7 @@ class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
         state = self._entry.runtime_data.connection_state
         if not state.available:
             return "disconnected"
-        return state.connection_state
+        return cast(str, state.connection_state)
 
 
 class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
@@ -535,7 +543,7 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
     def native_value(self) -> str:
         """Return the aggregated media-readiness state."""
 
-        return media_readiness(self._entry)["status"]
+        return cast(str, media_readiness(self._entry)["status"])
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -748,7 +756,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
             self.async_write_ha_state()
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         state = self._doorbell_state_from_event(event.data)
@@ -822,7 +830,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
 
     @property
     def _metrics(self) -> dict[str, Any]:
-        return self._entry.runtime_data.system_metrics
+        return cast(dict[str, Any], self._entry.runtime_data.system_metrics)
 
     @callback
     def _handle_connection_state_changed(self, entry_id: str) -> None:
@@ -922,7 +930,7 @@ class C300XDeviceLoadSensor(C300XSystemMetricSensor):
 
         percent = self._metrics.get("load_1m_percent")
         if percent is not None:
-            return percent
+            return cast(float, percent)
         load_1m = self._metrics.get("load_1m")
         cpu_count = self._metrics.get("cpu_count") or 1
         if load_1m is None:
@@ -1031,10 +1039,10 @@ class C300XVoicemailSensor(C300XEntity, SensorEntity):
 
     @property
     def _messages(self) -> dict[str, Any]:
-        return self._entry.runtime_data.answering_machine_messages
+        return cast(dict[str, Any], self._entry.runtime_data.answering_machine_messages)
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) != "answering_machine_messages_changed":
@@ -1130,10 +1138,10 @@ class C300XMemoSensor(C300XEntity, SensorEntity):
 
     @property
     def _memos(self) -> dict[str, Any]:
-        return self._entry.runtime_data.memos
+        return cast(dict[str, Any], self._entry.runtime_data.memos)
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) != "memos_changed":
@@ -1242,8 +1250,8 @@ async def _async_system_metrics(
         and updated_at is not None
         and (now - updated_at).total_seconds() < _METRICS_CACHE_SECONDS
     ):
-        return entry.runtime_data.system_metrics
-    metrics = await entry.runtime_data.api.async_system_metrics()
+        return cast(dict[str, Any], entry.runtime_data.system_metrics)
+    metrics = cast(dict[str, Any], await entry.runtime_data.api.async_system_metrics())
     entry.runtime_data.system_metrics = metrics
     entry.runtime_data.system_metrics_updated_at = now
     return metrics

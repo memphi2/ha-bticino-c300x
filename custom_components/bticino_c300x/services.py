@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -181,7 +181,7 @@ class _EntryRuntimeProxy:
         return getattr(self._entry, name)
 
 
-def _entry_for_call(hass: HomeAssistant, call: ServiceCall):
+def _entry_for_call(hass: HomeAssistant, call: ServiceCall) -> Any:
     entry_id = call.data.get(_ATTR_ENTRY_ID)
     entries = hass.config_entries.async_entries(DOMAIN)
     if entry_id:
@@ -650,7 +650,7 @@ def _sync_gui_required_services(
             hass.services.async_register(
                 DOMAIN,
                 service_name,
-                handlers[service_name],
+                cast(Any, handlers[service_name]),
                 schema=vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
             )
             registered.add(service_name)

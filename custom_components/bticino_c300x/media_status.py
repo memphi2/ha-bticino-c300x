@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 
-def home_call_payload(data: dict[str, Any]) -> dict[str, Any]:
+def home_call_payload(data: Mapping[str, Any]) -> dict[str, Any]:
     """Return the Home Call payload regardless of wrapper shape."""
 
     payload = data.get("home_call")

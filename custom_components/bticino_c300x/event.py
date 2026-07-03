@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.event import (
     DoorbellEventType,
@@ -26,6 +26,9 @@ from .event_payload import (
     agent_event_key,
     agent_event_name,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.core import Event
 
 PARALLEL_UPDATES = 0
 
@@ -84,7 +87,7 @@ class C300XDoorbellEventEntity(C300XEntity, EventEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) != "doorbell_pressed":
@@ -175,13 +178,13 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         self._write_event_data(dict(event.data))
 
     @callback
-    def _handle_action_event(self, event) -> None:
+    def _handle_action_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_data = action_event_display_data(

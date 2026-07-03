@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
-
-try:
-    from homeassistant.helpers import entity_registry as er
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
-    er = None
 
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
@@ -34,6 +30,12 @@ from .media_setup import (
     media_setup_has_only_device_user_failures,
     summarize_self_test_failures,
 )
+
+er: Any
+try:
+    from homeassistant.helpers import entity_registry as er
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
+    er = None
 
 INVALID_ACTION_MAP_ISSUE = "invalid_action_map"
 MISSING_ALARM_ENTITY_ISSUE = "missing_alarm_entity"

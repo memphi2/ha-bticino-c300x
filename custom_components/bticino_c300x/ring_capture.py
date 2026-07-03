@@ -8,7 +8,7 @@ import threading
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -281,10 +281,13 @@ async def _async_announcement_input_path(
     announcement_path: str | None,
 ) -> Path | None:
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(
-            _announcement_input_path,
-            hass,
-            announcement_path,
+        return cast(
+            Path | None,
+            await hass.async_add_executor_job(
+                _announcement_input_path,
+                hass,
+                announcement_path,
+            ),
         )
     return await asyncio.to_thread(_announcement_input_path, hass, announcement_path)
 

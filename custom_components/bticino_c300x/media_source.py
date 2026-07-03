@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
-from homeassistant.components.media_player import BrowseError, MediaClass
 from homeassistant.components.media_source import (
     BrowseMediaSource,
     MediaSource,
@@ -37,6 +36,12 @@ from .video_messages import (
     video_message_media_url,
     video_message_title,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.components.media_player.const import MediaClass
+    from homeassistant.components.media_player.errors import BrowseError
+else:
+    from homeassistant.components.media_player import BrowseError, MediaClass
 
 
 async def async_get_media_source(hass: HomeAssistant) -> C300XStoredMediaSource:

@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
-
-try:
-    from homeassistant.util import dt as dt_util
-except ImportError:  # pragma: no cover - local test stubs
-    dt_util = None
 
 from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_BY_LANGUAGE,
@@ -20,6 +15,12 @@ from .dashboard_labels import (
     _WEATHER_STATE_LABELS_EN,
     _WEATHER_TITLE_BY_LANGUAGE,
 )
+
+dt_util: Any
+try:
+    from homeassistant.util import dt as dt_util
+except ImportError:  # pragma: no cover - local test stubs
+    dt_util = None
 
 _FORECAST_TYPE_KEY = "_c300x_forecast_type"
 _FORECAST_CACHE_KEY = "bticino_c300x_dashboard_weather_forecast"
@@ -386,7 +387,7 @@ def _weather_time_label(value: Any) -> str:
     display_time = _weather_display_datetime(value)
     if display_time is None:
         return ""
-    if hasattr(display_time, "strftime"):
+    if isinstance(display_time, datetime):
         return display_time.strftime("%H:%M")
     return _dashboard_text(display_time, "", 16)
 
@@ -395,7 +396,7 @@ def _weather_forecast_time_label(value: Any, forecast_type: Any) -> str:
     display_time = _weather_display_datetime(value)
     if display_time is None:
         return ""
-    if not hasattr(display_time, "strftime"):
+    if not isinstance(display_time, datetime):
         return _dashboard_text(display_time, "", 16)
     if forecast_type == "hourly":
         next_time = display_time + timedelta(hours=1)
@@ -405,7 +406,7 @@ def _weather_forecast_time_label(value: Any, forecast_type: Any) -> str:
     return display_time.strftime("%H:%M")
 
 
-def _weather_display_datetime(value: Any) -> Any:
+def _weather_display_datetime(value: Any) -> datetime | str | None:
     if value in (None, ""):
         return None
     display_time = value
@@ -419,7 +420,7 @@ def _weather_display_datetime(value: Any) -> Any:
                 return _dashboard_text(value, "", 16)
     as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
     display_time = as_local(display_time) if callable(as_local) else display_time
-    return display_time
+    return cast(datetime | str | None, display_time)
 
 
 def _weather_updated_label(state: Any) -> str:

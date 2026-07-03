@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -101,7 +101,10 @@ def _ring_result_path(hass: Any, result_path: str | None) -> Path:
 
 async def _async_ring_result_path(hass: Any, result_path: str | None) -> Path:
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(_ring_result_path, hass, result_path)
+        return cast(
+            Path,
+            await hass.async_add_executor_job(_ring_result_path, hass, result_path),
+        )
     return await asyncio.to_thread(_ring_result_path, hass, result_path)
 
 
@@ -127,7 +130,7 @@ async def _async_read_json(hass: Any, path: Path) -> dict[str, Any]:
         return data
 
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(_read)
+        return cast(dict[str, Any], await hass.async_add_executor_job(_read))
     return await asyncio.to_thread(_read)
 
 
@@ -147,7 +150,7 @@ async def _async_capture_guardrail_result(
         )
 
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(_check)
+        return cast(dict[str, Any], await hass.async_add_executor_job(_check))
     return await asyncio.to_thread(_check)
 
 

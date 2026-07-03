@@ -198,7 +198,7 @@ class BticinoC300XRuntimeData:
     event_state: C300XEventState
     connection_state: C300XConnectionState
     capabilities: dict[str, Any]
-    agent_info: dict[str, Any]
+    agent_info: Mapping[str, Any]
     unregister_webhook: Callable[[], None]
     unregister_event_webhook: Callable[[], None]
     unregister_event_registration: Callable[[], None] | None

@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.entity import Entity
 
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, DOMAIN, SIGNAL_CONNECTION_STATE_CHANGED
-from .entry_config import entry_config_value
+from .entry_config import entry_config_value as entry_config_value
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.device_registry import DeviceInfo
+else:
+    from homeassistant.helpers.entity import DeviceInfo
 
 
 class C300XEntity(Entity):
@@ -22,12 +28,7 @@ class C300XEntity(Entity):
     def __init__(self, entry: ConfigEntry, key: str) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            manufacturer="BTicino",
-            model="Classe 300X",
-            name=entry.title,
-        )
+        self._attr_device_info = _device_info(entry)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -77,7 +78,7 @@ def entry_video_enabled(entry: ConfigEntry) -> bool:
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
     """Return C300X device metadata without extra device reads."""
 
-    info: dict[str, object] = {
+    info: DeviceInfo = {
         "identifiers": {(DOMAIN, entry.entry_id)},
         "manufacturer": "BTicino",
         "model": "Classe 300X",
@@ -86,7 +87,7 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
     firmware = _agent_info_string(entry, "firmware")
     if firmware is not None:
         info["sw_version"] = firmware
-    return DeviceInfo(**info)
+    return info
 
 
 def _agent_info_string(entry: ConfigEntry, key: str) -> str | None:

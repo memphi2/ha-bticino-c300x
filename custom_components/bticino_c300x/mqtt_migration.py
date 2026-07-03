@@ -6,9 +6,9 @@ from typing import Any
 
 from .api import (
     C300XAgentApi,
-    C300XAgentApiUnsupportedError,
     build_agent_base_url,
 )
+from .api_errors import C300XAgentApiUnsupportedError
 from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,

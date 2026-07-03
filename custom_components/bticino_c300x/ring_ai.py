@@ -8,7 +8,7 @@ import json
 import wave
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -110,12 +110,15 @@ async def _async_ring_analysis_source(
     wav_path: str | None,
 ) -> dict[str, Any]:
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(
-            lambda: _ring_analysis_source(
-                hass,
-                capture_path=capture_path,
-                wav_path=wav_path,
-            )
+        return cast(
+            dict[str, Any],
+            await hass.async_add_executor_job(
+                lambda: _ring_analysis_source(
+                    hass,
+                    capture_path=capture_path,
+                    wav_path=wav_path,
+                )
+            ),
         )
     return await asyncio.to_thread(
         _ring_analysis_source,
@@ -134,7 +137,7 @@ def _ring_wav_path(hass: Any, wav_path: str | None) -> Path:
 
 async def _async_ring_wav_path(hass: Any, wav_path: str | None) -> Path:
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(_ring_wav_path, hass, wav_path)
+        return cast(Path, await hass.async_add_executor_job(_ring_wav_path, hass, wav_path))
     return await asyncio.to_thread(_ring_wav_path, hass, wav_path)
 
 
@@ -278,7 +281,7 @@ async def _async_read_wav(hass: Any, path: Path) -> dict[str, Any]:
         return {"rate": rate, "width": width, "channels": channels, "audio": audio}
 
     if hasattr(hass, "async_add_executor_job"):
-        return await hass.async_add_executor_job(_read)
+        return cast(dict[str, Any], await hass.async_add_executor_job(_read))
     return await asyncio.to_thread(_read)
 
 
@@ -372,7 +375,7 @@ async def _async_read_wyoming_event(reader: asyncio.StreamReader) -> dict[str, A
     payload_length = int(event.get("payload_length") or 0)
     if payload_length:
         await reader.readexactly(payload_length)
-    return event
+    return cast(dict[str, Any], event)
 
 
 def _normalize_wyoming_result(
@@ -383,10 +386,8 @@ def _normalize_wyoming_result(
     capture_payload: dict[str, Any] | None = None,
     expected_phrase: str | None,
 ) -> dict[str, Any]:
-    phrase_match = (
-        bool(expected_phrase)
-        and transcript.strip().casefold() == expected_phrase.strip().casefold()
-    )
+    expected = expected_phrase.strip().casefold() if expected_phrase else ""
+    phrase_match = bool(expected and transcript.strip().casefold() == expected)
     result: dict[str, Any] = {
         "created_at": datetime.now(UTC).isoformat(),
         "provider": "wyoming_whisper",

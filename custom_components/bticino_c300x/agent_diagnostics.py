@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -62,7 +62,7 @@ async def async_refresh_agent_diagnostics(
     if runtime_data is None or not diagnostics_supported(runtime_data.capabilities):
         return None
     try:
-        diagnostics = await runtime_data.api.async_diagnostics()
+        diagnostics = cast(Mapping[str, Any], await runtime_data.api.async_diagnostics())
     except C300XAgentApiError:
         return None
     _store_agent_diagnostics(

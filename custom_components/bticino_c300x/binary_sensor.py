@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import EVENT_AGENT_EVENT_RECEIVED
@@ -94,7 +94,7 @@ class C300XHomeCallActiveBinarySensor(C300XEntity, BinarySensorEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)

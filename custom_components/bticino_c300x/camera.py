@@ -8,13 +8,11 @@ import time
 from collections.abc import Mapping
 from contextlib import suppress
 from contextvars import ContextVar
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.camera import (
     Camera,
     CameraEntityFeature,
-    WebRTCError,
-    WebRTCSendMessage,
 )
 from homeassistant.components.stream import (
     CONF_RTSP_TRANSPORT,
@@ -90,6 +88,11 @@ from .video import (
     doorbell_camera_unique_id,
     optional_string,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.components.camera.webrtc import WebRTCError, WebRTCSendMessage
+else:
+    from homeassistant.components.camera import WebRTCError, WebRTCSendMessage
 
 _CameraStateSnapshot = tuple[Any, Any, Any]
 PARALLEL_UPDATES = 0
@@ -271,7 +274,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         return super().available
 
     @property
-    def entity_picture(self) -> None:
+    def entity_picture(self) -> None:  # type: ignore[override]
         """Keep the entity-list representation on the configured CCTV icon."""
 
         return None
@@ -869,7 +872,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         *,
         apply_status: bool = True,
     ) -> dict[str, Any]:
-        status = await self._entry.runtime_data.api.async_doorbell_video_status()
+        status = cast(
+            dict[str, Any],
+            await self._entry.runtime_data.api.async_doorbell_video_status(),
+        )
         if apply_status:
             self._apply_status(status)
         return status

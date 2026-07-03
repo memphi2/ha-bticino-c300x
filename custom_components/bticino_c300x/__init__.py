@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -185,6 +186,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry)
     event_state = C300XEventState()
     connection_state = C300XConnectionState()
     unregister_event_registration = None
+    setup_data: Mapping[str, Any]
     try:
         setup_data = await api.async_validate_setup()
     except C300XAgentApiError as err:

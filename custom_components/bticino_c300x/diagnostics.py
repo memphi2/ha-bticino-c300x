@@ -7,7 +7,7 @@ import re
 import socket
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 from homeassistant.config_entries import ConfigEntry
@@ -111,7 +111,7 @@ _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: ConfigEntry,
-) -> dict:
+) -> dict[str, Any]:
     """Return safe diagnostics without secrets."""
 
     actions = entry.options.get(CONF_ACTIONS, {})
@@ -198,7 +198,7 @@ def _entry_diagnostics(entry: ConfigEntry) -> dict[str, Any]:
     }
 
 
-def _agent_write_diagnostics(entry: ConfigEntry) -> dict | None:
+def _agent_write_diagnostics(entry: ConfigEntry) -> dict[str, Any] | None:
     """Return safe write diagnostics if runtime data is available."""
 
     if not hasattr(entry, "runtime_data"):
@@ -385,7 +385,7 @@ def _route_diagnostics(host: str, port: int) -> dict[str, Any]:
 async def _async_installer_bundle_status(hass: HomeAssistant) -> dict[str, Any]:
     async_add_executor_job = getattr(hass, "async_add_executor_job", None)
     if callable(async_add_executor_job):
-        return await async_add_executor_job(installer_bundle_status)
+        return cast(dict[str, Any], await async_add_executor_job(installer_bundle_status))
     return installer_bundle_status()
 
 

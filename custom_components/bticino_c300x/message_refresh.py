@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from asyncio import Task
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -63,7 +63,7 @@ def _schedule_single_refresh(
     entry: ConfigEntry,
     *,
     task_attr: str,
-    refresh: Callable[[], Awaitable[None]],
+    refresh: Callable[[], Coroutine[Any, Any, None]],
 ) -> None:
     """Schedule one refresh task per entry/runtime-data attribute."""
 
@@ -150,7 +150,7 @@ async def _async_cached_payload(
         and updated_at is not None
         and (now - updated_at).total_seconds() < ttl_seconds
     ):
-        return payload
+        return cast(dict[str, Any], payload)
     payload = await refresh()
     _store_payload(entry, payload_attr, payload, updated_at=now)
     return payload

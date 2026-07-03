@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -94,7 +95,7 @@ async def async_load_packaged_bundle_metadata(
 
 
 def compare_agent_bundle(
-    setup_data: dict[str, Any],
+    setup_data: Mapping[str, Any],
     bundle: dict[str, Any] | None,
 ) -> AgentUpdateState:
     """Compare the installed agent metadata with the packaged bundle metadata."""

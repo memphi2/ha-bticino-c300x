@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
@@ -575,7 +575,7 @@ async def _async_wait_for_agent_after_update(
         await asyncio.sleep(initial_delay)
     for _attempt in range(12):
         try:
-            return await api.async_validate_setup()
+            return cast(dict[str, Any], await api.async_validate_setup())
         except Exception as err:  # noqa: BLE001 - retry during controlled restart
             last_error = err
             await asyncio.sleep(1)
@@ -595,7 +595,7 @@ async def _async_verify_agent_after_update(
             api,
             initial_delay=_AGENT_UPDATE_RESTART_SETTLE_SECONDS,
         )
-    return await api.async_validate_setup()
+    return cast(dict[str, Any], await api.async_validate_setup())
 
 
 async def _async_apply_repaired_agent_setup(

@@ -8,7 +8,7 @@ from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .api import C300XAgentApiError
+from .api_errors import C300XAgentApiError
 from .const import DOMAIN
 from .device_user import homeassistant_account_label
 from .repair_issues import DEVICE_USER_REQUIRED_ISSUE, repair_issue_id

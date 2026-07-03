@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -430,7 +430,7 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
             self.async_write_ha_state()
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) == "memos_changed":
@@ -598,7 +598,7 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
             self.async_write_ha_state()
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) == "answering_machine_messages_changed":
@@ -622,6 +622,8 @@ async def _async_activation_items(entry: ConfigEntry) -> list[dict[str, Any]]:
         activations = {"available": False, "supported": False, "items": []}
     entry.runtime_data.activations = activations
     items = activations.get("items") if isinstance(activations, dict) else []
+    if not isinstance(items, list):
+        return []
     return [item for item in items if isinstance(item, dict)]
 
 

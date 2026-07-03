@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, cast
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -15,6 +18,9 @@ from .const import (
 from .entity import C300XEntity, supports_capability
 from .event_payload import agent_event_key
 from .forwarding import coerce_forwarding_mode_state
+
+if TYPE_CHECKING:
+    from homeassistant.core import Event
 
 PARALLEL_UPDATES = 1
 
@@ -90,9 +96,11 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
             return
         self._apply_status(status)
 
-    def _apply_status(self, status: dict) -> None:
-        self._mode = status.get("mode")
-        self._state = status.get("state", "unknown")
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
+        mode = status.get("mode")
+        state = status.get("state", "unknown")
+        self._mode = mode if isinstance(mode, int) else None
+        self._state = state if isinstance(state, str) else "unknown"
         self._entry.runtime_data.event_state.smartphone_forwarding_mode = self._state
         self._attr_available = True
 
@@ -108,26 +116,28 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data) or ""
         if not event_type.startswith("smartphone_forwarding_"):
             return
         forwarding = _normalize_smartphone_forwarding_event(event.data)
-        self._state = forwarding.get("state")
-        self._mode = forwarding.get("mode")
+        state = forwarding.get("state")
+        mode = forwarding.get("mode")
+        self._state = state if isinstance(state, str) else "unknown"
+        self._mode = mode if isinstance(mode, int) else None
         self._entry.runtime_data.event_state.smartphone_forwarding_mode = self._state
         self._attr_available = True
         self.async_write_ha_state()
 
 
 def _normalize_smartphone_forwarding_event(
-    payload: dict[str, object],
+    payload: Mapping[str, Any],
 ) -> dict[str, str | int | None]:
     return coerce_forwarding_mode_state(payload.get("mode"), payload.get("state"))
 
 
 async def _async_refresh_initial_states(entities: list[SelectEntity]) -> None:
     for entity in entities:
-        await entity.async_update()
+        await cast(Any, entity).async_update()

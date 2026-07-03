@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
@@ -15,6 +15,9 @@ from .api import C300XAgentApiError
 from .const import EVENT_AGENT_EVENT_RECEIVED
 from .entity import C300XEntity
 from .event_payload import agent_event_key
+
+if TYPE_CHECKING:
+    from homeassistant.core import Event
 
 PARALLEL_UPDATES = 1
 _RINGER_VOLUME_MIN = 0
@@ -99,7 +102,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Event) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         if agent_event_key(event.data) != "ringer_volume_changed":
@@ -139,4 +142,4 @@ def _coerce_active_ringer_volume(value: Any) -> int | None:
 
 async def _async_refresh_initial_states(entities: list[NumberEntity]) -> None:
     for entity in entities:
-        await entity.async_update()
+        await cast(Any, entity).async_update()

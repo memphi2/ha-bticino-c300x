@@ -7,7 +7,7 @@ import logging
 from asyncio import Task
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
@@ -66,18 +66,19 @@ def async_request_agent_event_registration(
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return False
-    api = getattr(runtime_data, "api", None)
-    capabilities = getattr(runtime_data, "capabilities", None)
-    connection_state = getattr(runtime_data, "connection_state", None)
+    runtime = cast(Any, runtime_data)
+    api = getattr(runtime, "api", None)
+    capabilities = getattr(runtime, "capabilities", None)
+    connection_state = getattr(runtime, "connection_state", None)
     if api is None or not isinstance(capabilities, dict) or connection_state is None:
         return False
 
-    unregister = getattr(runtime_data, "unregister_event_registration", None)
+    unregister = getattr(runtime, "unregister_event_registration", None)
     if callable(unregister):
         unregister()
-        runtime_data.unregister_event_registration = None
+        runtime.unregister_event_registration = None
     on_runtime_registration_created = getattr(
-        runtime_data,
+        runtime,
         "on_runtime_registration_created",
         None,
     )
@@ -85,9 +86,10 @@ def async_request_agent_event_registration(
         on_runtime_registration_created = None
 
     async def _restart_registration() -> None:
-        if getattr(entry, "runtime_data", None) is not runtime_data:
+        if getattr(entry, "runtime_data", None) is not runtime:
             return
-        runtime_data.unregister_event_registration = (
+        active_runtime = cast(Any, runtime)
+        active_runtime.unregister_event_registration = (
             await async_start_agent_event_registration(
                 hass,
                 entry,
@@ -310,7 +312,7 @@ def _async_listen_entity_registry_updates(
     async_listen = getattr(bus, "async_listen", None)
     if not callable(async_listen):
         return None
-    return async_listen(event_type, callback)
+    return cast(CALLBACK_TYPE, async_listen(event_type, callback))
 
 
 def _entity_registry_update_affects_entry(event: Any, entry: ConfigEntry) -> bool:

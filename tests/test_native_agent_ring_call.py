@@ -215,7 +215,15 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert '"a=rtpmap:8 PCMA/8000\\r\\n"' in rtsp_body
     assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_body
     assert '"a=control:streamid=2\\r\\n"' in rtsp_body
-    assert '"a=sendonly\\r\\n"' in rtsp_body
+    backchannel_sdp = (
+        '"m=audio 0 RTP/AVP 8 0\\r\\n"\n'
+        '                "a=rtpmap:8 PCMA/8000\\r\\n"\n'
+        '                "a=rtpmap:0 PCMU/8000\\r\\n"\n'
+        '                "a=control:streamid=2\\r\\n"\n'
+        '                "a=recvonly\\r\\n"'
+    )
+    assert media_bridge.count(backchannel_sdp) == 3
+    assert '"a=sendonly\\r\\n"' not in rtsp_body
     assert "read_rtsp_request_or_interleaved(" in rtsp_body
     assert "handle_rtsp_backchannel_frame(" in rtsp_body
     assert "slot->backchannel_enabled = true;" in rtsp_body
@@ -359,7 +367,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in rtsp_home_call_sdp
     assert '"m=audio 0 RTP/AVP 8 0\\r\\n"' in rtsp_home_call_sdp
     assert '"a=control:streamid=2\\r\\n"' in rtsp_home_call_sdp
-    assert '"a=sendonly\\r\\n"' in rtsp_home_call_sdp
+    assert '"a=recvonly\\r\\n"' in rtsp_home_call_sdp
     assert '"m=video' not in rtsp_home_call_sdp
     assert '"Session: %s\\r\\nRTP-Info: url=%s/streamid=%d;seq=0;rtptime=0\\r\\n"' in rtsp_body
     assert "home_call_session ? 0 : 1" in rtsp_body
@@ -399,6 +407,8 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert "#define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0" in media_bridge
     assert "#define RTSP_AUDIO_FRAME_SAMPLES 160" in media_bridge
     assert "#define RTSP_BACKCHANNEL_FRAME_SAMPLES RTSP_AUDIO_FRAME_SAMPLES" in media_bridge
+    assert media_bridge.count('"a=control:streamid=2\\r\\n"') == 3
+    assert media_bridge.count('"a=recvonly\\r\\n"') >= 3
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
     assert "decode_pcma_sample(sample)" in pcm_body

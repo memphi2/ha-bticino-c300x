@@ -5674,7 +5674,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=rtpmap:8 PCMA/8000\r\n"
                 "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=2\r\n"
-                "a=sendonly\r\n";
+                "a=recvonly\r\n";
             const char *sdp_ring_audio_video =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"
@@ -5696,7 +5696,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=rtpmap:8 PCMA/8000\r\n"
                 "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=2\r\n"
-                "a=sendonly\r\n";
+                "a=recvonly\r\n";
             const char *sdp_home_call_audio =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"
@@ -5710,7 +5710,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=rtpmap:8 PCMA/8000\r\n"
                 "a=rtpmap:0 PCMU/8000\r\n"
                 "a=control:streamid=2\r\n"
-                "a=sendonly\r\n";
+                "a=recvonly\r\n";
             const char *sdp_video =
                 "v=0\r\n"
                 "o=- 0 0 IN IP4 127.0.0.1\r\n"

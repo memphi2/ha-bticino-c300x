@@ -8,7 +8,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 MEDIA_RE = re.compile(r"m=(audio|video)\s+\d+\s+RTP/SAVP\s+([0-9 ]+)")
 RTPMAP_RE = re.compile(r"a=rtpmap:(\d+)\s+([^\r\n]+)")
@@ -71,7 +71,7 @@ def parse_tcpdump_ascii(text: str, *, mode: str, source: str) -> dict[str, Any]:
         fingerprint["offer"] = offer
     if answer:
         fingerprint["answer"] = answer
-    return _drop_empty(fingerprint)
+    return cast(dict[str, Any], _drop_empty(fingerprint))
 
 
 def _extract_sip_sequence(text: str) -> list[str]:

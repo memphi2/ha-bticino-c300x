@@ -113,6 +113,7 @@ def main() -> int:
     assert_video_timer_preserves_existing_poll_timeout(binary)
     assert_rtsp_udp_preserves_ipv4_mapped_peers(binary)
     assert_overlong_activation_id_is_rejected(binary)
+    assert_startup_diagnostics_are_read_only(binary)
     assert_graceful_shutdown_signal_is_handled(binary)
 
     with (
@@ -193,8 +194,74 @@ def assert_overlong_activation_id_is_rejected(binary: Path) -> None:
         )
     if result.returncode == 0:
         raise AssertionError("overlong activation id with invalid suffix was accepted")
+    if "fatal: config_error:" not in result.stderr:
+        raise AssertionError(f"config failures must include a stable fatal reason: {result.stderr!r}")
     if "activations item id must be a safe string" not in result.stderr:
         raise AssertionError(f"unexpected activation id validation error: {result.stderr!r}")
+
+
+def assert_startup_diagnostics_are_read_only(binary: Path) -> None:
+    """Guard startup diagnosis so it never opens listeners, media or files for writing."""
+
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as api_socket,
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ui_socket,
+        tempfile.TemporaryDirectory(prefix="c300x-startup-diag-smoke-") as temp_dir,
+    ):
+        api_socket.bind(("127.0.0.1", 0))
+        api_socket.listen()
+        ui_socket.bind(("127.0.0.1", 0))
+        ui_socket.listen()
+        api_port = api_socket.getsockname()[1]
+        ui_port = ui_socket.getsockname()[1]
+        config_path = Path(temp_dir) / "config.json"
+        config_text = json.dumps(
+            {
+                "listen": {
+                    "host": "127.0.0.1",
+                    "apiPort": api_port,
+                    "uiPort": ui_port,
+                },
+                "api": {"token": "", "noAuth": True},
+                "maintenance": {"enabled": False},
+                "events": {"udp": {"enabled": True}},
+                "answeringMachine": {"messages": {"enabled": False}},
+                "memos": {"enabled": False},
+                "systemMetrics": {"enabled": False},
+                "video": {"enabled": False},
+                "displayBridge": {"enabled": False},
+            },
+            sort_keys=True,
+        )
+        config_path.write_text(config_text, encoding="utf-8")
+        result = subprocess.run(
+            [str(binary), "--config", str(config_path), "--diagnose-startup"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if config_path.read_text(encoding="utf-8") != config_text:
+            raise AssertionError("startup diagnosis must not rewrite config")
+    if result.returncode != 0:
+        raise AssertionError(f"startup diagnosis failed: {result.stderr!r}")
+    if result.stderr:
+        raise AssertionError(f"startup diagnosis must not emit stderr: {result.stderr!r}")
+    data = json.loads(result.stdout)
+    if data.get("ok") is not True:
+        raise AssertionError("startup diagnosis must report ok=true for valid config")
+    effective = data.get("effective_config", {})
+    plan = data.get("startup_plan", {})
+    side_effects = data.get("side_effects", {})
+    if effective.get("video_enabled") is not False:
+        raise AssertionError("startup diagnosis must expose effective video_enabled=false")
+    if plan.get("video_runtime") is not False or plan.get("rtsp_bridge") is not False:
+        raise AssertionError("startup diagnosis must show disabled media startup plan")
+    if side_effects != {
+        "opens_listeners": False,
+        "starts_media": False,
+        "writes_files": False,
+    }:
+        raise AssertionError(f"unexpected startup diagnosis side effects: {side_effects!r}")
 
 
 def assert_graceful_shutdown_signal_is_handled(binary: Path) -> None:

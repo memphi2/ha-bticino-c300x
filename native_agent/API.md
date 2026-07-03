@@ -109,6 +109,23 @@ No endpoint should ever echo API tokens, maintenance tokens, webhook tokens,
 shared secrets, SIP secrets, raw config file contents, or private callback URLs.
 Status endpoints use boolean flags and fingerprints instead.
 
+## Startup CLI Diagnostics
+
+The native binary supports a read-only startup diagnosis mode:
+
+```bash
+c300x-agent-native --config /path/to/config.json --diagnose-startup
+```
+
+This command validates and parses the effective config, prints a JSON startup
+plan to stdout, and exits without opening API/UI listeners, starting RTSP/media,
+or writing files. It is intended for cases where the API is unavailable because
+the agent exits during startup.
+
+Fatal startup failures use stable stderr reasons before returning exit code `2`,
+for example `config_error`, `api_token_missing`, `api_bind_failed`,
+`ui_bind_failed`, `runtime_alloc_failed`, or `video_runtime_start_failed`.
+
 ## Endpoint Index
 
 | Method | Path | Auth | Side effects |

@@ -12209,12 +12209,12 @@ int c300x_run(struct c300x_config *config)
     (void)signal(SIGINT, handle_shutdown_signal);
 
     if (!config->api_no_auth && config->api_token[0] == '\0') {
-        fprintf(stderr, "api.token must be configured when api.noAuth=false\n");
+        fprintf(stderr, "fatal: api_token_missing: api.token must be configured when api.noAuth=false\n");
         return 2;
     }
     runtime = calloc(1, sizeof(*runtime));
     if (runtime == NULL) {
-        fprintf(stderr, "failed to allocate agent runtime\n");
+        fprintf(stderr, "fatal: runtime_alloc_failed: failed to allocate agent runtime\n");
         return 2;
     }
     runtime->config = config;
@@ -12227,7 +12227,13 @@ int c300x_run(struct c300x_config *config)
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {
-        fprintf(stderr, "failed to bind API listener on %s:%u: %s\n", config->listen_host, config->api_port, strerror(errno));
+        fprintf(
+            stderr,
+            "fatal: api_bind_failed: failed to bind API listener on %s:%u: %s\n",
+            config->listen_host,
+            config->api_port,
+            strerror(errno)
+        );
         result = 2;
         goto cleanup;
     }
@@ -12237,7 +12243,13 @@ int c300x_run(struct c300x_config *config)
         listeners[listener_count].fd = make_listener(C300X_UI_LISTEN_HOST, config->ui_port);
         listeners[listener_count].kind = LISTENER_UI;
         if (listeners[listener_count].fd < 0) {
-            fprintf(stderr, "failed to bind UI listener on %s:%u: %s\n", C300X_UI_LISTEN_HOST, config->ui_port, strerror(errno));
+            fprintf(
+                stderr,
+                "fatal: ui_bind_failed: failed to bind UI listener on %s:%u: %s\n",
+                C300X_UI_LISTEN_HOST,
+                config->ui_port,
+                strerror(errno)
+            );
             result = 2;
             goto cleanup;
         }
@@ -12247,7 +12259,11 @@ int c300x_run(struct c300x_config *config)
     if (config->video_enabled) {
         video = c300x_video_create(config, video_error, sizeof(video_error));
         if (video == NULL) {
-            fprintf(stderr, "%s\n", video_error[0] != '\0' ? video_error : "video: initialization failed");
+            fprintf(
+                stderr,
+                "fatal: video_runtime_start_failed: %s\n",
+                video_error[0] != '\0' ? video_error : "video: initialization failed"
+            );
             result = 2;
             goto cleanup;
         }

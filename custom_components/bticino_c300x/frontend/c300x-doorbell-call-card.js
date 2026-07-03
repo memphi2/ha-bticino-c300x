@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=cfac0797bc32fff8";
+} from "./c300x-translations.js?v=1881449574e33b00";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=cfac0797bc32fff8";
+} from "./c300x-entity-resolver.js?v=1881449574e33b00";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=cfac0797bc32fff8";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=cfac0797bc32fff8";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=cfac0797bc32fff8";
+} from "./c300x-state-model.js?v=1881449574e33b00";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=1881449574e33b00";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=1881449574e33b00";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -779,12 +779,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _hasDoorbellRingCallSession() {
-    const mediaState = c300xMediaState(this._cameraEntity());
-    return this._doorbellAnswered
-      || this._ringPreviewActive
-      || mediaState === "ring_answering"
-      || mediaState === "ring_active"
-      || mediaState === "ring_hanging_up";
+    return this._doorbellAnswered;
   }
 
   _closePeer(clearStatus, options = {}) {

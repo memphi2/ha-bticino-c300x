@@ -554,6 +554,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     return
                 session.ready = True
                 await self._async_flush_provider_webrtc_candidates(session_id)
+                if session.ring_call and session.wants_audio:
+                    await self._async_close_other_ring_preview_webrtc_sessions(
+                        session_id
+                    )
         finally:
             _PROVIDER_WEBRTC_STREAM_CONTEXT.reset(token)
 
@@ -627,6 +631,33 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session_id,
                 session.pending_candidates.pop(0),
             )
+
+    async def _async_close_other_ring_preview_webrtc_sessions(
+        self,
+        answered_session_id: str,
+    ) -> None:
+        """Close passive Ring preview sessions once one browser owns the answer."""
+
+        session_ids = [
+            session_id
+            for session_id, session in self._provider_webrtc_sessions.items()
+            if session_id != answered_session_id
+            and session.owner == "doorbell"
+            and session.ring_preview
+        ]
+        if not session_ids:
+            return
+        await asyncio.gather(
+            *(
+                self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="ring_call_answered",
+                )
+                for session_id in session_ids
+            )
+        )
 
     @callback
     def close_webrtc_session(self, session_id: str) -> None:

@@ -1220,20 +1220,31 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
 
     asyncio.run(_run())
 
-    preview_sessions = [
-        camera._provider_webrtc_sessions[f"ring-preview-browser-{browser_index}"]
-        for browser_index in range(4)
+    preview_session_ids = [
+        f"ring-preview-browser-{browser_index}" for browser_index in range(4)
     ]
     answer_session = camera._provider_webrtc_sessions["ring-answer-browser"]
-    assert all(session.resource_id == "ring:entry-1" for session in preview_sessions)
+    assert not any(
+        session_id in camera._provider_webrtc_sessions
+        for session_id in preview_session_ids
+    )
     assert answer_session.resource_id == "ring:entry-1"
     assert answer_session.wants_audio is True
-    assert all(session.ready for session in preview_sessions)
     assert answer_session.ready is True
     assert camera._active_local_media_sessions() == 1
+    assert provider.closed == preview_session_ids
     assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     assert provider.support_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     assert len(provider.offers) == 5
+    assert [session_id for session_id, _offer in provider.offers[:4]] == preview_session_ids
+    closed_messages = [
+        message
+        for message in sent_messages
+        if _webrtc_message_value(message, "type") == "closed"
+    ]
+    assert [
+        _webrtc_message_value(message, "reason") for message in closed_messages
+    ] == ["ring_call_answered"] * 4
     assert api.activate_calls == []
     assert ready_urls == [
         *(["rtsp://127.0.0.1:6554/doorbell-video"] * 8),

@@ -673,7 +673,7 @@ def test_bundled_card_treats_media_primary_action_as_authoritative() -> None:
 
     assert "if (!c300xHasMediaPrimaryAction(cameraEntity))" in state_source
     assert 'return "busy";' in state_source
-    assert 'return active ? "hang_up" : "unavailable";' in state_source
+    assert 'return active && !passiveRingPreview ? "hang_up" : "unavailable";' in state_source
     assert state_source.index("const stateMachineAction = c300xStateMachineDoorstationAction") < state_source.index(
         "c300xIsRingCallPending(cameraEntity)"
     )
@@ -684,6 +684,7 @@ def test_bundled_card_treats_media_primary_action_as_authoritative() -> None:
         'doorbellAnswered && (!stateMachineAction || stateMachineAction === "answer")'
         in state_source
     )
+    assert 'return passiveRingCall || passiveRingPreview ? "busy" : "hang_up";' in state_source
 
 
 def test_bundled_card_shows_idle_status_for_idle_stream_action() -> None:
@@ -704,9 +705,9 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
 
     expected_mappings = {
         'if (action === "answer_ring")': 'return "answer";',
-        'if (action === "hangup")': 'return "hang_up";',
-        'if (action === "stop_stream")': 'return active ? "hang_up" : "busy";',
-        'if (action === "start_stream")': 'return active ? "hang_up" : "stream";',
+        'if (action === "hangup")': 'return passiveRingCall || passiveRingPreview ? "busy" : "hang_up";',
+        'if (action === "stop_stream")': 'return active && !passiveRingPreview ? "hang_up" : "busy";',
+        'if (action === "start_stream")': 'return active ? (passiveRingPreview ? "busy" : "hang_up") : "stream";',
         'if (action === "wait")': 'return "busy";',
     }
     for condition, button in expected_mappings.items():
@@ -727,7 +728,7 @@ def test_bundled_card_blocks_passive_on_demand_stop_button() -> None:
         )
     ]
 
-    assert 'return active ? "hang_up" : "busy";' in stop_stream_block
+    assert 'return active && !passiveRingPreview ? "hang_up" : "busy";' in stop_stream_block
     assert 'action === "busy"' in state_source
 
 
@@ -808,9 +809,13 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
 
 def test_doorstation_hangup_only_calls_ring_hangup_for_ring_sessions() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
     hangup_start = source.index("async _hangupDoorstation()")
     hangup_end = source.index("  _hasDoorbellRingCallSession()", hangup_start)
     hangup_body = source[hangup_start:hangup_end]
+    ring_session_start = source.index("  _hasDoorbellRingCallSession()")
+    ring_session_end = source.index("  _closePeer(", ring_session_start)
+    ring_session_body = source[ring_session_start:ring_session_end]
 
     assert "if (this._hangupInProgress)" in hangup_body
     assert "this._hangupInProgress = true;" in hangup_body
@@ -820,5 +825,26 @@ def test_doorstation_hangup_only_calls_ring_hangup_for_ring_sessions() -> None:
         "await this._hangupDoorbellCall({ closePeer: false });"
     )
     assert "await this._stopDoorbellVideo();" in hangup_body
-    assert 'mediaState === "ring_active"' in source
-    assert 'mediaState === "ring_hanging_up"' in source
+    assert "return this._doorbellAnswered;" in ring_session_body
+    assert "this._ringPreviewActive" not in ring_session_body
+    assert 'mediaState === "ring_active"' in state_source
+    assert 'mediaState === "ring_hanging_up"' in state_source
+
+
+def test_bundled_card_blocks_passive_ring_preview_hangup() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+
+    assert "doorbellAnswered," in state_source
+    assert "ringPreviewActive," in state_source
+    assert (
+        "const passiveRingCall = !doorbellAnswered && c300xIsRingCallAvailable(cameraEntity);"
+        in state_source
+    )
+    assert (
+        "const passiveRingPreview = active && ringPreviewActive && !doorbellAnswered;"
+        in state_source
+    )
+    assert 'return doorbellAnswered ? "hang_up" : "busy";' in state_source
+    assert 'return !doorbellAnswered && ringPreviewActive ? "busy" : "hang_up";' in state_source
+    assert "return this._doorbellAnswered;" in source

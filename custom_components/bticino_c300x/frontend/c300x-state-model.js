@@ -132,7 +132,12 @@ export function c300xDoorstationAction({
   previewStarting,
   ringPreviewActive,
 }) {
-  const stateMachineAction = c300xStateMachineDoorstationAction(cameraEntity, active);
+  const stateMachineAction = c300xStateMachineDoorstationAction(
+    cameraEntity,
+    active,
+    doorbellAnswered,
+    ringPreviewActive,
+  );
   if (doorbellAnswered && (!stateMachineAction || stateMachineAction === "answer")) {
     return "hang_up";
   }
@@ -158,10 +163,10 @@ export function c300xDoorstationAction({
     return active ? "hang_up" : "answer";
   }
   if (active) {
-    return "hang_up";
+    return !doorbellAnswered && ringPreviewActive ? "busy" : "hang_up";
   }
   if (c300xIsRingCallAvailable(cameraEntity)) {
-    return "hang_up";
+    return doorbellAnswered ? "hang_up" : "busy";
   }
   return "stream";
 }
@@ -178,38 +183,45 @@ export function c300xDoorstationStatusKey(cameraEntity, action, active) {
   return action;
 }
 
-export function c300xStateMachineDoorstationAction(cameraEntity, active) {
+export function c300xStateMachineDoorstationAction(
+  cameraEntity,
+  active,
+  doorbellAnswered = false,
+  ringPreviewActive = false,
+) {
   if (!c300xHasMediaPrimaryAction(cameraEntity)) {
     return "";
   }
   const action = c300xMediaPrimaryAction(cameraEntity);
+  const passiveRingCall = !doorbellAnswered && c300xIsRingCallAvailable(cameraEntity);
+  const passiveRingPreview = active && ringPreviewActive && !doorbellAnswered;
   if (action === "answer_ring") {
     return "answer";
   }
   if (action === "hangup") {
-    return "hang_up";
+    return passiveRingCall || passiveRingPreview ? "busy" : "hang_up";
   }
   if (action === "stop_stream") {
-    return active ? "hang_up" : "busy";
+    return active && !passiveRingPreview ? "hang_up" : "busy";
   }
   if (action === "start_stream") {
-    return active ? "hang_up" : "stream";
+    return active ? (passiveRingPreview ? "busy" : "hang_up") : "stream";
   }
   if (action === "wait") {
     const mediaState = c300xMediaState(cameraEntity);
-    if (active) {
-      return "hang_up";
-    }
     if (
       mediaState === "ring_answering"
       || mediaState === "ring_active"
       || mediaState === "ring_hanging_up"
     ) {
-      return "hang_up";
+      return doorbellAnswered ? "hang_up" : "busy";
+    }
+    if (active) {
+      return passiveRingPreview ? "busy" : "hang_up";
     }
     return "busy";
   }
-  return active ? "hang_up" : "unavailable";
+  return active && !passiveRingPreview ? "hang_up" : "unavailable";
 }
 
 export function c300xHasMediaPrimaryAction(cameraEntity) {

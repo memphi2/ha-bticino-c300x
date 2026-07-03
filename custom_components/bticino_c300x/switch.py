@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -82,7 +84,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "homeassistant_media_user_setup")
-        self._status: dict = {}
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -99,7 +101,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
         )
 
     @property
-    def extra_state_attributes(self) -> dict:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return the non-sensitive setup status reported by the agent."""
 
         keys = (
@@ -115,7 +117,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
         )
         return {key: self._status.get(key) for key in keys if key in self._status}
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the complete Home Assistant media-user setup."""
 
         try:
@@ -130,7 +132,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             raise HomeAssistantError("C300X Home Assistant media user failed") from err
         await self._store_status(status)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the routing/QML parts of the Home Assistant media-user setup."""
 
         try:
@@ -153,7 +155,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
             return
         await self._store_status(status, write_state=False)
 
-    async def _store_status(self, status: dict, *, write_state: bool = True) -> None:
+    async def _store_status(self, status: dict[str, Any], *, write_state: bool = True) -> None:
         self._status = status
         self._attr_available = True
         self._entry.runtime_data.device_user_status = status
@@ -185,13 +187,13 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
 
         return self._muted
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Mute the ringer."""
 
         await self._set_muted(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Unmute the ringer."""
 
         await self._set_muted(False)
@@ -211,7 +213,7 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
         status = await self._entry.runtime_data.api.async_set_ringer_muted(muted)
         self._apply_status(status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._muted = status.get("muted")
         self._attr_available = True
 
@@ -227,7 +229,7 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
         )
 
     @callback
-    def _handle_agent_event(self, event) -> None:
+    def _handle_agent_event(self, event: Any) -> None:
         if event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)
@@ -262,13 +264,13 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
 
         return {"greeting_message_enabled": self._greeting_message_enabled}
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable the answering machine."""
 
         await self._set_enabled(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable the answering machine."""
 
         await self._set_enabled(False)
@@ -290,7 +292,7 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
         )
         self._apply_status(status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._enabled = status.get("enabled")
         self._greeting_message_enabled = status.get("greeting_message_enabled")
         self._attr_available = True
@@ -324,13 +326,13 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
             "ssh_start",
         )
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Start SSH."""
 
         await self._set_enabled(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop SSH."""
 
         await self._set_enabled(False)
@@ -352,7 +354,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
         status = await self._entry.runtime_data.api.async_set_ssh_enabled(enabled)
         self._apply_status(status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._running = status.get("running")
         self._attr_available = True
 
@@ -377,7 +379,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         return patched if isinstance(patched, bool) else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return read-only patch metadata."""
 
         status = _qml_patch_status(self._entry)
@@ -401,7 +403,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
             "qml_restore",
         )
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the Display patch."""
 
         status = await async_apply_qml_patch_and_confirm(
@@ -412,7 +414,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the display files."""
 
         status = await async_restore_qml_patch_and_confirm(
@@ -464,7 +466,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
         if hass is not None:
             async_dispatcher_send(hass, SIGNAL_QML_PATCH_CHANGED, self._entry.entry_id)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._attr_available = bool(status.get("available", True))
 
 
@@ -478,7 +480,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "firewall_patch")
-        self._status: dict[str, object] = {}
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -489,7 +491,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
         return patched if isinstance(patched, bool) else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return read-only IPv4 firewall patch metadata."""
 
         return {
@@ -510,7 +512,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
 
         return super().available and _supports_firewall_switch(self._entry)
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the persistent IPv4 API firewall rule."""
 
         await self._async_enable_maintenance_endpoint()
@@ -519,7 +521,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the original IPv4 firewall script."""
 
         status = await self._entry.runtime_data.api.async_restore_firewall()
@@ -581,7 +583,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
             }
         )
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         _apply_patch_switch_status(self, status)
 
 
@@ -595,7 +597,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "ipv6_firewall_patch")
-        self._status: dict[str, object] = {}
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -606,7 +608,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
         return patched if isinstance(patched, bool) else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return read-only IPv6 firewall patch metadata."""
 
         return {
@@ -627,7 +629,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
 
         return super().available and _supports_ipv6_firewall_switch(self._entry)
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply the persistent IPv6 API firewall rules."""
 
         await self._async_enable_maintenance_endpoint()
@@ -636,7 +638,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
         await _async_refresh_agent_diagnostics_if_possible(self)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Restore the original IPv6 firewall script."""
 
         status = await self._entry.runtime_data.api.async_restore_ipv6_firewall()
@@ -700,7 +702,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
             }
         )
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         _apply_patch_switch_status(self, status)
 
 
@@ -718,7 +720,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         # HA entity customizations attached to the native bridge.
         super().__init__(entry, "legacy_mqtt_bridge")
         self._enabled: bool | None = None
-        self._status: dict[str, object] = {}
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -730,7 +732,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         return self._enabled
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return non-sensitive MQTT bridge metadata."""
 
         return {
@@ -767,7 +769,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
 
         return super().available and _supports_native_mqtt_bridge_switch(self._entry)
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable the native MQTT bridge."""
 
         await self._set_enabled(True)
@@ -775,7 +777,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         self.async_write_ha_state()
         _dispatch_mqtt_status_changed(self, self._status)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable the native MQTT bridge."""
 
         await self._set_enabled(False)
@@ -814,7 +816,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
         )
 
     @callback
-    def _handle_mqtt_status(self, entry_id: str, status: dict) -> None:
+    def _handle_mqtt_status(self, entry_id: str, status: dict[str, Any]) -> None:
         if entry_id != self._entry.entry_id:
             return
         native_enabled = status.get("native_enabled")
@@ -823,7 +825,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
             self._status = {**self._status, **status}
             self.async_write_ha_state()
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._status = status
         self._enabled = status.get("enabled")
         self._attr_available = bool(status.get("available", True))
@@ -840,7 +842,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__(entry, "legacy_tcpdump2mqtt_bridge")
         self._enabled: bool | None = None
-        self._status: dict[str, object] = {}
+        self._status: dict[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -852,7 +854,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         return self._enabled
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return non-sensitive legacy MQTT patch metadata."""
 
         return {
@@ -878,7 +880,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
 
         return super().available and _supports_legacy_mqtt_bridge_switch(self._entry)
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable the legacy TcpDump2Mqtt autostart."""
 
         await self._set_enabled(True)
@@ -886,7 +888,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         self.async_write_ha_state()
         _dispatch_mqtt_status_changed(self, self._status)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable the legacy TcpDump2Mqtt autostart and stop MQTT helpers."""
 
         await self._set_enabled(False)
@@ -927,7 +929,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
         )
 
     @callback
-    def _handle_mqtt_status(self, entry_id: str, status: dict) -> None:
+    def _handle_mqtt_status(self, entry_id: str, status: dict[str, Any]) -> None:
         if entry_id != self._entry.entry_id:
             return
         legacy_enabled = status.get("legacy_enabled")
@@ -941,7 +943,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
             self._status = {**self._status, **status}
             self.async_write_ha_state()
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._status = status
         native_enabled = bool(status.get("native_enabled"))
         exclusive = bool(status.get("exclusive", True))
@@ -975,14 +977,19 @@ class _AuthConfigStatusEntity(C300XEntity):
         )
 
     @callback
-    def _handle_auth_config_status(self, entry_id: str, status: dict) -> None:
+    def _handle_auth_config_status(self, entry_id: str, status: dict[str, Any]) -> None:
         if entry_id != self._entry.entry_id:
             return
         self._apply_status(status)
         self.async_write_ha_state()
 
+    def _apply_status(self, status: dict[str, Any]) -> None:
+        """Apply a shared auth-config status payload."""
 
-def _dispatch_auth_config_status(entity: C300XEntity, status: dict) -> None:
+        raise NotImplementedError
+
+
+def _dispatch_auth_config_status(entity: Any, status: dict[str, Any]) -> None:
     hass = getattr(entity, "hass", None)
     if hass is not None:
         async_dispatcher_send(
@@ -993,7 +1000,7 @@ def _dispatch_auth_config_status(entity: C300XEntity, status: dict) -> None:
         )
 
 
-def _dispatch_mqtt_status_changed(entity: C300XEntity, status: dict) -> None:
+def _dispatch_mqtt_status_changed(entity: Any, status: dict[str, Any]) -> None:
     hass = getattr(entity, "hass", None)
     if hass is not None:
         async_dispatcher_send(
@@ -1037,13 +1044,13 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
             "maintenance_no_auth_allowed": self._maintenance_no_auth_allowed,
         }
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable noAuth bootstrap mode."""
 
         await self._set_enabled(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable noAuth bootstrap mode."""
 
         await self._set_enabled(False)
@@ -1075,7 +1082,7 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._enabled = status.get("no_auth")
         self._api_token_configured = status.get("api_token_configured")
         self._maintenance_token_configured = status.get(
@@ -1105,13 +1112,13 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
 
         return self._enabled
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable bootstrap mDNS discovery."""
 
         await self._set_enabled(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable bootstrap mDNS discovery."""
 
         await self._set_enabled(False)
@@ -1134,7 +1141,7 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._enabled = status.get("mdns_enabled")
         self._attr_available = True
 
@@ -1166,13 +1173,13 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
 
         return {"no_auth": self._no_auth}
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Allow noAuth maintenance access."""
 
         await self._set_enabled(True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Deny noAuth maintenance access."""
 
         await self._set_enabled(False)
@@ -1199,7 +1206,7 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict) -> None:
+    def _apply_status(self, status: dict[str, Any]) -> None:
         self._enabled = status.get("maintenance_no_auth_allowed")
         self._no_auth = status.get("no_auth")
         self._attr_available = True
@@ -1211,7 +1218,8 @@ async def _async_refresh_initial_states(entities: list[SwitchEntity]) -> None:
     auth_config_entities = [
         entity
         for entity in entities
-        if getattr(entity, "_uses_auth_config_status", False)
+        if isinstance(entity, _AuthConfigStatusEntity)
+        and getattr(entity, "_uses_auth_config_status", False)
         and _supports_auth_config(entity._entry)
     ]
     if auth_config_entities:
@@ -1222,23 +1230,23 @@ async def _async_refresh_initial_states(entities: list[SwitchEntity]) -> None:
                 ]._entry.runtime_data.api.async_auth_config_status()
             )
         except C300XAgentApiError:
-            for entity in auth_config_entities:
-                entity._attr_available = False
+            for auth_entity in auth_config_entities:
+                auth_entity._attr_available = False
         else:
-            for entity in auth_config_entities:
-                entity._apply_status(status)
+            for auth_entity in auth_config_entities:
+                auth_entity._apply_status(status)
 
-    for entity in entities:
-        if entity in auth_config_entities:
+    for switch_entity in entities:
+        if switch_entity in auth_config_entities:
             continue
-        await entity.async_update()
+        await cast(Any, switch_entity).async_update()
 
 
 def _supports_maintenance_actions(entry: ConfigEntry, *actions: str) -> bool:
     return all(entry_maintenance_action_is_advertised(entry, action) for action in actions)
 
 
-def _apply_patch_switch_status(entity: C300XEntity, status: dict) -> None:
+def _apply_patch_switch_status(entity: Any, status: dict[str, Any]) -> None:
     entity._status = status
     entity._attr_available = bool(status.get("available", True))
 
@@ -1283,7 +1291,7 @@ def _configured_token(entry: ConfigEntry, key: str) -> str | None:
     return token or None
 
 
-def _qml_patch_status(entry: ConfigEntry) -> dict[str, object]:
+def _qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
     status = getattr(entry.runtime_data, "qml_patch_status", {})
     return status if isinstance(status, dict) else {}
 

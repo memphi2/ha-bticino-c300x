@@ -89,6 +89,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/sensor.py",
     "custom_components/bticino_c300x/service_schema.py",
     "custom_components/bticino_c300x/services.py",
+    "custom_components/bticino_c300x/switch.py",
     "custom_components/bticino_c300x/use_cases/__init__.py",
     "custom_components/bticino_c300x/use_cases/common.py",
     "custom_components/bticino_c300x/use_cases/device_actions.py",

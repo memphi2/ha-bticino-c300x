@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .const import DOMAIN
 
@@ -82,7 +82,7 @@ def load_packaged_bundle_metadata(path: Path | None = None) -> dict[str, Any] | 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    return data if isinstance(data, dict) else None
+    return cast(dict[str, Any], data) if isinstance(data, dict) else None
 
 
 async def async_load_packaged_bundle_metadata(
@@ -91,7 +91,10 @@ async def async_load_packaged_bundle_metadata(
 ) -> dict[str, Any] | None:
     """Load packaged native-agent metadata outside the event loop."""
 
-    return await hass.async_add_executor_job(load_packaged_bundle_metadata, path)
+    return cast(
+        dict[str, Any] | None,
+        await hass.async_add_executor_job(load_packaged_bundle_metadata, path),
+    )
 
 
 def compare_agent_bundle(
@@ -103,7 +106,8 @@ def compare_agent_bundle(
     if not bundle:
         return AgentUpdateState(state=UPDATE_STATE_UNKNOWN, reason="bundle_missing")
 
-    agent = setup_data.get("agent") if isinstance(setup_data.get("agent"), dict) else {}
+    raw_agent = setup_data.get("agent")
+    agent: Mapping[str, Any] = raw_agent if isinstance(raw_agent, Mapping) else {}
     installed_version = str(setup_data.get("version") or agent.get("version") or "")
     installed_api_version = str(setup_data.get("api_version") or "")
     installed_bundle_hash = str(agent.get("bundle_hash") or "")
@@ -112,7 +116,7 @@ def compare_agent_bundle(
     available_api_version = str(bundle.get("api_version") or "")
     available_bundle_hash = str(bundle.get("bundle_hash") or "")
 
-    common = {
+    common: dict[str, Any] = {
         "installed_version": installed_version or None,
         "available_version": available_version or None,
         "installed_api_version": installed_api_version or None,
@@ -220,7 +224,7 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
             "mode": "600",
         },
     )
-    return await api.async_apply_agent_update(bundle_hash=bundle_hash)
+    return cast(dict[str, Any], await api.async_apply_agent_update(bundle_hash=bundle_hash))
 
 
 async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) -> None:
@@ -264,7 +268,7 @@ async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) 
 async def _async_read_file_bytes(hass: Any, path: Path) -> bytes:
     """Read a packaged file outside the event loop."""
 
-    return await hass.async_add_executor_job(path.read_bytes)
+    return cast(bytes, await hass.async_add_executor_job(path.read_bytes))
 
 
 def _short_hash(value: str | None) -> str:

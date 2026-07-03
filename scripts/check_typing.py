@@ -16,6 +16,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/activation_address.py",
     "custom_components/bticino_c300x/agent_diagnostics.py",
     "custom_components/bticino_c300x/agent_contracts",
+    "custom_components/bticino_c300x/agent_update.py",
     "custom_components/bticino_c300x/api_errors.py",
     "custom_components/bticino_c300x/api_validation.py",
     "custom_components/bticino_c300x/binary_sensor.py",

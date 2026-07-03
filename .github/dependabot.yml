@@ -24,12 +24,16 @@ updates:
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
     groups:
-      python:
+      python-patch-minor:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "deps"
     ignore:
+      # Re-evaluate after HA 2026.7 compatibility branch is green.
       - dependency-name: "av"
         versions:
           - ">=17"

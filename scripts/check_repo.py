@@ -437,6 +437,13 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("device_installer.py must reject unvalidated Paramiko versions")
 
     dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    if (
+        "python-patch-minor:" not in dependabot
+        or 'update-types:\n          - "minor"\n          - "patch"' not in dependabot
+    ):
+        failures.append("Dependabot must group only Python minor/patch updates")
+    if "Re-evaluate after HA 2026.7 compatibility branch is green." not in dependabot:
+        failures.append("Dependabot major-version ignores must carry a re-evaluate note")
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
     if (

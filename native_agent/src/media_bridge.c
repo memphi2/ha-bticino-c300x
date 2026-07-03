@@ -62,6 +62,8 @@
 #define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0
 #define RTSP_AUDIO_FRAME_SAMPLES 160
 #define RTSP_BACKCHANNEL_FRAME_SAMPLES RTSP_AUDIO_FRAME_SAMPLES
+#define RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES 16
+#define RTSP_BACKCHANNEL_TALKBACK_PAYLOAD_MAX 256
 #define RTSP_BACKCHANNEL_SPEEX_BITS_STORAGE 2048
 #define RING_REGISTER_EXPIRES_SECONDS 300
 #define RING_REGISTER_RENEW_SECONDS 240
@@ -141,6 +143,12 @@ typedef struct {
 } rtsp_client_thread_arg_t;
 
 typedef struct {
+    unsigned char payload[RTSP_BACKCHANNEL_TALKBACK_PAYLOAD_MAX];
+    size_t payload_len;
+    bool marker;
+} talkback_queue_frame_t;
+
+typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t ready_cond;
     pthread_t server_thread;
@@ -210,6 +218,14 @@ typedef struct {
     long long ondemand_last_talkback_ms;
     long long ring_last_talkback_ms;
     long long home_call_last_talkback_ms;
+    talkback_queue_frame_t talkback_queue[RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES];
+    size_t talkback_queue_head;
+    size_t talkback_queue_len;
+    int16_t talkback_pcm_buffer[RTSP_BACKCHANNEL_FRAME_SAMPLES];
+    size_t talkback_pcm_count;
+    bool talkback_pcm_seq_initialized;
+    uint16_t talkback_pcm_next_seq;
+    unsigned int talkback_backchannel_generation;
     void *ondemand_srtp_state;
     void *ring_srtp_state;
     void *home_call_srtp_state;
@@ -937,6 +953,14 @@ static void send_media_audio_silence_payload_type(
     media_srtp_state_t *state,
     unsigned char payload_type
 );
+static bool send_queued_talkback_payload_locked(
+    media_bridge_t *bridge,
+    int fd,
+    int port,
+    media_srtp_state_t *state,
+    unsigned char payload_type,
+    long long *last_talkback_ms
+);
 static void send_srtcp_receiver_report(int fd, int port, c300x_srtp_t session, uint32_t sender_ssrc);
 static void send_srtcp_pli(
     int fd,
@@ -1208,6 +1232,80 @@ static bool ondemand_talkback_recent_locked(const media_bridge_t *bridge, long l
 static bool home_call_talkback_recent_locked(const media_bridge_t *bridge, long long now) {
     return bridge->home_call_last_talkback_ms > 0
         && now - bridge->home_call_last_talkback_ms <= HOME_CALL_TALKBACK_SILENCE_GRACE_MS;
+}
+
+static void reset_backchannel_talkback_locked(media_bridge_t *bridge) {
+    if (bridge == NULL) {
+        return;
+    }
+    bridge->talkback_queue_head = 0;
+    bridge->talkback_queue_len = 0;
+    bridge->talkback_pcm_count = 0;
+    bridge->talkback_pcm_seq_initialized = false;
+    bridge->talkback_pcm_next_seq = 0;
+    bridge->talkback_backchannel_generation++;
+}
+
+static bool queue_talkback_payload_locked(
+    media_bridge_t *bridge,
+    const unsigned char *payload,
+    size_t payload_len,
+    bool marker,
+    unsigned int generation
+) {
+    size_t index;
+
+    if (
+        bridge == NULL
+        || payload == NULL
+        || payload_len == 0
+        || payload_len > RTSP_BACKCHANNEL_TALKBACK_PAYLOAD_MAX
+        || bridge->talkback_backchannel_generation != generation
+    ) {
+        return false;
+    }
+    if (bridge->talkback_queue_len == RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES) {
+        bridge->talkback_queue_head = (
+            bridge->talkback_queue_head + 1
+        ) % RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES;
+        bridge->talkback_queue_len--;
+    }
+    index = (
+        bridge->talkback_queue_head + bridge->talkback_queue_len
+    ) % RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES;
+    memcpy(bridge->talkback_queue[index].payload, payload, payload_len);
+    bridge->talkback_queue[index].payload_len = payload_len;
+    bridge->talkback_queue[index].marker = marker;
+    bridge->talkback_queue_len++;
+    return true;
+}
+
+static bool pop_talkback_payload_locked(
+    media_bridge_t *bridge,
+    unsigned char *payload,
+    size_t *payload_len,
+    bool *marker
+) {
+    const talkback_queue_frame_t *frame;
+
+    if (
+        bridge == NULL
+        || payload == NULL
+        || payload_len == NULL
+        || marker == NULL
+        || bridge->talkback_queue_len == 0
+    ) {
+        return false;
+    }
+    frame = &bridge->talkback_queue[bridge->talkback_queue_head];
+    memcpy(payload, frame->payload, frame->payload_len);
+    *payload_len = frame->payload_len;
+    *marker = frame->marker;
+    bridge->talkback_queue_head = (
+        bridge->talkback_queue_head + 1
+    ) % RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES;
+    bridge->talkback_queue_len--;
+    return true;
 }
 
 static int read_message(int fd, char *buffer, size_t buffer_size, int timeout_seconds) {
@@ -2422,6 +2520,7 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     bridge->ring_target_video_port = 0;
     bridge->ring_last_talkback_ms = 0;
     bridge->ring_srtp_state = NULL;
+    reset_backchannel_talkback_locked(bridge);
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_stopped(bridge->video);
     if (was_active && c300x_video_consume_media_closed_event(bridge->video)) {
@@ -2581,13 +2680,22 @@ static void ring_media_loop(
         }
         if (answered && (next_audio == 0 || now >= next_audio)) {
             pthread_mutex_lock(&bridge->mutex);
-            if (bridge->ring_srtp_state == srtp && !ring_talkback_recent_locked(bridge, now)) {
-                send_media_audio_silence_payload_type(
+            if (bridge->ring_srtp_state == srtp) {
+                if (!send_queued_talkback_payload_locked(
+                    bridge,
                     audio_fd,
                     target_audio_port,
                     srtp,
-                    RING_AUDIO_PAYLOAD_TYPE
-                );
+                    RING_AUDIO_PAYLOAD_TYPE,
+                    &bridge->ring_last_talkback_ms
+                ) && !ring_talkback_recent_locked(bridge, now)) {
+                    send_media_audio_silence_payload_type(
+                        audio_fd,
+                        target_audio_port,
+                        srtp,
+                        RING_AUDIO_PAYLOAD_TYPE
+                    );
+                }
             }
             pthread_mutex_unlock(&bridge->mutex);
             next_audio = now + MEDIA_AUDIO_PACKET_MS;
@@ -2678,6 +2786,7 @@ static void handle_ring_invite(
     bridge->ring_call_stop = false;
     bridge->ring_send_bye = false;
     bridge->ring_last_talkback_ms = 0;
+    reset_backchannel_talkback_locked(bridge);
     bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;
     pthread_mutex_unlock(&bridge->mutex);
     audio_fd = -1;
@@ -2720,6 +2829,7 @@ cleanup:
     pthread_mutex_lock(&bridge->mutex);
     if (bridge->ring_srtp_state == &srtp) {
         bridge->ring_srtp_state = NULL;
+        reset_backchannel_talkback_locked(bridge);
     }
     pthread_mutex_unlock(&bridge->mutex);
     if (audio_fd >= 0) {
@@ -3004,13 +3114,6 @@ static void store_be32(unsigned char *out, uint32_t value) {
     out[3] = (unsigned char)(value & 0xff);
 }
 
-static uint32_t load_be32(const unsigned char *in) {
-    return ((uint32_t)in[0] << 24)
-        | ((uint32_t)in[1] << 16)
-        | ((uint32_t)in[2] << 8)
-        | (uint32_t)in[3];
-}
-
 static int protect_and_send_srtp(c300x_srtp_t session, int fd, int port, unsigned char *packet, int packet_len) {
     c300x_srtp_api_t *api = srtp_api();
     int protected_len = packet_len;
@@ -3065,6 +3168,45 @@ static void send_media_audio_silence_payload_type(
 
 static void send_media_audio_silence(int fd, int port, media_srtp_state_t *state) {
     send_media_audio_silence_payload_type(fd, port, state, MEDIA_AUDIO_PAYLOAD_TYPE);
+}
+
+static bool send_queued_talkback_payload_locked(
+    media_bridge_t *bridge,
+    int fd,
+    int port,
+    media_srtp_state_t *state,
+    unsigned char payload_type,
+    long long *last_talkback_ms
+) {
+    unsigned char payload[RTSP_BACKCHANNEL_TALKBACK_PAYLOAD_MAX];
+    unsigned char packet[512];
+    size_t payload_len = 0;
+    bool marker = false;
+
+    if (
+        state == NULL
+        || !state->available
+        || last_talkback_ms == NULL
+        || !pop_talkback_payload_locked(bridge, payload, &payload_len, &marker)
+    ) {
+        return false;
+    }
+    if (payload_len + 12 > sizeof(packet) - 32) {
+        return true;
+    }
+    memset(packet, 0, sizeof(packet));
+    packet[0] = 0x80;
+    packet[1] = (unsigned char)((marker ? 0x80 : 0) | payload_type);
+    store_be16(packet + 2, state->audio_seq);
+    store_be32(packet + 4, state->audio_timestamp);
+    store_be32(packet + 8, state->audio_ssrc);
+    memcpy(packet + 12, payload, payload_len);
+    if (protect_and_send_srtp(state->audio, fd, port, packet, (int)(12 + payload_len))) {
+        state->audio_seq++;
+        state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
+        *last_talkback_ms = monotonic_ms();
+    }
+    return true;
 }
 
 static void send_srtcp_receiver_report(int fd, int port, c300x_srtp_t session, uint32_t sender_ssrc) {
@@ -3341,14 +3483,32 @@ static unsigned char encode_pcmu_sample(int16_t sample) {
     return (unsigned char)~value;
 }
 
-static bool forward_speex_talkback_packet(
+static bool queue_speex_backchannel_packet(
     media_bridge_t *bridge,
     const unsigned char *packet,
-    ssize_t packet_len
+    size_t packet_len,
+    size_t header_len
 ) {
-    return forward_ring_talkback_packet(bridge, packet, packet_len)
-        || forward_home_call_talkback_packet(bridge, packet, packet_len)
-        || forward_ondemand_talkback_packet(bridge, packet, packet_len);
+    size_t payload_len;
+    bool marker;
+    unsigned int generation;
+
+    if (bridge == NULL || packet == NULL || packet_len <= header_len) {
+        return true;
+    }
+    payload_len = packet_len - header_len;
+    marker = (packet[1] & 0x80) != 0;
+    pthread_mutex_lock(&bridge->mutex);
+    generation = bridge->talkback_backchannel_generation;
+    (void)queue_talkback_payload_locked(
+        bridge,
+        packet + header_len,
+        payload_len,
+        marker,
+        generation
+    );
+    pthread_mutex_unlock(&bridge->mutex);
+    return true;
 }
 
 static bool forward_pcm_backchannel_packet(
@@ -3358,22 +3518,70 @@ static bool forward_pcm_backchannel_packet(
     size_t header_len,
     unsigned char payload_type
 ) {
-    const unsigned char *payload = packet + header_len;
-    size_t payload_len = packet_len - header_len;
+    const unsigned char *payload;
+    size_t payload_len;
     size_t offset = 0;
-    bool consumed = false;
+    bool marker_pending;
+    uint16_t sequence;
+    unsigned int generation;
 
-    while (payload_len - offset >= RTSP_BACKCHANNEL_FRAME_SAMPLES) {
+    if (bridge == NULL || packet == NULL || packet_len <= header_len) {
+        return true;
+    }
+    payload = packet + header_len;
+    payload_len = packet_len - header_len;
+    marker_pending = (packet[1] & 0x80) != 0;
+    sequence = load_be16(packet + 2);
+
+    pthread_mutex_lock(&bridge->mutex);
+    generation = bridge->talkback_backchannel_generation;
+    if (
+        !bridge->talkback_pcm_seq_initialized
+        || bridge->talkback_pcm_next_seq != sequence
+    ) {
+        bridge->talkback_pcm_count = 0;
+    }
+    bridge->talkback_pcm_seq_initialized = true;
+    bridge->talkback_pcm_next_seq = (uint16_t)(sequence + 1);
+    pthread_mutex_unlock(&bridge->mutex);
+
+    while (offset < payload_len) {
         int16_t samples[RTSP_BACKCHANNEL_FRAME_SAMPLES];
         unsigned char speex_payload[256];
-        unsigned char out[512];
         size_t speex_len = 0;
+        size_t take;
+        bool have_frame = false;
+        bool frame_marker = false;
 
-        for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
+        pthread_mutex_lock(&bridge->mutex);
+        if (bridge->talkback_backchannel_generation != generation) {
+            pthread_mutex_unlock(&bridge->mutex);
+            break;
+        }
+        take = RTSP_BACKCHANNEL_FRAME_SAMPLES - bridge->talkback_pcm_count;
+        if (take > payload_len - offset) {
+            take = payload_len - offset;
+        }
+        for (size_t index = 0; index < take; index++) {
             unsigned char sample = payload[offset + index];
-            samples[index] = payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
-                ? decode_pcma_sample(sample)
-                : decode_pcmu_sample(sample);
+            bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index] =
+                payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
+                    ? decode_pcma_sample(sample)
+                    : decode_pcmu_sample(sample);
+        }
+        bridge->talkback_pcm_count += take;
+        offset += take;
+        if (bridge->talkback_pcm_count == RTSP_BACKCHANNEL_FRAME_SAMPLES) {
+            memcpy(samples, bridge->talkback_pcm_buffer, sizeof(samples));
+            bridge->talkback_pcm_count = 0;
+            have_frame = true;
+            frame_marker = marker_pending;
+            marker_pending = false;
+        }
+        pthread_mutex_unlock(&bridge->mutex);
+
+        if (!have_frame) {
+            continue;
         }
         if (!speex_encode_pcm_frame(
             samples,
@@ -3381,29 +3589,19 @@ static bool forward_pcm_backchannel_packet(
             sizeof(speex_payload),
             &speex_len
         )) {
-            return true;
+            continue;
         }
-        if (12 + speex_len > sizeof(out)) {
-            return true;
-        }
-        memset(out, 0, sizeof(out));
-        out[0] = 0x80;
-        out[1] = (unsigned char)(
-            (offset == 0 ? (packet[1] & 0x80) : 0)
-            | C300X_TALKBACK_RTP_PAYLOAD_TYPE
-        );
-        store_be16(out + 2, load_be16(packet + 2));
-        store_be32(out + 4, load_be32(packet + 4) + (uint32_t)offset);
-        store_be32(out + 8, load_be32(packet + 8));
-        memcpy(out + 12, speex_payload, speex_len);
-        consumed = forward_speex_talkback_packet(
+        pthread_mutex_lock(&bridge->mutex);
+        (void)queue_talkback_payload_locked(
             bridge,
-            out,
-            (ssize_t)(12 + speex_len)
-        ) || consumed;
-        offset += RTSP_BACKCHANNEL_FRAME_SAMPLES;
+            speex_payload,
+            speex_len,
+            frame_marker,
+            generation
+        );
+        pthread_mutex_unlock(&bridge->mutex);
     }
-    return consumed || payload_len > 0;
+    return true;
 }
 
 static bool forward_rtsp_backchannel_packet(
@@ -3411,18 +3609,15 @@ static bool forward_rtsp_backchannel_packet(
     const unsigned char *packet,
     size_t packet_len
 ) {
-    size_t csrc_count;
     size_t header_len;
     unsigned char payload_type;
 
     if (bridge == NULL || packet == NULL || packet_len < 12) {
         return false;
     }
-    if ((packet[0] & 0xc0) != 0x80 || (packet[0] & 0x10) != 0) {
+    if (!rtp_payload_offset(packet, (int)packet_len, &header_len)) {
         return true;
     }
-    csrc_count = (size_t)(packet[0] & 0x0f);
-    header_len = 12 + (csrc_count * 4);
     if (packet_len <= header_len) {
         return true;
     }
@@ -3432,11 +3627,7 @@ static bool forward_rtsp_backchannel_packet(
         || payload_type == RING_AUDIO_PAYLOAD_TYPE
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE
     ) {
-        return forward_speex_talkback_packet(
-            bridge,
-            packet,
-            (ssize_t)packet_len
-        );
+        return queue_speex_backchannel_packet(bridge, packet, packet_len, header_len);
     }
     if (
         payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
@@ -3653,8 +3844,17 @@ static void *ondemand_media_thread(void *arg) {
         }
         if (next_audio_rtp == 0 || now >= next_audio_rtp) {
             pthread_mutex_lock(&bridge->mutex);
-            if (bridge->ondemand_srtp_state == &srtp && !ondemand_talkback_recent_locked(bridge, now)) {
-                send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp);
+            if (bridge->ondemand_srtp_state == &srtp) {
+                if (!send_queued_talkback_payload_locked(
+                    bridge,
+                    audio_rtp_fd,
+                    target_audio_port,
+                    &srtp,
+                    MEDIA_AUDIO_PAYLOAD_TYPE,
+                    &bridge->ondemand_last_talkback_ms
+                ) && !ondemand_talkback_recent_locked(bridge, now)) {
+                    send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp);
+                }
             }
             pthread_mutex_unlock(&bridge->mutex);
             next_audio_rtp = now + MEDIA_AUDIO_PACKET_MS;
@@ -3686,6 +3886,7 @@ static void *ondemand_media_thread(void *arg) {
     pthread_mutex_lock(&bridge->mutex);
     if (bridge->ondemand_srtp_state == &srtp) {
         bridge->ondemand_srtp_state = NULL;
+        reset_backchannel_talkback_locked(bridge);
     }
     bridge->ondemand_last_talkback_ms = 0;
     if (bridge->ondemand_audio_rtp_fd >= 0) {
@@ -4721,6 +4922,7 @@ static void *home_call_thread_func(void *arg) {
     bridge->home_call_rtp_packets = 0;
     bridge->home_call_rtcp_packets = 0;
     bridge->home_call_last_talkback_ms = 0;
+    reset_backchannel_talkback_locked(bridge);
     bridge->home_call_srtp_state = NULL;
     pthread_mutex_unlock(&bridge->mutex);
     dispatch_home_call_state_event(bridge, "home_call.started");
@@ -4868,8 +5070,17 @@ static void *home_call_thread_func(void *arg) {
         }
         if (next_audio == 0 || now >= next_audio) {
             pthread_mutex_lock(&bridge->mutex);
-            if (bridge->home_call_srtp_state == &srtp && !home_call_talkback_recent_locked(bridge, now)) {
-                send_media_audio_silence(audio_fd, target_audio_port, &srtp);
+            if (bridge->home_call_srtp_state == &srtp) {
+                if (!send_queued_talkback_payload_locked(
+                    bridge,
+                    audio_fd,
+                    target_audio_port,
+                    &srtp,
+                    MEDIA_AUDIO_PAYLOAD_TYPE,
+                    &bridge->home_call_last_talkback_ms
+                ) && !home_call_talkback_recent_locked(bridge, now)) {
+                    send_media_audio_silence(audio_fd, target_audio_port, &srtp);
+                }
             }
             pthread_mutex_unlock(&bridge->mutex);
             next_audio = now + MEDIA_AUDIO_PACKET_MS;
@@ -4889,6 +5100,7 @@ cleanup:
     pthread_mutex_lock(&bridge->mutex);
     if (bridge->home_call_srtp_state == &srtp) {
         bridge->home_call_srtp_state = NULL;
+        reset_backchannel_talkback_locked(bridge);
     }
     bridge->home_call_last_talkback_ms = 0;
     pthread_mutex_unlock(&bridge->mutex);
@@ -5115,6 +5327,7 @@ static bool start_media_session(media_bridge_t *bridge) {
         pthread_mutex_unlock(&bridge->mutex);
         return true;
     }
+    reset_backchannel_talkback_locked(bridge);
     bridge->media_starting = true;
     bridge->relay_stop = false;
     if (!create_rtp_socket(bridge)) {
@@ -5329,6 +5542,7 @@ static void stop_media_session(bool close_client) {
     g_bridge.ondemand_target_video_port = 0;
     g_bridge.ondemand_last_talkback_ms = 0;
     g_bridge.ondemand_srtp_state = NULL;
+    reset_backchannel_talkback_locked(&g_bridge);
     memset(g_bridge.ondemand_audio_srtp_key, 0, sizeof(g_bridge.ondemand_audio_srtp_key));
     memset(g_bridge.ondemand_video_srtp_key, 0, sizeof(g_bridge.ondemand_video_srtp_key));
     g_bridge.stop_in_progress = false;
@@ -6112,6 +6326,7 @@ void c300x_media_ring_receiver_stop(struct c300x_video *video) {
     g_bridge.ring_call_stop = false;
     g_bridge.ring_send_bye = false;
     g_bridge.ring_srtp_state = NULL;
+    reset_backchannel_talkback_locked(&g_bridge);
     if (!g_bridge.running) {
         g_bridge.config = NULL;
         g_bridge.video = NULL;
@@ -6167,6 +6382,7 @@ bool c300x_media_home_call_start(
     g_bridge.home_call_rtcp_packets = 0;
     g_bridge.home_call_last_talkback_ms = 0;
     g_bridge.home_call_srtp_state = NULL;
+    reset_backchannel_talkback_locked(&g_bridge);
     g_bridge.home_call_sip_fd = -1;
     g_bridge.home_call_audio_rtp_fd = -1;
     g_bridge.home_call_audio_rtcp_fd = -1;
@@ -6220,6 +6436,7 @@ void c300x_media_home_call_stop(struct c300x_video *video) {
     g_bridge.home_call_duration_seconds = 0;
     g_bridge.home_call_last_talkback_ms = 0;
     g_bridge.home_call_srtp_state = NULL;
+    reset_backchannel_talkback_locked(&g_bridge);
     if (!g_bridge.running && !g_bridge.ring_started) {
         g_bridge.config = NULL;
         g_bridge.video = NULL;

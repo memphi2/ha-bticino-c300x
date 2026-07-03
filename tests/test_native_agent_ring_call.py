@@ -144,10 +144,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
         ring_media_loop_body.index("if (now >= next_sip_keepalive)")
     )
     assert "send_media_audio_silence_payload_type(" in ring_media_loop_body
-    assert (
-        "bridge->ring_srtp_state == srtp && !ring_talkback_recent_locked(bridge, now)"
-        in ring_media_loop_body
-    )
+    assert "bridge->ring_srtp_state == srtp" in ring_media_loop_body
+    assert "send_queued_talkback_payload_locked(" in ring_media_loop_body
+    assert ") && !ring_talkback_recent_locked(bridge, now)" in ring_media_loop_body
     assert "RING_AUDIO_PAYLOAD_TYPE" in ring_media_loop_body
     assert "bridge->ring_last_talkback_ms = 0;" in ring_invite_body
     assert "bridge->ring_last_talkback_ms = monotonic_ms();" in ring_talkback_body
@@ -407,14 +406,25 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert "#define RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE 0" in media_bridge
     assert "#define RTSP_AUDIO_FRAME_SAMPLES 160" in media_bridge
     assert "#define RTSP_BACKCHANNEL_FRAME_SAMPLES RTSP_AUDIO_FRAME_SAMPLES" in media_bridge
+    assert "#define RTSP_BACKCHANNEL_TALKBACK_QUEUE_FRAMES 16" in media_bridge
+    assert "#define RTSP_BACKCHANNEL_TALKBACK_PAYLOAD_MAX 256" in media_bridge
     assert media_bridge.count('"a=control:streamid=2\\r\\n"') == 3
     assert media_bridge.count('"a=recvonly\\r\\n"') >= 3
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
     assert "decode_pcma_sample(sample)" in pcm_body
     assert "decode_pcmu_sample(sample)" in pcm_body
-    assert "| C300X_TALKBACK_RTP_PAYLOAD_TYPE" in pcm_body
-    assert "forward_speex_talkback_packet(" in backchannel_body
+    assert "while (offset < payload_len)" in pcm_body
+    assert "RTSP_BACKCHANNEL_FRAME_SAMPLES - bridge->talkback_pcm_count" in pcm_body
+    assert "bridge->talkback_pcm_seq_initialized" in pcm_body
+    assert "bridge->talkback_pcm_next_seq = (uint16_t)(sequence + 1);" in pcm_body
+    assert "bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index]" in pcm_body
+    assert "bridge->talkback_pcm_count = 0;" in pcm_body
+    assert "queue_talkback_payload_locked(" in pcm_body
+    assert "send_queued_talkback_payload_locked(" in media_bridge
+    assert "pop_talkback_payload_locked(" in media_bridge
+    assert "rtp_payload_offset(packet, (int)packet_len, &header_len)" in backchannel_body
+    assert "queue_speex_backchannel_packet(" in backchannel_body
     assert "RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in backchannel_body
     assert "RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in backchannel_body
 

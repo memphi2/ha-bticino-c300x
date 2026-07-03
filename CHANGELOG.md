@@ -2,6 +2,21 @@
 
 ## v1.6.2 - Unreleased
 
+### Changed
+
+- Raise the minimum supported Home Assistant version to `2026.5.0`.
+
+### Fixed
+
+- Close Home Assistant/go2rtc WebRTC sessions before stopping native RTSP media
+  so hang-up does not leave go2rtc retrying a closed RTSP producer.
+
+### Upgrade Notes
+
+- Update Home Assistant to `2026.5.0` or newer before installing this release.
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant to `1.6.2`.
+
 ## v1.6.1 - 2026-07-03
 
 ### Fixed

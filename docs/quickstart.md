@@ -14,7 +14,7 @@ HACS install -> add integration -> install/update agent -> Media readiness ready
 
 You need:
 
-- Home Assistant `2025.5.0` or newer.
+- Home Assistant `2026.5.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x`.
 - Root or SSH access on the C300X for the first device-agent installation.
 - A trusted local network between Home Assistant and the C300X.

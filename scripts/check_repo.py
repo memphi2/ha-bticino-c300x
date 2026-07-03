@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MIN_HOME_ASSISTANT_VERSION = "2025.5.0"
+MIN_HOME_ASSISTANT_VERSION = "2026.5.0"
 CURRENT_HOME_ASSISTANT_VERSION = "2026.6.1"
 CURRENT_RELEASE_VERSION = "1.6.2"
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
@@ -511,7 +511,7 @@ def check_hacs_metadata() -> list[str]:
             f"validate workflow must test current Home Assistant {CURRENT_HOME_ASSISTANT_VERSION}"
         )
     if 'python-version: "3.13"' not in validate_workflow:
-        failures.append("validate workflow must test the Home Assistant 2025.5 Python line")
+        failures.append("validate workflow must test the Home Assistant 2026.5 Python line")
     if 'python-version: "3.14"' not in validate_workflow:
         failures.append("validate workflow must test the current Home Assistant Python line")
     if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:

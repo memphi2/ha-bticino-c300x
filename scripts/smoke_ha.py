@@ -15,7 +15,7 @@ EXPECTED_HA_VERSION_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.environ.get(
         "HA_EXPECTED_VERSION_PREFIXES",
-        "2025.5.,2026.5.,2026.6.",
+        "2026.5.,2026.6.",
     ).split(",")
     if prefix.strip()
 )

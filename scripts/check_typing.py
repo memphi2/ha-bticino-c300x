@@ -103,6 +103,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/validation_patterns.py",
     "custom_components/bticino_c300x/video.py",
     "custom_components/bticino_c300x/video_messages.py",
+    "custom_components/bticino_c300x/webhook.py",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
     "scripts/check_repo.py",

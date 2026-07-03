@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import web
 from homeassistant.components import webhook
@@ -99,6 +99,12 @@ class _AgentEventContext:
     event_type: str
     payload: dict[str, Any]
     data: dict[str, Any]
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    """Return a JSON object value or an empty object."""
+
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
 
 
 def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[], None]:
@@ -280,7 +286,7 @@ async def _async_handle_agent_event(
 
     runtime_data = getattr(entry, "runtime_data", None)
     runtime_event_state = getattr(runtime_data, "event_state", None)
-    if getattr(runtime_event_state, "event_sequence", None) is not None:
+    if isinstance(runtime_event_state, C300XEventState):
         event_state = runtime_event_state
 
     expected_token = entry.data.get(CONF_EVENT_WEBHOOK_TOKEN, "")
@@ -293,7 +299,7 @@ async def _async_handle_agent_event(
     if not event_type:
         return _json_error("unsupported_event", status=400)
 
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    data = _json_object(payload.get("data"))
     snapshot = _is_snapshot_payload(payload)
     if event_type == "system_metrics_changed":
         _apply_system_metrics_event(hass, entry, data)
@@ -431,11 +437,7 @@ def _activate_video_state(
     *,
     default_available: bool,
 ) -> None:
-    video = (
-        context.data.get("video")
-        if isinstance(context.data.get("video"), dict)
-        else {}
-    )
+    video = _json_object(context.data.get("video"))
     external_media_active = _optional_bool(video.get("external_media_active")) is True
     context.event_state.video_available = (
         bool(video.get("available", default_available)) and not external_media_active
@@ -512,7 +514,8 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
 
 
 def _apply_voicemail_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
-    voicemail = data.get("voicemail") if isinstance(data.get("voicemail"), dict) else data
+    raw_voicemail = data.get("voicemail")
+    voicemail = _json_object(raw_voicemail) if isinstance(raw_voicemail, dict) else data
     event_state.voicemail_available = _optional_bool(voicemail.get("available"))
     event_state.voicemail_total = _optional_int(voicemail.get("total"))
     event_state.voicemail_unread = _optional_int(voicemail.get("unread"))
@@ -531,7 +534,8 @@ def _voicemail_event_data(event_state: C300XEventState) -> dict[str, Any]:
 
 
 def _apply_memos_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
-    memos = data.get("memos") if isinstance(data.get("memos"), dict) else data
+    raw_memos = data.get("memos")
+    memos = _json_object(raw_memos) if isinstance(raw_memos, dict) else data
     event_state.memos_available = _optional_bool(memos.get("available"))
     event_state.memos_total = _optional_int(memos.get("total"))
     event_state.memos_text_total = _optional_int(memos.get("text_total"))
@@ -630,11 +634,7 @@ def _video_event_data(
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     camera_entity_id = resolve_doorbell_camera_entity_id(hass, entry)
-    video = (
-        source.get("video")
-        if isinstance(source, Mapping) and isinstance(source.get("video"), Mapping)
-        else {}
-    )
+    video = _json_object(source.get("video") if source is not None else None)
     stream_path = safe_stream_path(
         event_state.video_stream_path
         or entry_config_value(entry, CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)

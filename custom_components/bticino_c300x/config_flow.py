@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -141,6 +141,11 @@ __all__ = [
     "_weather_entity_id",
 ]
 
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigFlowResult as FlowResult
+else:
+    FlowResult = dict[str, Any]
+
 _QML_PATCH_STATUS_CACHE_TTL = timedelta(seconds=30)
 _QML_PATCH_STATUS_UNKNOWN = "unknown"
 _QML_PATCH_STATUS_UNAVAILABLE = "unavailable"
@@ -199,7 +204,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Collect the C300X device address before agent auth/features."""
 
         errors: dict[str, str] = {}
@@ -240,7 +245,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_agent_missing(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Offer an explicit one-shot native-agent bootstrap install."""
 
         if not self._setup_connection:
@@ -261,7 +266,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_bootstrap_install(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Install the native agent before collecting HA feature options."""
 
         if not self._setup_connection:
@@ -335,7 +340,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_agent_auth(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Collect agent tokens after a reachable agent has been found."""
 
         if not self._setup_connection:
@@ -388,7 +393,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(
         self, discovery_info: Any
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Start setup from a C300X native-agent mDNS advertisement."""
 
         from .discovery import (
@@ -451,7 +456,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         connection: dict[str, Any],
         *,
         discovery_matches_entry: Any,
-    ) -> config_entries.FlowResult | None:
+    ) -> FlowResult | None:
         """Merge a later mDNS identity into an existing manual setup entry."""
 
         if discovered_unique_id is None:
@@ -520,7 +525,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user_features(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Collect initial C300X feature settings."""
 
         if not self._setup_connection:
@@ -589,7 +594,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user_dashboard(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Collect initial C300X display dashboard settings."""
 
         if not self._setup_feature_data:
@@ -609,7 +614,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user_dashboard_entity_display(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Collect per-entity display labels for the initial C300X dashboard."""
 
         if not self._setup_dashboard_input:
@@ -638,7 +643,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_create_setup_entry_from_dashboard(
         self,
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Create the setup entry from collected setup feature/dashboard pages."""
 
         feature_data, errors = _feature_input(
@@ -656,7 +661,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show initial C300X display dashboard settings."""
 
         return self.async_show_form(
@@ -699,7 +704,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None,
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show initial per-entity C300X display dashboard settings."""
 
         return self.async_show_form(
@@ -717,7 +722,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_create_setup_entry(
         self,
         feature_data: dict[str, Any],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Create the initial config entry after feature collection."""
 
         if self._setup_unique_id is not None:
@@ -761,7 +766,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Reconfigure agent connection and maintenance settings."""
 
         entry = self._get_reconfigure_entry()
@@ -796,7 +801,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure_features(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Reconfigure media and display feature settings."""
 
         entry = self._get_reconfigure_entry()
@@ -864,7 +869,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure_dashboard(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Reconfigure C300X display dashboard settings."""
 
         entry = self._get_reconfigure_entry()
@@ -900,7 +905,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure_dashboard_entity_display(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Reconfigure per-entity C300X display dashboard labels."""
 
         entry = self._get_reconfigure_entry()
@@ -941,7 +946,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Finish reconfigure from collected dashboard pages."""
 
         feature_data, errors = _feature_input(
@@ -960,7 +965,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show reconfigure C300X display dashboard settings."""
 
         entry = self._get_reconfigure_entry()
@@ -1029,7 +1034,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show reconfigure per-entity C300X display dashboard settings."""
 
         entry = self._get_reconfigure_entry()
@@ -1051,7 +1056,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_finish_reconfigure(
         self,
         feature_data: dict[str, Any],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Finish a reconfigure flow after all feature pages."""
 
         entry = self._get_reconfigure_entry()
@@ -1067,7 +1072,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
         updater = getattr(self, "async_update_and_abort", None)
         if updater is not None:
-            return updater(entry, data_updates=data_updates)
+            return cast(FlowResult, updater(entry, data_updates=data_updates))
         return self.async_update_reload_and_abort(entry, data_updates=data_updates)
 
     @staticmethod
@@ -1092,7 +1097,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Start the two-page options flow."""
 
         return await self.async_step_connection(user_input)
@@ -1100,7 +1105,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     async def async_step_connection(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Manage agent connection and token options."""
 
         errors: dict[str, str] = {}
@@ -1118,7 +1123,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     async def async_step_features(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Manage integration media and display feature options."""
 
         if not self._connection_options:
@@ -1164,7 +1169,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     async def async_step_dashboard(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Manage C300X display dashboard options."""
 
         feature_defaults = _current_feature_options(self._config_entry)
@@ -1199,7 +1204,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     async def async_step_dashboard_entity_display(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Manage per-entity display labels for C300X dashboard options."""
 
         feature_defaults = _current_feature_options(self._config_entry)
@@ -1239,7 +1244,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Create the options entry from collected dashboard pages."""
 
         feature_data, errors = _feature_input(
@@ -1264,7 +1269,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show options C300X display dashboard settings."""
 
         return self.async_show_form(
@@ -1332,7 +1337,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None,
         feature_defaults: dict[str, Any],
         errors: dict[str, str],
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         """Show options per-entity C300X display dashboard settings."""
 
         return self.async_show_form(
@@ -1478,7 +1483,7 @@ async def _async_agent_setup_data(
         int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    return await api.async_validate_setup()
+    return cast(dict[str, Any], await api.async_validate_setup())
 
 
 async def _async_agent_ready_for_setup(
@@ -1496,7 +1501,7 @@ async def _async_agent_ready_for_setup(
         int(connection.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
     )
     api = C300XAgentApi(async_get_clientsession(hass), base_url, api_token)
-    setup_data = await api.async_validate_setup()
+    setup_data = cast(dict[str, Any], await api.async_validate_setup())
     try:
         await api.async_self_test()
     except C300XAgentApiUnsupportedError:
@@ -1920,7 +1925,7 @@ async def _async_qml_patch_status(
 
     runtime_data.qml_patch_status = status
     runtime_data.qml_patch_status_updated_at = now
-    return status
+    return cast(dict[str, Any], status)
 
 
 def _qml_patch_status_label(status: dict[str, Any]) -> str:

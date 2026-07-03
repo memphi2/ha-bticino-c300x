@@ -31,6 +31,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/camera_media/home_call_ws.py",
     "custom_components/bticino_c300x/config_schemas.py",
     "custom_components/bticino_c300x/config_audio.py",
+    "custom_components/bticino_c300x/config_flow.py",
     "custom_components/bticino_c300x/config_flow_dashboard.py",
     "custom_components/bticino_c300x/config_flow_forms.py",
     "custom_components/bticino_c300x/config_flow_input.py",

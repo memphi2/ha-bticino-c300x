@@ -628,6 +628,38 @@ def test_doorbell_camera_closing_provider_sessions_controls_media_stop(
     assert api.stop_calls == 1
 
 
+def test_doorbell_camera_closing_last_resource_session_ignores_unrelated_stale_session() -> None:
+    api = _FakeApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _FakeWebRTCProvider()
+    camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+    camera._provider_webrtc_sessions["stale-home-call-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="home_call",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="home_call:entry-1",
+        ready=False,
+    )
+
+    asyncio.run(camera._async_close_webrtc_session("doorbell-session"))
+
+    assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 1
+    assert api.home_call_stop_calls == 0
+    assert camera._webrtc_session_ids() == ["stale-home-call-session"]
+
+
 def test_doorbell_camera_provider_offer_uses_backchannel_for_talkback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

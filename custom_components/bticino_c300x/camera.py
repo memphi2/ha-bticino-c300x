@@ -759,7 +759,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         )
                     )
             if (
-                not self._has_webrtc_sessions()
+                not self._has_webrtc_sessions_for_resource(
+                    provider_session.resource_id
+                )
                 and stop_media
                 and (
                     force_stop_media
@@ -1007,6 +1009,14 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Return true when any HA-side WebRTC session remains registered."""
 
         return bool(self._provider_webrtc_sessions)
+
+    def _has_webrtc_sessions_for_resource(self, resource_id: str) -> bool:
+        """Return true while a local session still owns the same media resource."""
+
+        return any(
+            session.resource_id == resource_id
+            for session in self._provider_webrtc_sessions.values()
+        )
 
     def _talkback_supported(self) -> bool:
         """Return true when the bridge can accept WebRTC microphone audio."""

@@ -11,7 +11,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "c300x_pcap_fingerprints"
@@ -359,9 +359,16 @@ def _event_packets(packets: list[Packet]) -> dict[str, Packet]:
     return events
 
 
+def _json_object(value: Any) -> dict[str, Any]:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
 def _fixture(mode: str) -> dict[str, Any]:
     fixture = FIXTURES / f"reference_{mode}.json"
-    return json.loads(fixture.read_text(encoding="utf-8"))
+    data = json.loads(fixture.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"reference fixture is not an object: {fixture}")
+    return cast(dict[str, Any], data)
 
 
 def _collect_fixture_integrity_checks(mode: str) -> list[Check]:
@@ -383,11 +390,9 @@ def _collect_fixture_integrity_checks(mode: str) -> list[Check]:
 
 def _collect_session_fixture_checks(mode: str, fixture: dict[str, Any]) -> list[Check]:
     expected_sequence = ["INVITE", "100", "180", "200", "ACK", "BYE", "200"]
-    offer = fixture.get("offer") if isinstance(fixture.get("offer"), dict) else {}
-    answer = fixture.get("answer") if isinstance(fixture.get("answer"), dict) else {}
-    ha_reference = (
-        fixture.get("ha_reference") if isinstance(fixture.get("ha_reference"), dict) else {}
-    )
+    offer = _json_object(fixture.get("offer"))
+    answer = _json_object(fixture.get("answer"))
+    ha_reference = _json_object(fixture.get("ha_reference"))
     checks = [
         Check(
             f"fixture.{mode}.sip_sequence",
@@ -561,11 +566,7 @@ def _collect_rtsp_contract_checks(mode: str, fixture: dict[str, Any]) -> list[Ch
             "teardown_required": True,
         },
     }[mode]
-    contract = (
-        fixture.get("rtsp_contract")
-        if isinstance(fixture.get("rtsp_contract"), dict)
-        else {}
-    )
+    contract = _json_object(fixture.get("rtsp_contract"))
     return [
         Check(
             f"fixture.{mode}.rtsp.methods",
@@ -924,7 +925,7 @@ def _timing_checks(
             1.0 <= (closed.timestamp - pressed.timestamp).total_seconds() <= 30.0,
         ),
     ]
-    if first_large is None:
+    if first_large is None or first_large.timestamp is None:
         checks.append(Check("pcap.timing.large_media_delay", False))
     else:
         checks.append(
@@ -933,7 +934,7 @@ def _timing_checks(
                 0 <= (first_large.timestamp - pressed.timestamp).total_seconds() <= 5.0,
             )
         )
-    if first_small is None:
+    if first_small is None or first_small.timestamp is None:
         checks.append(Check("pcap.timing.answered_control_delay", False))
     else:
         checks.append(

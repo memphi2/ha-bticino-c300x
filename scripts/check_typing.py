@@ -114,6 +114,7 @@ STRICT_TARGETS = (
     "scripts/device_routing_builder.py",
     "scripts/extract_pcap_fingerprint.py",
     "scripts/ha_https_proxy.py",
+    "scripts/verify_media_reference_flow.py",
 )
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN
@@ -13,7 +15,7 @@ def service_validation_error(
 ) -> ServiceValidationError:
     """Create a translated service validation error."""
 
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "translation_domain": DOMAIN,
         "translation_key": translation_key,
     }

@@ -63,6 +63,9 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.bticino_c300x.camera_media.rtsp_probe import (
+    HomeAssistantError as RtspProbeHomeAssistantError,
+)
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -540,12 +543,12 @@ def test_rtsp_options_probe_rejects_bad_responses(
 
     monkeypatch.setattr(asyncio, "open_connection", _open_connection)
 
-    with pytest.raises(HomeAssistantError):
+    with pytest.raises(RtspProbeHomeAssistantError):
         asyncio.run(_async_rtsp_options("rtsp://192.0.2.10:6554/doorbell"))
 
 
 def test_rtsp_options_probe_rejects_invalid_rtsp_url() -> None:
-    with pytest.raises(HomeAssistantError, match="Invalid C300X RTSP URL"):
+    with pytest.raises(RtspProbeHomeAssistantError, match="Invalid C300X RTSP URL"):
         asyncio.run(_async_rtsp_options("http://192.0.2.10:6554/doorbell"))
 
 

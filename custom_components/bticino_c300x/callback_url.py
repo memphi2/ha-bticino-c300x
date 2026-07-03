@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from typing import Any
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from homeassistant.config_entries import ConfigEntry
@@ -198,7 +199,7 @@ def _select_non_link_local_source_ip(agent_host: str, agent_port: int) -> str | 
 def _route_candidates(
     agent_host: str,
     agent_port: int,
-) -> list[tuple[int, int, int, str, tuple]]:
+) -> list[tuple[int, int, int, str, tuple[Any, ...]]]:
     host = agent_host.strip()
     if host.startswith("[") and "]" in host:
         host = host[1 : host.index("]")]

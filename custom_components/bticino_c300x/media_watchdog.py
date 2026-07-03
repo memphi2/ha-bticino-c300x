@@ -6,7 +6,7 @@ import asyncio
 from contextlib import suppress
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 
 from .camera_media.state_machine import (
     MediaState,
@@ -100,6 +100,7 @@ def handle_agent_cpu_metrics_changed(camera: Any, entry_id: str) -> None:
     watchdog = getattr(camera._entry.runtime_data, "agent_cpu_watchdog", None)
     if not getattr(watchdog, "tripped", False):
         return
+    watchdog = cast(AgentCpuWatchdog, watchdog)
     camera._agent_cpu_watchdog = watchdog
     if camera._webrtc_session_ids():
         camera.hass.async_create_task(
@@ -156,7 +157,7 @@ def _schedule_task(hass: Any, coro: Any) -> asyncio.Task[Any]:
 
     create_task = getattr(hass, "async_create_task", None)
     if callable(create_task):
-        return create_task(coro)
+        return cast(asyncio.Task[Any], create_task(coro))
     return asyncio.create_task(coro)
 
 

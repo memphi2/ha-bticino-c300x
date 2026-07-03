@@ -11,9 +11,12 @@ import time
 from collections.abc import Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.exceptions import HomeAssistantError
+
+if TYPE_CHECKING:
+    from av.audio.frame import AudioFrame
 
 _TALKBACK_RTP_PORT = 40004
 _TALKBACK_READY_TIMEOUT_SECONDS = 5.0
@@ -134,8 +137,15 @@ def _keep_talkback_alive_sync(
                 )
                 if audio_stream is None:
                     raise HomeAssistantError("C300X announcement file has no audio stream")
-                for frame in container.decode(audio_stream):
-                    for resampled in resampler.resample(frame):
+                audio_frame_type = getattr(av, "AudioFrame", None)
+                for decoded_frame in container.decode(audio_stream):
+                    if isinstance(audio_frame_type, type) and not isinstance(
+                        decoded_frame,
+                        audio_frame_type,
+                    ):
+                        continue
+                    audio_frame = cast("AudioFrame", decoded_frame)
+                    for resampled in resampler.resample(audio_frame):
                         fifo.write(resampled)
                         sequence, timestamp, marker = _send_ready_talkback_frames(
                             encoder,
@@ -148,12 +158,12 @@ def _keep_talkback_alive_sync(
                             marker,
                         )
                 while fifo.samples:
-                    frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
-                    if frame is None:
+                    fifo_frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
+                    if fifo_frame is None:
                         break
                     sequence, timestamp, marker = _send_encoded_talkback_frame(
                         encoder,
-                        frame,
+                        fifo_frame,
                         sock,
                         target,
                         sequence,

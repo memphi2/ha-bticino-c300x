@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -15,7 +15,7 @@ from .entry_config import entry_config_value
 async def async_refresh_qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
     """Refresh and store the device-reported Display patch status."""
 
-    status = await entry.runtime_data.api.async_qml_patch_status()
+    status = cast(dict[str, Any], await entry.runtime_data.api.async_qml_patch_status())
     _store_qml_patch_status(entry, status)
     return status
 
@@ -52,7 +52,10 @@ async def async_apply_qml_core_patch_and_confirm(
     _store_transient_qml_core_patch_status(entry, "core_patching")
     _notify_status_changed(status_changed)
     try:
-        action_status = await entry.runtime_data.api.async_apply_qml_core_patch()
+        action_status = cast(
+            dict[str, Any],
+            await entry.runtime_data.api.async_apply_qml_core_patch(),
+        )
     except Exception:
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)
@@ -76,7 +79,10 @@ async def async_restore_qml_core_patch_and_confirm(
     _store_transient_qml_core_patch_status(entry, "core_restoring")
     _notify_status_changed(status_changed)
     try:
-        action_status = await entry.runtime_data.api.async_restore_qml_core_patch()
+        action_status = cast(
+            dict[str, Any],
+            await entry.runtime_data.api.async_restore_qml_core_patch(),
+        )
     except Exception:
         _store_qml_patch_status(entry, previous_status)
         _notify_status_changed(status_changed)

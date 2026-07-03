@@ -33,13 +33,13 @@ async def async_probe_rtsp_url(
         raise HomeAssistantError("Invalid C300X RTSP URL")
     target_host = socket_host or agent_host_for_socket(parsed.hostname)
     target_port = socket_port or parsed.port
-    reader: asyncio.StreamReader | None = None
     writer: asyncio.StreamWriter | None = None
     try:
-        reader, writer = await asyncio.wait_for(
+        reader, opened_writer = await asyncio.wait_for(
             asyncio.open_connection(target_host, target_port),
             timeout=timeout_seconds,
         )
+        writer = opened_writer
         request = _rtsp_probe_request(
             rtsp_url,
             method=method,

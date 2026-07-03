@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import suppress
-from typing import Any
+from typing import Any, cast
 
 import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
@@ -429,7 +430,7 @@ def _remove_legacy_split_c300x_cards(
     return changed
 
 
-def _iter_lovelace_card_lists(value: Any):
+def _iter_lovelace_card_lists(value: Any) -> Iterator[list[Any]]:
     """Yield mutable Lovelace card lists from a config tree."""
 
     if isinstance(value, dict):
@@ -456,7 +457,7 @@ def _is_legacy_split_c300x_card(card: Any, camera_entity_id: str) -> bool:
     return card.get("mode") in {"doorbell_call", "home_call"}
 
 
-def _iter_lovelace_cards(value: Any):
+def _iter_lovelace_cards(value: Any) -> Iterator[dict[str, Any]]:
     """Yield cards from a Lovelace config tree."""
 
     if isinstance(value, dict):
@@ -526,7 +527,7 @@ def _dashboard_selector(hass: HomeAssistant) -> Any:
         return str
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=_dashboard_select_options(hass),
+            options=cast(Any, _dashboard_select_options(hass)),
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from .const import CONF_DEVICE_UI_ENABLED
@@ -156,10 +157,10 @@ def _event_label_language(language: str | None) -> str:
     return "en"
 
 
-def capability_is_supported(capabilities: dict[str, Any], capability: str) -> bool:
+def capability_is_supported(capabilities: Mapping[str, Any], capability: str) -> bool:
     """Return true when the device agent reports support for a capability."""
 
-    value = capabilities.get(capability) if isinstance(capabilities, dict) else None
+    value = capabilities.get(capability) if isinstance(capabilities, Mapping) else None
     if isinstance(value, dict):
         return bool(value.get("supported"))
     return bool(value)
@@ -304,12 +305,14 @@ def maintenance_action_is_supported(
 
 
 def maintenance_action_is_advertised(
-    capabilities: dict[str, Any],
+    capabilities: Mapping[str, Any],
     action: str,
 ) -> bool:
     """Return true when the device agent advertises a maintenance action."""
 
-    maintenance = capabilities.get("maintenance") if isinstance(capabilities, dict) else None
+    maintenance = (
+        capabilities.get("maintenance") if isinstance(capabilities, Mapping) else None
+    )
     return bool(
         isinstance(maintenance, dict)
         and maintenance.get("supported")

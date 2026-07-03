@@ -7,8 +7,6 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
-from homeassistant.components.camera import WebRTCError
-
 
 @dataclass(frozen=True)
 class ProviderWebRTCStreamContext:
@@ -46,7 +44,7 @@ def webrtc_message_is_error(message: Any) -> bool:
             data = as_dict()
             if isinstance(data, Mapping):
                 return data.get("type") == "error"
-    return isinstance(WebRTCError, type) and isinstance(message, WebRTCError)
+    return type(message).__name__ == "WebRTCError"
 
 
 def short_session_id(session_id: str) -> str:

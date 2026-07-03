@@ -106,6 +106,8 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/video.py",
     "custom_components/bticino_c300x/video_messages.py",
     "custom_components/bticino_c300x/webhook.py",
+    "scripts/build_hacs_release.py",
+    "scripts/check_stack_usage.py",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
     "scripts/check_repo.py",
@@ -114,6 +116,8 @@ STRICT_TARGETS = (
     "scripts/device_routing_builder.py",
     "scripts/extract_pcap_fingerprint.py",
     "scripts/ha_https_proxy.py",
+    "scripts/smoke_ha.py",
+    "scripts/stage_device_agent_bundle.py",
     "scripts/verify_media_reference_flow.py",
 )
 

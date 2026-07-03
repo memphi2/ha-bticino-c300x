@@ -510,10 +510,10 @@ def check_hacs_metadata() -> list[str]:
         failures.append(
             f"validate workflow must test current Home Assistant {CURRENT_HOME_ASSISTANT_VERSION}"
         )
-    if 'python-version: "3.13"' not in validate_workflow:
-        failures.append("validate workflow must test the Home Assistant 2026.5 Python line")
-    if 'python-version: "3.14"' not in validate_workflow:
-        failures.append("validate workflow must test the current Home Assistant Python line")
+    if validate_workflow.count('python-version: "3.14"') < 2:
+        failures.append(
+            "validate workflow must test minimum and current Home Assistant on Python 3.14"
+        )
     if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:
         failures.append("validate workflow must run HACS integration validation")
     if "ignore: hacsjson integration_manifest" not in validate_workflow:
@@ -600,10 +600,8 @@ def check_github_automation() -> list[str]:
 def check_python_runtime() -> list[str]:
     failures: list[str] = []
     runtime = f"{sys.version_info.major}.{sys.version_info.minor}"
-    if runtime not in {"3.13", "3.14"}:
-        failures.append(
-            "Python 3.13 or 3.14 is required for the supported Home Assistant CI gates"
-        )
+    if runtime != "3.14":
+        failures.append("Python 3.14 is required for the supported Home Assistant CI gates")
     pyproject = ROOT / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     if 'target-version = "py314"' not in text:

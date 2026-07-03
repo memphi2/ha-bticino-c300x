@@ -23,7 +23,7 @@ EXPECTED_PYTHON_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.environ.get(
         "HA_EXPECTED_PYTHON_PREFIXES",
-        "3.13.,3.14.",
+        "3.14.",
     ).split(",")
     if prefix.strip()
 )

@@ -28,7 +28,7 @@ jobs:
       matrix:
         include:
           - name: min-ha
-            python-version: "3.13"
+            python-version: "3.14"
             homeassistant: "2026.5.0"
           - name: current-ha
             python-version: "3.14"

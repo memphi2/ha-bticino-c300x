@@ -505,13 +505,13 @@ def check_hacs_metadata() -> list[str]:
         failures.append("validate workflow must test the Home Assistant 2025.5 Python line")
     if 'python-version: "3.14"' not in validate_workflow:
         failures.append("validate workflow must test the current Home Assistant Python line")
-    if "hacs/action@main" not in validate_workflow or "category: integration" not in validate_workflow:
+    if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:
         failures.append("validate workflow must run HACS integration validation")
     if "ignore: hacsjson integration_manifest" not in validate_workflow:
         failures.append(
             "HACS PR validation must document the zip_release checks that need a release asset"
         )
-    if "home-assistant/actions/hassfest@master" not in validate_workflow:
+    if "home-assistant/actions/hassfest@" not in validate_workflow:
         failures.append("validate workflow must run Hassfest")
 
     release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
@@ -523,7 +523,7 @@ def check_hacs_metadata() -> list[str]:
 
 
 def check_github_automation() -> list[str]:
-    """Keep GitHub automation current enough for the runner baseline."""
+    """Keep GitHub automation pinned to immutable, least-privilege targets."""
 
     failures: list[str] = []
     deprecated_actions = {
@@ -531,11 +531,27 @@ def check_github_automation() -> list[str]:
         "actions/setup-python@v5",
         "actions/upload-artifact@v4",
     }
-    for path in (ROOT / ".github").rglob("*.yml"):
+    workflow_use = re.compile(r"^\s*uses:\s*([^#\s]+)", re.MULTILINE)
+    pinned_sha = re.compile(r"[0-9a-f]{40}")
+    for path in (ROOT / ".github" / "workflows").rglob("*.yml"):
         text = path.read_text(encoding="utf-8")
+        if "runs-on: ubuntu-latest" in text:
+            failures.append(f"{relative(path)} must pin the runner image instead of ubuntu-latest")
+        if "permissions:" not in text or "contents: read" not in text:
+            failures.append(f"{relative(path)} must declare least-privilege contents: read permissions")
         for action in deprecated_actions:
             if action in text:
                 failures.append(f"{relative(path)} must not use deprecated {action}")
+        for match in workflow_use.finditer(text):
+            spec = match.group(1)
+            if "@" not in spec:
+                failures.append(f"{relative(path)} action use must include an immutable ref: {spec}")
+                continue
+            ref = spec.rsplit("@", 1)[1]
+            if not pinned_sha.fullmatch(ref):
+                failures.append(
+                    f"{relative(path)} action use must pin a full commit SHA instead of {spec}"
+                )
 
     dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     if "package-ecosystem: \"github-actions\"" not in dependabot:

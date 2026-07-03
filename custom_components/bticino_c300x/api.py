@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from base64 import b64encode
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 from aiohttp import ClientError, ClientSession
@@ -100,9 +100,9 @@ class C300XAgentApi:
         )
         if not isinstance(data, dict):
             raise C300XAgentApiResponseError("capabilities returned non-object JSON")
-        agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
-        device = data.get("device") if isinstance(data.get("device"), dict) else {}
-        capabilities = data.get("capabilities")
+        agent = _json_object(data.get("agent"))
+        device = _json_object(data.get("device"))
+        capabilities = _json_object(data.get("capabilities"))
         return CapabilityPayload(
             raw=data,
             version=_optional_string(agent.get("version") or data.get("api_version")),
@@ -112,7 +112,7 @@ class C300XAgentApi:
             device_id=_optional_string(device.get("id")),
             model=_optional_string(device.get("model")),
             firmware=_optional_string(device.get("firmware")),
-            capabilities=capabilities if isinstance(capabilities, dict) else {},
+            capabilities=capabilities,
         )
 
     async def async_smartphone_forwarding_status(self) -> ForwardingStatus:
@@ -791,7 +791,7 @@ class C300XAgentApi:
     async def async_set_maintenance_no_auth_allowed(
         self,
         enabled: bool,
-    ) -> dict[str, Any]:
+    ) -> AuthConfigStatus:
         """Allow or deny noAuth access to maintenance endpoints."""
 
         payload: dict[str, Any] = {"maintenanceNoAuthAllowed": bool(enabled)}
@@ -1035,7 +1035,10 @@ class C300XAgentApi:
                 url,
                 headers=headers,
                 json=json_data,
-                timeout=self._timeout if request_timeout is None else request_timeout,
+                timeout=cast(
+                    Any,
+                    self._timeout if request_timeout is None else request_timeout,
+                ),
             ) as response:
                 text = await response.text()
                 if response.status == 404:
@@ -1075,7 +1078,7 @@ class C300XAgentApi:
                 method,
                 url,
                 headers=headers,
-                timeout=self._timeout,
+                timeout=cast(Any, self._timeout),
             ) as response:
                 if response.status == 404:
                     text = await response.text()
@@ -1172,6 +1175,18 @@ def display_bridge_callback_fingerprint(
     return fnv1a64_fingerprint(material)
 
 
+def _json_object(value: Any) -> dict[str, Any]:
+    """Return a JSON object value or an empty object."""
+
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+def _json_list(value: Any) -> list[Any]:
+    """Return a JSON list value or an empty list."""
+
+    return value if isinstance(value, list) else []
+
+
 def _ok_response(data: Any) -> dict[str, Any]:
     """Return mutation responses as dictionaries."""
 
@@ -1183,7 +1198,7 @@ def normalize_doorbell_video(data: Any) -> DoorbellVideoStatus:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("doorbell video returned non-object JSON")
-    bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
+    bridge = _json_object(data.get("bridge"))
     return DoorbellVideoStatus(
         raw=data,
         available=bool(data.get("available")),
@@ -1203,7 +1218,7 @@ def normalize_doorbell_video(data: Any) -> DoorbellVideoStatus:
 def _doorbell_video_has_ring_call(data: Mapping[str, Any]) -> bool:
     """Return true while the native bridge owns a doorbell ring call."""
 
-    bridge = data.get("bridge") if isinstance(data.get("bridge"), dict) else {}
+    bridge = _json_object(data.get("bridge"))
     owner = str(data.get("media_owner") or bridge.get("media_owner") or "").lower()
     return owner == "ring" or bool(
         bridge.get("ring_call_active") or bridge.get("ring_media_active")
@@ -1260,7 +1275,7 @@ def normalize_activations(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("activations returned non-object JSON")
-    items = data.get("items") if isinstance(data.get("items"), list) else []
+    items = _json_list(data.get("items"))
     normalized_items = [
         activation
         for activation in (_normalize_activation(item) for item in items)
@@ -1586,7 +1601,7 @@ def normalize_mqtt_status(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("MQTT status returned non-object JSON")
-    topics = data.get("topics") if isinstance(data.get("topics"), dict) else {}
+    topics = _json_object(data.get("topics"))
     return {
         "available": data.get("available", True) is not False,
         "enabled": _optional_bool(data.get("enabled")),
@@ -1789,7 +1804,7 @@ def normalize_answering_machine_messages(data: Any) -> dict[str, Any]:
         raise C300XAgentApiResponseError(
             "answering-machine messages returned non-object JSON"
         )
-    messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    messages = _json_list(data.get("messages"))
     normalized_messages = [
         message
         for message in (_normalize_voicemail_message(item) for item in messages)
@@ -1811,7 +1826,7 @@ def normalize_memos(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("memos returned non-object JSON")
-    memos = data.get("memos") if isinstance(data.get("memos"), list) else []
+    memos = _json_list(data.get("memos"))
     normalized_memos = [
         memo
         for memo in (_normalize_memo(item) for item in memos)

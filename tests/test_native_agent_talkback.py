@@ -250,7 +250,7 @@ def test_native_agent_rtsp_response_does_not_send_truncated_stack_buffer() -> No
     assert "send_all(fd, response, (size_t)n)" in response_body
 
 
-def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() -> None:
+def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_update() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
     )
@@ -263,7 +263,7 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
         media_bridge.index("static int create_rtsp_listener")
     ]
 
-    assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)" in register_body
+    assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)" not in register_body
     assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
     assert "bool accepted = register_rtsp_client_locked(&g_bridge, fd, &slot_index);" in client_body
     assert "send_rtsp_response(fd, 453" in client_body
@@ -277,6 +277,8 @@ def test_native_agent_rtsp_rejects_parallel_sessions_before_overwriting_state() 
     assert "&& !wants_audio" in client_body
     assert "&& wants_audio" in client_body
     assert "&& !preview_path" in client_body
+    assert "rtsp_existing_clients_compatible_locked(" in client_body
+    assert "&& compatible_shared_path" in client_body
     assert "shutdown_ring_preview_clients_except_locked(&g_bridge, slot_index)" in client_body
     assert "if (!allow_shared_path)" in client_body
 

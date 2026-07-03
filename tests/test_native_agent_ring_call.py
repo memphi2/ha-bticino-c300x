@@ -158,6 +158,36 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     )
 
 
+def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> None:
+    media_bridge = _read_media_bridge()
+    register_body = media_bridge[
+        media_bridge.index("static bool register_rtsp_client_locked") :
+        media_bridge.index("static rtsp_client_slot_t *rtsp_client_slot_locked")
+    ]
+    describe_body = media_bridge[
+        media_bridge.index('} else if (strcmp(method, "DESCRIBE") == 0)') :
+        media_bridge.index('} else if (strcmp(method, "SETUP") == 0)')
+    ]
+    sharing_body = media_bridge[
+        media_bridge.index("static bool ondemand_audio_stream_sharing_allowed_locked") :
+        media_bridge.index("static int rtsp_client_count_locked")
+    ]
+
+    assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked" not in register_body
+    assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
+    assert "ondemand_audio_stream_sharing_allowed_locked(&g_bridge)" in describe_body
+    assert "rtsp_existing_clients_compatible_locked(" in describe_body
+    assert "if (!slot->described)" in register_body
+    assert "slot->described = true;" in describe_body
+    assert "&& wants_audio" in describe_body
+    assert "&& !preview_path" in describe_body
+    assert "&& !recorder" in describe_body
+    assert "&& compatible_shared_path" in describe_body
+    assert "ondemand_audio_stream_sharing_active_locked" in sharing_body
+    assert "&& (bridge->media_active || bridge->media_starting)" in sharing_body
+    assert "&& bridge->rtsp_audio_enabled" in sharing_body
+
+
 def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     media_bridge = _read_media_bridge()
     setup_body = media_bridge[

@@ -122,6 +122,7 @@ static int doorbell_devaddr(const struct c300x_config *config) {
 typedef struct {
     bool active;
     int fd;
+    bool described;
     bool transport_tcp;
     bool audio_enabled;
     bool recorder;
@@ -317,10 +318,31 @@ static bool ring_answer_stream_sharing_allowed_locked(const media_bridge_t *brid
     );
 }
 
+static bool ondemand_audio_stream_sharing_allowed_locked(const media_bridge_t *bridge) {
+    return (
+        !bridge->ring_call_active
+        && !bridge->ring_media_active
+        && !bridge->ring_call_stop
+        && !bridge->home_call_started
+        && !bridge->home_call_active
+        && !bridge->home_call_stop
+        && !bridge->stop_in_progress
+    );
+}
+
+static bool ondemand_audio_stream_sharing_active_locked(const media_bridge_t *bridge) {
+    return (
+        ondemand_audio_stream_sharing_allowed_locked(bridge)
+        && (bridge->media_active || bridge->media_starting)
+        && bridge->rtsp_audio_enabled
+    );
+}
+
 static bool rtsp_client_sharing_allowed_locked(const media_bridge_t *bridge) {
     return (
         ring_preview_sharing_allowed_locked(bridge)
         || ring_answer_stream_sharing_allowed_locked(bridge)
+        || ondemand_audio_stream_sharing_active_locked(bridge)
     );
 }
 
@@ -363,9 +385,6 @@ static void sync_legacy_rtsp_client_locked(media_bridge_t *bridge) {
 static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slot_index) {
     int active_clients = rtsp_client_count_locked(bridge);
 
-    if (active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)) {
-        return false;
-    }
     if (active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS) {
         return false;
     }
@@ -390,6 +409,27 @@ static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slo
         return true;
     }
     return false;
+}
+
+static bool rtsp_existing_clients_compatible_locked(
+    media_bridge_t *bridge,
+    int current_slot_index,
+    bool wants_audio,
+    bool recorder
+) {
+    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
+        rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
+        if (!slot->active || slot->fd < 0 || (int)index == current_slot_index) {
+            continue;
+        }
+        if (!slot->described) {
+            continue;
+        }
+        if (slot->audio_enabled != wants_audio || slot->recorder != recorder) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static rtsp_client_slot_t *rtsp_client_slot_locked(media_bridge_t *bridge, int slot_index) {
@@ -5953,6 +5993,13 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
             bool ring_preview_sharing = ring_preview_sharing_allowed_locked(&g_bridge);
             bool ring_answer_stream_sharing = ring_answer_stream_sharing_allowed_locked(&g_bridge);
+            bool ondemand_audio_stream_sharing = ondemand_audio_stream_sharing_allowed_locked(&g_bridge);
+            bool compatible_shared_path = rtsp_existing_clients_compatible_locked(
+                &g_bridge,
+                slot_index,
+                wants_audio,
+                recorder
+            );
             bool allow_shared_path = !shared_client
                 || (
                     ring_preview_sharing
@@ -5963,10 +6010,18 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     ring_answer_stream_sharing
                     && wants_audio
                     && !preview_path
+                )
+                || (
+                    ondemand_audio_stream_sharing
+                    && wants_audio
+                    && !preview_path
+                    && !recorder
+                    && compatible_shared_path
                 );
             if (slot != NULL && allow_shared_path) {
                 slot->audio_enabled = wants_audio;
                 slot->recorder = recorder;
+                slot->described = true;
                 slot->video_interleaved_channel = wants_audio ? 2 : 0;
                 slot->audio_interleaved_channel = 0;
                 slot->backchannel_enabled = false;

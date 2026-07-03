@@ -19,7 +19,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/memphi2/ha-bticino-c300x/issues",
   "requirements": [],
-  "version": "1.6.2",
+  "version": "1.6.3",
   "zeroconf": [
     "_bticino-c300x-agent._tcp.local."
   ]

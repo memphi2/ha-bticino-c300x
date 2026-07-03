@@ -102,6 +102,17 @@ class CameraRtspOwner(Protocol):
     def _async_write_ha_state_if_ready(self) -> None:
         """Publish entity state when available."""
 
+    def _rtsp_event_revision(self) -> int:
+        """Return the current RTSP-relevant agent-event revision."""
+
+    async def _async_wait_for_rtsp_event(
+        self,
+        *,
+        revision: int,
+        wait_seconds: float,
+    ) -> None:
+        """Wait until an RTSP-relevant agent event arrives or timeout expires."""
+
 
 def media_decision_is_call_media(decision: MediaStateOutput) -> bool:
     """Return true for ring/home-call media states."""
@@ -334,6 +345,7 @@ class CameraRtspOrchestrator:
             loop = asyncio.get_running_loop()
             deadline = loop.time() + self._settings.rtsp_ready_timeout_seconds
             last_error: Exception | None = None
+            event_revision = self._owner._rtsp_event_revision()
             while True:
                 block_reason = await self._async_rtsp_start_block_reason()
                 if block_reason is not None:
@@ -349,7 +361,8 @@ class CameraRtspOrchestrator:
                         self._owner._rtsp_cooldown_scope = None
                         return
 
-                if loop.time() >= deadline:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
                     self._owner._last_rtsp_error = (
                         type(last_error).__name__ if last_error else "timeout"
                     )
@@ -358,7 +371,35 @@ class CameraRtspOrchestrator:
                     raise HomeAssistantError(
                         f"C300X RTSP bridge did not become ready: {last_error}"
                     ) from last_error
-                await asyncio.sleep(self._settings.rtsp_ready_interval_seconds)
+                await self._async_wait_for_rtsp_state_change(
+                    event_revision,
+                    remaining=remaining,
+                    prefer_event=block_reason is not None,
+                )
+                event_revision = self._owner._rtsp_event_revision()
+
+    async def _async_wait_for_rtsp_state_change(
+        self,
+        revision: int,
+        *,
+        remaining: float,
+        prefer_event: bool,
+    ) -> None:
+        """Wait for a native media event, falling back to a bounded retry delay."""
+
+        if remaining <= 0:
+            return
+        if prefer_event:
+            wait_seconds = remaining
+        else:
+            wait_seconds = min(
+                remaining,
+                max(self._settings.rtsp_ready_interval_seconds, 1.0),
+            )
+        await self._owner._async_wait_for_rtsp_event(
+            revision=revision,
+            wait_seconds=wait_seconds,
+        )
 
     async def _async_rtsp_start_block_reason(self) -> str | None:
         """Return the native bridge state that would make RTSP PLAY fail."""

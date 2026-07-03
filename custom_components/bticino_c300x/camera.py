@@ -241,6 +241,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._rtsp_unavailable_until = 0.0
         self._last_rtsp_error: str | None = None
         self._rtsp_cooldown_scope: str | None = None
+        self._rtsp_state_event_revision = 0
+        self._rtsp_state_event_waiters: set[asyncio.Future[None]] = set()
         self._rtsp_orchestrator = CameraRtspOrchestrator(
             self,
             settings=CameraRtspOrchestratorSettings(
@@ -882,6 +884,42 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         await self._rtsp_orchestrator.async_wait_for_rtsp_ready(stream_url)
 
+    def _rtsp_event_revision(self) -> int:
+        """Return the current RTSP-relevant agent-event revision."""
+
+        return self._rtsp_state_event_revision
+
+    async def _async_wait_for_rtsp_event(
+        self,
+        *,
+        revision: int,
+        wait_seconds: float,
+    ) -> None:
+        """Wait for an RTSP-relevant agent event or a bounded fallback timeout."""
+
+        if wait_seconds <= 0 or self._rtsp_state_event_revision != revision:
+            return
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[None] = loop.create_future()
+        self._rtsp_state_event_waiters.add(future)
+        try:
+            if self._rtsp_state_event_revision != revision:
+                return
+            with suppress(TimeoutError):
+                await asyncio.wait_for(future, timeout=wait_seconds)
+        finally:
+            self._rtsp_state_event_waiters.discard(future)
+
+    def _wake_rtsp_event_waiters(self) -> None:
+        """Wake RTSP readiness waiters after authoritative native media events."""
+
+        self._rtsp_state_event_revision += 1
+        waiters = tuple(self._rtsp_state_event_waiters)
+        self._rtsp_state_event_waiters.clear()
+        for waiter in waiters:
+            if not waiter.done():
+                waiter.set_result(None)
+
     def _raise_if_rtsp_cooling_down(self) -> None:
         self._rtsp_orchestrator.raise_if_rtsp_cooling_down()
 
@@ -919,6 +957,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             for session_id, session in self._provider_webrtc_sessions.items()
             if session.owner == owner
         ]
+
+    def _ring_preview_webrtc_session_ids(self) -> list[str]:
+        """Return passive Ring preview session ids."""
+
+        return [
+            session_id
+            for session_id, session in self._provider_webrtc_sessions.items()
+            if session.owner == "doorbell" and session.ring_preview
+        ]
+
+    def _has_answered_ring_webrtc_session(self) -> bool:
+        """Return true when HA owns an answered Ring WebRTC media session."""
+
+        return any(
+            session.owner == "doorbell"
+            and session.ring_call
+            and session.wants_audio
+            and not session.ring_preview
+            for session in self._provider_webrtc_sessions.values()
+        )
 
     def _has_webrtc_sessions(self) -> bool:
         """Return true when any HA-side WebRTC session remains registered."""
@@ -1026,6 +1084,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         event_type = agent_event_key(event.data)
         if event_type in HOME_CALL_EVENTS:
             self._handle_home_call_event(event_type, event.data)
+            self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
             return
         if event_type not in VIDEO_WINDOW_EVENTS | VIDEO_WINDOW_CLOSED_EVENTS:
@@ -1033,6 +1092,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
             self._close_doorbell_webrtc_sessions_from_event()
+            self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
             return
         self._video_window_available = bool(
@@ -1047,6 +1107,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         )
         self._apply_event_media_facts(event.data)
         self._refresh_derived_media_state()
+        if self._last_media_state in {MediaState.RING_ANSWERING, MediaState.RING_ACTIVE}:
+            self._close_ring_preview_webrtc_sessions_after_answer_event()
+        self._wake_rtsp_event_waiters()
         self._async_write_ha_state_if_ready()
 
     def _handle_home_call_event(self, event_type: str, data: dict[str, Any]) -> None:
@@ -1115,6 +1178,29 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     notify_client=True,
                     reason="doorbell_media_closed",
                 )
+
+        self.hass.async_create_task(_close_sessions())
+
+    def _close_ring_preview_webrtc_sessions_after_answer_event(self) -> None:
+        """Close passive Ring previews after an authoritative answered event."""
+
+        if not self._has_answered_ring_webrtc_session():
+            return
+        session_ids = self._ring_preview_webrtc_session_ids()
+        if (
+            not session_ids
+            or not hasattr(self, "hass")
+            or not hasattr(self.hass, "async_create_task")
+        ):
+            return
+
+        async def _close_sessions() -> None:
+            await self._async_close_webrtc_sessions(
+                session_ids,
+                stop_media=False,
+                notify_client=True,
+                reason="ring_call_answered",
+            )
 
         self.hass.async_create_task(_close_sessions())
 

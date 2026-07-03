@@ -241,10 +241,10 @@ def test_wait_for_rtsp_ready_retries_and_resets_cooldown(
 def test_wait_for_rtsp_ready_waits_for_native_stop_to_finish(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def no_sleep(_delay: float) -> None:
-        return None
+    async def fail_sleep(_delay: float) -> None:
+        raise AssertionError("native stop readiness should wait for media events")
 
-    monkeypatch.setattr(rtsp_orchestrator.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(rtsp_orchestrator.asyncio, "sleep", fail_sleep)
     owner = _FakeOwner(
         status_queue=[
             {"media_owner": "agent", "bridge": {"stop_in_progress": True}},
@@ -258,6 +258,26 @@ def test_wait_for_rtsp_ready_waits_for_native_stop_to_finish(
     asyncio.run(orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell"))
 
     assert ready_urls == ["rtsp://agent.local/doorbell"]
+    assert owner.rtsp_event_waits == [(0, pytest.approx(0.01, abs=0.001))]
+
+
+def test_wait_for_rtsp_ready_waits_for_start_event_between_probes() -> None:
+    owner = _FakeOwner()
+    orchestrator = _orchestrator(owner, rtsp_ready_timeout_seconds=2.0)
+    attempts = 0
+
+    async def probe(_stream_url: str) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("not ready")
+
+    orchestrator.async_probe_rtsp = probe  # type: ignore[method-assign]
+
+    asyncio.run(orchestrator.async_wait_for_rtsp_ready("rtsp://agent.local/doorbell"))
+
+    assert attempts == 2
+    assert owner.rtsp_event_waits == [(0, pytest.approx(1.0))]
 
 
 def test_wait_for_rtsp_ready_records_failure_without_retry_cooldown(
@@ -443,6 +463,8 @@ class _FakeOwner:
         self._last_video_block_reason = None
         self._status_queue = list(status_queue or [])
         self._local_sessions = local_sessions
+        self._rtsp_event_revision_value = 0
+        self.rtsp_event_waits: list[tuple[int, float]] = []
         self.refresh_calls: list[bool] = []
         self.state_writes = 0
         self.applied_home_call_statuses: list[dict[str, Any]] = []
@@ -484,6 +506,17 @@ class _FakeOwner:
 
     def _async_write_ha_state_if_ready(self) -> None:
         self.state_writes += 1
+
+    def _rtsp_event_revision(self) -> int:
+        return self._rtsp_event_revision_value
+
+    async def _async_wait_for_rtsp_event(
+        self,
+        *,
+        revision: int,
+        wait_seconds: float,
+    ) -> None:
+        self.rtsp_event_waits.append((revision, wait_seconds))
 
 
 class _FakeReader:

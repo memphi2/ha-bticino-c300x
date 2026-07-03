@@ -5,35 +5,10 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from enum import IntFlag
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
-try:
-    from homeassistant.components.alarm_control_panel import (
-        AlarmControlPanelEntityFeature,
-    )
-except ImportError:  # pragma: no cover - local test stubs
-
-    class AlarmControlPanelEntityFeature(IntFlag):
-        """Fallback subset of HA alarm-control-panel feature flags."""
-
-        ARM_HOME = 1
-        ARM_AWAY = 2
-        ARM_NIGHT = 4
-        ARM_CUSTOM_BYPASS = 16
-        ARM_VACATION = 32
-
-try:
-    from homeassistant.util import dt as dt_util
-except ImportError:  # pragma: no cover - local test stubs
-    dt_util = None
-
-try:
-    from homeassistant.helpers import entity_registry as er
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
-    er = None
 
 from .action import (
     ActionValidationError,
@@ -91,6 +66,38 @@ from .dashboard_labels import (
 )
 from .dashboard_weather import async_dashboard_weather_payload
 from .entity import entry_config_value
+
+if TYPE_CHECKING:
+    from homeassistant.components.alarm_control_panel.const import (
+        AlarmControlPanelEntityFeature,
+    )
+else:
+    try:
+        from homeassistant.components.alarm_control_panel import (
+            AlarmControlPanelEntityFeature,
+        )
+    except ImportError:  # pragma: no cover - local test stubs
+
+        class AlarmControlPanelEntityFeature(IntFlag):
+            """Fallback subset of HA alarm-control-panel feature flags."""
+
+            ARM_HOME = 1
+            ARM_AWAY = 2
+            ARM_NIGHT = 4
+            ARM_CUSTOM_BYPASS = 16
+            ARM_VACATION = 32
+
+dt_util: Any
+try:
+    from homeassistant.util import dt as dt_util
+except ImportError:  # pragma: no cover - local test stubs
+    dt_util = None
+
+er: Any
+try:
+    from homeassistant.helpers import entity_registry as er
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
+    er = None
 
 
 def _alarm_feature(name: str, fallback: int) -> AlarmControlPanelEntityFeature:
@@ -1240,7 +1247,7 @@ def _state_time_label(state: Any | None, attribute: str) -> str:
     as_local = getattr(dt_util, "as_local", None) if dt_util is not None else None
     display_time = as_local(value) if callable(as_local) else value
     if hasattr(display_time, "strftime"):
-        return display_time.strftime("%d.%m. %H:%M")
+        return cast(str, display_time.strftime("%d.%m. %H:%M"))
     return ""
 
 
@@ -1985,7 +1992,7 @@ def _utcnow() -> datetime:
     """Return an aware UTC timestamp without requiring Home Assistant in tests."""
 
     if dt_util is not None:
-        return dt_util.utcnow()
+        return cast(datetime, dt_util.utcnow())
     return datetime.now(UTC)
 
 

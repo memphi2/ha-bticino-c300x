@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -20,6 +19,20 @@ from .api import (
 )
 from .const import DOMAIN
 from .video_messages import VIDEO_MESSAGE_PLAYBACK_MIME_TYPE
+
+if TYPE_CHECKING:
+    from av.audio.frame import AudioFrame
+    from av.video.frame import VideoFrame
+
+    class HomeAssistantView:
+        """Typed subset of Home Assistant's HTTP view base."""
+
+        url: str
+        extra_urls: list[str]
+        name: str
+        requires_auth: bool
+else:
+    from homeassistant.components.http import HomeAssistantView
 
 _VIEW_REGISTERED = "video_message_view_registered"
 _ORIGINAL_VIDEO_CONTENT_TYPES = {
@@ -35,8 +48,8 @@ def async_setup_media_view(hass: HomeAssistant) -> None:
     domain_data = hass.data.setdefault(DOMAIN, {})
     if domain_data.get(_VIEW_REGISTERED):
         return
-    hass.http.register_view(C300XVideoMessageMediaView())
-    hass.http.register_view(C300XVoiceMemoMediaView())
+    hass.http.register_view(cast(Any, C300XVideoMessageMediaView()))
+    hass.http.register_view(cast(Any, C300XVoiceMemoMediaView()))
     domain_data[_VIEW_REGISTERED] = True
 
 
@@ -194,8 +207,9 @@ def _convert_video_message_to_mp4(content: bytes) -> bytes:
                 "h264",
                 rate=video_stream.average_rate or 2,
             )
-            output_video.width = video_stream.codec_context.width
-            output_video.height = video_stream.codec_context.height
+            codec_context = cast(Any, video_stream.codec_context)
+            output_video.width = codec_context.width
+            output_video.height = codec_context.height
             output_video.pix_fmt = "yuv420p"
 
             output_audio = None
@@ -211,11 +225,13 @@ def _convert_video_message_to_mp4(content: bytes) -> bytes:
             for packet in input_container.demux(streams):
                 if packet.stream.type == "video":
                     for frame in packet.decode():
-                        for output_packet in output_video.encode(frame):
+                        video_frame = cast("VideoFrame", frame)
+                        for output_packet in output_video.encode(video_frame):
                             output_container.mux(output_packet)
                 elif output_audio is not None and resampler is not None:
                     for frame in packet.decode():
-                        for resampled_frame in resampler.resample(frame):
+                        audio_frame = cast("AudioFrame", frame)
+                        for resampled_frame in resampler.resample(audio_frame):
                             for output_packet in output_audio.encode(resampled_frame):
                                 output_container.mux(output_packet)
 

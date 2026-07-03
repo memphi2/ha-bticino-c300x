@@ -157,7 +157,7 @@ def patch_routing(source: Path, target: Path) -> str:
     """Patch *source* and write a new routing target to *target*."""
 
     data = bytearray(source.read_bytes())
-    digest = sha256(data)
+    digest = sha256(bytes(data))
     if digest != STOCK_SHA256:
         raise PatchError(
             f"Unsupported bt_answering_machine SHA-256: {digest}; "
@@ -165,7 +165,7 @@ def patch_routing(source: Path, target: Path) -> str:
         )
 
     for patch in PATCHES:
-        if not _verify_range(data, patch, patch.expected_range_sha256):
+        if not _verify_range(bytes(data), patch, patch.expected_range_sha256):
             raise PatchError(
                 f"Patch precondition failed for {patch.name} at 0x{patch.offset:x}: "
                 "unexpected precheck hash"
@@ -175,10 +175,10 @@ def patch_routing(source: Path, target: Path) -> str:
             if write.offset < 0 or end > patch.offset + patch.range_len:
                 raise PatchError(f"Patch write out of range for {patch.name}")
             data[patch.offset + write.offset : end] = write.data
-        if not _verify_range(data, patch, patch.patched_range_sha256):
+        if not _verify_range(bytes(data), patch, patch.patched_range_sha256):
             raise PatchError(f"Patch verification failed for {patch.name}")
 
-    patched_digest = sha256(data)
+    patched_digest = sha256(bytes(data))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     target.chmod(source.stat().st_mode & 0o7777)

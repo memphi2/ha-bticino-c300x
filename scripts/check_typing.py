@@ -111,6 +111,7 @@ STRICT_TARGETS = (
     "scripts/check_repo.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
+    "scripts/device_routing_builder.py",
 )
 
 

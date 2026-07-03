@@ -18,6 +18,7 @@ from .rtsp_policy import (
     decide_rtsp_admission,
     rtsp_resource_snapshot_from_status,
 )
+from .rtsp_probe import async_probe_rtsp_url
 from .state_machine import MediaState, MediaStateOutput
 
 CALL_MEDIA_STATES = {
@@ -433,49 +434,17 @@ class CameraRtspOrchestrator:
         port = int(
             entry_config_value(self._owner._entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
         )
-        reader: asyncio.StreamReader | None = None
-        writer: asyncio.StreamWriter | None = None
-        try:
-            opened_reader, opened_writer = await asyncio.wait_for(
-                asyncio.open_connection(host=host, port=port),
-                timeout=self._settings.rtsp_ready_connect_timeout_seconds,
-            )
-            reader = opened_reader
-            writer = opened_writer
-            request = (
-                f"DESCRIBE {stream_url} RTSP/1.0\r\n"
-                "CSeq: 1\r\n"
-                "Accept: application/sdp\r\n"
-                "User-Agent: HomeAssistant-BTicino-C300X\r\n"
-                "\r\n"
-            )
-            writer.write(request.encode("ascii"))
-            await asyncio.wait_for(
-                writer.drain(),
-                timeout=self._settings.rtsp_ready_connect_timeout_seconds,
-            )
-            response = await asyncio.wait_for(
-                reader.read(64),
-                timeout=self._settings.rtsp_ready_connect_timeout_seconds,
-            )
-            if not response.startswith(b"RTSP/1.0 "):
-                raise HomeAssistantError("RTSP bridge returned a non-RTSP response")
-            status_line = response.split(b"\r\n", 1)[0]
-            try:
-                status_code = int(status_line.split(maxsplit=2)[1])
-            except (IndexError, ValueError) as err:
-                raise HomeAssistantError(
-                    "RTSP bridge returned an invalid status line"
-                ) from err
-            if status_code < 200 or status_code >= 300:
-                raise HomeAssistantError(
-                    f"RTSP bridge returned status {status_code}"
-                )
-        finally:
-            if writer is not None:
-                writer.close()
-                with suppress(Exception):
-                    await writer.wait_closed()
+        await async_probe_rtsp_url(
+            stream_url,
+            method="DESCRIBE",
+            socket_host=host,
+            socket_port=port,
+            timeout_seconds=self._settings.rtsp_ready_connect_timeout_seconds,
+            read_size=64,
+            user_agent="HomeAssistant-BTicino-C300X",
+            accept_sdp=True,
+            reject_status_from=300,
+        )
 
     def raise_if_rtsp_admission_denied(
         self,

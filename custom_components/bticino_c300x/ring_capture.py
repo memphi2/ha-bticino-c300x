@@ -19,6 +19,7 @@ from .camera_media.rtsp_policy import (
     decide_rtsp_admission,
     rtsp_resource_snapshot_from_status,
 )
+from .camera_media.rtsp_probe import async_probe_rtsp_url
 from .camera_media.rtsp_url import (
     agent_host_for_socket as _agent_host_for_socket_value,
 )
@@ -413,36 +414,14 @@ async def _async_wait_rtsp_ready(rtsp_url: str) -> None:
 
 
 async def _async_rtsp_options(rtsp_url: str) -> None:
-    parsed = urlsplit(rtsp_url)
-    if parsed.scheme != "rtsp" or not parsed.hostname or not parsed.port:
-        raise HomeAssistantError("Invalid C300X RTSP URL")
-    socket_host = _agent_host_for_socket(parsed.hostname)
-    reader: asyncio.StreamReader | None = None
-    writer: asyncio.StreamWriter | None = None
-    try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(socket_host, parsed.port),
-            timeout=1.0,
-        )
-        request = (
-            f"OPTIONS {rtsp_url} RTSP/1.0\r\n"
-            "CSeq: 1\r\n"
-            "User-Agent: HomeAssistant-C300X\r\n"
-            "\r\n"
-        )
-        writer.write(request.encode("ascii"))
-        await writer.drain()
-        response = await asyncio.wait_for(reader.read(128), timeout=1.0)
-        first_line = response.splitlines()[0].decode("ascii", "replace") if response else ""
-        if not first_line.startswith("RTSP/"):
-            raise HomeAssistantError("C300X RTSP bridge returned a non-RTSP response")
-        parts = first_line.split()
-        if len(parts) < 2 or int(parts[1]) >= 500:
-            raise HomeAssistantError(f"C300X RTSP bridge returned {first_line}")
-    finally:
-        if writer is not None:
-            writer.close()
-            await writer.wait_closed()
+    await async_probe_rtsp_url(
+        rtsp_url,
+        method="OPTIONS",
+        timeout_seconds=1.0,
+        read_size=128,
+        user_agent="HomeAssistant-C300X",
+        reject_status_from=500,
+    )
 
 
 async def _async_mkdir(hass: Any, path: Path) -> None:

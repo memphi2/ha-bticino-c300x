@@ -195,7 +195,7 @@ def test_rtsp_probe_sends_describe_and_closes_writer(
     orchestrator = _orchestrator(owner)
     writer = _FakeWriter()
 
-    async def open_connection(*, host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
+    async def open_connection(host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
         assert host == "agent.local"
         assert port == 6554
         return _FakeReader(b"RTSP/1.0 200 OK\r\n"), writer
@@ -349,7 +349,7 @@ def test_rtsp_probe_rejects_non_rtsp_response(
     owner = _FakeOwner()
     orchestrator = _orchestrator(owner)
 
-    async def open_connection(*, host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
+    async def open_connection(host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
         return _FakeReader(b"HTTP/1.1 200 OK\r\n"), _FakeWriter()
 
     monkeypatch.setattr(rtsp_orchestrator.asyncio, "open_connection", open_connection)
@@ -364,7 +364,7 @@ def test_rtsp_probe_rejects_error_status(
     owner = _FakeOwner()
     orchestrator = _orchestrator(owner)
 
-    async def open_connection(*, host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
+    async def open_connection(host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
         return _FakeReader(b"RTSP/1.0 503 Service Unavailable\r\n"), _FakeWriter()
 
     monkeypatch.setattr(rtsp_orchestrator.asyncio, "open_connection", open_connection)
@@ -379,7 +379,7 @@ def test_rtsp_probe_rejects_invalid_status_line(
     owner = _FakeOwner()
     orchestrator = _orchestrator(owner)
 
-    async def open_connection(*, host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
+    async def open_connection(host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
         return _FakeReader(b"RTSP/1.0 broken\r\n"), _FakeWriter()
 
     monkeypatch.setattr(rtsp_orchestrator.asyncio, "open_connection", open_connection)

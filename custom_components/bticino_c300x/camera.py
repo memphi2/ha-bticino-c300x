@@ -855,7 +855,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._rtsp_orchestrator.raise_if_rtsp_cooling_down()
 
     async def _async_probe_rtsp(self, stream_url: str) -> None:
-        """Open a lightweight RTSP OPTIONS request against the native bridge."""
+        """Open a lightweight RTSP DESCRIBE request against the native bridge."""
 
         await self._rtsp_orchestrator.async_probe_rtsp(stream_url)
 
@@ -887,15 +887,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             session_id
             for session_id, session in self._provider_webrtc_sessions.items()
             if session.owner == owner
-        ]
-
-    def _webrtc_session_ids_for_ring_call(self) -> list[str]:
-        """Return HA-side session ids that are bound to an answered ring call."""
-
-        return [
-            session_id
-            for session_id, session in self._provider_webrtc_sessions.items()
-            if session.ring_call
         ]
 
     def _has_webrtc_sessions(self) -> bool:
@@ -1010,7 +1001,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
-            self._close_ring_webrtc_sessions_from_event()
+            self._close_doorbell_webrtc_sessions_from_event()
             self._async_write_ha_state_if_ready()
             return
         self._video_window_available = bool(
@@ -1074,10 +1065,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         self.hass.async_create_task(_close_sessions())
 
-    def _close_ring_webrtc_sessions_from_event(self) -> None:
-        """Close HA Ring Call WebRTC sessions after an authoritative agent end event."""
+    def _close_doorbell_webrtc_sessions_from_event(self) -> None:
+        """Close HA Doorbell WebRTC sessions after authoritative media close."""
 
-        session_ids = self._webrtc_session_ids_for_ring_call()
+        session_ids = self._webrtc_session_ids_by_owner("doorbell")
         if (
             not session_ids
             or not hasattr(self, "hass")
@@ -1091,7 +1082,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     session_id,
                     stop_media=False,
                     notify_client=True,
-                    reason="ring_call_closed",
+                    reason="doorbell_media_closed",
                 )
 
         self.hass.async_create_task(_close_sessions())

@@ -386,7 +386,7 @@ class CameraRtspOrchestrator:
             self._owner._rtsp_cooldown_scope = None
 
     async def async_probe_rtsp(self, stream_url: str) -> None:
-        """Open a lightweight RTSP OPTIONS request against the native bridge."""
+        """Open a lightweight RTSP DESCRIBE request against the native bridge."""
 
         host = self._owner._agent_host_for_socket()
         port = int(
@@ -402,8 +402,9 @@ class CameraRtspOrchestrator:
             reader = opened_reader
             writer = opened_writer
             request = (
-                f"OPTIONS {stream_url} RTSP/1.0\r\n"
+                f"DESCRIBE {stream_url} RTSP/1.0\r\n"
                 "CSeq: 1\r\n"
+                "Accept: application/sdp\r\n"
                 "User-Agent: HomeAssistant-BTicino-C300X\r\n"
                 "\r\n"
             )

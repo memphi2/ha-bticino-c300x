@@ -113,6 +113,7 @@ from custom_components.bticino_c300x.camera import (
     TALKBACK_CODEC,
     TALKBACK_RTP_PAYLOAD_TYPE,
     C300XDoorbellCamera,
+    _ProviderWebRTCSession,
     async_setup_entry,
 )
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
@@ -1960,6 +1961,50 @@ def test_doorbell_camera_clears_state_on_video_closed_event() -> None:
     assert camera._bridge_status["media_owner"] == "idle"
     assert camera._bridge_status["external_media_active"] is False
     assert camera._last_media_state is MediaState.IDLE
+
+
+def test_doorbell_media_closed_closes_local_doorbell_webrtc_without_agent_stop() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _FakeWebRTCProvider()
+    messages: list[Any] = []
+    tasks: list[asyncio.Task[Any]] = []
+
+    class _FakeHass:
+        def async_create_task(self, coro: Any) -> asyncio.Task[Any]:
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+            return task
+
+    camera.hass = _FakeHass()  # type: ignore[assignment]
+    camera._provider_webrtc_sessions["session-doorbell"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=messages.append,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+
+    async def _run() -> None:
+        camera._handle_agent_event(
+            SimpleNamespace(
+                data={
+                    "entry_id": entry.entry_id,
+                    "event_key": "doorbell_media_closed",
+                }
+            )
+        )
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    asyncio.run(_run())
+
+    assert camera._provider_webrtc_sessions == {}
+    assert provider.closed == ["session-doorbell"]
+    assert messages == [{"type": "closed", "reason": "doorbell_media_closed"}]
+    assert entry.runtime_data.api.stop_calls == 0
 
 
 def test_doorbell_camera_applies_home_call_answered_event_without_polling() -> None:

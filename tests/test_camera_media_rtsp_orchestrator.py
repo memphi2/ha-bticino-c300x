@@ -188,7 +188,7 @@ def test_restart_home_call_reader_waits_for_audio_rtsp() -> None:
     assert owner.applied_home_call_statuses == [{"rtp_proxy": True}]
 
 
-def test_rtsp_probe_sends_options_and_closes_writer(
+def test_rtsp_probe_sends_describe_and_closes_writer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = _FakeOwner()
@@ -205,7 +205,8 @@ def test_rtsp_probe_sends_options_and_closes_writer(
     asyncio.run(orchestrator.async_probe_rtsp("rtsp://agent.local:6554/doorbell"))
 
     assert writer.closed is True
-    assert writer.payload.startswith(b"OPTIONS rtsp://agent.local:6554/doorbell RTSP/1.0")
+    assert writer.payload.startswith(b"DESCRIBE rtsp://agent.local:6554/doorbell RTSP/1.0")
+    assert b"Accept: application/sdp\r\n" in writer.payload
 
 
 def test_wait_for_rtsp_ready_retries_and_resets_cooldown(

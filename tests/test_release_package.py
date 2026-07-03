@@ -139,6 +139,20 @@ def test_stage_bundle_strips_elf_agent_binary(
     ]
 
 
+def test_device_install_uploads_packaged_agent_binary() -> None:
+    install_script = (ROOT / "scripts" / "install_c300x_device.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"$ROOT_DIR/scripts/stage_device_agent_bundle.py" --skip-build' in install_script
+    assert 'PACKAGED_AGENT_BINARY="$ROOT_DIR/custom_components/bticino_c300x/device_agent/armhf/c300x-agent-native"' in install_script
+    assert 'PACKAGED_BUNDLE_MANIFEST="$ROOT_DIR/custom_components/bticino_c300x/device_agent/bundle.json"' in install_script
+    assert '"$PACKAGED_AGENT_BINARY"' in install_script
+    assert '"$PACKAGED_BUNDLE_MANIFEST"' in install_script
+    assert "'$REMOTE_DIR/bundle.json'" in install_script
+    assert '"$ROOT_DIR/native_agent/build/armhf/c300x-agent-native"' not in install_script
+
+
 def test_bundle_hash_ignores_integration_version_metadata(
     tmp_path: Path,
     monkeypatch,

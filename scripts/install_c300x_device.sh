@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE_DIR="${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}"
+PACKAGED_AGENT_BINARY="$ROOT_DIR/custom_components/bticino_c300x/device_agent/armhf/c300x-agent-native"
+PACKAGED_BUNDLE_MANIFEST="$ROOT_DIR/custom_components/bticino_c300x/device_agent/bundle.json"
 APPLY_QML=0
 UPLOAD_AGENT=0
 
@@ -20,7 +22,7 @@ Environment:
 
 Options:
   --apply-qml      Run the installed qml_patch.sh apply action once.
-  --agent          Also build and upload the native ARMHF agent binary.
+  --agent          Also build and upload the packaged native ARMHF agent binary.
 
 Notes:
   - Uses scp -O because the C300X firmware does not provide SFTP.
@@ -83,6 +85,7 @@ scp_cmd() {
 
 if [[ "$UPLOAD_AGENT" == "1" ]]; then
     make -C "$ROOT_DIR/native_agent" armhf
+    "$ROOT_DIR/scripts/stage_device_agent_bundle.py" --skip-build
 fi
 
 ssh_cmd "mkdir -p '$REMOTE_DIR/qml/js'"
@@ -110,9 +113,14 @@ ssh_cmd "chmod 700 '$REMOTE_DIR/bootstrap_firewall.sh'"
 if [[ "$UPLOAD_AGENT" == "1" ]]; then
     remote_agent_tmp="$REMOTE_DIR/.c300x-agent-native.new"
     scp_cmd \
-        "$ROOT_DIR/native_agent/build/armhf/c300x-agent-native" \
+        "$PACKAGED_AGENT_BINARY" \
         "$REMOTE:$remote_agent_tmp"
     ssh_cmd "chmod 700 '$remote_agent_tmp' && mv -f '$remote_agent_tmp' '$REMOTE_DIR/c300x-agent-native'"
+    remote_bundle_tmp="$REMOTE_DIR/.bundle.json.new"
+    scp_cmd \
+        "$PACKAGED_BUNDLE_MANIFEST" \
+        "$REMOTE:$remote_bundle_tmp"
+    ssh_cmd "chmod 600 '$remote_bundle_tmp' && mv -f '$remote_bundle_tmp' '$REMOTE_DIR/bundle.json'"
 fi
 
 if [[ "$APPLY_QML" == "1" ]]; then

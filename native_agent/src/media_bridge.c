@@ -82,7 +82,10 @@ static void secure_zero(void *ptr, size_t len);
 static int16_t decode_pcmu_sample(unsigned char value);
 static int16_t decode_pcma_sample(unsigned char value);
 static unsigned char encode_pcmu_sample(int16_t sample);
+static void store_be16(unsigned char *out, uint16_t value);
 static uint16_t load_be16(const unsigned char *in);
+static uint32_t load_be32(const unsigned char *in);
+static void store_be32(unsigned char *out, uint32_t value);
 
 static bool rtsp_peer_ipv4_address(
     const struct sockaddr_storage *peer,
@@ -235,6 +238,9 @@ typedef struct {
     unsigned char ondemand_video_srtp_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
     bool transport_tcp;
     bool rtsp_audio_enabled;
+    bool rtsp_audio_out_initialized;
+    uint16_t rtsp_audio_out_seq;
+    uint32_t rtsp_audio_out_timestamp;
     int video_interleaved_channel;
     int audio_interleaved_channel;
     struct sockaddr_in udp_client;
@@ -1244,6 +1250,9 @@ static void reset_backchannel_talkback_locked(media_bridge_t *bridge) {
     bridge->talkback_pcm_seq_initialized = false;
     bridge->talkback_pcm_next_seq = 0;
     bridge->talkback_backchannel_generation++;
+    bridge->rtsp_audio_out_initialized = false;
+    bridge->rtsp_audio_out_seq = 0;
+    bridge->rtsp_audio_out_timestamp = 0;
 }
 
 static bool queue_talkback_payload_locked(
@@ -2293,6 +2302,82 @@ static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
 }
 
+static bool next_rtsp_audio_output_timestamp(
+    media_bridge_t *bridge,
+    const unsigned char *source_packet,
+    size_t sample_count,
+    uint16_t *sequence,
+    uint32_t *timestamp
+) {
+    if (
+        bridge == NULL
+        || source_packet == NULL
+        || sample_count == 0
+        || sequence == NULL
+        || timestamp == NULL
+    ) {
+        return false;
+    }
+
+    pthread_mutex_lock(&bridge->mutex);
+    if (!bridge->rtsp_audio_out_initialized) {
+        bridge->rtsp_audio_out_seq = load_be16(source_packet + 2);
+        bridge->rtsp_audio_out_timestamp = load_be32(source_packet + 4);
+        bridge->rtsp_audio_out_initialized = true;
+    }
+    *sequence = bridge->rtsp_audio_out_seq++;
+    *timestamp = bridge->rtsp_audio_out_timestamp;
+    bridge->rtsp_audio_out_timestamp += (uint32_t)sample_count;
+    pthread_mutex_unlock(&bridge->mutex);
+    return true;
+}
+
+static bool forward_rtsp_audio_pcmu_payload(
+    media_bridge_t *bridge,
+    const unsigned char *source_packet,
+    const unsigned char *payload,
+    size_t payload_len,
+    bool marker
+) {
+    unsigned char out[12 + RTSP_AUDIO_FRAME_SAMPLES];
+    size_t offset = 0;
+
+    if (
+        bridge == NULL
+        || source_packet == NULL
+        || payload == NULL
+        || payload_len == 0
+    ) {
+        return false;
+    }
+
+    while (offset < payload_len) {
+        uint16_t sequence;
+        uint32_t timestamp;
+        size_t take = payload_len - offset;
+        if (take > RTSP_AUDIO_FRAME_SAMPLES) {
+            take = RTSP_AUDIO_FRAME_SAMPLES;
+        }
+        if (!next_rtsp_audio_output_timestamp(bridge, source_packet, take, &sequence, &timestamp)) {
+            return false;
+        }
+
+        memset(out, 0, sizeof(out));
+        out[0] = 0x80;
+        out[1] = (unsigned char)(
+            ((offset + take >= payload_len && marker) ? 0x80 : 0)
+            | RTSP_AUDIO_PAYLOAD_TYPE
+        );
+        store_be16(out + 2, sequence);
+        store_be32(out + 4, timestamp);
+        memcpy(out + 8, source_packet + 8, 4);
+        memcpy(out + 12, payload + offset, take);
+        forward_rtsp_packet(bridge, out, (int)(12 + take), true);
+        offset += take;
+    }
+    return true;
+}
+
 static bool forward_rtsp_audio_pcmu_packet(
     media_bridge_t *bridge,
     const unsigned char *packet,
@@ -2302,7 +2387,8 @@ static bool forward_rtsp_audio_pcmu_packet(
     size_t payload_offset;
     size_t payload_len;
     int16_t samples[RTSP_AUDIO_FRAME_SAMPLES];
-    unsigned char out[12 + RTSP_AUDIO_FRAME_SAMPLES];
+    unsigned char pcmu_payload[RTSP_AUDIO_FRAME_SAMPLES];
+    bool marker;
 
     if (!rtp_payload_offset(packet, packet_len, &payload_offset) || (size_t)packet_len <= payload_offset) {
         return false;
@@ -2310,22 +2396,39 @@ static bool forward_rtsp_audio_pcmu_packet(
 
     payload_type = packet[1] & 0x7f;
     payload_len = (size_t)packet_len - payload_offset;
+    marker = (packet[1] & 0x80) != 0;
     if (payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE) {
-        forward_rtsp_packet(bridge, packet, packet_len, true);
-        return true;
+        return forward_rtsp_audio_pcmu_payload(
+            bridge,
+            packet,
+            packet + payload_offset,
+            payload_len,
+            marker
+        );
     }
     if (payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE) {
-        if (payload_len > RTSP_AUDIO_FRAME_SAMPLES) {
-            payload_len = RTSP_AUDIO_FRAME_SAMPLES;
+        size_t offset = 0;
+        while (offset < payload_len) {
+            size_t take = payload_len - offset;
+            if (take > RTSP_AUDIO_FRAME_SAMPLES) {
+                take = RTSP_AUDIO_FRAME_SAMPLES;
+            }
+            for (size_t index = 0; index < take; index++) {
+                pcmu_payload[index] = encode_pcmu_sample(
+                    decode_pcma_sample(packet[payload_offset + offset + index])
+                );
+            }
+            if (!forward_rtsp_audio_pcmu_payload(
+                bridge,
+                packet,
+                pcmu_payload,
+                take,
+                offset + take >= payload_len && marker
+            )) {
+                return false;
+            }
+            offset += take;
         }
-        memset(out, 0, sizeof(out));
-        memcpy(out, packet, 12);
-        out[0] = 0x80;
-        out[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
-        for (size_t index = 0; index < payload_len; index++) {
-            out[12 + index] = encode_pcmu_sample(decode_pcma_sample(packet[payload_offset + index]));
-        }
-        forward_rtsp_packet(bridge, out, (int)(12 + payload_len), true);
         return true;
     }
     if (!rtsp_audio_payload_is_speex_8khz(payload_type)) {
@@ -2335,15 +2438,16 @@ static bool forward_rtsp_audio_pcmu_packet(
         return false;
     }
 
-    memset(out, 0, sizeof(out));
-    memcpy(out, packet, 12);
-    out[0] = 0x80;
-    out[1] = (unsigned char)((packet[1] & 0x80) | RTSP_AUDIO_PAYLOAD_TYPE);
     for (size_t index = 0; index < RTSP_AUDIO_FRAME_SAMPLES; index++) {
-        out[12 + index] = encode_pcmu_sample(samples[index]);
+        pcmu_payload[index] = encode_pcmu_sample(samples[index]);
     }
-    forward_rtsp_packet(bridge, out, (int)sizeof(out), true);
-    return true;
+    return forward_rtsp_audio_pcmu_payload(
+        bridge,
+        packet,
+        pcmu_payload,
+        sizeof(pcmu_payload),
+        marker
+    );
 }
 
 static void drain_ring_srtp_socket(
@@ -3105,6 +3209,13 @@ static void store_be16(unsigned char *out, uint16_t value) {
 
 static uint16_t load_be16(const unsigned char *in) {
     return (uint16_t)(((uint16_t)in[0] << 8) | in[1]);
+}
+
+static uint32_t load_be32(const unsigned char *in) {
+    return ((uint32_t)in[0] << 24)
+        | ((uint32_t)in[1] << 16)
+        | ((uint32_t)in[2] << 8)
+        | (uint32_t)in[3];
 }
 
 static void store_be32(unsigned char *out, uint32_t value) {

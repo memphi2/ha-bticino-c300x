@@ -429,6 +429,46 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert "RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in backchannel_body
 
 
+def test_native_agent_rtsp_audio_pcma_downstream_chunks_without_truncation() -> None:
+    media_bridge = _read_media_bridge()
+    audio_body = media_bridge[
+        media_bridge.index("static bool forward_rtsp_audio_pcmu_packet") :
+        media_bridge.index("static void drain_ring_srtp_socket")
+    ]
+
+    assert "static uint32_t load_be32" in media_bridge
+    assert "payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in audio_body
+    assert "while (offset < payload_len)" in audio_body
+    assert "payload_len = RTSP_AUDIO_FRAME_SAMPLES" not in audio_body
+    assert "decode_pcma_sample(packet[payload_offset + offset + index])" in audio_body
+    assert "offset + take >= payload_len && marker" in audio_body
+    assert "forward_rtsp_audio_pcmu_payload(" in audio_body
+
+
+def test_native_agent_rtsp_audio_downstream_uses_monotonic_output_clock() -> None:
+    media_bridge = _read_media_bridge()
+    reset_body = media_bridge[
+        media_bridge.index("static void reset_backchannel_talkback_locked") :
+        media_bridge.index("static bool queue_talkback_payload_locked")
+    ]
+    audio_body = media_bridge[
+        media_bridge.index("static bool next_rtsp_audio_output_timestamp") :
+        media_bridge.index("static void drain_ring_srtp_socket")
+    ]
+
+    assert "bool rtsp_audio_out_initialized;" in media_bridge
+    assert "bridge->rtsp_audio_out_initialized = false;" in reset_body
+    assert "bridge->rtsp_audio_out_seq = 0;" in reset_body
+    assert "bridge->rtsp_audio_out_timestamp = 0;" in reset_body
+    assert "bridge->rtsp_audio_out_seq = load_be16(source_packet + 2);" in audio_body
+    assert "bridge->rtsp_audio_out_timestamp = load_be32(source_packet + 4);" in audio_body
+    assert "*sequence = bridge->rtsp_audio_out_seq++;" in audio_body
+    assert "bridge->rtsp_audio_out_timestamp += (uint32_t)sample_count;" in audio_body
+    assert "store_be16(out + 2, sequence);" in audio_body
+    assert "store_be32(out + 4, timestamp);" in audio_body
+    assert "forward_rtsp_packet(bridge, packet, packet_len, true)" not in audio_body
+
+
 def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
     media_bridge = _read_media_bridge()
     invite_body = media_bridge[

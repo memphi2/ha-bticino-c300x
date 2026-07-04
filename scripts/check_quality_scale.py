@@ -72,7 +72,6 @@ OFFICIAL_RULES = (
 
 EXPECTED_PLATINUM_BLOCKERS = {
     "brands",
-    "config-flow-test-coverage",
     "test-coverage",
     "strict-typing",
 }

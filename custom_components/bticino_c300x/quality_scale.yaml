@@ -8,8 +8,8 @@ rules:
     comment: Prepare Home Assistant Brands assets before a core submission.
   common-modules: done
   config-flow-test-coverage:
-    status: todo
-    comment: Expand fixture-backed config-flow and reconfigure tests for the remaining setup, options, and repair paths.
+    status: done
+    comment: Fixture-backed tests cover setup, options, reconfigure, dashboard branching, invalid input handling, and Repair flows.
   config-flow: done
   dependency-transparency: done
   docs-actions: done

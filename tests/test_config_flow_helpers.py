@@ -2520,6 +2520,141 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     assert CONF_ROTATE_SHARED_SECRET not in result["data_updates"]
 
 
+def test_options_flow_init_and_missing_state_redirect_to_current_pages() -> None:
+    entry = SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: "",
+            CONF_VIDEO_ENABLED: False,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
+            CONF_ALARM_ENTITY_ID: "",
+            CONF_ALARM_PAGE_ENTITY_ID: "",
+            CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
+            CONF_ACTIONS: {},
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
+            CONF_VIDEO_PORT: 6554,
+            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_DEVICE_UI_ENABLED: False,
+        },
+        options={},
+        runtime_data=None,
+    )
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    init_form = asyncio.run(flow.async_step_init())
+    dashboard_redirect = asyncio.run(flow.async_step_dashboard())
+    entity_redirect = asyncio.run(flow.async_step_dashboard_entity_display())
+
+    assert init_form["step_id"] == "connection"
+    assert dashboard_redirect["step_id"] == "features"
+    assert entity_redirect["step_id"] == "features"
+
+
+def test_options_flow_invalid_feature_input_stays_on_features_page() -> None:
+    entry = SimpleNamespace(data={}, options={}, runtime_data=None)
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_DOORSTATION_AUDIO_GAIN_DB: 21,
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB: -21,
+            }
+        )
+    )
+
+    assert result["step_id"] == "features"
+    assert result["errors"] == {
+        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+    }
+
+
+def test_reconfigure_invalid_connection_stays_on_reconfigure_page() -> None:
+    entry = SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: "",
+        },
+        options={},
+    )
+    flow = BticinoC300XConfigFlow()
+    flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_reconfigure(
+            {
+                CONF_AGENT_HOST: "",
+                CONF_AGENT_PORT: 8091,
+                CONF_AGENT_TOKEN: "",
+                CONF_MAINTENANCE_TOKEN: "",
+                CONF_CALLBACK_BASE_URL: "",
+                CONF_ROTATE_SHARED_SECRET: False,
+            }
+        )
+    )
+
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {CONF_AGENT_HOST: "invalid_agent_host"}
+
+
+def test_reconfigure_missing_state_redirects_to_current_pages() -> None:
+    entry = SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: "",
+            CONF_CALLBACK_BASE_URL: "",
+            CONF_VIDEO_ENABLED: False,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
+            CONF_ALARM_ENTITY_ID: "",
+            CONF_ALARM_PAGE_ENTITY_ID: "",
+            CONF_WEATHER_ENTITY_ID: "",
+            CONF_DASHBOARD_ENTITIES: [],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
+            CONF_ACTIONS: {},
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
+            CONF_VIDEO_PORT: 6554,
+            CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
+            CONF_DEVICE_UI_ENABLED: False,
+        },
+        options={},
+        runtime_data=None,
+    )
+    flow = BticinoC300XConfigFlow()
+    flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    dashboard_redirect = asyncio.run(flow.async_step_reconfigure_dashboard())
+    entity_redirect = asyncio.run(flow.async_step_reconfigure_dashboard_entity_display())
+
+    assert dashboard_redirect["step_id"] == "reconfigure_features"
+    assert entity_redirect["step_id"] == "reconfigure_features"
+
+
 class _FakeQmlPatchApi:
     def __init__(self, status: dict[str, object]) -> None:
         self._status = status

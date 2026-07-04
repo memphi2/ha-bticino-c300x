@@ -11600,12 +11600,14 @@ static void handle_api_request(
         handle_doorbell_video_activate(client_fd, runtime, request);
         return;
     }
-    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/audio") == 0) {
-        c300x_handle_doorbell_video_audio_settings(
+    if (c300x_try_handle_doorbell_video_audio_settings_route(
             client_fd,
             runtime != NULL ? runtime->video : NULL,
+            request->method,
+            request->path,
             request->body
-        );
+        )
+    ) {
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/stop") == 0) {

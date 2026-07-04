@@ -11,6 +11,7 @@
 #include <string.h>
 
 #define C300X_DOORSTATION_AUDIO_GAIN_FIELD "\"doorstation_audio_gain_tenths\""
+#define C300X_DOORSTATION_AUDIO_SETTINGS_PATH "/api/v1/video/doorbell/audio"
 
 static bool json_value_terminates(char ch)
 {
@@ -74,6 +75,24 @@ bool c300x_parse_doorstation_audio_gain_request(const char *body, int *gain_tent
         return false;
     }
     *gain_tenths = parsed_gain_tenths;
+    return true;
+}
+
+bool c300x_try_handle_doorbell_video_audio_settings_route(
+    int client_fd,
+    struct c300x_video *video,
+    const char *method,
+    const char *path,
+    const char *request_body
+)
+{
+    if (
+        strcmp(method, "POST") != 0
+        || strcmp(path, C300X_DOORSTATION_AUDIO_SETTINGS_PATH) != 0
+    ) {
+        return false;
+    }
+    c300x_handle_doorbell_video_audio_settings(client_fd, video, request_body);
     return true;
 }
 

@@ -15,6 +15,8 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
 - Update the native C300X device agent from Home Assistant to `1.6.4`.
 
 ## v1.6.3 - 2026-07-04

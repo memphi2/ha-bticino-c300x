@@ -1,6 +1,8 @@
 #ifndef C300X_MEDIA_AUDIO_H
 #define C300X_MEDIA_AUDIO_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define C300X_DOORSTATION_AUDIO_GAIN_MIN_TENTHS (-200)
@@ -11,6 +13,11 @@
 int c300x_doorstation_audio_gain_normalize_tenths(int gain_tenths);
 int c300x_doorstation_audio_gain_q12_for_tenths(int gain_tenths);
 int c300x_audio_gain_q12_or_neutral(int gain_q12);
+bool c300x_rtp_payload_offset(
+    const unsigned char *packet,
+    int packet_len,
+    size_t *payload_offset
+);
 int16_t c300x_pcmu_decode(unsigned char value);
 int16_t c300x_pcma_decode(unsigned char value);
 int16_t c300x_audio_gain_apply(int16_t sample, int gain_q12);

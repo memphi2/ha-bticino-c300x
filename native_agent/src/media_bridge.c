@@ -2407,31 +2407,6 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
     }
 }
 
-static bool rtp_payload_offset(const unsigned char *packet, int packet_len, size_t *payload_offset) {
-    size_t header_len;
-
-    if (packet == NULL || payload_offset == NULL || packet_len < 12 || (packet[0] & 0xc0) != 0x80) {
-        return false;
-    }
-    header_len = 12 + ((size_t)(packet[0] & 0x0f) * 4);
-    if ((size_t)packet_len < header_len) {
-        return false;
-    }
-    if ((packet[0] & 0x10) != 0) {
-        uint16_t extension_words;
-        if ((size_t)packet_len < header_len + 4) {
-            return false;
-        }
-        extension_words = load_be16(packet + header_len + 2);
-        header_len += 4 + ((size_t)extension_words * 4);
-        if ((size_t)packet_len < header_len) {
-            return false;
-        }
-    }
-    *payload_offset = header_len;
-    return true;
-}
-
 static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
     return payload_type == RING_AUDIO_PAYLOAD_TYPE
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
@@ -2535,7 +2510,7 @@ static bool forward_rtsp_audio_pcmu_packet(
     unsigned char pcmu_payload[RTSP_AUDIO_FRAME_SAMPLES];
     bool marker;
 
-    if (!rtp_payload_offset(packet, packet_len, &payload_offset) || (size_t)packet_len <= payload_offset) {
+    if (!c300x_rtp_payload_offset(packet, packet_len, &payload_offset) || (size_t)packet_len <= payload_offset) {
         return false;
     }
 
@@ -3864,7 +3839,7 @@ static bool forward_rtsp_backchannel_packet(
     if (bridge == NULL || packet == NULL || packet_len < 12) {
         return false;
     }
-    if (!rtp_payload_offset(packet, (int)packet_len, &header_len)) {
+    if (!c300x_rtp_payload_offset(packet, (int)packet_len, &header_len)) {
         return true;
     }
     if (packet_len <= header_len) {

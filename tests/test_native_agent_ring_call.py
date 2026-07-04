@@ -463,7 +463,7 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert "queue_talkback_payload_locked(" in pcm_body
     assert "send_queued_talkback_payload_locked(" in media_bridge
     assert "pop_talkback_payload_locked(" in media_bridge
-    assert "rtp_payload_offset(packet, (int)packet_len, &header_len)" in backchannel_body
+    assert "c300x_rtp_payload_offset(packet, (int)packet_len, &header_len)" in backchannel_body
     assert "queue_speex_backchannel_packet(" in backchannel_body
     assert "RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in backchannel_body
     assert "RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in backchannel_body

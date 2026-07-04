@@ -53,6 +53,43 @@ int c300x_audio_gain_q12_or_neutral(int gain_q12)
     return gain_q12 > 0 ? gain_q12 : C300X_AUDIO_GAIN_Q12_NEUTRAL;
 }
 
+bool c300x_rtp_payload_offset(
+    const unsigned char *packet,
+    int packet_len,
+    size_t *payload_offset
+)
+{
+    size_t header_len;
+
+    if (
+        packet == NULL
+        || payload_offset == NULL
+        || packet_len < 12
+        || (packet[0] & 0xc0) != 0x80
+    ) {
+        return false;
+    }
+    header_len = 12 + ((size_t)(packet[0] & 0x0f) * 4);
+    if ((size_t)packet_len < header_len) {
+        return false;
+    }
+    if ((packet[0] & 0x10) != 0) {
+        uint16_t extension_words;
+        if ((size_t)packet_len < header_len + 4) {
+            return false;
+        }
+        extension_words = (uint16_t)(
+            ((uint16_t)packet[header_len + 2] << 8) | packet[header_len + 3]
+        );
+        header_len += 4 + ((size_t)extension_words * 4);
+        if ((size_t)packet_len < header_len) {
+            return false;
+        }
+    }
+    *payload_offset = header_len;
+    return true;
+}
+
 int16_t c300x_pcmu_decode(unsigned char value)
 {
     const int bias = 0x84;

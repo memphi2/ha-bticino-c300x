@@ -145,9 +145,9 @@ def test_release_builder_can_reuse_agent_from_release_zip(
 def test_release_tag_checker_matches_current_metadata() -> None:
     checker = _load_release_tag_checker()
 
-    assert checker.validate_release_tag("v1.6.3") == []
-    assert checker.validate_release_tag("1.6.3") == [
-        "release tag must use vX.Y.Z format, got '1.6.3'"
+    assert checker.validate_release_tag("v1.6.4") == []
+    assert checker.validate_release_tag("1.6.4") == [
+        "release tag must use vX.Y.Z format, got '1.6.4'"
     ]
 
 

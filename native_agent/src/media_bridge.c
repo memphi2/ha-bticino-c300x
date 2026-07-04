@@ -6345,10 +6345,16 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     break;
                 }
             }
-            if (!ring_session && !home_call_session && !start_media_session(&g_bridge)) {
-                rtsp_note_play_failure(&g_bridge, "media_start_failed");
-                send_rtsp_response(fd, 500, cseq, NULL, NULL);
-                break;
+            if (!ring_session && !home_call_session) {
+                if (c300x_media_session_stop_in_progress(g_bridge.video)) {
+                    send_rtsp_response(fd, 503, cseq, NULL, NULL);
+                    break;
+                }
+                if (!start_media_session(&g_bridge)) {
+                    rtsp_note_play_failure(&g_bridge, "media_start_failed");
+                    send_rtsp_response(fd, 500, cseq, NULL, NULL);
+                    break;
+                }
             }
             media_started = !ring_session && !home_call_session;
             if (ring_session && rtsp_audio_enabled) {

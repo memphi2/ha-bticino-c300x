@@ -274,7 +274,14 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "request_home_call_media_if_active" in rtsp_body
     assert "wait_for_ring_session_active(&g_bridge, 1500)" in rtsp_body
     assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in rtsp_body
-    assert "!ring_session && !home_call_session && !start_media_session" in rtsp_body
+    assert "if (!ring_session && !home_call_session) {" in rtsp_body
+    assert "c300x_media_session_stop_in_progress(g_bridge.video)" in rtsp_body
+    assert rtsp_body.index("c300x_media_session_stop_in_progress") < rtsp_body.index(
+        "start_media_session(&g_bridge)"
+    )
+    assert rtsp_body.index("start_media_session(&g_bridge)") < rtsp_body.index(
+        'rtsp_note_play_failure(&g_bridge, "media_start_failed")'
+    )
     assert "return bridge->ring_call_active && !bridge->ring_call_stop;" in media_bridge
     assert "return (bridge->home_call_started || bridge->home_call_active) && !bridge->home_call_stop;" in media_bridge
     assert "ring_session_active(&g_bridge)" in rtsp_body
@@ -296,13 +303,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     )
     assert rtsp_body.index(
         "if (recorder && !ring_session && !home_call_session)"
-    ) < rtsp_body.index(
-        "if (!ring_session && !home_call_session && !start_media_session(&g_bridge))"
-    )
-    assert (
-        "if (!ring_session && !home_call_session && !start_media_session(&g_bridge))"
-        in rtsp_body
-    )
+    ) < rtsp_body.index("if (!ring_session && !home_call_session) {")
+    assert "if (!ring_session && !home_call_session) {" in rtsp_body
     assert "media_started = !ring_session && !home_call_session" in rtsp_body
 
 

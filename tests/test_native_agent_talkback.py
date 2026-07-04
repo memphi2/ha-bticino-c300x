@@ -177,16 +177,23 @@ def test_native_agent_ignores_transient_on_demand_media_closed_during_start() ->
     assert "video->media_closed_grace_until_ms = 0;" in media_stopped_body
     assert "int c300x_video_consume_media_closed_event" in header
     assert "int c300x_video_consume_media_closed_event" in video
+    assert "int c300x_video_ignore_transient_view_requested" in header
+    assert "int c300x_video_ignore_transient_view_requested" in video
     assert "video->media_closed_event_armed = 0;" in video
     assert "video->clients > 0" in ignore_body
     assert "video->call_active || video->media_starting" in ignore_body
     assert "now < video->media_closed_grace_until_ms" in ignore_body
+    assert "!ring_call_active" in ignore_body
     assert 'strncmp(msg, "*8*3#1#4*"' in transient_filter_body
     assert 'strncmp(msg, "*8*3#5#4*"' in transient_filter_body
     assert (
         "c300x_video_ignore_transient_media_closed(runtime->video)"
         in transient_filter_body
     )
+    assert "doorbell_view_requested_is_ondemand_start_transition" in http
+    assert 'strncmp(msg, "*8*1#5#4#"' in http
+    assert 'strncmp(msg, "*8*2#1#4*"' in http
+    assert "c300x_video_ignore_transient_view_requested(runtime->video)" in http
     assert "!c300x_video_consume_media_closed_event(runtime->video)" in udp_event_body
 
 

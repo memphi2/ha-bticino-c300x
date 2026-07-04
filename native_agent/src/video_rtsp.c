@@ -719,3 +719,26 @@ int c300x_video_ignore_transient_media_closed(struct c300x_video *video)
     pthread_mutex_unlock(&video->mutex);
     return ignore;
 }
+
+int c300x_video_ignore_transient_view_requested(struct c300x_video *video)
+{
+    long long now;
+    int ring_call_active;
+    int ignore;
+
+    if (video == NULL) {
+        return 0;
+    }
+    now = monotonic_ms();
+    ring_call_active = c300x_media_ring_call_active(video) ? 1 : 0;
+    pthread_mutex_lock(&video->mutex);
+    ignore = (
+        !ring_call_active
+        && video->clients > 0
+        && (video->call_active || video->media_starting)
+        && video->media_closed_grace_until_ms > 0
+        && now < video->media_closed_grace_until_ms
+    );
+    pthread_mutex_unlock(&video->mutex);
+    return ignore;
+}

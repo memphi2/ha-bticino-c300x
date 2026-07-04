@@ -648,12 +648,58 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
     assert "|| this._transitionWebrtc" in preview_guard
     assert "|| this._doorbellAnswered" in preview_guard
     assert "|| this._ringPreviewStarted" in preview_guard
+    assert "|| this._ringPreviewSuppressed" in preview_guard
     assert "if (this._closing) {\n        return;\n      }\n      const state" in webrtc_source
     assert (
         'if (this._closing) {\n                return;\n              }\n'
         '              this._onClosed?.(message.reason || "closed");'
         in webrtc_source
     )
+
+
+def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+
+    update_block = source[
+        source.index("  _updateState()") : source.index(
+            "    const name = this._displayName",
+            source.index("  _updateState()"),
+        )
+    ]
+    preview_guard = source[
+        source.index("async _ensureDoorbellPreview()") : source.index(
+            "this._previewStarting = true;",
+            source.index("async _ensureDoorbellPreview()"),
+        )
+    ]
+    closed_handler = source[
+        source.index("  _handleWebrtcClosed(reason)") : source.index(
+            "  _isHomeCallMode()",
+            source.index("  _handleWebrtcClosed(reason)"),
+        )
+    ]
+
+    assert "this._ringPreviewSuppressed = false;" in source
+    assert 'mediaState === "ring_pending"' in update_block
+    assert 'mediaState === "ring_preview_active"' in update_block
+    assert 'mediaState === "ring_answering"' in update_block
+    assert 'mediaState === "ring_active"' in update_block
+    assert 'mediaState === "ring_hanging_up"' in update_block
+    assert 'mediaState !== "ring_pending" && mediaState !== "ring_preview_active"' not in source
+    assert "const previousMediaState = this._lastMediaState;" in update_block
+    assert "const previousRingLifecycleActive = (" in update_block
+    assert (
+        'mediaState === "ring_pending" && previousMediaState && !previousRingLifecycleActive'
+        in update_block
+    )
+    assert "this._ringPreviewSuppressed = false;" in update_block
+    assert (
+        update_block.index("this._ringPreviewSuppressed = false;")
+        < update_block.index("if (!ringLifecycleActive)")
+    )
+    assert "|| this._ringPreviewSuppressed" in preview_guard
+    assert 'if (reason === "ring_call_answered") {' in closed_handler
+    assert "this._ringPreviewSuppressed = true;" in closed_handler
 
 
 def test_bundled_card_uses_media_state_for_answered_ring_call() -> None:

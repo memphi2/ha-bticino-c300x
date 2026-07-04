@@ -128,6 +128,7 @@ jobs:
           if [ -n "${C300X_DEVICE_SYSROOT:-}" ] \
             && [ -f "${C300X_DEVICE_SYSROOT}/lib/libc.so.6" ]; then
             echo "reuse_args=" >> "$GITHUB_OUTPUT"
+            echo "reused_from=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           previous_tag="$(git tag --sort=-v:refname \
@@ -182,6 +183,7 @@ jobs:
           PY
               test -s .release/reuse-current/ha-bticino-c300x.zip
               echo "reuse_args=--reuse-agent-from-release-zip .release/reuse-current/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
+              echo "reused_from=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT or a verified current release asset is required"
@@ -194,6 +196,7 @@ jobs:
             --clobber
           test -s .release/reuse/ha-bticino-c300x.zip
           echo "reuse_args=--reuse-agent-from-release-zip .release/reuse/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
+          echo "reused_from=$previous_tag" >> "$GITHUB_OUTPUT"
       - name: Build HACS release zip
         run: scripts/build_hacs_release.py ${{ steps.reusable-agent.outputs.reuse_args }}
       - name: Generate release metadata
@@ -202,6 +205,7 @@ jobs:
             --zip "$RELEASE_ZIP" \
             --tag "${{ steps.release-tag.outputs.tag }}" \
             --repository "$GITHUB_REPOSITORY" \
+            --native-agent-reused-from "${{ steps.reusable-agent.outputs.reused_from }}" \
             --sha256sums "$RELEASE_SHA256SUMS" \
             --metadata "$RELEASE_METADATA" \
             --sbom "$RELEASE_SBOM"

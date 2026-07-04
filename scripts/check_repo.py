@@ -20,6 +20,7 @@ def _load_version_config() -> dict[str, str]:
         "min_homeassistant",
         "current_homeassistant",
         "python",
+        "c300x_firmware",
         "integration_version",
     }
     missing = sorted(required_keys.difference(data))
@@ -433,7 +434,7 @@ def check_release_metadata() -> list[str]:
         f"Minimum Home Assistant: `{MIN_HOME_ASSISTANT_VERSION}`",
         "Validated Home Assistant: `2026.5.x` and `2026.7.x`",
         f"Python: `{PYTHON_VERSION}`",
-        "C300X firmware: `1.7.x`",
+        f"C300X firmware: `{VERSION_CONFIG['c300x_firmware']}`",
         "`native_agent/src`",
         "`scripts/stage_device_agent_bundle.py`",
     ):
@@ -609,6 +610,7 @@ def check_hacs_metadata() -> list[str]:
         "gh release download": "release workflow must download the previous release asset for agent reuse",
         "--reuse-agent-from-release-zip": "release workflow must pass reusable agent assets to the HACS builder",
         "scripts/write_release_assets.py": "release workflow must write release metadata assets",
+        "reused_from": "release workflow must expose native-agent reuse evidence",
         ".release/ha-bticino-c300x.zip": "release workflow must produce the HACS zip asset",
         ".release/SHA256SUMS": "release workflow must attach SHA256SUMS",
         ".release/build-metadata.json": "release workflow must attach build metadata",
@@ -621,6 +623,17 @@ def check_hacs_metadata() -> list[str]:
     for token, message in required_release_tokens.items():
         if token not in release_workflow:
             failures.append(message)
+    release_assets_script = (ROOT / "scripts" / "write_release_assets.py").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        '"lts_evidence"',
+        '"native_agent_rebuilt"',
+        '"native_agent_reused_from"',
+        '"validated_jobs"',
+    ):
+        if token not in release_assets_script:
+            failures.append(f"write_release_assets.py must write {token} release evidence")
     release_validation = (ROOT / "docs" / "release-validation.md").read_text(
         encoding="utf-8"
     )

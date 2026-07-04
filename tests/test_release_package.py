@@ -188,6 +188,17 @@ def test_release_assets_are_reproducible_for_same_zip(tmp_path: Path) -> None:
     assert metadata["release_tag"] == "v1.6.2"
     assert metadata["repository"] == "example/repo"
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
+    assert metadata["lts_evidence"] == {
+        "release": "v1.6.2",
+        "min_homeassistant": "2026.5.0",
+        "current_homeassistant": "2026.7.1",
+        "validated_homeassistant": ["2026.5.0", "2026.7.1"],
+        "python": "3.14",
+        "firmware_target": "1.7.x",
+        "native_agent_rebuilt": True,
+        "native_agent_reused_from": None,
+        "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
+    }
 
     checksum_lines = (first / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert any(line.endswith("  ha-bticino-c300x.zip") for line in checksum_lines)
@@ -200,6 +211,27 @@ def test_release_assets_are_reproducible_for_same_zip(tmp_path: Path) -> None:
         "device_agent/bundle.json",
         "manifest.json",
     }
+
+
+def test_release_metadata_records_reused_native_agent(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    zip_path = tmp_path / "ha-bticino-c300x.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("manifest.json", "{}\n")
+
+    writer.write_release_assets(
+        zip_path=zip_path,
+        tag="v1.6.5",
+        repository="example/repo",
+        native_agent_reused_from="v1.6.4",
+        sha256sums_path=tmp_path / "SHA256SUMS",
+        metadata_path=tmp_path / "build-metadata.json",
+        sbom_path=tmp_path / "sbom.spdx.json",
+    )
+
+    metadata = json.loads((tmp_path / "build-metadata.json").read_text(encoding="utf-8"))
+    assert metadata["lts_evidence"]["native_agent_rebuilt"] is False
+    assert metadata["lts_evidence"]["native_agent_reused_from"] == "v1.6.4"
 
 
 def test_staged_self_update_bundle_contains_agent_managed_files(

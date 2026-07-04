@@ -18,6 +18,7 @@ from typing import Any, cast
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_MANIFEST = ROOT / "custom_components" / "bticino_c300x" / "manifest.json"
 NATIVE_AGENT_VERSION = ROOT / "native_agent" / "VERSION"
+PROJECT_VERSIONS = ROOT / "project-versions.json"
 DEFAULT_PACKAGE_NAME = "ha-bticino-c300x"
 DEFAULT_REPOSITORY = "unknown"
 
@@ -37,6 +38,11 @@ def main() -> int:
         "--repository",
         default=os.environ.get("GITHUB_REPOSITORY", DEFAULT_REPOSITORY),
         help="GitHub repository name used in build metadata.",
+    )
+    parser.add_argument(
+        "--native-agent-reused-from",
+        default=os.environ.get("C300X_NATIVE_AGENT_REUSED_FROM", ""),
+        help="Release tag whose native agent binary was reused, if any.",
     )
     parser.add_argument(
         "--sha256sums",
@@ -63,6 +69,7 @@ def main() -> int:
             zip_path=args.zip,
             tag=args.tag,
             repository=args.repository,
+            native_agent_reused_from=args.native_agent_reused_from,
             sha256sums_path=args.sha256sums,
             metadata_path=args.metadata,
             sbom_path=args.sbom,
@@ -85,6 +92,7 @@ def write_release_assets(
     sha256sums_path: Path,
     metadata_path: Path,
     sbom_path: Path,
+    native_agent_reused_from: str = "",
 ) -> None:
     if not zip_path.exists():
         raise ReleaseAssetError(f"release zip does not exist: {zip_path}")
@@ -104,6 +112,7 @@ def write_release_assets(
         commit=commit,
         integration_version=integration_version,
         native_agent_version=native_agent_version,
+        native_agent_reused_from=native_agent_reused_from.strip() or None,
         zip_path=zip_path,
         zip_sha256=zip_sha256,
         zip_entries=zip_entries,
@@ -131,6 +140,7 @@ def _build_metadata(
     commit: str,
     integration_version: str,
     native_agent_version: str,
+    native_agent_reused_from: str | None,
     zip_path: Path,
     zip_sha256: str,
     zip_entries: list[ZipEntry],
@@ -144,6 +154,10 @@ def _build_metadata(
         "git_commit": commit,
         "integration_version": integration_version,
         "native_agent_version": native_agent_version,
+        "lts_evidence": _lts_evidence(
+            tag=tag,
+            native_agent_reused_from=native_agent_reused_from,
+        ),
         "artifacts": [
             {
                 "filename": zip_path.name,
@@ -156,6 +170,28 @@ def _build_metadata(
     if bundle is not None:
         metadata["device_agent_bundle"] = bundle
     return metadata
+
+
+def _lts_evidence(
+    *,
+    tag: str,
+    native_agent_reused_from: str | None,
+) -> dict[str, Any]:
+    versions = _project_versions()
+    return {
+        "release": tag,
+        "min_homeassistant": versions["min_homeassistant"],
+        "current_homeassistant": versions["current_homeassistant"],
+        "validated_homeassistant": [
+            versions["min_homeassistant"],
+            versions["current_homeassistant"],
+        ],
+        "python": versions["python"],
+        "firmware_target": versions["c300x_firmware"],
+        "native_agent_rebuilt": native_agent_reused_from is None,
+        "native_agent_reused_from": native_agent_reused_from,
+        "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
+    }
 
 
 def _spdx_document(
@@ -288,6 +324,22 @@ def _integration_version() -> str:
     if not isinstance(version, str):
         raise ReleaseAssetError("manifest.json version must be a string")
     return version
+
+
+def _project_versions() -> dict[str, str]:
+    versions = cast(dict[str, Any], json.loads(PROJECT_VERSIONS.read_text(encoding="utf-8")))
+    required = (
+        "min_homeassistant",
+        "current_homeassistant",
+        "python",
+        "c300x_firmware",
+    )
+    missing = [key for key in required if not isinstance(versions.get(key), str)]
+    if missing:
+        raise ReleaseAssetError(
+            f"project-versions.json is missing string keys: {', '.join(missing)}"
+        )
+    return {key: cast(str, versions[key]) for key in required}
 
 
 def _native_agent_version() -> str:

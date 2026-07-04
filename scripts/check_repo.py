@@ -83,6 +83,7 @@ REQUIRED_PATHS = [
     "NOTICE",
     "PRIVACY.md",
     "SECURITY.md",
+    "SUPPORT.md",
     ".github/dependabot.yml",
     "project-versions.json",
     "custom_components/bticino_c300x/manifest.json",
@@ -410,6 +411,7 @@ def check_release_metadata() -> list[str]:
         "CHANGELOG.md": release_tag,
         str(release_note.relative_to(ROOT)): release_tag,
         "SECURITY.md": "Token Handling",
+        "SUPPORT.md": "1.6.x",
         "PRIVACY.md": "Local Data Flow",
         "LICENSE": "Apache License",
         "NOTICE": "BTicino C300X Home Assistant Integration",
@@ -426,6 +428,17 @@ def check_release_metadata() -> list[str]:
         failures.append(
             f"hacs.json must advertise Home Assistant {MIN_HOME_ASSISTANT_VERSION}"
         )
+    support = (ROOT / "SUPPORT.md").read_text(encoding="utf-8")
+    for expected in (
+        f"Minimum Home Assistant: `{MIN_HOME_ASSISTANT_VERSION}`",
+        "Validated Home Assistant: `2026.5.x` and `2026.7.x`",
+        f"Python: `{PYTHON_VERSION}`",
+        "C300X firmware: `1.7.x`",
+        "`native_agent/src`",
+        "`scripts/stage_device_agent_bundle.py`",
+    ):
+        if expected not in support:
+            failures.append(f"SUPPORT.md must mention {expected!r}")
     return failures
 
 
@@ -608,6 +621,29 @@ def check_hacs_metadata() -> list[str]:
     for token, message in required_release_tokens.items():
         if token not in release_workflow:
             failures.append(message)
+    release_validation = (ROOT / "docs" / "release-validation.md").read_text(
+        encoding="utf-8"
+    )
+    native_agent_docs = (ROOT / "docs" / "native-agent.md").read_text(
+        encoding="utf-8"
+    )
+    reuse_paths = (
+        "native_agent/src",
+        "native_agent/scripts",
+        "native_agent/VERSION",
+        "native_agent/Makefile",
+        "native_agent/config.example.json",
+        "device_qml",
+        "custom_components/bticino_c300x/device_agent/init",
+        "scripts/stage_device_agent_bundle.py",
+    )
+    for path in reuse_paths:
+        if path not in release_workflow:
+            failures.append(f"release workflow must gate agent reuse on {path}")
+        if path not in release_validation:
+            failures.append(f"docs/release-validation.md must document agent reuse path {path}")
+        if path not in native_agent_docs:
+            failures.append(f"docs/native-agent.md must document agent reuse path {path}")
     return failures
 
 

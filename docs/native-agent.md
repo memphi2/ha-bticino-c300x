@@ -155,6 +155,23 @@ arbitrary binaries on its own and does not check for updates in idle.
   and subscription store, and restarts only after the update request.
 - Older agents without self-update support still require the installer/SSH path.
 
+## Release agent reuse
+
+Release builds may reuse the previous release agent binary only when none of
+the native-agent or device-display bundle inputs changed. A rebuild is required
+when any of these paths change:
+
+- `native_agent/src`
+- `native_agent/scripts`
+- `native_agent/VERSION`
+- `native_agent/Makefile`
+- `native_agent/config.example.json`
+- `device_qml`
+- `custom_components/bticino_c300x/device_agent/init`
+- `scripts/stage_device_agent_bundle.py`
+
+The release workflow enforces this list before accepting a reused agent asset.
+
 ## Smoke tests
 
 ```bash

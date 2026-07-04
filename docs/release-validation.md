@@ -75,6 +75,32 @@ During media:
 - watchdog closes high-load sessions instead of keeping the device busy,
 - diagnostics report useful state changes.
 
+## LTS Evidence
+
+Each release must publish deterministic release artifacts:
+
+- HACS zip,
+- `SHA256SUMS`,
+- `build-metadata.json`,
+- SPDX SBOM,
+- GitHub artifact attestation.
+
+`build-metadata.json` records the supported Home Assistant range, Python
+version, C300X firmware target, native-agent version, agent reuse status and the
+validated release jobs. Treat that file as the release evidence for why the
+asset was considered LTS-compatible at build time.
+
+Agent binary reuse is allowed only if none of these paths changed:
+
+- `native_agent/src`
+- `native_agent/scripts`
+- `native_agent/VERSION`
+- `native_agent/Makefile`
+- `native_agent/config.example.json`
+- `device_qml`
+- `custom_components/bticino_c300x/device_agent/init`
+- `scripts/stage_device_agent_bundle.py`
+
 ## Privacy and Artifacts
 
 Do not commit:

@@ -1,8 +1,22 @@
 # Changelog
 
-## v1.6.3 - Unreleased
+## v1.6.3 - 2026-07-04
 
-No user-facing changes yet.
+### Fixed
+
+- Avoid Home Assistant 2026.7 startup risk by no longer importing the deprecated
+  Home Assistant percentage unit constant for device load, memory and CPU
+  sensors.
+- Keep missing PyAV scoped to stored video-message MP4 conversion; normal
+  integration startup and live video do not depend on PyAV.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
+- No native C300X device agent update is required when already running the
+  v1.6.2 agent; the packaged device-agent bundle hash is unchanged.
 
 ## v1.6.2 - 2026-07-04
 

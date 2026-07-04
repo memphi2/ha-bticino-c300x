@@ -290,15 +290,43 @@ def _connection_input(
     return data, errors
 
 
-def _feature_input(
+def _device_activation_input(
     user_input: dict[str, Any],
-    *,
-    default_video_enabled: bool = False,
-    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
-) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate common feature page input."""
+    errors: dict[str, str],
+) -> tuple[str, str, str, str]:
+    """Validate device activation fields and return mode/address/P/N."""
 
-    errors: dict[str, str] = {}
+    try:
+        mode = _device_activation_mode(
+            user_input.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO)
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_MODE] = "invalid_device_activation_mode"
+        mode = DEVICE_ACTIVATION_MODE_AUTO
+    try:
+        stair_light_p = _stair_light_p(
+            user_input.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P)
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] = "invalid_stair_light_part"
+        stair_light_p = DEFAULT_STAIR_LIGHT_P
+    try:
+        stair_light_n = _stair_light_n(
+            user_input.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N)
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = "invalid_stair_light_part"
+        stair_light_n = DEFAULT_STAIR_LIGHT_N
+    address = stair_light_where_from_parts(stair_light_p, stair_light_n)
+    return mode, address, stair_light_p, stair_light_n
+
+
+def _dashboard_feature_input(
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+) -> dict[str, Any]:
+    """Validate optional C300X display dashboard feature fields."""
+
     device_ui_enabled = bool(user_input.get(CONF_DEVICE_UI_ENABLED, False))
     alarm_entity_id = ""
     alarm_page_entity_id = ""
@@ -307,31 +335,6 @@ def _feature_input(
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
     dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
     actions: dict[str, dict[str, Any]] = {}
-    try:
-        device_activation_mode = _device_activation_mode(
-            user_input.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO)
-        )
-    except vol.Invalid:
-        errors[CONF_DEVICE_ACTIVATION_MODE] = "invalid_device_activation_mode"
-        device_activation_mode = DEVICE_ACTIVATION_MODE_AUTO
-    try:
-        device_activation_stair_light_p = _stair_light_p(
-            user_input.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P)
-        )
-    except vol.Invalid:
-        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] = "invalid_stair_light_part"
-        device_activation_stair_light_p = DEFAULT_STAIR_LIGHT_P
-    try:
-        device_activation_stair_light_n = _stair_light_n(
-            user_input.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N)
-        )
-    except vol.Invalid:
-        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = "invalid_stair_light_part"
-        device_activation_stair_light_n = DEFAULT_STAIR_LIGHT_N
-    device_activation_stair_light_address = stair_light_where_from_parts(
-        device_activation_stair_light_p,
-        device_activation_stair_light_n,
-    )
     if device_ui_enabled:
         try:
             actions = parse_actions_json(user_input.get(CONF_ACTIONS_JSON, ""))
@@ -373,48 +376,94 @@ def _feature_input(
                 _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
             )
         )
-    media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
-    if media_enabled:
-        try:
-            doorstation_audio_gain_db = audio_gain_db(
-                user_input.get(
-                    CONF_DOORSTATION_AUDIO_GAIN_DB,
-                    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-                )
+    return {
+        CONF_ALARM_ENTITY_ID: alarm_entity_id,
+        CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
+        CONF_WEATHER_ENTITY_ID: weather_entity_id,
+        CONF_DASHBOARD_ENTITIES: dashboard_entities,
+        CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
+        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard_entity_display_overrides,
+        CONF_ACTIONS: actions,
+        CONF_DASHBOARD_PREVENT_RETURN: bool(
+            user_input.get(
+                CONF_DASHBOARD_PREVENT_RETURN,
+                _DASHBOARD_PREVENT_RETURN_DEFAULT,
             )
-        except vol.Invalid:
-            errors[CONF_DOORSTATION_AUDIO_GAIN_DB] = "invalid_audio_gain"
-            doorstation_audio_gain_db = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
-        try:
-            ring_capture_audio_gain_db = audio_gain_db(
-                user_input.get(
-                    CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-                )
+            if device_ui_enabled
+            else _DASHBOARD_PREVENT_RETURN_DEFAULT
+        ),
+        CONF_DEVICE_UI_ENABLED: device_ui_enabled,
+    }
+
+
+def _audio_feature_input(
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+    *,
+    media_enabled: bool,
+) -> tuple[float, float]:
+    """Validate media audio feature fields."""
+
+    if not media_enabled:
+        return DEFAULT_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+
+    try:
+        doorstation_audio_gain_db = audio_gain_db(
+            user_input.get(
+                CONF_DOORSTATION_AUDIO_GAIN_DB,
+                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
             )
-        except vol.Invalid:
-            errors[CONF_RING_CAPTURE_AUDIO_GAIN_DB] = "invalid_audio_gain"
-            ring_capture_audio_gain_db = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
-    else:
+        )
+    except vol.Invalid:
+        errors[CONF_DOORSTATION_AUDIO_GAIN_DB] = "invalid_audio_gain"
         doorstation_audio_gain_db = DEFAULT_DOORSTATION_AUDIO_GAIN_DB
+    try:
+        ring_capture_audio_gain_db = audio_gain_db(
+            user_input.get(
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
+                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+            )
+        )
+    except vol.Invalid:
+        errors[CONF_RING_CAPTURE_AUDIO_GAIN_DB] = "invalid_audio_gain"
         ring_capture_audio_gain_db = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+    return doorstation_audio_gain_db, ring_capture_audio_gain_db
+
+
+def _feature_input(
+    user_input: dict[str, Any],
+    *,
+    default_video_enabled: bool = False,
+    default_create_homeassistant_user: bool = _CREATE_HOMEASSISTANT_USER_DEFAULT,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate common feature page input."""
+
+    errors: dict[str, str] = {}
+    dashboard = _dashboard_feature_input(user_input, errors)
+    (
+        device_activation_mode,
+        device_activation_stair_light_address,
+        device_activation_stair_light_p,
+        device_activation_stair_light_n,
+    ) = _device_activation_input(user_input, errors)
+    media_enabled = bool(user_input.get(CONF_VIDEO_ENABLED, default_video_enabled))
+    doorstation_audio_gain_db, ring_capture_audio_gain_db = _audio_feature_input(
+        user_input,
+        errors,
+        media_enabled=media_enabled,
+    )
     return (
         {
-            CONF_ALARM_ENTITY_ID: alarm_entity_id,
-            CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
-            CONF_WEATHER_ENTITY_ID: weather_entity_id,
-            CONF_DASHBOARD_ENTITIES: dashboard_entities,
-            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
-            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard_entity_display_overrides,
-            CONF_ACTIONS: actions,
-            CONF_DASHBOARD_PREVENT_RETURN: bool(
-                user_input.get(
-                    CONF_DASHBOARD_PREVENT_RETURN,
-                    _DASHBOARD_PREVENT_RETURN_DEFAULT,
-                )
-                if device_ui_enabled
-                else _DASHBOARD_PREVENT_RETURN_DEFAULT
-            ),
+            CONF_ALARM_ENTITY_ID: dashboard[CONF_ALARM_ENTITY_ID],
+            CONF_ALARM_PAGE_ENTITY_ID: dashboard[CONF_ALARM_PAGE_ENTITY_ID],
+            CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],
+            CONF_DASHBOARD_ENTITIES: dashboard[CONF_DASHBOARD_ENTITIES],
+            CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
+            CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard[
+                CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES
+            ],
+            CONF_ACTIONS: dashboard[CONF_ACTIONS],
+            CONF_DASHBOARD_PREVENT_RETURN: dashboard[CONF_DASHBOARD_PREVENT_RETURN],
             CONF_DEVICE_ACTIVATION_MODE: device_activation_mode,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: (
                 device_activation_stair_light_address
@@ -446,7 +495,7 @@ def _feature_input(
             CONF_VIDEO_STREAM_PATH: str(
                 user_input.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
             ),
-            CONF_DEVICE_UI_ENABLED: device_ui_enabled,
+            CONF_DEVICE_UI_ENABLED: dashboard[CONF_DEVICE_UI_ENABLED],
         },
         errors,
     )

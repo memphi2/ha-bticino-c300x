@@ -141,7 +141,42 @@ jobs:
             scripts/stage_device_agent_bundle.py)"
           if [ -n "$changed_inputs" ]; then
             printf '%s\n' "$changed_inputs"
-            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT is required"
+            mkdir -p .release/reuse-current
+            if gh release download "$RELEASE_TAG" \
+              --pattern ha-bticino-c300x.zip \
+              --pattern build-metadata.json \
+              --dir .release/reuse-current \
+              --clobber; then
+              CURRENT_RELEASE_TAG="$RELEASE_TAG" python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+          
+          metadata = json.loads(Path(".release/reuse-current/build-metadata.json").read_text())
+          expected = {
+              "release_tag": os.environ["CURRENT_RELEASE_TAG"],
+              "git_commit": subprocess.check_output(
+                  ["git", "rev-parse", "HEAD"],
+                  text=True,
+              ).strip(),
+              "native_agent_version": Path("native_agent/VERSION").read_text().strip(),
+          }
+          for key, value in expected.items():
+              if metadata.get(key) != value:
+                  print(f"current release asset metadata mismatch for {key}", file=sys.stderr)
+                  sys.exit(1)
+          bundle = metadata.get("device_agent_bundle") or {}
+          if bundle.get("agent_version") != expected["native_agent_version"]:
+              print("current release asset agent version mismatch", file=sys.stderr)
+              sys.exit(1)
+          PY
+              test -s .release/reuse-current/ha-bticino-c300x.zip
+              echo "reuse_args=--reuse-agent-from-release-zip .release/reuse-current/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT or a verified current release asset is required"
             exit 1
           fi
           mkdir -p .release/reuse

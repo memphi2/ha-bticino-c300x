@@ -312,6 +312,19 @@ class C300XAgentApi:
             }
         return _ok_response(data)
 
+    async def async_set_doorstation_audio_gain_db(
+        self,
+        gain_db: float,
+    ) -> dict[str, Any]:
+        """Set the native agent's runtime doorstation downstream audio gain."""
+
+        data = await self._request_json(
+            "POST",
+            "/api/v1/video/doorbell/audio",
+            json_data={"doorstation_audio_gain_tenths": round(float(gain_db) * 10)},
+        )
+        return _ok_response(data)
+
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         """Stop the native doorbell video call."""
 

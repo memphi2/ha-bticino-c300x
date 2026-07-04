@@ -698,7 +698,8 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
         < update_block.index("if (!ringLifecycleActive)")
     )
     assert "|| this._ringPreviewSuppressed" in preview_guard
-    assert 'if (reason === "ring_call_answered") {' in closed_handler
+    assert 'reason === "ring_call_answered"' in closed_handler
+    assert "this._ringPreviewActive && !this._doorbellAnswered" in closed_handler
     assert "this._ringPreviewSuppressed = true;" in closed_handler
 
 

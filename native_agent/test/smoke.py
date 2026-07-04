@@ -1228,6 +1228,47 @@ def run_smoke(
             assert_json_field(video["bridge"], "ring_receiver_running", True)
             assert_json_field(video["bridge"], "ring_registered", False)
             assert_json_field(video["bridge"], "last_error", None)
+            assert_json_field(video["bridge"], "doorstation_audio_gain_db", 0.0)
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/video/doorbell/audio",
+                    {"doorstation_audio_gain_tenths": 35},
+                ),
+                "ok",
+                True,
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/video/doorbell/audio",
+                    {"doorstation_audio_gain_tenths": 37},
+                    expected_status=400,
+                ),
+                "error",
+                "invalid_audio_gain",
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/video/doorbell/audio",
+                    {"doorstation_audio_gain_tenths": 200},
+                ),
+                "ok",
+                True,
+            )
+            assert_json_field(
+                api_post(
+                    api_port,
+                    "/api/v1/video/doorbell/audio",
+                    {"doorstation_audio_gain_tenths": 205},
+                    expected_status=400,
+                ),
+                "error",
+                "invalid_audio_gain",
+            )
+            video = api_get(api_port, "/api/v1/video/doorbell/status")
+            assert_json_field(video["bridge"], "doorstation_audio_gain_db", 20.0)
             rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(
                 api_post(api_port, "/api/v1/video/doorbell/actions/activate", {}),
@@ -1463,6 +1504,27 @@ def run_smoke(
                 raise AssertionError("callback token was not forwarded")
             if callback_event["body"].get("data", {}).get("address") != "10":
                 raise AssertionError("stair light event address was not parsed cleanly")
+            callback_seen = len(callback.requests)
+            send_udp_event(udp_port, "*8*1#1#4#21*11##")
+            doorbell_event = wait_for_callback_type(
+                callback,
+                "doorbell.pressed",
+                callback_seen,
+            )
+            if doorbell_event["body"].get("data", {}).get("raw") != "*8*1#1#4#21*11##":
+                raise AssertionError("doorbell ring raw frame was not preserved")
+            callback_seen = len(callback.requests)
+            send_udp_event(udp_port, "*8*1#1#2#220#0*19##")
+            doorbell_event = wait_for_callback_type(
+                callback,
+                "doorbell.pressed",
+                callback_seen,
+            )
+            if doorbell_event["body"].get("data", {}).get("raw") != "*8*1#1#2#220#0*19##":
+                raise AssertionError("doorbell issue ring raw frame was not preserved")
+            callback_seen = len(callback.requests)
+            send_udp_event(udp_port, "*8*1#5#4#20*11##")
+            assert_no_callback_type(callback, "doorbell.pressed", callback_seen)
             callback_seen = len(callback.requests)
             voicemail_ui_wait = start_ui_event_wait(ui_port, ui_revision(ui_port))
             write_voicemail_message(messages_root, "message_1", read=False, unix_time=1710000000)
@@ -2178,6 +2240,21 @@ def wait_for_callback_type(
                 return request
         time.sleep(0.05)
     raise AssertionError(f"callback event {event_type!r} was not received")
+
+
+def assert_no_callback_type(
+    callback: CallbackServer,
+    event_type: str,
+    start_index: int = 0,
+    timeout: float = 0.35,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for request in callback.requests[start_index:]:
+            body = request.get("body", {})
+            if isinstance(body, dict) and body.get("type") == event_type:
+                raise AssertionError(f"callback event {event_type!r} was received unexpectedly")
+        time.sleep(0.02)
 
 
 def write_voicemail_message(

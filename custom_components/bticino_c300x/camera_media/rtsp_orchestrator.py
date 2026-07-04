@@ -11,6 +11,7 @@ from typing import Any, Protocol, cast
 from homeassistant.exceptions import HomeAssistantError
 
 from ..const import CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT
+from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from ..entry_config import entry_config_value
 from .rtsp_policy import (
     RtspAdmissionKind,
@@ -158,10 +159,20 @@ class CameraRtspOrchestrator:
         self._owner = owner
         self._settings = settings
 
-    async def async_warmup_video(self, *, audio: bool = False) -> None:
+    async def async_warmup_video(
+        self,
+        *,
+        audio: bool = False,
+        status: Mapping[str, Any] | None = None,
+    ) -> None:
         """Mark the video window and refresh bridge metadata before RTSP opens."""
 
         try:
+            if audio:
+                await async_ensure_doorstation_audio_gain(
+                    self._owner._entry,
+                    status=status,
+                )
             await self._owner._entry.runtime_data.api.async_activate_doorbell_video(
                 audio=audio
             )
@@ -252,13 +263,18 @@ class CameraRtspOrchestrator:
                         decision,
                         consumer=RtspConsumer.DOORBELL_CARD,
                     )
-                await self.async_warmup_video(audio=audio)
+                await self.async_warmup_video(audio=audio, status=status)
             elif status is not None:
                 self.raise_if_rtsp_admission_denied(
                     status,
                     decision,
                     consumer=rtsp_consumer_for_doorbell_request(decision),
                 )
+                if audio:
+                    await async_ensure_doorstation_audio_gain(
+                        self._owner._entry,
+                        status=status,
+                    )
             stream_url = self._owner._build_stream_url(audio=audio)
             await self.async_wait_for_rtsp_ready(stream_url, cooldown_scope="doorbell")
             return stream_url

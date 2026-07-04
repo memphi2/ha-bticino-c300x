@@ -323,6 +323,16 @@ void c300x_video_doorbell_call_hangup(struct c300x_video *video)
     c300x_media_ring_call_hangup(video);
 }
 
+void c300x_video_set_doorstation_audio_gain_tenths(
+    struct c300x_video *video,
+    int gain_tenths
+) {
+    if (video == NULL || !video->enabled) {
+        return;
+    }
+    c300x_media_bridge_set_doorstation_audio_gain_tenths(video, gain_tenths);
+}
+
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds)
 {
     if (video == NULL || !video->enabled) {

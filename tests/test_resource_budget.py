@@ -34,6 +34,24 @@ def test_native_agent_event_payload_module_stays_small() -> None:
     assert path.read_text(encoding="utf-8").count("\n") <= 300
 
 
+def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
+    """Keep pressure on the remaining media bridge monolith."""
+
+    path = ROOT / "native_agent" / "src" / "media_bridge.c"
+
+    assert path.stat().st_size <= 229_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 6_900
+
+
+def test_native_agent_media_audio_module_stays_small() -> None:
+    """Keep the extracted audio helper from becoming another media bridge."""
+
+    path = ROOT / "native_agent" / "src" / "media_audio.c"
+
+    assert path.stat().st_size <= 5_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 180
+
+
 def test_large_python_modules_stay_within_interim_budget() -> None:
     """Catch accidental HA-side module bloat before it reaches a release."""
 

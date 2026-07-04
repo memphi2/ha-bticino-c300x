@@ -1604,6 +1604,14 @@ def _options_features_schema(
         ),
         DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     )
+    default_doorstation_audio_gain_db = audio_gain_db_or_default(
+        _config_default(
+            config_entry,
+            CONF_DOORSTATION_AUDIO_GAIN_DB,
+            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+        ),
+        DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
+    )
     return _reconfigure_features_schema(
         default_video_enabled,
         default_device_activation_mode,
@@ -1611,6 +1619,7 @@ def _options_features_schema(
         default_device_activation_stair_light_p,
         default_device_activation_stair_light_n,
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
+        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
     )
 
@@ -1760,6 +1769,9 @@ def _reconfigure_features_schema_from_current(
         current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
         current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
+        default_doorstation_audio_gain_db=float(
+            current[CONF_DOORSTATION_AUDIO_GAIN_DB]
+        ),
         default_ring_capture_audio_gain_db=float(
             current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
         ),

@@ -620,7 +620,7 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert CONF_DOORSTATION_AUDIO_GAIN_DB not in features
+    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in features
 
@@ -636,7 +636,7 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_WEATHER_ENTITY_ID not in result
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert CONF_DOORSTATION_AUDIO_GAIN_DB not in result
+    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_VIDEO_PORT not in result
     assert CONF_VIDEO_STREAM_PATH not in result
@@ -726,8 +726,8 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
         {
             CONF_VIDEO_ENABLED: True,
             CONF_CREATE_HOMEASSISTANT_USER: False,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: -12,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 12,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: -20,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 20,
         },
         default_video_enabled=True,
     )
@@ -735,16 +735,16 @@ def test_feature_input_can_disable_homeassistant_user_creation() -> None:
     assert errors == {}
     assert data[CONF_VIDEO_ENABLED] is True
     assert data[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -12
-    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 12
+    assert data[CONF_DOORSTATION_AUDIO_GAIN_DB] == -20
+    assert data[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 20
 
 
 def test_feature_input_rejects_audio_gain_outside_supported_range() -> None:
     data, errors = _feature_input(
         {
             CONF_VIDEO_ENABLED: True,
-            CONF_DOORSTATION_AUDIO_GAIN_DB: -12.5,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 12.5,
+            CONF_DOORSTATION_AUDIO_GAIN_DB: -20.5,
+            CONF_RING_CAPTURE_AUDIO_GAIN_DB: 20.5,
         },
         default_video_enabled=True,
     )
@@ -1853,7 +1853,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
     assert features[CONF_CREATE_HOMEASSISTANT_USER] is False
-    assert CONF_DOORSTATION_AUDIO_GAIN_DB not in features
+    assert features[CONF_DOORSTATION_AUDIO_GAIN_DB] == -3.5
     assert features[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 4.5
     assert CONF_VIDEO_PORT not in features
     assert CONF_VIDEO_STREAM_PATH not in features
@@ -1944,7 +1944,7 @@ def test_options_features_schema_excludes_dashboard_fields() -> None:
 
     assert result[CONF_VIDEO_ENABLED] is True
     assert result[CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert CONF_DOORSTATION_AUDIO_GAIN_DB not in result
+    assert result[CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert result[CONF_RING_CAPTURE_AUDIO_GAIN_DB] == DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
@@ -2074,9 +2074,10 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     assert enabled_keys[:4] == [
         CONF_VIDEO_ENABLED,
         CONF_CREATE_HOMEASSISTANT_USER,
+        CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-        CONF_DEVICE_ACTIVATION_MODE,
     ]
+    assert enabled_keys[4] == CONF_DEVICE_ACTIVATION_MODE
     assert CONF_DEVICE_UI_ENABLED not in enabled_keys
     assert CONF_ALARM_ENTITY_ID not in enabled_keys
     assert CONF_WEATHER_ENTITY_ID not in enabled_keys

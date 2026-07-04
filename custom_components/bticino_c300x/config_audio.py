@@ -6,8 +6,8 @@ from typing import Any
 
 import voluptuous as vol
 
-AUDIO_GAIN_DB_MIN = -12.0
-AUDIO_GAIN_DB_MAX = 12.0
+AUDIO_GAIN_DB_MIN = -20.0
+AUDIO_GAIN_DB_MAX = 20.0
 
 
 def audio_gain_db(value: Any) -> float:

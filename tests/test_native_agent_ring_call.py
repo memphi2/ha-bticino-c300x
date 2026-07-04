@@ -12,8 +12,15 @@ def _read_media_bridge() -> str:
     )
 
 
+def _read_media_audio() -> str:
+    return (ROOT / "native_agent" / "src" / "media_audio.c").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     media_bridge = _read_media_bridge()
+    media_audio = _read_media_audio()
     video_rtsp = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
         encoding="utf-8"
     )
@@ -116,9 +123,10 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
     assert "media_srtp_init_inbound(&srtp" in ring_invite_body
     assert "srtp_unprotect" in media_bridge
-    assert "forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len)" in media_bridge
+    assert "current_doorstation_audio_gain_q12(bridge)" in media_bridge
     assert "speex_decode_audio_frame(" in media_bridge
-    assert "encode_pcmu_sample(samples[index])" in media_bridge
+    assert "c300x_audio_gain_apply(samples[index], gain_q12)" in media_bridge
+    assert "int16_t c300x_audio_gain_apply(" in media_audio
     assert "payload_type == RING_AUDIO_PAYLOAD_TYPE" in media_bridge
     assert "payload_type == MEDIA_AUDIO_PAYLOAD_TYPE" in media_bridge
     assert "payload_type == C300X_TALKBACK_RTP_PAYLOAD_TYPE" not in media_bridge[
@@ -410,7 +418,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
     assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
-    assert "forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len)" in drain_home_call_body
+    assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
     assert "bridge->home_call_last_talkback_ms = monotonic_ms();" in home_call_talkback_body
@@ -418,6 +426,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
 
 def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path() -> None:
     media_bridge = _read_media_bridge()
+    media_audio = _read_media_audio()
     backchannel_body = media_bridge[
         media_bridge.index("static bool forward_rtsp_backchannel_packet") :
         media_bridge.index("static bool handle_rtsp_backchannel_frame")
@@ -441,8 +450,10 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
     assert media_bridge.count('"a=sendonly\\r\\n"') == 3
     assert 'dlopen("libspeex.so.1", RTLD_NOW | RTLD_LOCAL)' in speex_body
     assert "speex_encode_int" in speex_body
-    assert "decode_pcma_sample(sample)" in pcm_body
-    assert "decode_pcmu_sample(sample)" in pcm_body
+    assert "c300x_pcma_decode(sample)" in pcm_body
+    assert "c300x_pcmu_decode(sample)" in pcm_body
+    assert "int16_t c300x_pcma_decode(" in media_audio
+    assert "int16_t c300x_pcmu_decode(" in media_audio
     assert "while (offset < payload_len)" in pcm_body
     assert "RTSP_BACKCHANNEL_FRAME_SAMPLES - bridge->talkback_pcm_count" in pcm_body
     assert "bridge->talkback_pcm_seq_initialized" in pcm_body
@@ -460,6 +471,7 @@ def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path(
 
 def test_native_agent_rtsp_audio_pcma_downstream_chunks_without_truncation() -> None:
     media_bridge = _read_media_bridge()
+    media_audio = _read_media_audio()
     audio_body = media_bridge[
         media_bridge.index("static bool forward_rtsp_audio_pcmu_packet") :
         media_bridge.index("static void drain_ring_srtp_socket")
@@ -467,9 +479,14 @@ def test_native_agent_rtsp_audio_pcma_downstream_chunks_without_truncation() -> 
 
     assert "static uint32_t load_be32" in media_bridge
     assert "payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE" in audio_body
+    assert "payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE" in audio_body
+    assert "&& gain_q12 == DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in audio_body
     assert "while (offset < payload_len)" in audio_body
     assert "payload_len = RTSP_AUDIO_FRAME_SAMPLES" not in audio_body
-    assert "decode_pcma_sample(packet[payload_offset + offset + index])" in audio_body
+    assert "c300x_pcma_decode(packet[payload_offset + offset + index])" in audio_body
+    assert "c300x_pcmu_decode(packet[payload_offset + offset + index])" in audio_body
+    assert "c300x_audio_gain_apply(" in audio_body
+    assert "unsigned char c300x_pcmu_encode(" in media_audio
     assert "offset + take >= payload_len && marker" in audio_body
     assert "forward_rtsp_audio_pcmu_payload(" in audio_body
 

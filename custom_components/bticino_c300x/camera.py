@@ -556,6 +556,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session.ring_preview,
                 getattr(provider, "domain", type(provider).__name__),
             )
+            if session.ring_call and session.wants_audio:
+                await self._async_close_other_ring_preview_webrtc_sessions(
+                    session_id,
+                    drain=True,
+                )
             provider_offer_failed = False
 
             def _send_provider_message(message: Any) -> None:
@@ -661,6 +666,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     async def _async_close_other_ring_preview_webrtc_sessions(
         self,
         answered_session_id: str,
+        *,
+        drain: bool = False,
     ) -> None:
         """Close passive Ring preview sessions once one browser owns the answer."""
 
@@ -684,6 +691,8 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 for session_id in session_ids
             )
         )
+        if drain:
+            await self._async_wait_for_provider_rtsp_clients_to_drain()
 
     @callback
     def close_webrtc_session(self, session_id: str) -> None:

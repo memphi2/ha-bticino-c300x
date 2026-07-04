@@ -43,6 +43,7 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
+          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
@@ -89,6 +90,7 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
+          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
@@ -133,7 +135,7 @@
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
-      "invalid_audio_gain": "Scegli un guadagno audio tra -12 dB e +12 dB.",
+      "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "required": "Questo campo è obbligatorio."
     }
@@ -160,6 +162,7 @@
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
+          "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
           "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
@@ -194,7 +197,7 @@
       "invalid_alarm_entity": "Seleziona un'entità Alarmo alarm_control_panel oppure lascia vuoto il campo.",
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
-      "invalid_audio_gain": "Scegli un guadagno audio tra -12 dB e +12 dB.",
+      "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99."
     }
   },

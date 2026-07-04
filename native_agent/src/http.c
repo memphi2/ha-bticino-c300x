@@ -17,6 +17,7 @@
 #include "self_test.h"
 #include "ui_homeassistant.h"
 #include "ui_events.h"
+#include "video_audio_settings.h"
 #include "video_rtsp.h"
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -5968,6 +5969,53 @@ static int parse_openwebnet_address_event(
     return address_is_valid(address);
 }
 
+static int parse_openwebnet_doorbell_press_event(const char *msg)
+{
+    const char *prefix = "*8*1#1#";
+    const char *ptr;
+
+    if (msg == NULL || strncmp(msg, prefix, strlen(prefix)) != 0) {
+        return 0;
+    }
+    ptr = msg + strlen(prefix);
+    if (!isdigit((unsigned char)*ptr)) {
+        return 0;
+    }
+    while (isdigit((unsigned char)*ptr)) {
+        ptr++;
+    }
+    if (*ptr != '#') {
+        return 0;
+    }
+    ptr++;
+    if (!isdigit((unsigned char)*ptr)) {
+        return 0;
+    }
+    while (1) {
+        while (isdigit((unsigned char)*ptr)) {
+            ptr++;
+        }
+        if (*ptr == '*') {
+            ptr++;
+            break;
+        }
+        if (*ptr != '#') {
+            return 0;
+        }
+        ptr++;
+        if (!isdigit((unsigned char)*ptr)) {
+            return 0;
+        }
+    }
+    if (!isdigit((unsigned char)*ptr)) {
+        return 0;
+    }
+    while (isdigit((unsigned char)*ptr)) {
+        ptr++;
+    }
+    return strcmp(ptr, "##") == 0;
+}
+
 static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
 {
     if (runtime == NULL || c300x_smartphone_mode_from_code(code) == NULL) {
@@ -6179,7 +6227,7 @@ static int map_openwebnet_event(
         c300x_copy_string(type, type_len, "doorbell.media.closed");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
     }
-    if (strncmp(msg, "*8*1#1#4#", strlen("*8*1#1#4#")) == 0) {
+    if (parse_openwebnet_doorbell_press_event(msg)) {
         size_t used = 0;
         c300x_copy_string(type, type_len, "doorbell.pressed");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s}", raw_json);
@@ -6419,7 +6467,7 @@ static void send_response(
 
 static void send_json(int client_fd, int status, const char *reason, const char *body)
 {
-    send_response(client_fd, status, reason, body, NULL);
+    c300x_http_send_json(client_fd, status, reason, body);
 }
 
 static void send_file_response(
@@ -6990,6 +7038,7 @@ static void handle_doorbell_video_get(
     unsigned long long rtsp_rejected_clients = 0;
     unsigned long long rtsp_rejected_describes = 0;
     unsigned long long rtsp_play_failures = 0;
+    int doorstation_audio_gain_tenths = 0;
     unsigned long long bt_media_start_attempts = 0;
     unsigned long long bt_media_stop_attempts = 0;
     const char *last_rtp_at_json = "null";
@@ -7055,6 +7104,7 @@ static void handle_doorbell_video_get(
         rtsp_rejected_clients = video_status.rtsp_rejected_clients;
         rtsp_rejected_describes = video_status.rtsp_rejected_describes;
         rtsp_play_failures = video_status.rtsp_play_failures;
+        doorstation_audio_gain_tenths = video_status.doorstation_audio_gain_tenths;
         json_string(
             video_status.last_rtsp_method,
             last_rtsp_method_json,
@@ -7135,6 +7185,7 @@ static void handle_doorbell_video_get(
         "\"ring_preview_sharing\":%s,"
         "\"media_starting\":%s,"
         "\"audio_enabled\":%s,"
+        "\"doorstation_audio_gain_db\":%.1f,"
         "\"bt_media_start_attempts\":%llu,"
         "\"bt_media_stop_attempts\":%llu,"
         "\"rtsp_options_requests\":%llu,"
@@ -7200,6 +7251,7 @@ static void handle_doorbell_video_get(
         max_clients > 1 ? "true" : "false",
         media_starting ? "true" : "false",
         stream_audio ? "true" : "false",
+        (double)doorstation_audio_gain_tenths / 10.0,
         bt_media_start_attempts,
         bt_media_stop_attempts,
         rtsp_options_requests,
@@ -11546,6 +11598,14 @@ static void handle_api_request(
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {
         handle_doorbell_video_activate(client_fd, runtime, request);
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/audio") == 0) {
+        c300x_handle_doorbell_video_audio_settings(
+            client_fd,
+            runtime != NULL ? runtime->video : NULL,
+            request->body
+        );
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/stop") == 0) {

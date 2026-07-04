@@ -1,8 +1,21 @@
 # Changelog
 
-## v1.6.4 - Unreleased
+## v1.7.0 - Unreleased
 
-No user-facing changes yet.
+### Added
+
+- Add configurable live doorstation audio gain for on-demand video and Ring
+  Call audio. The default is `0 dB`.
+
+### Changed
+
+- Keep neutral doorstation audio gain on the passthrough path, so the default
+  setting does not add extra audio conversion.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant to `1.7.0`.
 
 ## v1.6.3 - 2026-07-04
 
@@ -468,7 +481,7 @@ path and removes the integration-local `aiortc` WebRTC runtime.
   Call can use a separate `homeassistant` device-side identity when available.
 - Bundles Lovelace cards for the doorstation and Home Call workflows with
   visual editor support and multi-device entity matching.
-- Shows the reported C300X firmware version in the Home Assistant device
+- Shows the reported C300X device software version in the Home Assistant device
   information.
 - Adds documentation examples for mobile door-call notifications, Android
   high-priority/alarm-stream delivery and iOS critical alerts.
@@ -505,8 +518,9 @@ path and removes the integration-local `aiortc` WebRTC runtime.
 - Microphone talkback requires a secure Home Assistant frontend such as HTTPS or
   Home Assistant Cloud. Without browser microphone access, the cards try to
   start receive-only audio where supported.
-- For separate rooting or SSH-enablement workflows, select firmware target
-  `1.7.19`; this integration is validated against the `1.7.x` firmware family.
+- For separate rooting or SSH-enablement workflows, select device software
+  target `1.7.19`; this integration is validated against the `1.7.x` device
+  software family.
 
 ### Notes
 
@@ -644,7 +658,7 @@ path and removes the integration-local `aiortc` WebRTC runtime.
 - Guarded legacy MQTT controls can disable the old `TcpDump2Mqtt` autostart
   path without rewriting unrelated media startup files.
 - Agent diagnostics expose safe runtime health details such as write counters,
-  wake reason, open file descriptors, video state, and media startup reference
+  wake reason, open file descriptors, video state, and media startup marker
   state.
 
 ### Changed
@@ -664,7 +678,7 @@ path and removes the integration-local `aiortc` WebRTC runtime.
   stored.
 - Diagnostics avoid token values, broker passwords, private callback URLs and
   user-specific device details.
-- Repository hygiene checks continue to reject firmware/APK payloads, copied
+- Repository hygiene checks continue to reject vendor/APK payloads, copied
   stock QML pages, foreign runtime directories, and third-party controller code.
 
 ## v0.2.0 - 2026-05-31
@@ -695,7 +709,7 @@ Home Assistant integration.
 - Separate API and maintenance tokens, with bootstrap `noAuth` intended only for
   initial setup.
 - Diagnostics avoid token values and private callback details.
-- Repository hygiene checks reject firmware/APK payloads, copied stock QML
+- Repository hygiene checks reject vendor/APK payloads, copied stock QML
   pages, foreign runtime directories, obvious private values, and third-party
   controller references in runtime code.
 - SSH installer dependency intentionally pinned to `paramiko==3.5.1` for legacy
@@ -705,7 +719,7 @@ Home Assistant integration.
 
 - The C300X must already be rooted or SSH-enabled before the native agent can be
   installed.
-- Firmware patching/rooting is intentionally outside this repository.
+- Device patching/rooting is intentionally outside this repository.
 - The project includes trademark, attribution, and third-party-code hygiene
   documentation.
 - Thanks to SlyOldFox for the public C300X groundwork and original community

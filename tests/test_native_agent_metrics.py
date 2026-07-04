@@ -665,6 +665,10 @@ def test_native_agent_maps_device_doorbell_answer_and_close_frames() -> None:
     assert 'strncmp(msg, "*8*3#1#4*", strlen("*8*3#1#4*")) == 0' in event_body
     assert 'strncmp(msg, "*8*3#5#4*", strlen("*8*3#5#4*")) == 0' in event_body
     assert 'strcmp(msg, "*7*0*##") == 0' in event_body
+    assert "static int parse_openwebnet_doorbell_press_event" in text
+    assert 'const char *prefix = "*8*1#1#";' in text
+    assert "parse_openwebnet_doorbell_press_event(msg)" in event_body
+    assert 'strncmp(msg, "*8*1#1#4#"' not in event_body
     assert event_body.index('strncmp(msg, "*8*2#1#4*"') < event_body.index(
         'c300x_copy_string(type, type_len, "doorbell.pressed")'
     )
@@ -674,7 +678,7 @@ def test_native_agent_maps_device_doorbell_answer_and_close_frames() -> None:
     assert event_body.index(
         'c300x_copy_string(type, type_len, "doorbell.media.closed")'
     ) < event_body.index(
-        'strncmp(msg, "*8*1#1#4#"'
+        "parse_openwebnet_doorbell_press_event(msg)"
     )
 
 

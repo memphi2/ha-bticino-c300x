@@ -38,5 +38,6 @@ void set_fd_nonblocking(int fd);
 void set_fd_cloexec(int fd);
 void allow_socket_reuse(int fd);
 void close_agent_socket(int fd);
+void c300x_http_send_json(int client_fd, int status, const char *reason, const char *body);
 
 #endif

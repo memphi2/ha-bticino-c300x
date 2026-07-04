@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "device_user.h"
+#include "media_audio.h"
 #include "media_bridge.h"
 #include "sha256.h"
 #include "string_util.h"
@@ -75,15 +76,13 @@
 #define RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS 300000
 #define RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS 30000
 #define HOME_CALL_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)
+#define DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL C300X_AUDIO_GAIN_Q12_NEUTRAL
 
 static bool read_sip_domain(char *domain, size_t domain_len);
 static int bind_udp_port(int port);
 static int bind_udp_loopback_port(int port);
 static void fill_random_bytes(unsigned char *out, size_t len);
 static void secure_zero(void *ptr, size_t len);
-static int16_t decode_pcmu_sample(unsigned char value);
-static int16_t decode_pcma_sample(unsigned char value);
-static unsigned char encode_pcmu_sample(int16_t sample);
 static void store_be16(unsigned char *out, uint16_t value);
 static uint16_t load_be16(const unsigned char *in);
 static uint32_t load_be32(const unsigned char *in);
@@ -229,6 +228,8 @@ typedef struct {
     unsigned long long rtsp_rejected_clients;
     unsigned long long rtsp_rejected_describes;
     unsigned long long rtsp_play_failures;
+    int doorstation_audio_gain_tenths;
+    int doorstation_audio_gain_q12;
     long long ondemand_last_talkback_ms;
     long long ring_last_talkback_ms;
     long long home_call_last_talkback_ms;
@@ -302,6 +303,7 @@ static media_bridge_t g_bridge = {
     .home_call_audio_rtcp_fd = -1,
     .video_interleaved_channel = 2,
     .audio_interleaved_channel = 0,
+    .doorstation_audio_gain_q12 = DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL,
 };
 
 static void close_fd_if_open(int *fd) {
@@ -2435,6 +2437,15 @@ static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
 }
 
+static int current_doorstation_audio_gain_q12(media_bridge_t *bridge) {
+    int gain_q12;
+
+    pthread_mutex_lock(&bridge->mutex);
+    gain_q12 = bridge->doorstation_audio_gain_q12;
+    pthread_mutex_unlock(&bridge->mutex);
+    return c300x_audio_gain_q12_or_neutral(gain_q12);
+}
+
 static bool next_rtsp_audio_output_timestamp(
     media_bridge_t *bridge,
     const unsigned char *source_packet,
@@ -2514,7 +2525,8 @@ static bool forward_rtsp_audio_pcmu_payload(
 static bool forward_rtsp_audio_pcmu_packet(
     media_bridge_t *bridge,
     const unsigned char *packet,
-    int packet_len
+    int packet_len,
+    int gain_q12
 ) {
     unsigned char payload_type;
     size_t payload_offset;
@@ -2530,7 +2542,13 @@ static bool forward_rtsp_audio_pcmu_packet(
     payload_type = packet[1] & 0x7f;
     payload_len = (size_t)packet_len - payload_offset;
     marker = (packet[1] & 0x80) != 0;
-    if (payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE) {
+    if (gain_q12 <= 0) {
+        gain_q12 = DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL;
+    }
+    if (
+        payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+        && gain_q12 == DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL
+    ) {
         return forward_rtsp_audio_pcmu_payload(
             bridge,
             packet,
@@ -2547,8 +2565,39 @@ static bool forward_rtsp_audio_pcmu_packet(
                 take = RTSP_AUDIO_FRAME_SAMPLES;
             }
             for (size_t index = 0; index < take; index++) {
-                pcmu_payload[index] = encode_pcmu_sample(
-                    decode_pcma_sample(packet[payload_offset + offset + index])
+                pcmu_payload[index] = c300x_pcmu_encode(
+                    c300x_audio_gain_apply(
+                        c300x_pcma_decode(packet[payload_offset + offset + index]),
+                        gain_q12
+                    )
+                );
+            }
+            if (!forward_rtsp_audio_pcmu_payload(
+                bridge,
+                packet,
+                pcmu_payload,
+                take,
+                offset + take >= payload_len && marker
+            )) {
+                return false;
+            }
+            offset += take;
+        }
+        return true;
+    }
+    if (payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE) {
+        size_t offset = 0;
+        while (offset < payload_len) {
+            size_t take = payload_len - offset;
+            if (take > RTSP_AUDIO_FRAME_SAMPLES) {
+                take = RTSP_AUDIO_FRAME_SAMPLES;
+            }
+            for (size_t index = 0; index < take; index++) {
+                pcmu_payload[index] = c300x_pcmu_encode(
+                    c300x_audio_gain_apply(
+                        c300x_pcmu_decode(packet[payload_offset + offset + index]),
+                        gain_q12
+                    )
                 );
             }
             if (!forward_rtsp_audio_pcmu_payload(
@@ -2572,7 +2621,9 @@ static bool forward_rtsp_audio_pcmu_packet(
     }
 
     for (size_t index = 0; index < RTSP_AUDIO_FRAME_SAMPLES; index++) {
-        pcmu_payload[index] = encode_pcmu_sample(samples[index]);
+        pcmu_payload[index] = c300x_pcmu_encode(
+            c300x_audio_gain_apply(samples[index], gain_q12)
+        );
     }
     return forward_rtsp_audio_pcmu_payload(
         bridge,
@@ -2607,7 +2658,12 @@ static void drain_ring_srtp_socket(
             : api->srtp_unprotect(session, packet, &packet_len) == 0;
         if (ok && !rtcp) {
             if (audio) {
-                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
+                (void)forward_rtsp_audio_pcmu_packet(
+                    bridge,
+                    packet,
+                    packet_len,
+                    current_doorstation_audio_gain_q12(bridge)
+                );
                 from_len = sizeof(from);
                 continue;
             }
@@ -3676,61 +3732,6 @@ static bool forward_ondemand_talkback_packet(
     return true;
 }
 
-static int16_t decode_pcmu_sample(unsigned char value) {
-    const int bias = 0x84;
-    int magnitude;
-
-    value = (unsigned char)~value;
-    magnitude = ((value & 0x0f) << 3) + bias;
-    magnitude <<= (value & 0x70) >> 4;
-    return (int16_t)((value & 0x80) ? (bias - magnitude) : (magnitude - bias));
-}
-
-static int16_t decode_pcma_sample(unsigned char value) {
-    int exponent;
-    int mantissa;
-    int sample;
-
-    value ^= 0x55;
-    exponent = (value & 0x70) >> 4;
-    mantissa = value & 0x0f;
-    sample = mantissa << 4;
-    if (exponent == 0) {
-        sample += 8;
-    } else {
-        sample += 0x108;
-        sample <<= exponent - 1;
-    }
-    return (int16_t)((value & 0x80) ? sample : -sample);
-}
-
-static unsigned char encode_pcmu_sample(int16_t sample) {
-    const int bias = 0x84;
-    const int clip = 32635;
-    int sign = 0;
-    int magnitude = sample;
-    int exponent = 7;
-    int exponent_mask = 0x4000;
-    int mantissa;
-    unsigned char value;
-
-    if (magnitude < 0) {
-        sign = 0x80;
-        magnitude = -magnitude;
-    }
-    if (magnitude > clip) {
-        magnitude = clip;
-    }
-    magnitude += bias;
-    while (exponent > 0 && (magnitude & exponent_mask) == 0) {
-        exponent--;
-        exponent_mask >>= 1;
-    }
-    mantissa = (magnitude >> (exponent + 3)) & 0x0f;
-    value = (unsigned char)(sign | (exponent << 4) | mantissa);
-    return (unsigned char)~value;
-}
-
 static bool queue_speex_backchannel_packet(
     media_bridge_t *bridge,
     const unsigned char *packet,
@@ -3814,8 +3815,8 @@ static bool forward_pcm_backchannel_packet(
             unsigned char sample = payload[offset + index];
             bridge->talkback_pcm_buffer[bridge->talkback_pcm_count + index] =
                 payload_type == RTSP_BACKCHANNEL_PCMA_PAYLOAD_TYPE
-                    ? decode_pcma_sample(sample)
-                    : decode_pcmu_sample(sample);
+                    ? c300x_pcma_decode(sample)
+                    : c300x_pcmu_decode(sample);
         }
         bridge->talkback_pcm_count += take;
         offset += take;
@@ -3940,7 +3941,12 @@ static void drain_ondemand_media_socket(
             : api->srtp_unprotect(session, packet, &packet_len) == 0;
         if (ok && !rtcp) {
             if (audio) {
-                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
+                (void)forward_rtsp_audio_pcmu_packet(
+                    bridge,
+                    packet,
+                    packet_len,
+                    current_doorstation_audio_gain_q12(bridge)
+                );
                 from_len = sizeof(from);
                 continue;
             }
@@ -4714,7 +4720,12 @@ static void drain_home_call_srtp_socket(
             }
             pthread_mutex_unlock(&bridge->mutex);
             if (!rtcp) {
-                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, packet_len);
+                (void)forward_rtsp_audio_pcmu_packet(
+                    bridge,
+                    packet,
+                    packet_len,
+                    DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL
+                );
             }
         }
         from_len = sizeof(from);
@@ -5398,7 +5409,12 @@ static void *rtp_relay_thread(void *arg) {
         if (audio_rtp_fd >= 0 && FD_ISSET(audio_rtp_fd, &readfds)) {
             ssize_t n = recv(audio_rtp_fd, packet, sizeof(packet), 0);
             if (n > 0) {
-                (void)forward_rtsp_audio_pcmu_packet(bridge, packet, (int)n);
+                (void)forward_rtsp_audio_pcmu_packet(
+                    bridge,
+                    packet,
+                    (int)n,
+                    current_doorstation_audio_gain_q12(bridge)
+                );
             }
         }
         if (!FD_ISSET(rtp_fd, &readfds)) {
@@ -5942,6 +5958,7 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         status->rtsp_rejected_clients = g_bridge.rtsp_rejected_clients;
         status->rtsp_rejected_describes = g_bridge.rtsp_rejected_describes;
         status->rtsp_play_failures = g_bridge.rtsp_play_failures;
+        status->doorstation_audio_gain_tenths = g_bridge.doorstation_audio_gain_tenths;
         snprintf(
             status->last_rtsp_method,
             sizeof(status->last_rtsp_method),
@@ -5985,6 +6002,22 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         active_threads += g_bridge.rtsp_client_threads;
         status->bridge_open_fds = open_fds;
         status->bridge_active_threads = active_threads;
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
+}
+
+void c300x_media_bridge_set_doorstation_audio_gain_tenths(
+    struct c300x_video *video,
+    int gain_tenths
+) {
+    int normalized = c300x_doorstation_audio_gain_normalize_tenths(gain_tenths);
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    if (g_bridge.video == video) {
+        g_bridge.doorstation_audio_gain_tenths = normalized;
+        g_bridge.doorstation_audio_gain_q12 = c300x_doorstation_audio_gain_q12_for_tenths(
+            normalized
+        );
     }
     pthread_mutex_unlock(&g_bridge.mutex);
 }

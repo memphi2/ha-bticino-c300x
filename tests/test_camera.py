@@ -149,6 +149,7 @@ class _FakeApi:
         self.home_call_start_calls: list[int | None] = []
         self.home_call_stop_calls = 0
         self.home_call_status_calls = 0
+        self.doorstation_audio_gain_calls: list[float] = []
         self.reload_gui_calls = 0
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
@@ -171,6 +172,13 @@ class _FakeApi:
     async def async_activate_doorbell_video(self, audio: bool = True) -> dict[str, Any]:
         self.activate_calls.append(audio)
         return {"ok": True, "audio": audio}
+
+    async def async_set_doorstation_audio_gain_db(
+        self,
+        gain_db: float,
+    ) -> dict[str, Any]:
+        self.doorstation_audio_gain_calls.append(gain_db)
+        return {"ok": True, "doorstation_audio_gain_db": gain_db}
 
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_calls += 1
@@ -1341,6 +1349,109 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
         _webrtc_message_value(message, "type") == "error"
         for message in sent_messages
     )
+
+
+def test_ring_answer_audio_closes_preview_before_provider_offer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class _RingApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.answered = False
+
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "ring"
+            status["window_available"] = True
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "ring_audio_active": self.answered,
+                "ring_answer_requested": self.answered,
+                "ring_answered": self.answered,
+                "unanswered_ring_call": not self.answered,
+                "clients": 0,
+                "max_clients": 2,
+                "ring_preview_sharing": True,
+            }
+            return status
+
+    class _RecordingProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            events.append(f"offer-start:{session_id}")
+            await super().async_handle_async_webrtc_offer(
+                camera,
+                offer_sdp,
+                session_id,
+                send_message,
+            )
+
+        def async_close_session(self, session_id: str) -> None:
+            events.append(f"close:{session_id}")
+            super().async_close_session(session_id)
+
+    api = _RingApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _RecordingProvider()
+    messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+
+    preview_offer = "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly\r\n"
+    answered_offer = (
+        "v=0\r\n"
+        "m=video 9 UDP/TLS/RTP/SAVPF 96\r\n"
+        "a=recvonly\r\n"
+        "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"
+        "a=sendrecv\r\n"
+    )
+
+    async def _run() -> None:
+        await camera.async_handle_async_webrtc_offer(
+            preview_offer,
+            "ring-preview-browser",
+            messages.append,
+        )
+        api.answered = True
+        await camera.async_handle_async_webrtc_offer(
+            answered_offer,
+            "ring-answer-browser",
+            messages.append,
+        )
+
+    asyncio.run(_run())
+
+    assert events.index("close:ring-preview-browser") < events.index(
+        "offer-start:ring-answer-browser"
+    )
+    assert list(camera._provider_webrtc_sessions) == ["ring-answer-browser"]
+    assert provider.closed == ["ring-preview-browser"]
+    assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
+    assert api.hangup_calls == 0
+    assert api.stop_calls == 0
+    closed_messages = [
+        message
+        for message in messages
+        if _webrtc_message_value(message, "type") == "closed"
+    ]
+    assert [
+        _webrtc_message_value(message, "reason") for message in closed_messages
+    ] == ["ring_call_answered"]
 
 
 def test_ring_call_answer_without_microphone_omits_rtsp_backchannel(

@@ -57,6 +57,7 @@ struct c300x_video_status {
     unsigned long long rtsp_rejected_clients;
     unsigned long long rtsp_rejected_describes;
     unsigned long long rtsp_play_failures;
+    int doorstation_audio_gain_tenths;
     char last_rtp_at[40];
     char last_media_started_at[40];
     char last_error[128];
@@ -84,6 +85,10 @@ int c300x_video_activate(struct c300x_video *video, int include_audio);
 void c300x_video_stop(struct c300x_video *video);
 int c300x_video_doorbell_call_answer(struct c300x_video *video);
 void c300x_video_doorbell_call_hangup(struct c300x_video *video);
+void c300x_video_set_doorstation_audio_gain_tenths(
+    struct c300x_video *video,
+    int gain_tenths
+);
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds);
 void c300x_video_home_call_stop(struct c300x_video *video);
 int c300x_video_pollfds(struct c300x_video *video, struct pollfd *fds, int max_fds);

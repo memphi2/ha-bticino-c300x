@@ -43,6 +43,7 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
@@ -89,6 +90,7 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
@@ -133,7 +135,7 @@
       "invalid_alarm_entity": "Waehle eine Alarmo-Alarm-Control-Panel-Entitaet oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Waehle eine unterstuetzte Dashboard-Entitaet fuer die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
-      "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -12 dB und +12 dB.",
+      "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
       "required": "Dieses Feld ist erforderlich."
     }
@@ -160,6 +162,7 @@
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
+          "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
           "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
@@ -194,7 +197,7 @@
       "invalid_alarm_entity": "Waehle eine Alarmo-Alarm-Control-Panel-Entitaet oder lasse das Feld leer.",
       "invalid_alarm_page_entity": "Waehle eine unterstuetzte Dashboard-Entitaet fuer die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
-      "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -12 dB und +12 dB.",
+      "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein."
     }
   },

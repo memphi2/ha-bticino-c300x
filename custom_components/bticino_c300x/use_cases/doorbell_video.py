@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from .common import ensure_doorbell_video_supported, raise_agent_command_failed
 
 
@@ -17,6 +18,8 @@ class DoorbellVideoUseCase:
         """Activate or renew the C300X doorbell video session."""
 
         ensure_doorbell_video_supported(self._entry)
+        if audio:
+            await async_ensure_doorstation_audio_gain(self._entry)
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_activate_doorbell_video(audio=audio)
         )

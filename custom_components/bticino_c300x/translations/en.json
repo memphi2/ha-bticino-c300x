@@ -43,6 +43,7 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",
@@ -89,6 +90,7 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",
@@ -133,7 +135,7 @@
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
-      "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
+      "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "required": "This field is required."
     }
@@ -160,6 +162,7 @@
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
+          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
           "device_activation_mode": "Device activation address mode",
           "device_activation_stair_light_address": "Manual stair light activation address",
@@ -194,7 +197,7 @@
       "invalid_alarm_entity": "Select an Alarmo alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
-      "invalid_audio_gain": "Choose an audio gain between -12 dB and +12 dB.",
+      "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99."
     }
   },

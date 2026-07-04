@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.6.1`
+- Current packaged agent version: `1.7.0`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -165,6 +165,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `POST` | `/api/v1/memos/actions/delete` | API | Deletes selected memos. |
 | `GET` | `/api/v1/video/doorbell` | API | None. |
 | `GET` | `/api/v1/video/doorbell/status` | API | None. |
+| `POST` | `/api/v1/video/doorbell/audio` | API | Updates runtime-only doorstation downstream audio gain. |
 | `POST` | `/api/v1/video/doorbell/actions/activate` | API | Starts or renews on-demand doorbell media. |
 | `POST` | `/api/v1/video/doorbell/actions/stop` | API | Stops agent-owned on-demand doorbell media. |
 | `GET` | `/api/v1/calls/doorbell` | API | None. |
@@ -221,7 +222,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.6.1"}
+{"ok": true, "agent": "native-c", "version": "1.7.0"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -297,7 +298,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.6.1",
+  "agent_version": "1.7.0",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -639,7 +640,23 @@ Side effects: none.
 
 Returns doorbell video availability, stream paths, media ownership, and bridge
 state. The endpoint must reflect agent/device state, not Home Assistant UI
-state.
+state. `bridge.doorstation_audio_gain_db` reports the runtime-only downstream
+gain that is applied to doorstation audio before RTSP output.
+
+### `POST /api/v1/video/doorbell/audio`
+
+Authentication: normal API token.
+
+Side effects: updates only the native agent's in-memory doorstation downstream
+audio gain. It does not write C300X device files or change Home Call audio.
+
+Request fields:
+
+```json
+{"doorstation_audio_gain_tenths": 60}
+```
+
+Accepted gain range is `-200` to `200` tenths of a dB, in 0.5 dB steps.
 
 ### `POST /api/v1/video/doorbell/actions/activate`
 
@@ -936,7 +953,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.6.1"
+  "agent_version": "1.7.0"
 }
 ```
 
@@ -1150,7 +1167,8 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.6.1 | 1.1 | 1.7.x | Current packaged agent; fixes RTSP backchannel negotiation for provider-based browser talkback. |
+| 1.7.0 | 1.1 | 1.7.x | Adds configurable live doorstation audio gain for on-demand video and Ring Call audio. |
+| 1.6.1 | 1.1 | 1.7.x | Fixes RTSP backchannel negotiation for provider-based browser talkback. |
 | 1.6.0 | 1.1 | 1.7.x | Adds RTSP backchannel support for provider-based browser talkback. |
 | 1.5.3 | 1.1 | 1.7.x | Adds multi-client doorbell viewing and confirmed C300X UI-scale ringer volume support. |
 | 1.5.0 | 1.1 | 1.7.x | Adds initial ringer volume read/write support. |

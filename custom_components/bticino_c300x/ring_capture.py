@@ -33,6 +33,7 @@ from .camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
+from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .const import (
     CONF_AGENT_HOST,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -368,7 +369,7 @@ def _capture_audio_gain_db(entry: Any) -> float:
         )
     except (TypeError, ValueError):
         return DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
-    return min(12.0, max(-12.0, gain))
+    return min(AUDIO_GAIN_DB_MAX, max(AUDIO_GAIN_DB_MIN, gain))
 
 
 def _agent_host_for_socket(host: str) -> str:

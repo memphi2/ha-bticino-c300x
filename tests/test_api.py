@@ -1911,6 +1911,25 @@ def test_activate_doorbell_video_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["json"] == {"audio": True}
 
 
+def test_set_doorstation_audio_gain_requests_runtime_endpoint() -> None:
+    session = _FakeSession('{"ok": true}')
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+    )
+
+    assert asyncio.run(api.async_set_doorstation_audio_gain_db(6.0)) == {"ok": True}
+    assert session.requests[0]["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/video/doorbell/audio",
+    )
+    assert session.requests[0]["kwargs"]["headers"] == {
+        "Authorization": "Bearer agent-token",
+    }
+    assert session.requests[0]["kwargs"]["json"] == {"doorstation_audio_gain_tenths": 60}
+
+
 def test_activate_doorbell_video_accepts_active_ring_conflict() -> None:
     session = _QueuedSession(
         [

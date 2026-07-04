@@ -208,8 +208,8 @@ def test_capture_audio_gain_uses_entry_option_and_clamps_range() -> None:
     )
 
     assert _capture_audio_gain_db(entry) == -4.5
-    assert _capture_audio_gain_db(high_entry) == 12.0
-    assert _capture_audio_gain_db(low_entry) == -12.0
+    assert _capture_audio_gain_db(high_entry) == 20.0
+    assert _capture_audio_gain_db(low_entry) == -20.0
 
 
 def test_capture_audio_gain_falls_back_for_invalid_option() -> None:

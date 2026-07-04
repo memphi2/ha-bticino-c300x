@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from .common import ensure_doorbell_call_supported, raise_agent_command_failed
 
 
@@ -17,6 +18,8 @@ class RingCallUseCase:
         """Answer the active C300X doorbell ring call through the agent."""
 
         ensure_doorbell_call_supported(self._entry)
+        status = await self._entry.runtime_data.api.async_doorbell_video_status()
+        await async_ensure_doorstation_audio_gain(self._entry, status=status)
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_answer_doorbell_call()
         )

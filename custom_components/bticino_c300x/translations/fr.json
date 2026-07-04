@@ -43,6 +43,7 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
@@ -89,6 +90,7 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
@@ -133,7 +135,7 @@
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
-      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
       "required": "Ce champ est obligatoire."
     }
@@ -160,6 +162,7 @@
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
+          "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
           "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
           "device_activation_mode": "Mode d'adresse des activations appareil",
           "device_activation_stair_light_address": "Adresse manuelle de l'activation lumiere d'escalier",
@@ -194,7 +197,7 @@
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",
       "invalid_alarm_page_entity": "Selectionnez une entite dashboard prise en charge pour la page alarme ou laissez vide.",
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
-      "invalid_audio_gain": "Choisissez un gain audio entre -12 dB et +12 dB.",
+      "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99."
     }
   },

@@ -38,8 +38,8 @@ def test_audio_gain_selector_uses_home_assistant_number_selector(
     result = audio_gain_db_selector()
 
     assert result.config.kwargs == {
-        "min": -12,
-        "max": 12,
+        "min": -20.0,
+        "max": 20.0,
         "step": 0.5,
         "mode": "slider",
         "unit_of_measurement": "dB",

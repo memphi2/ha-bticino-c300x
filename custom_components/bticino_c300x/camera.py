@@ -790,7 +790,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                             await self._async_refresh_video_status(apply_status=False)
                         )
                     )
-            if (
+            should_stop_media = (
                 not self._has_webrtc_sessions_for_resource(
                     provider_session.resource_id
                 )
@@ -802,7 +802,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         and not provider_session.ring_call
                     )
                 )
-            ):
+            )
+            if should_stop_media:
+                await self._async_wait_for_provider_rtsp_clients_to_drain()
                 if provider_session.owner == "home_call":
                     with suppress(Exception):
                         await self._entry.runtime_data.api.async_stop_home_call()

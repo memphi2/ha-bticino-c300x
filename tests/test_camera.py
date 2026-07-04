@@ -690,6 +690,65 @@ def test_doorbell_camera_prepare_stop_waits_for_provider_rtsp_clients_to_drain(
     assert api.stop_calls == 0
 
 
+def test_doorbell_camera_closing_last_webrtc_session_drains_provider_before_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class _DrainingApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.clients = [2, 1, 0]
+
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            clients = self.clients.pop(0)
+            events.append(f"status:{clients}")
+            status["bridge"] = {**status["bridge"], "clients": clients}
+            return status
+
+        async def async_stop_doorbell_video(self) -> dict[str, Any]:
+            events.append("stop")
+            return await super().async_stop_doorbell_video()
+
+    class _RecordingProvider(_FakeWebRTCProvider):
+        def async_close_session(self, session_id: str) -> None:
+            events.append(f"close:{session_id}")
+            super().async_close_session(session_id)
+
+    monkeypatch.setattr(
+        camera_module,
+        "WEBRTC_PROVIDER_CLOSE_DRAIN_INTERVAL_SECONDS",
+        0,
+    )
+
+    api = _DrainingApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _RecordingProvider()
+    camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+
+    asyncio.run(camera._async_close_webrtc_session("doorbell-session"))
+
+    assert events == [
+        "close:doorbell-session",
+        "status:2",
+        "status:1",
+        "status:0",
+        "stop",
+    ]
+    assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 1
+
+
 def test_doorbell_camera_closing_last_resource_session_ignores_unrelated_stale_session() -> None:
     api = _FakeApi()
     entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))

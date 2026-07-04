@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.7.0`
+- Current packaged agent version: `1.6.4`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -222,7 +222,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.7.0"}
+{"ok": true, "agent": "native-c", "version": "1.6.4"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -298,7 +298,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.7.0",
+  "agent_version": "1.6.4",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -953,7 +953,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.7.0"
+  "agent_version": "1.6.4"
 }
 ```
 
@@ -1167,7 +1167,7 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.7.0 | 1.1 | 1.7.x | Adds configurable live doorstation audio gain for on-demand video and Ring Call audio. |
+| 1.6.4 | 1.1 | 1.7.x | Adds configurable live doorstation audio gain for on-demand video and Ring Call audio. |
 | 1.6.1 | 1.1 | 1.7.x | Fixes RTSP backchannel negotiation for provider-based browser talkback. |
 | 1.6.0 | 1.1 | 1.7.x | Adds RTSP backchannel support for provider-based browser talkback. |
 | 1.5.3 | 1.1 | 1.7.x | Adds multi-client doorbell viewing and confirmed C300X UI-scale ringer volume support. |

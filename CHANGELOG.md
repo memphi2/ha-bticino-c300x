@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.7.0 - Unreleased
+## v1.6.4 - 2026-07-04
 
 ### Added
 
@@ -15,7 +15,7 @@
 ### Upgrade Notes
 
 - Restart Home Assistant after updating.
-- Update the native C300X device agent from Home Assistant to `1.7.0`.
+- Update the native C300X device agent from Home Assistant to `1.6.4`.
 
 ## v1.6.3 - 2026-07-04
 

@@ -1262,8 +1262,8 @@ def test_manifest_does_not_require_optional_paramiko() -> None:
 def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:
     requirement_files = (
         ROOT / "requirements-dev.in",
-        ROOT / "requirements-dev.lock",
-        ROOT / "requirements-dev-min-ha.lock",
+        ROOT / "requirements-dev.txt",
+        ROOT / "requirements-dev-min-ha.txt",
     )
 
     for path in requirement_files:

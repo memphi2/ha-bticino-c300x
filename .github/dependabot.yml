@@ -17,6 +17,8 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
+    # Pinned CI lock manifests are requirements files so Dependabot updates
+    # them directly: requirements-dev.txt and requirements-dev-min-ha.txt.
     schedule:
       interval: "monthly"
       time: "05:30"

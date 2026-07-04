@@ -110,8 +110,8 @@ REQUIRED_PATHS = [
     "scripts/write_release_assets.py",
     "scripts/smoke_ha.py",
     "requirements-dev.in",
-    "requirements-dev.lock",
-    "requirements-dev-min-ha.lock",
+    "requirements-dev.txt",
+    "requirements-dev-min-ha.txt",
     "hacs.json",
     "native_agent/Makefile",
     "native_agent/API.md",
@@ -463,8 +463,8 @@ def check_installer_dependency_pins() -> list[str]:
         )
 
     requirements_in = (ROOT / "requirements-dev.in").read_text(encoding="utf-8")
-    current_lock = (ROOT / "requirements-dev.lock").read_text(encoding="utf-8")
-    min_lock = (ROOT / "requirements-dev-min-ha.lock").read_text(encoding="utf-8")
+    current_lock = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    min_lock = (ROOT / "requirements-dev-min-ha.txt").read_text(encoding="utf-8")
     if required_pin not in requirements_in.splitlines():
         failures.append(f"requirements-dev.in must pin {required_pin}")
     if "homeassistant==" in requirements_in:
@@ -472,12 +472,12 @@ def check_installer_dependency_pins() -> list[str]:
     expected_current_ha = f"homeassistant=={CURRENT_HOME_ASSISTANT_VERSION}"
     expected_min_ha = f"homeassistant=={MIN_HOME_ASSISTANT_VERSION}"
     if expected_current_ha not in current_lock.splitlines():
-        failures.append(f"requirements-dev.lock must pin {expected_current_ha}")
+        failures.append(f"requirements-dev.txt must pin {expected_current_ha}")
     if expected_min_ha not in min_lock.splitlines():
-        failures.append(f"requirements-dev-min-ha.lock must pin {expected_min_ha}")
+        failures.append(f"requirements-dev-min-ha.txt must pin {expected_min_ha}")
     for path, text in {
-        "requirements-dev.lock": current_lock,
-        "requirements-dev-min-ha.lock": min_lock,
+        "requirements-dev.txt": current_lock,
+        "requirements-dev-min-ha.txt": min_lock,
     }.items():
         if required_pin not in text.splitlines():
             failures.append(f"{path} must pin {required_pin}")
@@ -515,6 +515,8 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("Dependabot must leave Python major updates to manual compatibility work")
     if "Home Assistant compatibility is bumped manually" not in dependabot:
         failures.append("Dependabot must document manual Home Assistant compatibility bumps")
+    if "requirements-dev.txt" not in dependabot or "requirements-dev-min-ha.txt" not in dependabot:
+        failures.append("Dependabot must document the pinned validation requirement files it updates")
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
     if (
@@ -588,9 +590,9 @@ def check_hacs_metadata() -> list[str]:
             failures.append(
                 f"{workflow_name} must test minimum and current Home Assistant on Python {PYTHON_VERSION}"
             )
-        if "requirements-dev.lock" not in workflow or "requirements-dev-min-ha.lock" not in workflow:
+        if "requirements-dev.txt" not in workflow or "requirements-dev-min-ha.txt" not in workflow:
             failures.append(f"{workflow_name} must install validation dependencies from lock files")
-        if "pip install --upgrade -r" in workflow or "requirements-dev.txt" in workflow:
+        if "pip install --upgrade -r" in workflow:
             failures.append(f"{workflow_name} must not use moving validation requirements")
     if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:
         failures.append("validate workflow must run HACS integration validation")

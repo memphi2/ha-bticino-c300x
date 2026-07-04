@@ -854,35 +854,33 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
     assert "1.4.1-dev" not in metadata_source
 
 
-def test_doorstation_hangup_closes_local_webrtc_before_service_fallback() -> None:
+def test_doorstation_hangup_always_stops_service_before_closing_webrtc() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
     hangup_start = source.index("async _hangupDoorstation()")
     hangup_end = source.index("  _hasDoorbellRingCallSession()", hangup_start)
     hangup_body = source[hangup_start:hangup_end]
     ring_session_start = source.index("  _hasDoorbellRingCallSession()")
-    ring_session_end = source.index("  _hasLocalDoorstationWebrtcSession()", ring_session_start)
+    ring_session_end = source.index("  _closePeer(", ring_session_start)
     ring_session_body = source[ring_session_start:ring_session_end]
-    local_session_start = source.index("  _hasLocalDoorstationWebrtcSession()")
-    local_session_end = source.index("  _closePeer(", local_session_start)
-    local_session_body = source[local_session_start:local_session_end]
 
     assert "if (this._hangupInProgress)" in hangup_body
     assert "this._hangupInProgress = true;" in hangup_body
     assert "this._hangupInProgress = false;" in hangup_body
-    assert "if (this._hasLocalDoorstationWebrtcSession())" in hangup_body
-    assert hangup_body.index("if (this._hasLocalDoorstationWebrtcSession())") < hangup_body.index(
+    assert "_hasLocalDoorstationWebrtcSession" not in source
+    assert "if (this._hasDoorbellRingCallSession())" in hangup_body
+    assert "await this._hangupDoorbellCall({ closePeer: false });" in hangup_body
+    assert 'console.error("C300X ring-call hangup failed", err);' in hangup_body
+    assert hangup_body.index("await this._hangupDoorbellCall({ closePeer: false });") < hangup_body.index(
         "await this._stopDoorbellVideo();"
     )
-    assert "this._closePeer(true);" in hangup_body
+    assert hangup_body.index('console.error("C300X ring-call hangup failed", err);') < hangup_body.index(
+        "await this._stopDoorbellVideo();"
+    )
     assert "await this._stopDoorbellVideo();" in hangup_body
-    assert "await this._hangupDoorbellCall({ closePeer: false });" not in hangup_body
+    assert "_closePeer(ok)" in hangup_body
     assert "return this._doorbellAnswered;" in ring_session_body
     assert "this._ringPreviewActive" not in ring_session_body
-    assert "this._webrtc?.running" in local_session_body
-    assert "this._webrtc?.pc" in local_session_body
-    assert "this._webrtc?.remoteStream" in local_session_body
-    assert "this._hasDoorbellRingCallSession()" in local_session_body
     assert 'mediaState === "ring_active"' in state_source
     assert 'mediaState === "ring_hanging_up"' in state_source
 

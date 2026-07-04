@@ -239,3 +239,48 @@ int c300x_event_payload_build_doorbell_state(
         : snprintf(out, out_len, "\"doorbell\":%s", doorbell_state_json);
     return written >= 0 && (size_t)written < out_len;
 }
+
+void c300x_event_payload_build_data_json(
+    const struct c300x_config *config,
+    struct c300x_video *video,
+    const char *event_type,
+    const char *data_json,
+    char *out,
+    size_t out_len
+) {
+    char doorbell_json[2304];
+    const char *source = data_json != NULL ? data_json : "{}";
+    size_t source_len;
+    size_t used = 0;
+
+    if (
+        !c300x_event_payload_needs_doorbell_state(event_type)
+        || !c300x_event_payload_build_doorbell_state(
+            config,
+            video,
+            event_type,
+            doorbell_json,
+            sizeof(doorbell_json)
+        )
+    ) {
+        c300x_copy_string(out, out_len, source);
+        return;
+    }
+    source_len = strlen(source);
+    if (source_len < 2 || source[0] != '{' || source[source_len - 1] != '}') {
+        c300x_copy_string(out, out_len, source);
+        return;
+    }
+    if (!c300x_appendf(
+        out,
+        out_len,
+        &used,
+        "%.*s%s%s}",
+        (int)(source_len - 1),
+        source,
+        source_len == 2 ? "" : ",",
+        doorbell_json
+    )) {
+        c300x_copy_string(out, out_len, source);
+    }
+}

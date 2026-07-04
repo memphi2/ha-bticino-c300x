@@ -114,6 +114,7 @@ void c300x_video_bridge_ring_media_started(struct c300x_video *video, int includ
 void c300x_video_bridge_media_stopped(struct c300x_video *video);
 void c300x_video_bridge_rtp_packet(struct c300x_video *video);
 void c300x_video_bridge_set_error(struct c300x_video *video, const char *message);
+int c300x_video_should_dispatch_event(struct c300x_video *video, const char *event_type);
 void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds);
 int c300x_video_consume_media_closed_event(struct c300x_video *video);
 int c300x_video_ignore_transient_media_closed(struct c300x_video *video);

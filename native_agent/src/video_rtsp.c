@@ -2,6 +2,7 @@
 #include "string_util.h"
 
 #include "media_bridge.h"
+#include "time_util.h"
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -20,6 +21,7 @@
 #define C300X_EXTERNAL_MEDIA_GUARD_DEFAULT_SECONDS 30
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
 #define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
+#define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000
 
 struct c300x_video;
 static void clear_external_media_active_locked(struct c300x_video *video);
@@ -51,6 +53,7 @@ struct c300x_video {
     char last_rtp_at[40];
     char last_media_started_at[40];
     char last_error[128];
+    long long last_doorbell_pressed_ms;
     int event_read_fd;
     int event_write_fd;
     struct c300x_video_event pending_events[C300X_VIDEO_MAX_PENDING_EVENTS];
@@ -79,14 +82,6 @@ static void set_last_error(struct c300x_video *video, const char *message)
     pthread_mutex_unlock(&video->mutex);
 }
 
-static long long monotonic_ms(void)
-{
-    struct timeval now;
-
-    gettimeofday(&now, NULL);
-    return ((long long)now.tv_sec * 1000LL) + ((long long)now.tv_usec / 1000LL);
-}
-
 static int external_media_active_locked(struct c300x_video *video)
 {
     long long now;
@@ -94,7 +89,7 @@ static int external_media_active_locked(struct c300x_video *video)
     if (!video->external_event_active) {
         return 0;
     }
-    now = monotonic_ms();
+    now = c300x_monotonic_ms();
     if (video->external_event_expires_ms > 0 && now >= video->external_event_expires_ms) {
         clear_external_media_active_locked(video);
         return 0;
@@ -120,7 +115,7 @@ static void set_external_media_active_locked(
 ) {
     video->external_event_active = 1;
     video->external_event_expires_ms =
-        monotonic_ms() + ((long long)external_media_guard_ttl_seconds(ttl_seconds) * 1000LL);
+        c300x_monotonic_ms() + ((long long)external_media_guard_ttl_seconds(ttl_seconds) * 1000LL);
     snprintf(
         video->external_owner,
         sizeof(video->external_owner),
@@ -285,6 +280,7 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
         return 0;
     }
     pthread_mutex_unlock(&video->mutex);
+    c300x_media_session_note_explicit_activate(video);
     if (!c300x_video_ensure_running(video)) {
         return 0;
     }
@@ -568,7 +564,7 @@ void c300x_video_bridge_media_starting(struct c300x_video *video)
     pthread_mutex_lock(&video->mutex);
     video->media_starting = 1;
     video->media_closed_grace_until_ms =
-        monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
+        c300x_monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
     clear_external_media_active_locked(video);
     pthread_mutex_unlock(&video->mutex);
 }
@@ -586,7 +582,7 @@ void c300x_video_bridge_media_started(struct c300x_video *video, int include_aud
     video->media_starting = 0;
     video->media_closed_event_armed = 1;
     video->media_closed_grace_until_ms =
-        monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
+        c300x_monotonic_ms() + C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS;
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     video->last_block_reason[0] = '\0';
@@ -652,6 +648,32 @@ void c300x_video_bridge_set_error(struct c300x_video *video, const char *message
     pthread_mutex_unlock(&video->mutex);
 }
 
+int c300x_video_should_dispatch_event(struct c300x_video *video, const char *event_type)
+{
+    long long now;
+    long long previous;
+    int accept = 1;
+
+    if (video == NULL || event_type == NULL || strcmp(event_type, "doorbell.pressed") != 0) {
+        return 1;
+    }
+
+    now = c300x_monotonic_ms();
+    pthread_mutex_lock(&video->mutex);
+    previous = video->last_doorbell_pressed_ms;
+    if (
+        previous > 0
+        && now >= previous
+        && now - previous < C300X_DOORBELL_PRESSED_DEDUPE_MS
+    ) {
+        accept = 0;
+    } else {
+        video->last_doorbell_pressed_ms = now;
+    }
+    pthread_mutex_unlock(&video->mutex);
+    return accept;
+}
+
 void c300x_video_note_event(struct c300x_video *video, const char *event_type, int ttl_seconds)
 {
     int ring_call_active;
@@ -708,7 +730,7 @@ int c300x_video_ignore_transient_media_closed(struct c300x_video *video)
     if (video == NULL) {
         return 0;
     }
-    now = monotonic_ms();
+    now = c300x_monotonic_ms();
     pthread_mutex_lock(&video->mutex);
     ignore = (
         video->clients > 0
@@ -729,7 +751,7 @@ int c300x_video_ignore_transient_view_requested(struct c300x_video *video)
     if (video == NULL) {
         return 0;
     }
-    now = monotonic_ms();
+    now = c300x_monotonic_ms();
     ring_call_active = c300x_media_ring_call_active(video) ? 1 : 0;
     pthread_mutex_lock(&video->mutex);
     ignore = (

@@ -2,9 +2,12 @@
 
 #include "device_user.h"
 #include "media_audio.h"
+#include "media_base64.h"
 #include "media_bridge.h"
+#include "media_session_guard.h"
 #include "sha256.h"
 #include "string_util.h"
+#include "time_util.h"
 #include "video_rtsp.h"
 
 #include <arpa/inet.h>
@@ -194,6 +197,7 @@ typedef struct {
     bool media_active;
     bool media_starting;
     bool stop_in_progress;
+    c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
     int rtp_fd;
@@ -341,6 +345,7 @@ static bool ondemand_audio_stream_sharing_allowed_locked(const media_bridge_t *b
         && !bridge->home_call_active
         && !bridge->home_call_stop
         && !bridge->stop_in_progress
+        && !c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
     );
 }
 
@@ -1325,14 +1330,8 @@ static int content_length(const char *message) {
     return value[0] ? atoi(value) : 0;
 }
 
-static long long monotonic_ms(void) {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return ((long long)now.tv_sec * 1000LL) + ((long long)now.tv_usec / 1000LL);
-}
-
 static bool wait_for_rtsp_clients_to_drain(media_bridge_t *bridge, int timeout_ms) {
-    long long deadline = monotonic_ms() + timeout_ms;
+    long long deadline = c300x_monotonic_ms() + timeout_ms;
 
     while (true) {
         int clients;
@@ -1343,7 +1342,7 @@ static bool wait_for_rtsp_clients_to_drain(media_bridge_t *bridge, int timeout_m
         if (clients <= 0) {
             return true;
         }
-        if (monotonic_ms() >= deadline) {
+        if (c300x_monotonic_ms() >= deadline) {
             return false;
         }
         usleep(RTSP_CLIENT_DRAIN_POLL_MS * 1000);
@@ -1791,111 +1790,12 @@ static bool bridge_instance_uuid(
     return ok;
 }
 
-static bool base64_encode(const unsigned char *data, size_t len, char *out, size_t out_len) {
-    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t needed = ((len + 2) / 3) * 4;
-    size_t pos = 0;
-
-    if (out_len <= needed) {
-        return false;
-    }
-    for (size_t index = 0; index < len; index += 3) {
-        unsigned int value = ((unsigned int)data[index]) << 16;
-        int remaining = (int)(len - index);
-        if (remaining > 1) {
-            value |= ((unsigned int)data[index + 1]) << 8;
-        }
-        if (remaining > 2) {
-            value |= (unsigned int)data[index + 2];
-        }
-        out[pos++] = alphabet[(value >> 18) & 0x3f];
-        out[pos++] = alphabet[(value >> 12) & 0x3f];
-        out[pos++] = remaining > 1 ? alphabet[(value >> 6) & 0x3f] : '=';
-        out[pos++] = remaining > 2 ? alphabet[value & 0x3f] : '=';
-    }
-    out[pos] = '\0';
-    return true;
-}
-
-static int base64_value(char ch) {
-    if (ch >= 'A' && ch <= 'Z') {
-        return ch - 'A';
-    }
-    if (ch >= 'a' && ch <= 'z') {
-        return ch - 'a' + 26;
-    }
-    if (ch >= '0' && ch <= '9') {
-        return ch - '0' + 52;
-    }
-    if (ch == '+') {
-        return 62;
-    }
-    if (ch == '/') {
-        return 63;
-    }
-    return -1;
-}
-
-static bool base64_decode(const char *text, unsigned char *out, size_t out_len, size_t *decoded_len) {
-    size_t pos = 0;
-    int values[4];
-    int count = 0;
-
-    if (text == NULL || out == NULL || decoded_len == NULL) {
-        return false;
-    }
-    *decoded_len = 0;
-    while (*text != '\0' && *text != '\r' && *text != '\n' && *text != ';' && *text != '|') {
-        if (*text == '=') {
-            values[count++] = -2;
-        } else {
-            int value = base64_value(*text);
-            if (value < 0) {
-                return false;
-            }
-            values[count++] = value;
-        }
-        text++;
-        if (count != 4) {
-            continue;
-        }
-        if (values[0] < 0 || values[1] < 0) {
-            return false;
-        }
-        if (pos >= out_len) {
-            return false;
-        }
-        out[pos++] = (unsigned char)((values[0] << 2) | (values[1] >> 4));
-        if (values[2] != -2) {
-            if (values[2] < 0 || pos >= out_len) {
-                return false;
-            }
-            out[pos++] = (unsigned char)(((values[1] & 0x0f) << 4) | (values[2] >> 2));
-        }
-        if (values[2] == -2 && values[3] != -2) {
-            return false;
-        }
-        if (values[3] != -2) {
-            if (values[3] < 0 || pos >= out_len) {
-                return false;
-            }
-            out[pos++] = (unsigned char)(((values[2] & 0x03) << 6) | values[3]);
-        }
-        count = 0;
-    }
-    if (count != 0) {
-        return false;
-    }
-    *decoded_len = pos;
-    return true;
-}
-
 static bool generate_sdes_key(unsigned char *key, size_t key_len, char *out, size_t out_len) {
     if (key == NULL || key_len != MEDIA_SRTP_MASTER_KEY_LEN) {
         return false;
     }
     fill_random_bytes(key, key_len);
-    return base64_encode(key, key_len, out, out_len);
+    return c300x_media_base64_encode(key, key_len, out, out_len);
 }
 
 static bool generate_random_sdes_key(size_t key_len, char *out, size_t out_len) {
@@ -1906,7 +1806,7 @@ static bool generate_random_sdes_key(size_t key_len, char *out, size_t out_len) 
         return false;
     }
     fill_random_bytes(key, key_len);
-    ok = base64_encode(key, key_len, out, out_len);
+    ok = c300x_media_base64_encode(key, key_len, out, out_len);
     secure_zero(key, sizeof(key));
     return ok;
 }
@@ -1953,7 +1853,7 @@ static bool parse_sdp_sdes_key(const char *message, const char *media, unsigned 
                 return false;
             }
             inline_key += strlen("inline:");
-            if (!base64_decode(inline_key, decoded, sizeof(decoded), &decoded_len)) {
+            if (!c300x_media_base64_decode(inline_key, decoded, sizeof(decoded), &decoded_len)) {
                 return false;
             }
             if (decoded_len < MEDIA_SRTP_MASTER_KEY_LEN) {
@@ -2694,9 +2594,9 @@ static bool ring_session_active(media_bridge_t *bridge) {
 
 static bool wait_for_ring_session_active(media_bridge_t *bridge, int timeout_ms) {
     bool active = false;
-    long long deadline = monotonic_ms() + timeout_ms;
+    long long deadline = c300x_monotonic_ms() + timeout_ms;
 
-    while (monotonic_ms() < deadline) {
+    while (c300x_monotonic_ms() < deadline) {
         if (ring_session_active(bridge)) {
             return true;
         }
@@ -2813,7 +2713,7 @@ static void ring_media_loop(
     long long next_audio = 0;
     long long next_rtcp = 0;
     long long next_stun = 0;
-    long long started_at = monotonic_ms();
+    long long started_at = c300x_monotonic_ms();
     long long last_inbound_activity = started_at;
     long long next_sip_keepalive = started_at + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
     uint32_t video_ssrc = 0;
@@ -2867,7 +2767,7 @@ static void ring_media_loop(
             c300x_video_bridge_ring_media_started(bridge->video, 1);
             c300x_video_dispatch_event(bridge->video, "doorbell.view_requested", "{}", 0);
             answered = true;
-            last_inbound_activity = monotonic_ms();
+            last_inbound_activity = c300x_monotonic_ms();
         }
 
         fd_set readfds;
@@ -2900,7 +2800,7 @@ static void ring_media_loop(
                     break;
                 }
                 if (n > 0 && strncmp(message, "\r\n\r\n", 4) != 0) {
-                    last_inbound_activity = monotonic_ms();
+                    last_inbound_activity = c300x_monotonic_ms();
                     if (strncmp(message, "BYE ", 4) == 0 || strncmp(message, "CANCEL ", 7) == 0) {
                         send_sip_ok_response(sip_fd, message);
                         remote_ended = true;
@@ -2910,24 +2810,24 @@ static void ring_media_loop(
                 }
             }
             if (audio_fd >= 0 && FD_ISSET(audio_fd, &readfds)) {
-                last_inbound_activity = monotonic_ms();
+                last_inbound_activity = c300x_monotonic_ms();
                 drain_ring_srtp_socket(bridge, audio_fd, srtp->audio_in, false, true, NULL);
             }
             if (audio_rtcp_fd >= 0 && FD_ISSET(audio_rtcp_fd, &readfds)) {
-                last_inbound_activity = monotonic_ms();
+                last_inbound_activity = c300x_monotonic_ms();
                 drain_ring_srtp_socket(bridge, audio_rtcp_fd, srtp->audio_in, true, true, NULL);
             }
             if (video_fd >= 0 && FD_ISSET(video_fd, &readfds)) {
-                last_inbound_activity = monotonic_ms();
+                last_inbound_activity = c300x_monotonic_ms();
                 drain_ring_srtp_socket(bridge, video_fd, srtp->video_in, false, false, &video_ssrc);
             }
             if (video_rtcp_fd >= 0 && FD_ISSET(video_rtcp_fd, &readfds)) {
-                last_inbound_activity = monotonic_ms();
+                last_inbound_activity = c300x_monotonic_ms();
                 drain_ring_srtp_socket(bridge, video_rtcp_fd, srtp->video_in, true, false, NULL);
             }
         }
 
-        long long now = monotonic_ms();
+        long long now = c300x_monotonic_ms();
         if (
             (!answered || rtsp_clients <= 0)
             &&
@@ -3213,8 +3113,8 @@ static void *ring_receiver_thread(void *arg) {
         bridge->ring_registered = true;
         bridge->ring_sip_fd = fd;
         pthread_mutex_unlock(&bridge->mutex);
-        next_keepalive = monotonic_ms() + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
-        next_register = monotonic_ms() + ((long long)RING_REGISTER_RENEW_SECONDS * 1000LL);
+        next_keepalive = c300x_monotonic_ms() + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
+        next_register = c300x_monotonic_ms() + ((long long)RING_REGISTER_RENEW_SECONDS * 1000LL);
 
         while (true) {
             pthread_mutex_lock(&bridge->mutex);
@@ -3235,7 +3135,7 @@ static void *ring_receiver_thread(void *arg) {
                 }
             }
 
-            long long now = monotonic_ms();
+            long long now = c300x_monotonic_ms();
             if (now >= next_keepalive) {
                 (void)send_all(fd, "\r\n\r\n", 4);
                 next_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
@@ -3483,7 +3383,7 @@ static bool send_queued_talkback_payload_locked(
     if (protect_and_send_srtp(state->audio, fd, port, packet, (int)(12 + payload_len))) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
-        *last_talkback_ms = monotonic_ms();
+        *last_talkback_ms = c300x_monotonic_ms();
     }
     return true;
 }
@@ -3571,7 +3471,7 @@ static bool forward_ring_talkback_packet(
     )) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
-        bridge->ring_last_talkback_ms = monotonic_ms();
+        bridge->ring_last_talkback_ms = c300x_monotonic_ms();
     }
     pthread_mutex_unlock(&bridge->mutex);
     return true;
@@ -3636,7 +3536,7 @@ static bool forward_home_call_talkback_packet(
     )) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
-        bridge->home_call_last_talkback_ms = monotonic_ms();
+        bridge->home_call_last_talkback_ms = c300x_monotonic_ms();
     }
     pthread_mutex_unlock(&bridge->mutex);
     return true;
@@ -3701,7 +3601,7 @@ static bool forward_ondemand_talkback_packet(
     )) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
-        bridge->ondemand_last_talkback_ms = monotonic_ms();
+        bridge->ondemand_last_talkback_ms = c300x_monotonic_ms();
     }
     pthread_mutex_unlock(&bridge->mutex);
     return true;
@@ -3948,7 +3848,7 @@ static void *ondemand_media_thread(void *arg) {
     long long next_audio_rtp = 0;
     long long next_rtcp = 0;
     long long next_sip_keepalive = 0;
-    long long next_bt_av_renew = monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
+    long long next_bt_av_renew = c300x_monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
 
     memset(&srtp, 0, sizeof(srtp));
     pthread_mutex_lock(&bridge->mutex);
@@ -4063,7 +3963,7 @@ static void *ondemand_media_thread(void *arg) {
             }
         }
 
-        long long now = monotonic_ms();
+        long long now = c300x_monotonic_ms();
         if (next_media_keepalive == 0 || now >= next_media_keepalive) {
             send_stun_binding_request(audio_rtp_fd, target_audio_port);
             send_stun_binding_request(audio_rtcp_fd, target_audio_port + 1);
@@ -4997,12 +4897,12 @@ static void drain_home_call_stop_responses(
     char message[SIP_BUFFER_SIZE];
     bool stop_response_seen = false;
     bool invite_final_seen = !wait_invite_final;
-    long long deadline = monotonic_ms() + 2000;
+    long long deadline = c300x_monotonic_ms() + 2000;
 
     if (fd < 0 || stop_method == NULL || stop_method[0] == '\0') {
         return;
     }
-    while (monotonic_ms() < deadline) {
+    while (c300x_monotonic_ms() < deadline) {
         int n = read_message_poll(fd, message, sizeof(message), 1);
         if (n <= 0) {
             continue;
@@ -5069,7 +4969,7 @@ static void *home_call_thread_func(void *arg) {
     bool started_event_sent = false;
     bool answered_event_sent = false;
     bool dispatch_ended = false;
-    long long ring_deadline = monotonic_ms() + ((long long)HOME_CALL_DEFAULT_RING_TIMEOUT_SECONDS * 1000LL);
+    long long ring_deadline = c300x_monotonic_ms() + ((long long)HOME_CALL_DEFAULT_RING_TIMEOUT_SECONDS * 1000LL);
     long long call_deadline = 0;
     long long next_audio = 0;
     long long next_rtcp = 0;
@@ -5162,7 +5062,7 @@ static void *home_call_thread_func(void *arg) {
     dispatch_home_call_state_event(bridge, "home_call.started");
     started_event_sent = true;
 
-    while (!answered && monotonic_ms() < ring_deadline) {
+    while (!answered && c300x_monotonic_ms() < ring_deadline) {
         bool stop;
         bool send_bye;
 
@@ -5234,7 +5134,7 @@ static void *home_call_thread_func(void *arg) {
         answered_event_sent = true;
         answered = true;
         if (duration_seconds > 0) {
-            call_deadline = monotonic_ms() + ((long long)duration_seconds * 1000LL);
+            call_deadline = c300x_monotonic_ms() + ((long long)duration_seconds * 1000LL);
         }
     }
 
@@ -5254,7 +5154,7 @@ static void *home_call_thread_func(void *arg) {
         stop = bridge->home_call_stop;
         send_bye = bridge->home_call_send_bye;
         pthread_mutex_unlock(&bridge->mutex);
-        if ((call_deadline > 0 && monotonic_ms() >= call_deadline) || stop) {
+        if ((call_deadline > 0 && c300x_monotonic_ms() >= call_deadline) || stop) {
             if (send_bye || call_deadline > 0) {
                 send_sip_bye(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri);
                 drain_home_call_stop_responses(fd, "BYE", false);
@@ -5296,7 +5196,7 @@ static void *home_call_thread_func(void *arg) {
             }
         }
 
-        long long now = monotonic_ms();
+        long long now = c300x_monotonic_ms();
         if (next_stun == 0 || now >= next_stun) {
             send_stun_binding_request(audio_fd, target_audio_port);
             send_stun_binding_request(audio_rtcp_fd, target_audio_port + 1);
@@ -5554,11 +5454,14 @@ static bool create_rtp_socket(media_bridge_t *bridge) {
 }
 
 static bool start_media_session(media_bridge_t *bridge) __attribute__((noinline));
-static void stop_media_session(bool close_client);
+static void stop_media_session(bool close_client, bool explicit_stop);
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&bridge->mutex);
-    if (bridge->stop_in_progress) {
+    if (
+        bridge->stop_in_progress
+        || c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
+    ) {
         pthread_mutex_unlock(&bridge->mutex);
         return false;
     }
@@ -5581,19 +5484,19 @@ static bool start_media_session(media_bridge_t *bridge) {
 
     if (!send_sip_setup(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "ondemand_sip_setup_failed");
-        stop_media_session(false);
+        stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
     if (!start_talkback_proxy(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "talkback_start_failed");
-        stop_media_session(false);
+        stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
     if (!start_bt_av_media(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "bt_av_media_start_failed");
-        stop_media_session(false);
+        stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
@@ -5607,7 +5510,7 @@ static bool start_media_session(media_bridge_t *bridge) {
 
     if (!started) {
         c300x_video_bridge_set_error(bridge->video, "rtp_relay_start_failed");
-        stop_media_session(false);
+        stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
@@ -5616,7 +5519,7 @@ static bool start_media_session(media_bridge_t *bridge) {
     return true;
 }
 
-static void stop_media_session(bool close_client) {
+static void stop_media_session(bool close_client, bool explicit_stop) {
     int sip_fd = -1;
     char from_aor[256];
     char to_aor[256];
@@ -5647,6 +5550,7 @@ static void stop_media_session(bool close_client) {
     contact_uri[0] = '\0';
 
     pthread_mutex_lock(&g_bridge.mutex);
+    c300x_media_session_guard_note_stop(&g_bridge.ondemand_guard, explicit_stop);
     if (g_bridge.stop_in_progress) {
         if (close_client) {
             drain_clients = true;
@@ -5825,11 +5729,31 @@ void c300x_media_session_stop(struct c300x_video *video) {
         }
         return;
     }
-    stop_media_session(true);
+    stop_media_session(true, true);
     c300x_video_bridge_media_stopped(g_bridge.video);
     if (dispatch_closed && c300x_video_consume_media_closed_event(video)) {
         c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);
     }
+}
+
+void c300x_media_session_stop_after_rtsp_disconnect(struct c300x_video *video) {
+    bool owned;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    owned = g_bridge.video == video;
+    pthread_mutex_unlock(&g_bridge.mutex);
+    if (!owned) {
+        return;
+    }
+    stop_media_session(true, false);
+}
+
+void c300x_media_session_note_explicit_activate(struct c300x_video *video) {
+    pthread_mutex_lock(&g_bridge.mutex);
+    if (g_bridge.video == video) {
+        c300x_media_session_guard_clear(&g_bridge.ondemand_guard);
+    }
+    pthread_mutex_unlock(&g_bridge.mutex);
 }
 
 bool c300x_media_session_stop_in_progress(const struct c300x_video *video) {
@@ -6350,6 +6274,15 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     send_rtsp_response(fd, 503, cseq, NULL, NULL);
                     break;
                 }
+                pthread_mutex_lock(&g_bridge.mutex);
+                bool explicit_stop_guard =
+                    c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard);
+                pthread_mutex_unlock(&g_bridge.mutex);
+                if (explicit_stop_guard) {
+                    rtsp_note_play_failure(&g_bridge, "explicit_stop_guard");
+                    send_rtsp_response(fd, 503, cseq, NULL, NULL);
+                    break;
+                }
                 if (!start_media_session(&g_bridge)) {
                     rtsp_note_play_failure(&g_bridge, "media_start_failed");
                     send_rtsp_response(fd, 500, cseq, NULL, NULL);
@@ -6406,7 +6339,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     c300x_video_bridge_client_disconnected(g_bridge.video);
 
     if (media_started && remaining_clients == 0) {
-        c300x_media_session_stop(g_bridge.video);
+        c300x_media_session_stop_after_rtsp_disconnect(g_bridge.video);
         c300x_video_bridge_media_stopped(g_bridge.video);
     }
     free(request);

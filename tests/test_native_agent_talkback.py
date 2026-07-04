@@ -419,7 +419,7 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
         media_bridge.index("static bool forward_ondemand_talkback_packet") :
         media_bridge.index("static void drain_ondemand_media_socket")
     ]
-    assert "bridge->ondemand_last_talkback_ms = monotonic_ms();" in media_bridge[
+    assert "bridge->ondemand_last_talkback_ms = c300x_monotonic_ms();" in media_bridge[
         media_bridge.index("static bool forward_ondemand_talkback_packet") :
         media_bridge.index("static void drain_ondemand_media_socket")
     ]

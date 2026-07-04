@@ -314,7 +314,11 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         ),
         Check("code.native.answer_uses_ring_request", "request_ring_answer_if_active(&g_bridge)" in answer_bridge),
         Check("code.native.silence_uses_answer_payload", "send_media_audio_silence_payload_type(" in ring_loop),
-        Check("code.native.ring_event_payload_module_used", "c300x_event_payload_build_doorbell_state" in http),
+        Check(
+            "code.native.ring_event_payload_module_used",
+            "c300x_event_payload_build_doorbell_state" in event_payload
+            and "c300x_event_payload_build_data_json(" in http,
+        ),
         Check("code.event_payload.pressed_supported", 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload),
         Check("code.event_payload.closed_supported", 'strcmp(event_type, "doorbell.media.closed") == 0' in event_payload),
         Check("code.event_payload.view_supported", 'strcmp(event_type, "doorbell.view_requested") == 0' in event_payload),

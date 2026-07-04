@@ -144,7 +144,7 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "c300x_video_bridge_ring_media_started(bridge->video, 1)" in ring_media_loop_body
     assert "long long last_inbound_activity = started_at;" in ring_media_loop_body
     assert "rtsp_clients = rtsp_client_count_locked(bridge);" in ring_media_loop_body
-    assert ring_media_loop_body.count("last_inbound_activity = monotonic_ms();") >= 5
+    assert ring_media_loop_body.count("last_inbound_activity = c300x_monotonic_ms();") >= 5
     assert "RING_ANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
     assert "RING_UNANSWERED_MEDIA_IDLE_TIMEOUT_MS" in ring_media_loop_body
     assert "(!answered || rtsp_clients <= 0)" in ring_media_loop_body
@@ -157,7 +157,7 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert ") && !ring_talkback_recent_locked(bridge, now)" in ring_media_loop_body
     assert "RING_AUDIO_PAYLOAD_TYPE" in ring_media_loop_body
     assert "bridge->ring_last_talkback_ms = 0;" in ring_invite_body
-    assert "bridge->ring_last_talkback_ms = monotonic_ms();" in ring_talkback_body
+    assert "bridge->ring_last_talkback_ms = c300x_monotonic_ms();" in ring_talkback_body
     assert "return ring_active;" in ring_talkback_body
     assert "protect_and_send_srtp(" in ring_talkback_body
     assert "TALKBACK_TARGET_PORT" not in ring_talkback_body
@@ -168,6 +168,9 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
 
 def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> None:
     media_bridge = _read_media_bridge()
+    guard_header = (ROOT / "native_agent" / "src" / "media_session_guard.h").read_text(
+        encoding="utf-8"
+    )
     register_body = media_bridge[
         media_bridge.index("static bool register_rtsp_client_locked") :
         media_bridge.index("static rtsp_client_slot_t *rtsp_client_slot_locked")
@@ -194,6 +197,8 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
     assert "ondemand_audio_stream_sharing_active_locked" in sharing_body
     assert "&& (bridge->media_active || bridge->media_starting)" in sharing_body
     assert "&& bridge->rtsp_audio_enabled" in sharing_body
+    assert "c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)" in sharing_body
+    assert "c300x_media_session_guard_t" in guard_header
 
 
 def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
@@ -209,7 +214,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
         start_pos : media_bridge.index("static void stop_media_session", start_pos)
     ]
     stop_body = media_bridge[
-        media_bridge.index("static void stop_media_session(bool close_client)") :
+        media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
         media_bridge.index("void c300x_media_session_stop")
     ]
     rtsp_body = media_bridge[
@@ -238,6 +243,10 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert "start_bt_av_media(bridge)" in media_bridge
+    assert '#include "media_base64.h"' in media_bridge
+    assert '#include "time_util.h"' in media_bridge
+    assert "static bool base64_encode(" not in media_bridge
+    assert "static long long monotonic_ms" not in media_bridge
     assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
     assert stop_body.index("send_sip_bye(") < stop_body.index(
         "send_bt_av_media_stop();"
@@ -276,12 +285,17 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in rtsp_body
     assert "if (!ring_session && !home_call_session) {" in rtsp_body
     assert "c300x_media_session_stop_in_progress(g_bridge.video)" in rtsp_body
+    assert "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)" in rtsp_body
     assert rtsp_body.index("c300x_media_session_stop_in_progress") < rtsp_body.index(
+        "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)"
+    )
+    assert rtsp_body.index("c300x_media_session_guard_blocks_start") < rtsp_body.index(
         "start_media_session(&g_bridge)"
     )
     assert rtsp_body.index("start_media_session(&g_bridge)") < rtsp_body.index(
         'rtsp_note_play_failure(&g_bridge, "media_start_failed")'
     )
+    assert 'rtsp_note_play_failure(&g_bridge, "explicit_stop_guard")' in rtsp_body
     assert "return bridge->ring_call_active && !bridge->ring_call_stop;" in media_bridge
     assert "return (bridge->home_call_started || bridge->home_call_active) && !bridge->home_call_stop;" in media_bridge
     assert "ring_session_active(&g_bridge)" in rtsp_body
@@ -423,7 +437,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL" in drain_home_call_body
     assert "MEDIA_AUDIO_PAYLOAD_TYPE" in home_call_talkback_body
     assert "bridge->home_call_target_audio_port" in home_call_talkback_body
-    assert "bridge->home_call_last_talkback_ms = monotonic_ms();" in home_call_talkback_body
+    assert "bridge->home_call_last_talkback_ms = c300x_monotonic_ms();" in home_call_talkback_body
 
 
 def test_native_agent_rtsp_backchannel_transcodes_pcm_to_existing_talkback_path() -> None:
@@ -633,6 +647,9 @@ def test_native_agent_home_call_emits_authoritative_state_events() -> None:
 
 def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> None:
     media_bridge = _read_media_bridge()
+    guard_source = (ROOT / "native_agent" / "src" / "media_session_guard.c").read_text(
+        encoding="utf-8"
+    )
     video = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
         encoding="utf-8"
     )
@@ -650,7 +667,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         media_bridge.index("static void close_ring_media_fds_locked")
     ]
     stop_media_body = media_bridge[
-        media_bridge.index("static void stop_media_session(bool close_client)") :
+        media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
         media_bridge.index("void c300x_media_session_stop")
     ]
     rtsp_drain_body = media_bridge[
@@ -687,6 +704,10 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert activate_video_body.index("c300x_media_ring_call_active(video)") < (
         activate_video_body.index("external_media_active_locked(video)")
     )
+    assert "c300x_media_session_note_explicit_activate(video);" in activate_video_body
+    assert activate_video_body.index("c300x_media_session_note_explicit_activate(video);") < (
+        activate_video_body.index("c300x_video_ensure_running(video)")
+    )
     stop_body = video[
         video.index("void c300x_video_stop") :
         video.index("int c300x_video_home_call_start")
@@ -694,7 +715,10 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "c300x_media_session_stop(video);" in stop_body
     assert "c300x_media_bridge_stop(video);" not in stop_body
     assert "video->running = 0;" not in stop_body
-    assert session_start_body.index("if (bridge->stop_in_progress)") < (
+    assert session_start_body.index("bridge->stop_in_progress") < (
+        session_start_body.index("c300x_media_session_guard_blocks_start")
+    )
+    assert session_start_body.index("c300x_media_session_guard_blocks_start") < (
         session_start_body.index("if (bridge->media_active || bridge->media_starting)")
     )
     assert "#define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800" in media_bridge
@@ -708,8 +732,15 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "ring_dispatch_closed =" in session_stop_body
     assert "dispatch_closed = owned && doorbell_media_session_active_locked(&g_bridge);" in session_stop_body
     assert session_stop_body.index("stop_ring_call_if_active") < session_stop_body.index(
-        "stop_media_session(true)"
+        "stop_media_session(true, true)"
     )
+    assert "c300x_media_session_guard_t ondemand_guard;" in media_bridge
+    assert "c300x_media_session_guard_note_stop(&g_bridge.ondemand_guard, explicit_stop)" in stop_media_body
+    assert "guard->explicit_stop = true;" in guard_source
+    assert "c300x_media_session_stop_after_rtsp_disconnect(g_bridge.video)" in media_bridge
+    assert "stop_media_session(true, false)" in media_bridge
+    assert "c300x_media_session_guard_clear(&g_bridge.ondemand_guard)" in media_bridge
+    assert "guard->explicit_stop = false;" in guard_source
     assert "c300x_video_consume_media_closed_event(video)" in session_stop_body
     assert session_stop_body.count(
         'c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);'
@@ -862,17 +893,23 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
 
 def test_native_agent_doorbell_events_include_device_media_state() -> None:
     http = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    video = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
+        encoding="utf-8"
+    )
     event_payload = (ROOT / "native_agent" / "src" / "event_payload.c").read_text(
         encoding="utf-8"
     )
-    state_body = http[
-        http.index("static void dispatch_event_internal")
-        - 1000 :
-        http.index("static void dispatch_event_internal")
+    payload_builder_body = event_payload[
+        event_payload.index("void c300x_event_payload_build_data_json") :
+        event_payload.index("void c300x_event_payload_build_data_json") + 2000
     ]
     dispatch_body = http[
         http.index("static void dispatch_event_internal") :
         http.index("static void dispatch_event(", http.index("static void dispatch_event_internal"))
+    ]
+    dedupe_body = video[
+        video.index("int c300x_video_should_dispatch_event") :
+        video.index("void c300x_video_note_event")
     ]
 
     assert 'strcmp(event_type, "doorbell.pressed") == 0' in event_payload
@@ -900,13 +937,24 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         assert f'\\"{field}\\":' in event_payload
     assert '\\"doorbell\\":%s' in event_payload
     assert 'doorbell_state_for_event(event_type)' in event_payload
-    assert "size_t used = 0;" in state_body
-    assert "c300x_event_payload_build_doorbell_state" in state_body
-    assert "runtime != NULL ? runtime->video : NULL" in state_body
-    assert "c300x_event_payload_needs_doorbell_state" in state_body
+    assert "size_t used = 0;" in payload_builder_body
+    assert "c300x_event_payload_build_doorbell_state" in payload_builder_body
+    assert "c300x_event_payload_needs_doorbell_state" in payload_builder_body
+    assert "c300x_event_payload_build_data_json(" in dispatch_body
+    assert "runtime != NULL ? runtime->video : NULL" in dispatch_body
+    assert "#define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000" in video
+    assert "long long last_doorbell_pressed_ms;" in video
+    assert 'strcmp(event_type, "doorbell.pressed") != 0' in dedupe_body
+    assert "previous = video->last_doorbell_pressed_ms;" in dedupe_body
+    assert "now - previous < C300X_DOORBELL_PRESSED_DEDUPE_MS" in dedupe_body
+    assert "video->last_doorbell_pressed_ms = now;" in dedupe_body
+    assert "c300x_video_should_dispatch_event(runtime->video, event_type)" in dispatch_body
+    assert dispatch_body.index("c300x_video_should_dispatch_event") < dispatch_body.index(
+        "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
+    )
     assert dispatch_body.index(
         "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
-    ) < dispatch_body.index("build_event_data_json(")
+    ) < dispatch_body.index("c300x_event_payload_build_data_json(")
     assert "c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, merged_json)" in dispatch_body
 
 

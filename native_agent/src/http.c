@@ -5479,53 +5479,6 @@ static void handle_subscription_delete(
     send_json(client_fd, 404, "Not Found", "{\"ok\":false}\n");
 }
 
-static void build_event_data_json(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime,
-    const char *event_type,
-    const char *data_json,
-    char *out,
-    size_t out_len
-)
-{
-    char doorbell_json[2304];
-    const char *source = data_json != NULL ? data_json : "{}";
-    size_t source_len;
-    size_t used = 0;
-
-    if (
-        !c300x_event_payload_needs_doorbell_state(event_type)
-        || !c300x_event_payload_build_doorbell_state(
-            config,
-            runtime != NULL ? runtime->video : NULL,
-            event_type,
-            doorbell_json,
-            sizeof(doorbell_json)
-        )
-    ) {
-        c300x_copy_string(out, out_len, source);
-        return;
-    }
-    source_len = strlen(source);
-    if (source_len < 2 || source[0] != '{' || source[source_len - 1] != '}') {
-        c300x_copy_string(out, out_len, source);
-        return;
-    }
-    if (!c300x_appendf(
-        out,
-        out_len,
-        &used,
-        "%.*s%s%s}",
-        (int)(source_len - 1),
-        source,
-        source_len == 2 ? "" : ",",
-        doorbell_json
-    )) {
-        c300x_copy_string(out, out_len, source);
-        return;
-    }
-}
-
 static void dispatch_event_internal(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
@@ -5542,10 +5495,23 @@ static void dispatch_event_internal(
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
     int written;
 
+    if (
+        runtime->video != NULL
+        && !c300x_video_should_dispatch_event(runtime->video, event_type)
+    ) {
+        return;
+    }
     if (update_video_state && runtime->video != NULL) {
         c300x_video_note_event(runtime->video, event_type, ttl_seconds);
     }
-    build_event_data_json(config, runtime, event_type, data_json, merged_json, sizeof(merged_json));
+    c300x_event_payload_build_data_json(
+        config,
+        runtime != NULL ? runtime->video : NULL,
+        event_type,
+        data_json,
+        merged_json,
+        sizeof(merged_json)
+    );
     utc_now(occurred_at, sizeof(occurred_at));
     json_string(event_type, event_type_json, sizeof(event_type_json));
     written = snprintf(

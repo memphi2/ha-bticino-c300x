@@ -14,5 +14,13 @@ int c300x_event_payload_build_doorbell_state(
     char *out,
     size_t out_len
 );
+void c300x_event_payload_build_data_json(
+    const struct c300x_config *config,
+    struct c300x_video *video,
+    const char *event_type,
+    const char *data_json,
+    char *out,
+    size_t out_len
+);
 
 #endif

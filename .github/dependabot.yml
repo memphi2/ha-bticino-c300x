@@ -40,13 +40,6 @@ updates:
       - dependency-name: "homeassistant"
         versions:
           - ">=0"
-      # Re-evaluate after HA 2026.7 media compatibility branch is green.
-      - dependency-name: "av"
-        versions:
-          - ">=17"
       - dependency-name: "paramiko"
         versions:
           - ">=4"
-      - dependency-name: "PyTurboJPEG"
-        versions:
-          - ">=2.4"

@@ -1260,9 +1260,14 @@ def test_manifest_does_not_require_optional_paramiko() -> None:
 
 
 def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:
-    requirements_dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    requirement_files = (
+        ROOT / "requirements-dev.in",
+        ROOT / "requirements-dev.lock",
+        ROOT / "requirements-dev-min-ha.lock",
+    )
 
-    assert "paramiko==3.5.1" in requirements_dev.splitlines()
+    for path in requirement_files:
+        assert "paramiko==3.5.1" in path.read_text(encoding="utf-8").splitlines()
 
 
 def test_manifest_does_not_require_aiortc() -> None:

@@ -101,10 +101,11 @@ and tests. No `tcpdump2mqtt` source tree or script payload is vendored in this
 repository.
 
 The Home Assistant integration does not require external Python packages
-through Home Assistant packaging metadata. Optional WebRTC development tests
-still use `aiortc==1.14.0`, and the optional SSH installer loads Paramiko lazily
-while accepting only the validated `paramiko==3.5.1` version. These dependencies
-are not vendored into this repository.
+through Home Assistant packaging metadata. The integration-local WebRTC runtime
+is not declared as a Home Assistant package requirement, and the optional SSH
+installer loads Paramiko lazily while accepting only the validated
+`paramiko==3.5.1` version. These dependencies are not vendored into this
+repository.
 
 ## Assets
 

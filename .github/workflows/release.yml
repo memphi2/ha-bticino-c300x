@@ -30,9 +30,11 @@ jobs:
           - name: min-ha
             python-version: "3.14"
             homeassistant: "2026.5.0"
+            requirements-lock: requirements-dev-min-ha.lock
           - name: current-ha
             python-version: "3.14"
-            homeassistant: "2026.6.1"
+            homeassistant: "2026.7.1"
+            requirements-lock: requirements-dev.lock
     name: validate (${{ matrix.name }})
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -44,10 +46,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install Python validation tools
         run: |
-          python -m pip install --upgrade pip
-          grep -v '^homeassistant==' requirements-dev.txt > /tmp/c300x-requirements-dev-no-ha.txt
-          python -m pip install --upgrade -r /tmp/c300x-requirements-dev-no-ha.txt
-          python -m pip install --upgrade "homeassistant==${{ matrix.homeassistant }}"
+          python -m pip install -r "${{ matrix.requirements-lock }}"
+          python -m pip check
+          python - <<'PY'
+          from importlib.metadata import version
+
+          expected = "${{ matrix.homeassistant }}"
+          actual = version("homeassistant")
+          if actual != expected:
+              raise SystemExit(f"homeassistant lock mismatch: expected {expected}, got {actual}")
+          PY
       - name: Install native agent toolchain
         run: |
           sudo apt-get update

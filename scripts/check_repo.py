@@ -11,9 +11,28 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MIN_HOME_ASSISTANT_VERSION = "2026.5.0"
-CURRENT_HOME_ASSISTANT_VERSION = "2026.6.1"
-CURRENT_RELEASE_VERSION = "1.6.5"
+VERSION_CONFIG_PATH = ROOT / "project-versions.json"
+
+
+def _load_version_config() -> dict[str, str]:
+    data = json.loads(VERSION_CONFIG_PATH.read_text(encoding="utf-8"))
+    required_keys = {
+        "min_homeassistant",
+        "current_homeassistant",
+        "python",
+        "integration_version",
+    }
+    missing = sorted(required_keys.difference(data))
+    if missing:
+        raise RuntimeError(f"project-versions.json is missing keys: {', '.join(missing)}")
+    return {key: str(data[key]) for key in required_keys}
+
+
+VERSION_CONFIG = _load_version_config()
+MIN_HOME_ASSISTANT_VERSION = VERSION_CONFIG["min_homeassistant"]
+CURRENT_HOME_ASSISTANT_VERSION = VERSION_CONFIG["current_homeassistant"]
+PYTHON_VERSION = VERSION_CONFIG["python"]
+CURRENT_RELEASE_VERSION = VERSION_CONFIG["integration_version"]
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
 TEXT_SUFFIXES = {
     ".c",
@@ -65,6 +84,7 @@ REQUIRED_PATHS = [
     "PRIVACY.md",
     "SECURITY.md",
     ".github/dependabot.yml",
+    "project-versions.json",
     "custom_components/bticino_c300x/manifest.json",
     "custom_components/bticino_c300x/brand/icon.png",
     "custom_components/bticino_c300x/brand/logo.png",
@@ -87,7 +107,9 @@ REQUIRED_PATHS = [
     "scripts/verify_media_reference_flow.py",
     "scripts/write_release_assets.py",
     "scripts/smoke_ha.py",
-    "requirements-dev.txt",
+    "requirements-dev.in",
+    "requirements-dev.lock",
+    "requirements-dev-min-ha.lock",
     "hacs.json",
     "native_agent/Makefile",
     "native_agent/API.md",
@@ -423,12 +445,30 @@ def check_installer_dependency_pins() -> list[str]:
         )
     if any(str(requirement).startswith("aiortc") for requirement in manifest.get("requirements", [])):
         failures.append(
-            "manifest.json must not require aiortc; HA 2026.7 stream uses av 17"
+            "manifest.json must not require aiortc; media uses Home Assistant's WebRTC provider"
         )
 
-    requirements_dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    if required_pin not in requirements_dev.splitlines():
-        failures.append(f"requirements-dev.txt must pin {required_pin}")
+    requirements_in = (ROOT / "requirements-dev.in").read_text(encoding="utf-8")
+    current_lock = (ROOT / "requirements-dev.lock").read_text(encoding="utf-8")
+    min_lock = (ROOT / "requirements-dev-min-ha.lock").read_text(encoding="utf-8")
+    if required_pin not in requirements_in.splitlines():
+        failures.append(f"requirements-dev.in must pin {required_pin}")
+    if "homeassistant==" in requirements_in:
+        failures.append("requirements-dev.in must leave Home Assistant to the CI lock matrix")
+    expected_current_ha = f"homeassistant=={CURRENT_HOME_ASSISTANT_VERSION}"
+    expected_min_ha = f"homeassistant=={MIN_HOME_ASSISTANT_VERSION}"
+    if expected_current_ha not in current_lock.splitlines():
+        failures.append(f"requirements-dev.lock must pin {expected_current_ha}")
+    if expected_min_ha not in min_lock.splitlines():
+        failures.append(f"requirements-dev-min-ha.lock must pin {expected_min_ha}")
+    for path, text in {
+        "requirements-dev.lock": current_lock,
+        "requirements-dev-min-ha.lock": min_lock,
+    }.items():
+        if required_pin not in text.splitlines():
+            failures.append(f"{path} must pin {required_pin}")
+        if "aiortc==" in text:
+            failures.append(f"{path} must not install aiortc")
 
     installer = (
         ROOT / "custom_components" / "bticino_c300x" / "device_installer.py"
@@ -463,11 +503,6 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("Dependabot must document manual Home Assistant compatibility bumps")
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
-    if (
-        'dependency-name: "PyTurboJPEG"' not in dependabot
-        or '">=2.4"' not in dependabot
-    ):
-        failures.append("Dependabot must ignore PyTurboJPEG >=2.4 for dev env stability")
     if (
         'dependency-name: "homeassistant"' not in dependabot
         or '">=0"' not in dependabot
@@ -518,21 +553,31 @@ def check_hacs_metadata() -> list[str]:
             "HACS build script must support verified release-agent reuse when the agent did not change"
         )
 
-    validate_workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
-        encoding="utf-8"
-    )
-    if MIN_HOME_ASSISTANT_VERSION not in validate_workflow:
-        failures.append(
-            f"validate workflow must test minimum Home Assistant {MIN_HOME_ASSISTANT_VERSION}"
-        )
-    if CURRENT_HOME_ASSISTANT_VERSION not in validate_workflow:
-        failures.append(
-            f"validate workflow must test current Home Assistant {CURRENT_HOME_ASSISTANT_VERSION}"
-        )
-    if validate_workflow.count('python-version: "3.14"') < 2:
-        failures.append(
-            "validate workflow must test minimum and current Home Assistant on Python 3.14"
-        )
+    validate_workflow_path = ROOT / ".github" / "workflows" / "validate.yml"
+    release_workflow_path = ROOT / ".github" / "workflows" / "release.yml"
+    validate_workflow = validate_workflow_path.read_text(encoding="utf-8")
+    release_workflow = release_workflow_path.read_text(encoding="utf-8")
+    for workflow_path, workflow in {
+        validate_workflow_path: validate_workflow,
+        release_workflow_path: release_workflow,
+    }.items():
+        workflow_name = workflow_path.name
+        if MIN_HOME_ASSISTANT_VERSION not in workflow:
+            failures.append(
+                f"{workflow_name} must test minimum Home Assistant {MIN_HOME_ASSISTANT_VERSION}"
+            )
+        if CURRENT_HOME_ASSISTANT_VERSION not in workflow:
+            failures.append(
+                f"{workflow_name} must test current Home Assistant {CURRENT_HOME_ASSISTANT_VERSION}"
+            )
+        if workflow.count(f'python-version: "{PYTHON_VERSION}"') < 2:
+            failures.append(
+                f"{workflow_name} must test minimum and current Home Assistant on Python {PYTHON_VERSION}"
+            )
+        if "requirements-dev.lock" not in workflow or "requirements-dev-min-ha.lock" not in workflow:
+            failures.append(f"{workflow_name} must install validation dependencies from lock files")
+        if "pip install --upgrade -r" in workflow or "requirements-dev.txt" in workflow:
+            failures.append(f"{workflow_name} must not use moving validation requirements")
     if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:
         failures.append("validate workflow must run HACS integration validation")
     if "ignore: hacsjson integration_manifest" not in validate_workflow:
@@ -542,9 +587,6 @@ def check_hacs_metadata() -> list[str]:
     if "home-assistant/actions/hassfest@" not in validate_workflow:
         failures.append("validate workflow must run Hassfest")
 
-    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-        encoding="utf-8"
-    )
     required_release_tokens = {
         "push:\n    tags:": "release workflow must run from immutable release tags",
         "scripts/check_release_tag.py": "release workflow must validate tag metadata",
@@ -623,12 +665,13 @@ def check_github_automation() -> list[str]:
 def check_python_runtime() -> list[str]:
     failures: list[str] = []
     runtime = f"{sys.version_info.major}.{sys.version_info.minor}"
-    if runtime != "3.14":
-        failures.append("Python 3.14 is required for the supported Home Assistant CI gates")
+    if runtime != PYTHON_VERSION:
+        failures.append(f"Python {PYTHON_VERSION} is required for the supported Home Assistant CI gates")
     pyproject = ROOT / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
-    if 'target-version = "py314"' not in text:
-        failures.append("pyproject.toml must keep Ruff target-version at py314")
+    ruff_target = f"py{PYTHON_VERSION.replace('.', '')}"
+    if f'target-version = "{ruff_target}"' not in text:
+        failures.append(f"pyproject.toml must keep Ruff target-version at {ruff_target}")
     return failures
 
 

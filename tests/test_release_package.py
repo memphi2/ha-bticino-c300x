@@ -124,12 +124,30 @@ def test_release_builder_requires_verified_device_sysroot(
     assert builder._release_sysroot() == valid_sysroot
 
 
+def test_release_builder_can_reuse_agent_from_release_zip(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    builder = _load_release_builder()
+    agent_binary = tmp_path / "native_agent" / "build" / "armhf" / "c300x-agent-native"
+    release_zip = tmp_path / "ha-bticino-c300x.zip"
+    with zipfile.ZipFile(release_zip, "w") as archive:
+        archive.writestr("device_agent/armhf/c300x-agent-native", b"agent")
+
+    monkeypatch.setattr(builder, "AGENT_BINARY", agent_binary)
+
+    builder._restore_agent_from_release_zip(release_zip)
+
+    assert agent_binary.read_bytes() == b"agent"
+    assert agent_binary.stat().st_mode & 0o777 == 0o700
+
+
 def test_release_tag_checker_matches_current_metadata() -> None:
     checker = _load_release_tag_checker()
 
-    assert checker.validate_release_tag("v1.6.2") == []
-    assert checker.validate_release_tag("1.6.2") == [
-        "release tag must use vX.Y.Z format, got '1.6.2'"
+    assert checker.validate_release_tag("v1.6.3") == []
+    assert checker.validate_release_tag("1.6.3") == [
+        "release tag must use vX.Y.Z format, got '1.6.3'"
     ]
 
 

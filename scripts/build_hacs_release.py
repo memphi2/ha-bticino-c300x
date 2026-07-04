@@ -44,10 +44,25 @@ def main() -> int:
         default=None,
         help="Output zip path. Defaults to .release/ha-bticino-c300x.zip.",
     )
+    parser.add_argument(
+        "--reuse-agent-from-release-zip",
+        type=Path,
+        default=None,
+        help=(
+            "Extract the ARMHF agent binary from an existing HACS release zip. "
+            "Use only when native-agent and device bundle inputs are unchanged."
+        ),
+    )
     args = parser.parse_args()
 
     version = _integration_version()
-    if not args.skip_build:
+    if args.reuse_agent_from_release_zip is not None:
+        try:
+            _restore_agent_from_release_zip(args.reuse_agent_from_release_zip)
+        except (OSError, zipfile.BadZipFile, KeyError) as err:
+            sys.stderr.write(f"Cannot reuse ARMHF agent from release zip: {err}\n")
+            return 1
+    elif not args.skip_build:
         sysroot = _release_sysroot()
         if sysroot is None:
             sys.stderr.write(
@@ -106,6 +121,14 @@ def _write_zip(output: Path) -> None:
         for path in sorted(PACKAGE_ROOT.rglob("*")):
             if path.is_file():
                 archive.writestr(_zip_info(path), path.read_bytes())
+
+
+def _restore_agent_from_release_zip(zip_path: Path) -> None:
+    with zipfile.ZipFile(zip_path) as archive:
+        data = archive.read("device_agent/armhf/c300x-agent-native")
+    AGENT_BINARY.parent.mkdir(parents=True, exist_ok=True)
+    AGENT_BINARY.write_bytes(data)
+    AGENT_BINARY.chmod(0o700)
 
 
 def _zip_info(path: Path) -> zipfile.ZipInfo:

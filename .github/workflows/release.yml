@@ -110,8 +110,49 @@ jobs:
           sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
       - name: Release validation gates
         run: python scripts/check_repo.py
+      - name: Resolve reusable native agent
+        id: reusable-agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${C300X_DEVICE_SYSROOT:-}" ] \
+            && [ -f "${C300X_DEVICE_SYSROOT}/lib/libc.so.6" ]; then
+            echo "reuse_args=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          previous_tag="$(git tag --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -F -x -v "$RELEASE_TAG" \
+            | head -n 1 || true)"
+          if [ -z "$previous_tag" ]; then
+            echo "::error::C300X_DEVICE_SYSROOT is unavailable and no previous release tag exists for agent reuse"
+            exit 1
+          fi
+          changed_inputs="$(git diff --name-only "$previous_tag..HEAD" -- \
+            native_agent/src \
+            native_agent/scripts \
+            native_agent/VERSION \
+            native_agent/Makefile \
+            native_agent/config.example.json \
+            device_qml \
+            custom_components/bticino_c300x/device_agent/init \
+            scripts/stage_device_agent_bundle.py)"
+          if [ -n "$changed_inputs" ]; then
+            printf '%s\n' "$changed_inputs"
+            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT is required"
+            exit 1
+          fi
+          mkdir -p .release/reuse
+          gh release download "$previous_tag" \
+            --pattern ha-bticino-c300x.zip \
+            --dir .release/reuse \
+            --clobber
+          test -s .release/reuse/ha-bticino-c300x.zip
+          echo "reuse_args=--reuse-agent-from-release-zip .release/reuse/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
       - name: Build HACS release zip
-        run: scripts/build_hacs_release.py
+        run: scripts/build_hacs_release.py ${{ steps.reusable-agent.outputs.reuse_args }}
       - name: Generate release metadata
         run: |
           scripts/write_release_assets.py \

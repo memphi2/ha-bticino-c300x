@@ -513,6 +513,10 @@ def check_hacs_metadata() -> list[str]:
         failures.append(
             "HACS zip_release package must contain the integration files at zip root"
         )
+    if "--reuse-agent-from-release-zip" not in build_script:
+        failures.append(
+            "HACS build script must support verified release-agent reuse when the agent did not change"
+        )
 
     validate_workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
         encoding="utf-8"
@@ -545,6 +549,10 @@ def check_hacs_metadata() -> list[str]:
         "push:\n    tags:": "release workflow must run from immutable release tags",
         "scripts/check_release_tag.py": "release workflow must validate tag metadata",
         "scripts/build_hacs_release.py": "release workflow must build the HACS zip asset",
+        "Resolve reusable native agent": "release workflow must resolve reusable native-agent assets",
+        "Native agent/bundle inputs changed": "release workflow must block agent reuse when bundle inputs changed",
+        "gh release download": "release workflow must download the previous release asset for agent reuse",
+        "--reuse-agent-from-release-zip": "release workflow must pass reusable agent assets to the HACS builder",
         "scripts/write_release_assets.py": "release workflow must write release metadata assets",
         ".release/ha-bticino-c300x.zip": "release workflow must produce the HACS zip asset",
         ".release/SHA256SUMS": "release workflow must attach SHA256SUMS",

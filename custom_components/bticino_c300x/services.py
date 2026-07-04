@@ -167,6 +167,7 @@ _DELETE_SERVICE_NAMES = (
     SERVICE_DELETE_LATEST_VOICE_MEMO,
 )
 type _ServiceHandler = Callable[[ServiceCall], Awaitable[None]]
+type _ServiceSpec = tuple[str, _ServiceHandler, vol.Schema]
 type _EntrySupport = Callable[[Any], bool]
 
 
@@ -425,7 +426,26 @@ def _register_base_services(
 ) -> None:
     """Register services that are always part of the integration."""
 
-    for service_name, handler, schema in (
+    for service_name, handler, schema in _base_service_specs(handlers):
+        hass.services.async_register(DOMAIN, service_name, cast(Any, handler), schema=schema)
+
+
+def _base_service_specs(handlers: _C300XServiceHandlers) -> tuple[_ServiceSpec, ...]:
+    """Return service specs that are always part of the integration."""
+
+    return (
+        *_device_action_service_specs(handlers),
+        *_doorbell_media_service_specs(handlers),
+        *_ring_analysis_service_specs(handlers),
+        *_maintenance_service_specs(handlers),
+        *_message_service_specs(handlers),
+    )
+
+
+def _device_action_service_specs(
+    handlers: _C300XServiceHandlers,
+) -> tuple[_ServiceSpec, ...]:
+    return (
         (
             SERVICE_RUN_ACTION,
             handlers.async_run_action,
@@ -478,6 +498,13 @@ def _register_base_services(
                 }
             ),
         ),
+    )
+
+
+def _doorbell_media_service_specs(
+    handlers: _C300XServiceHandlers,
+) -> tuple[_ServiceSpec, ...]:
+    return (
         (
             SERVICE_ACTIVATE_DOORBELL_VIDEO,
             handlers.async_activate_doorbell_video,
@@ -518,6 +545,28 @@ def _register_base_services(
             ),
         ),
         (
+            SERVICE_START_HOME_CALL,
+            handlers.async_start_home_call,
+            vol.Schema(
+                {
+                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
+                    vol.Optional(_ATTR_DURATION_SECONDS): _home_call_duration_seconds,
+                }
+            ),
+        ),
+        (
+            SERVICE_STOP_HOME_CALL,
+            handlers.async_stop_home_call,
+            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
+        ),
+    )
+
+
+def _ring_analysis_service_specs(
+    handlers: _C300XServiceHandlers,
+) -> tuple[_ServiceSpec, ...]:
+    return (
+        (
             SERVICE_RUN_RING_WYOMING_ANALYSIS,
             handlers.async_run_ring_wyoming_analysis,
             vol.Schema(
@@ -542,26 +591,21 @@ def _register_base_services(
                     vol.Optional(_ATTR_DECISION_PATH): cv.string,
                     vol.Optional(_ATTR_CAPTURE_PATH): cv.string,
                     vol.Optional(_ATTR_EXPECTED_PHRASE): cv.string,
-                    vol.Optional(_ATTR_UNLOCK_ON_MATCH, default=False): _boolean_service_value,
+                    vol.Optional(
+                        _ATTR_UNLOCK_ON_MATCH,
+                        default=False,
+                    ): _boolean_service_value,
                     vol.Optional(_ATTR_LOCK_ID, default="default"): _lock_id,
                 }
             ),
         ),
-        (
-            SERVICE_START_HOME_CALL,
-            handlers.async_start_home_call,
-            vol.Schema(
-                {
-                    vol.Optional(_ATTR_ENTRY_ID): cv.string,
-                    vol.Optional(_ATTR_DURATION_SECONDS): _home_call_duration_seconds,
-                }
-            ),
-        ),
-        (
-            SERVICE_STOP_HOME_CALL,
-            handlers.async_stop_home_call,
-            vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
-        ),
+    )
+
+
+def _maintenance_service_specs(
+    handlers: _C300XServiceHandlers,
+) -> tuple[_ServiceSpec, ...]:
+    return (
         (
             SERVICE_REBOOT,
             handlers.async_reboot,
@@ -572,6 +616,13 @@ def _register_base_services(
             handlers.async_reload_gui,
             vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
         ),
+    )
+
+
+def _message_service_specs(
+    handlers: _C300XServiceHandlers,
+) -> tuple[_ServiceSpec, ...]:
+    return (
         (
             SERVICE_PLAY_LATEST_VIDEO_MESSAGE,
             handlers.async_play_latest_video_message,
@@ -593,8 +644,7 @@ def _register_base_services(
                 }
             ),
         ),
-    ):
-        hass.services.async_register(DOMAIN, service_name, handler, schema=schema)
+    )
 
 
 def _play_media_schema() -> vol.Schema:

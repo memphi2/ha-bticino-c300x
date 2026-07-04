@@ -1,8 +1,21 @@
 # Changelog
 
-## v1.6.5 - Unreleased
+## v1.6.5 - 2026-07-04
 
-No user-facing changes yet.
+### Fixed
+
+- Keep on-demand and Ring Call stop handling idempotent so duplicate stop
+  events do not reopen a stopped media session.
+- Close shared browser media sessions cleanly when another browser answers or
+  hangs up a Ring Call.
+- Reduce repeated go2rtc RTSP retry warnings after stopping doorstation media.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
+- Update the native C300X device agent from Home Assistant to `1.6.5`.
 
 ## v1.6.4 - 2026-07-04
 

@@ -438,14 +438,29 @@ def check_installer_dependency_pins() -> list[str]:
     if "_validate_paramiko_version(paramiko)" not in installer:
         failures.append("device_installer.py must reject unvalidated Paramiko versions")
 
+    sensor = (ROOT / "custom_components" / "bticino_c300x" / "sensor.py").read_text(
+        encoding="utf-8"
+    )
+    if "PERCENTAGE" in sensor:
+        failures.append(
+            "sensor.py must not import Home Assistant PERCENTAGE; HA 2026.7 deprecates it as a unit"
+        )
+
     dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     if (
         "python-patch-minor:" not in dependabot
         or 'update-types:\n          - "minor"\n          - "patch"' not in dependabot
     ):
         failures.append("Dependabot must group only Python minor/patch updates")
-    if "Re-evaluate after HA 2026.7 compatibility branch is green." not in dependabot:
-        failures.append("Dependabot major-version ignores must carry a re-evaluate note")
+    if 'interval: "monthly"' not in dependabot:
+        failures.append("Dependabot must check Python dependencies monthly for LTS stability")
+    if (
+        'dependency-name: "*"' not in dependabot
+        or "version-update:semver-major" not in dependabot
+    ):
+        failures.append("Dependabot must leave Python major updates to manual compatibility work")
+    if "Home Assistant compatibility is bumped manually" not in dependabot:
+        failures.append("Dependabot must document manual Home Assistant compatibility bumps")
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
     if (
@@ -455,10 +470,10 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("Dependabot must ignore PyTurboJPEG >=2.4 for dev env stability")
     if (
         'dependency-name: "homeassistant"' not in dependabot
-        or '">=2026.7"' not in dependabot
+        or '">=0"' not in dependabot
     ):
         failures.append(
-            "Dependabot must ignore Home Assistant dev pins; CI uses validate.yml"
+            "Dependabot must leave Home Assistant dev pins to manual matrix bumps"
         )
     return failures
 

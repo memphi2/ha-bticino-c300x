@@ -14,7 +14,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    PERCENTAGE,
     EntityCategory,
     UnitOfTemperature,
 )
@@ -78,6 +77,7 @@ from .video_messages import (
 PARALLEL_UPDATES = 1
 _METRICS_CACHE_SECONDS = 10
 _DOORBELL_CLOSED_STATES = frozenset({DOORBELL_STATE_IDLE})
+_PERCENT = "%"
 _DOORBELL_EVENT_STATES = {
     "doorbell_pressed": DOORBELL_STATE_RINGING,
     "doorbell_view_requested": DOORBELL_STATE_VIEW_REQUESTED,
@@ -917,7 +917,7 @@ class C300XDeviceLoadSensor(C300XSystemMetricSensor):
     """Device-agent host CPU-normalized load sensor."""
 
     _attr_suggested_display_precision = 2
-    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_native_unit_of_measurement = _PERCENT
     _attr_translation_key = "device_load"
     _metric_key = "load_1m_percent"
 
@@ -955,7 +955,7 @@ class C300XDeviceMemorySensor(C300XSystemMetricSensor):
     """Device-agent host memory usage sensor."""
 
     _attr_suggested_display_precision = 1
-    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_native_unit_of_measurement = _PERCENT
     _attr_translation_key = "device_memory"
     _metric_key = "memory_usage_percent"
 
@@ -983,7 +983,7 @@ class C300XDeviceCpuSensor(C300XSystemMetricSensor):
     """Device-agent host CPU usage sensor."""
 
     _attr_suggested_display_precision = 1
-    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_native_unit_of_measurement = _PERCENT
     _attr_translation_key = "device_cpu"
     _metric_key = "cpu_usage_percent"
 

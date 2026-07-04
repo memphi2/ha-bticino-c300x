@@ -88,7 +88,6 @@ if "homeassistant.components.sensor" not in sys.modules:
     class UnitOfTime:  # pragma: no cover - import-time stub only
         SECONDS = "s"
 
-    const.PERCENTAGE = "%"
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
     issue_registry.async_create_issue = lambda **kwargs: None

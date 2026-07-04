@@ -42,6 +42,10 @@ _ORIGINAL_VIDEO_CONTENT_TYPES = {
 }
 
 
+class C300XMediaDependencyError(RuntimeError):
+    """Raised when an optional Home Assistant media dependency is unavailable."""
+
+
 def async_setup_media_view(hass: HomeAssistant) -> None:
     """Register authenticated media proxy views once."""
 
@@ -99,6 +103,8 @@ class C300XVideoMessageMediaView(HomeAssistantView):
                     _convert_video_message_to_mp4,
                     content,
                 )
+            except C300XMediaDependencyError as err:
+                raise web.HTTPBadGateway(text=str(err)) from err
             except Exception as err:
                 raise web.HTTPBadGateway(
                     text="C300X video message could not be converted to MP4"
@@ -185,8 +191,13 @@ def _should_transcode_video_message(content_type: str) -> bool:
 def _convert_video_message_to_mp4(content: bytes) -> bytes:
     """Convert C300X AVI video messages into browser-playable MP4 bytes."""
 
-    import av
-    from av.audio.resampler import AudioResampler
+    try:
+        import av
+        from av.audio.resampler import AudioResampler
+    except ImportError as err:
+        raise C300XMediaDependencyError(
+            "PyAV is not installed on Home Assistant"
+        ) from err
 
     source = BytesIO(content)
     target = BytesIO()

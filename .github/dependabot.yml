@@ -18,11 +18,10 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "05:30"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     groups:
       python-patch-minor:
         patterns:
@@ -33,7 +32,15 @@ updates:
     commit-message:
       prefix: "deps"
     ignore:
-      # Re-evaluate after HA 2026.7 compatibility branch is green.
+      # Python majors are compatibility work, not routine maintenance.
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+      # Home Assistant compatibility is bumped manually after min/current CI matrix proof.
+      - dependency-name: "homeassistant"
+        versions:
+          - ">=0"
+      # Re-evaluate after HA 2026.7 media compatibility branch is green.
       - dependency-name: "av"
         versions:
           - ">=17"
@@ -43,6 +50,3 @@ updates:
       - dependency-name: "PyTurboJPEG"
         versions:
           - ">=2.4"
-      - dependency-name: "homeassistant"
-        versions:
-          - ">=2026.7"

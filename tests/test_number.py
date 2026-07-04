@@ -92,7 +92,6 @@ class DeviceInfo(dict):  # pragma: no cover - import-time stub only
 
 number.NumberEntity = NumberEntity
 config_entries.ConfigEntry = ConfigEntry
-const.PERCENTAGE = "%"
 core.HomeAssistant = HomeAssistant
 core.ServiceCall = ServiceCall
 core.callback = lambda func: func

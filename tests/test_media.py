@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import sys
 import types
 from types import SimpleNamespace
@@ -330,6 +331,34 @@ def test_convert_video_message_to_mp4_rejects_missing_video_stream(
 
     with pytest.raises(ValueError, match="does not contain a video stream"):
         media_module._convert_video_message_to_mp4(b"audio-only")
+
+
+def test_convert_video_message_to_mp4_maps_missing_pyav(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for module_name in ("av", "av.audio", "av.audio.resampler"):
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    original_import = builtins.__import__
+
+    def fake_import(
+        name: str,
+        globals_: dict[str, object] | None = None,
+        locals_: dict[str, object] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> object:
+        if name == "av" or name.startswith("av."):
+            raise ImportError("missing PyAV")
+        return original_import(name, globals_, locals_, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(
+        media_module.C300XMediaDependencyError,
+        match="PyAV is not installed",
+    ):
+        media_module._convert_video_message_to_mp4(b"avi")
 
 
 class _FakeMediaApi:

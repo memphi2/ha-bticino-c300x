@@ -62,6 +62,8 @@ def activation_items_from_feature_data(
 def activation_manage_step(
     user_input: dict[str, Any] | None,
     items: list[dict[str, Any]],
+    *,
+    max_items: int = MAX_DEVICE_ACTIVATIONS,
 ) -> ActivationStepResult:
     """Handle Add/Edit/Remove/Done input for activation management."""
 
@@ -78,7 +80,7 @@ def activation_manage_step(
     if action == DEVICE_ACTIVATION_FLOW_ACTION_DONE:
         return ActivationStepResult(ACTIVATION_STEP_DONE, items, None, {})
     if action == DEVICE_ACTIVATION_FLOW_ACTION_ADD:
-        if len(items) >= MAX_DEVICE_ACTIVATIONS:
+        if len(items) >= _bounded_max_items(max_items):
             return ActivationStepResult(
                 ACTIVATION_STEP_MANAGE,
                 items,
@@ -123,13 +125,19 @@ def activation_item_step(
 
     if user_input is None:
         return ActivationStepResult(ACTIVATION_STEP_ITEM, items, edit_id, {})
+    if edit_id is None and len(items) >= activation_item_limit(feature_data):
+        return ActivationStepResult(
+            ACTIVATION_STEP_MANAGE,
+            items,
+            None,
+            {"base": "invalid_device_activations"},
+        )
     try:
         item = _activation_from_form(
             user_input,
             reserved_ids=_activation_reserved_ids(
                 items,
                 edit_id=edit_id,
-                manual_stair_light=_activation_mode_is_manual(feature_data),
             ),
         )
     except DeviceActivationConfigError:
@@ -145,6 +153,14 @@ def activation_item_step(
         None,
         {},
     )
+
+
+def activation_item_limit(feature_data: dict[str, Any]) -> int:
+    """Return the maximum number of user-managed activation items."""
+
+    if _activation_mode_is_manual(feature_data):
+        return MAX_DEVICE_ACTIVATIONS - 1
+    return MAX_DEVICE_ACTIVATIONS
 
 
 def activation_manage_form(
@@ -244,16 +260,18 @@ def _activation_reserved_ids(
     items: list[dict[str, Any]],
     *,
     edit_id: str | None,
-    manual_stair_light: bool,
 ) -> set[str]:
     reserved = {
         str(item.get("id") or "")
         for item in items
         if item.get("id") and item.get("id") != edit_id
     }
-    if manual_stair_light:
-        reserved.add("stair_light")
+    reserved.add("stair_light")
     return reserved
+
+
+def _bounded_max_items(value: int) -> int:
+    return max(0, min(value, MAX_DEVICE_ACTIVATIONS))
 
 
 def _activation_from_form(

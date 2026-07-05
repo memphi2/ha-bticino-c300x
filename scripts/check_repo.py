@@ -90,6 +90,8 @@ REQUIRED_PATHS = [
     "SECURITY.md",
     "SUPPORT.md",
     ".github/dependabot.yml",
+    ".github/codeql/codeql-config.yml",
+    ".github/workflows/codeql.yml",
     "project-versions.json",
     "custom_components/bticino_c300x/manifest.json",
     "custom_components/bticino_c300x/brand/icon.png",

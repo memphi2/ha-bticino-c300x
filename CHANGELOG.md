@@ -2,7 +2,26 @@
 
 ## v1.7.0 - Unreleased
 
-No user-facing changes yet.
+### Added
+
+- Add configurable device activation buttons in setup, options, and reconfigure
+  flows.
+
+### Fixed
+
+- Keep manual stair-light activation configuration within the native 16-item
+  limit.
+- Reserve the generated `stair_light` activation ID in all activation modes to
+  avoid conflicting custom buttons.
+- Align Home Assistant activation-address validation with the native device
+  agent limit.
+
+### Upgrade Notes
+
+- Update or reconfigure the native C300X device agent before using custom device
+  activations.
+- Use Reconfigure after updating if custom device activations were configured
+  before this prerelease.
 
 ## v1.6.6 - 2026-07-05
 

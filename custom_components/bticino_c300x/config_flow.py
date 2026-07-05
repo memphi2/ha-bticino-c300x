@@ -27,6 +27,9 @@ from .config_flow_activations import (
     activation_item_form as _activation_item_form,
 )
 from .config_flow_activations import (
+    activation_item_limit as _activation_item_limit,
+)
+from .config_flow_activations import (
     activation_item_step as _activation_item_step,
 )
 from .config_flow_activations import (
@@ -626,7 +629,11 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not self._setup_feature_data:
             return await self.async_step_user_features()
 
-        result = _activation_manage_step(user_input, self._setup_device_activations)
+        result = _activation_manage_step(
+            user_input,
+            self._setup_device_activations,
+            max_items=_activation_item_limit(self._setup_feature_data),
+        )
         self._setup_device_activations = result.items
         self._setup_activation_edit_id = result.edit_id
         if result.next_step == _ACTIVATION_STEP_DONE:
@@ -958,6 +965,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         result = _activation_manage_step(
             user_input,
             self._reconfigure_device_activations,
+            max_items=_activation_item_limit(self._reconfigure_feature_data),
         )
         self._reconfigure_device_activations = result.items
         self._reconfigure_activation_edit_id = result.edit_id
@@ -1322,7 +1330,11 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         if not self._feature_options:
             return await self.async_step_features()
 
-        result = _activation_manage_step(user_input, self._device_activations)
+        result = _activation_manage_step(
+            user_input,
+            self._device_activations,
+            max_items=_activation_item_limit(self._feature_options),
+        )
         self._device_activations = result.items
         self._activation_edit_id = result.edit_id
         if result.next_step == _ACTIVATION_STEP_DONE:

@@ -63,12 +63,13 @@ def desired_activation_items(
     if mode == DEVICE_ACTIVATION_MODE_MANUAL:
         items.append(stair_light_activation(stair_light_address))
         reserved_ids.add("stair_light")
-    items.extend(
-        normalize_device_activations(
-            device_activations,
-            reserved_ids=reserved_ids,
-        )
+    additional_items = normalize_device_activations(
+        device_activations,
+        reserved_ids=reserved_ids,
     )
+    if len(items) + len(additional_items) > MAX_DEVICE_ACTIVATIONS:
+        raise DeviceActivationConfigError("too_many_device_activations")
+    items.extend(additional_items)
     return items
 
 

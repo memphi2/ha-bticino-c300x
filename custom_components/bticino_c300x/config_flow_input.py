@@ -320,11 +320,10 @@ def _device_activation_input(
     except vol.Invalid:
         errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = "invalid_stair_light_part"
         stair_light_n = DEFAULT_STAIR_LIGHT_N
-    reserved_ids = {"stair_light"} if mode == "manual" else set()
     try:
         device_activations = normalize_device_activations(
             user_input.get(CONF_DEVICE_ACTIVATIONS, []),
-            reserved_ids=reserved_ids,
+            reserved_ids={"stair_light"},
         )
     except DeviceActivationConfigError:
         errors[CONF_DEVICE_ACTIVATIONS] = "invalid_device_activations"

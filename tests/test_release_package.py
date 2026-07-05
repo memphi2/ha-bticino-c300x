@@ -312,6 +312,21 @@ def test_device_install_uploads_packaged_agent_binary() -> None:
     assert '"$ROOT_DIR/native_agent/build/armhf/c300x-agent-native"' not in install_script
 
 
+def test_ha_test_install_uses_release_agent_bundle_by_default() -> None:
+    install_script = (ROOT / "scripts" / "install_ha_test.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'PACKAGE_DEVICE_AGENT_DIR="$ROOT_DIR/.release/package/device_agent"' in install_script
+    assert 'C300X_INSTALL_DEVICE_AGENT_SOURCE:-release' in install_script
+    assert 'cp -a "$PACKAGE_DEVICE_AGENT_DIR/." "$INSTALL_STAGE_DIR/device_agent/"' in install_script
+    workspace_branch = install_script[
+        install_script.index("        workspace)") :
+        install_script.index("        *)", install_script.index("        workspace)"))
+    ]
+    assert '"$ROOT_DIR/scripts/stage_device_agent_bundle.py"' in workspace_branch
+
+
 def test_bundle_hash_ignores_integration_version_metadata(
     tmp_path: Path,
     monkeypatch,

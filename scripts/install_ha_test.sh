@@ -3,6 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="$ROOT_DIR/custom_components/bticino_c300x"
+PACKAGE_DEVICE_AGENT_DIR="$ROOT_DIR/.release/package/device_agent"
+INSTALL_SOURCE_DIR="$SOURCE_DIR"
+INSTALL_STAGE_DIR=""
+
+cleanup() {
+    if [[ -n "$INSTALL_STAGE_DIR" && -d "$INSTALL_STAGE_DIR" ]]; then
+        rm -rf "$INSTALL_STAGE_DIR"
+    fi
+}
+trap cleanup EXIT
 
 discover_custom_components_dir() {
     local storage_dir
@@ -64,10 +74,18 @@ configuration exposed through the GVFS SMB config share.
 Environment:
   HA_TEST_CUSTOM_COMPONENTS_DIR  Override the custom_components directory.
   HA_TEST_CUSTOM_COMPONENTS_URI  Override the GIO fallback URI.
+  C300X_INSTALL_DEVICE_AGENT_SOURCE
+                                 Device-agent bundle source: release (default)
+                                 or workspace.
+  C300X_INSTALL_STAGE_AGENT_BUNDLE
+                                 With source=workspace, stage the workspace
+                                 bundle before copying. Defaults to 1.
 
 Notes:
   - Does not use rsync because GVFS/SMB rejects rsync temp files.
   - Does not use hard-coded local Home Assistant config paths.
+  - Uses .release/package/device_agent by default so ignored workspace bundle
+    artifacts cannot create false agent repairs during HA-only installs.
   - Copies files directly and removes only stale files below bticino_c300x
     when GVFS exposes normal directory operations.
   - Falls back to gio copy when GVFS can access files but not stat the
@@ -85,9 +103,37 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
-if [[ "${C300X_INSTALL_STAGE_AGENT_BUNDLE:-1}" == "1" ]]; then
-    "$ROOT_DIR/scripts/stage_device_agent_bundle.py"
-fi
+prepare_install_source() {
+    local bundle_source="${C300X_INSTALL_DEVICE_AGENT_SOURCE:-release}"
+    case "$bundle_source" in
+        release)
+            if [[ ! -f "$PACKAGE_DEVICE_AGENT_DIR/bundle.json" ]]; then
+                printf 'Missing release device-agent bundle: %s\n' "$PACKAGE_DEVICE_AGENT_DIR/bundle.json" >&2
+                printf 'Build or restore .release/package first, or set C300X_INSTALL_DEVICE_AGENT_SOURCE=workspace.\n' >&2
+                exit 1
+            fi
+            INSTALL_STAGE_DIR="$(mktemp -d)"
+            cp -a "$SOURCE_DIR/." "$INSTALL_STAGE_DIR/"
+            rm -rf "$INSTALL_STAGE_DIR/device_agent"
+            mkdir -p "$INSTALL_STAGE_DIR/device_agent"
+            cp -a "$PACKAGE_DEVICE_AGENT_DIR/." "$INSTALL_STAGE_DIR/device_agent/"
+            INSTALL_SOURCE_DIR="$INSTALL_STAGE_DIR"
+            ;;
+        workspace)
+            if [[ "${C300X_INSTALL_STAGE_AGENT_BUNDLE:-1}" == "1" ]]; then
+                "$ROOT_DIR/scripts/stage_device_agent_bundle.py"
+            fi
+            INSTALL_SOURCE_DIR="$SOURCE_DIR"
+            ;;
+        *)
+            printf 'Unsupported C300X_INSTALL_DEVICE_AGENT_SOURCE: %s\n' "$bundle_source" >&2
+            printf 'Use "release" or "workspace".\n' >&2
+            exit 1
+            ;;
+    esac
+}
+
+prepare_install_source
 
 if [[ -z "$CUSTOM_COMPONENTS_DIR" || ! -d "$CUSTOM_COMPONENTS_DIR" ]]; then
     printf 'Missing HA test custom_components directory: %s\n' "$CUSTOM_COMPONENTS_DIR" >&2
@@ -106,18 +152,18 @@ gio_copy_tree() {
     fi
 
     while IFS= read -r -d '' directory; do
-        rel="${directory#$SOURCE_DIR/}"
+        rel="${directory#$INSTALL_SOURCE_DIR/}"
         [[ "$rel" == "$directory" ]] && continue
         gio mkdir "$TARGET_URI/$rel" >/dev/null 2>&1 || true
-    done < <(find "$SOURCE_DIR" -type d -not -name '__pycache__' -print0)
+    done < <(find "$INSTALL_SOURCE_DIR" -type d -not -name '__pycache__' -print0)
 
     while IFS= read -r -d '' file; do
-        rel="${file#$SOURCE_DIR/}"
+        rel="${file#$INSTALL_SOURCE_DIR/}"
         case "$rel" in
             __pycache__/*|*/__pycache__/*) continue ;;
         esac
         gio copy -T "$file" "$TARGET_URI/$rel"
-    done < <(find "$SOURCE_DIR" -type f -print0)
+    done < <(find "$INSTALL_SOURCE_DIR" -type f -print0)
 
     if ! gio cat "$TARGET_URI/executor.py" | grep -F -q '_commands_with_alarmo_readiness'; then
         printf 'Installed executor.py does not contain the expected Alarmo readiness code.\n' >&2
@@ -142,24 +188,24 @@ direct_copy_tree() {
     fi
 
     while IFS= read -r -d '' directory; do
-        rel="${directory#$SOURCE_DIR/}"
+        rel="${directory#$INSTALL_SOURCE_DIR/}"
         [[ "$rel" == "$directory" ]] && continue
         mkdir -p "$TARGET_DIR/$rel"
-    done < <(find "$SOURCE_DIR" -type d -not -name '__pycache__' -print0)
+    done < <(find "$INSTALL_SOURCE_DIR" -type d -not -name '__pycache__' -print0)
 
     while IFS= read -r -d '' file; do
-        rel="${file#$SOURCE_DIR/}"
+        rel="${file#$INSTALL_SOURCE_DIR/}"
         case "$rel" in
             __pycache__/*|*/__pycache__/*) continue ;;
         esac
         mkdir -p "$(dirname "$TARGET_DIR/$rel")"
         cp -f "$file" "$TARGET_DIR/$rel"
-    done < <(find "$SOURCE_DIR" -type f -print0)
+    done < <(find "$INSTALL_SOURCE_DIR" -type f -print0)
 
     if [[ "${C300X_INSTALL_PRUNE:-1}" == "1" ]]; then
         while IFS= read -r -d '' target_file; do
             rel="${target_file#$TARGET_DIR/}"
-            if [[ ! -f "$SOURCE_DIR/$rel" ]]; then
+            if [[ ! -f "$INSTALL_SOURCE_DIR/$rel" ]]; then
                 rm -f "$target_file"
             fi
         done < <(find "$TARGET_DIR" -type f -print0)

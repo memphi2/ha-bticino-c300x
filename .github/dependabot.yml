@@ -17,8 +17,10 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
-    # Pinned CI lock manifests are requirements files so Dependabot updates
-    # them directly: requirements-dev.txt and requirements-dev-min-ha.txt.
+    # Dependabot updates requirements-dev.txt. The minimum-HA lock is tied to
+    # Home Assistant's 2026.5 transitive pins and is curated manually.
+    exclude-paths:
+      - "requirements-dev-min-ha.txt"
     schedule:
       interval: "monthly"
       time: "05:30"

@@ -1,6 +1,7 @@
-# Direct validation dependencies. CI and Dependabot use the pinned matrix files
-# requirements-dev.txt and requirements-dev-min-ha.txt.
-# Home Assistant is locked per CI matrix.
+# Direct validation dependencies. CI uses pinned matrix files. Dependabot updates
+# requirements-dev.txt; requirements-dev-min-ha.txt is curated manually because
+# it must stay compatible with Home Assistant's minimum-version transitive pins.
+# Home Assistant itself is locked per CI matrix.
 av==18.0.0
 mypy==2.1.0
 numpy==2.5.1

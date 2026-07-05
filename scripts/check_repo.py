@@ -515,8 +515,15 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("Dependabot must leave Python major updates to manual compatibility work")
     if "Home Assistant compatibility is bumped manually" not in dependabot:
         failures.append("Dependabot must document manual Home Assistant compatibility bumps")
-    if "requirements-dev.txt" not in dependabot or "requirements-dev-min-ha.txt" not in dependabot:
-        failures.append("Dependabot must document the pinned validation requirement files it updates")
+    if "requirements-dev.txt" not in dependabot:
+        failures.append("Dependabot must document the current validation lock it updates")
+    if (
+        'exclude-paths:\n      - "requirements-dev-min-ha.txt"' not in dependabot
+        or "minimum-HA lock" not in dependabot
+    ):
+        failures.append(
+            "Dependabot must exclude the minimum-HA validation lock from automatic updates"
+        )
     if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
         failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
     if (

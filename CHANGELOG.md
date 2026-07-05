@@ -1,8 +1,25 @@
 # Changelog
 
-## v1.6.6 - Unreleased
+## v1.6.6 - 2026-07-05
 
-No user-facing changes yet.
+### Fixed
+
+- Keep passive Ring Call preview browsers in sync after another browser answers
+  the call, so they no longer freeze on a stale busy view.
+- Return open Ring Call cards to idle after the answered browser hangs up.
+- Keep Ring media state priority stable while the browser stream transitions.
+
+### Changed
+
+- Add safe media timeline diagnostics for media/session troubleshooting.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
+- No native C300X device agent update is required when already running the
+  v1.6.5 agent; the packaged device-agent bundle hash is unchanged.
 
 ## v1.6.5 - 2026-07-04
 

@@ -205,6 +205,34 @@ def test_ring_active_can_be_captured_when_rtsp_policy_admits_it() -> None:
     assert result.capture_blocked is False
 
 
+def test_answered_ring_facts_win_over_stale_unanswered_flag() -> None:
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="ring",
+            unanswered_ring_call=True,
+            ring_media_active=True,
+            ring_audio_active=True,
+        )
+    )
+
+    assert result.state is MediaState.RING_ACTIVE
+    assert result.primary_action is MediaPrimaryAction.HANGUP
+
+
+def test_answer_request_wins_over_stale_unanswered_flag() -> None:
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="ring",
+            unanswered_ring_call=True,
+            ring_media_active=True,
+            ring_answer_requested=True,
+        )
+    )
+
+    assert result.state is MediaState.RING_ANSWERING
+    assert result.primary_action is MediaPrimaryAction.WAIT
+
+
 @pytest.mark.parametrize(
     "facts",
     [
@@ -271,6 +299,42 @@ def test_video_status_mapping_contract_populates_state_facts() -> None:
     assert facts.ring_media_active is True
     assert facts.rtsp_clients == 1
     assert derive_media_state(facts).state is MediaState.RING_PREVIEW_ACTIVE
+
+
+def test_video_status_mapping_derives_answered_ring_from_stale_unanswered_status() -> None:
+    facts = media_state_input_from_video_status(
+        {
+            "window_available": True,
+            "bridge": {
+                "media_owner": "ring",
+                "ring_media_active": True,
+                "ring_audio_active": True,
+                "unanswered_ring_call": True,
+                "clients": 1,
+            },
+        }
+    )
+
+    result = derive_media_state(facts)
+
+    assert facts.video_owner == "ring"
+    assert result.state is MediaState.RING_ACTIVE
+    assert result.primary_action is MediaPrimaryAction.HANGUP
+
+
+def test_home_call_stopping_wins_over_stale_answered_status() -> None:
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="home_call",
+            home_call_running=True,
+            home_call_active=True,
+            home_call_answered=True,
+            home_call_stopping=True,
+        )
+    )
+
+    assert result.state is MediaState.HOME_CALL_STOPPING
+    assert result.primary_action is MediaPrimaryAction.WAIT
 
 
 def test_video_status_missing_or_invalid_values_use_safe_defaults() -> None:

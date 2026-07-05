@@ -235,9 +235,7 @@ def derive_media_state(facts: MediaStateInput) -> MediaStateOutput:
         or facts.unanswered_ring_call
     ):
         answered_ring_call = facts.ring_answered or facts.ring_audio_active
-        unanswered_ring_call = facts.unanswered_ring_call or not (
-            facts.ring_answer_requested or answered_ring_call
-        )
+        unanswered_ring_call = not (facts.ring_answer_requested or answered_ring_call)
         if facts.ring_answer_requested:
             return _output(
                 MediaState.RING_ANSWERING,

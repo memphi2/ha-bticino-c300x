@@ -29,6 +29,7 @@ class C300XEntity(Entity):
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_device_info = _device_info(entry)
+        self._last_connection_state_available = _connection_state_available(entry)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -58,8 +59,13 @@ class C300XEntity(Entity):
 
     @callback
     def _handle_c300x_connection_state_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
+        if entry_id != self._entry.entry_id:
+            return
+        current = _connection_state_available(self._entry)
+        if current == self._last_connection_state_available:
+            return
+        self._last_connection_state_available = current
+        self.async_write_ha_state()
 
 
 def supports_capability(entry: ConfigEntry, capability: str) -> bool:
@@ -73,6 +79,13 @@ def entry_video_enabled(entry: ConfigEntry) -> bool:
     """Return the effective HA video setting for this entry."""
 
     return bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False))
+
+
+def _connection_state_available(entry: ConfigEntry) -> bool | None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    connection_state = getattr(runtime_data, "connection_state", None)
+    value = getattr(connection_state, "available", None)
+    return value if isinstance(value, bool) else None
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:

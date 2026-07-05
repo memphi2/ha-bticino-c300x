@@ -255,6 +255,23 @@ def test_device_info_omits_empty_firmware_version() -> None:
     assert "sw_version" not in entity.device_info
 
 
+def test_base_entity_deduplicates_unchanged_connection_state_writes() -> None:
+    entry = _FakeEntry()
+    entity = C300XEntity(entry, "test")  # type: ignore[arg-type]
+    writes: list[str] = []
+    entity.async_write_ha_state = lambda: writes.append("write")  # type: ignore[method-assign]
+
+    entity._handle_c300x_connection_state_changed(entry.entry_id)
+    entry.runtime_data.connection_state.available = False
+    entity._handle_c300x_connection_state_changed(entry.entry_id)
+    entity._handle_c300x_connection_state_changed(entry.entry_id)
+    entry.runtime_data.connection_state.available = True
+    entity._handle_c300x_connection_state_changed(entry.entry_id)
+    entity._handle_c300x_connection_state_changed("other-entry")
+
+    assert writes == ["write", "write"]
+
+
 def test_device_event_entity_triggers_stable_event_type_with_readable_attributes() -> None:
     entity = C300XDeviceAgentEventEntity(
         _FakeEntry(),  # type: ignore[arg-type]

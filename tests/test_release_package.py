@@ -13,6 +13,7 @@ SCRIPT = ROOT / "scripts" / "build_hacs_release.py"
 STAGE_SCRIPT = ROOT / "scripts" / "stage_device_agent_bundle.py"
 RELEASE_ASSETS_SCRIPT = ROOT / "scripts" / "write_release_assets.py"
 RELEASE_TAG_SCRIPT = ROOT / "scripts" / "check_release_tag.py"
+PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
 
 
 def _load_release_builder():
@@ -145,10 +146,13 @@ def test_release_builder_can_reuse_agent_from_release_zip(
 
 def test_release_tag_checker_matches_current_metadata() -> None:
     checker = _load_release_tag_checker()
+    version = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))[
+        "integration_version"
+    ]
 
-    assert checker.validate_release_tag("v1.7.0") == []
-    assert checker.validate_release_tag("1.7.0") == [
-        "release tag must use vX.Y.Z format, got '1.7.0'"
+    assert checker.validate_release_tag(f"v{version}") == []
+    assert checker.validate_release_tag(version) == [
+        f"release tag must use vX.Y.Z format, got {version!r}"
     ]
 
 

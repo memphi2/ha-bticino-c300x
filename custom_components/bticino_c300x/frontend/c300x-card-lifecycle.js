@@ -1,7 +1,7 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=bb0e9a9ddafadbba";
+} from "./c300x-ring-preview-state.js?v=e68142b744a4830f";
 
 export class C300XCardLifecycleState {
   constructor() {

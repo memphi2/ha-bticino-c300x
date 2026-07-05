@@ -106,6 +106,7 @@ REQUIRED_PATHS = [
     "scripts/check_release_tag.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
+    "scripts/update_frontend_hashes.py",
     "scripts/verify_media_reference_flow.py",
     "scripts/write_release_assets.py",
     "scripts/smoke_ha.py",
@@ -186,6 +187,7 @@ def main() -> int:
     failures.extend(check_release_metadata())
     failures.extend(check_installer_dependency_pins())
     failures.extend(check_hacs_metadata())
+    failures.extend(check_frontend_bundle_hash())
     failures.extend(check_github_automation())
     failures.extend(check_python_runtime())
     failures.extend(check_quality_scale())
@@ -667,6 +669,27 @@ def check_hacs_metadata() -> list[str]:
         if path not in native_agent_docs:
             failures.append(f"docs/native-agent.md must document agent reuse path {path}")
     return failures
+
+
+def check_frontend_bundle_hash() -> list[str]:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "update_frontend_hashes.py"),
+            "--check",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+    return [
+        f"frontend bundle hash gate failed: {line.removeprefix('FAIL: ')}"
+        for line in output.splitlines()
+        if line
+    ]
 
 
 def check_github_automation() -> list[str]:

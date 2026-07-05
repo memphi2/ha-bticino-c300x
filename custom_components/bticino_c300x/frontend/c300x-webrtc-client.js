@@ -1,3 +1,5 @@
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=e68142b744a4830f";
+
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack }) {
     this._getHass = getHass;
@@ -46,16 +48,9 @@ export class C300XWebrtcClient {
     });
     const rtcConfig = c300xNormalizeRtcConfig(clientConfig);
     this._remoteStream = new MediaStream();
-    let mediaAttached = false;
-    const attachMedia = () => {
-      if (mediaAttached) {
-        return;
-      }
-      mediaElement.srcObject = this._remoteStream;
-      mediaAttached = true;
-    };
+    const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream);
     if (!attachOnFirstTrack) {
-      attachMedia();
+      mediaAttachment.attach();
     }
 
     const pc = new RTCPeerConnection(rtcConfig);
@@ -84,11 +79,7 @@ export class C300XWebrtcClient {
           this._remoteStream.addTrack(track);
         }
       }
-      attachMedia();
-      mediaElement.autoplay = true;
-      mediaElement.muted = false;
-      mediaElement.volume = 1;
-      mediaElement.play().catch(() => {});
+      mediaAttachment.play();
       this._onTrack?.();
     };
 

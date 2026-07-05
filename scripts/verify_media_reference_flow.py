@@ -257,12 +257,12 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         / "frontend"
         / "c300x-state-model.js"
     )
-    card = _read(
+    card_actions = _read(
         root
         / "custom_components"
         / "bticino_c300x"
         / "frontend"
-        / "c300x-doorbell-call-card.js"
+        / "c300x-card-actions.js"
     )
 
     ring_invite = _section(
@@ -333,8 +333,8 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         Check("code.api.hangup_action", "/api/v1/calls/doorbell/actions/hangup" in api),
         Check("code.state_model.ring_pending_answerable", 'mediaState === "ring_pending"' in state_model),
         Check("code.state_model.preview_answerable", 'mediaState === "ring_preview_active"' in state_model),
-        Check("code.card.answer_service", '"answer_doorbell_call"' in card),
-        Check("code.card.hangup_service", '"hangup_doorbell_call"' in card),
+        Check("code.card.answer_service", '"answer_doorbell_call"' in card_actions),
+        Check("code.card.hangup_service", '"hangup_doorbell_call"' in card_actions),
     ])
     return checks
 

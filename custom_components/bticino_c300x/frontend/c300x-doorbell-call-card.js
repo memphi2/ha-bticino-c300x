@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=bb0e9a9ddafadbba";
+} from "./c300x-translations.js?v=e68142b744a4830f";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -13,19 +13,21 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=bb0e9a9ddafadbba";
+} from "./c300x-entity-resolver.js?v=e68142b744a4830f";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=bb0e9a9ddafadbba";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=bb0e9a9ddafadbba";
+} from "./c300x-card-editor.js?v=e68142b744a4830f";
+import { C300XCardActions } from "./c300x-card-actions.js?v=e68142b744a4830f";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=e68142b744a4830f";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=e68142b744a4830f";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=bb0e9a9ddafadbba";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=bb0e9a9ddafadbba";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=bb0e9a9ddafadbba";
+} from "./c300x-state-model.js?v=e68142b744a4830f";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=e68142b744a4830f";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=e68142b744a4830f";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -89,6 +91,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._micStream = null;
     this._micMuted = false;
     this._lifecycle = new C300XCardLifecycleState();
+    this._actions = new C300XCardActions(this);
     this._webrtc = this._createWebrtcClient();
     this._transitionWebrtc = null;
     this._error = "";
@@ -133,271 +136,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
 
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `
-      <style>
-        :host {
-          display: block;
-          height: 100%;
-        }
-        ha-card {
-          overflow: hidden;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-        }
-        .media {
-          position: relative;
-          width: 100%;
-          flex: 1 1 auto;
-          background: #111;
-          min-height: 0;
-        }
-        video {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          display: block;
-          background: #111;
-        }
-        .remote-audio {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          opacity: 0;
-          pointer-events: none;
-        }
-        .transition-video {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          opacity: 0;
-          pointer-events: none;
-        }
-        .empty {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--secondary-text-color);
-          font-size: 14px;
-          pointer-events: none;
-        }
-        .body {
-          min-height: 48px;
-          padding: 4px 16px;
-          display: flex;
-          align-items: center;
-          flex: 0 0 auto;
-        }
-        .entity-main {
-          display: flex;
-          align-items: center;
-          min-width: 0;
-          flex: 1 1 auto;
-        }
-        .row-actions {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 0 16px 0 0;
-          flex: 0 0 auto;
-        }
-        .row-action,
-        .home-action,
-        .mic-action {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 40px;
-          height: 40px;
-          margin: 0;
-          padding: 0;
-          border: 0;
-          color: var(--state-icon-color);
-          background: color-mix(in srgb, var(--state-icon-color) 14%, transparent);
-          flex: 0 0 auto;
-          --mdc-icon-size: 24px;
-          border-radius: 50%;
-          cursor: pointer;
-          font: inherit;
-          transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
-        }
-        .row-action.active {
-          color: var(--primary-color);
-          background: color-mix(in srgb, var(--primary-color) 18%, transparent);
-        }
-        .home-action.hidden {
-          display: none;
-        }
-        .home-action.active {
-          color: var(--primary-color);
-          background: color-mix(in srgb, var(--primary-color) 18%, transparent);
-        }
-        .home-action.dialing {
-          color: var(--warning-color, var(--primary-color));
-          background: color-mix(in srgb, var(--warning-color, var(--primary-color)) 20%, transparent);
-          animation: c300x-ring 900ms ease-in-out infinite;
-        }
-        .home-action.blocked {
-          color: var(--disabled-text-color);
-          background: color-mix(in srgb, var(--disabled-text-color) 14%, transparent);
-          cursor: default;
-        }
-        .row-action.dialing,
-        .row-action.answerable {
-          color: var(--warning-color, var(--primary-color));
-          background: color-mix(in srgb, var(--warning-color, var(--primary-color)) 20%, transparent);
-          animation: c300x-ring 900ms ease-in-out infinite, c300x-answer-glow 1400ms ease-in-out infinite;
-        }
-        .row-action.recording {
-          position: relative;
-          color: var(--error-color);
-          background: color-mix(in srgb, var(--error-color) 18%, transparent);
-          animation: c300x-record-breathe 1300ms ease-in-out infinite;
-        }
-        .row-action.blocked {
-          color: var(--disabled-text-color);
-          background: color-mix(in srgb, var(--disabled-text-color) 14%, transparent);
-          cursor: default;
-        }
-        .row-action.recording::after {
-          content: "";
-          position: absolute;
-          top: 7px;
-          right: 7px;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: var(--error-color);
-          box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color) 45%, transparent);
-          animation: c300x-record-dot 1100ms ease-out infinite;
-        }
-        @keyframes c300x-ring {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          18% { transform: rotate(-12deg) scale(1.03); }
-          36% { transform: rotate(10deg) scale(1.03); }
-          54% { transform: rotate(-7deg) scale(1.02); }
-          72% { transform: rotate(5deg) scale(1.01); }
-        }
-        @keyframes c300x-answer-glow {
-          0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning-color, var(--primary-color)) 0%, transparent); }
-          45% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--warning-color, var(--primary-color)) 18%, transparent); }
-        }
-        @keyframes c300x-record-breathe {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-        @keyframes c300x-record-dot {
-          0% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color) 45%, transparent); }
-          100% { opacity: .35; box-shadow: 0 0 0 8px color-mix(in srgb, var(--error-color) 0%, transparent); }
-        }
-        .row-action:focus-visible {
-          outline: 2px solid var(--primary-color);
-          outline-offset: 2px;
-        }
-        .mic-action {
-          width: 36px;
-          height: 36px;
-          --mdc-icon-size: 22px;
-        }
-        .mic-action.muted {
-          color: var(--warning-color, var(--primary-color));
-          background: color-mix(in srgb, var(--warning-color, var(--primary-color)) 18%, transparent);
-        }
-        .mic-action.hidden {
-          display: none;
-        }
-        .mic-action:focus-visible {
-          outline: 2px solid var(--primary-color);
-          outline-offset: 2px;
-        }
-        .action-icon {
-          display: flex;
-        }
-        .entity-text {
-          min-width: 0;
-        }
-        .title {
-          font-size: 14px;
-          font-weight: 400;
-          line-height: 20px;
-          color: var(--primary-text-color);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .secondary {
-          color: var(--secondary-text-color);
-          font-size: 13px;
-          line-height: 18px;
-        }
-        .secondary.error {
-          color: var(--error-color);
-        }
-        .secondary.notice {
-          color: var(--warning-color, var(--secondary-text-color));
-        }
-        .readiness {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          margin-top: 2px;
-          min-height: 18px;
-          color: var(--secondary-text-color);
-          font-size: 12px;
-          line-height: 16px;
-          cursor: pointer;
-        }
-        .readiness.hidden {
-          display: none;
-        }
-        .readiness.ready {
-          color: var(--success-color, #43a047);
-        }
-        .readiness.warning {
-          color: var(--warning-color, #f9a825);
-        }
-        .readiness.blocked,
-        .readiness.unavailable {
-          color: var(--error-color);
-        }
-        .readiness-icon {
-          --mdc-icon-size: 16px;
-        }
-      </style>
-      <ha-card>
-        <audio class="remote-audio" autoplay playsinline></audio>
-        <div class="media">
-          <video playsinline autoplay></video>
-          <video class="transition-video" playsinline autoplay></video>
-          <div class="empty"></div>
-        </div>
-        <div class="body">
-          <div class="entity-main">
-            <div class="row-actions">
-              <button class="row-action" type="button">
-                <ha-icon class="action-icon" icon="mdi:phone"></ha-icon>
-              </button>
-              <button class="home-action hidden" type="button">
-                <ha-icon class="home-action-icon" icon="mdi:phone"></ha-icon>
-              </button>
-              <button class="mic-action hidden" type="button">
-                <ha-icon class="mic-icon" icon="mdi:microphone"></ha-icon>
-              </button>
-            </div>
-            <div class="entity-text">
-              <div class="title"></div>
-              <div class="secondary"></div>
-              <div class="readiness hidden">
-                <ha-icon class="readiness-icon" icon="mdi:check-circle"></ha-icon>
-                <span class="readiness-text"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ha-card>
-    `;
+    root.innerHTML = C300X_DOORBELL_CARD_TEMPLATE;
 
     this._videoEl = root.querySelector("video");
     this._transitionVideoEl = root.querySelector(".transition-video");
@@ -417,8 +156,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._readinessIconEl = root.querySelector(".readiness-icon");
     this._readinessTextEl = root.querySelector(".readiness-text");
 
-    this._actionButtonEl.addEventListener("click", () => this._handlePrimaryAction());
-    this._homeActionButtonEl.addEventListener("click", () => this._handleHomeCallAction());
+    this._actionButtonEl.addEventListener("click", () => this._actions.handlePrimaryAction());
+    this._homeActionButtonEl.addEventListener("click", () => this._actions.handleHomeCallAction());
     this._readinessEl.addEventListener("click", () => this._openRepairs());
     this._micButtonEl.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -507,72 +246,6 @@ class C300XDoorbellCallCard extends HTMLElement {
       transitionActive: !!this._transitionWebrtc,
     })) {
       this._startPassiveAnsweredDoorbellPreview();
-    }
-  }
-
-  async _handlePrimaryAction() {
-    if (!this._isHomeCallMode()) {
-      if (this._lifecycle.activeHomeCallSession) {
-        return;
-      }
-      const action = this._doorstationView().action;
-      if (action === "external_call") {
-        return;
-      }
-      if (action === "hang_up") {
-        await this._hangupDoorstation();
-        return;
-      }
-      if (action === "answer") {
-        this._lifecycle.answeringDoorbell = true;
-        try {
-          await this._answerDoorbellCall();
-          this._lifecycle.doorbellAnswered = true;
-          if (this._lifecycle.ringPreviewActive && this._webrtc.pc) {
-            await this._startAnsweredDoorbellStream();
-          } else {
-            await this._startTalkback();
-          }
-        } finally {
-          this._lifecycle.answeringDoorbell = false;
-        }
-        return;
-      }
-      await this._startTalkback();
-      return;
-    }
-    if (this._isConfiguredCallActive() || this._lifecycle.startingCall) {
-      await this._hangup();
-      return;
-    }
-    await this._startHomeCallAudio();
-  }
-
-  async _handleHomeCallAction() {
-    if (!this._isAutoMode()) {
-      return;
-    }
-    if (this._isConfiguredCallActive() || this._lifecycle.activeHomeCallSession || this._lifecycle.startingCall) {
-      await this._hangupHomeCall();
-      return;
-    }
-    await this._startHomeCallAudio();
-  }
-
-  async _startHomeCallAudio() {
-    if (this._webrtc.running || this._lifecycle.startingCall) {
-      return;
-    }
-    this._lifecycle.startingCall = true;
-    this._lifecycle.activeHomeCallSession = true;
-    this._error = "";
-    this._clearNotice();
-
-    try {
-      await this._startTalkback({ homeCall: true });
-    } finally {
-      this._lifecycle.startingCall = false;
-      this._updateState();
     }
   }
 
@@ -752,65 +425,6 @@ class C300XDoorbellCallCard extends HTMLElement {
       console.warn("C300X microphone unavailable; starting receive-only stream", err);
       this._showTemporaryNotice(this._label("microphone_stream_only"));
     }
-  }
-
-  async _hangup() {
-    if (this._lifecycle.hangupInProgress) {
-      return;
-    }
-    this._lifecycle.hangupInProgress = true;
-    this._lifecycle.startingCall = false;
-    const homeCallMode = this._lifecycle.activeHomeCallSession || this._isHomeCallMode();
-    let ok = true;
-    try {
-      this._closePeer(false);
-      if (homeCallMode) {
-        await this._stopHomeCall();
-      } else {
-        await this._stopDoorbellVideo();
-      }
-    } catch (err) {
-      console.error("C300X hangup failed", err);
-      this._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      this._lifecycle.hangupInProgress = false;
-      this._closePeer(ok);
-    }
-  }
-
-  async _hangupDoorstation() {
-    if (this._lifecycle.hangupInProgress) {
-      return;
-    }
-    this._lifecycle.hangupInProgress = true;
-    this._lifecycle.startingCall = false;
-    const hadDoorbellRingCallSession = this._hasDoorbellRingCallSession();
-    let ok = true;
-    try {
-      this._closePeer(false);
-      if (hadDoorbellRingCallSession) {
-        try {
-          await this._hangupDoorbellCall({ closePeer: false });
-        } catch (err) {
-          console.error("C300X ring-call hangup failed", err);
-          this._error = err?.message || `${err}`;
-          ok = false;
-        }
-      }
-      await this._stopDoorbellVideo();
-    } catch (err) {
-      console.error("C300X doorbell video stop failed", err);
-      this._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      this._lifecycle.hangupInProgress = false;
-      this._closePeer(ok);
-    }
-  }
-
-  _hasDoorbellRingCallSession() {
-    return this._lifecycle.doorbellAnswered;
   }
 
   _closePeer(clearStatus, options = {}) {
@@ -1083,68 +697,6 @@ class C300XDoorbellCallCard extends HTMLElement {
       return this._label("media_forwarding_required");
     }
     return this._label(`media_${normalized}`);
-  }
-
-  async _stopHomeCall() {
-    if (!this._hass) {
-      return;
-    }
-    await this._hass.callService("bticino_c300x", "stop_home_call", this._serviceData());
-  }
-
-  async _hangupHomeCall() {
-    if (this._lifecycle.hangupInProgress) {
-      return;
-    }
-    this._lifecycle.hangupInProgress = true;
-    this._lifecycle.startingCall = false;
-    let ok = true;
-    try {
-      await this._stopHomeCall();
-    } catch (err) {
-      console.error("C300X home-call hangup failed", err);
-      this._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      this._lifecycle.hangupInProgress = false;
-      this._closePeer(ok);
-    }
-  }
-
-  async _stopDoorbellVideo() {
-    if (!this._hass) {
-      return;
-    }
-    await this._hass.callService("bticino_c300x", "stop_doorbell_video", this._serviceData());
-  }
-
-  async _answerDoorbellCall() {
-    if (!this._hass) {
-      return;
-    }
-    await this._hass.callService(
-      "bticino_c300x",
-      "answer_doorbell_call",
-      this._serviceData(),
-    );
-  }
-
-  async _hangupDoorbellCall({ closePeer = true } = {}) {
-    if (!this._hass) {
-      return;
-    }
-    let ok = true;
-    try {
-      await this._hass.callService("bticino_c300x", "hangup_doorbell_call", this._serviceData());
-    } catch (err) {
-      console.error("C300X ring-call hangup failed", err);
-      this._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      if (closePeer) {
-        this._closePeer(ok);
-      }
-    }
   }
 
   _openRepairs() {

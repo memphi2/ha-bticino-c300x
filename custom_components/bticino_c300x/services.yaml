@@ -301,7 +301,7 @@ evaluate_ring_analysis:
 
 start_home_call:
   name: Start C300X home call
-  description: Start a local media local Home Call to the C300X through the local device agent.
+  description: Start a local audio Home Call to the C300X through the local device agent.
   fields:
     entry_id:
       name: Entry ID
@@ -321,7 +321,7 @@ start_home_call:
 
 stop_home_call:
   name: Stop C300X home call
-  description: Stop the active local media local Home Call through the local device agent.
+  description: Stop the active local Home Call through the local device agent.
   fields:
     entry_id:
       name: Entry ID

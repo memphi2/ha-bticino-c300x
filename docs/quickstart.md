@@ -66,6 +66,10 @@ Recommended first-run choices:
 - Enable **Doorbell camera/video** when you want camera, Ring Call, Home Call or
   talkback.
 - Keep **Create Home Assistant media user** enabled for media features.
+- Leave **Doorstation live audio gain** at `0 dB` for the first test.
+- Leave **Ring capture audio gain** at its default unless you use Ring Capture.
+- Leave **Additional device activations** empty unless you already know the
+  C300X activation addresses you want as Home Assistant buttons.
 - Leave display pages disabled unless you want Home Assistant pages on the
   C300X display.
 - Select Alarmo and weather entities only if you use those display pages.
@@ -127,10 +131,22 @@ are installed into Home Assistant's blueprint folder when the integration loads.
 
 Details: [Blueprints](blueprints.md)
 
+## After the First Test
+
+Use [Feature reference](feature-reference.md) to decide what to enable next:
+
+- additional C300X activation buttons,
+- ringer mute and volume controls,
+- video-message and memo workflows,
+- display pages,
+- Ring Capture and local Wyoming transcription,
+- maintenance controls.
+
 ## If Something Fails
 
 Start with:
 
+- [Feature reference](feature-reference.md)
 - [Media readiness](media-readiness.md)
 - [Media troubleshooting](media-troubleshooting.md)
 - [Advanced maintenance](advanced-maintenance.md)

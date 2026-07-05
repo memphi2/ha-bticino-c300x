@@ -2,7 +2,7 @@
 
 ## Supported Release Line
 
-- `1.6.x`: active
+- `1.7.x`: active
 
 ## Compatibility Baseline
 

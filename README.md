@@ -108,6 +108,7 @@ and hard-reload the browser if the card picker still shows old frontend state.
 | --- | --- |
 | 5-minute setup path | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
+| Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
 | Ready-made automations | [Blueprints](docs/blueprints.md) |
@@ -117,6 +118,7 @@ and hard-reload the browser if the card picker still shows old frontend state.
 | Maintainer documentation | Link |
 | --- | --- |
 | Architecture and data flow | [Architecture](docs/architecture.md) |
+| Current functional surface | [Feature reference](docs/feature-reference.md) |
 | Native agent runtime and packaging | [Native agent](docs/native-agent.md) |
 | Native agent HTTP API contract | [Native Agent API](native_agent/API.md) |
 | Device QML display pages | [Device QML UI](device_qml/README.md) |

@@ -59,6 +59,19 @@ Plain HTTP is not a reliable microphone path. In mobile notifications, open the
 dashboard and press **Answer** in the card; do not expect a background
 notification action to grant microphone access.
 
+## Audio Is Too Quiet or Too Loud
+
+Use the integration options before changing automations:
+
+- **Doorstation live audio gain** affects live on-demand and Ring Call audio.
+- **Ring capture audio gain** affects Ring Capture output files.
+- Both values accept `-20 dB` to `+20 dB`.
+- Keep live gain at `0 dB` when the default audio level is acceptable; the
+  integration then avoids unnecessary runtime gain updates.
+
+Home Call uses its own media path. Do not tune Home Call volume by changing
+Ring Capture gain.
+
 ## Home Call Rings but Looks Connected Too Early
 
 Home Call is audio-only and has its own state path.
@@ -96,6 +109,7 @@ blueprint always records audio because transcription needs `latest.raw.wav`.
 | `ring_call_not_active` | There was no answerable Ring Call at that moment. |
 | `external_session_active` | Another route/client owns the media session. |
 | `rtsp_consumer_active` | A capture or stream tried to start while the path was busy. |
+| `go2rtc ... error=EOF` on stop | Usually the provider observed a native RTSP source closing. Treat it as relevant when it repeats during start or leaves the card/session busy. |
 | `callback_url` readiness failure | The C300X cannot reach the HA callback URL. |
 | Browser microphone unavailable | Use HTTPS/HA Cloud and allow microphone access. |
 

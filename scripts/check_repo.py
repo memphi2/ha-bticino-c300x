@@ -414,6 +414,7 @@ def check_release_metadata() -> list[str]:
         failures.append(
             f"release metadata must stay on {CURRENT_RELEASE_VERSION}, got {version}"
         )
+    active_release_line = ".".join(version.split(".")[:2]) + ".x"
     release_tag = f"v{version}"
     release_note = ROOT / ".github" / "release-notes" / f"{release_tag}.md"
     required_mentions = {
@@ -421,7 +422,7 @@ def check_release_metadata() -> list[str]:
         "CHANGELOG.md": release_tag,
         str(release_note.relative_to(ROOT)): release_tag,
         "SECURITY.md": "Token Handling",
-        "SUPPORT.md": "1.6.x",
+        "SUPPORT.md": active_release_line,
         "PRIVACY.md": "Local Data Flow",
         "LICENSE": "Apache License",
         "NOTICE": "BTicino C300X Home Assistant Integration",

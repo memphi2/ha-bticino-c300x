@@ -9,6 +9,8 @@ notes, use [native_agent/README.md](../native_agent/README.md).
 
 The device runtime is a native C binary from `native_agent/`. Node.js and `node_modules` are not part of the runtime path.
 
+Current packaged agent version: `1.7.0`.
+
 ## Build
 
 ```bash
@@ -100,6 +102,9 @@ The agent exposes a versioned local HTTP API under `/api/v1`, plus a small
 loopback-only UI listener for C300X QML pages. Endpoint paths, auth rules,
 payloads, side effects, and compatibility notes are maintained in
 [Native Agent API Contract](../native_agent/API.md).
+
+The user-facing feature mapping for those endpoints is summarized in
+[Feature reference](feature-reference.md).
 
 Keep new endpoint details in that file. This page should stay focused on
 runtime packaging, setup defaults, security posture, and release behavior.

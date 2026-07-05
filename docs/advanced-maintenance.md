@@ -90,6 +90,20 @@ Use the Repair when Readiness reports:
 To remove the user manually, use the C300X display/user management UI, then run
 setup or Repair again if media features are still enabled.
 
+## Device Activations
+
+Additional device activations are configured in setup, options or reconfigure.
+Normal users should use the structured forms, not raw JSON.
+
+Automatic mode leaves the built-in stair-light action alone. Manual mode
+generates one `stair_light` activation from P/N address parts and reserves that
+id, so up to 15 more user activations can be added.
+
+The integration syncs activation config to the native agent after saving only
+when the desired activation list differs from the agent state. It should not
+write activation config during normal Home Assistant startup when nothing
+changed.
+
 ## Callback URL
 
 Callbacks must use a local HTTP URL that the C300X can reach directly.

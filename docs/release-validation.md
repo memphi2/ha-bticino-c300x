@@ -87,8 +87,11 @@ Each release must publish deterministic release artifacts:
 
 `build-metadata.json` records the supported Home Assistant range, Python
 version, C300X firmware target, native-agent version, agent reuse status and the
-validated release jobs. Treat that file as the release evidence for why the
-asset was considered LTS-compatible at build time.
+validated release jobs. For fresh native-agent builds it also records
+`native_agent_sysroot` evidence from `C300X_DEVICE_SYSROOT`: no local path, only
+availability, content hashes for the relevant ARMHF sysroot libraries and a
+combined fingerprint. Treat that file as the release evidence for why the asset
+was considered LTS-compatible at build time.
 
 Agent binary reuse is allowed only if none of these paths changed:
 
@@ -100,6 +103,10 @@ Agent binary reuse is allowed only if none of these paths changed:
 - `device_qml`
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
+
+If any path above changed, do not release with a reused native-agent binary.
+Build with a verified `C300X_DEVICE_SYSROOT`, run the ABI/stack gates, and keep
+the resulting sysroot evidence in `build-metadata.json`.
 
 ## Legal and Provenance Audit
 

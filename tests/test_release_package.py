@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -151,8 +152,12 @@ def test_release_tag_checker_matches_current_metadata() -> None:
     ]
 
 
-def test_release_assets_are_reproducible_for_same_zip(tmp_path: Path) -> None:
+def test_release_assets_are_reproducible_for_same_zip(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     writer = _load_release_assets()
+    monkeypatch.delenv("C300X_DEVICE_SYSROOT", raising=False)
     zip_path = tmp_path / "ha-bticino-c300x.zip"
     bundle = {
         "agent_version": "1.6.1",
@@ -197,6 +202,12 @@ def test_release_assets_are_reproducible_for_same_zip(tmp_path: Path) -> None:
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,
         "native_agent_reused_from": None,
+        "native_agent_sysroot": {
+            "configured": False,
+            "available": False,
+            "fingerprint": None,
+            "files": {},
+        },
         "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
     }
 
@@ -232,6 +243,44 @@ def test_release_metadata_records_reused_native_agent(tmp_path: Path) -> None:
     metadata = json.loads((tmp_path / "build-metadata.json").read_text(encoding="utf-8"))
     assert metadata["lts_evidence"]["native_agent_rebuilt"] is False
     assert metadata["lts_evidence"]["native_agent_reused_from"] == "v1.6.4"
+
+
+def test_release_metadata_records_native_sysroot_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    writer = _load_release_assets()
+    zip_path = tmp_path / "ha-bticino-c300x.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("manifest.json", "{}\n")
+
+    sysroot = tmp_path / "rootfs"
+    libc = sysroot / "lib" / "libc.so.6"
+    ld_linux = sysroot / "lib" / "ld-linux-armhf.so.3"
+    libc.parent.mkdir(parents=True)
+    libc.write_bytes(b"glibc")
+    ld_linux.write_bytes(b"ld")
+    monkeypatch.setenv("C300X_DEVICE_SYSROOT", str(sysroot))
+
+    writer.write_release_assets(
+        zip_path=zip_path,
+        tag="v1.7.0",
+        repository="example/repo",
+        sha256sums_path=tmp_path / "SHA256SUMS",
+        metadata_path=tmp_path / "build-metadata.json",
+        sbom_path=tmp_path / "sbom.spdx.json",
+    )
+
+    metadata = json.loads((tmp_path / "build-metadata.json").read_text(encoding="utf-8"))
+    sysroot_evidence = metadata["lts_evidence"]["native_agent_sysroot"]
+    assert sysroot_evidence["configured"] is True
+    assert sysroot_evidence["available"] is True
+    assert sysroot_evidence["files"] == {
+        "lib/ld-linux-armhf.so.3": f"sha256:{hashlib.sha256(b'ld').hexdigest()}",
+        "lib/libc.so.6": f"sha256:{hashlib.sha256(b'glibc').hexdigest()}",
+    }
+    assert sysroot_evidence["fingerprint"].startswith("sha256:")
+    assert "path" not in sysroot_evidence
 
 
 def test_staged_self_update_bundle_contains_agent_managed_files(

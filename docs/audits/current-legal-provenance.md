@@ -261,6 +261,10 @@ scripts and `bundle.json` are intentionally not tracked in git. They are
 generated/reused by the release packaging path and validated through bundle
 hash metadata.
 
+Current release metadata also records sanitized native-agent sysroot evidence
+when `C300X_DEVICE_SYSROOT` is configured for a fresh ARMHF build. The evidence
+uses library hashes and a combined fingerprint, not local sysroot paths.
+
 An ignored local `.release/ha-bticino-c300x.zip` was rebuilt during this audit:
 
 ```text

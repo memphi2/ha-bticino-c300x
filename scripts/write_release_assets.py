@@ -190,8 +190,45 @@ def _lts_evidence(
         "firmware_target": versions["c300x_firmware"],
         "native_agent_rebuilt": native_agent_reused_from is None,
         "native_agent_reused_from": native_agent_reused_from,
+        "native_agent_sysroot": _native_agent_sysroot_evidence(),
         "validated_jobs": ["min-ha", "current-ha", "hacs", "hassfest"],
     }
+
+
+def _native_agent_sysroot_evidence() -> dict[str, Any]:
+    sysroot = os.environ.get("C300X_DEVICE_SYSROOT", "").strip()
+    evidence: dict[str, Any] = {
+        "configured": bool(sysroot),
+        "available": False,
+        "fingerprint": None,
+        "files": {},
+    }
+    if not sysroot:
+        return evidence
+
+    sysroot_path = Path(sysroot)
+    file_hashes: dict[str, str] = {}
+    for relative in (
+        "lib/libc.so.6",
+        "lib/ld-linux-armhf.so.3",
+        "lib/libpthread.so.0",
+        "lib/libdl.so.2",
+    ):
+        path = sysroot_path / relative
+        if path.is_file():
+            file_hashes[relative] = f"sha256:{_sha256_file(path)}"
+
+    evidence["files"] = file_hashes
+    if file_hashes:
+        digest = hashlib.sha256()
+        for relative, file_hash in sorted(file_hashes.items()):
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(file_hash.encode("utf-8"))
+            digest.update(b"\0")
+        evidence["available"] = True
+        evidence["fingerprint"] = f"sha256:{digest.hexdigest()}"
+    return evidence
 
 
 def _spdx_document(

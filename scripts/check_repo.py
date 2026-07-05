@@ -780,6 +780,7 @@ def check_hacs_metadata() -> list[str]:
         '"lts_evidence"',
         '"native_agent_rebuilt"',
         '"native_agent_reused_from"',
+        '"native_agent_sysroot"',
         '"validated_jobs"',
     ):
         if token not in release_assets_script:

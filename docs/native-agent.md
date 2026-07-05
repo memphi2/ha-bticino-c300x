@@ -176,6 +176,10 @@ when any of these paths change:
 - `scripts/stage_device_agent_bundle.py`
 
 The release workflow enforces this list before accepting a reused agent asset.
+When a fresh ARMHF agent build is required, release metadata records sanitized
+sysroot evidence from `C300X_DEVICE_SYSROOT`: whether a sysroot was configured,
+whether relevant ARMHF libraries were available, their SHA256 hashes and a
+combined fingerprint. The metadata must not expose local sysroot paths.
 
 ## Smoke tests
 

@@ -95,16 +95,13 @@ def test_agent_event_key_converts_dot_notation() -> None:
     assert agent_event_name(data, "de") == "Türöffner gestartet"
 
 
-def test_action_event_display_data_maps_stair_light_action() -> None:
+def test_action_event_display_data_ignores_stair_light_action() -> None:
     data = action_event_display_data(
         {"entry_id": "entry-1", "action_id": "stair_light", "address": "10"},
         "de",
     )
 
-    assert data["event_key"] == "stair_light_activated"
-    assert data["event_value"] == "Treppenlicht aktiviert"
-    assert data["address"] == "10"
-    assert "event_at" in data
+    assert data == {}
 
 
 def test_action_event_key_maps_door_unlock_action() -> None:

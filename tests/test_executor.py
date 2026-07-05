@@ -2082,12 +2082,7 @@ def test_async_trigger_stair_light_calls_agent_api() -> None:
     assert result == {"ok": True, "action_id": "stair_light", "address": "10"}
     assert entry.runtime_data.api.stair_light_calls == 1
     assert entry.runtime_data.api.last_stair_light_address == "10"
-    assert hass.bus.events == [
-        (
-            "bticino_c300x_action_received",
-            {"entry_id": "entry-1", "action_id": "stair_light", "address": "10"},
-        )
-    ]
+    assert hass.bus.events == []
 
 
 def test_async_trigger_stair_light_uses_default_p_n_address() -> None:

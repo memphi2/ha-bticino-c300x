@@ -111,7 +111,7 @@ sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 from homeassistant.const import EntityCategory  # noqa: E402
 from custom_components.bticino_c300x.agent_contracts import CapabilityPayload  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
-    DASHBOARD_ENTITY_STAIR_LIGHT,
+    DASHBOARD_ENTITY_DOOR_UNLOCK,
     EVENT_ACTION_RECEIVED,
     EVENT_AGENT_EVENT_RECEIVED,
 )
@@ -394,7 +394,7 @@ def test_device_event_entity_ignores_unregistered_event_type() -> None:
 def test_device_event_entity_filters_entry_duplicate_and_action_events() -> None:
     entity = C300XDeviceAgentEventEntity(  # type: ignore[arg-type]
         _FakeEntry(),
-        ["stair_light_activated"],
+        ["door_unlock_started"],
     )
     entity.hass = SimpleNamespace(config=SimpleNamespace(language="en"))
 
@@ -413,18 +413,18 @@ def test_device_event_entity_filters_entry_duplicate_and_action_events() -> None
         SimpleNamespace(
             data={
                 "entry_id": "entry-1",
-                "action_id": DASHBOARD_ENTITY_STAIR_LIGHT,
+                "action_id": DASHBOARD_ENTITY_DOOR_UNLOCK,
             }
         )
     )
-    assert entity.triggered_event[0] == "stair_light_activated"
+    assert entity.triggered_event[0] == "door_unlock_started"
     entity.triggered_event = ("unchanged", {})
     entity.wrote_state = False
     entity._write_event_data(
         {
             "entry_id": "entry-1",
             "event_at": entity._last_event_at,
-            "event_key": "stair_light_activated",
+            "event_key": "door_unlock_started",
         }
     )
     assert entity.triggered_event == ("unchanged", {})

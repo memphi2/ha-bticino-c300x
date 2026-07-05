@@ -7546,7 +7546,6 @@ static void send_device_error(int client_fd, const char *error)
 
 static int activate_stair_light(
     const struct c300x_config *config,
-    struct agent_runtime *runtime,
     char *address,
     size_t address_len,
     char *reply,
@@ -7556,8 +7555,6 @@ static int activate_stair_light(
 )
 {
     char command[64];
-    char event_data[512];
-    char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
 
     if (address[0] == '\0') {
         snprintf(address, address_len, "%s", config->stair_light_default_address);
@@ -7570,19 +7567,12 @@ static int activate_stair_light(
     if (!c300x_openwebnet_send(config, command, reply, reply_len, error, error_len)) {
         return 0;
     }
-    if (runtime != NULL) {
-        c300x_json_string(address, address_json, sizeof(address_json));
-        if (snprintf(event_data, sizeof(event_data), "{\"address\":%s}", address_json) < (int)sizeof(event_data)) {
-            dispatch_event(config, runtime, "stair_light.activated", event_data, 0);
-        }
-    }
     return 1;
 }
 
 static void handle_stair_light(
     int client_fd,
     const struct c300x_config *config,
-    struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -7596,7 +7586,6 @@ static void handle_stair_light(
     c300x_json_string_field(request->body, "address", address, sizeof(address));
     if (!activate_stair_light(
         config,
-        runtime,
         address,
         sizeof(address),
         reply,
@@ -11386,7 +11375,7 @@ static void handle_api_request(
     }
 
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/stair-light/actions/activate") == 0) {
-        handle_stair_light(client_fd, config, runtime, request);
+        handle_stair_light(client_fd, config, request);
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/activations") == 0) {

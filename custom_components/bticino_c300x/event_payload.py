@@ -7,12 +7,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .capabilities import event_label
-from .const import DASHBOARD_ENTITY_DOOR_UNLOCK, DASHBOARD_ENTITY_STAIR_LIGHT
+from .const import DASHBOARD_ENTITY_DOOR_UNLOCK
 from .event_types import agent_event_key as _agent_event_key
 
 ACTION_EVENT_KEYS = {
     DASHBOARD_ENTITY_DOOR_UNLOCK: "door_unlock_started",
-    DASHBOARD_ENTITY_STAIR_LIGHT: "stair_light_activated",
 }
 
 

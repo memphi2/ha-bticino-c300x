@@ -466,14 +466,6 @@ async def async_trigger_stair_light(
         entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, ""),
     )
     await entry.runtime_data.api.async_stair_light(target_address)
-    hass.bus.async_fire(
-        EVENT_ACTION_RECEIVED,
-        {
-            "entry_id": entry.entry_id,
-            "action_id": DASHBOARD_ENTITY_STAIR_LIGHT,
-            "address": str(target_address),
-        },
-    )
     return {
         "ok": True,
         "action_id": DASHBOARD_ENTITY_STAIR_LIGHT,

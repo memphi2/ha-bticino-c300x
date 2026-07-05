@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config_schemas import (
     device_activation_item_schema,
@@ -29,6 +30,11 @@ from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigFlowResult as FlowResult
+else:
+    FlowResult = dict[str, Any]
 
 ACTIVATION_STEP_DONE = "done"
 ACTIVATION_STEP_ITEM = "item"
@@ -142,12 +148,12 @@ def activation_item_step(
 
 
 def activation_manage_form(
-    show_form: Any,
+    show_form: Callable[..., FlowResult],
     *,
     step_id: str,
     items: list[dict[str, Any]],
     errors: dict[str, str],
-) -> dict[str, Any]:
+) -> FlowResult:
     """Return the Home Assistant manage form result."""
 
     return show_form(
@@ -159,13 +165,13 @@ def activation_manage_form(
 
 
 def activation_item_form(
-    show_form: Any,
+    show_form: Callable[..., FlowResult],
     *,
     step_id: str,
     items: list[dict[str, Any]],
     edit_id: str | None,
     errors: dict[str, str],
-) -> dict[str, Any]:
+) -> FlowResult:
     """Return the Home Assistant single-item form result."""
 
     return show_form(

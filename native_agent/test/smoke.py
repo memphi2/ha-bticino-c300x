@@ -24,6 +24,7 @@ from typing import Any
 TOKEN = "local-test-token"
 NATIVE_AGENT_DIR = Path(__file__).resolve().parents[1]
 EXPECTED_AGENT_VERSION = (NATIVE_AGENT_DIR / "VERSION").read_text(encoding="utf-8").strip()
+DOORBELL_PRESSED_DEDUPE_SECONDS = 1.1
 
 
 class OpenWebNetServer(socketserver.ThreadingTCPServer):
@@ -1513,6 +1514,10 @@ def run_smoke(
             )
             if doorbell_event["body"].get("data", {}).get("raw") != "*8*1#1#4#21*11##":
                 raise AssertionError("doorbell ring raw frame was not preserved")
+            callback_seen = len(callback.requests)
+            send_udp_event(udp_port, "*8*1#1#2#220#0*19##")
+            assert_no_callback_type(callback, "doorbell.pressed", callback_seen)
+            time.sleep(DOORBELL_PRESSED_DEDUPE_SECONDS)
             callback_seen = len(callback.requests)
             send_udp_event(udp_port, "*8*1#1#2#220#0*19##")
             doorbell_event = wait_for_callback_type(

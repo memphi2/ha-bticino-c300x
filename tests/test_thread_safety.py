@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_display_bridge_alarm_notify_uses_thread_safe_scheduling() -> None:
     text = (
-        ROOT / "custom_components" / "bticino_c300x" / "__init__.py"
+        ROOT / "custom_components" / "bticino_c300x" / "runtime_manager.py"
     ).read_text(encoding="utf-8")
     tracker_body = text.split(
         "def _async_track_display_bridge_updates",

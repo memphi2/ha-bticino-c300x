@@ -127,9 +127,9 @@ def test_system_metric_sensors_are_disabled_by_default_and_not_polled() -> None:
 
 
 def test_no_auth_bootstrap_entries_are_not_rejected_before_agent_probe() -> None:
-    text = (ROOT / "custom_components" / "bticino_c300x" / "__init__.py").read_text(
-        encoding="utf-8"
-    )
+    text = (
+        ROOT / "custom_components" / "bticino_c300x" / "runtime_manager.py"
+    ).read_text(encoding="utf-8")
     required_block = text.split("required = (", maxsplit=1)[1].split(")", maxsplit=1)[0]
 
     assert "CONF_AGENT_HOST" in required_block

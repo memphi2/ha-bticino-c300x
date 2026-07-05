@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 import custom_components.bticino_c300x as integration
+import custom_components.bticino_c300x.runtime_manager as runtime_manager
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
@@ -50,6 +51,8 @@ def _stub_homeassistant_http() -> None:
     )
     if not hasattr(dispatcher, "async_dispatcher_send"):
         dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
+    if not hasattr(dispatcher, "async_dispatcher_connect"):
+        dispatcher.async_dispatcher_connect = lambda *_args, **_kwargs: lambda: None
 
     components = sys.modules.setdefault(
         "homeassistant.components",
@@ -209,21 +212,37 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "async_register_agent_event_webhook",
         lambda *_args: lambda: calls.append("event-webhook-unregister"),
     )
-    monkeypatch.setattr(integration, "_async_configure_device_activations", _record_async(calls, "activations"))
-    monkeypatch.setattr(integration, "_async_configure_display_bridge", _record_async(calls, "display"))
-    monkeypatch.setattr(integration, "_async_sync_device_ui_patch", _record_async(calls, "qml"))
-    monkeypatch.setattr(integration, "_async_sync_device_user", _record_async(calls, "user"))
     monkeypatch.setattr(
-        integration,
+        runtime_manager,
+        "_async_configure_device_activations",
+        _record_async(calls, "activations"),
+    )
+    monkeypatch.setattr(
+        runtime_manager,
+        "_async_configure_display_bridge",
+        _record_async(calls, "display"),
+    )
+    monkeypatch.setattr(
+        runtime_manager,
+        "_async_sync_device_ui_patch",
+        _record_async(calls, "qml"),
+    )
+    monkeypatch.setattr(
+        runtime_manager,
+        "_async_sync_device_user",
+        _record_async(calls, "user"),
+    )
+    monkeypatch.setattr(
+        runtime_manager,
         "_async_track_display_bridge_updates",
         lambda _hass, _entry: lambda: calls.append("display-unregister"),
     )
     monkeypatch.setattr(
-        integration,
+        runtime_manager,
         "_async_remove_stale_gui_dependent_entities",
         lambda _hass, _entry: calls.append("remove-stale"),
     )
-    monkeypatch.setattr(integration, "C300XAgentApi", _SetupApi)
+    monkeypatch.setattr(runtime_manager, "C300XAgentApi", _SetupApi)
 
     entry = _entry(
         data={
@@ -898,7 +917,7 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     listened_events: list[str] = []
 
     monkeypatch.setattr(
-        integration,
+        runtime_manager,
         "_async_schedule_display_bridge_notify",
         lambda *_args: calls.append("notify"),
     )

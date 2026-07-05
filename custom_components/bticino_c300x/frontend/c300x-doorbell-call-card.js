@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=e68142b744a4830f";
+} from "./c300x-translations.js?v=edc306f6c037576f";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -13,21 +13,21 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=e68142b744a4830f";
+} from "./c300x-entity-resolver.js?v=edc306f6c037576f";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=e68142b744a4830f";
-import { C300XCardActions } from "./c300x-card-actions.js?v=e68142b744a4830f";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=e68142b744a4830f";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=e68142b744a4830f";
+} from "./c300x-card-editor.js?v=edc306f6c037576f";
+import { C300XCardActions } from "./c300x-card-actions.js?v=edc306f6c037576f";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=edc306f6c037576f";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=edc306f6c037576f";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=e68142b744a4830f";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=e68142b744a4830f";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=e68142b744a4830f";
+} from "./c300x-state-model.js?v=edc306f6c037576f";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=edc306f6c037576f";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=edc306f6c037576f";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -94,6 +94,11 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._actions = new C300XCardActions(this);
     this._webrtc = this._createWebrtcClient();
     this._transitionWebrtc = null;
+    this._cameraEntityState = null;
+    this._stateSubscriptionConnection = null;
+    this._stateSubscriptionEntityId = "";
+    this._stateSubscriptionToken = 0;
+    this._unsubscribeStateEvents = null;
     this._error = "";
     this._notice = "";
     this._noticeTimer = null;
@@ -116,11 +121,14 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._syncCameraEntityFromHass();
+    this._ensureStateSubscription();
     this._ensureRendered();
     this._updateState();
   }
 
   disconnectedCallback() {
+    this._clearStateSubscription();
     this._clearNoticeTimer();
     this._stopRingbackTone();
     this._closePeer(false);
@@ -522,7 +530,82 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _cameraEntity() {
-    return this._hass?.states?.[this._resolvedCameraEntityId()];
+    const entityId = this._resolvedCameraEntityId();
+    return this._cameraEntityState || this._hass?.states?.[entityId];
+  }
+
+  _syncCameraEntityFromHass() {
+    const entityId = this._resolvedCameraEntityId();
+    const entity = this._hass?.states?.[entityId];
+    if (entity) {
+      this._cameraEntityState = entity;
+    }
+  }
+
+  _ensureStateSubscription() {
+    const entityId = this._resolvedCameraEntityId();
+    const connection = this._hass?.connection;
+    const subscribeEvents = connection?.subscribeEvents;
+    if (
+      this._stateSubscriptionConnection === connection
+      && this._stateSubscriptionEntityId === entityId
+    ) {
+      return;
+    }
+    this._clearStateSubscription();
+    this._stateSubscriptionConnection = connection || null;
+    this._stateSubscriptionEntityId = entityId || "";
+    if (!entityId || typeof subscribeEvents !== "function") {
+      return;
+    }
+
+    const token = ++this._stateSubscriptionToken;
+    let unsubscribePromise;
+    try {
+      unsubscribePromise = Promise.resolve(subscribeEvents.call(
+        connection,
+        (event) => this._handleStateChanged(event),
+        "state_changed",
+      ));
+    } catch (err) {
+      console.warn("C300X state subscription failed", err);
+      return;
+    }
+    unsubscribePromise.then((unsubscribe) => {
+      if (
+        token !== this._stateSubscriptionToken
+        || this._stateSubscriptionConnection !== connection
+        || this._stateSubscriptionEntityId !== entityId
+      ) {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+        return;
+      }
+      this._unsubscribeStateEvents = unsubscribe;
+    }).catch((err) => {
+      console.warn("C300X state subscription failed", err);
+    });
+  }
+
+  _clearStateSubscription() {
+    const unsubscribe = this._unsubscribeStateEvents;
+    this._unsubscribeStateEvents = null;
+    this._stateSubscriptionConnection = null;
+    this._stateSubscriptionEntityId = "";
+    this._stateSubscriptionToken += 1;
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+    }
+  }
+
+  _handleStateChanged(event) {
+    const data = event?.data || {};
+    if (data.entity_id !== this._stateSubscriptionEntityId) {
+      return;
+    }
+    this._cameraEntityState = data.new_state || null;
+    this._updateState();
   }
 
   _mediaReadinessEntity() {

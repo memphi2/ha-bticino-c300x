@@ -103,8 +103,9 @@ function installFakeDom() {
   return registry;
 }
 
-function fakeHass() {
+function fakeHass({ cameraEntity, connection } = {}) {
   return {
+    connection,
     entities: {
       "camera.bticino_c300x_doorbell_camera": {
         config_entry_id: "entry-1",
@@ -120,7 +121,7 @@ function fakeHass() {
       },
     },
     states: {
-      "camera.bticino_c300x_doorbell_camera": {
+      "camera.bticino_c300x_doorbell_camera": cameraEntity || {
         attributes: {
           friendly_name: "Door",
           media_primary_action: "start_stream",
@@ -161,4 +162,60 @@ test("doorbell card custom element renders with fake Home Assistant state", asyn
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   assert.equal(globalThis.window.customCards.length, 1);
   assert.equal(globalThis.window.customCards[0].type, "c300x-doorbell-call-card");
+});
+
+test("doorbell card updates from direct camera state events without page reload", async () => {
+  const registry = installFakeDom();
+  const subscriptions = [];
+  const connection = {
+    subscribeEvents(callback, eventType) {
+      subscriptions.push({ callback, eventType, active: true });
+      return () => {
+        subscriptions.at(-1).active = false;
+      };
+    },
+  };
+  const busyCamera = {
+    attributes: {
+      friendly_name: "Door",
+      media_primary_action: "wait",
+      media_state: "ring_active",
+    },
+    state: "streaming",
+  };
+  const idleCamera = {
+    attributes: {
+      friendly_name: "Door",
+      media_primary_action: "start_stream",
+      media_state: "idle",
+    },
+    state: "idle",
+  };
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?state-event-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+  card.hass = fakeHass({ cameraEntity: busyCamera, connection });
+
+  await Promise.resolve();
+  assert.equal(subscriptions.length, 1);
+  assert.equal(subscriptions[0].eventType, "state_changed");
+  assert.equal(card.shadowRoot.querySelector(".row-action").disabled, true);
+
+  subscriptions[0].callback({
+    data: {
+      entity_id: "camera.bticino_c300x_doorbell_camera",
+      new_state: idleCamera,
+    },
+  });
+
+  assert.equal(card._cameraEntity().attributes.media_state, "idle");
+  assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
+  card.disconnectedCallback();
+  assert.equal(subscriptions[0].active, false);
 });

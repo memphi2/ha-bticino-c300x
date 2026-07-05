@@ -1,4 +1,4 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=e68142b744a4830f";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=edc306f6c037576f";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack }) {

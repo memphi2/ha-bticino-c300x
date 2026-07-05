@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=f92bf778dbe356bd";
+} from "./c300x-translations.js?v=a8e03efea70bd8e1";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=f92bf778dbe356bd";
+} from "./c300x-entity-resolver.js?v=a8e03efea70bd8e1";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=f92bf778dbe356bd";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=f92bf778dbe356bd";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=f92bf778dbe356bd";
+} from "./c300x-state-model.js?v=a8e03efea70bd8e1";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=a8e03efea70bd8e1";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=a8e03efea70bd8e1";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -756,9 +756,11 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     this._hangupInProgress = true;
     this._startingCall = false;
+    const homeCallMode = this._activeHomeCallSession || this._isHomeCallMode();
     let ok = true;
     try {
-      if (this._isHomeCallMode()) {
+      this._closePeer(false);
+      if (homeCallMode) {
         await this._stopHomeCall();
       } else {
         await this._stopDoorbellVideo();
@@ -779,9 +781,11 @@ class C300XDoorbellCallCard extends HTMLElement {
     }
     this._hangupInProgress = true;
     this._startingCall = false;
+    const hadDoorbellRingCallSession = this._hasDoorbellRingCallSession();
     let ok = true;
     try {
-      if (this._hasDoorbellRingCallSession()) {
+      this._closePeer(false);
+      if (hadDoorbellRingCallSession) {
         try {
           await this._hangupDoorbellCall({ closePeer: false });
         } catch (err) {

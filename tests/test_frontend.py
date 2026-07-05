@@ -854,9 +854,12 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
     assert "1.4.1-dev" not in metadata_source
 
 
-def test_doorstation_hangup_always_stops_service_before_closing_webrtc() -> None:
+def test_doorstation_hangup_closes_webrtc_before_stopping_agent_media() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+    generic_hangup_start = source.index("async _hangup()")
+    generic_hangup_end = source.index("  async _hangupDoorstation()", generic_hangup_start)
+    generic_hangup_body = source[generic_hangup_start:generic_hangup_end]
     hangup_start = source.index("async _hangupDoorstation()")
     hangup_end = source.index("  _hasDoorbellRingCallSession()", hangup_start)
     hangup_body = source[hangup_start:hangup_end]
@@ -868,7 +871,18 @@ def test_doorstation_hangup_always_stops_service_before_closing_webrtc() -> None
     assert "this._hangupInProgress = true;" in hangup_body
     assert "this._hangupInProgress = false;" in hangup_body
     assert "_hasLocalDoorstationWebrtcSession" not in source
-    assert "if (this._hasDoorbellRingCallSession())" in hangup_body
+    assert "const homeCallMode = this._activeHomeCallSession || this._isHomeCallMode();" in generic_hangup_body
+    assert generic_hangup_body.index("this._closePeer(false);") < generic_hangup_body.index(
+        "await this._stopDoorbellVideo();"
+    )
+    assert "const hadDoorbellRingCallSession = this._hasDoorbellRingCallSession();" in hangup_body
+    assert "if (hadDoorbellRingCallSession)" in hangup_body
+    assert hangup_body.index("this._closePeer(false);") < hangup_body.index(
+        "await this._hangupDoorbellCall({ closePeer: false });"
+    )
+    assert hangup_body.index("this._closePeer(false);") < hangup_body.index(
+        "await this._stopDoorbellVideo();"
+    )
     assert "await this._hangupDoorbellCall({ closePeer: false });" in hangup_body
     assert 'console.error("C300X ring-call hangup failed", err);' in hangup_body
     assert hangup_body.index("await this._hangupDoorbellCall({ closePeer: false });") < hangup_body.index(

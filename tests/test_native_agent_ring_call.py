@@ -272,7 +272,12 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "read_rtsp_request_or_interleaved(" in rtsp_body
     assert "handle_rtsp_backchannel_frame(" in rtsp_body
     assert "slot->backchannel_enabled = true;" in rtsp_body
-    assert rtsp_body.count('"a=fmtp:96 profile-level-id=42801F\\r\\n"') >= 3
+    assert (
+        rtsp_body.count(
+            '"a=fmtp:96 profile-level-id=42801F;packetization-mode=1\\r\\n"'
+        )
+        >= 3
+    )
     assert rtsp_body.count('"a=rtcp-fb:* trr-int 5000\\r\\n"') >= 3
     assert rtsp_body.count('"a=rtcp-fb:* ccm tmmbr\\r\\n"') >= 3
     assert rtsp_body.count('"a=rtcp-fb:96 nack pli\\r\\n"') >= 3
@@ -529,6 +534,32 @@ def test_native_agent_rtsp_audio_downstream_uses_monotonic_output_clock() -> Non
     assert "store_be16(out + 2, sequence);" in audio_body
     assert "store_be32(out + 4, timestamp);" in audio_body
     assert "forward_rtsp_packet(bridge, packet, packet_len, true)" not in audio_body
+
+
+def test_native_agent_ondemand_relay_prioritizes_video_over_audio_work() -> None:
+    media_bridge = _read_media_bridge()
+    relay_start = media_bridge.index("static void *rtp_relay_thread")
+    relay_body = media_bridge[
+        relay_start : media_bridge.index("static int bind_udp_port", relay_start)
+    ]
+    create_socket_body = media_bridge[
+        media_bridge.index("static bool create_rtp_socket") :
+        media_bridge.index("static bool start_media_session")
+    ]
+
+    assert "#define MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES (512 * 1024)" in media_bridge
+    assert "#define MEDIA_VIDEO_RELAY_DRAIN_BURST 64" in media_bridge
+    assert "setsockopt(fd, SOL_SOCKET, SO_RCVBUF" in media_bridge
+    assert (
+        "set_socket_receive_buffer(video_fd, MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES);"
+        in create_socket_body
+    )
+    assert "drain_relay_video_packets(bridge, rtp_fd);" in relay_body
+    assert "drain_relay_audio_packet(bridge, audio_rtp_fd);" in relay_body
+    assert relay_body.index("drain_relay_video_packets(bridge, rtp_fd);") < relay_body.index(
+        "drain_relay_audio_packet(bridge, audio_rtp_fd);"
+    )
+    assert relay_body.count("drain_relay_video_packets(bridge, rtp_fd);") >= 2
 
 
 def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:

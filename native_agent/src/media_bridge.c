@@ -50,6 +50,8 @@
 #define MEDIA_AUDIO_PAYLOAD_TYPE 98
 #define MEDIA_AUDIO_SILENCE_PAYLOAD 0x00
 #define MEDIA_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)
+#define MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES (512 * 1024)
+#define MEDIA_VIDEO_RELAY_DRAIN_BURST 64
 #define MEDIA_RENEW_SECONDS 20
 #define MEDIA_SIP_KEEPALIVE_SECONDS 10
 #define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
@@ -85,6 +87,7 @@
 static bool read_sip_domain(char *domain, size_t domain_len);
 static int bind_udp_port(int port);
 static int bind_udp_loopback_port(int port);
+static void set_socket_receive_buffer(int fd, int size_bytes);
 static void fill_random_bytes(unsigned char *out, size_t len);
 static void secure_zero(void *ptr, size_t len);
 static void store_be16(unsigned char *out, uint16_t value);
@@ -5080,9 +5083,47 @@ cleanup:
     return NULL;
 }
 
+static void drain_relay_video_packets(media_bridge_t *bridge, int rtp_fd) {
+    unsigned char packet[2048];
+
+    if (bridge == NULL || rtp_fd < 0) {
+        return;
+    }
+
+    for (size_t drained = 0; drained < MEDIA_VIDEO_RELAY_DRAIN_BURST; drained++) {
+        ssize_t n = recv(rtp_fd, packet, sizeof(packet), MSG_DONTWAIT);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            return;
+        }
+        forward_rtsp_packet(bridge, packet, (int)n, false);
+    }
+}
+
+static void drain_relay_audio_packet(media_bridge_t *bridge, int audio_rtp_fd) {
+    unsigned char packet[2048];
+    ssize_t n;
+
+    if (bridge == NULL || audio_rtp_fd < 0) {
+        return;
+    }
+
+    n = recv(audio_rtp_fd, packet, sizeof(packet), MSG_DONTWAIT);
+    if (n <= 0) {
+        return;
+    }
+    (void)forward_rtsp_audio_pcmu_packet(
+        bridge,
+        packet,
+        (int)n,
+        current_doorstation_audio_gain_q12(bridge)
+    );
+}
+
 static void *rtp_relay_thread(void *arg) {
     media_bridge_t *bridge = arg;
-    unsigned char packet[2048];
 
     while (true) {
         pthread_mutex_lock(&bridge->mutex);
@@ -5111,26 +5152,13 @@ static void *rtp_relay_thread(void *arg) {
             continue;
         }
 
+        if (FD_ISSET(rtp_fd, &readfds)) {
+            drain_relay_video_packets(bridge, rtp_fd);
+        }
         if (audio_rtp_fd >= 0 && FD_ISSET(audio_rtp_fd, &readfds)) {
-            ssize_t n = recv(audio_rtp_fd, packet, sizeof(packet), 0);
-            if (n > 0) {
-                (void)forward_rtsp_audio_pcmu_packet(
-                    bridge,
-                    packet,
-                    (int)n,
-                    current_doorstation_audio_gain_q12(bridge)
-                );
-            }
+            drain_relay_audio_packet(bridge, audio_rtp_fd);
+            drain_relay_video_packets(bridge, rtp_fd);
         }
-        if (!FD_ISSET(rtp_fd, &readfds)) {
-            continue;
-        }
-
-        ssize_t n = recv(rtp_fd, packet, sizeof(packet), 0);
-        if (n <= 0) {
-            continue;
-        }
-        forward_rtsp_packet(bridge, packet, (int)n, false);
     }
 
     pthread_mutex_lock(&bridge->mutex);
@@ -5186,6 +5214,13 @@ static int bind_udp_loopback_port(int port) {
         return -1;
     }
     return fd;
+}
+
+static void set_socket_receive_buffer(int fd, int size_bytes) {
+    if (fd < 0 || size_bytes <= 0) {
+        return;
+    }
+    (void)setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size_bytes, sizeof(size_bytes));
 }
 
 static void *talkback_proxy_thread(void *arg) {
@@ -5273,6 +5308,7 @@ static bool create_rtp_socket(media_bridge_t *bridge) {
     if (video_fd < 0) {
         return false;
     }
+    set_socket_receive_buffer(video_fd, MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES);
     int audio_fd = bind_udp_port(audio_rtp_port(bridge->config));
     if (audio_fd < 0) {
         close(video_fd);
@@ -5939,7 +5975,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
-                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=fmtp:96 profile-level-id=42801F;packetization-mode=1\r\n"
                 "a=rtcp-fb:* trr-int 5000\r\n"
                 "a=rtcp-fb:* ccm tmmbr\r\n"
                 "a=rtcp-fb:96 nack pli\r\n"
@@ -5961,7 +5997,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "a=control:streamid=0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
-                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=fmtp:96 profile-level-id=42801F;packetization-mode=1\r\n"
                 "a=rtcp-fb:* trr-int 5000\r\n"
                 "a=rtcp-fb:* ccm tmmbr\r\n"
                 "a=rtcp-fb:96 nack pli\r\n"
@@ -5994,7 +6030,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 "t=0 0\r\n"
                 "m=video 0 RTP/AVP 96\r\n"
                 "a=rtpmap:96 H264/90000\r\n"
-                "a=fmtp:96 profile-level-id=42801F\r\n"
+                "a=fmtp:96 profile-level-id=42801F;packetization-mode=1\r\n"
                 "a=rtcp-fb:* trr-int 5000\r\n"
                 "a=rtcp-fb:* ccm tmmbr\r\n"
                 "a=rtcp-fb:96 nack pli\r\n"

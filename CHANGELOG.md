@@ -1,8 +1,30 @@
 # Changelog
 
-## v1.7.2 - Unreleased
+## v1.7.2 - 2026-07-05
 
-No user-facing changes yet.
+### Fixed
+
+- Stop failed on-demand WebRTC provider starts cleanly so the C300X media
+  session is not left running after a provider setup error.
+- Keep Ring Call preview media running when one browser's provider setup fails.
+- Emit stable door-unlock start/end events for lock activations so automations
+  listening for unlock completion also work with additional activation buttons.
+- Deduplicate local door-unlock and stair-light echoes from the device event
+  stream.
+- Add stair-light release events and complete translations for mapped device
+  agent events.
+
+### Changed
+
+- Reduce redundant Lovelace card DOM updates during frequent Home Assistant
+  state refreshes.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
+- Update the native C300X device agent from Home Assistant to `1.7.2`.
 
 ## v1.7.0 - 2026-07-05
 

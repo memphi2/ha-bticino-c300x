@@ -5,6 +5,7 @@
 #include "event_payload.h"
 #include "http_util.h"
 #include "json_util.h"
+#include "local_action_events.h"
 #include "device_routing.h"
 #include "memo_store.h"
 #include "media_bridge.h"
@@ -69,7 +70,6 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
-#define C300X_LOCAL_ACTION_EVENT_DEDUPE_MS 1000
 #define C300X_AGENT_UPDATE_STAGE ".update"
 #define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
 #define C300X_AGENT_BUNDLE_HASH_LEN 96
@@ -243,9 +243,7 @@ struct agent_runtime {
     int ringer_muted;
     int ringer_volume_known;
     int ringer_volume;
-    long long last_local_action_event_ms;
-    char last_local_action_event_type[64];
-    char last_local_action_address[C300X_MAX_ADDRESS_LEN];
+    struct c300x_local_action_events local_action_events;
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
@@ -5816,54 +5814,50 @@ static int parse_openwebnet_doorbell_press_event(const char *msg)
     return strcmp(ptr, "##") == 0;
 }
 
-static int is_local_action_event(const char *type)
-{
-    return type != NULL
-        && (
-            strcmp(type, "door_unlock.started") == 0
-            || strcmp(type, "door_unlock.ended") == 0
-            || strcmp(type, "stair_light.activated") == 0
-            || strcmp(type, "stair_light.released") == 0
-        );
-}
-
-static int local_action_event_is_duplicate(
+static void dispatch_lock_activation_event(
+    const struct c300x_config *config,
     struct agent_runtime *runtime,
-    const char *type,
-    const char *address
+    const struct c300x_activation *activation,
+    const char *event_type,
+    const char *raw
 )
 {
-    long long now;
-    long long previous;
+    char raw_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char address_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
+    char id_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ACTIVATION_ID_LEN)];
+    char event_data[1024];
 
-    if (runtime == NULL || !is_local_action_event(type) || address == NULL) {
-        return 0;
-    }
-
-    now = c300x_monotonic_ms();
-    previous = runtime->last_local_action_event_ms;
     if (
-        previous > 0
-        && now >= previous
-        && now - previous < C300X_LOCAL_ACTION_EVENT_DEDUPE_MS
-        && strcmp(runtime->last_local_action_event_type, type) == 0
-        && strcmp(runtime->last_local_action_address, address) == 0
+        runtime == NULL
+        || activation == NULL
+        || activation->address[0] == '\0'
+        || raw == NULL
+        || raw[0] == '\0'
     ) {
-        return 1;
+        return;
     }
-
-    runtime->last_local_action_event_ms = now;
-    c300x_copy_string(
-        runtime->last_local_action_event_type,
-        sizeof(runtime->last_local_action_event_type),
-        type
+    c300x_json_string(raw, raw_json, sizeof(raw_json));
+    c300x_json_string(activation->address, address_json, sizeof(address_json));
+    c300x_json_string(activation->id, id_json, sizeof(id_json));
+    if (
+        snprintf(
+            event_data,
+            sizeof(event_data),
+            "{\"raw\":%s,\"address\":%s,\"source\":\"activation\",\"activation_id\":%s}",
+            raw_json,
+            address_json,
+            id_json
+        ) >= (int)sizeof(event_data)
+    ) {
+        return;
+    }
+    c300x_local_action_event_remember(
+        &runtime->local_action_events,
+        event_type,
+        activation->address,
+        c300x_monotonic_ms()
     );
-    c300x_copy_string(
-        runtime->last_local_action_address,
-        sizeof(runtime->last_local_action_address),
-        address
-    );
-    return 0;
+    dispatch_event(config, runtime, event_type, event_data, 0);
 }
 
 static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
@@ -6056,7 +6050,12 @@ static int map_openwebnet_event(
     }
     if (parse_openwebnet_address_event(msg, "*8*19*", address, sizeof(address))) {
         size_t used = 0;
-        if (local_action_event_is_duplicate(runtime, "door_unlock.started", address)) {
+        if (c300x_local_action_event_is_duplicate(
+            runtime != NULL ? &runtime->local_action_events : NULL,
+            "door_unlock.started",
+            address,
+            c300x_monotonic_ms()
+        )) {
             return 0;
         }
         c300x_json_string(address, address_json, sizeof(address_json));
@@ -6065,7 +6064,12 @@ static int map_openwebnet_event(
     }
     if (parse_openwebnet_address_event(msg, "*8*20*", address, sizeof(address))) {
         size_t used = 0;
-        if (local_action_event_is_duplicate(runtime, "door_unlock.ended", address)) {
+        if (c300x_local_action_event_is_duplicate(
+            runtime != NULL ? &runtime->local_action_events : NULL,
+            "door_unlock.ended",
+            address,
+            c300x_monotonic_ms()
+        )) {
             return 0;
         }
         c300x_json_string(address, address_json, sizeof(address_json));
@@ -6074,7 +6078,12 @@ static int map_openwebnet_event(
     }
     if (parse_openwebnet_address_event(msg, "*8*21*", address, sizeof(address))) {
         size_t used = 0;
-        if (local_action_event_is_duplicate(runtime, "stair_light.activated", address)) {
+        if (c300x_local_action_event_is_duplicate(
+            runtime != NULL ? &runtime->local_action_events : NULL,
+            "stair_light.activated",
+            address,
+            c300x_monotonic_ms()
+        )) {
             return 0;
         }
         c300x_json_string(address, address_json, sizeof(address_json));
@@ -6083,7 +6092,12 @@ static int map_openwebnet_event(
     }
     if (parse_openwebnet_address_event(msg, "*8*22*", address, sizeof(address))) {
         size_t used = 0;
-        if (local_action_event_is_duplicate(runtime, "stair_light.released", address)) {
+        if (c300x_local_action_event_is_duplicate(
+            runtime != NULL ? &runtime->local_action_events : NULL,
+            "stair_light.released",
+            address,
+            c300x_monotonic_ms()
+        )) {
             return 0;
         }
         c300x_json_string(address, address_json, sizeof(address_json));
@@ -7864,6 +7878,24 @@ static void handle_activation_run(
     } else if (!c300x_openwebnet_send(config, press, reply, sizeof(reply), error, sizeof(error))) {
         send_device_error(client_fd, error);
         return;
+    }
+    if (strcmp(activation->type, "lock") == 0 && activation->address[0] != '\0') {
+        dispatch_lock_activation_event(
+            config,
+            runtime,
+            activation,
+            "door_unlock.started",
+            press
+        );
+        if (release[0] != '\0') {
+            dispatch_lock_activation_event(
+                config,
+                runtime,
+                activation,
+                "door_unlock.ended",
+                release
+            );
+        }
     }
     c300x_json_string(activation->id, id_json, sizeof(id_json));
     c300x_json_string(activation->name, name_json, sizeof(name_json));

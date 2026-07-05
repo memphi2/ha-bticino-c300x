@@ -455,7 +455,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 "offer_owner": owner,
                 "has_audio": has_audio_media,
                 "wants_audio": wants_audio,
-                "talkback_requested": talkback_requested,
+                "microphone_requested": talkback_requested,
                 "duration_seconds": duration_seconds,
             },
         )
@@ -578,7 +578,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 details={
                     "session_owner": owner,
                     "wants_audio": wants_audio,
-                    "talkback_requested": talkback_requested,
+                    "microphone_requested": talkback_requested,
                     "ring_call": session.ring_call,
                     "ring_preview": session.ring_preview,
                     "provider": str(getattr(provider, "domain", type(provider).__name__)),
@@ -612,7 +612,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         details={
                             "session_owner": owner,
                             "wants_audio": wants_audio,
-                            "talkback_requested": talkback_requested,
+                            "microphone_requested": talkback_requested,
                             "ring_call": session.ring_call,
                             "ring_preview": session.ring_preview,
                         },
@@ -629,7 +629,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     details={
                         "session_owner": owner,
                         "wants_audio": wants_audio,
-                        "talkback_requested": talkback_requested,
+                        "microphone_requested": talkback_requested,
                         "ring_call": session.ring_call,
                         "ring_preview": session.ring_preview,
                     },

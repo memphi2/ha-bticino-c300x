@@ -1,7 +1,7 @@
 name: "C300X CodeQL config"
 
 paths-ignore:
-  # Qt/QML JavaScript uses directives such as ".pragma library" that are valid
-  # for the device runtime but are not valid ECMAScript for CodeQL's JS parser.
-  - "device_qml/js/**"
-  - "custom_components/bticino_c300x/device_agent/qml/js/**"
+  # Qt/QML files and their QML JavaScript libraries are valid for the device
+  # runtime but are not valid ECMAScript/TypeScript for CodeQL's JS parser.
+  - "device_qml/**"
+  - "custom_components/bticino_c300x/device_agent/qml/**"

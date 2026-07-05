@@ -48,6 +48,24 @@ Security scanners may flag Paramiko for SHA-1/RSA-key handling
 network, use the installer only for rooted/SSH-enabled devices you control, and
 disable SSH again after bootstrap when your maintenance model allows it.
 
+## Accepted Local-Only Security Exceptions
+
+The following scanner findings are documented and intentionally suppressed in
+source:
+
+- CodeQL `py/paramiko-missing-host-key-validation`: the rooted C300X can
+  regenerate its SSH host key after reboot, so stable host-key pinning would
+  make the local bootstrap/repair installer unreliable. The Paramiko path is
+  optional, pinned to `paramiko==3.5.1`, and used only for trusted local devices
+  during install or repair.
+- CodeQL `cpp/cleartext-transmission`: the native MQTT bridge uses the device's
+  local MQTT transport model. TLS is not available on this device-side path, so
+  MQTT must stay on a trusted local network and must not be exposed externally.
+
+These exceptions do not apply to internet-exposed deployments. Do not expose
+SSH, MQTT, native-agent HTTP, RTSP, WebRTC, or Home Assistant callback surfaces
+outside the trusted local network.
+
 ## Maintenance Surface
 
 Maintenance endpoints are disabled unless explicitly enabled in agent config and

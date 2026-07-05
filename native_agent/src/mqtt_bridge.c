@@ -83,6 +83,9 @@ static int send_all(int fd, const void *data, size_t len)
 {
     const unsigned char *ptr = data;
     while (len > 0) {
+        // Native MQTT intentionally matches the C300X local network model.
+        // TLS is not available on the device-side MQTT path; keep it local.
+        // codeql[cpp/cleartext-transmission]
         ssize_t sent = send(fd, ptr, len, MSG_NOSIGNAL);
         if (sent < 0) {
             if (errno == EINTR) {

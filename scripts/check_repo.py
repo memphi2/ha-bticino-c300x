@@ -627,8 +627,10 @@ def check_hacs_metadata() -> list[str]:
 
     validate_workflow_path = ROOT / ".github" / "workflows" / "validate.yml"
     release_workflow_path = ROOT / ".github" / "workflows" / "release.yml"
+    codeql_config_path = ROOT / ".github" / "codeql" / "codeql-config.yml"
     validate_workflow = validate_workflow_path.read_text(encoding="utf-8")
     release_workflow = release_workflow_path.read_text(encoding="utf-8")
+    codeql_config = codeql_config_path.read_text(encoding="utf-8")
     for workflow_path, workflow in {
         validate_workflow_path: validate_workflow,
         release_workflow_path: release_workflow,
@@ -658,6 +660,20 @@ def check_hacs_metadata() -> list[str]:
         )
     if "home-assistant/actions/hassfest@" not in validate_workflow:
         failures.append("validate workflow must run Hassfest")
+    for path in (
+        '"device_qml/**"',
+        '"custom_components/bticino_c300x/device_agent/qml/**"',
+    ):
+        if path not in codeql_config:
+            failures.append(f"CodeQL config must ignore Qt/QML runtime path {path}")
+    for path in (
+        '"device_qml/js/**"',
+        '"custom_components/bticino_c300x/device_agent/qml/js/**"',
+    ):
+        if path in codeql_config:
+            failures.append(
+                f"CodeQL config must ignore the complete Qt/QML tree, not only {path}"
+            )
 
     required_release_tokens = {
         "push:\n    tags:": "release workflow must run from immutable release tags",

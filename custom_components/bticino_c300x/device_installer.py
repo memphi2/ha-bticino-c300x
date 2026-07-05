@@ -522,6 +522,11 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
         _validate_paramiko_version(paramiko)
         self._paramiko = paramiko
         self._client = paramiko.SSHClient()
+
+        # The rooted C300X regenerates its SSH host key across reboots, so
+        # host-key pinning is not stable. This installer is an optional local
+        # bootstrap path and never used for normal agent runtime.
+        # codeql[py/paramiko-missing-host-key-validation]
         self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             self._client.connect(**_paramiko_connect_kwargs(request))

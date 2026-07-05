@@ -16,6 +16,7 @@
 #include "string_util.h"
 #include "system_metrics.h"
 #include "self_test.h"
+#include "time_util.h"
 #include "ui_homeassistant.h"
 #include "ui_events.h"
 #include "video_audio_settings.h"
@@ -68,6 +69,7 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
+#define C300X_LOCAL_ACTION_EVENT_DEDUPE_MS 1000
 #define C300X_AGENT_UPDATE_STAGE ".update"
 #define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
 #define C300X_AGENT_BUNDLE_HASH_LEN 96
@@ -241,6 +243,9 @@ struct agent_runtime {
     int ringer_muted;
     int ringer_volume_known;
     int ringer_volume;
+    long long last_local_action_event_ms;
+    char last_local_action_event_type[64];
+    char last_local_action_address[C300X_MAX_ADDRESS_LEN];
     int network_online;
     time_t network_checked_at;
     struct c300x_mqtt mqtt;
@@ -5811,6 +5816,55 @@ static int parse_openwebnet_doorbell_press_event(const char *msg)
     return strcmp(ptr, "##") == 0;
 }
 
+static int is_local_action_event(const char *type)
+{
+    return type != NULL
+        && (
+            strcmp(type, "door_unlock.started") == 0
+            || strcmp(type, "door_unlock.ended") == 0
+            || strcmp(type, "stair_light.activated") == 0
+        );
+}
+
+static int local_action_event_is_duplicate(
+    struct agent_runtime *runtime,
+    const char *type,
+    const char *address
+)
+{
+    long long now;
+    long long previous;
+
+    if (runtime == NULL || !is_local_action_event(type) || address == NULL) {
+        return 0;
+    }
+
+    now = c300x_monotonic_ms();
+    previous = runtime->last_local_action_event_ms;
+    if (
+        previous > 0
+        && now >= previous
+        && now - previous < C300X_LOCAL_ACTION_EVENT_DEDUPE_MS
+        && strcmp(runtime->last_local_action_event_type, type) == 0
+        && strcmp(runtime->last_local_action_address, address) == 0
+    ) {
+        return 1;
+    }
+
+    runtime->last_local_action_event_ms = now;
+    c300x_copy_string(
+        runtime->last_local_action_event_type,
+        sizeof(runtime->last_local_action_event_type),
+        type
+    );
+    c300x_copy_string(
+        runtime->last_local_action_address,
+        sizeof(runtime->last_local_action_address),
+        address
+    );
+    return 0;
+}
+
 static void remember_smartphone_forwarding_mode(struct agent_runtime *runtime, int code)
 {
     if (runtime == NULL || c300x_smartphone_mode_from_code(code) == NULL) {
@@ -6001,18 +6055,27 @@ static int map_openwebnet_event(
     }
     if (parse_openwebnet_address_event(msg, "*8*19*", address, sizeof(address))) {
         size_t used = 0;
+        if (local_action_event_is_duplicate(runtime, "door_unlock.started", address)) {
+            return 0;
+        }
         c300x_json_string(address, address_json, sizeof(address_json));
         c300x_copy_string(type, type_len, "door_unlock.started");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (parse_openwebnet_address_event(msg, "*8*20*", address, sizeof(address))) {
         size_t used = 0;
+        if (local_action_event_is_duplicate(runtime, "door_unlock.ended", address)) {
+            return 0;
+        }
         c300x_json_string(address, address_json, sizeof(address_json));
         c300x_copy_string(type, type_len, "door_unlock.ended");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (parse_openwebnet_address_event(msg, "*8*21*", address, sizeof(address))) {
         size_t used = 0;
+        if (local_action_event_is_duplicate(runtime, "stair_light.activated", address)) {
+            return 0;
+        }
         c300x_json_string(address, address_json, sizeof(address_json));
         c300x_copy_string(type, type_len, "stair_light.activated");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);

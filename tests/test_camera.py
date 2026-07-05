@@ -117,6 +117,7 @@ from custom_components.bticino_c300x.camera import (
     async_setup_entry,
 )
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
+from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 dispatcher_signals: list[tuple[str, str]] = []
@@ -231,6 +232,7 @@ class _FakeRuntimeData:
     agent_cpu_watchdog_task: Any = None
     prepare_doorbell_video_stop: Any = None
     prepare_home_call_stop: Any = None
+    media_timeline: Any = field(default_factory=C300XMediaTimeline)
 
 
 def _webrtc_message_value(message: Any, key: str) -> Any:
@@ -2664,6 +2666,42 @@ def test_doorbell_camera_deduplicates_unchanged_agent_event_state_writes() -> No
     )
 
     assert writes == ["write", "write"]
+
+
+def test_doorbell_camera_records_safe_media_timeline_from_agent_events() -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+    event_data = {
+        "entry_id": entry.entry_id,
+        "event_key": "doorbell_view_requested",
+        "video_window_available": True,
+        "video_available": True,
+        "media_owner": "doorbell",
+        "stream_path": "/doorbell-video",
+        "bridge": {
+            "media_owner": "doorbell",
+            "media_active": True,
+            "clients": 1,
+            "ring_call_active": False,
+        },
+    }
+
+    camera._handle_agent_event(SimpleNamespace(data=event_data))
+
+    [entry_data] = entry.runtime_data.media_timeline.diagnostics()
+    assert entry_data["kind"] == "agent_event"
+    assert entry_data["event"] == "doorbell_view_requested"
+    assert entry_data["owner"] == "doorbell"
+    assert entry_data["session_count"] == 0
+    assert entry_data["details"] == {
+        "video_available": True,
+        "video_window_available": True,
+        "bridge_clients": 1,
+        "bridge_media_active": True,
+        "bridge_ring_call_active": False,
+    }
+    assert "stream_path" not in entry_data["details"]
 
 
 def test_doorbell_camera_does_not_infer_runtime_video_window() -> None:

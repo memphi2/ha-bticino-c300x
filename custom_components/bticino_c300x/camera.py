@@ -448,7 +448,23 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         has_audio_media = _offer_has_audio(offer_sdp)
         talkback_requested = _offer_can_send_microphone(offer_sdp)
         wants_audio = has_audio_media and _offer_should_use_audio_stream(offer_sdp)
+        self._record_media_timeline(
+            "webrtc",
+            "offer_received",
+            details={
+                "offer_owner": owner,
+                "has_audio": has_audio_media,
+                "wants_audio": wants_audio,
+                "talkback_requested": talkback_requested,
+                "duration_seconds": duration_seconds,
+            },
+        )
         if owner == "home_call" and not wants_audio:
+            self._record_media_timeline(
+                "webrtc",
+                "offer_rejected",
+                details={"offer_owner": owner, "reason": "home_call_requires_audio"},
+            )
             send_message(
                 WebRTCError(
                     "bticino_webrtc_offer_failed",
@@ -556,6 +572,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session.ring_preview,
                 getattr(provider, "domain", type(provider).__name__),
             )
+            self._record_media_timeline(
+                "webrtc",
+                "session_prepared",
+                details={
+                    "session_owner": owner,
+                    "wants_audio": wants_audio,
+                    "talkback_requested": talkback_requested,
+                    "ring_call": session.ring_call,
+                    "ring_preview": session.ring_preview,
+                    "provider": str(getattr(provider, "domain", type(provider).__name__)),
+                },
+            )
             if session.ring_call and session.wants_audio:
                 await self._async_close_other_ring_preview_webrtc_sessions(
                     session_id,
@@ -578,12 +606,34 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             current_session = self._provider_webrtc_sessions.get(session_id)
             if current_session is session:
                 if provider_offer_failed:
+                    self._record_media_timeline(
+                        "webrtc",
+                        "provider_offer_failed",
+                        details={
+                            "session_owner": owner,
+                            "wants_audio": wants_audio,
+                            "talkback_requested": talkback_requested,
+                            "ring_call": session.ring_call,
+                            "ring_preview": session.ring_preview,
+                        },
+                    )
                     await self._async_close_webrtc_session(
                         session_id,
                         notify_client=False,
                     )
                     return
                 session.ready = True
+                self._record_media_timeline(
+                    "webrtc",
+                    "session_ready",
+                    details={
+                        "session_owner": owner,
+                        "wants_audio": wants_audio,
+                        "talkback_requested": talkback_requested,
+                        "ring_call": session.ring_call,
+                        "ring_preview": session.ring_preview,
+                    },
+                )
                 await self._async_flush_provider_webrtc_candidates(session_id)
                 if session.ring_call and session.wants_audio:
                     await self._async_close_other_ring_preview_webrtc_sessions(
@@ -775,6 +825,22 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     ) -> None:
         provider_session = self._provider_webrtc_sessions.pop(session_id, None)
         if provider_session is not None:
+            self._record_media_timeline(
+                "webrtc",
+                "session_closed",
+                details={
+                    "session_owner": provider_session.owner,
+                    "ready": provider_session.ready,
+                    "stop_media": stop_media,
+                    "force_stop_media": force_stop_media,
+                    "notify_client": notify_client,
+                    "reason": reason,
+                    "ring_call": provider_session.ring_call,
+                    "ring_preview": provider_session.ring_preview,
+                    "wants_audio": provider_session.wants_audio,
+                    "wants_backchannel": provider_session.wants_backchannel,
+                },
+            )
             self._presession_webrtc_candidates.pop(session_id, None)
             with suppress(Exception):
                 provider_session.provider.async_close_session(session_id)
@@ -1156,6 +1222,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         event_type = agent_event_key(event.data)
         if event_type in HOME_CALL_EVENTS:
             self._handle_home_call_event(event_type, event.data)
+            self._record_media_timeline(
+                "agent_event",
+                event_type,
+                details=self._agent_event_timeline_details(event.data),
+            )
             self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
             return
@@ -1164,6 +1235,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
             self._close_doorbell_webrtc_sessions_from_event()
+            self._record_media_timeline(
+                "agent_event",
+                event_type,
+                details=self._agent_event_timeline_details(event.data),
+            )
             self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
             return
@@ -1181,6 +1257,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         self._refresh_derived_media_state()
         if self._last_media_state in {MediaState.RING_ANSWERING, MediaState.RING_ACTIVE}:
             self._close_ring_preview_webrtc_sessions_after_answer_event()
+        self._record_media_timeline(
+            "agent_event",
+            event_type,
+            details=self._agent_event_timeline_details(event.data),
+        )
         self._wake_rtsp_event_waiters()
         self._async_write_ha_state_if_ready()
 
@@ -1350,6 +1431,66 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return
         self._last_state_snapshot = snapshot
         self.async_write_ha_state()
+
+    def _record_media_timeline(
+        self,
+        kind: str,
+        event: str,
+        *,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Record a safe media transition using already-known runtime state."""
+
+        runtime = getattr(self._entry, "runtime_data", None)
+        timeline = getattr(runtime, "media_timeline", None)
+        record = getattr(timeline, "record", None)
+        if not callable(record):
+            return
+        ready_sessions = sum(
+            1 for session in self._provider_webrtc_sessions.values() if session.ready
+        )
+        record(
+            kind=kind,
+            event=event,
+            media_state=self._last_media_state.value,
+            owner=self._video_owner,
+            session_count=len(self._provider_webrtc_sessions),
+            ring_preview_sessions=len(self._ring_preview_webrtc_session_ids()),
+            ready_sessions=ready_sessions,
+            details=details,
+        )
+
+    def _agent_event_timeline_details(
+        self,
+        data: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Return safe media facts from one already-received agent event."""
+
+        details: dict[str, Any] = {}
+        for key in (
+            "video_available",
+            "video_window_available",
+            "external_media_active",
+        ):
+            if key in data:
+                details[key] = bool(data[key])
+        bridge = data.get("bridge")
+        if isinstance(bridge, Mapping):
+            for key in (
+                "clients",
+                "media_active",
+                "ring_call_active",
+                "ring_media_active",
+                "ring_audio_active",
+                "ring_answer_requested",
+                "ring_answered",
+                "ring_hangup_requested",
+                "home_call_running",
+                "home_call_active",
+            ):
+                if key in bridge:
+                    details[f"bridge_{key}"] = bridge[key]
+        return details
 
     def _refresh_derived_media_state(self) -> None:
         self._last_media_decision = self._derive_media_decision()

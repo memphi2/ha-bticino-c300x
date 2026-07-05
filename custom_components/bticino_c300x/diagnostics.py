@@ -171,6 +171,7 @@ async def async_get_config_entry_diagnostics(
             "capabilities": _capability_diagnostics(runtime),
             "update": _agent_update_diagnostics(runtime),
             "event_state": _event_state_diagnostics(runtime),
+            "media_timeline": _media_timeline_diagnostics(runtime),
             "caches": _cache_diagnostics(runtime),
             "system_metrics": _safe_system_metrics(runtime),
             "display_bridge": _operation_diagnostics(
@@ -510,6 +511,19 @@ def _event_state_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "memos_total": getattr(state, "memos_total", None),
         "memos_unread": getattr(state, "memos_unread", None),
     }
+
+
+def _media_timeline_diagnostics(runtime: Any | None) -> list[dict[str, Any]] | None:
+    if runtime is None:
+        return None
+    timeline = getattr(runtime, "media_timeline", None)
+    diagnostics = getattr(timeline, "diagnostics", None)
+    if not callable(diagnostics):
+        return None
+    result = diagnostics()
+    if not isinstance(result, list):
+        return None
+    return result
 
 
 def _cache_diagnostics(runtime: Any | None) -> dict[str, Any] | None:

@@ -11,6 +11,7 @@ from .callback_target import (
     callback_url_host_type,
     callback_url_scheme,
 )
+from .media_timeline import C300XMediaTimeline
 from .media_watchdog import AgentCpuWatchdog
 
 
@@ -234,4 +235,5 @@ class BticinoC300XRuntimeData:
     agent_diagnostics_updated_at: datetime | None = None
     agent_diagnostics_updated_by: str | None = None
     agent_diagnostics_change_reason: str | None = None
+    media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: Any | None = None

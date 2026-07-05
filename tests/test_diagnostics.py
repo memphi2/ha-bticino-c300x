@@ -102,6 +102,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _sequence_count,
     async_get_config_entry_diagnostics,
 )
+from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
 
 
 @dataclass
@@ -211,6 +212,22 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
             "raw": {"token": "private-token"},
         },
         agent_diagnostics_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
+        media_timeline=C300XMediaTimeline(),
+    )
+    runtime_data.media_timeline.record(
+        kind="webrtc",
+        event="session_prepared",
+        media_state="on_demand_active",
+        owner="doorbell",
+        session_count=1,
+        ring_preview_sessions=0,
+        ready_sessions=0,
+        details={
+            "provider": "go2rtc",
+            "stream_url": "rtsp://192.0.2.60:6554/private-stream",
+            "wants_audio": True,
+        },
+        now=datetime(2026, 6, 2, tzinfo=UTC),
     )
     entry = _FakeEntry(
         data={
@@ -293,6 +310,19 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         "temperature_c": 41.2,
         "temperature_source": None,
     }
+    assert diagnostics["runtime"]["media_timeline"] == [
+        {
+            "at": "2026-06-02T00:00:00+00:00",
+            "kind": "webrtc",
+            "event": "session_prepared",
+            "media_state": "on_demand_active",
+            "owner": "doorbell",
+            "session_count": 1,
+            "ring_preview_sessions": 0,
+            "ready_sessions": 0,
+            "details": {"provider": "go2rtc", "wants_audio": True},
+        }
+    ]
 
     encoded = json.dumps(diagnostics, sort_keys=True)
     for private_value in (

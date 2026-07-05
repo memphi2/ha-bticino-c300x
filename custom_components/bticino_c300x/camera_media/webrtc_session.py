@@ -8,13 +8,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass
 class ProviderWebRTCStreamContext:
     """Provider stream-source context for one WebRTC offer."""
 
     owner: str
     wants_audio: bool
     wants_backchannel: bool
+    media_started: bool = False
 
 
 @dataclass

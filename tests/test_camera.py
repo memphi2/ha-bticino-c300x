@@ -537,6 +537,104 @@ def test_doorbell_camera_provider_offer_error_closes_local_session(
     ]
 
 
+def test_doorbell_camera_provider_exception_before_stream_source_keeps_media(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _EarlyErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offers.append((session_id, offer_sdp))
+            raise HomeAssistantError("provider failed before source setup")
+
+    api = _FakeApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _EarlyErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+
+    async def _provider_without_source(
+        _hass: Any,
+        _camera: C300XDoorbellCamera,
+    ) -> Any:
+        return provider
+
+    monkeypatch.setattr(
+        camera_module,
+        "_async_get_supported_webrtc_provider",
+        _provider_without_source,
+    )
+    _stub_rtsp_ready(camera)
+
+    asyncio.run(
+        camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-early-error",
+            sent_messages.append,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert provider.closed == ["session-early-error"]
+    assert provider.offer_sources == []
+    assert api.stop_calls == 0
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "bticino_webrtc_unavailable"
+    ]
+
+
+def test_doorbell_camera_provider_exception_after_stream_source_stops_on_demand(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _LateErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offer_sources.append(await camera.stream_source())
+            self.offers.append((session_id, offer_sdp))
+            raise HomeAssistantError("provider failed after source setup")
+
+    api = _FakeApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _LateErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+
+    asyncio.run(
+        camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-late-error",
+            sent_messages.append,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert provider.closed == ["session-late-error"]
+    assert provider.offer_sources == ["rtsp://127.0.0.1:6554/doorbell"]
+    assert api.stop_calls == 1
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "bticino_webrtc_unavailable"
+    ]
+
+
 def test_doorbell_camera_home_call_provider_offer_error_stops_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1513,6 +1611,71 @@ def test_ring_answer_audio_keeps_passive_preview_registered(
         if _webrtc_message_value(message, "type") == "closed"
     ]
     assert closed_messages == []
+
+
+def test_ring_preview_provider_exception_after_stream_source_keeps_ring_media(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _RingApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            status = await super().async_doorbell_video_status()
+            status["media_owner"] = "ring"
+            status["window_available"] = True
+            status["bridge"] = {
+                **status["bridge"],
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "ring_audio_active": False,
+                "ring_answer_requested": False,
+                "ring_answered": False,
+                "unanswered_ring_call": True,
+                "clients": 0,
+                "max_clients": 4,
+                "ring_preview_sharing": True,
+            }
+            return status
+
+    class _LateErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offer_sources.append(await camera.stream_source())
+            self.offers.append((session_id, offer_sdp))
+            raise HomeAssistantError("provider failed after source setup")
+
+    api = _RingApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _LateErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+
+    asyncio.run(
+        camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly\r\n",
+            "ring-preview-error",
+            sent_messages.append,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert provider.closed == ["ring-preview-error"]
+    assert provider.offer_sources == ["rtsp://127.0.0.1:6554/doorbell-video"]
+    assert api.stop_calls == 0
+    assert api.hangup_calls == 0
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "bticino_webrtc_unavailable"
+    ]
 
 
 def test_ring_call_answer_without_microphone_omits_rtsp_backchannel(

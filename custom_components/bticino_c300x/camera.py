@@ -372,6 +372,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 stream_url = await self._async_prepare_provider_rtsp_stream(
                     provider_context
                 )
+            provider_context.media_started = True
             if provider_context.wants_backchannel:
                 return f"{stream_url}#backchannel=1"
             return stream_url
@@ -477,6 +478,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await self._async_close_webrtc_session(session_id)
 
         home_call_started = False
+        stream_context = _ProviderWebRTCStreamContext(
+            owner=owner,
+            wants_audio=wants_audio,
+            wants_backchannel=talkback_requested,
+        )
         try:
             if owner == "home_call":
                 await self._entry.runtime_data.api.async_start_home_call(
@@ -490,13 +496,14 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 owner=owner,
                 wants_audio=wants_audio,
                 talkback_requested=talkback_requested,
+                stream_context=stream_context,
             )
         except HomeAssistantError as err:
             self._presession_webrtc_candidates.pop(session_id, None)
-            await self._async_close_webrtc_session(
+            await self._async_cleanup_failed_provider_offer(
                 session_id,
-                stop_media=False,
-                notify_client=False,
+                owner=owner,
+                stream_context=stream_context,
             )
             if home_call_started:
                 with suppress(Exception):
@@ -504,10 +511,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             send_message(WebRTCError("bticino_webrtc_unavailable", str(err)))
         except Exception as err:
             self._presession_webrtc_candidates.pop(session_id, None)
-            await self._async_close_webrtc_session(
+            await self._async_cleanup_failed_provider_offer(
                 session_id,
-                stop_media=False,
-                notify_client=False,
+                owner=owner,
+                stream_context=stream_context,
             )
             if home_call_started:
                 with suppress(Exception):
@@ -523,14 +530,10 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         owner: str,
         wants_audio: bool,
         talkback_requested: bool,
+        stream_context: _ProviderWebRTCStreamContext,
     ) -> None:
         """Delegate one browser WebRTC offer to HA/go2rtc."""
 
-        stream_context = _ProviderWebRTCStreamContext(
-            owner=owner,
-            wants_audio=wants_audio,
-            wants_backchannel=talkback_requested,
-        )
         token = _PROVIDER_WEBRTC_STREAM_CONTEXT.set(stream_context)
         try:
             provider = await _async_get_supported_webrtc_provider(self.hass, self)
@@ -614,6 +617,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     )
                     await self._async_close_webrtc_session(
                         session_id,
+                        stop_media=stream_context.media_started,
                         notify_client=False,
                     )
                     return
@@ -650,6 +654,46 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return f"ring:{self._entry.entry_id}"
         suffix = "audio" if wants_audio else "video"
         return f"doorbell:{self._entry.entry_id}:{suffix}"
+
+    async def _async_cleanup_failed_provider_offer(
+        self,
+        session_id: str,
+        *,
+        owner: str,
+        stream_context: _ProviderWebRTCStreamContext,
+    ) -> None:
+        """Close a failed provider offer without stopping unrelated media."""
+
+        had_provider_session = session_id in self._provider_webrtc_sessions
+        await self._async_close_webrtc_session(
+            session_id,
+            stop_media=owner != "home_call" and stream_context.media_started,
+            notify_client=False,
+        )
+        if (
+            not had_provider_session
+            and self._provider_offer_failure_should_stop_doorbell_media(
+                owner,
+                stream_context,
+            )
+        ):
+            with suppress(Exception):
+                await self._entry.runtime_data.api.async_stop_doorbell_video()
+
+    def _provider_offer_failure_should_stop_doorbell_media(
+        self,
+        owner: str,
+        stream_context: _ProviderWebRTCStreamContext,
+    ) -> bool:
+        """Return true when a failed offer owns a started on-demand media path."""
+
+        if owner == "home_call" or not stream_context.media_started:
+            return False
+        decision = self._last_media_decision
+        return not (
+            _media_decision_is_ring_call(decision)
+            or _media_decision_is_unanswered_ring(decision)
+        )
 
     def _webrtc_diagnostic_label(
         self,

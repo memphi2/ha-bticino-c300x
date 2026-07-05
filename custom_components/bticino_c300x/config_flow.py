@@ -1223,10 +1223,10 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
 
         _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
-        updater = getattr(self, "async_update_and_abort", None)
-        if updater is not None:
-            return cast(FlowResult, updater(entry, data_updates=data_updates))
-        return self.async_update_reload_and_abort(entry, data_updates=data_updates)
+        return cast(
+            FlowResult,
+            self.async_update_and_abort(entry, data_updates=data_updates),
+        )
 
     @staticmethod
     @callback

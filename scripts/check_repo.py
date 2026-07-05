@@ -194,6 +194,7 @@ def main() -> int:
     failures.extend(check_legal_hygiene())
     failures.extend(check_current_audit_snapshot())
     failures.extend(check_release_metadata())
+    failures.extend(check_home_assistant_deprecations())
     failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
     failures.extend(check_hacs_metadata())
@@ -359,6 +360,7 @@ def check_legal_hygiene() -> list[str]:
         "CHANGELOG.md",
         "PRIVACY.md",
         "SECURITY.md",
+        "scripts/check_legal_audit.py",
         "scripts/check_repo.py",
         "scripts/check_validate.py",
     }
@@ -470,6 +472,50 @@ def check_release_metadata() -> list[str]:
     ):
         if expected not in support:
             failures.append(f"SUPPORT.md must mention {expected!r}")
+    return failures
+
+
+def check_home_assistant_deprecations() -> list[str]:
+    """Reject Home Assistant APIs that are removed or hazardous for this LTS line."""
+
+    failures: list[str] = []
+    forbidden_tokens = {
+        "async_update_reload_and_abort": (
+            "use async_update_and_abort() when an entry update listener is registered"
+        ),
+        "show_advanced_options": "advanced-mode flow branching is deprecated",
+        "hass.helpers": "import Home Assistant helpers directly instead of hass.helpers",
+        "hass.components": "import Home Assistant components directly instead of hass.components",
+        "mwc-": "Material Web Components tags are not LTS-safe in HA frontend",
+        "paper-": "Paper tags are not LTS-safe in HA frontend",
+        "ha-fab": "ha-fab is not LTS-safe in HA frontend",
+        "async_register_entity_service": "old entity-service registration API",
+        "async_register_admin_service": "old service registration API",
+        "async_register_platform_entity_service": "old platform entity-service API",
+    }
+    for path in ROOT.rglob("*"):
+        if (
+            is_ignored(path)
+            or not path.is_file()
+            or path.suffix.lower() not in TEXT_SUFFIXES
+        ):
+            continue
+        if path == Path(__file__).resolve():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for token, reason in forbidden_tokens.items():
+            if token in text:
+                failures.append(
+                    f"{relative(path)} must not use {token!r}: {reason}"
+                )
+        if re.search(r"\.async_publish\([^)]*\bqos\s*=\s*None", text, re.DOTALL):
+            failures.append(
+                f"{relative(path)} must not publish MQTT messages with qos=None"
+            )
+        if re.search(r"\.async_publish\([^)]*\bretain\s*=\s*None", text, re.DOTALL):
+            failures.append(
+                f"{relative(path)} must not publish MQTT messages with retain=None"
+            )
     return failures
 
 

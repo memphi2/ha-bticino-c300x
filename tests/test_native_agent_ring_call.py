@@ -723,6 +723,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     )
     assert "#define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800" in media_bridge
     assert "#define RTSP_CLIENT_DRAIN_POLL_MS 50" in media_bridge
+    assert "#define RTSP_TEARDOWN_CLOSE_WAIT_SECONDS 3" in media_bridge
     assert "rtsp_client_count_locked(bridge)" in rtsp_drain_body
     assert "shutdown_all_rtsp_clients_locked(bridge);" in rtsp_drain_body
     assert "shutdown_rtsp_clients_after_drain(&g_bridge);" in stop_ring_call_body
@@ -956,6 +957,28 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         "c300x_video_note_event(runtime->video, event_type, ttl_seconds)"
     ) < dispatch_body.index("c300x_event_payload_build_data_json(")
     assert "c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, merged_json)" in dispatch_body
+
+
+def test_native_agent_rtsp_answer_and_teardown_avoid_eof_prone_closes() -> None:
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+    client_body = media_bridge[
+        media_bridge.index("static void handle_rtsp_client") :
+        media_bridge.index("static void *rtsp_client_thread")
+    ]
+    teardown_start = client_body.index('} else if (strcmp(method, "TEARDOWN") == 0)')
+    teardown_body = client_body[
+        teardown_start : client_body.index("} else {", teardown_start)
+    ]
+
+    assert "shutdown_ring_preview_clients_except_locked" not in media_bridge
+    assert "close_preview_after_play" not in client_body
+    assert "unregister_rtsp_client_locked(&g_bridge, slot_index);" in teardown_body
+    assert "slot_index = -1;" in teardown_body
+    assert "teardown_seen = true;" in teardown_body
+    assert "break;" not in teardown_body
+    assert "RTSP_TEARDOWN_CLOSE_WAIT_SECONDS" in client_body
 
 
 def test_native_agent_doorbell_stop_does_not_match_home_call_resources() -> None:

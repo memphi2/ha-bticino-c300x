@@ -286,7 +286,7 @@ def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_upda
     assert "&& !preview_path" in client_body
     assert "rtsp_existing_clients_compatible_locked(" in client_body
     assert "&& compatible_shared_path" in client_body
-    assert "shutdown_ring_preview_clients_except_locked(&g_bridge, slot_index)" in client_body
+    assert "shutdown_ring_preview_clients_except_locked" not in client_body
     assert "if (!allow_shared_path)" in client_body
 
 

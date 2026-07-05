@@ -305,12 +305,15 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
         Check("code.native.preview_not_closed_before_answer", "shutdown_ring_preview_clients_locked(bridge);" not in ring_loop),
         Check("code.native.answer_stream_sharing_allowed", "ring_answer_stream_sharing_allowed_locked(&g_bridge)" in rtsp_body),
         Check(
-            "code.native.preview_closed_after_answer_stream_play",
-            _ordered(
-                rtsp_body,
-                "send_rtsp_response(fd, 200, cseq, headers, NULL);",
-                "shutdown_ring_preview_clients_except_locked(&g_bridge, slot_index)",
-            ),
+            "code.native.preview_not_closed_after_answer_stream_play",
+            "shutdown_ring_preview_clients_except_locked" not in rtsp_body
+            and "close_preview_after_play" not in rtsp_body,
+        ),
+        Check(
+            "code.native.teardown_waits_for_client_close",
+            "RTSP_TEARDOWN_CLOSE_WAIT_SECONDS" in rtsp_body
+            and "teardown_seen = true;" in rtsp_body
+            and "slot_index = -1;" in rtsp_body,
         ),
         Check("code.native.answer_uses_ring_request", "request_ring_answer_if_active(&g_bridge)" in answer_bridge),
         Check("code.native.silence_uses_answer_payload", "send_media_audio_silence_payload_type(" in ring_loop),

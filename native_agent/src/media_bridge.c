@@ -36,6 +36,7 @@
 #define DEFAULT_SIP_PORT 5060
 #define BT_AV_MEDIA_PORT 30007
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
+#define RTSP_TEARDOWN_CLOSE_WAIT_SECONDS 3
 #define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800
 #define RTSP_CLIENT_DRAIN_POLL_MS 50
 #define TALKBACK_TARGET_PORT 4000
@@ -545,18 +546,6 @@ static void close_all_rtsp_clients_locked(media_bridge_t *bridge) {
         slot->fd = -1;
     }
     sync_legacy_rtsp_client_locked(bridge);
-}
-
-static void shutdown_ring_preview_clients_except_locked(media_bridge_t *bridge, int keep_slot_index) {
-    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
-        rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
-        if (!slot->active || slot->fd < 0 || (int)index == keep_slot_index) {
-            continue;
-        }
-        if (!slot->audio_enabled) {
-            shutdown(slot->fd, SHUT_RDWR);
-        }
-    }
 }
 
 static size_t rtsp_send_targets_locked(
@@ -5826,6 +5815,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     char transport[512];
     char session_id[32];
     bool media_started = false;
+    bool teardown_seen = false;
     int slot_index = -1;
     int remaining_clients = 0;
 
@@ -5856,7 +5846,9 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             sizeof(interleaved),
             &interleaved_channel,
             &interleaved_len,
-            media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30
+            teardown_seen
+                ? RTSP_TEARDOWN_CLOSE_WAIT_SECONDS
+                : (media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30)
         );
         if (read_result == RTSP_READ_INTERLEAVED) {
             if (interleaved_len > 0) {
@@ -6090,7 +6082,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             send_rtsp_response(fd, 200, cseq, headers, NULL);
         } else if (strcmp(method, "PLAY") == 0) {
             bool rtsp_audio_enabled = false;
-            bool close_preview_after_play = false;
             pthread_mutex_lock(&g_bridge.mutex);
             rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
             if (slot != NULL) {
@@ -6131,11 +6122,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 }
             }
             media_started = !ring_session && !home_call_session;
-            if (ring_session && rtsp_audio_enabled) {
-                pthread_mutex_lock(&g_bridge.mutex);
-                close_preview_after_play = g_bridge.ring_answered;
-                pthread_mutex_unlock(&g_bridge.mutex);
-            }
             char headers[256];
             snprintf(
                 headers,
@@ -6146,11 +6132,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 home_call_session ? 0 : 1
             );
             send_rtsp_response(fd, 200, cseq, headers, NULL);
-            if (close_preview_after_play) {
-                pthread_mutex_lock(&g_bridge.mutex);
-                shutdown_ring_preview_clients_except_locked(&g_bridge, slot_index);
-                pthread_mutex_unlock(&g_bridge.mutex);
-            }
         } else if (strcmp(method, "GET_PARAMETER") == 0) {
             char headers[128];
             pthread_mutex_lock(&g_bridge.mutex);
@@ -6164,20 +6145,31 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             pthread_mutex_lock(&g_bridge.mutex);
             rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
             snprintf(session_id, sizeof(session_id), "%s", slot != NULL ? slot->session_id : "");
+            unregister_rtsp_client_locked(&g_bridge, slot_index);
+            slot_index = -1;
+            remaining_clients = rtsp_client_count_locked(&g_bridge);
             pthread_mutex_unlock(&g_bridge.mutex);
             snprintf(headers, sizeof(headers), "Session: %s\r\n", session_id);
             send_rtsp_response(fd, 200, cseq, headers, NULL);
-            break;
+            c300x_video_bridge_client_disconnected(g_bridge.video);
+            if (media_started && remaining_clients == 0) {
+                c300x_media_session_stop_after_rtsp_disconnect(g_bridge.video);
+                c300x_video_bridge_media_stopped(g_bridge.video);
+            }
+            media_started = false;
+            teardown_seen = true;
         } else {
             send_rtsp_response(fd, 404, cseq, NULL, NULL);
         }
     }
 
-    pthread_mutex_lock(&g_bridge.mutex);
-    unregister_rtsp_client_locked(&g_bridge, slot_index);
-    remaining_clients = rtsp_client_count_locked(&g_bridge);
-    pthread_mutex_unlock(&g_bridge.mutex);
-    c300x_video_bridge_client_disconnected(g_bridge.video);
+    if (slot_index >= 0) {
+        pthread_mutex_lock(&g_bridge.mutex);
+        unregister_rtsp_client_locked(&g_bridge, slot_index);
+        remaining_clients = rtsp_client_count_locked(&g_bridge);
+        pthread_mutex_unlock(&g_bridge.mutex);
+        c300x_video_bridge_client_disconnected(g_bridge.video);
+    }
 
     if (media_started && remaining_clients == 0) {
         c300x_media_session_stop_after_rtsp_disconnect(g_bridge.video);

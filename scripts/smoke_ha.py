@@ -68,9 +68,11 @@ REQUIRED_ENTITIES = {
     "event.bticino_c300x_doorbell_ring_event",
     "sensor.bticino_c300x_device_agent_status",
     "sensor.bticino_c300x_doorbell_state",
+}
+FORBIDDEN_ENTITIES = {
+    "button.bticino_c300x_start_ssh",
     "switch.bticino_c300x_ssh",
 }
-FORBIDDEN_ENTITIES = {"button.bticino_c300x_start_ssh"}
 BAD_STATES = {"disconnected", "unavailable", "unknown"}
 
 

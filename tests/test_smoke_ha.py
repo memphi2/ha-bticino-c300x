@@ -35,6 +35,18 @@ class _RuntimeClient:
         }
 
 
+class _StatesClient:
+    def __init__(self, entity_ids: set[str]) -> None:
+        self._entity_ids = entity_ids
+
+    def get_json(self, path: str) -> list[dict[str, str]]:
+        assert path == "/api/states"
+        return [
+            {"entity_id": entity_id, "state": "ok"}
+            for entity_id in sorted(self._entity_ids)
+        ]
+
+
 def test_smoke_ha_defaults_follow_project_versions(monkeypatch: Any) -> None:
     monkeypatch.delenv("HA_EXPECTED_VERSION_PREFIXES", raising=False)
     monkeypatch.delenv("HA_EXPECTED_PYTHON_PREFIXES", raising=False)
@@ -71,3 +83,11 @@ def test_smoke_ha_runtime_check_rejects_unconfigured_minor(monkeypatch: Any) -> 
     )
 
     assert failures == ["HA version 2026.6.9 does not match 2026.5.*, 2026.7.*"]
+
+
+def test_smoke_ha_does_not_require_optional_ssh_maintenance_entity() -> None:
+    smoke_ha = _load_smoke_ha()
+
+    assert "switch.bticino_c300x_ssh" not in smoke_ha.REQUIRED_ENTITIES
+    assert "switch.bticino_c300x_ssh" in smoke_ha.FORBIDDEN_ENTITIES
+    assert smoke_ha.check_entities(_StatesClient(set(smoke_ha.REQUIRED_ENTITIES))) == []

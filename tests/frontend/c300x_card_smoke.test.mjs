@@ -99,6 +99,8 @@ function installFakeDom() {
   globalThis.window.customCards = [];
   globalThis.window.clearTimeout = clearTimeout;
   globalThis.window.setTimeout = setTimeout;
+  delete globalThis.requestAnimationFrame;
+  delete globalThis.cancelAnimationFrame;
 
   return registry;
 }
@@ -218,4 +220,57 @@ test("doorbell card updates from direct camera state events without page reload"
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   card.disconnectedCallback();
   assert.equal(subscriptions[0].active, false);
+});
+
+test("doorbell card coalesces unchanged hass updates into one animation frame", async () => {
+  const registry = installFakeDom();
+  const frames = [];
+  globalThis.requestAnimationFrame = (callback) => {
+    frames.push(callback);
+    return frames.length;
+  };
+  globalThis.cancelAnimationFrame = () => {};
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?render-signature-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+
+  let renderCalls = 0;
+  const updateState = card._updateState.bind(card);
+  card._updateState = () => {
+    renderCalls += 1;
+    updateState();
+  };
+
+  card.hass = fakeHass();
+  card.hass = fakeHass();
+
+  assert.equal(frames.length, 1);
+  assert.equal(renderCalls, 0);
+  frames.shift()();
+  assert.equal(renderCalls, 1);
+
+  card.hass = fakeHass();
+  assert.equal(frames.length, 1);
+  frames.shift()();
+  assert.equal(renderCalls, 1);
+
+  card.hass = fakeHass({
+    cameraEntity: {
+      attributes: {
+        friendly_name: "Door",
+        media_primary_action: "wait",
+        media_state: "ring_active",
+      },
+      state: "streaming",
+    },
+  });
+  frames.shift()();
+
+  assert.equal(renderCalls, 2);
 });

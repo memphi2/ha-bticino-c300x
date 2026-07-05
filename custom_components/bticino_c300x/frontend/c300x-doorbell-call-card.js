@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=a8e03efea70bd8e1";
+} from "./c300x-translations.js?v=871a76fb89337b65";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,14 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=a8e03efea70bd8e1";
+} from "./c300x-entity-resolver.js?v=871a76fb89337b65";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=a8e03efea70bd8e1";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=a8e03efea70bd8e1";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=a8e03efea70bd8e1";
+} from "./c300x-state-model.js?v=871a76fb89337b65";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=871a76fb89337b65";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=871a76fb89337b65";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -474,7 +474,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       || previousMediaState === "ring_active"
       || previousMediaState === "ring_hanging_up"
     );
-    if (mediaState === "ring_pending" && previousMediaState && !previousRingLifecycleActive) {
+    if (ringLifecycleActive && previousMediaState && !previousRingLifecycleActive) {
       this._ringPreviewSuppressed = false;
     }
     if (!ringLifecycleActive) {

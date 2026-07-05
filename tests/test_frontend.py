@@ -689,7 +689,7 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
     assert "const previousMediaState = this._lastMediaState;" in update_block
     assert "const previousRingLifecycleActive = (" in update_block
     assert (
-        'mediaState === "ring_pending" && previousMediaState && !previousRingLifecycleActive'
+        "ringLifecycleActive && previousMediaState && !previousRingLifecycleActive"
         in update_block
     )
     assert "this._ringPreviewSuppressed = false;" in update_block

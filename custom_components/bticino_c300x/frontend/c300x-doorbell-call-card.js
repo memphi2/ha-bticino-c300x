@@ -1,8 +1,7 @@
 import {
   C300X_TRANSLATIONS,
-  c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=c5ed6831376ab2bc";
+} from "./c300x-translations.js?v=bb0e9a9ddafadbba";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -10,50 +9,33 @@ import {
   C300X_DEFAULT_CONFIG,
   C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
-  c300xEntityId,
   c300xEntryId,
-  c300xFirstEntity,
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=c5ed6831376ab2bc";
+} from "./c300x-entity-resolver.js?v=bb0e9a9ddafadbba";
+import {
+  C300X_CARD_EDITOR_TAG,
+  c300xDoorbellCardStubConfig,
+} from "./c300x-card-editor.js?v=bb0e9a9ddafadbba";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=bb0e9a9ddafadbba";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=c5ed6831376ab2bc";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=c5ed6831376ab2bc";
-import {
-  c300xRingLifecycleActive,
-  c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=c5ed6831376ab2bc";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=c5ed6831376ab2bc";
+} from "./c300x-state-model.js?v=bb0e9a9ddafadbba";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=bb0e9a9ddafadbba";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=bb0e9a9ddafadbba";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
-function c300xFireConfigChanged(element, config) {
-  element.dispatchEvent(new CustomEvent("config-changed", {
-    detail: { config },
-    bubbles: true,
-    composed: true,
-  }));
-}
-
 class C300XDoorbellCallCard extends HTMLElement {
   static getStubConfig(hass, entityId) {
-    const entity = entityId || c300xFirstEntity(
-      hass,
-      "camera",
-      C300X_CAMERA_OBJECT_ID,
-    );
-    return {
-      entity: entity || c300xEntityId("camera", C300X_CAMERA_OBJECT_ID),
-      ...C300X_DEFAULT_CONFIG,
-    };
+    return c300xDoorbellCardStubConfig(hass, entityId);
   }
 
   static getConfigElement() {
-    return document.createElement("c300x-doorbell-call-card-editor");
+    return document.createElement(C300X_CARD_EDITOR_TAG);
   }
 
   static getEntitySuggestion(hass, entityId) {
@@ -106,19 +88,9 @@ class C300XDoorbellCallCard extends HTMLElement {
     };
     this._micStream = null;
     this._micMuted = false;
+    this._lifecycle = new C300XCardLifecycleState();
     this._webrtc = this._createWebrtcClient();
     this._transitionWebrtc = null;
-    this._startingCall = false;
-    this._previewStarting = false;
-    this._ringPreviewStarted = false;
-    this._ringPreviewSuppressed = false;
-    this._passiveAnsweredPreviewStarted = false;
-    this._lastMediaState = "";
-    this._answeringDoorbell = false;
-    this._hangupInProgress = false;
-    this._ringPreviewActive = false;
-    this._doorbellAnswered = false;
-    this._activeHomeCallSession = false;
     this._error = "";
     this._notice = "";
     this._noticeTimer = null;
@@ -133,7 +105,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     return new C300XWebrtcClient({
       getHass: () => this._hass,
       getEntityId: () => this._resolvedCameraEntityId(),
-      isHomeCallMode: () => this._activeHomeCallSession || this._isHomeCallMode(),
+      isHomeCallMode: () => this._lifecycle.activeHomeCallSession || this._isHomeCallMode(),
       onClosed: onClosed || ((reason) => this._handleWebrtcClosed(reason)),
       onTrack: onTrack || (() => this._updateState()),
     });
@@ -464,43 +436,38 @@ class C300XDoorbellCallCard extends HTMLElement {
     const autoMode = this._isAutoMode();
     const entity = this._cameraEntity();
     const mediaState = c300xMediaState(entity);
-    const previousMediaState = this._lastMediaState;
-    const ringLifecycleActive = c300xRingLifecycleActive(mediaState);
-    if (c300xShouldResetRingPreviewSuppression(mediaState, previousMediaState)) {
-      this._ringPreviewSuppressed = false;
-    }
-    if (!ringLifecycleActive) {
-      this._ringPreviewStarted = false;
-      this._passiveAnsweredPreviewStarted = false;
+    const mediaUpdate = this._lifecycle.evaluateMediaState(mediaState);
+    if (!mediaUpdate.ringLifecycleActive) {
       if (
-        (this._ringPreviewActive || this._doorbellAnswered)
+        mediaUpdate.shouldCloseLocalRingPeer
         && (this._webrtc.running || !!this._webrtc.remoteStream || this._transitionWebrtc)
       ) {
         this._closePeer(true);
         return;
       }
     }
-    this._lastMediaState = mediaState;
+    this._lifecycle.commitMediaState(mediaState);
     const name = this._displayName(entity);
-    const homeSessionActive = this._activeHomeCallSession
-      && (this._webrtc.running || !!this._webrtc.remoteStream || this._startingCall);
-    const doorstationActive = !homeCallMode
-      && !this._activeHomeCallSession
-      && (this._webrtc.running || !!this._webrtc.remoteStream);
+    const hasLocalMedia = this._webrtc.running || !!this._webrtc.remoteStream;
+    const homeSessionActive = this._lifecycle.homeSessionActive(hasLocalMedia);
+    const doorstationActive = this._lifecycle.doorstationActive({
+      homeCallMode,
+      hasLocalMedia,
+    });
     const view = c300xCardViewModel({
       cameraEntity: entity,
       homeCallMode,
       active: doorstationActive,
-      startingCall: this._startingCall,
-      doorbellAnswered: this._doorbellAnswered,
-      previewStarting: this._previewStarting,
-      ringPreviewActive: this._ringPreviewActive,
+      startingCall: this._lifecycle.startingCall,
+      doorbellAnswered: this._lifecycle.doorbellAnswered,
+      previewStarting: this._lifecycle.previewStarting,
+      ringPreviewActive: this._lifecycle.ringPreviewActive,
     });
     const homeView = c300xCardViewModel({
       cameraEntity: entity,
       homeCallMode: true,
       active: homeSessionActive,
-      startingCall: this._startingCall && (homeCallMode || this._activeHomeCallSession),
+      startingCall: this._lifecycle.startingCall && (homeCallMode || this._lifecycle.activeHomeCallSession),
       doorbellAnswered: false,
       previewStarting: false,
       ringPreviewActive: false,
@@ -534,21 +501,18 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (view.shouldAutoPreview) {
       this._ensureDoorbellPreview();
     }
-    if (
-      mediaState === "ring_active"
-      && this._ringPreviewActive
-      && !this._doorbellAnswered
-      && !this._passiveAnsweredPreviewStarted
-      && this._webrtc.running
-      && !this._transitionWebrtc
-    ) {
+    if (this._lifecycle.shouldStartPassiveAnsweredPreview({
+      mediaState,
+      webrtcRunning: this._webrtc.running,
+      transitionActive: !!this._transitionWebrtc,
+    })) {
       this._startPassiveAnsweredDoorbellPreview();
     }
   }
 
   async _handlePrimaryAction() {
     if (!this._isHomeCallMode()) {
-      if (this._activeHomeCallSession) {
+      if (this._lifecycle.activeHomeCallSession) {
         return;
       }
       const action = this._doorstationView().action;
@@ -560,24 +524,24 @@ class C300XDoorbellCallCard extends HTMLElement {
         return;
       }
       if (action === "answer") {
-        this._answeringDoorbell = true;
+        this._lifecycle.answeringDoorbell = true;
         try {
           await this._answerDoorbellCall();
-          this._doorbellAnswered = true;
-          if (this._ringPreviewActive && this._webrtc.pc) {
+          this._lifecycle.doorbellAnswered = true;
+          if (this._lifecycle.ringPreviewActive && this._webrtc.pc) {
             await this._startAnsweredDoorbellStream();
           } else {
             await this._startTalkback();
           }
         } finally {
-          this._answeringDoorbell = false;
+          this._lifecycle.answeringDoorbell = false;
         }
         return;
       }
       await this._startTalkback();
       return;
     }
-    if (this._isConfiguredCallActive() || this._startingCall) {
+    if (this._isConfiguredCallActive() || this._lifecycle.startingCall) {
       await this._hangup();
       return;
     }
@@ -588,7 +552,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (!this._isAutoMode()) {
       return;
     }
-    if (this._isConfiguredCallActive() || this._activeHomeCallSession || this._startingCall) {
+    if (this._isConfiguredCallActive() || this._lifecycle.activeHomeCallSession || this._lifecycle.startingCall) {
       await this._hangupHomeCall();
       return;
     }
@@ -596,44 +560,39 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _startHomeCallAudio() {
-    if (this._webrtc.running || this._startingCall) {
+    if (this._webrtc.running || this._lifecycle.startingCall) {
       return;
     }
-    this._startingCall = true;
-    this._activeHomeCallSession = true;
+    this._lifecycle.startingCall = true;
+    this._lifecycle.activeHomeCallSession = true;
     this._error = "";
     this._clearNotice();
 
     try {
       await this._startTalkback({ homeCall: true });
     } finally {
-      this._startingCall = false;
+      this._lifecycle.startingCall = false;
       this._updateState();
     }
   }
 
   async _ensureDoorbellPreview() {
-    if (
-      this._webrtc.running
-      || this._transitionWebrtc
-      || this._previewStarting
-      || this._ringPreviewStarted
-      || this._ringPreviewSuppressed
-      || this._answeringDoorbell
-      || this._doorbellAnswered
-    ) {
+    if (!this._lifecycle.canStartDoorbellPreview({
+      webrtcRunning: this._webrtc.running,
+      transitionActive: !!this._transitionWebrtc,
+    })) {
       return;
     }
-    this._previewStarting = true;
+    this._lifecycle.previewStarting = true;
     try {
       await this._startTalkback({ microphone: false, receiveAudio: false });
       if (this._webrtc.remoteStream && !this._error) {
-        this._ringPreviewStarted = true;
-        this._ringPreviewActive = true;
+        this._lifecycle.ringPreviewStarted = true;
+        this._lifecycle.ringPreviewActive = true;
         this._updateState();
       }
     } finally {
-      this._previewStarting = false;
+      this._lifecycle.previewStarting = false;
     }
   }
 
@@ -676,8 +635,8 @@ class C300XDoorbellCallCard extends HTMLElement {
       microphoneStream: this._micStream,
       receiveAudio: true,
       onPromoted: () => {
-        this._ringPreviewActive = false;
-        this._doorbellAnswered = true;
+        this._lifecycle.ringPreviewActive = false;
+        this._lifecycle.doorbellAnswered = true;
       },
     });
   }
@@ -686,18 +645,18 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._transitionWebrtc || !this._transitionVideoEl) {
       return;
     }
-    this._passiveAnsweredPreviewStarted = true;
+    this._lifecycle.passiveAnsweredPreviewStarted = true;
     try {
       await this._replaceDoorbellWebrtcStream({
         microphoneStream: null,
         receiveAudio: false,
         onPromoted: () => {
-          this._ringPreviewActive = true;
-          this._doorbellAnswered = false;
+          this._lifecycle.ringPreviewActive = true;
+          this._lifecycle.doorbellAnswered = false;
         },
       });
     } catch (err) {
-      this._passiveAnsweredPreviewStarted = false;
+      this._lifecycle.passiveAnsweredPreviewStarted = false;
       console.error("C300X passive ring preview transition failed", err);
       this._error = err?.message || `${err}`;
       this._updateState();
@@ -796,12 +755,12 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _hangup() {
-    if (this._hangupInProgress) {
+    if (this._lifecycle.hangupInProgress) {
       return;
     }
-    this._hangupInProgress = true;
-    this._startingCall = false;
-    const homeCallMode = this._activeHomeCallSession || this._isHomeCallMode();
+    this._lifecycle.hangupInProgress = true;
+    this._lifecycle.startingCall = false;
+    const homeCallMode = this._lifecycle.activeHomeCallSession || this._isHomeCallMode();
     let ok = true;
     try {
       this._closePeer(false);
@@ -815,17 +774,17 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
-      this._hangupInProgress = false;
+      this._lifecycle.hangupInProgress = false;
       this._closePeer(ok);
     }
   }
 
   async _hangupDoorstation() {
-    if (this._hangupInProgress) {
+    if (this._lifecycle.hangupInProgress) {
       return;
     }
-    this._hangupInProgress = true;
-    this._startingCall = false;
+    this._lifecycle.hangupInProgress = true;
+    this._lifecycle.startingCall = false;
     const hadDoorbellRingCallSession = this._hasDoorbellRingCallSession();
     let ok = true;
     try {
@@ -845,13 +804,13 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
-      this._hangupInProgress = false;
+      this._lifecycle.hangupInProgress = false;
       this._closePeer(ok);
     }
   }
 
   _hasDoorbellRingCallSession() {
-    return this._doorbellAnswered;
+    return this._lifecycle.doorbellAnswered;
   }
 
   _closePeer(clearStatus, options = {}) {
@@ -869,13 +828,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._micStream = null;
     this._micMuted = false;
 
-    this._ringPreviewActive = false;
-    this._activeHomeCallSession = false;
-    this._passiveAnsweredPreviewStarted = false;
-    if (clearStatus) {
-      this._ringPreviewStarted = false;
-    }
-    this._doorbellAnswered = false;
+    this._lifecycle.clearPeer(clearStatus);
     if (this._videoEl && !options.keepMediaElement) {
       this._videoEl.srcObject = null;
     }
@@ -933,11 +886,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (this._transitionWebrtc) {
       return;
     }
-    if (
-      reason === "ring_call_answered"
-      || (this._ringPreviewActive && !this._doorbellAnswered)
-    ) {
-      this._ringPreviewSuppressed = true;
+    if (this._lifecycle.shouldSuppressPreviewOnClose(reason)) {
+      this._lifecycle.ringPreviewSuppressed = true;
     }
     if (!this._webrtc?.pc && !this._webrtc?.remoteStream && !this._webrtc?.running) {
       return;
@@ -1097,11 +1047,14 @@ class C300XDoorbellCallCard extends HTMLElement {
     return c300xCardViewModel({
       cameraEntity: this._cameraEntity(),
       homeCallMode: false,
-      active: !this._activeHomeCallSession && (this._webrtc.running || !!this._webrtc.remoteStream),
-      startingCall: this._startingCall,
-      doorbellAnswered: this._doorbellAnswered,
-      previewStarting: this._previewStarting,
-      ringPreviewActive: this._ringPreviewActive,
+      active: this._lifecycle.doorstationActive({
+        homeCallMode: false,
+        hasLocalMedia: this._webrtc.running || !!this._webrtc.remoteStream,
+      }),
+      startingCall: this._lifecycle.startingCall,
+      doorbellAnswered: this._lifecycle.doorbellAnswered,
+      previewStarting: this._lifecycle.previewStarting,
+      ringPreviewActive: this._lifecycle.ringPreviewActive,
     });
   }
 
@@ -1140,11 +1093,11 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _hangupHomeCall() {
-    if (this._hangupInProgress) {
+    if (this._lifecycle.hangupInProgress) {
       return;
     }
-    this._hangupInProgress = true;
-    this._startingCall = false;
+    this._lifecycle.hangupInProgress = true;
+    this._lifecycle.startingCall = false;
     let ok = true;
     try {
       await this._stopHomeCall();
@@ -1153,7 +1106,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._error = err?.message || `${err}`;
       ok = false;
     } finally {
-      this._hangupInProgress = false;
+      this._lifecycle.hangupInProgress = false;
       this._closePeer(ok);
     }
   }
@@ -1200,139 +1153,6 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 }
 
-class C300XDoorbellCallCardEditor extends HTMLElement {
-  setConfig(config) {
-    this._config = {
-      ...C300XDoorbellCallCard.getStubConfig(this._hass),
-      ...config,
-    };
-    this._render();
-  }
-
-  set hass(hass) {
-    const languageChanged = c300xLanguage(this._hass) !== c300xLanguage(hass);
-    this._hass = hass;
-    if (!this.shadowRoot || languageChanged) {
-      this._render();
-      return;
-    }
-    const form = this.shadowRoot.querySelector("ha-form");
-    if (form) {
-      form.hass = hass;
-    }
-  }
-
-  _render() {
-    if (!this._config || !this._hass) {
-      return;
-    }
-    const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-    const doorbellOnlyMode = this._config.mode === "doorbell_call";
-    root.innerHTML = `
-      <ha-form></ha-form>
-    `;
-
-    const form = root.querySelector("ha-form");
-    form.hass = this._hass;
-    form.data = {
-      ...this._config,
-      show_media_readiness: this._config.show_media_readiness !== false,
-    };
-    form.schema = [
-      {
-        name: "mode",
-        required: true,
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: [
-              { value: "auto", label: this._label("auto_mode") },
-              { value: "doorbell_call", label: this._label("doorbell_call") },
-              { value: "home_call", label: this._label("home_call") },
-            ],
-          },
-        },
-      },
-      {
-        name: "entity",
-        required: false,
-        selector: { entity: { domain: "camera" } },
-      },
-      {
-        name: "name",
-        selector: { entity_name: {} },
-        context: { entity: "entity" },
-      },
-      {
-        name: "show_media_readiness",
-        selector: { boolean: {} },
-      },
-      ...(doorbellOnlyMode ? [] : [
-        {
-          name: "ringback_tone",
-          selector: { boolean: {} },
-        },
-        {
-          name: "ringback_volume",
-          selector: {
-            number: {
-              min: 0,
-              max: 100,
-              step: 1,
-              mode: "slider",
-              unit_of_measurement: "%",
-            },
-          },
-        },
-      ]),
-    ];
-    form.computeLabel = (schema) => this._label(
-      {
-        ringback_tone: "ringback_tone",
-        ringback_volume: "ringback_volume",
-        show_media_readiness: "show_media_readiness",
-      }[schema.name] || schema.name,
-    );
-    form.addEventListener("value-changed", (event) => {
-      this._setConfig(event.detail.value || {});
-    });
-  }
-
-  _setConfig(config) {
-    const nextConfig = { ...config };
-    const modeChanged = this._config.mode !== nextConfig.mode;
-    for (const [key, value] of Object.entries(nextConfig)) {
-      if (value === "") {
-        delete nextConfig[key];
-      }
-    }
-    if (nextConfig.show_media_readiness !== false) {
-      delete nextConfig.show_media_readiness;
-    }
-    if (nextConfig.mode === "doorbell_call") {
-      delete nextConfig.ringback_tone;
-      delete nextConfig.ringback_volume;
-    }
-    delete nextConfig.home_call_entity;
-    delete nextConfig.doorbell_state_entity;
-    if (JSON.stringify(this._config) === JSON.stringify(nextConfig)) {
-      return;
-    }
-    this._config = nextConfig;
-    c300xFireConfigChanged(this, nextConfig);
-    if (modeChanged) {
-      this._render();
-    }
-  }
-
-  _label(key) {
-    return c300xLocalize(this._hass, key);
-  }
-}
-
-if (!customElements.get("c300x-doorbell-call-card-editor")) {
-  customElements.define("c300x-doorbell-call-card-editor", C300XDoorbellCallCardEditor);
-}
 if (!customElements.get(C300X_CARD_TAG)) {
   customElements.define(C300X_CARD_TAG, C300XDoorbellCallCard);
 }

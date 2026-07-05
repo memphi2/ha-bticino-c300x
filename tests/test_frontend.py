@@ -28,6 +28,8 @@ from custom_components.bticino_c300x.frontend import (
 
 CARD_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_FILENAME
 CARD_METADATA_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_METADATA_FILENAME
+CARD_EDITOR_SOURCE = FRONTEND_DIR / "c300x-card-editor.js"
+CARD_LIFECYCLE_SOURCE = FRONTEND_DIR / "c300x-card-lifecycle.js"
 CARD_RESOLVER_SOURCE = FRONTEND_DIR / "c300x-entity-resolver.js"
 CARD_RINGBACK_SOURCE = FRONTEND_DIR / "c300x-ringback-tone.js"
 CARD_RING_PREVIEW_STATE_SOURCE = FRONTEND_DIR / "c300x-ring-preview-state.js"
@@ -38,6 +40,8 @@ MANIFEST_SOURCE = Path("custom_components/bticino_c300x/manifest.json")
 FRONTEND_MODULE_SOURCES = (
     CARD_SOURCE,
     CARD_METADATA_SOURCE,
+    CARD_EDITOR_SOURCE,
+    CARD_LIFECYCLE_SOURCE,
     CARD_RESOLVER_SOURCE,
     CARD_RINGBACK_SOURCE,
     CARD_RING_PREVIEW_STATE_SOURCE,
@@ -383,6 +387,7 @@ def test_frontend_lovelace_resource_handles_missing_manager(
 
 def test_bundled_card_supports_editor_languages_and_multi_device_config() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    editor_source = CARD_EDITOR_SOURCE.read_text(encoding="utf-8")
     resolver_source = CARD_RESOLVER_SOURCE.read_text(encoding="utf-8")
     translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
     webrtc_source = CARD_WEBRTC_SOURCE.read_text(encoding="utf-8")
@@ -417,9 +422,9 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert 'preview: false' in source
     assert "ll-rebuild" not in source
     assert 'formatEntityName' in source
-    assert '<ha-form>' in source
-    assert 'selector: { entity_name: {} }' in source
-    assert 'context: { entity: "entity" }' in source
+    assert '<ha-form>' in editor_source
+    assert 'selector: { entity_name: {} }' in editor_source
+    assert 'context: { entity: "entity" }' in editor_source
     assert 'config_entry_id' in resolver_source
     assert "function c300xAutoRelatedEntityId" not in resolver_source
     assert "function c300xFirstRelatedEntityId" not in resolver_source
@@ -429,17 +434,19 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
     assert "C300X_HOME_CALL_TRANSLATION_KEY" not in source
     assert ".filter((entityId)" not in source
     assert ".sort((left, right)" not in source
-    assert '{ value: "auto", label: this._label("auto_mode") }' in source
-    assert 'required: false' in source
-    assert 'name: "state_entity"' not in source
-    assert 'name: "state_label"' not in source
-    assert 'name: "doorbell_state_entity"' not in source
-    assert 'name: "home_call_entity"' not in source
-    assert 'selector: { entity: { domain: "sensor" } }' not in source
-    assert 'selector: { entity: { domain: "binary_sensor" } }' not in source
+    assert '{ value: "auto", label: this._label("auto_mode") }' in editor_source
+    assert 'required: false' in editor_source
+    assert 'name: "state_entity"' not in editor_source
+    assert 'name: "state_label"' not in editor_source
+    assert 'name: "doorbell_state_entity"' not in editor_source
+    assert 'name: "home_call_entity"' not in editor_source
+    assert 'selector: { entity: { domain: "sensor" } }' not in editor_source
+    assert 'selector: { entity: { domain: "binary_sensor" } }' not in editor_source
     assert "doorbell_state_entity: entityId" not in source
     assert "home_call_entity: entityId" not in source
-    assert 'customElements.define("c300x-doorbell-call-card-editor"' in source
+    assert "C300XDoorbellCallCardEditor" not in source
+    assert 'C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor"' in editor_source
+    assert "customElements.define(C300X_CARD_EDITOR_TAG" in editor_source
     assert 'customElements.get(C300X_CARD_TAG)' in source
     for language in ("en", "de", "fr", "it"):
         assert f"  {language}: {{" in translations_source
@@ -459,6 +466,7 @@ def test_bundled_card_supports_editor_languages_and_multi_device_config() -> Non
 
 def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    editor_source = CARD_EDITOR_SOURCE.read_text(encoding="utf-8")
     metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
     resolver_source = CARD_RESOLVER_SOURCE.read_text(encoding="utf-8")
     translations_source = CARD_TRANSLATIONS_SOURCE.read_text(encoding="utf-8")
@@ -472,13 +480,13 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert 'mode: "doorbell_call"' not in metadata_source
     assert 'class="home-action hidden"' in source
     assert "_handleHomeCallAction" in source
-    assert "_activeHomeCallSession" in source
+    assert "activeHomeCallSession" in source
     assert "doorstationBlockedByHomeCall" not in source
     assert 'class="readiness hidden"' in source
     assert '"/config/repairs"' in source
     assert 'this._config?.show_media_readiness !== false' in source
-    assert 'show_media_readiness: this._config.show_media_readiness !== false' in source
-    assert 'delete nextConfig.show_media_readiness' in source
+    assert 'show_media_readiness: this._config.show_media_readiness !== false' in editor_source
+    assert 'delete nextConfig.show_media_readiness' in editor_source
     assert "media_forwarding_required" in source
     assert "media_ready" in translations_source
     assert 'show_media_readiness: "Show media readiness line"' in translations_source
@@ -574,7 +582,7 @@ def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:
     assert "return c300xIsRingCallPending(cameraEntity);" in state_source
     assert "c300xIsRingPreviewAvailable(cameraEntity)" in state_source
     assert 'c300xMediaState(cameraEntity) === "ring_preview_active"' in state_source
-    assert "this._ringPreviewActive = true;" in source
+    assert "this._lifecycle.ringPreviewActive = true;" in source
     assert "this._startTalkback({ microphone: false, receiveAudio: false })" in source
     assert "} else if (receiveAudio) {" in webrtc_source
 
@@ -583,7 +591,7 @@ def test_bundled_card_does_not_drop_first_doorstation_click_on_stale_home_call_s
     source = CARD_SOURCE.read_text(encoding="utf-8")
     handler = source[
         source.index("async _handlePrimaryAction()") : source.index(
-            "if (this._isConfiguredCallActive() || this._startingCall)"
+            "if (this._isConfiguredCallActive() || this._lifecycle.startingCall)"
         )
     ]
 
@@ -630,6 +638,7 @@ def test_bundled_card_transitions_answer_without_clearing_preview() -> None:
 
 def test_bundled_card_transitions_passive_preview_after_ring_answer() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    lifecycle_source = CARD_LIFECYCLE_SOURCE.read_text(encoding="utf-8")
 
     update_block = source[
         source.index("  _updateState()") : source.index(
@@ -651,13 +660,12 @@ def test_bundled_card_transitions_passive_preview_after_ring_answer() -> None:
         )
     ]
 
-    assert 'mediaState === "ring_active"' in update_block
-    assert "this._ringPreviewActive" in update_block
-    assert "!this._doorbellAnswered" in update_block
+    assert 'mediaState === "ring_active"' in lifecycle_source
+    assert "shouldStartPassiveAnsweredPreview" in update_block
     assert "this._startPassiveAnsweredDoorbellPreview();" in update_block
     assert "microphoneStream: null" in passive_block
     assert "receiveAudio: false" in passive_block
-    assert "this._doorbellAnswered = false;" in passive_block
+    assert "this._lifecycle.doorbellAnswered = false;" in passive_block
     assert "previous.close();" in replace_block
     assert "onPromoted();" in replace_block
 
@@ -673,21 +681,19 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
     ]
     preview_guard = source[
         source.index("async _ensureDoorbellPreview()") : source.index(
-            "this._previewStarting = true;",
+            "this._lifecycle.previewStarting = true;",
             source.index("async _ensureDoorbellPreview()"),
         )
     ]
 
     assert answer_block.index("await this._answerDoorbellCall();") < answer_block.index(
-        "this._doorbellAnswered = true;"
+        "this._lifecycle.doorbellAnswered = true;"
     )
-    assert answer_block.index("this._doorbellAnswered = true;") < answer_block.index(
+    assert answer_block.index("this._lifecycle.doorbellAnswered = true;") < answer_block.index(
         "await this._startAnsweredDoorbellStream();"
     )
-    assert "|| this._transitionWebrtc" in preview_guard
-    assert "|| this._doorbellAnswered" in preview_guard
-    assert "|| this._ringPreviewStarted" in preview_guard
-    assert "|| this._ringPreviewSuppressed" in preview_guard
+    assert "canStartDoorbellPreview" in preview_guard
+    assert "transitionActive: !!this._transitionWebrtc" in preview_guard
     assert "if (this._closing) {\n        return;\n      }\n      const state" in webrtc_source
     assert (
         'if (this._closing) {\n                return;\n              }\n'
@@ -698,6 +704,7 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
 
 def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    lifecycle_source = CARD_LIFECYCLE_SOURCE.read_text(encoding="utf-8")
     ring_preview_source = CARD_RING_PREVIEW_STATE_SOURCE.read_text(encoding="utf-8")
 
     update_block = source[
@@ -708,7 +715,7 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
     ]
     preview_guard = source[
         source.index("async _ensureDoorbellPreview()") : source.index(
-            "this._previewStarting = true;",
+            "this._lifecycle.previewStarting = true;",
             source.index("async _ensureDoorbellPreview()"),
         )
     ]
@@ -719,12 +726,12 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
         )
     ]
 
-    assert "this._ringPreviewSuppressed = false;" in source
-    assert 'from "./c300x-ring-preview-state.js?v=' in source
-    assert "c300xRingLifecycleActive(mediaState)" in update_block
+    assert "this.ringPreviewSuppressed = false;" in lifecycle_source
+    assert 'from "./c300x-ring-preview-state.js?v=' in lifecycle_source
+    assert "c300xRingLifecycleActive(mediaState)" in lifecycle_source
     assert (
         "c300xShouldResetRingPreviewSuppression(mediaState, previousMediaState)"
-        in update_block
+        in lifecycle_source
     )
     assert 'mediaState === "ring_pending"' not in update_block
     assert '"ring_pending"' in ring_preview_source
@@ -733,18 +740,18 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
     assert '"ring_active"' in ring_preview_source
     assert '"ring_hanging_up"' in ring_preview_source
     assert 'mediaState !== "ring_pending" && mediaState !== "ring_preview_active"' not in source
-    assert "const previousMediaState = this._lastMediaState;" in update_block
+    assert "const previousMediaState = this.lastMediaState;" in lifecycle_source
     assert "previousRingLifecycleActive" not in source
-    assert "this._ringPreviewSuppressed = false;" in update_block
+    assert "this.ringPreviewSuppressed = false;" in lifecycle_source
     assert (
-        update_block.index("this._ringPreviewSuppressed = false;")
-        < update_block.index("if (!ringLifecycleActive)")
+        lifecycle_source.index("this.ringPreviewSuppressed = false;")
+        < lifecycle_source.index("if (!ringLifecycleActive)")
     )
     assert "this._closePeer(true);" in update_block
-    assert "|| this._ringPreviewSuppressed" in preview_guard
-    assert 'reason === "ring_call_answered"' in closed_handler
-    assert "this._ringPreviewActive && !this._doorbellAnswered" in closed_handler
-    assert "this._ringPreviewSuppressed = true;" in closed_handler
+    assert "canStartDoorbellPreview" in preview_guard
+    assert 'reason === "ring_call_answered"' in lifecycle_source
+    assert "this.ringPreviewActive && !this.doorbellAnswered" in lifecycle_source
+    assert "this._lifecycle.ringPreviewSuppressed = true;" in closed_handler
 
 
 def test_bundled_card_uses_media_state_for_answered_ring_call() -> None:
@@ -884,16 +891,25 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
     bundle_version = digest.hexdigest()[:16]
 
     card_source = CARD_SOURCE.read_text(encoding="utf-8")
+    editor_source = CARD_EDITOR_SOURCE.read_text(encoding="utf-8")
+    lifecycle_source = CARD_LIFECYCLE_SOURCE.read_text(encoding="utf-8")
     metadata_source = CARD_METADATA_SOURCE.read_text(encoding="utf-8")
     for helper_name in (
         "c300x-translations.js",
         "c300x-entity-resolver.js",
+        "c300x-card-editor.js",
+        "c300x-card-lifecycle.js",
         "c300x-state-model.js",
         "c300x-ringback-tone.js",
-        "c300x-ring-preview-state.js",
         "c300x-webrtc-client.js",
     ):
         assert f'from "./{helper_name}?v={bundle_version}"' in card_source
+    for helper_name in (
+        "c300x-translations.js",
+        "c300x-entity-resolver.js",
+    ):
+        assert f'from "./{helper_name}?v={bundle_version}"' in editor_source
+    assert f'from "./c300x-ring-preview-state.js?v={bundle_version}"' in lifecycle_source
     assert f'import "./{DOORBELL_CALL_CARD_FILENAME}?v={bundle_version}";' in metadata_source
     assert "1.4.1-dev" not in card_source
     assert "1.4.1-dev" not in metadata_source
@@ -912,11 +928,11 @@ def test_doorstation_hangup_closes_webrtc_before_stopping_agent_media() -> None:
     ring_session_end = source.index("  _closePeer(", ring_session_start)
     ring_session_body = source[ring_session_start:ring_session_end]
 
-    assert "if (this._hangupInProgress)" in hangup_body
-    assert "this._hangupInProgress = true;" in hangup_body
-    assert "this._hangupInProgress = false;" in hangup_body
+    assert "if (this._lifecycle.hangupInProgress)" in hangup_body
+    assert "this._lifecycle.hangupInProgress = true;" in hangup_body
+    assert "this._lifecycle.hangupInProgress = false;" in hangup_body
     assert "_hasLocalDoorstationWebrtcSession" not in source
-    assert "const homeCallMode = this._activeHomeCallSession || this._isHomeCallMode();" in generic_hangup_body
+    assert "const homeCallMode = this._lifecycle.activeHomeCallSession || this._isHomeCallMode();" in generic_hangup_body
     assert generic_hangup_body.index("this._closePeer(false);") < generic_hangup_body.index(
         "await this._stopDoorbellVideo();"
     )
@@ -938,8 +954,8 @@ def test_doorstation_hangup_closes_webrtc_before_stopping_agent_media() -> None:
     )
     assert "await this._stopDoorbellVideo();" in hangup_body
     assert "_closePeer(ok)" in hangup_body
-    assert "return this._doorbellAnswered;" in ring_session_body
-    assert "this._ringPreviewActive" not in ring_session_body
+    assert "return this._lifecycle.doorbellAnswered;" in ring_session_body
+    assert "this._lifecycle.ringPreviewActive" not in ring_session_body
     assert 'mediaState === "ring_active"' in state_source
     assert 'mediaState === "ring_hanging_up"' in state_source
 
@@ -960,4 +976,4 @@ def test_bundled_card_blocks_passive_ring_preview_hangup() -> None:
     )
     assert 'return doorbellAnswered ? "hang_up" : "busy";' in state_source
     assert 'return !doorbellAnswered && ringPreviewActive ? "busy" : "hang_up";' in state_source
-    assert "return this._doorbellAnswered;" in source
+    assert "return this._lifecycle.doorbellAnswered;" in source

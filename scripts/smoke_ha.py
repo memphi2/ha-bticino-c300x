@@ -8,14 +8,35 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 DOMAIN = "bticino_c300x"
+ROOT = Path(__file__).resolve().parents[1]
+PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
+PROJECT_VERSIONS = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))
+
+
+def _version_minor_prefix(version: str) -> str:
+    return version.rsplit(".", maxsplit=1)[0] + "."
+
+
+def _expected_ha_version_prefixes() -> tuple[str, str]:
+    return (
+        _version_minor_prefix(str(PROJECT_VERSIONS["min_homeassistant"])),
+        _version_minor_prefix(str(PROJECT_VERSIONS["current_homeassistant"])),
+    )
+
+
+def _expected_python_prefixes() -> tuple[str]:
+    return (str(PROJECT_VERSIONS["python"]) + ".",)
+
+
 EXPECTED_HA_VERSION_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.environ.get(
         "HA_EXPECTED_VERSION_PREFIXES",
-        "2026.5.,2026.6.",
+        ",".join(_expected_ha_version_prefixes()),
     ).split(",")
     if prefix.strip()
 )
@@ -23,7 +44,7 @@ EXPECTED_PYTHON_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.environ.get(
         "HA_EXPECTED_PYTHON_PREFIXES",
-        "3.14.",
+        ",".join(_expected_python_prefixes()),
     ).split(",")
     if prefix.strip()
 )

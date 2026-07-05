@@ -48,6 +48,10 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+
+
+def _version_minor_prefix(version: str) -> str:
+    return version.rsplit(".", maxsplit=1)[0] + "."
 CODE_SUFFIXES = {
     ".c",
     ".h",
@@ -185,6 +189,7 @@ def main() -> int:
     failures.extend(check_secret_patterns())
     failures.extend(check_legal_hygiene())
     failures.extend(check_release_metadata())
+    failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
     failures.extend(check_hacs_metadata())
     failures.extend(check_frontend_bundle_hash())
@@ -442,6 +447,42 @@ def check_release_metadata() -> list[str]:
     ):
         if expected not in support:
             failures.append(f"SUPPORT.md must mention {expected!r}")
+    return failures
+
+
+def check_smoke_ha_versions() -> list[str]:
+    failures: list[str] = []
+    smoke = (ROOT / "scripts" / "smoke_ha.py").read_text(encoding="utf-8")
+    required_tokens = (
+        "PROJECT_VERSIONS_PATH",
+        'PROJECT_VERSIONS["min_homeassistant"]',
+        'PROJECT_VERSIONS["current_homeassistant"]',
+        'PROJECT_VERSIONS["python"]',
+        "HA_EXPECTED_VERSION_PREFIXES",
+        "HA_EXPECTED_PYTHON_PREFIXES",
+    )
+    for token in required_tokens:
+        if token not in smoke:
+            failures.append(f"scripts/smoke_ha.py must derive runtime defaults from project-versions.json: {token}")
+
+    stale_ha_literals = sorted(
+        {
+            match.group(0)
+            for match in re.finditer(r"\b20\d{2}\.\d+\.", smoke)
+            if match.group(0)
+            not in {
+                _version_minor_prefix(MIN_HOME_ASSISTANT_VERSION),
+                _version_minor_prefix(CURRENT_HOME_ASSISTANT_VERSION),
+            }
+        }
+    )
+    if stale_ha_literals:
+        failures.append(
+            "scripts/smoke_ha.py must not hardcode stale HA version prefix defaults: "
+            + ", ".join(stale_ha_literals)
+        )
+    if 'PROJECT_VERSIONS_PATH.read_text(encoding="utf-8")' not in smoke:
+        failures.append("scripts/smoke_ha.py must read project-versions.json with UTF-8")
     return failures
 
 

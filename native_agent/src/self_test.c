@@ -5,10 +5,15 @@
 #include "string_util.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #define C300X_SELF_TEST_API_VERSION "1.1"
 #define C300X_SELF_TEST_FIREWALL_BEGIN "# c300x-native-agent firewall begin"
@@ -122,7 +127,7 @@ static int read_text_file(const char *path, char *buffer, size_t buffer_len, int
 static int agent_init_link_matches(void)
 {
     char current[C300X_MAX_PATH_LEN];
-    char resolved[512];
+    char resolved[PATH_MAX];
     ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
 
     if (len < 0) {

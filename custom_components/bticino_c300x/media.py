@@ -104,7 +104,9 @@ class C300XVideoMessageMediaView(HomeAssistantView):
                     content,
                 )
             except C300XMediaDependencyError as err:
-                raise web.HTTPBadGateway(text=str(err)) from err
+                raise web.HTTPBadGateway(
+                    text="C300X video message could not be converted to MP4"
+                ) from err
             except Exception as err:
                 raise web.HTTPBadGateway(
                     text="C300X video message could not be converted to MP4"

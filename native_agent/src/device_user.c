@@ -917,6 +917,8 @@ static int ensure_route_target(
         }
         if (is_alluser && !updated_alluser) {
             size_t body_len = line_len;
+            size_t remaining;
+            int written;
             while (body_len > 0 && (cursor[body_len - 1] == '\n' || cursor[body_len - 1] == '\r')) {
                 body_len--;
             }
@@ -927,7 +929,14 @@ static int ensure_route_target(
             }
             memcpy(output + output_len, cursor, body_len);
             output_len += body_len;
-            output_len += (size_t)snprintf(output + output_len, output_cap - output_len, ", <sip:%s>\n", ha_aor);
+            remaining = output_cap - output_len;
+            written = snprintf(output + output_len, remaining, ", <sip:%s>\n", ha_aor);
+            if (written < 0 || (size_t)written >= remaining) {
+                free(output);
+                set_error(error, error_len, "route_too_large");
+                return 0;
+            }
+            output_len += (size_t)written;
             updated_alluser = 1;
         } else {
             if (output_len + copy_len >= output_cap) {

@@ -8,6 +8,9 @@
   the call, so they no longer freeze on a stale busy view.
 - Return open Ring Call cards to idle after the answered browser hangs up.
 - Keep Ring media state priority stable while the browser stream transitions.
+- Harden native self-test and device-user route handling.
+- Avoid exposing optional media conversion dependency details in HTTP error
+  responses.
 
 ### Changed
 
@@ -18,8 +21,7 @@
 - Restart Home Assistant after updating.
 - Hard-reload all open Home Assistant browser dashboards after updating so the
   bundled card module is refreshed from the installed integration version.
-- No native C300X device agent update is required when already running the
-  v1.6.5 agent; the packaged device-agent bundle hash is unchanged.
+- Update the native C300X device agent from Home Assistant to `1.6.6`.
 
 ## v1.6.5 - 2026-07-04
 

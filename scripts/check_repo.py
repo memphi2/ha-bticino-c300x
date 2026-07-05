@@ -111,6 +111,7 @@ REQUIRED_PATHS = [
     "docs/user-guide.md",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
+    "scripts/check_frontend_lts.py",
     "scripts/check_ha_deprecations.py",
     "scripts/check_legal_audit.py",
     "scripts/check_release_tag.py",
@@ -201,6 +202,7 @@ def main() -> int:
     failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
     failures.extend(check_hacs_metadata())
+    failures.extend(check_frontend_lts())
     failures.extend(check_frontend_bundle_hash())
     failures.extend(check_github_automation())
     failures.extend(check_python_runtime())
@@ -804,6 +806,25 @@ def check_hacs_metadata() -> list[str]:
         if path not in native_agent_docs:
             failures.append(f"docs/native-agent.md must document agent reuse path {path}")
     return failures
+
+
+def check_frontend_lts() -> list[str]:
+    """Run the dedicated Lovelace-card LTS compatibility gate."""
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "check_frontend_lts.py")],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+    return [
+        f"frontend LTS gate failed: {line.removeprefix('FAIL: ')}"
+        for line in output.splitlines()
+        if line
+    ]
 
 
 def check_frontend_bundle_hash() -> list[str]:

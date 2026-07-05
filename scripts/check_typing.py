@@ -117,6 +117,7 @@ STRICT_TARGETS = (
     "scripts/check_stack_usage.py",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
+    "scripts/check_frontend_lts.py",
     "scripts/check_ha_deprecations.py",
     "scripts/check_repo.py",
     "scripts/check_typing.py",

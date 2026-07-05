@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.7.1 - Unreleased
+## v1.7.2 - Unreleased
 
 No user-facing changes yet.
 

@@ -97,7 +97,7 @@ def test_agent_setup_completion_closes_noauth_without_disabling_token_auth() -> 
         maxsplit=1,
     )[0]
 
-    assert 'json_bool_field(request->body, "setupComplete", &value)' in body
+    assert 'c300x_json_bool_field(request->body, "setupComplete", &value)' in body
     assert "if (setup_complete && updated->api_token[0] != '\\0')" in body
     assert "updated->api_no_auth = 0" in body
     assert "updated->maintenance_no_auth_allowed = 0" in body

@@ -87,9 +87,9 @@ def test_auth_config_read_never_returns_configured_tokens() -> None:
         maxsplit=1,
     )[0]
 
-    assert "json_string(config->api_token" not in get_body
+    assert "c300x_json_string(config->api_token" not in get_body
     assert (
-        "json_string(config->maintenance_admin_token" not in get_body
+        "c300x_json_string(config->maintenance_admin_token" not in get_body
     )
     assert '"\\"api_token\\":%s,"' not in get_body
     assert '"\\"maintenance_token\\":%s,"' not in get_body
@@ -112,9 +112,9 @@ def test_auth_config_exposes_and_updates_activation_settings() -> None:
     assert '"\\"activations_enabled\\":%s,"' in get_body
     assert '"\\"activations_auto_discover\\":%s"' in get_body
     assert "activation_stair_light_address" not in get_body
-    assert 'json_bool_field(request->body, "activationsEnabled", &value)' in post_body
+    assert 'c300x_json_bool_field(request->body, "activationsEnabled", &value)' in post_body
     assert (
-        'json_bool_field(request->body, "activationsAutoDiscover", &value)'
+        'c300x_json_bool_field(request->body, "activationsAutoDiscover", &value)'
         in post_body
     )
     assert '"activationItemsJson"' in post_body
@@ -130,7 +130,7 @@ def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:
         1
     ].split("static void handle_subscription_delete", maxsplit=1)[0]
 
-    assert 'json_bool_field(request->body, "setupComplete", &value)' in post_body
+    assert 'c300x_json_bool_field(request->body, "setupComplete", &value)' in post_body
     assert "setup_complete = value" in post_body
     assert "if (setup_complete && updated->api_token[0] != '\\0')" in post_body
     assert "updated->api_no_auth = 0" in post_body

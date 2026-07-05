@@ -399,8 +399,8 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "MEDIA_AUDIO_PACKET_MS 20" in media_bridge
     assert "MEDIA_AUDIO_PAYLOAD_TYPE 98" in media_bridge
     assert "#define MEDIA_TALKBACK_SILENCE_GRACE_MS (MEDIA_AUDIO_PACKET_MS * 2)" in media_bridge
-    assert 'parse_sdp_sdes_key(response, "\\r\\nm=audio ", answer_audio_key_raw' in send_sip_setup_body
-    assert 'parse_sdp_sdes_key(response, "\\r\\nm=video ", answer_video_key_raw' in send_sip_setup_body
+    assert 'c300x_media_sip_parse_sdp_sdes_key(response, "\\r\\nm=audio ", answer_audio_key_raw' in send_sip_setup_body
+    assert 'c300x_media_sip_parse_sdp_sdes_key(response, "\\r\\nm=video ", answer_video_key_raw' in send_sip_setup_body
     assert "bridge->ondemand_audio_srtp_in_key" in send_sip_setup_body
     assert "bridge->ondemand_video_srtp_in_key" in send_sip_setup_body
     assert "media_srtp_init_inbound(&srtp, audio_in_key, video_in_key)" in ondemand_media_body

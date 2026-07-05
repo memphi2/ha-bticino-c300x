@@ -33,4 +33,4 @@ def test_capabilities_escapes_resolved_firmware_value() -> None:
 
     assert "char firmware_value[C300X_MAX_VERSION_LEN];" in source
     assert "resolve_device_firmware(config, firmware_value, sizeof(firmware_value));" in source
-    assert "json_escape_string(firmware_value, device_firmware, sizeof(device_firmware));" in source
+    assert "c300x_json_escape_string(firmware_value, device_firmware, sizeof(device_firmware));" in source

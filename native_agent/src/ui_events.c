@@ -1,6 +1,7 @@
 #include "ui_events.h"
 
 #include "http_util.h"
+#include "json_util.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -28,36 +29,6 @@ static int min_timeout_ms(int current, int candidate)
     return current;
 }
 
-static size_t json_escape_string(const char *value, char *out, size_t out_len)
-{
-    size_t used = 0;
-
-    if (out_len == 0) {
-        return 0;
-    }
-    for (size_t index = 0; value[index] != '\0' && used + 1 < out_len; index++) {
-        unsigned char ch = (unsigned char)value[index];
-        if (ch == '\\' || ch == '"') {
-            if (used + 2 >= out_len) {
-                break;
-            }
-            out[used++] = '\\';
-            out[used++] = (char)ch;
-            continue;
-        }
-        if (ch < 0x20) {
-            if (used + 6 >= out_len) {
-                break;
-            }
-            used += (size_t)snprintf(out + used, out_len - used, "\\u%04x", ch);
-            continue;
-        }
-        out[used++] = (char)ch;
-    }
-    out[used] = '\0';
-    return used;
-}
-
 static void ui_event_send(
     const struct c300x_ui_events *events,
     int client_fd,
@@ -72,7 +43,7 @@ static void ui_event_send(
     const char *topic_json = "null";
 
     if (events->topic[0] != '\0') {
-        json_escape_string(events->topic, escaped_topic, sizeof(escaped_topic));
+        c300x_json_escape_string(events->topic, escaped_topic, sizeof(escaped_topic));
         snprintf(quoted_topic, sizeof(quoted_topic), "\"%s\"", escaped_topic);
         topic_json = quoted_topic;
     }

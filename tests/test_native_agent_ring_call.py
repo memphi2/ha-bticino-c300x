@@ -119,8 +119,8 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert '"a=inactive\\r\\n"' in media_bridge
     assert '"m=video %d RTP/SAVP 96\\r\\n"' in media_bridge
     assert '"a=recvonly\\r\\n"' in media_bridge
-    assert "parse_sdp_sdes_key(invite, \"\\r\\nm=audio \"" in ring_invite_body
-    assert "parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
+    assert "c300x_media_sip_parse_sdp_sdes_key(invite, \"\\r\\nm=audio \"" in ring_invite_body
+    assert "c300x_media_sip_parse_sdp_sdes_key(invite, \"\\r\\nm=video \"" in ring_invite_body
     assert "media_srtp_init_inbound(&srtp" in ring_invite_body
     assert "srtp_unprotect" in media_bridge
     assert "current_doorstation_audio_gain_q12(bridge)" in media_bridge
@@ -424,7 +424,7 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert '"Session: %s\\r\\nRTP-Info: url=%s/streamid=%d;seq=0;rtptime=0\\r\\n"' in rtsp_body
     assert "home_call_session ? 0 : 1" in rtsp_body
     assert (
-        'target_audio_port = parse_sdp_media_port(message, "\\r\\nm=audio ", 7078);'
+        'target_audio_port = c300x_media_sip_parse_sdp_media_port(message, "\\r\\nm=audio ", 7078);'
         in home_call_body
     )
     assert "bridge->home_call_rtp_proxy = target_audio_port != 7078;" in home_call_body

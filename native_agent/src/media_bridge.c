@@ -5,6 +5,7 @@
 #include "media_base64.h"
 #include "media_bridge.h"
 #include "media_session_guard.h"
+#include "media_sip.h"
 #include "sha256.h"
 #include "string_util.h"
 #include "time_util.h"
@@ -53,7 +54,6 @@
 #define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
 #define MEDIA_INSTANCE_UUID_LEN 37
 #define MEDIA_INSTANCE_UUID_NAMESPACE "ha-bticino-c300x:sip-instance:"
-#define MEDIA_SRTP_MASTER_KEY_LEN 30
 #define HOME_CALL_AUDIO_RTP_PORT 45544
 #define HOME_CALL_AUDIO_RTCP_PORT 45545
 #define HOME_CALL_DEFAULT_RING_TIMEOUT_SECONDS 60
@@ -248,10 +248,10 @@ typedef struct {
     void *ondemand_srtp_state;
     void *ring_srtp_state;
     void *home_call_srtp_state;
-    unsigned char ondemand_audio_srtp_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char ondemand_video_srtp_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char ondemand_audio_srtp_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char ondemand_video_srtp_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_audio_srtp_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_video_srtp_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_audio_srtp_in_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char ondemand_video_srtp_in_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
     bool transport_tcp;
     bool rtsp_audio_enabled;
     bool rtsp_audio_out_initialized;
@@ -1219,68 +1219,6 @@ static int connect_sip_socket(const struct c300x_config *config) {
     return fd;
 }
 
-static void header_value(const char *message, const char *name, char *out, size_t out_len) {
-    out[0] = '\0';
-    size_t name_len = strlen(name);
-    const char *line = message;
-    while (line != NULL && *line != '\0') {
-        const char *line_end = strstr(line, "\r\n");
-        if (line_end == NULL) {
-            line_end = line + strlen(line);
-        }
-        if (strncasecmp(line, name, name_len) == 0) {
-            const char *value = line + name_len;
-            while (*value == ' ' || *value == '\t') {
-                value++;
-            }
-            size_t len = (size_t)(line_end - value);
-            if (len >= out_len) {
-                len = out_len - 1;
-            }
-            memcpy(out, value, len);
-            out[len] = '\0';
-            return;
-        }
-        if (*line_end == '\0') {
-            break;
-        }
-        line = line_end + 2;
-    }
-}
-
-static void sip_uri_from_header(const char *header, char *out, size_t out_len) {
-    out[0] = '\0';
-    if (header == NULL || header[0] == '\0' || out_len == 0) {
-        return;
-    }
-
-    const char *start = strchr(header, '<');
-    const char *end = NULL;
-    if (start != NULL) {
-        start++;
-        end = strchr(start, '>');
-    } else {
-        start = header;
-        while (*start == ' ' || *start == '\t') {
-            start++;
-        }
-        end = start;
-        while (*end != '\0' && *end != ',' && *end != '\r' && *end != '\n') {
-            end++;
-        }
-    }
-
-    if (start == NULL || end == NULL || end <= start) {
-        return;
-    }
-    size_t len = (size_t)(end - start);
-    if (len >= out_len) {
-        len = out_len - 1;
-    }
-    memcpy(out, start, len);
-    out[len] = '\0';
-}
-
 static void append_all_headers(
     char *out,
     size_t out_len,
@@ -1311,23 +1249,6 @@ static void append_all_headers(
         }
         line = line_end + 2;
     }
-}
-
-static void make_tagged_to(const char *to_header, const char *tag, char *out, size_t out_len) {
-    char uri[512];
-
-    sip_uri_from_header(to_header, uri, sizeof(uri));
-    if (uri[0] != '\0') {
-        snprintf(out, out_len, "<%s>;tag=%s", uri, tag);
-        return;
-    }
-    snprintf(out, out_len, "%s;tag=%s", to_header, tag);
-}
-
-static int content_length(const char *message) {
-    char value[32];
-    header_value(message, "Content-Length:", value, sizeof(value));
-    return value[0] ? atoi(value) : 0;
 }
 
 static bool wait_for_rtsp_clients_to_drain(media_bridge_t *bridge, int timeout_ms) {
@@ -1472,7 +1393,7 @@ static int read_message(int fd, char *buffer, size_t buffer_size, int timeout_se
         char *header_end = strstr(buffer, "\r\n\r\n");
         if (header_end != NULL) {
             size_t header_len = (size_t)(header_end + 4 - buffer);
-            int body_len = content_length(buffer);
+            int body_len = c300x_media_sip_content_length(buffer);
             if ((int)(used - header_len) >= body_len) {
                 return (int)used;
             }
@@ -1609,7 +1530,7 @@ static rtsp_read_result_t read_rtsp_request_or_interleaved(
         char *header_end = strstr(request, "\r\n\r\n");
         if (header_end != NULL) {
             size_t header_len = (size_t)(header_end + 4 - request);
-            int body_len = content_length(request);
+            int body_len = c300x_media_sip_content_length(request);
             if ((int)(used - header_len) >= body_len) {
                 return RTSP_READ_REQUEST;
             }
@@ -1791,7 +1712,7 @@ static bool bridge_instance_uuid(
 }
 
 static bool generate_sdes_key(unsigned char *key, size_t key_len, char *out, size_t out_len) {
-    if (key == NULL || key_len != MEDIA_SRTP_MASTER_KEY_LEN) {
+    if (key == NULL || key_len != C300X_MEDIA_SRTP_MASTER_KEY_LEN) {
         return false;
     }
     fill_random_bytes(key, key_len);
@@ -1818,86 +1739,6 @@ static void secure_zero(void *ptr, size_t len) {
         *p++ = 0;
         len--;
     }
-}
-
-static int parse_sdp_media_port(const char *message, const char *media, int fallback) {
-    const char *pos = strstr(message, media);
-    if (pos == NULL) {
-        return fallback;
-    }
-    return atoi(pos + strlen(media));
-}
-
-static bool parse_sdp_sdes_key(const char *message, const char *media, unsigned char *out, size_t out_len) {
-    const char *section = strstr(message, media);
-    const char *section_end;
-    unsigned char decoded[64];
-    size_t decoded_len = 0;
-
-    if (section == NULL || out == NULL || out_len != MEDIA_SRTP_MASTER_KEY_LEN) {
-        return false;
-    }
-    section_end = strstr(section + strlen(media), "\r\nm=");
-    const char *line = section;
-    while (line != NULL && *line != '\0' && (section_end == NULL || line < section_end)) {
-        const char *line_end = strstr(line, "\r\n");
-        if (line_end == NULL) {
-            line_end = line + strlen(line);
-        }
-        if (
-            strncasecmp(line, "a=crypto:", strlen("a=crypto:")) == 0
-            && strstr(line, "AES_CM_128_HMAC_SHA1_80") != NULL
-        ) {
-            const char *inline_key = strstr(line, "inline:");
-            if (inline_key == NULL || inline_key >= line_end) {
-                return false;
-            }
-            inline_key += strlen("inline:");
-            if (!c300x_media_base64_decode(inline_key, decoded, sizeof(decoded), &decoded_len)) {
-                return false;
-            }
-            if (decoded_len < MEDIA_SRTP_MASTER_KEY_LEN) {
-                return false;
-            }
-            memcpy(out, decoded, MEDIA_SRTP_MASTER_KEY_LEN);
-            secure_zero(decoded, sizeof(decoded));
-            return true;
-        }
-        if (*line_end == '\0') {
-            break;
-        }
-        line = line_end + 2;
-    }
-    secure_zero(decoded, sizeof(decoded));
-    return false;
-}
-
-static int sip_status_code(const char *message) {
-    int status = 0;
-    if (sscanf(message, "SIP/2.0 %d", &status) != 1) {
-        return 0;
-    }
-    return status;
-}
-
-static void cseq_method_value(const char *message, char *out, size_t out_len) {
-    char cseq[64];
-    header_value(message, "CSeq:", cseq, sizeof(cseq));
-    out[0] = '\0';
-    char *space = strrchr(cseq, ' ');
-    const char *method = space != NULL ? space + 1 : cseq;
-    while (*method == ' ' || *method == '\t') {
-        method++;
-    }
-    size_t len = strlen(method);
-    while (len > 0 && (method[len - 1] == ' ' || method[len - 1] == '\t' || method[len - 1] == '\r' || method[len - 1] == '\n')) {
-        len--;
-    }
-    if (len >= out_len) {
-        len = out_len - 1;
-    }
-    memcpy(out, method, len);
-    out[len] = '\0';
 }
 
 static void send_sip_ack(
@@ -1967,10 +1808,10 @@ static void send_sip_ok_response(int fd, const char *message) {
     char response[4096];
     size_t used = 0;
 
-    header_value(message, "To:", to, sizeof(to));
-    header_value(message, "From:", from, sizeof(from));
-    header_value(message, "Call-ID:", call_id, sizeof(call_id));
-    header_value(message, "CSeq:", cseq, sizeof(cseq));
+    c300x_media_sip_header_value(message, "To:", to, sizeof(to));
+    c300x_media_sip_header_value(message, "From:", from, sizeof(from));
+    c300x_media_sip_header_value(message, "Call-ID:", call_id, sizeof(call_id));
+    c300x_media_sip_header_value(message, "CSeq:", cseq, sizeof(cseq));
     if (to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0' || cseq[0] == '\0') {
         return;
     }
@@ -2066,17 +1907,17 @@ static bool send_ring_response(
     char instance_uuid[MEDIA_INSTANCE_UUID_LEN];
     size_t used = 0;
 
-    header_value(invite, "To:", to, sizeof(to));
-    header_value(invite, "From:", from, sizeof(from));
-    header_value(invite, "Call-ID:", call_id, sizeof(call_id));
-    header_value(invite, "CSeq:", cseq, sizeof(cseq));
+    c300x_media_sip_header_value(invite, "To:", to, sizeof(to));
+    c300x_media_sip_header_value(invite, "From:", from, sizeof(from));
+    c300x_media_sip_header_value(invite, "Call-ID:", call_id, sizeof(call_id));
+    c300x_media_sip_header_value(invite, "CSeq:", cseq, sizeof(cseq));
     if (to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0' || cseq[0] == '\0') {
         return false;
     }
     if (code == 100) {
         snprintf(tagged_to, sizeof(tagged_to), "%s", to);
     } else {
-        make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
+        c300x_media_sip_make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
     }
 
     used += (size_t)snprintf(response + used, sizeof(response) - used, "SIP/2.0 %d %s\r\n", code, reason);
@@ -2198,7 +2039,7 @@ static bool send_ring_registration(
     if (read_message(fd, response, sizeof(response), 3) < 0) {
         return false;
     }
-    return sip_status_code(response) >= 200 && sip_status_code(response) < 300;
+    return c300x_media_sip_status_code(response) >= 200 && c300x_media_sip_status_code(response) < 300;
 }
 
 static bool send_ring_register(
@@ -2236,10 +2077,10 @@ static void send_ring_bye(
         ? remote_contact_uri
         : "sip:c300x@127.0.0.1:5060";
 
-    header_value(invite, "To:", to, sizeof(to));
-    header_value(invite, "From:", from, sizeof(from));
-    header_value(invite, "Call-ID:", call_id, sizeof(call_id));
-    make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
+    c300x_media_sip_header_value(invite, "To:", to, sizeof(to));
+    c300x_media_sip_header_value(invite, "From:", from, sizeof(from));
+    c300x_media_sip_header_value(invite, "Call-ID:", call_id, sizeof(call_id));
+    c300x_media_sip_make_tagged_to(to, to_tag, tagged_to, sizeof(tagged_to));
     if (tagged_to[0] == '\0' || from[0] == '\0' || call_id[0] == '\0') {
         return;
     }
@@ -2898,10 +2739,10 @@ static void handle_ring_invite(
     int audio_rtcp_fd = -1;
     int video_fd = -1;
     int video_rtcp_fd = -1;
-    unsigned char answer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char answer_video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char offer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char offer_video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_video_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char offer_audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char offer_video_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
     char answer_audio_key[64];
     char answer_video_key[64];
     char sdp_early[4096];
@@ -2921,8 +2762,8 @@ static void handle_ring_invite(
         goto cleanup;
     }
     if (
-        !parse_sdp_sdes_key(invite, "\r\nm=audio ", offer_audio_key_raw, sizeof(offer_audio_key_raw))
-        || !parse_sdp_sdes_key(invite, "\r\nm=video ", offer_video_key_raw, sizeof(offer_video_key_raw))
+        !c300x_media_sip_parse_sdp_sdes_key(invite, "\r\nm=audio ", offer_audio_key_raw, sizeof(offer_audio_key_raw))
+        || !c300x_media_sip_parse_sdp_sdes_key(invite, "\r\nm=video ", offer_video_key_raw, sizeof(offer_video_key_raw))
         || !generate_sdes_key(answer_audio_key_raw, sizeof(answer_audio_key_raw), answer_audio_key, sizeof(answer_audio_key))
         || !generate_sdes_key(answer_video_key_raw, sizeof(answer_video_key_raw), answer_video_key, sizeof(answer_video_key))
         || !media_srtp_init_state(&srtp, answer_audio_key_raw, answer_video_key_raw)
@@ -2939,8 +2780,8 @@ static void handle_ring_invite(
     }
 
     snprintf(to_tag, sizeof(to_tag), "ha-ring%ld", (long)time(NULL));
-    header_value(invite, "Contact:", remote_contact, sizeof(remote_contact));
-    sip_uri_from_header(remote_contact, remote_contact_uri, sizeof(remote_contact_uri));
+    c300x_media_sip_header_value(invite, "Contact:", remote_contact, sizeof(remote_contact));
+    c300x_media_sip_uri_from_header(remote_contact, remote_contact_uri, sizeof(remote_contact_uri));
 
     pthread_mutex_lock(&bridge->mutex);
     close_ring_media_fds_locked(bridge);
@@ -2948,8 +2789,8 @@ static void handle_ring_invite(
     bridge->ring_audio_rtcp_fd = audio_rtcp_fd;
     bridge->ring_video_rtp_fd = video_fd;
     bridge->ring_video_rtcp_fd = video_rtcp_fd;
-    bridge->ring_target_audio_port = parse_sdp_media_port(invite, "\r\nm=audio ", 7078);
-    bridge->ring_target_video_port = parse_sdp_media_port(invite, "\r\nm=video ", 9078);
+    bridge->ring_target_audio_port = c300x_media_sip_parse_sdp_media_port(invite, "\r\nm=audio ", 7078);
+    bridge->ring_target_video_port = c300x_media_sip_parse_sdp_media_port(invite, "\r\nm=video ", 9078);
     bridge->ring_call_active = true;
     bridge->ring_media_active = false;
     bridge->ring_audio_active = false;
@@ -3223,8 +3064,8 @@ static void *sip_monitor_thread(void *arg) {
         }
 
         char cseq_method[16];
-        cseq_method_value(message, cseq_method, sizeof(cseq_method));
-        if (sip_status_code(message) == 200 && strcmp(cseq_method, "INVITE") == 0) {
+        c300x_media_sip_cseq_method_value(message, cseq_method, sizeof(cseq_method));
+        if (c300x_media_sip_status_code(message) == 200 && strcmp(cseq_method, "INVITE") == 0) {
             send_sip_ack(fd, from_aor, to_aor, local_ip, local_port, transport, to_header, from_tag, call_id, contact_uri, invite_cseq);
             continue;
         }
@@ -3839,10 +3680,10 @@ static void drain_ondemand_media_socket(
 static void *ondemand_media_thread(void *arg) {
     media_bridge_t *bridge = arg;
     uint32_t video_ssrc = 0;
-    unsigned char audio_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char video_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char audio_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char video_in_key[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char audio_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char video_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char audio_in_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char video_in_key[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
     media_srtp_state_t srtp;
     long long next_media_keepalive = 0;
     long long next_audio_rtp = 0;
@@ -4056,10 +3897,10 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     int ondemand_video_rtcp_fd = -1;
     int target_audio_port = 7078;
     int target_video_port = 9078;
-    unsigned char audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char answer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char answer_video_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char video_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_video_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
     char audio_key[64];
     char video_key[64];
     char audio_crypto_aead128[64];
@@ -4195,7 +4036,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         close(ondemand_video_rtcp_fd);
         return false;
     }
-    if (sip_status_code(response) >= 300) {
+    if (c300x_media_sip_status_code(response) >= 300) {
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4324,7 +4165,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         if (read_message(fd, response, sizeof(response), 5) < 0) {
             break;
         }
-        status = sip_status_code(response);
+        status = c300x_media_sip_status_code(response);
         if (status >= 200) {
             break;
         }
@@ -4341,11 +4182,11 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         close(ondemand_video_rtcp_fd);
         return false;
     }
-    target_audio_port = parse_sdp_media_port(response, "\r\nm=audio ", target_audio_port);
-    target_video_port = parse_sdp_media_port(response, "\r\nm=video ", target_video_port);
+    target_audio_port = c300x_media_sip_parse_sdp_media_port(response, "\r\nm=audio ", target_audio_port);
+    target_video_port = c300x_media_sip_parse_sdp_media_port(response, "\r\nm=video ", target_video_port);
     if (
-        !parse_sdp_sdes_key(response, "\r\nm=audio ", answer_audio_key_raw, sizeof(answer_audio_key_raw))
-        || !parse_sdp_sdes_key(response, "\r\nm=video ", answer_video_key_raw, sizeof(answer_video_key_raw))
+        !c300x_media_sip_parse_sdp_sdes_key(response, "\r\nm=audio ", answer_audio_key_raw, sizeof(answer_audio_key_raw))
+        || !c300x_media_sip_parse_sdp_sdes_key(response, "\r\nm=video ", answer_video_key_raw, sizeof(answer_video_key_raw))
     ) {
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
@@ -4362,12 +4203,12 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     char to_header[512];
     char contact_header[512];
     char contact_uri[512];
-    header_value(response, "To:", to_header, sizeof(to_header));
+    c300x_media_sip_header_value(response, "To:", to_header, sizeof(to_header));
     if (to_header[0] == '\0') {
         snprintf(to_header, sizeof(to_header), "<sip:%s>", to_aor);
     }
-    header_value(response, "Contact:", contact_header, sizeof(contact_header));
-    sip_uri_from_header(contact_header, contact_uri, sizeof(contact_uri));
+    c300x_media_sip_header_value(response, "Contact:", contact_header, sizeof(contact_header));
+    c300x_media_sip_uri_from_header(contact_header, contact_uri, sizeof(contact_uri));
     if (contact_uri[0] == '\0') {
         snprintf(contact_uri, sizeof(contact_uri), "sip:%s", to_aor);
     }
@@ -4781,7 +4622,7 @@ static bool send_home_call_register(
     if (read_message(fd, response, sizeof(response), 3) < 0) {
         return false;
     }
-    return sip_status_code(response) >= 200 && sip_status_code(response) < 300;
+    return c300x_media_sip_status_code(response) >= 200 && c300x_media_sip_status_code(response) < 300;
 }
 
 static bool send_home_call_invite(
@@ -4919,10 +4760,10 @@ static void drain_home_call_stop_responses(
             continue;
         }
 
-        int status = sip_status_code(message);
+        int status = c300x_media_sip_status_code(message);
         if (status >= 200) {
             char cseq_method[16];
-            cseq_method_value(message, cseq_method, sizeof(cseq_method));
+            c300x_media_sip_cseq_method_value(message, cseq_method, sizeof(cseq_method));
             if (strcmp(cseq_method, stop_method) == 0) {
                 stop_response_seen = true;
             }
@@ -4950,8 +4791,8 @@ static void *home_call_thread_func(void *arg) {
     int audio_fd = -1;
     int audio_rtcp_fd = -1;
     int duration_seconds;
-    unsigned char offer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
-    unsigned char answer_audio_key_raw[MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char offer_audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
+    unsigned char answer_audio_key_raw[C300X_MEDIA_SRTP_MASTER_KEY_LEN];
     char offer_audio_key[64];
     char sdp[4096];
     char message[SIP_BUFFER_SIZE];
@@ -5094,7 +4935,7 @@ static void *home_call_thread_func(void *arg) {
             send_sip_ok_response(fd, message);
             goto cleanup;
         }
-        int status = sip_status_code(message);
+        int status = c300x_media_sip_status_code(message);
         if (status == 0 || status < 200) {
             continue;
         }
@@ -5102,18 +4943,18 @@ static void *home_call_thread_func(void *arg) {
             c300x_video_bridge_set_error(bridge->video, "home_call_rejected");
             goto cleanup;
         }
-        target_audio_port = parse_sdp_media_port(message, "\r\nm=audio ", 7078);
-        header_value(message, "To:", to_header, sizeof(to_header));
+        target_audio_port = c300x_media_sip_parse_sdp_media_port(message, "\r\nm=audio ", 7078);
+        c300x_media_sip_header_value(message, "To:", to_header, sizeof(to_header));
         if (to_header[0] == '\0') {
             snprintf(to_header, sizeof(to_header), "<sip:%s>", to_aor);
         }
-        header_value(message, "Contact:", contact_header, sizeof(contact_header));
-        sip_uri_from_header(contact_header, contact_uri, sizeof(contact_uri));
+        c300x_media_sip_header_value(message, "Contact:", contact_header, sizeof(contact_header));
+        c300x_media_sip_uri_from_header(contact_header, contact_uri, sizeof(contact_uri));
         if (contact_uri[0] == '\0') {
             snprintf(contact_uri, sizeof(contact_uri), "sip:%s", to_aor);
         }
         if (
-            !parse_sdp_sdes_key(message, "\r\nm=audio ", answer_audio_key_raw, sizeof(answer_audio_key_raw))
+            !c300x_media_sip_parse_sdp_sdes_key(message, "\r\nm=audio ", answer_audio_key_raw, sizeof(answer_audio_key_raw))
             || !media_srtp_init_audio_inbound(&srtp, answer_audio_key_raw)
         ) {
             c300x_video_bridge_set_error(bridge->video, "home_call_answer_srtp_failed");
@@ -6037,8 +5878,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         cseq[0] = '\0';
         transport[0] = '\0';
         (void)sscanf(request, "%15s %511s", method, uri);
-        header_value(request, "CSeq:", cseq, sizeof(cseq));
-        header_value(request, "Transport:", transport, sizeof(transport));
+        c300x_media_sip_header_value(request, "CSeq:", cseq, sizeof(cseq));
+        c300x_media_sip_header_value(request, "Transport:", transport, sizeof(transport));
         bool recorder = strstr(uri, "/doorbell-recorder") != NULL;
         bool preview_path = strstr(uri, "/doorbell-video") != NULL || recorder;
         rtsp_note_request(&g_bridge, method);

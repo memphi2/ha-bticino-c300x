@@ -34,6 +34,18 @@ def test_native_agent_event_payload_module_stays_small() -> None:
     assert path.read_text(encoding="utf-8").count("\n") <= 300
 
 
+def test_native_agent_json_util_module_stays_small() -> None:
+    """Keep shared JSON helpers outside the HTTP monolith."""
+
+    source = ROOT / "native_agent" / "src" / "json_util.c"
+    header = ROOT / "native_agent" / "src" / "json_util.h"
+
+    assert source.stat().st_size <= 7_500
+    assert source.read_text(encoding="utf-8").count("\n") <= 230
+    assert header.stat().st_size <= 1_500
+    assert header.read_text(encoding="utf-8").count("\n") <= 40
+
+
 def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
     """Keep pressure on the remaining media bridge monolith."""
 
@@ -50,6 +62,18 @@ def test_native_agent_media_audio_module_stays_small() -> None:
 
     assert path.stat().st_size <= 5_000
     assert path.read_text(encoding="utf-8").count("\n") <= 180
+
+
+def test_native_agent_media_sip_module_stays_small() -> None:
+    """Keep SIP/SDP parsing outside the media bridge monolith."""
+
+    source = ROOT / "native_agent" / "src" / "media_sip.c"
+    header = ROOT / "native_agent" / "src" / "media_sip.h"
+
+    assert source.stat().st_size <= 10_000
+    assert source.read_text(encoding="utf-8").count("\n") <= 330
+    assert header.stat().st_size <= 2_500
+    assert header.read_text(encoding="utf-8").count("\n") <= 80
 
 
 def test_large_python_modules_stay_within_interim_budget() -> None:

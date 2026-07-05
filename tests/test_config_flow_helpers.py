@@ -1115,6 +1115,9 @@ def test_bootstrap_install_success_continues_to_feature_step(
             f"{request.host}:{kwargs['api_token']}:{kwargs['maintenance_token']}"
         )
 
+    async def ensure_installer_dependencies(_hass: object) -> None:
+        calls.append("ensure_deps")
+
     async def probe_agent(
         _hass: object,
         connection: dict[str, object],
@@ -1131,6 +1134,10 @@ def test_bootstrap_install_success_continues_to_feature_step(
         config_flow_module.secrets,
         "token_urlsafe",
         lambda length: f"token-{length}",
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_ensure_installer_dependencies",
+        ensure_installer_dependencies,
     )
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow.async_install_device_agent",
@@ -1166,6 +1173,7 @@ def test_bootstrap_install_success_continues_to_feature_step(
     assert flow._setup_connection[CONF_MAINTENANCE_TOKEN] == "token-32"
     assert calls == [
         "abort_check",
+        "ensure_deps",
         "install:c300x.local:token-32:token-32",
         "probe:c300x.local:token-32",
         "migrate",
@@ -1220,6 +1228,7 @@ def test_bootstrap_install_reports_install_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
     flow._setup_connection = {
         CONF_NAME: "Door",
         CONF_AGENT_HOST: "c300x.local",
@@ -1234,6 +1243,13 @@ def test_bootstrap_install_reports_install_error(
     async def install_agent(*_args: object, **_kwargs: object) -> None:
         raise config_flow_module.C300XDeviceInstallError("ssh_auth_failed")
 
+    async def ensure_installer_dependencies(_hass: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_ensure_installer_dependencies",
+        ensure_installer_dependencies,
+    )
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow.async_install_device_agent",
         install_agent,
@@ -1271,6 +1287,9 @@ def test_bootstrap_install_reports_verify_failure(
     async def install_agent(*_args: object, **_kwargs: object) -> None:
         return None
 
+    async def ensure_installer_dependencies(_hass: object) -> None:
+        return None
+
     async def probe_agent(*_args: object, **_kwargs: object) -> str:
         return "missing"
 
@@ -1278,6 +1297,10 @@ def test_bootstrap_install_reports_verify_failure(
         config_flow_module.secrets,
         "token_urlsafe",
         lambda length: f"token-{length}",
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow.async_ensure_installer_dependencies",
+        ensure_installer_dependencies,
     )
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow.async_install_device_agent",

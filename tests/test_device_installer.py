@@ -30,10 +30,12 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 )
 from custom_components.bticino_c300x.device_installer import (  # noqa: E402
     DEFAULT_REMOTE_DIR,
+    INSTALLER_REQUIREMENTS,
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
     _device_config_json,
     _render_startup_defaults,
+    async_ensure_installer_dependencies,
     async_install_device_agent,
     installer_bundle_status,
 )
@@ -1288,6 +1290,45 @@ def test_manifest_does_not_require_optional_paramiko() -> None:
     assert not any(
         requirement.startswith("paramiko") for requirement in manifest["requirements"]
     )
+
+
+def test_installer_requests_optional_paramiko_on_demand() -> None:
+    assert INSTALLER_REQUIREMENTS == ("paramiko==3.5.1",)
+
+
+def test_installer_dependency_processing_uses_homeassistant_requirements(
+    monkeypatch: Any,
+) -> None:
+    calls: list[tuple[object, str, list[str], bool]] = []
+
+    async def process_requirements(
+        hass: object,
+        name: str,
+        requirements: list[str],
+        *,
+        is_built_in: bool,
+    ) -> None:
+        calls.append((hass, name, requirements, is_built_in))
+
+    requirements_module = types.ModuleType("homeassistant.requirements")
+    requirements_module.RequirementsNotFound = RuntimeError
+    requirements_module.async_process_requirements = process_requirements
+    monkeypatch.setitem(sys.modules, "homeassistant.requirements", requirements_module)
+    homeassistant_module = sys.modules.setdefault(
+        "homeassistant",
+        types.ModuleType("homeassistant"),
+    )
+    monkeypatch.setattr(
+        homeassistant_module,
+        "requirements",
+        requirements_module,
+        raising=False,
+    )
+    hass = object()
+
+    asyncio.run(async_ensure_installer_dependencies(hass))  # type: ignore[arg-type]
+
+    assert calls == [(hass, "bticino_c300x", ["paramiko==3.5.1"], False)]
 
 
 def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:

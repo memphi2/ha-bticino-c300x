@@ -50,6 +50,7 @@ from .const import (
 )
 from .device_installer import (
     C300XDeviceInstallRequest,
+    async_ensure_installer_dependencies,
     async_install_device_agent,
 )
 from .device_user import homeassistant_account_label
@@ -495,6 +496,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
 
         try:
             patch_state = await _async_capture_external_patch_state(entry)
+            await async_ensure_installer_dependencies(self.hass)
             install_result = await async_install_device_agent(
                 C300XDeviceInstallRequest(
                     host=str(entry_config_value(entry, CONF_AGENT_HOST, "")).strip(),

@@ -163,7 +163,7 @@
       "invalid_agent_host": "Saisissez l'hote de l'agent appareil.",
       "invalid_callback_base_url": "Saisissez une URL callback HTTP locale de Home Assistant joignable par le C300X, ou laissez vide.",
       "invalid_device_host": "Saisissez l'adresse du C300X.",
-      "installer_dependency_missing": "La dependance Python SSH de Home Assistant n'est pas encore chargee. Redemarrez Home Assistant apres l'installation ou la mise a jour de l'integration.",
+      "installer_dependency_missing": "La dependance Python SSH optionnelle n'a pas pu etre installee ou chargee. Verifiez l'installation des paquets Home Assistant et reessayez.",
       "invalid_ssh_password": "Saisissez le mot de passe SSH du C300X.",
       "invalid_ssh_username": "Saisissez l'utilisateur SSH du C300X.",
       "invalid_alarm_entity": "Selectionnez une entite alarm_control_panel Alarmo ou laissez vide.",

@@ -580,6 +580,9 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
         )
         return types.SimpleNamespace(changed_files=())
 
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        calls.append("ensure_deps")
+
     async def wait_for_agent(_api: Any) -> dict[str, Any]:
         calls.append("wait")
         return {"version": "1.1.0", "capabilities": {}}
@@ -594,6 +597,11 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(
+        repairs,
+        "async_ensure_installer_dependencies",
+        ensure_installer_dependencies,
+    )
     monkeypatch.setattr(repairs, "_async_wait_for_agent_after_update", wait_for_agent)
     monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
     monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
@@ -610,6 +618,7 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
 
     assert result == {"type": "create_entry", "data": {}}
     assert calls == [
+        "ensure_deps",
         "install:192.0.2.60:root:agent-token:maintenance-token",
         "wait",
         "migrate_mqtt",
@@ -635,7 +644,15 @@ def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
     async def install_agent(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("ssh failed")
 
+    async def ensure_installer_dependencies(_hass: Any) -> None:
+        return None
+
     monkeypatch.setattr(repairs, "async_install_device_agent", install_agent)
+    monkeypatch.setattr(
+        repairs,
+        "async_ensure_installer_dependencies",
+        ensure_installer_dependencies,
+    )
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
 
     result = asyncio.run(

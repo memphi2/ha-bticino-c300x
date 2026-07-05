@@ -150,6 +150,7 @@ from .const import (
 from .device_installer import (
     C300XDeviceInstallError,
     C300XDeviceInstallRequest,
+    async_ensure_installer_dependencies,
     async_install_device_agent,
 )
 from .entry_config import entry_config_value
@@ -322,6 +323,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 apply_gui_patch=False,
             )
             try:
+                await async_ensure_installer_dependencies(self.hass)
                 await async_install_device_agent(
                     request,
                     api_token=api_token,

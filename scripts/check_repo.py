@@ -500,7 +500,7 @@ def check_installer_dependency_pins() -> list[str]:
     )
     if any(str(requirement).startswith("paramiko") for requirement in manifest.get("requirements", [])):
         failures.append(
-            "manifest.json must not require Paramiko; SSH install loads it lazily"
+            "manifest.json must not require Paramiko; SSH install processes it on demand"
         )
     if any(str(requirement).startswith("aiortc") for requirement in manifest.get("requirements", [])):
         failures.append(
@@ -534,6 +534,10 @@ def check_installer_dependency_pins() -> list[str]:
     ).read_text(encoding="utf-8")
     if f'_REQUIRED_PARAMIKO_VERSION = "{REQUIRED_PARAMIKO_VERSION}"' not in installer:
         failures.append("device_installer.py must hard-code the validated Paramiko pin")
+    if 'INSTALLER_REQUIREMENTS = (f"paramiko=={_REQUIRED_PARAMIKO_VERSION}",)' not in installer:
+        failures.append("device_installer.py must request the pinned Paramiko requirement lazily")
+    if "async_process_requirements(" not in installer or "is_built_in=False" not in installer:
+        failures.append("device_installer.py must install optional SSH dependencies on demand")
     if "_validate_paramiko_version(paramiko)" not in installer:
         failures.append("device_installer.py must reject unvalidated Paramiko versions")
 

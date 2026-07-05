@@ -15,7 +15,7 @@ import stat
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .activation_address import stair_light_where_from_entry_values
 from .const import (
@@ -24,8 +24,12 @@ from .const import (
     DEFAULT_STAIR_LIGHT_P,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
+    DOMAIN,
 )
 from .device_activations import desired_activation_items
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = COMPONENT_DIR.parents[1]
@@ -44,6 +48,7 @@ REMOTE_FIREWALL_BACKUP = (
 _SSH_CONNECT_TIMEOUT = 12.0
 _SSH_COMMAND_TIMEOUT = 30.0
 _REQUIRED_PARAMIKO_VERSION = "3.5.1"
+INSTALLER_REQUIREMENTS = (f"paramiko=={_REQUIRED_PARAMIKO_VERSION}",)
 _LEGACY_RSA_SHA2_ALGORITHMS = ("rsa-sha2-512", "rsa-sha2-256")
 
 
@@ -128,6 +133,25 @@ async def async_install_device_agent(
         ),
         changed_files=changed_files,
     )
+
+
+async def async_ensure_installer_dependencies(hass: HomeAssistant) -> None:
+    """Install optional SSH bootstrap dependencies only when the installer is used."""
+
+    from homeassistant.requirements import (
+        RequirementsNotFound,
+        async_process_requirements,
+    )
+
+    try:
+        await async_process_requirements(
+            hass,
+            DOMAIN,
+            list(INSTALLER_REQUIREMENTS),
+            is_built_in=False,
+        )
+    except RequirementsNotFound as err:
+        raise C300XDeviceInstallError("installer_dependency_missing") from err
 
 
 def _install_device_agent_sync(

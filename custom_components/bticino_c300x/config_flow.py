@@ -6,7 +6,6 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
@@ -18,7 +17,27 @@ from .api import (
     C300XAgentApiUnsupportedError,
     build_agent_base_url,
 )
-from .config_audio import audio_gain_db_or_default
+from .config_flow_activations import (
+    ACTIVATION_STEP_DONE as _ACTIVATION_STEP_DONE,
+)
+from .config_flow_activations import (
+    ACTIVATION_STEP_ITEM as _ACTIVATION_STEP_ITEM,
+)
+from .config_flow_activations import (
+    activation_item_form as _activation_item_form,
+)
+from .config_flow_activations import (
+    activation_item_step as _activation_item_step,
+)
+from .config_flow_activations import (
+    activation_items_from_feature_data as _activation_items_from_feature_data,
+)
+from .config_flow_activations import (
+    activation_manage_form as _activation_manage_form,
+)
+from .config_flow_activations import (
+    activation_manage_step as _activation_manage_step,
+)
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -29,13 +48,7 @@ from .config_flow_dashboard import (
     dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
 )
 from .config_flow_dashboard import (
-    dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
-)
-from .config_flow_dashboard import (
     dashboard_entity_display_schema as _dashboard_entity_display_schema,
-)
-from .config_flow_dashboard import (
-    dashboard_entity_ids as _dashboard_entity_ids,
 )
 from .config_flow_dashboard import (
     dashboard_input_defaults as _dashboard_input_defaults,
@@ -43,11 +56,29 @@ from .config_flow_dashboard import (
 from .config_flow_dashboard import (
     dashboard_schema as _dashboard_schema,
 )
-from .config_flow_forms import (
-    actions_json as _actions_json,
+from .config_flow_features import (
+    current_connection_options as _current_connection_options,
+)
+from .config_flow_features import (
+    current_feature_options as _current_feature_options,
+)
+from .config_flow_features import (
+    feature_input_defaults as _feature_input_defaults,
+)
+from .config_flow_features import (
+    options_connection_schema as _options_connection_schema,
+)
+from .config_flow_features import (
+    options_features_schema as _options_features_schema,
+)
+from .config_flow_features import (
+    reconfigure_connection_schema_from_current as _reconfigure_connection_schema_from_current,
+)
+from .config_flow_features import (
+    reconfigure_features_schema_from_current as _reconfigure_features_schema_from_current,
 )
 from .config_flow_forms import (
-    optional_suggested as _optional_suggested,
+    actions_json as _actions_json,
 )
 from .config_flow_input import (
     _agent_auth_input,
@@ -90,9 +121,9 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_EVENT_WEBHOOK_ID,
@@ -107,14 +138,9 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
-    DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_NAME,
-    DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
-    DEFAULT_VIDEO_PORT,
-    DEFAULT_VIDEO_STREAM_PATH,
     DEVICE_ACTIVATION_MODE_AUTO,
     DOMAIN,
 )
@@ -166,7 +192,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DEVICE_ACTIVATION_MODE,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+        CONF_DEVICE_ACTIVATIONS,
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
         CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
         CONF_DEVICE_UI_ENABLED,
@@ -196,9 +222,13 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._setup_agent_needs_token = False
         self._setup_device_ui_default = False
         self._setup_feature_data: dict[str, Any] = {}
+        self._setup_device_activations: list[dict[str, Any]] = []
+        self._setup_activation_edit_id: str | None = None
         self._setup_dashboard_input: dict[str, Any] = {}
         self._reconfigure_connection: dict[str, Any] = {}
         self._reconfigure_feature_data: dict[str, Any] = {}
+        self._reconfigure_device_activations: list[dict[str, Any]] = []
+        self._reconfigure_activation_edit_id: str | None = None
         self._reconfigure_dashboard_input: dict[str, Any] = {}
 
     async def async_step_user(
@@ -551,12 +581,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_DEVICE_ACTIVATION_MODE,
                             DEVICE_ACTIVATION_MODE_AUTO,
                         ),
-                        str(
-                            user_input.get(
-                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                                DEFAULT_STAIR_LIGHT_ADDRESS,
-                            )
-                        ),
                         user_input.get(
                             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
                             DEFAULT_STAIR_LIGHT_P,
@@ -573,22 +597,83 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ),
                     ),
                     errors=errors,
-                )
+            )
 
             self._setup_feature_data = feature_data
-            return await self.async_step_user_dashboard()
+            self._setup_device_activations = _activation_items_from_feature_data(
+                feature_data
+            )
+            return await self.async_step_user_device_activations()
 
         return self.async_show_form(
             step_id="user_features",
             data_schema=_setup_features_schema(
                 _SETUP_VIDEO_ENABLED_DEFAULT,
                 default_device_activation_mode=DEVICE_ACTIVATION_MODE_AUTO,
-                default_device_activation_stair_light_address=DEFAULT_STAIR_LIGHT_ADDRESS,
                 default_device_activation_stair_light_p=DEFAULT_STAIR_LIGHT_P,
                 default_device_activation_stair_light_n=DEFAULT_STAIR_LIGHT_N,
                 default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
             ),
             errors=errors,
+        )
+
+    async def async_step_user_device_activations(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage additional C300X device activations during setup."""
+
+        if not self._setup_feature_data:
+            return await self.async_step_user_features()
+
+        result = _activation_manage_step(user_input, self._setup_device_activations)
+        self._setup_device_activations = result.items
+        self._setup_activation_edit_id = result.edit_id
+        if result.next_step == _ACTIVATION_STEP_DONE:
+            self._setup_feature_data[CONF_DEVICE_ACTIVATIONS] = list(result.items)
+            return await self.async_step_user_dashboard()
+        if result.next_step == _ACTIVATION_STEP_ITEM:
+            return _activation_item_form(
+                self.async_show_form,
+                step_id="user_device_activation_item",
+                items=result.items,
+                edit_id=result.edit_id,
+                errors=result.errors,
+            )
+
+        return _activation_manage_form(
+            self.async_show_form,
+            step_id="user_device_activations",
+            items=result.items,
+            errors=result.errors,
+        )
+
+    async def async_step_user_device_activation_item(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Add or edit one C300X device activation during setup."""
+
+        if not self._setup_feature_data:
+            return await self.async_step_user_features()
+
+        result = _activation_item_step(
+            user_input,
+            self._setup_device_activations,
+            self._setup_activation_edit_id,
+            self._setup_feature_data,
+        )
+        self._setup_device_activations = result.items
+        self._setup_activation_edit_id = result.edit_id
+        if result.next_step != _ACTIVATION_STEP_ITEM:
+            return await self.async_step_user_device_activations()
+
+        return _activation_item_form(
+            self.async_show_form,
+            step_id="user_device_activation_item",
+            items=result.items,
+            edit_id=result.edit_id,
+            errors=result.errors,
         )
 
     async def async_step_user_dashboard(
@@ -825,14 +910,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_DEVICE_ACTIVATION_MODE,
                             feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
                         ),
-                        str(
-                            user_input.get(
-                                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                                feature_defaults[
-                                    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS
-                                ],
-                            )
-                        ),
                         user_input.get(
                             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
                             feature_defaults[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
@@ -852,10 +929,13 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     description_placeholders=(
                         await _async_qml_patch_description_placeholders(entry)
                     ),
-                )
+            )
 
             self._reconfigure_feature_data = feature_data
-            return await self.async_step_reconfigure_dashboard()
+            self._reconfigure_device_activations = _activation_items_from_feature_data(
+                feature_data
+            )
+            return await self.async_step_reconfigure_device_activations()
 
         return self.async_show_form(
             step_id="reconfigure_features",
@@ -864,6 +944,68 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=await _async_qml_patch_description_placeholders(
                 entry
             ),
+        )
+
+    async def async_step_reconfigure_device_activations(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Reconfigure additional C300X device activations."""
+
+        if not self._reconfigure_feature_data:
+            return await self.async_step_reconfigure_features()
+
+        result = _activation_manage_step(
+            user_input,
+            self._reconfigure_device_activations,
+        )
+        self._reconfigure_device_activations = result.items
+        self._reconfigure_activation_edit_id = result.edit_id
+        if result.next_step == _ACTIVATION_STEP_DONE:
+            self._reconfigure_feature_data[CONF_DEVICE_ACTIVATIONS] = list(result.items)
+            return await self.async_step_reconfigure_dashboard()
+        if result.next_step == _ACTIVATION_STEP_ITEM:
+            return _activation_item_form(
+                self.async_show_form,
+                step_id="reconfigure_device_activation_item",
+                items=result.items,
+                edit_id=result.edit_id,
+                errors=result.errors,
+            )
+
+        return _activation_manage_form(
+            self.async_show_form,
+            step_id="reconfigure_device_activations",
+            items=result.items,
+            errors=result.errors,
+        )
+
+    async def async_step_reconfigure_device_activation_item(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Add or edit one C300X device activation during reconfigure."""
+
+        if not self._reconfigure_feature_data:
+            return await self.async_step_reconfigure_features()
+
+        result = _activation_item_step(
+            user_input,
+            self._reconfigure_device_activations,
+            self._reconfigure_activation_edit_id,
+            self._reconfigure_feature_data,
+        )
+        self._reconfigure_device_activations = result.items
+        self._reconfigure_activation_edit_id = result.edit_id
+        if result.next_step != _ACTIVATION_STEP_ITEM:
+            return await self.async_step_reconfigure_device_activations()
+
+        return _activation_item_form(
+            self.async_show_form,
+            step_id="reconfigure_device_activation_item",
+            items=result.items,
+            edit_id=result.edit_id,
+            errors=result.errors,
         )
 
     async def async_step_reconfigure_dashboard(
@@ -1092,6 +1234,8 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._connection_options: dict[str, Any] = {}
         self._feature_options: dict[str, Any] = {}
+        self._device_activations: list[dict[str, Any]] = []
+        self._activation_edit_id: str | None = None
         self._dashboard_options: dict[str, Any] = {}
 
     async def async_step_init(
@@ -1153,9 +1297,12 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                             self._config_entry
                         )
                     ),
-                )
+            )
             self._feature_options = feature_data
-            return await self.async_step_dashboard()
+            self._device_activations = _activation_items_from_feature_data(
+                feature_data
+            )
+            return await self.async_step_device_activations()
 
         return self.async_show_form(
             step_id="features",
@@ -1164,6 +1311,65 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             description_placeholders=await _async_qml_patch_description_placeholders(
                 self._config_entry
             ),
+        )
+
+    async def async_step_device_activations(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage additional C300X device activations in the options flow."""
+
+        if not self._feature_options:
+            return await self.async_step_features()
+
+        result = _activation_manage_step(user_input, self._device_activations)
+        self._device_activations = result.items
+        self._activation_edit_id = result.edit_id
+        if result.next_step == _ACTIVATION_STEP_DONE:
+            self._feature_options[CONF_DEVICE_ACTIVATIONS] = list(result.items)
+            return await self.async_step_dashboard()
+        if result.next_step == _ACTIVATION_STEP_ITEM:
+            return _activation_item_form(
+                self.async_show_form,
+                step_id="device_activation_item",
+                items=result.items,
+                edit_id=result.edit_id,
+                errors=result.errors,
+            )
+
+        return _activation_manage_form(
+            self.async_show_form,
+            step_id="device_activations",
+            items=result.items,
+            errors=result.errors,
+        )
+
+    async def async_step_device_activation_item(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Add or edit one C300X device activation in the options flow."""
+
+        if not self._feature_options:
+            return await self.async_step_features()
+
+        result = _activation_item_step(
+            user_input,
+            self._device_activations,
+            self._activation_edit_id,
+            self._feature_options,
+        )
+        self._device_activations = result.items
+        self._activation_edit_id = result.edit_id
+        if result.next_step != _ACTIVATION_STEP_ITEM:
+            return await self.async_step_device_activations()
+
+        return _activation_item_form(
+            self.async_show_form,
+            step_id="device_activation_item",
+            items=result.items,
+            edit_id=result.edit_id,
+            errors=result.errors,
         )
 
     async def async_step_dashboard(
@@ -1519,345 +1725,6 @@ def _stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:
 
     device_id = setup_data.get("device_id")
     return discovery_unique_id({"id": device_id}) if device_id else None
-
-
-def _options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.Schema:
-    """Return the first options page schema."""
-
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_AGENT_HOST,
-                default=_config_default(config_entry, CONF_AGENT_HOST, ""),
-            ): str,
-            vol.Optional(
-                CONF_AGENT_PORT,
-                default=_config_default(
-                    config_entry,
-                    CONF_AGENT_PORT,
-                    DEFAULT_AGENT_PORT,
-                ),
-            ): int,
-            vol.Required(
-                CONF_AGENT_TOKEN,
-                default=_config_default(config_entry, CONF_AGENT_TOKEN, ""),
-            ): str,
-            vol.Optional(
-                CONF_MAINTENANCE_TOKEN,
-                default=_config_default(config_entry, CONF_MAINTENANCE_TOKEN, ""),
-            ): str,
-            _optional_suggested(
-                CONF_CALLBACK_BASE_URL,
-                _config_default(config_entry, CONF_CALLBACK_BASE_URL, ""),
-            ): str,
-        }
-    )
-
-
-def _options_features_schema(
-    config_entry: config_entries.ConfigEntry,
-    *,
-    video_enabled: bool | None = None,
-    create_homeassistant_user: bool | None = None,
-) -> vol.Schema:
-    """Return the second options page schema."""
-
-    default_video_enabled = (
-        bool(_config_default(config_entry, CONF_VIDEO_ENABLED, False))
-        if video_enabled is None
-        else bool(video_enabled)
-    )
-    default_create_homeassistant_user = (
-        _config_default(
-            config_entry,
-            CONF_CREATE_HOMEASSISTANT_USER,
-            _CREATE_HOMEASSISTANT_USER_DEFAULT,
-        )
-        if create_homeassistant_user is None
-        else create_homeassistant_user
-    )
-    default_device_activation_mode = _config_default(
-        config_entry,
-        CONF_DEVICE_ACTIVATION_MODE,
-        DEVICE_ACTIVATION_MODE_AUTO,
-    )
-    default_device_activation_stair_light_address = _config_default(
-        config_entry,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-        DEFAULT_STAIR_LIGHT_ADDRESS,
-    )
-    default_device_activation_stair_light_p = _config_default(
-        config_entry,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-        DEFAULT_STAIR_LIGHT_P,
-    )
-    default_device_activation_stair_light_n = _config_default(
-        config_entry,
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-        DEFAULT_STAIR_LIGHT_N,
-    )
-    default_ring_capture_audio_gain_db = audio_gain_db_or_default(
-        _config_default(
-            config_entry,
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-        ),
-        DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-    )
-    default_doorstation_audio_gain_db = audio_gain_db_or_default(
-        _config_default(
-            config_entry,
-            CONF_DOORSTATION_AUDIO_GAIN_DB,
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-        ),
-        DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-    )
-    return _reconfigure_features_schema(
-        default_video_enabled,
-        default_device_activation_mode,
-        default_device_activation_stair_light_address,
-        default_device_activation_stair_light_p,
-        default_device_activation_stair_light_n,
-        default_create_homeassistant_user=bool(default_create_homeassistant_user),
-        default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
-        default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
-    )
-
-
-def _current_connection_options(
-    config_entry: config_entries.ConfigEntry,
-) -> dict[str, Any]:
-    """Return effective connection options for a restarted options flow."""
-
-    return {
-        CONF_AGENT_HOST: _config_default(config_entry, CONF_AGENT_HOST, ""),
-        CONF_AGENT_PORT: int(
-            _config_default(config_entry, CONF_AGENT_PORT, DEFAULT_AGENT_PORT)
-        ),
-        CONF_AGENT_TOKEN: _config_default(config_entry, CONF_AGENT_TOKEN, ""),
-        CONF_MAINTENANCE_TOKEN: _config_default(
-            config_entry,
-            CONF_MAINTENANCE_TOKEN,
-            "",
-        ),
-        CONF_CALLBACK_BASE_URL: _config_default(
-            config_entry,
-            CONF_CALLBACK_BASE_URL,
-            "",
-        ),
-    }
-
-
-def _current_feature_options(
-    config_entry: config_entries.ConfigEntry,
-) -> dict[str, Any]:
-    """Return effective feature options for reconfigure defaults."""
-
-    return {
-        CONF_ALARM_ENTITY_ID: _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
-        CONF_WEATHER_ENTITY_ID: _config_default(
-            config_entry,
-            CONF_WEATHER_ENTITY_ID,
-            "",
-        ),
-        CONF_DASHBOARD_ENTITIES: _dashboard_entity_ids(
-            _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
-        ),
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: _dashboard_entity_display_overrides(
-            _config_default(config_entry, CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
-        ),
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE: bool(
-            _config_default(
-                config_entry,
-                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-                _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-            )
-        ),
-        CONF_VIDEO_ENABLED: bool(
-            _config_default(config_entry, CONF_VIDEO_ENABLED, False)
-        ),
-        CONF_VIDEO_PORT: int(
-            _config_default(config_entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
-        ),
-        CONF_VIDEO_STREAM_PATH: _config_default(
-            config_entry,
-            CONF_VIDEO_STREAM_PATH,
-            DEFAULT_VIDEO_STREAM_PATH,
-        ),
-        CONF_DOORSTATION_AUDIO_GAIN_DB: audio_gain_db_or_default(
-            _config_default(
-                config_entry,
-                CONF_DOORSTATION_AUDIO_GAIN_DB,
-                DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-            ),
-            DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
-        ),
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB: audio_gain_db_or_default(
-            _config_default(
-                config_entry,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-                DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-            ),
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-        ),
-        CONF_CREATE_HOMEASSISTANT_USER: bool(
-            _config_default(
-                config_entry,
-                CONF_CREATE_HOMEASSISTANT_USER,
-                _CREATE_HOMEASSISTANT_USER_DEFAULT,
-            )
-        ),
-        CONF_DEVICE_UI_ENABLED: bool(
-            _config_default(config_entry, CONF_DEVICE_UI_ENABLED, False)
-        ),
-        CONF_ACTIONS: _config_default(config_entry, CONF_ACTIONS, {}),
-        CONF_DASHBOARD_PREVENT_RETURN: bool(
-            _config_default(
-                config_entry,
-                CONF_DASHBOARD_PREVENT_RETURN,
-                _DASHBOARD_PREVENT_RETURN_DEFAULT,
-            )
-        ),
-        CONF_DEVICE_ACTIVATION_MODE: _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_MODE,
-            DEVICE_ACTIVATION_MODE_AUTO,
-        ),
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-            DEFAULT_STAIR_LIGHT_ADDRESS,
-        ),
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-            DEFAULT_STAIR_LIGHT_P,
-        ),
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-            DEFAULT_STAIR_LIGHT_N,
-        ),
-    }
-
-
-def _reconfigure_connection_schema_from_current(
-    config_entry: config_entries.ConfigEntry,
-) -> vol.Schema:
-    """Return the reconfigure connection schema using effective entry values."""
-
-    current = _current_connection_options(config_entry)
-    return _reconfigure_connection_schema(
-        current[CONF_AGENT_HOST],
-        int(current[CONF_AGENT_PORT]),
-        current[CONF_AGENT_TOKEN],
-        current[CONF_MAINTENANCE_TOKEN],
-        current[CONF_CALLBACK_BASE_URL],
-    )
-
-
-def _reconfigure_features_schema_from_current(
-    config_entry: config_entries.ConfigEntry,
-) -> vol.Schema:
-    """Return the reconfigure features schema using effective entry values."""
-
-    current = _current_feature_options(config_entry)
-    return _reconfigure_features_schema(
-        bool(current[CONF_VIDEO_ENABLED]),
-        current[CONF_DEVICE_ACTIVATION_MODE],
-        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS],
-        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
-        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
-        default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
-        default_doorstation_audio_gain_db=float(
-            current[CONF_DOORSTATION_AUDIO_GAIN_DB]
-        ),
-        default_ring_capture_audio_gain_db=float(
-            current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
-        ),
-    )
-
-
-def _feature_input_defaults(
-    user_input: dict[str, Any],
-    defaults: dict[str, Any],
-) -> dict[str, Any]:
-    """Return feature input with hidden display fields preserved when absent."""
-
-    data = dict(user_input)
-    if CONF_CREATE_HOMEASSISTANT_USER not in data:
-        media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))
-        media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))
-        data[CONF_CREATE_HOMEASSISTANT_USER] = (
-            _CREATE_HOMEASSISTANT_USER_DEFAULT
-            if media_enabled and not media_was_enabled
-            else defaults.get(
-                CONF_CREATE_HOMEASSISTANT_USER,
-                _CREATE_HOMEASSISTANT_USER_DEFAULT,
-            )
-        )
-    data.setdefault(
-        CONF_DEVICE_ACTIVATION_MODE,
-        defaults.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO),
-    )
-    data.setdefault(
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-        defaults.get(
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-            DEFAULT_STAIR_LIGHT_ADDRESS,
-        ),
-    )
-    data.setdefault(
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P),
-    )
-    data.setdefault(
-        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-        defaults.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N),
-    )
-    data.setdefault(CONF_VIDEO_PORT, defaults.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT))
-    data.setdefault(
-        CONF_VIDEO_STREAM_PATH,
-        defaults.get(CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH),
-    )
-    data.setdefault(
-        CONF_DOORSTATION_AUDIO_GAIN_DB,
-        defaults.get(CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB),
-    )
-    data.setdefault(
-        CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-        defaults.get(
-            CONF_RING_CAPTURE_AUDIO_GAIN_DB,
-            DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-        ),
-    )
-    data.setdefault(
-        CONF_DEVICE_UI_ENABLED,
-        defaults.get(CONF_DEVICE_UI_ENABLED, False),
-    )
-    if not bool(data.get(CONF_DEVICE_UI_ENABLED, False)):
-        return data
-    data.setdefault(CONF_ALARM_ENTITY_ID, defaults[CONF_ALARM_ENTITY_ID])
-    data.setdefault(CONF_ALARM_PAGE_ENTITY_ID, defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""))
-    data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
-    data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
-    data.setdefault(
-        CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-        defaults.get(
-            CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
-            _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
-        ),
-    )
-    data.setdefault(
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-        defaults.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {}),
-    )
-    data.setdefault(CONF_ACTIONS_JSON, _actions_json(defaults[CONF_ACTIONS]))
-    data.setdefault(
-        CONF_DASHBOARD_PREVENT_RETURN,
-        defaults[CONF_DASHBOARD_PREVENT_RETURN],
-    )
-    return data
 
 
 def _clear_reconfigured_option_overrides(

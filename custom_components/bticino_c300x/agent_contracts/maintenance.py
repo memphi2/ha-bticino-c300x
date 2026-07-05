@@ -22,7 +22,6 @@ class AuthConfigStatus(AgentContract):
     ipv6_firewall_enabled: bool | None
     activations_enabled: bool | None
     activations_auto_discover: bool | None
-    activation_stair_light_address: str | None
 
 
 @dataclass(frozen=True, slots=True, eq=False)

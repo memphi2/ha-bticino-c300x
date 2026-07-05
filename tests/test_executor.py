@@ -83,7 +83,6 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
@@ -2091,9 +2090,9 @@ def test_async_trigger_stair_light_calls_agent_api() -> None:
     ]
 
 
-def test_async_trigger_stair_light_ignores_old_configured_address() -> None:
+def test_async_trigger_stair_light_uses_default_p_n_address() -> None:
     hass = FakeHass()
-    entry = FakeEntry(data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"})
+    entry = FakeEntry(data={})
 
     result = run(async_trigger_stair_light(hass, entry))
 
@@ -2116,12 +2115,9 @@ def test_async_trigger_stair_light_uses_configured_p_n_address() -> None:
     assert entry.runtime_data.api.last_stair_light_address == "21"
 
 
-def test_async_trigger_stair_light_ignores_old_option_address() -> None:
+def test_async_trigger_stair_light_uses_default_p_n_address_with_options() -> None:
     hass = FakeHass()
-    entry = FakeEntry(
-        data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"},
-        options={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "30#1"},
-    )
+    entry = FakeEntry(data={}, options={})
 
     result = run(async_trigger_stair_light(hass, entry))
 
@@ -2131,7 +2127,7 @@ def test_async_trigger_stair_light_ignores_old_option_address() -> None:
 
 def test_async_trigger_stair_light_accepts_override_address() -> None:
     hass = FakeHass()
-    entry = FakeEntry(data={CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1"})
+    entry = FakeEntry(data={})
 
     result = run(async_trigger_stair_light(hass, entry, "31"))
 

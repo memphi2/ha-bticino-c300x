@@ -15,9 +15,9 @@ from custom_components.bticino_c300x.const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -27,7 +27,6 @@ from custom_components.bticino_c300x.const import (
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     DATA_RUNTIME_ENTRIES,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DEVICE_ACTIVATION_MODE_MANUAL,
     DOMAIN,
 )
@@ -343,14 +342,21 @@ def test_device_user_and_activation_config_helpers() -> None:
         options={
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "",
         }
     )
 
     assert integration._entry_activation_config(entry) == (
         True,
         False,
-        DEFAULT_STAIR_LIGHT_ADDRESS,
+        [
+            {
+                "address": "10",
+                "addressMode": "manual",
+                "id": "stair_light",
+                "name": "Stair light",
+                "type": "stair_light",
+            }
+        ],
     )
 
 
@@ -358,20 +364,73 @@ def test_configure_device_activations_updates_only_when_needed() -> None:
     entry = _entry(
         options={
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "77",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "07",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "07",
         }
     )
     api = _ActivationApi(
         {
             "activations_enabled": True,
             "activations_auto_discover": True,
-            "activation_stair_light_address": "77",
         }
     )
 
     asyncio.run(integration._async_configure_device_activations(entry, api))
 
-    assert api.configured == [(True, False, "77")]
+    assert api.configured == [
+        (
+            True,
+            False,
+            [
+                {
+                    "address": "77",
+                    "addressMode": "manual",
+                    "id": "stair_light",
+                    "name": "Stair light",
+                    "type": "stair_light",
+                }
+            ],
+        )
+    ]
+
+
+def test_entry_activation_config_includes_additional_activation_items() -> None:
+    entry = _entry(
+        options={
+            CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "07",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "07",
+            CONF_DEVICE_ACTIVATIONS: [
+                {
+                    "id": "front_lock",
+                    "name": "Front lock",
+                    "type": "lock",
+                    "address": "10",
+                }
+            ],
+        }
+    )
+
+    assert integration._entry_activation_config(entry) == (
+        True,
+        False,
+        [
+            {
+                "address": "77",
+                "addressMode": "manual",
+                "id": "stair_light",
+                "name": "Stair light",
+                "type": "stair_light",
+            },
+            {
+                "address": "10",
+                "addressMode": "manual",
+                "id": "front_lock",
+                "name": "Front lock",
+                "type": "lock",
+            },
+        ],
+    )
 
 
 def test_configure_device_activations_uses_p_n_address() -> None:
@@ -386,8 +445,16 @@ def test_configure_device_activations_uses_p_n_address() -> None:
         {
             "activations_enabled": True,
             "activations_auto_discover": False,
-            "activation_stair_light_address": "21",
-        }
+        },
+        items=[
+            {
+                "address": "21",
+                "addressMode": "manual",
+                "id": "stair_light",
+                "name": "Stair light",
+                "type": "stair_light",
+            }
+        ],
     )
 
     asyncio.run(integration._async_configure_device_activations(entry, api))
@@ -407,8 +474,16 @@ def test_configure_device_activations_skips_unknown_manual_address() -> None:
         {
             "activations_enabled": True,
             "activations_auto_discover": False,
-            "activation_stair_light_address": None,
-        }
+        },
+        items=[
+            {
+                "address": "21",
+                "addressMode": "manual",
+                "id": "stair_light",
+                "name": "Stair light",
+                "type": "stair_light",
+            }
+        ],
     )
 
     asyncio.run(integration._async_configure_device_activations(entry, api))
@@ -420,7 +495,8 @@ def test_configure_device_activations_ignores_agent_errors() -> None:
     entry = _entry(
         options={
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "77",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "07",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "07",
         }
     )
     api = _ActivationApi({}, error=integration.C300XAgentApiError)
@@ -1076,25 +1152,39 @@ class _ActivationApi:
         self,
         status: dict[str, Any],
         *,
+        items: list[dict[str, Any]] | None = None,
         error: type[Exception] | None = None,
     ) -> None:
         self._status = status
+        self._items = list(items or [])
         self._error = error
-        self.configured: list[tuple[bool, bool, str]] = []
+        self.configured: list[tuple[bool, bool, list[dict[str, Any]]]] = []
 
     async def async_auth_config_status(self) -> dict[str, Any]:
         if self._error is not None:
             raise self._error("unsupported")
         return self._status
 
+    async def async_activations(self) -> dict[str, Any]:
+        if self._error is not None:
+            raise self._error("unsupported")
+        return {"items": [{"source": "config", **item} for item in self._items]}
+
     async def async_configure_device_activations(
         self,
         *,
         enabled: bool,
         auto_discover: bool,
-        stair_light_address: str,
+        items: list[dict[str, Any]],
     ) -> None:
-        self.configured.append((enabled, auto_discover, stair_light_address))
+        self.configured.append((enabled, auto_discover, items))
+        self._status.update(
+            {
+                "activations_enabled": enabled,
+                "activations_auto_discover": auto_discover,
+            }
+        )
+        self._items = list(items)
 
 
 class _DisplayBridgeApi:

@@ -754,6 +754,71 @@ static int parse_activation_discovery_roots(
     return 1;
 }
 
+static int parse_activation_items_value(
+    const char *value,
+    const char *document_end,
+    struct c300x_config *config,
+    char *error,
+    size_t error_len
+)
+{
+    const char *array_end;
+    const char *ptr;
+    const char *item;
+    const char *item_end;
+
+    if (!array_bounds(value, document_end, &array_end)) {
+        set_error(error, error_len, "activations.items must be an array");
+        return 0;
+    }
+    config->activations_count = 0;
+    ptr = skip_ws(value, array_end);
+    if (ptr < array_end && *ptr == '[') {
+        ptr++;
+    }
+    while ((ptr = next_array_value(ptr, array_end, &item, &item_end)) != NULL) {
+        (void)item_end;
+        if (config->activations_count >= C300X_MAX_ACTIVATIONS) {
+            set_error(error, error_len, "too many activations configured");
+            return 0;
+        }
+        if (!parse_activation_item(
+            item,
+            document_end,
+            &config->activations[config->activations_count],
+            error,
+            error_len
+        )) {
+            return 0;
+        }
+        config->activations_count++;
+    }
+    return 1;
+}
+
+int c300x_config_set_activation_items_json(
+    struct c300x_config *config,
+    const char *items_json,
+    char *error,
+    size_t error_len
+)
+{
+    const char *document_end;
+
+    if (items_json == NULL) {
+        set_error(error, error_len, "activations.items must be an array");
+        return 0;
+    }
+    document_end = items_json + strlen(items_json);
+    return parse_activation_items_value(
+        items_json,
+        document_end,
+        config,
+        error,
+        error_len
+    );
+}
+
 int c300x_load_config(
     const char *config_path,
     struct c300x_config *config,
@@ -918,39 +983,15 @@ int c300x_load_config(
         }
     }
     if (nested_member(document, document_end, "activations", "items", &value)) {
-        const char *array_end;
-        const char *ptr;
-        const char *item;
-        const char *item_end;
-
-        if (!array_bounds(value, document_end, &array_end)) {
-            set_error(error, error_len, "activations.items must be an array");
+        if (!parse_activation_items_value(
+            value,
+            document_end,
+            config,
+            error,
+            error_len
+        )) {
             free(document);
             return 0;
-        }
-        config->activations_count = 0;
-        ptr = skip_ws(value, array_end);
-        if (ptr < array_end && *ptr == '[') {
-            ptr++;
-        }
-        while ((ptr = next_array_value(ptr, array_end, &item, &item_end)) != NULL) {
-            (void)item_end;
-            if (config->activations_count >= C300X_MAX_ACTIVATIONS) {
-                set_error(error, error_len, "too many activations configured");
-                free(document);
-                return 0;
-            }
-            if (!parse_activation_item(
-                item,
-                document_end,
-                &config->activations[config->activations_count],
-                error,
-                error_len
-            )) {
-                free(document);
-                return 0;
-            }
-            config->activations_count++;
         }
     }
     if (nested_member(document, document_end, "locks", "releaseDelayMs", &value)) {

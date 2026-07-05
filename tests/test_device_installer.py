@@ -138,7 +138,8 @@ def test_bootstrap_device_config_supports_manual_stair_light_activation() -> Non
             maintenance_token="maintenance-token",
             agent_port=8091,
             device_activation_mode=DEVICE_ACTIVATION_MODE_MANUAL,
-            device_activation_stair_light_address="12",
+            device_activation_stair_light_p="01",
+            device_activation_stair_light_n="02",
         )
     )
 
@@ -151,6 +152,36 @@ def test_bootstrap_device_config_supports_manual_stair_light_activation() -> Non
             "id": "stair_light",
             "name": "Stair light",
             "type": "stair_light",
+        }
+    ]
+
+
+def test_bootstrap_device_config_supports_additional_activation_items() -> None:
+    config = json.loads(
+        _device_config_json(
+            api_token="api-token",
+            maintenance_token="maintenance-token",
+            agent_port=8091,
+            device_activations=[
+                {
+                    "id": "front_lock",
+                    "name": "Front lock",
+                    "type": "lock",
+                    "address": "10",
+                }
+            ],
+        )
+    )
+
+    assert config["activations"]["enabled"] is True
+    assert config["activations"]["autoDiscover"] is True
+    assert config["activations"]["items"] == [
+        {
+            "address": "10",
+            "addressMode": "manual",
+            "id": "front_lock",
+            "name": "Front lock",
+            "type": "lock",
         }
     ]
 

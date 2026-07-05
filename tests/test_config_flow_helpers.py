@@ -105,12 +105,6 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     _connection_input,
     _current_connection_options,
     _current_feature_options,
-    _dashboard_entity_display_form_complete,
-    _dashboard_entity_display_schema,
-    _dashboard_input_defaults,
-    _dashboard_schema,
-    _dashboard_entity_ids,
-    _dashboard_entity_display_overrides,
     _feature_input,
     _feature_input_defaults,
     _non_empty_string,
@@ -130,11 +124,16 @@ from custom_components.bticino_c300x.config_flow import (  # noqa: E402
 from custom_components.bticino_c300x import config_flow as config_flow_module  # noqa: E402
 from custom_components.bticino_c300x.api import C300XAgentApiConnectionError  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
+    dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
+    dashboard_entity_display_overrides as _dashboard_entity_display_overrides,
+    dashboard_entity_display_schema as _dashboard_entity_display_schema,
+    dashboard_entity_ids as _dashboard_entity_ids,
     _dashboard_entity_name_display,
     _dashboard_entity_secondary_info,
+    dashboard_input_defaults as _dashboard_input_defaults,
+    dashboard_schema as _dashboard_schema,
 )
 from custom_components.bticino_c300x.config_schemas import (  # noqa: E402
-    stair_light_address as _stair_light_address,
     stair_light_n as _stair_light_n,
     stair_light_p as _stair_light_p,
 )
@@ -155,8 +154,13 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
+    CONF_DEVICE_ACTIVATION_FLOW_ACTION,
+    CONF_DEVICE_ACTIVATION_ITEM_ADDRESS,
+    CONF_DEVICE_ACTIVATION_ITEM_ID,
+    CONF_DEVICE_ACTIVATION_ITEM_NAME,
+    CONF_DEVICE_ACTIVATION_ITEM_TYPE,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_UI_ENABLED,
@@ -174,8 +178,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEVICE_ACTIVATION_FLOW_ACTION_ADD,
+    DEVICE_ACTIVATION_FLOW_ACTION_DONE,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
 )
@@ -235,10 +240,6 @@ def test_probe_agent_requires_event_subscription_endpoint(
     ]
 
 
-def test_stair_light_address_accepts_firmware_default() -> None:
-    assert _stair_light_address(DEFAULT_STAIR_LIGHT_ADDRESS) == DEFAULT_STAIR_LIGHT_ADDRESS
-
-
 def test_stair_light_address_parts_match_firmware_default() -> None:
     result = _feature_input(
         {
@@ -249,10 +250,9 @@ def test_stair_light_address_parts_match_firmware_default() -> None:
 
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "01"
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "00"
-    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == DEFAULT_STAIR_LIGHT_ADDRESS
 
 
-def test_stair_light_address_parts_build_openwebnet_where() -> None:
+def test_stair_light_address_parts_preserve_parts() -> None:
     result = _feature_input(
         {
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
@@ -260,7 +260,8 @@ def test_stair_light_address_parts_build_openwebnet_where() -> None:
         }
     )[0]
 
-    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
+    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "01"
 
 
 @pytest.mark.parametrize(
@@ -285,12 +286,6 @@ def test_feature_schemas_are_serializable_for_home_assistant_forms() -> None:
 
     voluptuous_serialize.convert(_setup_features_schema(False))
     voluptuous_serialize.convert(_reconfigure_features_schema(False))
-
-
-@pytest.mark.parametrize("value", ["", "../bad", "abc", "10;reboot"])
-def test_stair_light_address_rejects_unsafe_values(value: str) -> None:
-    with pytest.raises(vol.Invalid):
-        _stair_light_address(value)
 
 
 def test_non_empty_string_strips_input() -> None:
@@ -558,7 +553,6 @@ def test_setup_schema_defers_agent_tokens_to_auth_page() -> None:
 
     assert CONF_AGENT_TOKEN not in result
     assert CONF_DEVICE_ACTIVATION_MODE not in result
-    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in result
     assert result[CONF_CALLBACK_BASE_URL] == ""
 
 
@@ -614,7 +608,6 @@ def test_reconfigure_schema_preserves_defaults() -> None:
     )
     features = feature_schema({})
 
-    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in connection
     assert connection[CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
@@ -643,7 +636,6 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
     assert result[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
-    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in result
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
     assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
 
@@ -995,13 +987,18 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             }
         )
     )
-    dashboard_form = asyncio.run(
+    activation_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: True,
                 CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
             }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_user_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
     entity_display_form = asyncio.run(
@@ -1028,6 +1025,7 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
 
     assert auth_form["step_id"] == "agent_auth"
     assert feature_form["step_id"] == "user_features"
+    assert activation_form["step_id"] == "user_device_activations"
     assert dashboard_form["step_id"] == "user_dashboard"
     assert entity_display_form["step_id"] == "user_dashboard_entity_display"
     assert result["type"] == "create_entry"
@@ -1494,7 +1492,7 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
             )
         )
     )
-    feature_form = asyncio.run(
+    activation_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
@@ -1502,10 +1500,16 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
             }
         )
     )
+    feature_form = asyncio.run(
+        flow.async_step_user_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
+        )
+    )
     result = asyncio.run(
         flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: False})
     )
 
+    assert activation_form["step_id"] == "user_device_activations"
     assert feature_form["step_id"] == "user_dashboard"
     assert result["title"] == "Door Station"
     assert calls == [
@@ -1689,7 +1693,7 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
     )
 
     asyncio.run(flow._async_adopt_agent_unique_id(api_token="known-token"))
-    feature_form = asyncio.run(
+    activation_form = asyncio.run(
         flow.async_step_user_features(
             {
                 CONF_DEVICE_UI_ENABLED: False,
@@ -1697,10 +1701,16 @@ def test_installer_adopts_agent_mdns_id_and_aborts_parallel_discovery(
             }
         )
     )
+    feature_form = asyncio.run(
+        flow.async_step_user_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
+        )
+    )
     result = asyncio.run(
         flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: False})
     )
 
+    assert activation_form["step_id"] == "user_device_activations"
     assert feature_form["step_id"] == "user_dashboard"
     assert result["title"] == "BTicino C300X"
     assert calls == [
@@ -1830,7 +1840,6 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             },
             CONF_DASHBOARD_PREVENT_RETURN: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "20#1",
         },
     )
 
@@ -1848,7 +1857,6 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert connection_with_callback[CONF_CALLBACK_BASE_URL] == (
         "http://192.0.2.11:8123"
     )
-    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in connection
     assert CONF_ALARM_ENTITY_ID not in features
     assert CONF_WEATHER_ENTITY_ID not in features
     assert features[CONF_VIDEO_ENABLED] is True
@@ -1860,7 +1868,6 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_DEVICE_UI_ENABLED not in features
     assert CONF_DASHBOARD_PREVENT_RETURN not in features
     assert features[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
-    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS not in features
     assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
     assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
@@ -2196,7 +2203,6 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
             CONF_ALARM_ENTITY_ID: "",
             CONF_WEATHER_ENTITY_ID: "",
             CONF_DASHBOARD_ENTITIES: [],
@@ -2227,7 +2233,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             }
         )
     )
-    dashboard_form = asyncio.run(
+    activation_form = asyncio.run(
         flow.async_step_features(
             {
                 CONF_VIDEO_ENABLED: True,
@@ -2237,6 +2243,26 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
             }
+        )
+    )
+    activation_item_form = asyncio.run(
+        flow.async_step_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD}
+        )
+    )
+    activation_manage_form = asyncio.run(
+        flow.async_step_device_activation_item(
+            {
+                CONF_DEVICE_ACTIVATION_ITEM_ID: "front_lock",
+                CONF_DEVICE_ACTIVATION_ITEM_NAME: "Front lock",
+                CONF_DEVICE_ACTIVATION_ITEM_TYPE: "lock",
+                CONF_DEVICE_ACTIVATION_ITEM_ADDRESS: "10",
+            }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
     entity_options_form = asyncio.run(
@@ -2262,6 +2288,9 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     )
 
     assert connection_form["step_id"] == "features"
+    assert activation_form["step_id"] == "device_activations"
+    assert activation_item_form["step_id"] == "device_activation_item"
+    assert activation_manage_form["step_id"] == "device_activations"
     assert dashboard_form["step_id"] == "dashboard"
     assert entity_options_form["step_id"] == "dashboard_entity_display"
     assert result["type"] == "create_entry"
@@ -2272,9 +2301,17 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
     assert result["data"][CONF_RING_CAPTURE_AUDIO_GAIN_DB] == 2.5
     assert result["data"][CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
-    assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "21"
     assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
     assert result["data"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "01"
+    assert result["data"][CONF_DEVICE_ACTIVATIONS] == [
+        {
+            "address": "10",
+            "addressMode": "manual",
+            "id": "front_lock",
+            "name": "Front lock",
+            "type": "lock",
+        }
+    ]
     assert result["data"][CONF_DEVICE_UI_ENABLED] is True
     assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"
@@ -2308,7 +2345,6 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
             CONF_ALARM_ENTITY_ID: "",
@@ -2369,7 +2405,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             }
         )
     )
-    dashboard_form = asyncio.run(
+    activation_form = asyncio.run(
         flow.async_step_reconfigure_features(
             {
                 CONF_VIDEO_ENABLED: True,
@@ -2378,6 +2414,26 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
                 CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "03",
             }
+        )
+    )
+    activation_item_form = asyncio.run(
+        flow.async_step_reconfigure_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD}
+        )
+    )
+    activation_manage_form = asyncio.run(
+        flow.async_step_reconfigure_device_activation_item(
+            {
+                CONF_DEVICE_ACTIVATION_ITEM_ID: "front_lock",
+                CONF_DEVICE_ACTIVATION_ITEM_NAME: "Front lock",
+                CONF_DEVICE_ACTIVATION_ITEM_TYPE: "lock",
+                CONF_DEVICE_ACTIVATION_ITEM_ADDRESS: "10",
+            }
+        )
+    )
+    dashboard_form = asyncio.run(
+        flow.async_step_reconfigure_device_activations(
+            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
     entity_display_form = asyncio.run(
@@ -2405,6 +2461,9 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     )
 
     assert features_form["step_id"] == "reconfigure_features"
+    assert activation_form["step_id"] == "reconfigure_device_activations"
+    assert activation_item_form["step_id"] == "reconfigure_device_activation_item"
+    assert activation_manage_form["step_id"] == "reconfigure_device_activations"
     assert dashboard_form["step_id"] == "reconfigure_dashboard"
     assert entity_display_form["step_id"] == "reconfigure_dashboard_entity_display"
     assert result["type"] == "abort"
@@ -2412,7 +2471,17 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_AGENT_PORT] == 8092
     assert result["data_updates"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.20:8123"
     assert result["data_updates"][CONF_CREATE_HOMEASSISTANT_USER] is True
-    assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS] == "23"
+    assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == "02"
+    assert result["data_updates"][CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == "03"
+    assert result["data_updates"][CONF_DEVICE_ACTIVATIONS] == [
+        {
+            "address": "10",
+            "addressMode": "manual",
+            "id": "front_lock",
+            "name": "Front lock",
+            "type": "lock",
+        }
+    ]
     assert result["data_updates"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert result["data_updates"][CONF_DASHBOARD_DYNAMIC_HOMEPAGE] is False
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
@@ -2531,7 +2600,6 @@ def test_options_flow_init_and_missing_state_redirect_to_current_pages() -> None
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
             CONF_ALARM_ENTITY_ID: "",
@@ -2626,7 +2694,6 @@ def test_reconfigure_missing_state_redirects_to_current_pages() -> None:
             CONF_VIDEO_ENABLED: False,
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: DEFAULT_STAIR_LIGHT_ADDRESS,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: DEFAULT_STAIR_LIGHT_P,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: DEFAULT_STAIR_LIGHT_N,
             CONF_ALARM_ENTITY_ID: "",

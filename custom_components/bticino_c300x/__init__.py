@@ -30,9 +30,9 @@ from .const import (
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -50,6 +50,10 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
+from .device_activations import (
+    activation_items_match,
+    desired_activation_items,
+)
 from .device_user import (
     device_user_bootstrap_needed,
     device_user_bootstrap_satisfied,
@@ -562,24 +566,23 @@ async def _async_configure_device_activations(
 ) -> None:
     """Synchronize configured C300X activation discovery with the native agent."""
 
-    enabled, auto_discover, stair_light_address = _entry_activation_config(entry)
+    enabled, auto_discover, items = _entry_activation_config(entry)
     try:
         status = await api.async_auth_config_status()
         current_enabled = status.get("activations_enabled")
         current_auto_discover = status.get("activations_auto_discover")
-        current_stair_light_address = status.get("activation_stair_light_address")
         if current_enabled is None or current_auto_discover is None:
             return
         if (
             current_enabled is enabled
             and current_auto_discover is auto_discover
-            and (auto_discover or current_stair_light_address in {None, stair_light_address})
+            and await _async_device_activation_items_match(api, items)
         ):
             return
         await api.async_configure_device_activations(
             enabled=enabled,
             auto_discover=auto_discover,
-            stair_light_address=stair_light_address,
+            items=items,
         )
     except C300XAgentApiUnsupportedError:
         _LOGGER.debug("C300X device agent does not support activation configuration")
@@ -590,7 +593,30 @@ async def _async_configure_device_activations(
         )
 
 
-def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool, str]:
+async def _async_device_activation_items_match(
+    api: C300XAgentApi,
+    desired_items: list[dict[str, Any]],
+) -> bool:
+    """Return true when the agent already reports the desired configured items."""
+
+    try:
+        activations = await api.async_activations()
+    except C300XAgentApiError:
+        return False
+    items = activations.get("items")
+    if not isinstance(items, list):
+        return False
+    configured_items = [
+        item
+        for item in items
+        if isinstance(item, dict) and item.get("source") == "config"
+    ]
+    return activation_items_match(desired_items, configured_items)
+
+
+def _entry_activation_config(
+    entry: BticinoC300XConfigEntry,
+) -> tuple[bool, bool, list[dict[str, Any]]]:
     """Return the desired native-agent activation configuration."""
 
     mode = str(
@@ -603,14 +629,13 @@ def _entry_activation_config(entry: BticinoC300XConfigEntry) -> tuple[bool, bool
     auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
     p_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
     n_value = _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, "")
-    if str(p_value or "").strip() or str(n_value or "").strip():
-        address = stair_light_where_from_entry_values(p_value, n_value)
-    else:
-        address = str(
-            _entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS, "")
-            or ""
-        ).strip() or stair_light_where_from_entry_values("", "")
-    return True, auto_discover, address
+    address = stair_light_where_from_entry_values(p_value, n_value)
+    items = desired_activation_items(
+        mode=mode,
+        stair_light_address=address,
+        device_activations=_entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, []),
+    )
+    return True, auto_discover, items
 
 
 async def _async_configure_display_bridge(

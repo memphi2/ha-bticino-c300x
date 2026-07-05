@@ -30,7 +30,9 @@ from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
@@ -414,13 +416,21 @@ def test_configure_device_activations_writes_only_on_mismatch() -> None:
         {
             "activations_enabled": True,
             "activations_auto_discover": True,
-            "activation_stair_light_address": "",
         }
     )
     entry = SimpleNamespace(
         data={
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: "12",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "01",
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "02",
+            CONF_DEVICE_ACTIVATIONS: [
+                {
+                    "id": "front_lock",
+                    "name": "Front lock",
+                    "type": "lock",
+                    "address": "10",
+                }
+            ],
         },
         options={},
     )
@@ -430,8 +440,59 @@ def test_configure_device_activations_writes_only_on_mismatch() -> None:
 
     assert api.calls == [
         ("status",),
-        ("configure", True, False, "12"),
+        (
+            "configure",
+            True,
+            False,
+            (
+                (
+                    (
+                        "address",
+                        "12",
+                    ),
+                    (
+                        "addressMode",
+                        "manual",
+                    ),
+                    (
+                        "id",
+                        "stair_light",
+                    ),
+                    (
+                        "name",
+                        "Stair light",
+                    ),
+                    (
+                        "type",
+                        "stair_light",
+                    ),
+                ),
+                (
+                    (
+                        "address",
+                        "10",
+                    ),
+                    (
+                        "addressMode",
+                        "manual",
+                    ),
+                    (
+                        "id",
+                        "front_lock",
+                    ),
+                    (
+                        "name",
+                        "Front lock",
+                    ),
+                    (
+                        "type",
+                        "lock",
+                    ),
+                ),
+            ),
+        ),
         ("status",),
+        ("activations",),
     ]
 
 
@@ -449,16 +510,25 @@ class _FakeActivationConfigApi:
         *,
         enabled: bool,
         auto_discover: bool,
-        stair_light_address: str,
+        items: list[dict[str, object]],
     ) -> dict[str, object]:
-        self.calls.append(("configure", enabled, auto_discover, stair_light_address))
+        self.calls.append(
+            (
+                "configure",
+                enabled,
+                auto_discover,
+                tuple(tuple(sorted(item.items())) for item in items),
+            )
+        )
         self.status.update(
             {
                 "activations_enabled": enabled,
                 "activations_auto_discover": auto_discover,
-                "activation_stair_light_address": (
-                    "" if auto_discover else stair_light_address
-                ),
+                "items": [{"source": "config", **item} for item in items],
             }
         )
         return dict(self.status)
+
+    async def async_activations(self) -> dict[str, object]:
+        self.calls.append(("activations",))
+        return {"items": self.status.get("items", [])}

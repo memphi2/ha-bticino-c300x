@@ -155,6 +155,12 @@ int c300x_load_config(
     char *error,
     size_t error_len
 );
+int c300x_config_set_activation_items_json(
+    struct c300x_config *config,
+    const char *items_json,
+    char *error,
+    size_t error_len
+);
 int c300x_save_config_if_changed(
     const struct c300x_config *config,
     char *error,

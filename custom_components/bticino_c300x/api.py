@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from base64 import b64encode
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -57,6 +57,7 @@ from .const import (
     HEADER_MAINTENANCE_TOKEN,
     SMARTPHONE_FORWARDING_MODES,
 )
+from .device_activations import activation_items_json
 from .fingerprint import fnv1a64_fingerprint
 from .forwarding import coerce_forwarding_mode_state
 from .validation_patterns import ACTIVATION_ID_RE
@@ -588,18 +589,15 @@ class C300XAgentApi:
         *,
         enabled: bool,
         auto_discover: bool,
-        stair_light_address: str,
+        items: Sequence[Mapping[str, Any]],
     ) -> AuthConfigStatus:
         """Configure native-agent C300X activation discovery."""
 
         payload: dict[str, Any] = {
             "activationsEnabled": bool(enabled),
             "activationsAutoDiscover": bool(auto_discover),
+            "activationItemsJson": activation_items_json(items),
         }
-        if not auto_discover:
-            payload["activationStairLightAddress"] = normalize_stair_light_address(
-                stair_light_address
-            )
         data = await self._request_json(
             "POST",
             "/api/v1/maintenance/auth",
@@ -1519,9 +1517,6 @@ def normalize_auth_config_status(data: Any) -> AuthConfigStatus:
         ipv6_firewall_enabled=_optional_bool(data.get("ipv6_firewall_enabled")),
         activations_enabled=_optional_bool(data.get("activations_enabled")),
         activations_auto_discover=_optional_bool(data.get("activations_auto_discover")),
-        activation_stair_light_address=_optional_string(
-            data.get("activation_stair_light_address")
-        ),
     )
 
 

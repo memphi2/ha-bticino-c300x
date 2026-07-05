@@ -46,9 +46,26 @@
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "device_activation_stair_light_p": "Treppenlicht-Adresse P",
           "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+        }
+      },
+      "user_device_activations": {
+        "title": "Zusaetzliche Geraeteaktivierungen",
+        "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "data": {
+          "device_activation_flow_action": "Aktion",
+          "device_activation_flow_target": "Aktivierung"
+        }
+      },
+      "user_device_activation_item": {
+        "title": "Geraeteaktivierung",
+        "description": "Konfiguriert einen adressbasierten Aktivierungsbutton.",
+        "data": {
+          "device_activation_item_id": "Button-ID",
+          "device_activation_item_name": "Button-Name",
+          "device_activation_item_type": "Button-Typ",
+          "device_activation_item_address": "Aktivierungsadresse"
         }
       },
       "user_dashboard": {
@@ -93,9 +110,26 @@
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "device_activation_stair_light_p": "Treppenlicht-Adresse P",
           "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+        }
+      },
+      "reconfigure_device_activations": {
+        "title": "Zusaetzliche Geraeteaktivierungen",
+        "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "data": {
+          "device_activation_flow_action": "Aktion",
+          "device_activation_flow_target": "Aktivierung"
+        }
+      },
+      "reconfigure_device_activation_item": {
+        "title": "Geraeteaktivierung",
+        "description": "Konfiguriert einen adressbasierten Aktivierungsbutton.",
+        "data": {
+          "device_activation_item_id": "Button-ID",
+          "device_activation_item_name": "Button-Name",
+          "device_activation_item_type": "Button-Typ",
+          "device_activation_item_address": "Aktivierungsadresse"
         }
       },
       "reconfigure_dashboard": {
@@ -136,6 +170,7 @@
       "invalid_alarm_page_entity": "Waehle eine unterstuetzte Dashboard-Entitaet fuer die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
+      "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
       "required": "Dieses Feld ist erforderlich."
     }
@@ -165,9 +200,26 @@
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
           "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_address": "Manuelle Treppenlicht-Aktivierungsadresse",
           "device_activation_stair_light_p": "Treppenlicht-Adresse P",
           "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+        }
+      },
+      "device_activations": {
+        "title": "Zusaetzliche Geraeteaktivierungen",
+        "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
+        "data": {
+          "device_activation_flow_action": "Aktion",
+          "device_activation_flow_target": "Aktivierung"
+        }
+      },
+      "device_activation_item": {
+        "title": "Geraeteaktivierung",
+        "description": "Konfiguriert einen adressbasierten Aktivierungsbutton.",
+        "data": {
+          "device_activation_item_id": "Button-ID",
+          "device_activation_item_name": "Button-Name",
+          "device_activation_item_type": "Button-Typ",
+          "device_activation_item_address": "Aktivierungsadresse"
         }
       },
       "dashboard": {
@@ -198,6 +250,7 @@
       "invalid_alarm_page_entity": "Waehle eine unterstuetzte Dashboard-Entitaet fuer die Alarmseite oder lasse das Feld leer.",
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
+      "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein."
     }
   },

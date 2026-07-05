@@ -33,11 +33,14 @@ from .const import (
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
     DEFAULT_AGENT_PORT,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEFAULT_STAIR_LIGHT_N,
+    DEFAULT_STAIR_LIGHT_P,
     DEVICE_ACTIVATION_MODE_AUTO,
     DOMAIN,
     SIGNAL_AGENT_INFO_CHANGED,
@@ -514,12 +517,23 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                             DEVICE_ACTIVATION_MODE_AUTO,
                         )
                     ),
-                    device_activation_stair_light_address=str(
+                    device_activation_stair_light_p=str(
                         entry_config_value(
                             entry,
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
-                            DEFAULT_STAIR_LIGHT_ADDRESS,
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                            DEFAULT_STAIR_LIGHT_P,
                         )
+                    ),
+                    device_activation_stair_light_n=str(
+                        entry_config_value(
+                            entry,
+                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                            DEFAULT_STAIR_LIGHT_N,
+                        )
+                    ),
+                    device_activations=tuple(
+                        entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, [])
+                        or []
                     ),
                 ),
                 api_token=str(entry_config_value(entry, CONF_AGENT_TOKEN, "")),

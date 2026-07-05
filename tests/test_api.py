@@ -554,7 +554,15 @@ def test_api_maintenance_auth_methods_include_safe_payloads_and_headers() -> Non
         api.async_configure_device_activations(
             enabled=True,
             auto_discover=False,
-            stair_light_address="22",
+            items=[
+                {
+                    "id": "stair_light",
+                    "name": "Stair light",
+                    "type": "stair_light",
+                    "addressMode": "manual",
+                    "address": "22",
+                }
+            ],
         )
     )["maintenance_enabled"] is True
     assert asyncio.run(api.async_set_ipv6_firewall_enabled(True))["ipv6_firewall_enabled"] is True
@@ -580,7 +588,10 @@ def test_api_maintenance_auth_methods_include_safe_payloads_and_headers() -> Non
         {
             "activationsEnabled": True,
             "activationsAutoDiscover": False,
-            "activationStairLightAddress": "22",
+            "activationItemsJson": (
+                '[{"id":"stair_light","name":"Stair light",'
+                '"type":"stair_light","addressMode":"manual","address":"22"}]'
+            ),
         },
         {"ipv6FirewallEnabled": True, "maintenanceEnabled": True},
         {"firewallEnabled": True, "maintenanceEnabled": True},
@@ -1078,8 +1089,7 @@ def test_auth_config_status_uses_maintenance_endpoint() -> None:
         '"maintenance_token_configured": true, "restart_required": true, '
         '"maintenance_no_auth_allowed": false, "mdns_enabled": true, '
         '"firewall_enabled": false, "ipv6_firewall_enabled": true, '
-        '"activations_enabled": true, "activations_auto_discover": false, '
-        '"activation_stair_light_address": "10"}'
+        '"activations_enabled": true, "activations_auto_discover": false}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1100,7 +1110,6 @@ def test_auth_config_status_uses_maintenance_endpoint() -> None:
     assert status["ipv6_firewall_enabled"] is True
     assert status["activations_enabled"] is True
     assert status["activations_auto_discover"] is False
-    assert status["activation_stair_light_address"] == "10"
     assert session.requests[0]["args"] == (
         "GET",
         "http://agent.local:8080/api/v1/maintenance/auth",
@@ -1168,8 +1177,7 @@ def test_set_mdns_discovery_sends_maintenance_update() -> None:
 def test_configure_device_activations_sends_maintenance_update() -> None:
     session = _FakeSession(
         '{"ok": true, "activations_enabled": true, '
-        '"activations_auto_discover": false, '
-        '"activation_stair_light_address": "10"}'
+        '"activations_auto_discover": false}'
     )
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1182,13 +1190,20 @@ def test_configure_device_activations_sends_maintenance_update() -> None:
         api.async_configure_device_activations(
             enabled=True,
             auto_discover=False,
-            stair_light_address="10",
+            items=[
+                {
+                    "id": "front_lock",
+                    "name": "Front lock",
+                    "type": "lock",
+                    "addressMode": "manual",
+                    "address": "10",
+                }
+            ],
         )
     )
 
     assert status["activations_enabled"] is True
     assert status["activations_auto_discover"] is False
-    assert status["activation_stair_light_address"] == "10"
     assert session.requests[0]["args"] == (
         "POST",
         "http://agent.local:8080/api/v1/maintenance/auth",
@@ -1200,7 +1215,10 @@ def test_configure_device_activations_sends_maintenance_update() -> None:
     assert session.requests[0]["kwargs"]["json"] == {
         "activationsEnabled": True,
         "activationsAutoDiscover": False,
-        "activationStairLightAddress": "10",
+        "activationItemsJson": (
+            '[{"id":"front_lock","name":"Front lock","type":"lock",'
+            '"addressMode":"manual","address":"10"}]'
+        ),
     }
 
 

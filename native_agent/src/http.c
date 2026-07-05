@@ -274,13 +274,6 @@ static int auth_config_requires_restart(
     const struct c300x_config *current,
     const struct c300x_config *updated
 );
-static const char *configured_stair_light_activation_address(
-    const struct c300x_config *config
-);
-static void configure_stair_light_activation(
-    struct c300x_config *config,
-    const char *address
-);
 static void handle_ui_homeassistant(
     int client_fd,
     const struct c300x_config *config,
@@ -4082,7 +4075,6 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
     char listen_host[C300X_JSON_QUOTED_LEN(C300X_MAX_HOST_LEN)];
     char ui_listen_host[C300X_JSON_QUOTED_LEN(sizeof(C300X_UI_LISTEN_HOST))];
     char stair_address[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
-    char activation_stair_address[C300X_JSON_QUOTED_LEN(C300X_MAX_ADDRESS_LEN)];
     char api_token_fingerprint[C300X_TOKEN_FINGERPRINT_LEN] = "";
     char maintenance_token_fingerprint[C300X_TOKEN_FINGERPRINT_LEN] = "";
     char api_token_fingerprint_json[C300X_JSON_QUOTED_LEN(C300X_TOKEN_FINGERPRINT_LEN)];
@@ -4092,11 +4084,6 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
     json_string(config->listen_host, listen_host, sizeof(listen_host));
     json_string(C300X_UI_LISTEN_HOST, ui_listen_host, sizeof(ui_listen_host));
     json_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
-    json_string(
-        configured_stair_light_activation_address(config),
-        activation_stair_address,
-        sizeof(activation_stair_address)
-    );
     if (config->api_token[0] != '\0') {
         fnv1a64_fingerprint(config->api_token, api_token_fingerprint, sizeof(api_token_fingerprint));
     }
@@ -4144,8 +4131,7 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         "\"video_messages_enabled\":%s,"
         "\"system_metrics_enabled\":%s,"
         "\"activations_enabled\":%s,"
-        "\"activations_auto_discover\":%s,"
-        "\"activation_stair_light_address\":%s"
+        "\"activations_auto_discover\":%s"
         "}\n",
         config->api_no_auth ? "true" : "false",
         config->api_no_auth ? "true" : "false",
@@ -4173,8 +4159,7 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         config->answering_machine_messages_enabled ? "true" : "false",
         config->system_metrics_enabled ? "true" : "false",
         config->activations_enabled ? "true" : "false",
-        config->activations_auto_discover ? "true" : "false",
-        activation_stair_address
+        config->activations_auto_discover ? "true" : "false"
     );
     send_json(client_fd, 200, "OK", body);
 }
@@ -4206,38 +4191,6 @@ static void maybe_json_string_field(
     }
 }
 
-static const char *configured_stair_light_activation_address(
-    const struct c300x_config *config
-)
-{
-    for (int index = 0; index < config->activations_count; index++) {
-        const struct c300x_activation *activation = &config->activations[index];
-        if (strcmp(activation->id, "stair_light") == 0) {
-            return activation->address;
-        }
-    }
-    return "";
-}
-
-static void configure_stair_light_activation(
-    struct c300x_config *config,
-    const char *address
-)
-{
-    struct c300x_activation *activation;
-
-    config->activations_enabled = 1;
-    config->activations_auto_discover = 0;
-    config->activations_count = 1;
-    memset(config->activations, 0, sizeof(config->activations));
-    activation = &config->activations[0];
-    snprintf(activation->id, sizeof(activation->id), "%s", "stair_light");
-    snprintf(activation->name, sizeof(activation->name), "%s", "Stair light");
-    snprintf(activation->type, sizeof(activation->type), "%s", "stair_light");
-    snprintf(activation->address_mode, sizeof(activation->address_mode), "%s", "manual");
-    snprintf(activation->address, sizeof(activation->address), "%s", address);
-}
-
 static int auth_config_requires_restart(
     const struct c300x_config *current,
     const struct c300x_config *updated
@@ -4252,8 +4205,15 @@ static int auth_config_requires_restart(
         || current->video_enabled != updated->video_enabled
         || current->memos_enabled != updated->memos_enabled
         || current->answering_machine_messages_enabled != updated->answering_machine_messages_enabled
-        || current->system_metrics_enabled != updated->system_metrics_enabled
-        || current->activations_enabled != updated->activations_enabled
+        || current->system_metrics_enabled != updated->system_metrics_enabled;
+}
+
+static int auth_config_activations_changed(
+    const struct c300x_config *current,
+    const struct c300x_config *updated
+)
+{
+    return current->activations_enabled != updated->activations_enabled
         || current->activations_auto_discover != updated->activations_auto_discover
         || current->activations_count != updated->activations_count
         || memcmp(current->activations, updated->activations, sizeof(current->activations)) != 0;
@@ -4292,7 +4252,7 @@ static void handle_auth_config_post(
     char maintenance_token[C300X_MAX_TOKEN_LEN];
     char listen_host[C300X_MAX_HOST_LEN];
     char stair_address[C300X_MAX_ADDRESS_LEN];
-    char activation_stair_address[C300X_MAX_ADDRESS_LEN];
+    char activation_items_json[8192];
     char error[C300X_MAX_ERROR_LEN];
     int value = 0;
     int port_result = 0;
@@ -4419,17 +4379,25 @@ static void handle_auth_config_post(
     }
     maybe_json_string_field(
         request->body,
-        "activationStairLightAddress",
-        "activation_stair_light_address",
-        activation_stair_address,
-        sizeof(activation_stair_address)
+        "activationItemsJson",
+        "activation_items_json",
+        activation_items_json,
+        sizeof(activation_items_json)
     );
-    if (activation_stair_address[0] != '\0') {
-        if (!address_is_valid(activation_stair_address)) {
-            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_activation_address\"}\n");
+    if (activation_items_json[0] != '\0') {
+        if (!c300x_config_set_activation_items_json(
+            updated,
+            activation_items_json,
+            error,
+            sizeof(error)
+        )) {
+            char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+            char body[512];
+            json_string(error, error_json, sizeof(error_json));
+            snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"invalid_activation_items\",\"detail\":%s}\n", error_json);
+            send_json(client_fd, 400, "Bad Request", body);
             AUTH_CONFIG_POST_RETURN();
         }
-        configure_stair_light_activation(updated, activation_stair_address);
     }
     if (json_bool_field(request->body, "maintenanceEnabled", &value) || json_bool_field(request->body, "maintenance_enabled", &value)) {
         updated->maintenance_enabled = value;
@@ -4487,6 +4455,7 @@ static void handle_auth_config_post(
     if (!c300x_config_persisted_equal(baseline, updated)) {
         int restart_required = config->restart_required
             || auth_config_requires_restart(config, updated);
+        int activations_changed = auth_config_activations_changed(config, updated);
         int changed = 0;
         if (!c300x_save_config_if_changed(updated, error, sizeof(error), &changed)) {
             char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
@@ -4500,6 +4469,9 @@ static void handle_auth_config_post(
             copy_live_auth_config(config, updated, restart_required);
         } else {
             *config = *updated;
+        }
+        if (!restart_required && activations_changed && runtime != NULL) {
+            runtime->activation_discovery_loaded = 0;
         }
         if (changed) {
             record_agent_write(config, runtime, "config", "auth_config");

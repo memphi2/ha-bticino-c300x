@@ -28,9 +28,9 @@ from .const import (
     CONF_CALLBACK_BASE_URL,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_EVENT_WEBHOOK_ID,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_PORT,
@@ -145,9 +145,11 @@ async def async_get_config_entry_diagnostics(
                 entry_config_value(entry, CONF_VIDEO_STREAM_PATH, "")
             ),
             "stair_light_configured": bool(
-                entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS, "")
-                or entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
+                entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, "")
                 or entry_config_value(entry, CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, "")
+            ),
+            "additional_device_activation_count": len(
+                entry_config_value(entry, CONF_DEVICE_ACTIVATIONS, []) or []
             ),
             "alarm_entity_configured": bool(_configured_alarm_entity(entry)),
             "weather_entity_configured": bool(_configured_weather_entity(entry)),
@@ -183,6 +185,7 @@ async def async_get_config_entry_diagnostics(
             "qml_patch_check": _operation_diagnostics(
                 getattr(runtime, "qml_patch_diagnostics", None)
             ),
+            "activations": _safe_activation_diagnostics(runtime),
         },
         "agent_write_diagnostics": _agent_write_diagnostics(entry),
     }
@@ -213,6 +216,39 @@ def _agent_write_diagnostics(entry: ConfigEntry) -> dict[str, Any] | None:
             key: getattr(entry.runtime_data, key, None)
             for key in _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS
         },
+    }
+
+
+def _safe_activation_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
+    """Return non-sensitive configured activation diagnostics."""
+
+    if runtime is None:
+        return None
+    activations = getattr(runtime, "activations", {})
+    if not isinstance(activations, Mapping):
+        return None
+    items = activations.get("items")
+    safe_items: list[dict[str, Any]] = []
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, Mapping):
+                continue
+            safe_items.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "type": str(item.get("type") or ""),
+                    "source": str(item.get("source") or ""),
+                    "executable": bool(item.get("executable")),
+                    "address_mode": str(item.get("address_mode") or item.get("addressMode") or ""),
+                    "address_configured": bool(item.get("address")),
+                }
+            )
+    return {
+        "available": bool(activations.get("available", True)),
+        "supported": bool(activations.get("supported")),
+        "count": activations.get("count"),
+        "item_count": len(safe_items),
+        "items": safe_items,
     }
 
 

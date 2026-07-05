@@ -17,12 +17,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .activation_address import stair_light_where_from_entry_values
 from .const import (
     DEFAULT_AGENT_PORT,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
+    DEFAULT_STAIR_LIGHT_N,
+    DEFAULT_STAIR_LIGHT_P,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
 )
+from .device_activations import desired_activation_items
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = COMPONENT_DIR.parents[1]
@@ -64,7 +67,9 @@ class C300XDeviceInstallRequest:
     apply_firewall_patch: bool = True
     apply_gui_patch: bool = False
     device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO
-    device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS
+    device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P
+    device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N
+    device_activations: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,9 +105,9 @@ async def async_install_device_agent(
         remote_dir=request.remote_dir,
         firewall_enabled=request.apply_firewall_patch,
         device_activation_mode=request.device_activation_mode,
-        device_activation_stair_light_address=(
-            request.device_activation_stair_light_address
-        ),
+        device_activation_stair_light_p=request.device_activation_stair_light_p,
+        device_activation_stair_light_n=request.device_activation_stair_light_n,
+        device_activations=request.device_activations,
     ).encode("utf-8")
 
     changed_files = await asyncio.to_thread(
@@ -302,13 +307,17 @@ def _device_config_json(
     remote_dir: str = DEFAULT_REMOTE_DIR,
     firewall_enabled: bool = True,
     device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
+    device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
+    device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
+    device_activations: Any = None,
 ) -> str:
     qml_patch_script = f"{remote_dir}/qml_patch.sh"
     remove_agent_script = f"{remote_dir}/remove_agent.sh"
     activations = _device_activation_config(
         mode=device_activation_mode,
-        stair_light_address=device_activation_stair_light_address,
+        stair_light_p=device_activation_stair_light_p,
+        stair_light_n=device_activation_stair_light_n,
+        device_activations=device_activations,
     )
     config = {
         "listen": {
@@ -324,7 +333,10 @@ def _device_config_json(
         "device": {
             "model": "C300X",
             "firmware": "",
-            "stairLightDefaultAddress": DEFAULT_STAIR_LIGHT_ADDRESS,
+            "stairLightDefaultAddress": stair_light_where_from_entry_values(
+                DEFAULT_STAIR_LIGHT_P,
+                DEFAULT_STAIR_LIGHT_N,
+            ),
         },
         "activations": activations,
         "maintenance": {
@@ -396,22 +408,22 @@ def _device_config_json(
 def _device_activation_config(
     *,
     mode: str,
-    stair_light_address: str,
+    stair_light_p: str,
+    stair_light_n: str,
+    device_activations: Any = None,
 ) -> dict[str, Any]:
     """Return the native-agent activation config for a bootstrap install."""
 
     auto_discover = mode != DEVICE_ACTIVATION_MODE_MANUAL
-    items: list[dict[str, Any]] = []
-    if not auto_discover:
-        items.append(
-            {
-                "id": "stair_light",
-                "name": "Stair light",
-                "type": "stair_light",
-                "addressMode": "manual",
-                "address": stair_light_address,
-            }
-        )
+    stair_light_address = stair_light_where_from_entry_values(
+        stair_light_p,
+        stair_light_n,
+    )
+    items = desired_activation_items(
+        mode=mode,
+        stair_light_address=stair_light_address,
+        device_activations=device_activations or [],
+    )
     return {
         "enabled": True,
         "autoDiscover": auto_discover,

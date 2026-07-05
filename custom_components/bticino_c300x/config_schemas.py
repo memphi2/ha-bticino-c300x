@@ -17,6 +17,12 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_CALLBACK_BASE_URL,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DEVICE_ACTIVATION_FLOW_ACTION,
+    CONF_DEVICE_ACTIVATION_FLOW_TARGET,
+    CONF_DEVICE_ACTIVATION_ITEM_ADDRESS,
+    CONF_DEVICE_ACTIVATION_ITEM_ID,
+    CONF_DEVICE_ACTIVATION_ITEM_NAME,
+    CONF_DEVICE_ACTIVATION_ITEM_TYPE,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -27,13 +33,16 @@ from .const import (
     CONF_VIDEO_ENABLED,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
-    DEFAULT_STAIR_LIGHT_ADDRESS,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
+    DEVICE_ACTIVATION_FLOW_ACTION_ADD,
+    DEVICE_ACTIVATION_FLOW_ACTION_DONE,
+    DEVICE_ACTIVATION_FLOW_ACTION_EDIT,
+    DEVICE_ACTIVATION_FLOW_ACTION_REMOVE,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
 )
-from .validation_patterns import STAIR_LIGHT_ADDRESS_RE
+from .device_activations import DEVICE_ACTIVATION_TYPES
 
 selector: Any
 try:
@@ -49,7 +58,6 @@ CREATE_HOMEASSISTANT_USER_DEFAULT = True
 def setup_features_schema(
     default_video_enabled: bool,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
     default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
     default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
@@ -62,9 +70,6 @@ def setup_features_schema(
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
         default_device_activation_mode=default_device_activation_mode,
-        default_device_activation_stair_light_address=(
-            default_device_activation_stair_light_address
-        ),
         default_device_activation_stair_light_p=default_device_activation_stair_light_p,
         default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
@@ -100,10 +105,56 @@ def reconfigure_connection_schema(
     )
 
 
+def device_activation_manage_schema(items: list[dict[str, Any]]) -> vol.Schema:
+    """Return the activation management action schema."""
+
+    fields: dict[Any, Any] = {
+        vol.Required(
+            CONF_DEVICE_ACTIVATION_FLOW_ACTION,
+            default=DEVICE_ACTIVATION_FLOW_ACTION_DONE,
+        ): _device_activation_action_selector(has_items=bool(items)),
+    }
+    if items:
+        fields[
+            vol.Optional(
+                CONF_DEVICE_ACTIVATION_FLOW_TARGET,
+                default=str(items[0].get("id", "")),
+            )
+        ] = _device_activation_target_selector(items)
+    return vol.Schema(fields)
+
+
+def device_activation_item_schema(
+    item: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Return the schema for one configured activation."""
+
+    item = item or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_DEVICE_ACTIVATION_ITEM_ID,
+                default=str(item.get("id") or ""),
+            ): str,
+            vol.Required(
+                CONF_DEVICE_ACTIVATION_ITEM_NAME,
+                default=str(item.get("name") or ""),
+            ): str,
+            vol.Required(
+                CONF_DEVICE_ACTIVATION_ITEM_TYPE,
+                default=str(item.get("type") or "lock"),
+            ): _device_activation_type_selector(),
+            vol.Required(
+                CONF_DEVICE_ACTIVATION_ITEM_ADDRESS,
+                default=str(item.get("address") or ""),
+            ): str,
+        }
+    )
+
+
 def reconfigure_features_schema(
     default_video_enabled: bool,
     default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_address: str = DEFAULT_STAIR_LIGHT_ADDRESS,
     default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
     default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
@@ -116,24 +167,12 @@ def reconfigure_features_schema(
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
         default_device_activation_mode=default_device_activation_mode,
-        default_device_activation_stair_light_address=(
-            default_device_activation_stair_light_address
-        ),
         default_device_activation_stair_light_p=default_device_activation_stair_light_p,
         default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
     )
-
-
-def stair_light_address(value: Any) -> str:
-    """Validate the OpenWebNet address segment used by the stair light command."""
-
-    address = str(value or "").strip()
-    if not STAIR_LIGHT_ADDRESS_RE.fullmatch(address):
-        raise vol.Invalid("invalid staircase light address")
-    return address
 
 
 def stair_light_p(value: Any) -> str:
@@ -164,11 +203,69 @@ def audio_gain_db_selector() -> Any:
     )
 
 
+def _device_activation_action_selector(*, has_items: bool) -> Any:
+    options = [
+        {"value": DEVICE_ACTIVATION_FLOW_ACTION_DONE, "label": "Done"},
+        {"value": DEVICE_ACTIVATION_FLOW_ACTION_ADD, "label": "Add"},
+    ]
+    if has_items:
+        options.extend(
+            [
+                {"value": DEVICE_ACTIVATION_FLOW_ACTION_EDIT, "label": "Edit"},
+                {"value": DEVICE_ACTIVATION_FLOW_ACTION_REMOVE, "label": "Remove"},
+            ]
+        )
+    if selector is None:
+        return vol.In(tuple(option["value"] for option in options))
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=options,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
+    options = [
+        {
+            "value": str(item.get("id") or ""),
+            "label": f"{item.get('name') or item.get('id')} ({item.get('id')})",
+        }
+        for item in items
+        if item.get("id")
+    ]
+    if selector is None:
+        return vol.In(tuple(option["value"] for option in options))
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=options,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _device_activation_type_selector() -> Any:
+    supported_types = tuple(
+        item for item in DEVICE_ACTIVATION_TYPES if item in {"lock", "light", "stair_light"}
+    )
+    if selector is None:
+        return vol.In(supported_types)
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                {"value": "lock", "label": "Door lock"},
+                {"value": "light", "label": "Light"},
+                {"value": "stair_light", "label": "Stair light"},
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
 def _media_feature_schema(
     *,
     default_video_enabled: bool,
     default_device_activation_mode: str,
-    default_device_activation_stair_light_address: str,
     default_device_activation_stair_light_p: str,
     default_device_activation_stair_light_n: str,
     default_create_homeassistant_user: bool,

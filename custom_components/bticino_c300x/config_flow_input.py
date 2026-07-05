@@ -8,7 +8,6 @@ import voluptuous as vol
 from homeassistant.const import CONF_NAME
 
 from .action import ActionValidationError, parse_actions_json
-from .activation_address import stair_light_where_from_parts
 from .callback_url import normalize_callback_base_url
 from .config_audio import audio_gain_db
 from .config_flow_dashboard import (
@@ -49,9 +48,9 @@ from .const import (
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
-    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+    CONF_DEVICE_ACTIVATIONS,
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
@@ -72,6 +71,10 @@ from .const import (
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
     WEATHER_DOMAIN,
+)
+from .device_activations import (
+    DeviceActivationConfigError,
+    normalize_device_activations,
 )
 from .validation_patterns import ENTITY_OBJECT_ID_RE
 
@@ -293,8 +296,8 @@ def _connection_input(
 def _device_activation_input(
     user_input: dict[str, Any],
     errors: dict[str, str],
-) -> tuple[str, str, str, str]:
-    """Validate device activation fields and return mode/address/P/N."""
+) -> tuple[str, list[dict[str, Any]], str, str]:
+    """Validate device activation fields and return mode/items/P/N."""
 
     try:
         mode = _device_activation_mode(
@@ -317,8 +320,16 @@ def _device_activation_input(
     except vol.Invalid:
         errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = "invalid_stair_light_part"
         stair_light_n = DEFAULT_STAIR_LIGHT_N
-    address = stair_light_where_from_parts(stair_light_p, stair_light_n)
-    return mode, address, stair_light_p, stair_light_n
+    reserved_ids = {"stair_light"} if mode == "manual" else set()
+    try:
+        device_activations = normalize_device_activations(
+            user_input.get(CONF_DEVICE_ACTIVATIONS, []),
+            reserved_ids=reserved_ids,
+        )
+    except DeviceActivationConfigError:
+        errors[CONF_DEVICE_ACTIVATIONS] = "invalid_device_activations"
+        device_activations = []
+    return mode, device_activations, stair_light_p, stair_light_n
 
 
 def _dashboard_feature_input(
@@ -442,7 +453,7 @@ def _feature_input(
     dashboard = _dashboard_feature_input(user_input, errors)
     (
         device_activation_mode,
-        device_activation_stair_light_address,
+        device_activations,
         device_activation_stair_light_p,
         device_activation_stair_light_n,
     ) = _device_activation_input(user_input, errors)
@@ -465,9 +476,7 @@ def _feature_input(
             CONF_ACTIONS: dashboard[CONF_ACTIONS],
             CONF_DASHBOARD_PREVENT_RETURN: dashboard[CONF_DASHBOARD_PREVENT_RETURN],
             CONF_DEVICE_ACTIVATION_MODE: device_activation_mode,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_ADDRESS: (
-                device_activation_stair_light_address
-            ),
+            CONF_DEVICE_ACTIVATIONS: device_activations,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: device_activation_stair_light_p,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: device_activation_stair_light_n,
             CONF_VIDEO_ENABLED: media_enabled,

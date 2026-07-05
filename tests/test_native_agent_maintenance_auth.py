@@ -110,15 +110,18 @@ def test_auth_config_exposes_and_updates_activation_settings() -> None:
     ].split("static int legacy_mqtt_installed", maxsplit=1)[0]
 
     assert '"\\"activations_enabled\\":%s,"' in get_body
-    assert '"\\"activations_auto_discover\\":%s,"' in get_body
-    assert '"\\"activation_stair_light_address\\":%s"' in get_body
+    assert '"\\"activations_auto_discover\\":%s"' in get_body
+    assert "activation_stair_light_address" not in get_body
     assert 'json_bool_field(request->body, "activationsEnabled", &value)' in post_body
     assert (
         'json_bool_field(request->body, "activationsAutoDiscover", &value)'
         in post_body
     )
-    assert '"activationStairLightAddress"' in post_body
-    assert "configure_stair_light_activation(updated, activation_stair_address)" in post_body
+    assert '"activationItemsJson"' in post_body
+    assert "c300x_config_set_activation_items_json" in post_body
+    assert "activationStairLightAddress" not in post_body
+    assert "configure_stair_light_activation" not in post_body
+    assert "auth_config_activations_changed" in post_body
 
 
 def test_setup_completion_closes_no_auth_when_api_token_exists() -> None:

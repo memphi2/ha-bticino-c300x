@@ -46,9 +46,26 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
           "device_activation_stair_light_p": "Indirizzo P luce scale",
           "device_activation_stair_light_n": "Indirizzo N luce scale"
+        }
+      },
+      "user_device_activations": {
+        "title": "Attivazioni dispositivo aggiuntive",
+        "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
+        "data": {
+          "device_activation_flow_action": "Azione",
+          "device_activation_flow_target": "Attivazione"
+        }
+      },
+      "user_device_activation_item": {
+        "title": "Attivazione dispositivo",
+        "description": "Configura un pulsante di attivazione basato su indirizzo.",
+        "data": {
+          "device_activation_item_id": "ID pulsante",
+          "device_activation_item_name": "Nome pulsante",
+          "device_activation_item_type": "Tipo pulsante",
+          "device_activation_item_address": "Indirizzo attivazione"
         }
       },
       "user_dashboard": {
@@ -93,9 +110,26 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
           "device_activation_stair_light_p": "Indirizzo P luce scale",
           "device_activation_stair_light_n": "Indirizzo N luce scale"
+        }
+      },
+      "reconfigure_device_activations": {
+        "title": "Attivazioni dispositivo aggiuntive",
+        "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
+        "data": {
+          "device_activation_flow_action": "Azione",
+          "device_activation_flow_target": "Attivazione"
+        }
+      },
+      "reconfigure_device_activation_item": {
+        "title": "Attivazione dispositivo",
+        "description": "Configura un pulsante di attivazione basato su indirizzo.",
+        "data": {
+          "device_activation_item_id": "ID pulsante",
+          "device_activation_item_name": "Nome pulsante",
+          "device_activation_item_type": "Tipo pulsante",
+          "device_activation_item_address": "Indirizzo attivazione"
         }
       },
       "reconfigure_dashboard": {
@@ -136,6 +170,7 @@
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
       "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
+      "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalita luce scale manuale riserva gia stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "required": "Questo campo è obbligatorio."
     }
@@ -165,9 +200,26 @@
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
           "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_address": "Indirizzo manuale attivazione luce scale",
           "device_activation_stair_light_p": "Indirizzo P luce scale",
           "device_activation_stair_light_n": "Indirizzo N luce scale"
+        }
+      },
+      "device_activations": {
+        "title": "Attivazioni dispositivo aggiuntive",
+        "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
+        "data": {
+          "device_activation_flow_action": "Azione",
+          "device_activation_flow_target": "Attivazione"
+        }
+      },
+      "device_activation_item": {
+        "title": "Attivazione dispositivo",
+        "description": "Configura un pulsante di attivazione basato su indirizzo.",
+        "data": {
+          "device_activation_item_id": "ID pulsante",
+          "device_activation_item_name": "Nome pulsante",
+          "device_activation_item_type": "Tipo pulsante",
+          "device_activation_item_address": "Indirizzo attivazione"
         }
       },
       "dashboard": {
@@ -198,6 +250,7 @@
       "invalid_alarm_page_entity": "Seleziona un'entità dashboard supportata per la pagina allarme oppure lascia vuoto il campo.",
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
       "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
+      "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalita luce scale manuale riserva gia stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99."
     }
   },

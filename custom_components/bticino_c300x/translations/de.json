@@ -316,6 +316,9 @@
           "doorbell_media_closed": "Türkamera-Stream beendet",
           "doorbell_pressed": "Türklingel gedrückt",
           "doorbell_view_requested": "Türkamera-Ansicht gestartet",
+          "home_call_answered": "Zuhause-Anruf angenommen",
+          "home_call_ended": "Zuhause-Anruf beendet",
+          "home_call_started": "Zuhause-Anruf gestartet",
           "memos_changed": "Memos aktualisiert",
           "ringer_muted": "Klingelton stummgeschaltet",
           "ringer_unmuted": "Klingelton aktiviert",
@@ -323,6 +326,8 @@
           "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
           "stair_light_activated": "Treppenlicht aktiviert",
           "stair_light_released": "Treppenlicht freigegeben",
+          "system_metrics_changed": "Systemwerte aktualisiert",
+          "agent_diagnostics_changed": "Agent-Schreibdiagnose aktualisiert",
           "activation_executed": "Geräteaktion ausgeführt"
         }
       }

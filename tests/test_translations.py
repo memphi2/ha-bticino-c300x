@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.bticino_c300x.doorbell_state import DOORBELL_STATES
+from custom_components.bticino_c300x.event_types import HA_EVENT_TYPES
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "bticino_c300x"
@@ -58,6 +59,26 @@ def test_smartphone_forwarding_select_translates_internal_options() -> None:
             "blocked",
         } <= set(translated_states)
         assert translated_states["homeassistant"] != "homeassistant"
+
+
+def test_agent_event_translations_cover_all_mapped_event_types() -> None:
+    expected = set(HA_EVENT_TYPES.values())
+
+    for path in (
+        INTEGRATION / "strings.json",
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        translated_states = _path_value(
+            _load_json(path),
+            "entity",
+            "event",
+            "agent_event",
+            "state",
+        )
+        assert expected <= set(translated_states)
 
 
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:

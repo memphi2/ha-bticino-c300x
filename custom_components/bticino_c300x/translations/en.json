@@ -316,6 +316,9 @@
           "doorbell_media_closed": "Doorbell camera stream ended",
           "doorbell_pressed": "Doorbell pressed",
           "doorbell_view_requested": "Doorbell view requested",
+          "home_call_answered": "Home call answered",
+          "home_call_ended": "Home call ended",
+          "home_call_started": "Home call started",
           "memos_changed": "Memos changed",
           "ringer_muted": "Ringer muted",
           "ringer_unmuted": "Ringer unmuted",
@@ -323,6 +326,8 @@
           "smartphone_forwarding_changed": "Smartphone forwarding changed",
           "stair_light_activated": "Stair light activated",
           "stair_light_released": "Stair light released",
+          "system_metrics_changed": "System metrics updated",
+          "agent_diagnostics_changed": "Agent write diagnostics updated",
           "activation_executed": "Device activation executed"
         }
       }

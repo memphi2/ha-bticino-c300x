@@ -316,6 +316,9 @@
           "doorbell_media_closed": "Stream videocitofono terminato",
           "doorbell_pressed": "Campanello premuto",
           "doorbell_view_requested": "Vista videocitofono avviata",
+          "home_call_answered": "Chiamata casa risposta",
+          "home_call_ended": "Chiamata casa terminata",
+          "home_call_started": "Chiamata casa avviata",
           "memos_changed": "Memo aggiornati",
           "ringer_muted": "Suoneria disattivata",
           "ringer_unmuted": "Suoneria attivata",
@@ -323,6 +326,8 @@
           "smartphone_forwarding_changed": "Inoltro smartphone modificato",
           "stair_light_activated": "Luce scale attivata",
           "stair_light_released": "Luce scale rilasciata",
+          "system_metrics_changed": "Metriche di sistema aggiornate",
+          "agent_diagnostics_changed": "Diagnostica scritture agent aggiornata",
           "activation_executed": "Attivazione dispositivo eseguita"
         }
       }

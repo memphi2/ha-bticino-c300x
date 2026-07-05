@@ -316,6 +316,9 @@
           "doorbell_media_closed": "Flux camera de sonnette termine",
           "doorbell_pressed": "Sonnette appuyee",
           "doorbell_view_requested": "Vue camera de sonnette demandee",
+          "home_call_answered": "Appel domicile repondu",
+          "home_call_ended": "Appel domicile termine",
+          "home_call_started": "Appel domicile demarre",
           "memos_changed": "Memos mis a jour",
           "ringer_muted": "Sonnerie coupee",
           "ringer_unmuted": "Sonnerie activee",
@@ -323,6 +326,8 @@
           "smartphone_forwarding_changed": "Renvoi smartphone modifie",
           "stair_light_activated": "Lumiere d'escalier activee",
           "stair_light_released": "Lumiere d'escalier relachee",
+          "system_metrics_changed": "Metriques systeme mises a jour",
+          "agent_diagnostics_changed": "Diagnostics ecritures agent mis a jour",
           "activation_executed": "Activation appareil executee"
         }
       }

@@ -631,7 +631,18 @@ def test_native_agent_ringer_events_are_change_based() -> None:
     assert "static int ringer_volume_to_openwebnet_code(int volume)" in text
     assert "code / C300X_RINGER_VOLUME_OPENWEBNET_STEP" in text
     assert "volume * C300X_RINGER_VOLUME_OPENWEBNET_STEP" in text
+    assert "static int ringer_mute_is_ring_answer_transition" in text
+    ringer_answer_body = text.split(
+        "static int ringer_mute_is_ring_answer_transition",
+        maxsplit=1,
+    )[1].split("static void remember_ringer_volume", maxsplit=1)[0]
+    assert "status.ring_audio_active" in ringer_answer_body
+    assert "status.ring_answer_requested" in ringer_answer_body
+    assert "status.ring_answered" in ringer_answer_body
     assert "note_ringer_muted_changed(runtime, muted)" in event_body
+    assert event_body.index("ringer_mute_is_ring_answer_transition(runtime, muted)") < event_body.index(
+        "note_ringer_muted_changed(runtime, muted)"
+    )
     assert "ringer_volume_from_reply(msg, &code)" in event_body
     assert "note_ringer_volume_changed(runtime, code)" in event_body
     assert 'c300x_copy_string(type, type_len, "ringer.volume_changed")' in event_body

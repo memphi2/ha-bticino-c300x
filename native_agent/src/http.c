@@ -5862,6 +5862,17 @@ static int note_ringer_muted_changed(struct agent_runtime *runtime, int muted)
     return 1;
 }
 
+static int ringer_mute_is_ring_answer_transition(struct agent_runtime *runtime, int muted)
+{
+    struct c300x_video_status status;
+
+    if (!muted || runtime == NULL || runtime->video == NULL) {
+        return 0;
+    }
+    c300x_video_status(runtime->video, &status);
+    return status.ring_audio_active || status.ring_answer_requested || status.ring_answered;
+}
+
 static void remember_ringer_volume(struct agent_runtime *runtime, int volume)
 {
     if (runtime == NULL) {
@@ -5968,6 +5979,9 @@ static int map_openwebnet_event(
             return 0;
         }
         muted = code == 0;
+        if (ringer_mute_is_ring_answer_transition(runtime, muted)) {
+            return 0;
+        }
         if (!note_ringer_muted_changed(runtime, muted)) {
             return 0;
         }

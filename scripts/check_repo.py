@@ -114,6 +114,7 @@ REQUIRED_PATHS = [
     "scripts/check_frontend_lts.py",
     "scripts/check_ha_deprecations.py",
     "scripts/check_legal_audit.py",
+    "scripts/check_media_contracts.py",
     "scripts/check_release_tag.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
@@ -204,6 +205,7 @@ def main() -> int:
     failures.extend(check_hacs_metadata())
     failures.extend(check_frontend_lts())
     failures.extend(check_frontend_bundle_hash())
+    failures.extend(check_media_contracts())
     failures.extend(check_github_automation())
     failures.extend(check_python_runtime())
     failures.extend(check_quality_scale())
@@ -843,6 +845,25 @@ def check_frontend_bundle_hash() -> list[str]:
     output = "\n".join(part for part in (result.stdout, result.stderr) if part)
     return [
         f"frontend bundle hash gate failed: {line.removeprefix('FAIL: ')}"
+        for line in output.splitlines()
+        if line
+    ]
+
+
+def check_media_contracts() -> list[str]:
+    """Run the dedicated HA/go2rtc media contract gate."""
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "check_media_contracts.py")],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+    return [
+        f"media contract gate failed: {line.removeprefix('FAIL: ')}"
         for line in output.splitlines()
         if line
     ]

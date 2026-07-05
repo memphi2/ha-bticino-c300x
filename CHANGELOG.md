@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.7.0 - Unreleased
+## v1.7.0 - 2026-07-05
 
 ### Added
 
@@ -9,6 +9,15 @@
 
 ### Fixed
 
+- Keep Ring Call preview and busy state synchronized across multiple open
+  dashboards.
+- Prevent Ring Call answer events from toggling the C300X ringer mute switch.
+- Deduplicate stair-light activation events.
+- Keep on-demand video relay teardown stable so stopped streams do not leave
+  stale sessions behind.
+- Load SSH installer dependencies only when SSH-based agent install or repair
+  is used, so normal integration startup is not blocked by optional installer
+  packages.
 - Keep manual stair-light activation configuration within the native 16-item
   limit.
 - Reserve the generated `stair_light` activation ID in all activation modes to
@@ -18,10 +27,12 @@
 
 ### Upgrade Notes
 
-- Update or reconfigure the native C300X device agent before using custom device
-  activations.
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled card module is refreshed from the installed integration version.
+- Update the native C300X device agent from Home Assistant to `1.7.0`.
 - Use Reconfigure after updating if custom device activations were configured
-  before this prerelease.
+  before this release.
 
 ## v1.6.6 - 2026-07-05
 

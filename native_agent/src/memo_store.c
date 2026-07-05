@@ -111,6 +111,7 @@ static int write_file_bytes(
 )
 {
     FILE *file = fopen(path, "wb");
+    int fd;
 
     if (file == NULL) {
         return 0;
@@ -119,10 +120,13 @@ static int write_file_bytes(
         (void)fclose(file);
         return 0;
     }
+    fd = fileno(file);
+    if (fd >= 0) {
+        (void)fchmod(fd, mode);
+    }
     if (fclose(file) != 0) {
         return 0;
     }
-    (void)chmod(path, mode);
     return 1;
 }
 

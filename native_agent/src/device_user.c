@@ -387,17 +387,16 @@ static int write_file_atomic(
         return 0;
     }
     fd = fileno(fp);
-    if (fd >= 0) {
-        (void)fsync(fd);
+    if (fd < 0 || fchmod(fd, mode) != 0) {
+        fclose(fp);
+        unlink(tmp_path);
+        set_error(error, error_len, "chmod_failed");
+        return 0;
     }
+    (void)fsync(fd);
     if (fclose(fp) != 0) {
         unlink(tmp_path);
         set_error(error, error_len, "tmp_close_failed");
-        return 0;
-    }
-    if (chmod(tmp_path, mode) != 0) {
-        unlink(tmp_path);
-        set_error(error, error_len, "chmod_failed");
         return 0;
     }
     if (rename(tmp_path, path) != 0) {

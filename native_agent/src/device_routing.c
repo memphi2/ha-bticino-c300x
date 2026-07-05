@@ -277,18 +277,18 @@ static int copy_file_exact(const char *source, const char *target, mode_t mode)
     }
     fclose(in);
     fd = fileno(out);
-    if (fd >= 0) {
-        (void)fsync(fd);
+    if (fd < 0 || fchmod(fd, mode) != 0) {
+        fclose(out);
+        unlink(tmp_path);
+        return 0;
     }
+    if (fchown(fd, source_stat.st_uid, source_stat.st_gid) != 0 && errno != EPERM) {
+        fclose(out);
+        unlink(tmp_path);
+        return 0;
+    }
+    (void)fsync(fd);
     if (fclose(out) != 0) {
-        unlink(tmp_path);
-        return 0;
-    }
-    if (chmod(tmp_path, mode) != 0) {
-        unlink(tmp_path);
-        return 0;
-    }
-    if (chown(tmp_path, source_stat.st_uid, source_stat.st_gid) != 0 && errno != EPERM) {
         unlink(tmp_path);
         return 0;
     }
@@ -460,6 +460,7 @@ int c300x_device_routing_apply(
     C300X_ROUTING_STAT_STRUCT original_stat;
     mode_t original_mode;
     FILE *fp;
+    int fd;
 
     if (!c300x_device_routing_read_status(status)) {
         set_error(error, error_len, "routing_status_failed");
@@ -536,13 +537,20 @@ int c300x_device_routing_apply(
         return 0;
     }
     free(data);
-    (void)fsync(fileno(fp));
+    fd = fileno(fp);
     if (
-        fclose(fp) != 0
-        || chmod(target_tmp_path, original_mode) != 0
-        || (chown(target_tmp_path, original_stat.st_uid, original_stat.st_gid) != 0 && errno != EPERM)
-        || rename(target_tmp_path, target_path) != 0
+        fd < 0
+        || fchmod(fd, original_mode) != 0
+        || (fchown(fd, original_stat.st_uid, original_stat.st_gid) != 0 && errno != EPERM)
     ) {
+        fclose(fp);
+        unlink(target_tmp_path);
+        (void)remount_root("ro");
+        set_error(error, error_len, "routing_target_replace_failed");
+        return 0;
+    }
+    (void)fsync(fd);
+    if (fclose(fp) != 0 || rename(target_tmp_path, target_path) != 0) {
         unlink(target_tmp_path);
         (void)remount_root("ro");
         set_error(error, error_len, "routing_target_replace_failed");

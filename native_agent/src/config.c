@@ -2118,6 +2118,7 @@ static int save_config_internal(
     uid_t owner_uid = 0;
     gid_t owner_gid = 0;
     int have_owner = 0;
+    int fd;
 
     if (changed != NULL) {
         *changed = 0;
@@ -2299,15 +2300,22 @@ static int save_config_internal(
     fprintf(file, "    \"enabled\": %s,\n", config->display_bridge_enabled ? "true" : "false");
     fprintf(file, "    \"homeAssistant\": {\"requestTimeoutMs\": %d}\n  }\n}\n", config->home_assistant_request_timeout_ms);
 
+    fd = fileno(file);
+    if (fd < 0 || fchmod(fd, 0600) != 0) {
+        (void)fclose(file);
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to secure temporary config file");
+        return 0;
+    }
+    if (have_owner && fchown(fd, owner_uid, owner_gid) != 0 && errno != EPERM) {
+        (void)fclose(file);
+        (void)unlink(temporary_path);
+        set_error(error, error_len, "unable to preserve config file owner");
+        return 0;
+    }
     if (fclose(file) != 0) {
         (void)unlink(temporary_path);
         set_error(error, error_len, "unable to write temporary config file");
-        return 0;
-    }
-    (void)chmod(temporary_path, 0600);
-    if (have_owner && chown(temporary_path, owner_uid, owner_gid) != 0 && errno != EPERM) {
-        (void)unlink(temporary_path);
-        set_error(error, error_len, "unable to preserve config file owner");
         return 0;
     }
     if (files_equal(temporary_path, config->config_path)) {
@@ -2319,7 +2327,6 @@ static int save_config_internal(
         set_error(error, error_len, "unable to replace config file");
         return 0;
     }
-    (void)chmod(config->config_path, 0600);
     if (changed != NULL) {
         *changed = 1;
     }

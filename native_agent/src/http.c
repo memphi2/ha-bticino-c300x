@@ -1669,6 +1669,7 @@ static int write_binary_chunk(
 )
 {
     FILE *file;
+    int fd;
 
     if (path == NULL || path[0] == '\0' || offset < 0) {
         return 0;
@@ -1691,10 +1692,13 @@ static int write_binary_chunk(
         (void)fclose(file);
         return 0;
     }
+    fd = fileno(file);
+    if (fd >= 0) {
+        (void)fchmod(fd, mode);
+    }
     if (fclose(file) != 0) {
         return 0;
     }
-    (void)chmod(path, mode);
     return 1;
 }
 
@@ -1705,6 +1709,7 @@ static int copy_binary_file(const char *source, const char *target, mode_t mode)
     FILE *in;
     FILE *out;
     size_t read_len;
+    int out_fd;
 
     if (!mkdir_parent(target, 0755)) {
         return 0;
@@ -1735,6 +1740,10 @@ static int copy_binary_file(const char *source, const char *target, mode_t mode)
         (void)unlink(temporary_path);
         return 0;
     }
+    out_fd = fileno(out);
+    if (out_fd >= 0) {
+        (void)fchmod(out_fd, mode);
+    }
     {
         int close_in = fclose(in);
         int close_out = fclose(out);
@@ -1743,12 +1752,10 @@ static int copy_binary_file(const char *source, const char *target, mode_t mode)
             return 0;
         }
     }
-    (void)chmod(temporary_path, mode);
     if (rename(temporary_path, target) != 0) {
         (void)unlink(temporary_path);
         return 0;
     }
-    (void)chmod(target, mode);
     return 1;
 }
 
@@ -9332,6 +9339,7 @@ static int firewall_write_file(
 {
     char temporary_path[C300X_MAX_PATH_LEN + 8];
     FILE *file;
+    int fd;
 
     if (!mkdir_parent(path, 0755)) {
         return 0;
@@ -9348,16 +9356,18 @@ static int firewall_write_file(
         (void)unlink(temporary_path);
         return 0;
     }
+    fd = fileno(file);
+    if (fd >= 0) {
+        (void)fchmod(fd, mode);
+    }
     if (fclose(file) != 0) {
         (void)unlink(temporary_path);
         return 0;
     }
-    (void)chmod(temporary_path, mode);
     if (rename(temporary_path, path) != 0) {
         (void)unlink(temporary_path);
         return 0;
     }
-    (void)chmod(path, mode);
     return 1;
 }
 

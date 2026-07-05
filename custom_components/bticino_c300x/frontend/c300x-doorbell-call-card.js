@@ -2,7 +2,7 @@ import {
   C300X_TRANSLATIONS,
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=871a76fb89337b65";
+} from "./c300x-translations.js?v=f228ab9ca068b9ae";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -16,14 +16,18 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=871a76fb89337b65";
+} from "./c300x-entity-resolver.js?v=f228ab9ca068b9ae";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=871a76fb89337b65";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=871a76fb89337b65";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=871a76fb89337b65";
+} from "./c300x-state-model.js?v=f228ab9ca068b9ae";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=f228ab9ca068b9ae";
+import {
+  c300xRingLifecycleActive,
+  c300xShouldResetRingPreviewSuppression,
+} from "./c300x-ring-preview-state.js?v=f228ab9ca068b9ae";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=f228ab9ca068b9ae";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -460,21 +464,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     const entity = this._cameraEntity();
     const mediaState = c300xMediaState(entity);
     const previousMediaState = this._lastMediaState;
-    const ringLifecycleActive = (
-      mediaState === "ring_pending"
-      || mediaState === "ring_preview_active"
-      || mediaState === "ring_answering"
-      || mediaState === "ring_active"
-      || mediaState === "ring_hanging_up"
-    );
-    const previousRingLifecycleActive = (
-      previousMediaState === "ring_pending"
-      || previousMediaState === "ring_preview_active"
-      || previousMediaState === "ring_answering"
-      || previousMediaState === "ring_active"
-      || previousMediaState === "ring_hanging_up"
-    );
-    if (ringLifecycleActive && previousMediaState && !previousRingLifecycleActive) {
+    const ringLifecycleActive = c300xRingLifecycleActive(mediaState);
+    if (c300xShouldResetRingPreviewSuppression(mediaState, previousMediaState)) {
       this._ringPreviewSuppressed = false;
     }
     if (!ringLifecycleActive) {

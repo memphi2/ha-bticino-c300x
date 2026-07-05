@@ -30,6 +30,7 @@ CARD_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_FILENAME
 CARD_METADATA_SOURCE = FRONTEND_DIR / DOORBELL_CALL_CARD_METADATA_FILENAME
 CARD_RESOLVER_SOURCE = FRONTEND_DIR / "c300x-entity-resolver.js"
 CARD_RINGBACK_SOURCE = FRONTEND_DIR / "c300x-ringback-tone.js"
+CARD_RING_PREVIEW_STATE_SOURCE = FRONTEND_DIR / "c300x-ring-preview-state.js"
 CARD_STATE_SOURCE = FRONTEND_DIR / "c300x-state-model.js"
 CARD_TRANSLATIONS_SOURCE = FRONTEND_DIR / "c300x-translations.js"
 CARD_WEBRTC_SOURCE = FRONTEND_DIR / "c300x-webrtc-client.js"
@@ -39,6 +40,7 @@ FRONTEND_MODULE_SOURCES = (
     CARD_METADATA_SOURCE,
     CARD_RESOLVER_SOURCE,
     CARD_RINGBACK_SOURCE,
+    CARD_RING_PREVIEW_STATE_SOURCE,
     CARD_STATE_SOURCE,
     CARD_TRANSLATIONS_SOURCE,
     CARD_WEBRTC_SOURCE,
@@ -659,6 +661,7 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
 
 def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> None:
     source = CARD_SOURCE.read_text(encoding="utf-8")
+    ring_preview_source = CARD_RING_PREVIEW_STATE_SOURCE.read_text(encoding="utf-8")
 
     update_block = source[
         source.index("  _updateState()") : source.index(
@@ -680,18 +683,21 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
     ]
 
     assert "this._ringPreviewSuppressed = false;" in source
-    assert 'mediaState === "ring_pending"' in update_block
-    assert 'mediaState === "ring_preview_active"' in update_block
-    assert 'mediaState === "ring_answering"' in update_block
-    assert 'mediaState === "ring_active"' in update_block
-    assert 'mediaState === "ring_hanging_up"' in update_block
-    assert 'mediaState !== "ring_pending" && mediaState !== "ring_preview_active"' not in source
-    assert "const previousMediaState = this._lastMediaState;" in update_block
-    assert "const previousRingLifecycleActive = (" in update_block
+    assert 'from "./c300x-ring-preview-state.js?v=' in source
+    assert "c300xRingLifecycleActive(mediaState)" in update_block
     assert (
-        "ringLifecycleActive && previousMediaState && !previousRingLifecycleActive"
+        "c300xShouldResetRingPreviewSuppression(mediaState, previousMediaState)"
         in update_block
     )
+    assert 'mediaState === "ring_pending"' not in update_block
+    assert '"ring_pending"' in ring_preview_source
+    assert '"ring_preview_active"' in ring_preview_source
+    assert '"ring_answering"' in ring_preview_source
+    assert '"ring_active"' in ring_preview_source
+    assert '"ring_hanging_up"' in ring_preview_source
+    assert 'mediaState !== "ring_pending" && mediaState !== "ring_preview_active"' not in source
+    assert "const previousMediaState = this._lastMediaState;" in update_block
+    assert "previousRingLifecycleActive" not in source
     assert "this._ringPreviewSuppressed = false;" in update_block
     assert (
         update_block.index("this._ringPreviewSuppressed = false;")
@@ -846,6 +852,7 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
         "c300x-entity-resolver.js",
         "c300x-state-model.js",
         "c300x-ringback-tone.js",
+        "c300x-ring-preview-state.js",
         "c300x-webrtc-client.js",
     ):
         assert f'from "./{helper_name}?v={bundle_version}"' in card_source

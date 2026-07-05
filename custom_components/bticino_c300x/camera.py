@@ -18,7 +18,6 @@ from homeassistant.components.stream import (
     CONF_RTSP_TRANSPORT,
     CONF_USE_WALLCLOCK_AS_TIMESTAMPS,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -79,6 +78,7 @@ from .const import (
 )
 from .device_user import media_user_attribute
 from .entity import C300XEntity, entry_config_value, supports_capability
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_status import (
     home_call_payload as _home_call_payload,
@@ -162,7 +162,7 @@ def _media_decision_is_home_call(decision: MediaStateOutput) -> bool:
     return decision.state in HOME_CALL_STATES
 
 
-def _capability_supported_if_known(entry: ConfigEntry, capability: str) -> bool:
+def _capability_supported_if_known(entry: BticinoC300XConfigEntry, capability: str) -> bool:
     capabilities = getattr(getattr(entry, "runtime_data", None), "capabilities", None)
     if not isinstance(capabilities, dict) or not capabilities:
         return True
@@ -221,7 +221,7 @@ async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Came
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the optional C300X WebRTC camera."""
@@ -239,7 +239,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     _attr_supported_features = CameraEntityFeature.STREAM
     _attr_translation_key = "doorbell_camera"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         Camera.__init__(self)
         C300XEntity.__init__(self, entry, "doorbell_camera")
         self._attr_unique_id = doorbell_camera_unique_id(entry)

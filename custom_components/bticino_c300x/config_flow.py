@@ -154,6 +154,7 @@ from .device_installer import (
     async_install_device_agent,
 )
 from .entry_config import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 from .mqtt_migration import async_migrate_legacy_mqtt_for_connection
 
 __all__ = [
@@ -549,7 +550,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def _async_request_event_registration(
         self,
-        entry: config_entries.ConfigEntry,
+        entry: BticinoC300XConfigEntry,
     ) -> None:
         """Trigger HA-to-agent runtime subscription renewal for a loaded entry."""
 
@@ -1223,15 +1224,12 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_updates[CONF_EVENT_WEBHOOK_TOKEN] = secrets.token_urlsafe(32)
 
         _clear_reconfigured_option_overrides(self.hass, entry, data_updates)
-        return cast(
-            FlowResult,
-            self.async_update_and_abort(entry, data_updates=data_updates),
-        )
+        return self.async_update_and_abort(entry, data_updates=data_updates)
 
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: BticinoC300XConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Return the options flow."""
 
@@ -1241,7 +1239,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     """Handle C300X options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry: BticinoC300XConfigEntry) -> None:
         self._config_entry = config_entry
         self._connection_options: dict[str, Any] = {}
         self._feature_options: dict[str, Any] = {}
@@ -1591,7 +1589,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         )
 
 
-def _reconfigure_unique_id(entry: config_entries.ConfigEntry) -> str:
+def _reconfigure_unique_id(entry: BticinoC300XConfigEntry) -> str:
     """Return the existing entry unique id for reconfigure flows."""
 
     return str(getattr(entry, "unique_id", None) or DOMAIN)
@@ -1606,7 +1604,7 @@ def _manual_setup_unique_id(connection: dict[str, Any]) -> str:
 
 
 def _entry_uses_manual_setup_unique_id(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> bool:
     """Return true when an existing entry still uses the host-based setup ID."""
 
@@ -1616,7 +1614,7 @@ def _entry_uses_manual_setup_unique_id(
 
 async def _async_discovery_targets_configured_entry(
     hass: Any,
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     connection: dict[str, Any],
 ) -> bool:
     """Return true when a discovery endpoint is the already configured agent."""
@@ -1642,7 +1640,7 @@ async def _async_discovery_targets_configured_entry(
 
 
 def _entry_connection_matches_discovery(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     connection: dict[str, Any],
 ) -> bool:
     """Return true when host and port already match the discovery endpoint."""
@@ -1758,7 +1756,7 @@ def _stable_unique_id_from_setup_data(setup_data: dict[str, Any]) -> str | None:
 
 def _clear_reconfigured_option_overrides(
     hass: Any,
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     data_updates: dict[str, Any],
 ) -> None:
     """Clear stale option values for settings written through reconfigure."""
@@ -1776,7 +1774,7 @@ def _clear_reconfigured_option_overrides(
 
 
 def _config_default(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     key: str,
     default: Any,
 ) -> Any:
@@ -1786,7 +1784,7 @@ def _config_default(
 
 
 async def _async_qml_patch_description_placeholders(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> dict[str, str]:
     """Return placeholders for the device Display patch status."""
 
@@ -1798,7 +1796,7 @@ async def _async_qml_patch_description_placeholders(
 
 
 async def _async_qml_patch_status(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     """Return cached Display patch status, refreshing it only when useful."""
 

@@ -9,7 +9,6 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
@@ -26,6 +25,7 @@ from .const import (
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
 from .data import C300XConnectionState
+from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .event_types import HA_EVENT_TYPES
 from .fingerprint import fnv1a64_fingerprint
@@ -39,7 +39,7 @@ _SUBSCRIPTION_REFRESH_SECONDS = 300
 
 async def async_start_agent_event_registration(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     api: C300XAgentApi,
     capabilities: dict[str, Any],
     connection_state: C300XConnectionState,
@@ -59,7 +59,7 @@ async def async_start_agent_event_registration(
 
 def async_request_agent_event_registration(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> bool:
     """Restart runtime event registration after the agent is rediscovered."""
 
@@ -114,7 +114,7 @@ class _AgentEventRegistration:
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: BticinoC300XConfigEntry,
         api: C300XAgentApi,
         capabilities: dict[str, Any],
         connection_state: C300XConnectionState,
@@ -315,7 +315,7 @@ def _async_listen_entity_registry_updates(
     return cast(CALLBACK_TYPE, async_listen(event_type, callback))
 
 
-def _entity_registry_update_affects_entry(event: Any, entry: ConfigEntry) -> bool:
+def _entity_registry_update_affects_entry(event: Any, entry: BticinoC300XConfigEntry) -> bool:
     """Return false only when a registry update is clearly unrelated."""
 
     data = getattr(event, "data", None)
@@ -330,7 +330,7 @@ def _entity_registry_update_affects_entry(event: Any, entry: ConfigEntry) -> boo
 
 def _active_events_for_capabilities(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     capabilities: dict[str, Any],
 ) -> list[str]:
     """Return only push events that currently have an enabled HA consumer."""
@@ -555,7 +555,7 @@ def event_token_fingerprint(token: str) -> str:
 
 def _schedule_unavailable_expiry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     connection_state: C300XConnectionState,
 ) -> None:
     """Mark the agent unavailable after a short reconnect grace window."""
@@ -575,7 +575,7 @@ def _schedule_unavailable_expiry(
     )
 
 
-def _send_connection_update(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _send_connection_update(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Notify entities and refresh repair issues after connection state changes."""
 
     _send_connection_state_changed(hass, entry.entry_id)
@@ -597,7 +597,7 @@ def _send_connection_state_changed(hass: HomeAssistant, entry_id: str) -> None:
     async_dispatcher_send(hass, SIGNAL_CONNECTION_STATE_CHANGED, entry_id)
 
 
-def _sync_repair_issues(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_repair_issues(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Refresh repair issues after callback diagnostics change."""
 
     if not hasattr(entry, "runtime_data"):

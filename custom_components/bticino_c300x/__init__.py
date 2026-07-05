@@ -65,15 +65,11 @@ from .entry_config import (
 from .entry_config import (
     normalized_update_options,
 )
+from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
-
-    type BticinoC300XConfigEntry = ConfigEntry[BticinoC300XRuntimeData]
-else:
-    BticinoC300XConfigEntry = Any
 
 BASE_PLATFORMS = (
     "binary_sensor",

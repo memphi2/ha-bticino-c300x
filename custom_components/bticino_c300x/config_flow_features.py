@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-from homeassistant import config_entries
 
 from .config_audio import audio_gain_db_or_default
 from .config_flow_dashboard import (
@@ -64,11 +63,12 @@ from .const import (
     DEVICE_ACTIVATION_MODE_AUTO,
 )
 from .entry_config import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
 
 
-def options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.Schema:
+def options_connection_schema(config_entry: BticinoC300XConfigEntry) -> vol.Schema:
     """Return the first options page schema."""
 
     return vol.Schema(
@@ -102,7 +102,7 @@ def options_connection_schema(config_entry: config_entries.ConfigEntry) -> vol.S
 
 
 def options_features_schema(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     *,
     video_enabled: bool | None = None,
     create_homeassistant_user: bool | None = None,
@@ -148,7 +148,7 @@ def options_features_schema(
 
 
 def current_connection_options(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     """Return effective connection options for a restarted options flow."""
 
@@ -172,7 +172,7 @@ def current_connection_options(
 
 
 def current_feature_options(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     """Return effective feature options for reconfigure defaults."""
 
@@ -265,7 +265,7 @@ def current_feature_options(
 
 
 def reconfigure_connection_schema_from_current(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> vol.Schema:
     """Return the reconfigure connection schema using effective entry values."""
 
@@ -280,7 +280,7 @@ def reconfigure_connection_schema_from_current(
 
 
 def reconfigure_features_schema_from_current(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
 ) -> vol.Schema:
     """Return the reconfigure features schema using effective entry values."""
 
@@ -377,7 +377,7 @@ def feature_input_defaults(
 
 
 def _config_default(
-    config_entry: config_entries.ConfigEntry,
+    config_entry: BticinoC300XConfigEntry,
     key: str,
     default: Any,
 ) -> Any:

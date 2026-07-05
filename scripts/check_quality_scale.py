@@ -73,7 +73,6 @@ OFFICIAL_RULES = (
 EXPECTED_PLATINUM_BLOCKERS = {
     "brands",
     "test-coverage",
-    "strict-typing",
 }
 
 VALID_STATUSES = {"done", "todo", "exempt"}

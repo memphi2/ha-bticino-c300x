@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -17,6 +16,7 @@ from .api import (
 )
 from .capabilities import diagnostics_supported
 from .const import SIGNAL_AGENT_DIAGNOSTICS_CHANGED
+from .entry_types import BticinoC300XConfigEntry
 
 _WRITE_DIAGNOSTIC_KEYS = (
     "agent_write_count",
@@ -54,7 +54,7 @@ _UI_EVENT_DIAGNOSTIC_KEYS = (
 
 async def async_refresh_agent_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> Mapping[str, Any] | None:
     """Refresh safe write diagnostics once and notify interested entities."""
 
@@ -78,7 +78,7 @@ async def async_refresh_agent_diagnostics(
 
 def apply_agent_diagnostics_event(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     data: dict[str, Any],
 ) -> Mapping[str, Any] | None:
     """Apply write diagnostics carried in a push event without callback recursion."""
@@ -106,7 +106,7 @@ def apply_agent_diagnostics_event(
 
 def _store_agent_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     diagnostics: Mapping[str, Any],
     *,
     updated_by: str,

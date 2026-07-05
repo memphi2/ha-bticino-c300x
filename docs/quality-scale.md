@@ -12,15 +12,14 @@ This page explains the current blocker set and is validated by
 The integration is local-push based, capability-gated, async, unload-safe, and
 provides diagnostics plus repair issues. Fixture-backed tests cover setup,
 options, reconfigure, dashboard branching, invalid input handling, and Repair
-flows. The local coverage ratchet is currently 95%, and strict typing covers the
-media helpers, agent contracts, use-case commands, dashboard helpers, and
-selected shared helpers.
+flows. The local coverage ratchet is currently 95%, and the strict typing gate
+covers the HA-facing integration modules, shared helpers, media paths, agent
+contracts, and release/validation scripts.
 
 ## Platinum Blockers
 
 - `brands`
 - `test-coverage`
-- `strict-typing`
 
 ## Local Gates
 

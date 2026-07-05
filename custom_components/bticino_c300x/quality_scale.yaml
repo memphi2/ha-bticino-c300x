@@ -92,5 +92,5 @@ rules:
     status: done
     comment: Device-agent HTTP calls use Home Assistant's shared aiohttp client session.
   strict-typing:
-    status: todo
-    comment: Strict mypy covers media helpers, agent contracts, use-case commands, dashboard helpers, and shared helpers; remaining HA-facing modules still need stepwise coverage.
+    status: done
+    comment: Strict mypy covers the HA-facing integration modules, shared helpers, media paths, agent contracts, and release/validation scripts.

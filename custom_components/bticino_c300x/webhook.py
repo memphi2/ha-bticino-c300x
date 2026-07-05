@@ -12,7 +12,6 @@ from typing import Any, cast
 
 from aiohttp import web
 from homeassistant.components import webhook
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
@@ -47,6 +46,7 @@ from .const import (
 from .data import C300XEventState
 from .doorbell_state import raw_doorbell_state_value
 from .entity import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_display_data
 from .event_types import normalize_event_type, payload_event_key
 from .executor import (
@@ -85,7 +85,7 @@ class _DisplayBridgeContext:
     """Display-bridge command payload context."""
 
     hass: HomeAssistant
-    entry: ConfigEntry
+    entry: BticinoC300XConfigEntry
     payload: dict[str, Any]
 
 
@@ -94,7 +94,7 @@ class _AgentEventContext:
     """Event payload context used by state mutation handlers."""
 
     hass: HomeAssistant
-    entry: ConfigEntry
+    entry: BticinoC300XConfigEntry
     event_state: C300XEventState
     event_type: str
     payload: dict[str, Any]
@@ -107,7 +107,7 @@ def _json_object(value: Any) -> dict[str, Any]:
     return cast(dict[str, Any], value) if isinstance(value, dict) else {}
 
 
-def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[], None]:
+def async_register_webhook(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> Callable[[], None]:
     """Register the per-entry webhook and return an unregister callback."""
 
     webhook_id = entry.data[CONF_WEBHOOK_ID]
@@ -137,7 +137,7 @@ def async_register_webhook(hass: HomeAssistant, entry: ConfigEntry) -> Callable[
 
 def async_register_agent_event_webhook(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     event_state: C300XEventState,
 ) -> Callable[[], None]:
     """Register the device-agent-to-HA push-event webhook."""
@@ -169,7 +169,7 @@ def async_register_agent_event_webhook(
 
 async def _async_handle_webhook(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     request: web.Request,
 ) -> web.Response:
     """Handle a webhook request from the local C300X display bridge."""
@@ -278,7 +278,7 @@ _DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {
 
 async def _async_handle_agent_event(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     event_state: C300XEventState,
     request: web.Request,
 ) -> web.Response:
@@ -559,7 +559,7 @@ def _memos_event_data(event_state: C300XEventState) -> dict[str, Any]:
 
 def _apply_snapshot_entity_refresh(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     event_type: str,
 ) -> None:
     """Refresh stateful entities for subscription snapshots without firing events."""
@@ -570,7 +570,7 @@ def _apply_snapshot_entity_refresh(
         async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
 
 
-def _cache_voicemail_snapshot(entry: ConfigEntry, event_state: C300XEventState) -> None:
+def _cache_voicemail_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
@@ -582,7 +582,7 @@ def _cache_voicemail_snapshot(entry: ConfigEntry, event_state: C300XEventState) 
     runtime_data.answering_machine_messages_updated_at = dt_util.utcnow()
 
 
-def _cache_memos_snapshot(entry: ConfigEntry, event_state: C300XEventState) -> None:
+def _cache_memos_snapshot(entry: BticinoC300XConfigEntry, event_state: C300XEventState) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return
@@ -594,7 +594,7 @@ def _cache_memos_snapshot(entry: ConfigEntry, event_state: C300XEventState) -> N
 
 def _apply_system_metrics_event(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     data: dict[str, Any],
 ) -> None:
     metrics = (
@@ -614,7 +614,7 @@ def _apply_system_metrics_event(
 
 def _doorbell_event_data(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     event_state: C300XEventState,
     source: Mapping[str, Any] | None,
     doorbell_state: str | None,
@@ -629,7 +629,7 @@ def _doorbell_event_data(
 
 def _video_event_data(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     event_state: C300XEventState,
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:

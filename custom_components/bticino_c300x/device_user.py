@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+
+from .entry_types import BticinoC300XConfigEntry
 
 
 def homeassistant_account_label(hass: HomeAssistant) -> str:
@@ -100,7 +101,7 @@ def device_user_repair_reason(status: Mapping[str, Any]) -> str | None:
     return None
 
 
-def media_user_attributes(entry: ConfigEntry) -> dict[str, Any]:
+def media_user_attributes(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Return safe attributes for the media identity selected by the agent."""
 
     status = getattr(entry.runtime_data, "device_user_status", {})
@@ -115,7 +116,7 @@ def media_user_attributes(entry: ConfigEntry) -> dict[str, Any]:
     return attributes
 
 
-def media_user_attribute(entry: ConfigEntry) -> dict[str, Any]:
+def media_user_attribute(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Return one safe nested media-user attribute for compact entities."""
 
     attributes = media_user_attributes(entry)

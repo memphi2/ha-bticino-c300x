@@ -7,18 +7,18 @@ from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import C300XAgentApiError
 from .const import SIGNAL_MEMOS_CHANGED, SIGNAL_VIDEO_MESSAGES_CHANGED
+from .entry_types import BticinoC300XConfigEntry
 
 _VOICEMAIL_CACHE_SECONDS = 10
 _MEMOS_CACHE_SECONDS = 10
 
 
-def schedule_memos_refresh(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def schedule_memos_refresh(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     """Refresh memos once and notify all memo-backed entities."""
 
     _schedule_single_refresh(
@@ -31,7 +31,7 @@ def schedule_memos_refresh(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def _async_refresh_memos_from_agent(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     try:
         await async_memos(entry, force_refresh=True)
@@ -43,7 +43,7 @@ async def _async_refresh_memos_from_agent(
 
 def schedule_answering_machine_messages_refresh(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     """Refresh video-message metadata once and notify all backed entities."""
 
@@ -60,7 +60,7 @@ def schedule_answering_machine_messages_refresh(
 
 def _schedule_single_refresh(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     task_attr: str,
     refresh: Callable[[], Coroutine[Any, Any, None]],
@@ -82,7 +82,7 @@ def _schedule_single_refresh(
 
 async def _async_refresh_answering_machine_messages_from_agent(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     try:
         await async_answering_machine_messages(entry, force_refresh=True)
@@ -100,7 +100,7 @@ async def _async_refresh_answering_machine_messages_from_agent(
 
 
 async def async_answering_machine_messages(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
@@ -116,7 +116,7 @@ async def async_answering_machine_messages(
 
 
 async def async_memos(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
@@ -132,7 +132,7 @@ async def async_memos(
 
 
 async def _async_cached_payload(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     payload_attr: str,
     ttl_seconds: int,
@@ -157,7 +157,7 @@ async def _async_cached_payload(
 
 
 def _store_payload(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     payload_attr: str,
     payload: dict[str, Any],
     *,

@@ -5,12 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
-
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
 from .device_user import device_user_ready
 from .entry_config import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 from .media_setup import (
     media_readiness_action,
     self_test_failure_is_optional_ipv6_only,
@@ -28,7 +27,7 @@ MEDIA_READINESS_REQUIRED_SELF_TEST_CHECKS = (
 )
 
 
-def media_readiness(entry: ConfigEntry) -> dict[str, Any]:
+def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Return a read-only readiness summary for local media features."""
 
     runtime_data = entry.runtime_data

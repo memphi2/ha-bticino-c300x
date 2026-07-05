@@ -50,6 +50,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/doorbell_state.py",
     "custom_components/bticino_c300x/doorstation_audio.py",
     "custom_components/bticino_c300x/entry_config.py",
+    "custom_components/bticino_c300x/entry_types.py",
     "custom_components/bticino_c300x/entity.py",
     "custom_components/bticino_c300x/error_text.py",
     "custom_components/bticino_c300x/event.py",

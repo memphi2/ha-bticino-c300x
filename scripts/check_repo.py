@@ -99,6 +99,7 @@ REQUIRED_PATHS = [
     "custom_components/bticino_c300x/quality_scale.yaml",
     "custom_components/bticino_c300x/config_flow.py",
     "custom_components/bticino_c300x/discovery.py",
+    "custom_components/bticino_c300x/entry_types.py",
     "custom_components/bticino_c300x/webhook.py",
     "custom_components/bticino_c300x/diagnostics.py",
     "custom_components/bticino_c300x/repair_issues.py",
@@ -195,6 +196,7 @@ def main() -> int:
     failures.extend(check_current_audit_snapshot())
     failures.extend(check_release_metadata())
     failures.extend(check_home_assistant_deprecations())
+    failures.extend(check_config_entry_typing())
     failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
     failures.extend(check_hacs_metadata())
@@ -515,6 +517,33 @@ def check_home_assistant_deprecations() -> list[str]:
         if re.search(r"\.async_publish\([^)]*\bretain\s*=\s*None", text, re.DOTALL):
             failures.append(
                 f"{relative(path)} must not publish MQTT messages with retain=None"
+            )
+    return failures
+
+
+def check_config_entry_typing() -> list[str]:
+    """Keep the runtime_data-aware ConfigEntry alias centralized."""
+
+    failures: list[str] = []
+    alias_path = ROOT / "custom_components" / "bticino_c300x" / "entry_types.py"
+    alias_text = alias_path.read_text(encoding="utf-8")
+    for token in (
+        "type BticinoC300XConfigEntry = ConfigEntry[BticinoC300XRuntimeData]",
+        "BticinoC300XConfigEntry = Any",
+    ):
+        if token not in alias_text:
+            failures.append(f"entry_types.py must define the shared typed ConfigEntry alias: {token}")
+    for path in (ROOT / "custom_components" / "bticino_c300x").rglob("*.py"):
+        if path == alias_path:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "from homeassistant.config_entries import ConfigEntry" in text:
+            failures.append(
+                f"{relative(path)} must import BticinoC300XConfigEntry from entry_types.py"
+            )
+        if "config_entries.ConfigEntry" in text:
+            failures.append(
+                f"{relative(path)} must use BticinoC300XConfigEntry for entry annotations"
             )
     return failures
 

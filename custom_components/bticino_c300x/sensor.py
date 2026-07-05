@@ -12,7 +12,6 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EntityCategory,
     UnitOfTemperature,
@@ -58,6 +57,7 @@ from .doorbell_state import (
     raw_doorbell_state_value,
 )
 from .entity import C300XEntity
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_readiness import MEDIA_READINESS_STATUS_OPTIONS, media_readiness
 from .memos import (
@@ -226,7 +226,7 @@ def _poll_wakeups_per_loop(diagnostics: Mapping[str, Any]) -> float | None:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X sensors."""
@@ -303,7 +303,7 @@ class C300XConnectionDiagnosticSensor(C300XEntity, SensorEntity):
         state = self._entry.runtime_data.connection_state
         if not state.available:
             return "disconnected"
-        return cast(str, state.connection_state)
+        return state.connection_state
 
 
 class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
@@ -313,7 +313,7 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
     _attr_options = ["ok", "warning", "error"]
     _attr_translation_key = "agent_status"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "agent_status")
 
     async def async_update(self) -> None:
@@ -412,7 +412,7 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
     _attr_options = list(_AGENT_DIAGNOSTICS_STATUS_OPTIONS)
     _attr_translation_key = "agent_diagnostics"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "agent_diagnostics")
 
     async def async_update(self) -> None:
@@ -512,7 +512,7 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
     _attr_options = list(MEDIA_READINESS_STATUS_OPTIONS)
     _attr_translation_key = "media_readiness"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "media_readiness")
         self._last_state_snapshot: _EntityStateSnapshot | None = None
 
@@ -698,7 +698,7 @@ class C300XDoorbellStateSensor(C300XEntity, SensorEntity):
     _attr_should_poll = False
     _attr_translation_key = "doorbell_state"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "doorbell_state")
         self._state: str | None = None
         self._last_event_at: str | None = None
@@ -790,7 +790,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _metric_key = ""
 
-    def __init__(self, entry: ConfigEntry, key: str) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         super().__init__(entry, key)
         self._recovery_refresh_task: Task[None] | None = None
         self._last_state_snapshot: _EntityStateSnapshot | None = None
@@ -830,7 +830,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
 
     @property
     def _metrics(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self._entry.runtime_data.system_metrics)
+        return self._entry.runtime_data.system_metrics
 
     @callback
     def _handle_connection_state_changed(self, entry_id: str) -> None:
@@ -897,7 +897,7 @@ class C300XDeviceTemperatureSensor(C300XSystemMetricSensor):
     _attr_translation_key = "device_temperature"
     _metric_key = "temperature_c"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "device_temperature")
 
     @property
@@ -921,7 +921,7 @@ class C300XDeviceLoadSensor(C300XSystemMetricSensor):
     _attr_translation_key = "device_load"
     _metric_key = "load_1m_percent"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "device_load")
 
     @property
@@ -959,7 +959,7 @@ class C300XDeviceMemorySensor(C300XSystemMetricSensor):
     _attr_translation_key = "device_memory"
     _metric_key = "memory_usage_percent"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "device_memory")
 
     @property
@@ -987,7 +987,7 @@ class C300XDeviceCpuSensor(C300XSystemMetricSensor):
     _attr_translation_key = "device_cpu"
     _metric_key = "cpu_usage_percent"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "device_cpu")
 
     @property
@@ -1039,7 +1039,7 @@ class C300XVoicemailSensor(C300XEntity, SensorEntity):
 
     @property
     def _messages(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self._entry.runtime_data.answering_machine_messages)
+        return self._entry.runtime_data.answering_machine_messages
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1080,7 +1080,7 @@ class C300XVoicemailMessagesSensor(C300XVoicemailSensor):
     _attr_native_unit_of_measurement = "messages"
     _attr_translation_key = "voicemail_messages"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "voicemail_messages")
 
     @property
@@ -1138,7 +1138,7 @@ class C300XMemoSensor(C300XEntity, SensorEntity):
 
     @property
     def _memos(self) -> dict[str, Any]:
-        return cast(dict[str, Any], self._entry.runtime_data.memos)
+        return self._entry.runtime_data.memos
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1180,7 +1180,7 @@ class C300XTextMemosSensor(C300XMemoSensor):
     _attr_translation_key = "text_memos"
     _memo_kind = "text"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "text_memos")
 
     @property
@@ -1211,7 +1211,7 @@ class C300XVoiceMemosSensor(C300XMemoSensor):
     _attr_translation_key = "voice_memos"
     _memo_kind = "voice"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "voice_memos")
 
     @property
@@ -1236,7 +1236,7 @@ class C300XVoiceMemosSensor(C300XMemoSensor):
 
 
 async def _async_system_metrics(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     force_refresh: bool = False,
 ) -> dict[str, Any]:
@@ -1250,14 +1250,14 @@ async def _async_system_metrics(
         and updated_at is not None
         and (now - updated_at).total_seconds() < _METRICS_CACHE_SECONDS
     ):
-        return cast(dict[str, Any], entry.runtime_data.system_metrics)
+        return entry.runtime_data.system_metrics
     metrics = cast(dict[str, Any], await entry.runtime_data.api.async_system_metrics())
     entry.runtime_data.system_metrics = metrics
     entry.runtime_data.system_metrics_updated_at = now
     return metrics
 
 
-def _system_metrics_capability(entry: ConfigEntry) -> dict[str, Any]:
+def _system_metrics_capability(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     metrics = capabilities.get("system_metrics") if isinstance(capabilities, dict) else None
     if not isinstance(metrics, dict) or not metrics.get("supported"):
@@ -1266,7 +1266,7 @@ def _system_metrics_capability(entry: ConfigEntry) -> dict[str, Any]:
 
 
 async def _async_refresh_initial_answering_machine_messages(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     """Load a one-shot video-message snapshot for startup state."""
 
@@ -1280,7 +1280,7 @@ async def _async_refresh_initial_answering_machine_messages(
         entry.runtime_data.answering_machine_messages_updated_at = datetime.now(UTC)
 
 
-async def _async_refresh_initial_memos(entry: ConfigEntry) -> None:
+async def _async_refresh_initial_memos(entry: BticinoC300XConfigEntry) -> None:
     """Load a one-shot memo snapshot for startup state."""
 
     try:

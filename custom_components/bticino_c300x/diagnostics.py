@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .callback_target import (
@@ -41,6 +40,7 @@ from .const import (
 )
 from .device_installer import installer_bundle_status
 from .entity import entry_config_value, entry_video_enabled
+from .entry_types import BticinoC300XConfigEntry
 from .fingerprint import fnv1a64_fingerprint
 
 _SENSITIVE_KEY_PARTS = (
@@ -110,7 +110,7 @@ _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     """Return safe diagnostics without secrets."""
 
@@ -191,7 +191,7 @@ async def async_get_config_entry_diagnostics(
     }
 
 
-def _entry_diagnostics(entry: ConfigEntry) -> dict[str, Any]:
+def _entry_diagnostics(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     return {
         "title_configured": bool(getattr(entry, "title", "")),
         "entry_id_fingerprint": fnv1a64_fingerprint(str(getattr(entry, "entry_id", ""))),
@@ -202,7 +202,7 @@ def _entry_diagnostics(entry: ConfigEntry) -> dict[str, Any]:
     }
 
 
-def _agent_write_diagnostics(entry: ConfigEntry) -> dict[str, Any] | None:
+def _agent_write_diagnostics(entry: BticinoC300XConfigEntry) -> dict[str, Any] | None:
     """Return safe write diagnostics if runtime data is available."""
 
     if not hasattr(entry, "runtime_data"):
@@ -329,7 +329,7 @@ def _operation_diagnostics(operation: Any | None) -> dict[str, Any] | None:
 
 async def _async_network_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     host = str(entry_config_value(entry, CONF_AGENT_HOST, "") or "").strip()
     try:
@@ -626,7 +626,7 @@ def _safe_status_dict(value: Any) -> dict[str, Any] | None:
     }
 
 
-def _configured_alarm_entity(entry: ConfigEntry) -> str:
+def _configured_alarm_entity(entry: BticinoC300XConfigEntry) -> str:
     value = entry.options.get(CONF_ALARM_ENTITY_ID) or entry.data.get(
         CONF_ALARM_ENTITY_ID,
         "",
@@ -634,7 +634,7 @@ def _configured_alarm_entity(entry: ConfigEntry) -> str:
     return value if isinstance(value, str) else ""
 
 
-def _configured_weather_entity(entry: ConfigEntry) -> str:
+def _configured_weather_entity(entry: BticinoC300XConfigEntry) -> str:
     value = entry.options.get(CONF_WEATHER_ENTITY_ID) or entry.data.get(
         CONF_WEATHER_ENTITY_ID,
         "",

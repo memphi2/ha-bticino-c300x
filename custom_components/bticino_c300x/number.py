@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.number import NumberEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -14,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import C300XAgentApiError
 from .const import EVENT_AGENT_EVENT_RECEIVED
 from .entity import C300XEntity
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ _RINGER_VOLUME_STEP = 1
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X number entities."""
@@ -49,7 +49,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
     _attr_native_max_value = _RINGER_VOLUME_MAX
     _attr_native_step = _RINGER_VOLUME_STEP
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "ringer_volume")
         self._volume: int | None = None
         self._attr_available = True
@@ -115,7 +115,7 @@ class C300XRingerVolumeNumber(C300XEntity, NumberEntity):
         self.async_write_ha_state()
 
 
-def _supports_ringer_volume(entry: ConfigEntry) -> bool:
+def _supports_ringer_volume(entry: BticinoC300XConfigEntry) -> bool:
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     ringer = capabilities.get("ringer") if isinstance(capabilities, Mapping) else None
     return (

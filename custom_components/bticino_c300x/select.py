@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -16,6 +15,7 @@ from .const import (
     SMARTPHONE_FORWARDING_MODES,
 )
 from .entity import C300XEntity, supports_capability
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .forwarding import coerce_forwarding_mode_state
 
@@ -36,7 +36,7 @@ _FORWARDING_MODE_BY_LABEL = {
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X select entities."""
@@ -56,7 +56,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     _attr_translation_key = "smartphone_forwarding_mode"
     _attr_options = list(_FORWARDING_OPTION_LABELS.values())
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "smartphone_forwarding_mode")
         self._mode: int | None = None
         self._state = "unknown"

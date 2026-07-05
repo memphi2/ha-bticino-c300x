@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -33,6 +32,7 @@ from .const import (
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .entity import C300XEntity, entry_video_enabled, supports_capability
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .executor import async_trigger_stair_light, async_unlock_door
 from .memos import latest_memo_id
@@ -53,7 +53,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X buttons."""
@@ -95,7 +95,7 @@ class C300XStairLightButton(C300XEntity, ButtonEntity):
 
     _attr_translation_key = "stair_light"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "stair_light")
 
     async def async_press(self) -> None:
@@ -116,7 +116,7 @@ class C300XDoorUnlockButton(C300XEntity, ButtonEntity):
 
     _attr_translation_key = "door_unlock"
 
-    def __init__(self, entry: ConfigEntry, lock_id: str, lock_name: str) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, lock_id: str, lock_name: str) -> None:
         key = "door_unlock" if lock_id == "default" else f"door_unlock_{lock_id}"
         super().__init__(entry, key)
         self._lock_id = lock_id
@@ -139,7 +139,7 @@ class C300XDoorUnlockButton(C300XEntity, ButtonEntity):
 class C300XDeviceActivationButton(C300XEntity, ButtonEntity):
     """Button that runs one configured C300X device activation."""
 
-    def __init__(self, entry: ConfigEntry, activation: dict[str, Any]) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, activation: dict[str, Any]) -> None:
         activation_id = str(activation["id"])
         super().__init__(entry, f"device_activation_{activation_id}")
         self._activation = activation
@@ -185,7 +185,7 @@ class C300XStopDoorbellVideoButton(C300XEntity, ButtonEntity):
 
     _attr_translation_key = "stop_doorbell_video"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "stop_doorbell_video")
 
     @property
@@ -240,7 +240,7 @@ class C300XRebootButton(C300XMaintenanceButton):
     _attr_translation_key = "reboot"
     _maintenance_action = "reboot"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "reboot")
 
     async def async_press(self) -> None:
@@ -264,7 +264,7 @@ class C300XRemoveAgentButton(C300XMaintenanceButton):
     _attr_translation_key = "remove_agent"
     _maintenance_action = "agent_remove"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "remove_agent")
 
     async def async_press(self) -> None:
@@ -288,7 +288,7 @@ class C300XRestartAgentButton(C300XMaintenanceButton):
     _attr_translation_key = "restart_agent"
     _maintenance_action = "agent_restart"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "restart_agent")
 
     async def async_press(self) -> None:
@@ -312,7 +312,7 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
     _attr_translation_key = "reload_gui"
     _maintenance_action = "gui_reload"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "reload_gui")
 
     async def async_press(self) -> None:
@@ -334,7 +334,7 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
     _memo_kind = ""
     _memo_label = "memo"
 
-    def __init__(self, entry: ConfigEntry, key: str) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         super().__init__(entry, key)
 
     @property
@@ -449,7 +449,7 @@ class C300XDeleteLatestTextMemoButton(C300XDeleteLatestMemoButton):
     _memo_kind = "text"
     _memo_label = "text"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_text_memo")
 
 
@@ -460,7 +460,7 @@ class C300XDeleteLatestVoiceMemoButton(C300XDeleteLatestMemoButton):
     _memo_kind = "voice"
     _memo_label = "voice"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_voice_memo")
 
 
@@ -469,7 +469,7 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
 
     _attr_translation_key = "delete_latest_video_message"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_video_message")
 
     @property
@@ -610,7 +610,7 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
             self.async_write_ha_state()
 
 
-async def _async_activation_items(entry: ConfigEntry) -> list[dict[str, Any]]:
+async def _async_activation_items(entry: BticinoC300XConfigEntry) -> list[dict[str, Any]]:
     """Return executable activation discovery items without failing setup."""
 
     try:
@@ -639,12 +639,12 @@ def _activation_icon(activation_type: str) -> str:
     return "mdi:gesture-tap-button"
 
 
-def _connection_available(entry: ConfigEntry) -> bool:
+def _connection_available(entry: BticinoC300XConfigEntry) -> bool:
     connection_state = getattr(entry.runtime_data, "connection_state", None)
     return connection_state is None or bool(connection_state.available)
 
 
-def _gui_required_action_available(entry: ConfigEntry) -> bool:
+def _gui_required_action_available(entry: BticinoC300XConfigEntry) -> bool:
     if not _connection_available(entry):
         return False
     runtime_data = getattr(entry, "runtime_data", None)
@@ -654,17 +654,17 @@ def _gui_required_action_available(entry: ConfigEntry) -> bool:
     )
 
 
-def _memo_store_available(entry: ConfigEntry) -> bool:
+def _memo_store_available(entry: BticinoC300XConfigEntry) -> bool:
     memos = getattr(entry.runtime_data, "memos", {})
     return not isinstance(memos, dict) or bool(memos.get("available", True))
 
 
-def _video_message_store_available(entry: ConfigEntry) -> bool:
+def _video_message_store_available(entry: BticinoC300XConfigEntry) -> bool:
     messages = getattr(entry.runtime_data, "answering_machine_messages", {})
     return not isinstance(messages, dict) or bool(messages.get("available", True))
 
 
-async def _async_ensure_gui_function_patch(entry: ConfigEntry) -> None:
+async def _async_ensure_gui_function_patch(entry: BticinoC300XConfigEntry) -> None:
     if entry_gui_function_patch_active(entry):
         return
     try:

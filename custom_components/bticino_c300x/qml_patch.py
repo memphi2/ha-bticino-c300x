@@ -6,13 +6,12 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.config_entries import ConfigEntry
-
 from .const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from .entry_config import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 
 
-async def async_refresh_qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
+async def async_refresh_qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Refresh and store the device-reported Display patch status."""
 
     status = cast(dict[str, Any], await entry.runtime_data.api.async_qml_patch_status())
@@ -24,7 +23,7 @@ type _StatusChanged = Callable[[], None]
 
 
 async def async_apply_qml_patch_and_confirm(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     status_changed: _StatusChanged | None = None,
 ) -> dict[str, Any]:
     """Apply the patch and store the confirmed post-action status."""
@@ -43,7 +42,7 @@ async def async_apply_qml_patch_and_confirm(
 
 
 async def async_apply_qml_core_patch_and_confirm(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     status_changed: _StatusChanged | None = None,
 ) -> dict[str, Any]:
     """Apply the always-needed core media hook and store confirmed status."""
@@ -70,7 +69,7 @@ async def async_apply_qml_core_patch_and_confirm(
 
 
 async def async_restore_qml_core_patch_and_confirm(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     status_changed: _StatusChanged | None = None,
 ) -> dict[str, Any]:
     """Restore only the core media hook and store confirmed status."""
@@ -97,7 +96,7 @@ async def async_restore_qml_core_patch_and_confirm(
 
 
 async def async_restore_qml_patch_and_confirm(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     status_changed: _StatusChanged | None = None,
 ) -> dict[str, Any]:
     """Restore display files and store the confirmed post-action status."""
@@ -112,7 +111,7 @@ async def async_restore_qml_patch_and_confirm(
 
 
 async def _async_run_qml_patch_action(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     status_changed: _StatusChanged | None,
     transient_state: str,
@@ -139,7 +138,7 @@ async def _async_run_qml_patch_action(
     return status
 
 
-def _store_transient_qml_patch_status(entry: ConfigEntry, state: str) -> None:
+def _store_transient_qml_patch_status(entry: BticinoC300XConfigEntry, state: str) -> None:
     current = _qml_patch_status(entry)
     _store_qml_patch_status(
         entry,
@@ -156,7 +155,7 @@ def _store_transient_qml_patch_status(entry: ConfigEntry, state: str) -> None:
     )
 
 
-def _store_transient_qml_core_patch_status(entry: ConfigEntry, state: str) -> None:
+def _store_transient_qml_core_patch_status(entry: BticinoC300XConfigEntry, state: str) -> None:
     current = _qml_patch_status(entry)
     _store_qml_patch_status(
         entry,
@@ -173,7 +172,7 @@ def _store_transient_qml_core_patch_status(entry: ConfigEntry, state: str) -> No
     )
 
 
-def _qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
+def _qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     status = getattr(entry.runtime_data, "qml_patch_status", {})
     return dict(status) if isinstance(status, dict) else {}
 
@@ -183,6 +182,6 @@ def _notify_status_changed(status_changed: _StatusChanged | None) -> None:
         status_changed()
 
 
-def _store_qml_patch_status(entry: ConfigEntry, status: dict[str, Any]) -> None:
+def _store_qml_patch_status(entry: BticinoC300XConfigEntry, status: dict[str, Any]) -> None:
     entry.runtime_data.qml_patch_status = status
     entry.runtime_data.qml_patch_status_updated_at = datetime.now(UTC)

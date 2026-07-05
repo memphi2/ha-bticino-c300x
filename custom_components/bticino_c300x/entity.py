@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
@@ -13,6 +12,7 @@ from homeassistant.helpers.entity import Entity
 from .capabilities import capability_is_supported
 from .const import CONF_VIDEO_ENABLED, DOMAIN, SIGNAL_CONNECTION_STATE_CHANGED
 from .entry_config import entry_config_value as entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 
 if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceInfo
@@ -25,7 +25,7 @@ class C300XEntity(Entity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, entry: ConfigEntry, key: str) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_device_info = _device_info(entry)
@@ -68,27 +68,27 @@ class C300XEntity(Entity):
         self.async_write_ha_state()
 
 
-def supports_capability(entry: ConfigEntry, capability: str) -> bool:
+def supports_capability(entry: BticinoC300XConfigEntry, capability: str) -> bool:
     """Return true when the device agent reports support for a capability."""
 
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     return capability_is_supported(capabilities, capability)
 
 
-def entry_video_enabled(entry: ConfigEntry) -> bool:
+def entry_video_enabled(entry: BticinoC300XConfigEntry) -> bool:
     """Return the effective HA video setting for this entry."""
 
     return bool(entry_config_value(entry, CONF_VIDEO_ENABLED, False))
 
 
-def _connection_state_available(entry: ConfigEntry) -> bool | None:
+def _connection_state_available(entry: BticinoC300XConfigEntry) -> bool | None:
     runtime_data = getattr(entry, "runtime_data", None)
     connection_state = getattr(runtime_data, "connection_state", None)
     value = getattr(connection_state, "available", None)
     return value if isinstance(value, bool) else None
 
 
-def _device_info(entry: ConfigEntry) -> DeviceInfo:
+def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
     """Return C300X device metadata without extra device reads."""
 
     info: DeviceInfo = {
@@ -103,7 +103,7 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
     return info
 
 
-def _agent_info_string(entry: ConfigEntry, key: str) -> str | None:
+def _agent_info_string(entry: BticinoC300XConfigEntry, key: str) -> str | None:
     """Return a non-empty string value from cached agent setup metadata."""
 
     runtime_data = getattr(entry, "runtime_data", None)

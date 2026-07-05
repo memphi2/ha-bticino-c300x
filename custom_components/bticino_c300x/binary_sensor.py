@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import EVENT_AGENT_EVENT_RECEIVED
 from .device_user import media_user_attributes
 from .entity import C300XEntity, supports_capability
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_status import home_call_payload as _home_call_payload
 from .value_parsing import optional_int as _optional_int
@@ -22,7 +22,7 @@ HOME_CALL_EVENTS = {"home_call_started", "home_call_answered", "home_call_ended"
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X binary sensors."""
@@ -39,7 +39,7 @@ class C300XHomeCallActiveBinarySensor(C300XEntity, BinarySensorEntity):
     _attr_should_poll = False
     _attr_translation_key = "home_call_active"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "home_call_active")
         self._running = False
         self._active = False

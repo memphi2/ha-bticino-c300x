@@ -7,7 +7,6 @@ import socket
 from typing import Any
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .callback_target import (
@@ -22,6 +21,7 @@ from .const import (
     DEFAULT_AGENT_PORT,
 )
 from .entry_config import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 
 _SOURCE_CONNECT_TIMEOUT_SECONDS = 0.35
 _DEFAULT_CALLBACK_PORT = 8123
@@ -29,7 +29,7 @@ _DEFAULT_CALLBACK_PORT = 8123
 
 async def async_generate_agent_callback_url(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     webhook_id: str,
 ) -> str:
     """Generate a HA webhook URL suitable for callbacks from the device agent.
@@ -62,7 +62,7 @@ async def async_generate_agent_callback_url(
 
 async def async_suggest_callback_base_url(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> str:
     """Suggest a local HTTP callback base URL without mutating the entry."""
 
@@ -134,7 +134,7 @@ def apply_callback_base_url(callback_url: str, callback_base_url: str) -> str:
 
 async def async_rewrite_link_local_callback_url(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     callback_url: str,
 ) -> str:
     """Replace mDNS/link-local callback hosts with a routable HA source address."""

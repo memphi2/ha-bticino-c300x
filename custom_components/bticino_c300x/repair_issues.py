@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
@@ -23,6 +22,7 @@ from .const import (
     FRONTEND_CARD_SETUP_REPAIR_VERSION,
 )
 from .device_user import device_user_repair_reason
+from .entry_types import BticinoC300XConfigEntry
 from .media_readiness import media_readiness
 from .media_setup import (
     media_setup_fixable_checks,
@@ -78,7 +78,7 @@ def repair_issue_id(issue_type: str, entry_id: str) -> str:
 @callback
 def async_sync_entry_repair_issues(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     """Synchronize actionable Repairs issues for a loaded config entry."""
 
@@ -127,7 +127,7 @@ def async_delete_repair_issue(
 @callback
 def async_create_media_watchdog_issue(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     *,
     reason: str,
     cpu_percent: float | None,
@@ -149,7 +149,7 @@ def async_create_media_watchdog_issue(
     )
 
 
-def _sync_action_map_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_action_map_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     try:
         validate_action_map(entry.options.get(CONF_ACTIONS, {}))
     except ActionValidationError as err:
@@ -164,7 +164,7 @@ def _sync_action_map_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     async_delete_repair_issue(hass, entry.entry_id, INVALID_ACTION_MAP_ISSUE)
 
 
-def _sync_missing_alarm_entity_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_missing_alarm_entity_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     alarm_entity_id = _configured_alarm_entity_id(entry)
     if not alarm_entity_id:
         async_delete_repair_issue(hass, entry.entry_id, MISSING_ALARM_ENTITY_ISSUE)
@@ -181,7 +181,7 @@ def _sync_missing_alarm_entity_issue(hass: HomeAssistant, entry: ConfigEntry) ->
     )
 
 
-def _sync_frontend_card_setup_hint_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_frontend_card_setup_hint_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     if not isinstance(capabilities, dict) or not (
         capability_is_supported(capabilities, "doorbell_video")
@@ -201,7 +201,7 @@ def _sync_frontend_card_setup_hint_issue(hass: HomeAssistant, entry: ConfigEntry
     )
 
 
-def _sync_agent_capability_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_agent_capability_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     connection_state = getattr(entry.runtime_data, "connection_state", None)
     if connection_state is not None and not getattr(connection_state, "available", True):
         async_delete_repair_issue(
@@ -232,7 +232,7 @@ def _sync_agent_capability_issue(hass: HomeAssistant, entry: ConfigEntry) -> Non
     )
 
 
-def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_device_agent_update_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     update_state = getattr(entry.runtime_data, "agent_update_state", None)
     if update_state is None or not getattr(update_state, "update_required", False):
         async_delete_repair_issue(hass, entry.entry_id, DEVICE_AGENT_UPDATE_REQUIRED_ISSUE)
@@ -247,7 +247,7 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: ConfigEntry) -> 
     )
 
 
-def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     diagnostics = getattr(runtime_data, "agent_diagnostics", None)
     if not isinstance(diagnostics, Mapping):
@@ -272,7 +272,7 @@ def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: ConfigEntry) ->
     )
 
 
-def _sync_device_agent_self_test_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_device_agent_self_test_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not getattr(connection_state, "available", True):
@@ -323,7 +323,7 @@ def _sync_device_agent_self_test_issue(hass: HomeAssistant, entry: ConfigEntry) 
 
 def _sync_device_agent_ui_event_watchdog_issue(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     diagnostics = getattr(runtime_data, "agent_diagnostics", None)
@@ -365,7 +365,7 @@ def _sync_device_agent_ui_event_watchdog_issue(
 
 def _sync_unsupported_callback_url_issue(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     callback_problem = _callback_problem(entry)
     if callback_problem is None:
@@ -381,7 +381,7 @@ def _sync_unsupported_callback_url_issue(
     )
 
 
-def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not getattr(connection_state, "available", True):
@@ -434,7 +434,7 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: ConfigEntry) ->
     )
 
 
-def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_device_user_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not getattr(connection_state, "available", True):
@@ -477,7 +477,7 @@ def _sync_device_user_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
     )
 
 
-def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
     if not _entry_media_enabled(entry):
         async_delete_repair_issue(
@@ -528,7 +528,7 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: ConfigEntry) -> N
     )
 
 
-def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:
+def _callback_problem(entry: BticinoC300XConfigEntry) -> dict[str, str] | None:
     runtime_data = getattr(entry, "runtime_data", None)
     if runtime_data is None:
         return None
@@ -586,7 +586,7 @@ def _callback_problem(entry: ConfigEntry) -> dict[str, str] | None:
 
 def _create_issue(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     issue_type: str,
     *,
     severity: ir.IssueSeverity,
@@ -612,12 +612,12 @@ def _create_issue(
     )
 
 
-def _configured_alarm_entity_id(entry: ConfigEntry) -> str:
+def _configured_alarm_entity_id(entry: BticinoC300XConfigEntry) -> str:
     value = entry.options.get(CONF_ALARM_ENTITY_ID) or entry.data.get(CONF_ALARM_ENTITY_ID)
     return value.strip() if isinstance(value, str) else ""
 
 
-def _entry_media_enabled(entry: ConfigEntry) -> bool:
+def _entry_media_enabled(entry: BticinoC300XConfigEntry) -> bool:
     options = getattr(entry, "options", {})
     data = getattr(entry, "data", {})
     if isinstance(options, dict) and CONF_VIDEO_ENABLED in options:
@@ -645,7 +645,7 @@ def _registry_entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     return registry.async_get(entity_id) is not None
 
 
-def _frontend_card_setup_repair_handled(entry: ConfigEntry) -> bool:
+def _frontend_card_setup_repair_handled(entry: BticinoC300XConfigEntry) -> bool:
     """Return true when this Lovelace card repair generation was handled."""
 
     data_version = entry.data.get(CONF_FRONTEND_CARD_SETUP_REPAIR_VERSION)
@@ -658,7 +658,7 @@ def _frontend_card_setup_repair_handled(entry: ConfigEntry) -> bool:
 
 def _mark_frontend_card_setup_dismissed(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> None:
     """Persist that the Lovelace card setup hint has been handled."""
 

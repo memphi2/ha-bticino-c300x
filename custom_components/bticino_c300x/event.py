@@ -9,7 +9,6 @@ from homeassistant.components.event import (
     EventDeviceClass,
     EventEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -20,6 +19,7 @@ from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
 )
 from .entity import C300XEntity, supports_capability
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import (
     action_event_display_data,
     agent_event_display_data,
@@ -35,7 +35,7 @@ PARALLEL_UPDATES = 0
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the C300X device-agent event entity."""
@@ -58,7 +58,7 @@ class C300XDoorbellEventEntity(C300XEntity, EventEntity):
     _attr_should_poll = False
     _attr_translation_key = "doorbell_event"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         C300XEntity.__init__(self, entry, "doorbell_event")
         self._last_ring_at: str | None = None
         self._last_ring_data: dict[str, Any] = {}
@@ -111,7 +111,7 @@ class C300XDeviceAgentEventEntity(C300XEntity, EventEntity):
     _attr_should_poll = False
     _attr_translation_key = "agent_event"
 
-    def __init__(self, entry: ConfigEntry, event_types: list[str]) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry, event_types: list[str]) -> None:
         C300XEntity.__init__(self, entry, "agent_event")
         self._event_keys = event_types
         self._attr_event_types = event_types

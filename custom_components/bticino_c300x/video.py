@@ -5,11 +5,11 @@ from __future__ import annotations
 from base64 import b64decode
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .const import DEFAULT_VIDEO_STREAM_PATH, DOMAIN
+from .entry_types import BticinoC300XConfigEntry
 
 CAMERA_DOMAIN = "camera"
 DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"
@@ -28,7 +28,7 @@ _CAMERA_PROXY_IMAGE_B64 = (
 TRANSPARENT_CAMERA_PROXY_IMAGE = b64decode(_CAMERA_PROXY_IMAGE_B64)
 
 
-def doorbell_camera_unique_id(entry: ConfigEntry) -> str:
+def doorbell_camera_unique_id(entry: BticinoC300XConfigEntry) -> str:
     """Return the stable unique ID used by the doorbell camera entity."""
 
     return f"{entry.entry_id}_{DOORBELL_CAMERA_UNIQUE_ID_SUFFIX}"
@@ -36,7 +36,7 @@ def doorbell_camera_unique_id(entry: ConfigEntry) -> str:
 
 def resolve_doorbell_camera_entity_id(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> str | None:
     """Resolve the current doorbell camera entity ID from the entity registry."""
 

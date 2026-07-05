@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from enum import IntFlag
 from typing import TYPE_CHECKING, Any, cast
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .action import (
@@ -66,6 +65,7 @@ from .dashboard_labels import (
 )
 from .dashboard_weather import async_dashboard_weather_payload
 from .entity import entry_config_value
+from .entry_types import BticinoC300XConfigEntry
 
 if TYPE_CHECKING:
     from homeassistant.components.alarm_control_panel.const import (
@@ -172,14 +172,14 @@ def _dashboard_language(hass: HomeAssistant | None) -> str:
     return "en"
 
 
-def configured_alarm_entity_id(entry: ConfigEntry) -> str | None:
+def configured_alarm_entity_id(entry: BticinoC300XConfigEntry) -> str | None:
     """Return the alarm entity configured for a C300X entry."""
 
     value = entry_config_value(entry, CONF_ALARM_ENTITY_ID)
     return value if isinstance(value, str) and value else None
 
 
-def configured_alarm_page_entity_id(entry: ConfigEntry) -> str | None:
+def configured_alarm_page_entity_id(entry: BticinoC300XConfigEntry) -> str | None:
     """Return the optional dashboard-compatible entity shown on the alarm page."""
 
     value = entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID)
@@ -187,14 +187,14 @@ def configured_alarm_page_entity_id(entry: ConfigEntry) -> str | None:
     return entities[0] if entities else None
 
 
-def configured_weather_entity_id(entry: ConfigEntry) -> str | None:
+def configured_weather_entity_id(entry: BticinoC300XConfigEntry) -> str | None:
     """Return the weather entity configured for the C300X dashboard."""
 
     value = entry_config_value(entry, CONF_WEATHER_ENTITY_ID)
     return value if isinstance(value, str) and value else None
 
 
-def configured_actions(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
+def configured_actions(entry: BticinoC300XConfigEntry) -> dict[str, dict[str, Any]]:
     """Return the validated configured action allowlist."""
 
     try:
@@ -205,14 +205,14 @@ def configured_actions(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
         return {}
 
 
-def configured_dashboard_entities(entry: ConfigEntry) -> tuple[str, ...]:
+def configured_dashboard_entities(entry: BticinoC300XConfigEntry) -> tuple[str, ...]:
     """Return selected standard HA entities for the C300X dashboard."""
 
     return _dashboard_entity_ids(entry_config_value(entry, CONF_DASHBOARD_ENTITIES, []))
 
 
 def configured_dashboard_entity_display_overrides(
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> dict[str, dict[str, str]]:
     """Return per-entity dashboard display overrides."""
 
@@ -221,7 +221,7 @@ def configured_dashboard_entity_display_overrides(
     )
 
 
-def configured_dashboard_prevent_return(entry: ConfigEntry) -> bool:
+def configured_dashboard_prevent_return(entry: BticinoC300XConfigEntry) -> bool:
     """Return whether the dashboard should prevent returning to the homepage."""
 
     return bool(entry_config_value(entry, CONF_DASHBOARD_PREVENT_RETURN, True))
@@ -233,7 +233,7 @@ def _dashboard_entity_ids(value: Any) -> tuple[str, ...]:
     return normalize_dashboard_entity_ids(value)
 
 
-async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+async def async_status(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Return state data intended for the C300X UI."""
 
     device_ui_enabled = bool(entry_device_ui_enabled_or_patch_active(entry))
@@ -277,7 +277,7 @@ async def async_status(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any
 
 async def async_execute_action(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     action_id: str,
 ) -> dict[str, Any]:
     """Execute a configured action by id."""
@@ -309,7 +309,7 @@ async def async_execute_action(
 
 async def async_execute_alarm_command(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     command: str,
     code: str | None,
     *,
@@ -456,7 +456,7 @@ async def async_execute_alarm_command(
 
 async def async_trigger_stair_light(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     address: str | None = None,
 ) -> dict[str, Any]:
     """Activate the staircase light through the configured agent."""
@@ -475,7 +475,7 @@ async def async_trigger_stair_light(
 
 async def async_unlock_door(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     lock_id: str = "default",
 ) -> dict[str, Any]:
     """Unlock a configured C300X door lock through the device agent."""
@@ -498,7 +498,7 @@ async def async_unlock_door(
 
 async def async_dashboard_payload(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
 ) -> dict[str, Any]:
     """Return data in the c300x-dashboard `/homeassistant` JSON shape."""
 
@@ -592,7 +592,7 @@ async def async_dashboard_payload(
 
 async def async_execute_dashboard_action(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     entity_id: str,
     *,
     option: str | None = None,
@@ -644,7 +644,7 @@ def _dashboard_datetime_label() -> str:
 
 def _alarm_page_entity(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     language: str,
 ) -> dict[str, Any]:
     entity_id = configured_alarm_page_entity_id(entry)
@@ -833,7 +833,7 @@ def _dashboard_kind(action: dict[str, Any], dashboard: dict[str, Any]) -> str:
 
 async def _async_execute_dashboard_entity(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     entity_id: str,
     action: str | None,
     *,
@@ -2165,7 +2165,7 @@ def _state_active_since(state: Any) -> tuple[str | None, str | None]:
 
 def _entity_state(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     domain: str,
     key: str,
 ) -> str | None:

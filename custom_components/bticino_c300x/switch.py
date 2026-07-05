@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -36,6 +35,7 @@ from .entity import (
     entry_video_enabled,
     supports_capability,
 )
+from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .qml_patch import (
     async_apply_qml_patch_and_confirm,
@@ -48,7 +48,7 @@ PARALLEL_UPDATES = 1
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: BticinoC300XConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C300X switches."""
@@ -82,7 +82,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "homeassistant_media_user_setup"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "homeassistant_media_user_setup")
         self._status: dict[str, Any] = {}
         self._attr_available = True
@@ -176,7 +176,7 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "ringer_mute"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "ringer_mute")
         self._muted: bool | None = None
         self._attr_available = True
@@ -246,7 +246,7 @@ class C300XAnsweringMachineSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "answering_machine"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "answering_machine")
         self._enabled: bool | None = None
         self._greeting_message_enabled: bool | None = None
@@ -306,7 +306,7 @@ class C300XMaintenanceSshSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "maintenance_ssh"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "maintenance_ssh")
         self._running: bool | None = None
         self._attr_available = True
@@ -367,7 +367,7 @@ class C300XGuiFunctionPatchSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "gui_function_patch"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "gui_function_patch")
         self._attr_available = True
 
@@ -478,7 +478,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "firewall_patch"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "firewall_patch")
         self._status: dict[str, Any] = {}
         self._attr_available = True
@@ -595,7 +595,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "ipv6_firewall_patch"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "ipv6_firewall_patch")
         self._status: dict[str, Any] = {}
         self._attr_available = True
@@ -714,7 +714,7 @@ class C300XNativeMqttBridgeSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "native_mqtt_bridge"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         # Preserve the pre-split unique ID. Older builds mislabeled the native
         # bridge as "legacy_mqtt_bridge"; reusing that unique ID keeps existing
         # HA entity customizations attached to the native bridge.
@@ -839,7 +839,7 @@ class C300XLegacyMqttBridgeSwitch(C300XEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "legacy_mqtt_bridge"
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "legacy_tcpdump2mqtt_bridge")
         self._enabled: bool | None = None
         self._status: dict[str, Any] = {}
@@ -1020,7 +1020,7 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
     _attr_translation_key = "maintenance_no_auth"
     _uses_auth_config_status = True
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "maintenance_no_auth")
         self._enabled: bool | None = None
         self._api_token_configured: bool | None = None
@@ -1101,7 +1101,7 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
     _attr_translation_key = "maintenance_mdns_discovery"
     _uses_auth_config_status = True
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "maintenance_mdns_discovery")
         self._enabled: bool | None = None
         self._attr_available = True
@@ -1155,7 +1155,7 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
     _attr_translation_key = "maintenance_no_auth_access"
     _uses_auth_config_status = True
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "maintenance_no_auth_access")
         self._enabled: bool | None = None
         self._no_auth: bool | None = None
@@ -1242,7 +1242,7 @@ async def _async_refresh_initial_states(entities: list[SwitchEntity]) -> None:
         await cast(Any, switch_entity).async_update()
 
 
-def _supports_maintenance_actions(entry: ConfigEntry, *actions: str) -> bool:
+def _supports_maintenance_actions(entry: BticinoC300XConfigEntry, *actions: str) -> bool:
     return all(entry_maintenance_action_is_advertised(entry, action) for action in actions)
 
 
@@ -1251,7 +1251,7 @@ def _apply_patch_switch_status(entity: Any, status: dict[str, Any]) -> None:
     entity._attr_available = bool(status.get("available", True))
 
 
-def _supports_firewall_switch(entry: ConfigEntry) -> bool:
+def _supports_firewall_switch(entry: BticinoC300XConfigEntry) -> bool:
     return _supports_maintenance_actions(
         entry,
         "firewall_status",
@@ -1260,7 +1260,7 @@ def _supports_firewall_switch(entry: ConfigEntry) -> bool:
     ) or _supports_auth_config(entry)
 
 
-def _supports_ipv6_firewall_switch(entry: ConfigEntry) -> bool:
+def _supports_ipv6_firewall_switch(entry: BticinoC300XConfigEntry) -> bool:
     return _supports_maintenance_actions(
         entry,
         "ipv6_firewall_status",
@@ -1269,11 +1269,11 @@ def _supports_ipv6_firewall_switch(entry: ConfigEntry) -> bool:
     ) or _supports_auth_config(entry)
 
 
-def _supports_native_mqtt_bridge_switch(entry: ConfigEntry) -> bool:
+def _supports_native_mqtt_bridge_switch(entry: BticinoC300XConfigEntry) -> bool:
     return _supports_maintenance_actions(entry, "mqtt_status", "mqtt_config")
 
 
-def _supports_legacy_mqtt_bridge_switch(entry: ConfigEntry) -> bool:
+def _supports_legacy_mqtt_bridge_switch(entry: BticinoC300XConfigEntry) -> bool:
     return _supports_maintenance_actions(
         entry,
         "legacy_mqtt_status",
@@ -1281,17 +1281,17 @@ def _supports_legacy_mqtt_bridge_switch(entry: ConfigEntry) -> bool:
     )
 
 
-def _supports_auth_config(entry: ConfigEntry) -> bool:
+def _supports_auth_config(entry: BticinoC300XConfigEntry) -> bool:
     capabilities = getattr(entry.runtime_data, "capabilities", {})
     return auth_config_supported(capabilities)
 
 
-def _configured_token(entry: ConfigEntry, key: str) -> str | None:
+def _configured_token(entry: BticinoC300XConfigEntry, key: str) -> str | None:
     token = str(entry_config_value(entry, key, "") or "").strip()
     return token or None
 
 
-def _qml_patch_status(entry: ConfigEntry) -> dict[str, Any]:
+def _qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     status = getattr(entry.runtime_data, "qml_patch_status", {})
     return status if isinstance(status, dict) else {}
 

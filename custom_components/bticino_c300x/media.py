@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
 from aiohttp import web
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .api import (
@@ -18,6 +17,7 @@ from .api import (
     normalize_video_message_id,
 )
 from .const import DOMAIN
+from .entry_types import BticinoC300XConfigEntry
 from .video_messages import VIDEO_MESSAGE_PLAYBACK_MIME_TYPE
 
 if TYPE_CHECKING:
@@ -174,7 +174,7 @@ def _validated_voice_memo_id(memo_name: str) -> str | None:
         return None
 
 
-def runtime_entry(hass: HomeAssistant, entry_id: str) -> ConfigEntry[Any] | None:
+def runtime_entry(hass: HomeAssistant, entry_id: str) -> BticinoC300XConfigEntry | None:
     """Return a loaded C300X entry by id."""
 
     entry = hass.config_entries.async_get_entry(entry_id)

@@ -39,21 +39,21 @@
       },
       "user_features": {
         "title": "Fonctions BTicino C300X",
-        "description": "Selectionnez les fonctions media et appareil Home Assistant exposees par cette installation C300X.",
+        "description": "Selectionnez les fonctions media Home Assistant exposees par cette installation C300X.",
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
         }
       },
       "user_device_activations": {
         "title": "Activations appareil supplementaires",
         "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
         "data": {
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_p": "Adresse P lumiere escalier",
+          "device_activation_stair_light_n": "Adresse N lumiere escalier",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }
@@ -103,21 +103,21 @@
       },
       "reconfigure_features": {
         "title": "Reconfigurer les fonctions BTicino C300X",
-        "description": "Mettez a jour les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "description": "Mettez a jour les reglages media et utilisateur media Home Assistant.",
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
         }
       },
       "reconfigure_device_activations": {
         "title": "Activations appareil supplementaires",
         "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
         "data": {
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_p": "Adresse P lumiere escalier",
+          "device_activation_stair_light_n": "Adresse N lumiere escalier",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }
@@ -193,21 +193,21 @@
       },
       "features": {
         "title": "Fonctions BTicino C300X",
-        "description": "Configurez les reglages media, utilisateur media Home Assistant et activation appareil.",
+        "description": "Configurez les reglages media et utilisateur media Home Assistant.",
         "data": {
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
-          "device_activation_mode": "Mode d'adresse des activations appareil",
-          "device_activation_stair_light_p": "Adresse P lumiere escalier",
-          "device_activation_stair_light_n": "Adresse N lumiere escalier"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
         }
       },
       "device_activations": {
         "title": "Activations appareil supplementaires",
         "description": "Activations supplementaires configurees : {device_activation_count}\n\n{device_activation_items}\n\nAjouter, modifier ou supprimer ne change que la configuration Home Assistant en attente. L'agent appareil est synchronise apres l'enregistrement, et seulement si sa configuration d'activations differe.",
         "data": {
+          "device_activation_mode": "Mode d'adresse des activations appareil",
+          "device_activation_stair_light_p": "Adresse P lumiere escalier",
+          "device_activation_stair_light_n": "Adresse N lumiere escalier",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }

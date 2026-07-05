@@ -53,13 +53,15 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stub
     selector = None
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
+_ACTIVATION_ITEM_EXAMPLES = {
+    CONF_DEVICE_ACTIVATION_ITEM_ID: "front_gate",
+    CONF_DEVICE_ACTIVATION_ITEM_NAME: "Front gate",
+    CONF_DEVICE_ACTIVATION_ITEM_ADDRESS: "10",
+}
 
 
 def setup_features_schema(
     default_video_enabled: bool,
-    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
-    default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
@@ -69,9 +71,6 @@ def setup_features_schema(
 
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
-        default_device_activation_mode=default_device_activation_mode,
-        default_device_activation_stair_light_p=default_device_activation_stair_light_p,
-        default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -105,10 +104,36 @@ def reconfigure_connection_schema(
     )
 
 
-def device_activation_manage_schema(items: list[dict[str, Any]]) -> vol.Schema:
+def device_activation_manage_schema(
+    items: list[dict[str, Any]],
+    feature_data: dict[str, Any],
+) -> vol.Schema:
     """Return the activation management action schema."""
 
+    default_mode = _device_activation_mode_default(
+        feature_data.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO)
+    )
+    default_p = _stair_light_part_default(
+        feature_data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P),
+        default=DEFAULT_STAIR_LIGHT_P,
+    )
+    default_n = _stair_light_part_default(
+        feature_data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N),
+        default=DEFAULT_STAIR_LIGHT_N,
+    )
     fields: dict[Any, Any] = {
+        vol.Optional(
+            CONF_DEVICE_ACTIVATION_MODE,
+            default=default_mode,
+        ): _device_activation_mode_selector(),
+        vol.Optional(
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+            default=default_p,
+        ): str,
+        vol.Optional(
+            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+            default=default_n,
+        ): str,
         vol.Required(
             CONF_DEVICE_ACTIVATION_FLOW_ACTION,
             default=DEVICE_ACTIVATION_FLOW_ACTION_DONE,
@@ -130,23 +155,27 @@ def device_activation_item_schema(
     """Return the schema for one configured activation."""
 
     item = item or {}
+    is_new = not item
     return vol.Schema(
         {
-            vol.Required(
+            _activation_item_required(
                 CONF_DEVICE_ACTIVATION_ITEM_ID,
-                default=str(item.get("id") or ""),
+                str(item.get("id") or ""),
+                is_new=is_new,
             ): str,
-            vol.Required(
+            _activation_item_required(
                 CONF_DEVICE_ACTIVATION_ITEM_NAME,
-                default=str(item.get("name") or ""),
+                str(item.get("name") or ""),
+                is_new=is_new,
             ): str,
             vol.Required(
                 CONF_DEVICE_ACTIVATION_ITEM_TYPE,
                 default=str(item.get("type") or "lock"),
             ): _device_activation_type_selector(),
-            vol.Required(
+            _activation_item_required(
                 CONF_DEVICE_ACTIVATION_ITEM_ADDRESS,
-                default=str(item.get("address") or ""),
+                str(item.get("address") or ""),
+                is_new=is_new,
             ): str,
         }
     )
@@ -154,9 +183,6 @@ def device_activation_item_schema(
 
 def reconfigure_features_schema(
     default_video_enabled: bool,
-    default_device_activation_mode: str = DEVICE_ACTIVATION_MODE_AUTO,
-    default_device_activation_stair_light_p: str = DEFAULT_STAIR_LIGHT_P,
-    default_device_activation_stair_light_n: str = DEFAULT_STAIR_LIGHT_N,
     *,
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
@@ -166,9 +192,6 @@ def reconfigure_features_schema(
 
     return _media_feature_schema(
         default_video_enabled=default_video_enabled,
-        default_device_activation_mode=default_device_activation_mode,
-        default_device_activation_stair_light_p=default_device_activation_stair_light_p,
-        default_device_activation_stair_light_n=default_device_activation_stair_light_n,
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -262,24 +285,59 @@ def _device_activation_type_selector() -> Any:
     )
 
 
+def _device_activation_mode_default(value: Any) -> str:
+    mode = str(value or DEVICE_ACTIVATION_MODE_AUTO).strip()
+    if mode not in DEVICE_ACTIVATION_MODES:
+        return DEVICE_ACTIVATION_MODE_AUTO
+    return mode
+
+
+def _device_activation_mode_selector() -> Any:
+    if selector is None:
+        return vol.In(DEVICE_ACTIVATION_MODES)
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                {"value": "automatic", "label": "Automatic"},
+                {"value": "manual", "label": "Manual"},
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+def _stair_light_part_default(value: Any, *, default: str) -> str:
+    try:
+        return normalize_stair_light_part(value, default=default)
+    except vol.Invalid:
+        return normalize_stair_light_part(default, default=default)
+
+
+def _activation_item_required(
+    key: str,
+    default: str,
+    *,
+    is_new: bool,
+) -> vol.Required:
+    if not is_new:
+        return vol.Required(key, default=default)
+    suggested_value = _ACTIVATION_ITEM_EXAMPLES.get(key)
+    if suggested_value in (None, ""):
+        return vol.Required(key, default=default)
+    return vol.Required(
+        key,
+        default=default,
+        description={"suggested_value": suggested_value},
+    )
+
+
 def _media_feature_schema(
     *,
     default_video_enabled: bool,
-    default_device_activation_mode: str,
-    default_device_activation_stair_light_p: str,
-    default_device_activation_stair_light_n: str,
     default_create_homeassistant_user: bool,
     default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
 ) -> vol.Schema:
-    default_p = normalize_stair_light_part(
-        default_device_activation_stair_light_p,
-        default=DEFAULT_STAIR_LIGHT_P,
-    )
-    default_n = normalize_stair_light_part(
-        default_device_activation_stair_light_n,
-        default=DEFAULT_STAIR_LIGHT_N,
-    )
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
     }
@@ -302,20 +360,4 @@ def _media_feature_schema(
                 default=default_ring_capture_audio_gain_db,
             )
         ] = audio_gain_db_selector()
-    fields.update(
-        {
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_MODE,
-                default=default_device_activation_mode,
-            ): vol.In(DEVICE_ACTIVATION_MODES),
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-                default=default_p,
-            ): str,
-            vol.Optional(
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-                default=default_n,
-            ): str,
-        }
-    )
     return vol.Schema(fields)

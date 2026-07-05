@@ -39,21 +39,21 @@
       },
       "user_features": {
         "title": "BTicino C300X features",
-        "description": "Select the Home Assistant media and device features exposed by this C300X installation.",
+        "description": "Select the Home Assistant media features exposed by this C300X installation.",
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address"
+          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)"
         }
       },
       "user_device_activations": {
         "title": "Additional device activations",
         "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }
@@ -103,21 +103,21 @@
       },
       "reconfigure_features": {
         "title": "Reconfigure BTicino C300X features",
-        "description": "Update media, Home Assistant media user, and device activation settings.",
+        "description": "Update media and Home Assistant media user settings.",
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address"
+          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)"
         }
       },
       "reconfigure_device_activations": {
         "title": "Additional device activations",
         "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }
@@ -193,21 +193,21 @@
       },
       "features": {
         "title": "BTicino C300X features",
-        "description": "Configure media, Home Assistant media user, and device activation settings.",
+        "description": "Configure media and Home Assistant media user settings.",
         "data": {
           "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address"
+          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)"
         }
       },
       "device_activations": {
         "title": "Additional device activations",
         "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
+          "device_activation_mode": "Device activation address mode",
+          "device_activation_stair_light_p": "Stair light P address",
+          "device_activation_stair_light_n": "Stair light N address",
           "device_activation_flow_action": "Action",
           "device_activation_flow_target": "Activation"
         }

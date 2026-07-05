@@ -39,21 +39,21 @@
       },
       "user_features": {
         "title": "BTicino C300X Funktionen",
-        "description": "Waehlt die Home-Assistant-Medien- und Geraetefunktionen fuer diese C300X-Installation aus.",
+        "description": "Waehlt die Home-Assistant-Medienfunktionen fuer diese C300X-Installation aus.",
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
-          "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
         }
       },
       "user_device_activations": {
         "title": "Zusaetzliche Geraeteaktivierungen",
         "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
+          "device_activation_stair_light_n": "Treppenlicht-Adresse N",
           "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         }
@@ -103,21 +103,21 @@
       },
       "reconfigure_features": {
         "title": "BTicino C300X Funktionen neu konfigurieren",
-        "description": "Aktualisiert Medien-, Home-Assistant-Media-User- und Geraeteaktivierungs-Einstellungen.",
+        "description": "Aktualisiert Medien- und Home-Assistant-Media-User-Einstellungen.",
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
-          "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
         }
       },
       "reconfigure_device_activations": {
         "title": "Zusaetzliche Geraeteaktivierungen",
         "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
+          "device_activation_stair_light_n": "Treppenlicht-Adresse N",
           "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         }
@@ -193,21 +193,21 @@
       },
       "features": {
         "title": "BTicino C300X Funktionen",
-        "description": "Konfiguriert Medien-, Home-Assistant-Media-User- und Geraeteaktivierungs-Einstellungen.",
+        "description": "Konfiguriert Medien- und Home-Assistant-Media-User-Einstellungen.",
         "data": {
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
-          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
-          "device_activation_stair_light_n": "Treppenlicht-Adresse N"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
         }
       },
       "device_activations": {
         "title": "Zusaetzliche Geraeteaktivierungen",
         "description": "Konfigurierte zusaetzliche Aktivierungen: {device_activation_count}\n\n{device_activation_items}\n\nHinzufuegen, Bearbeiten oder Entfernen aendert nur die ausstehende Home-Assistant-Konfiguration. Der Device-Agent wird erst nach dem Speichern synchronisiert und nur, wenn seine Aktivierungskonfiguration abweicht.",
         "data": {
+          "device_activation_mode": "Adressmodus fuer Geraeteaktivierungen",
+          "device_activation_stair_light_p": "Treppenlicht-Adresse P",
+          "device_activation_stair_light_n": "Treppenlicht-Adresse N",
           "device_activation_flow_action": "Aktion",
           "device_activation_flow_target": "Aktivierung"
         }

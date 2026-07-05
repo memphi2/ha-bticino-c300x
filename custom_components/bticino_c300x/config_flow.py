@@ -41,6 +41,9 @@ from .config_flow_activations import (
 from .config_flow_activations import (
     activation_manage_step as _activation_manage_step,
 )
+from .config_flow_activations import (
+    activation_settings_step as _activation_settings_step,
+)
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
 )
@@ -142,9 +145,6 @@ from .const import (
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
     DEFAULT_NAME,
-    DEFAULT_STAIR_LIGHT_N,
-    DEFAULT_STAIR_LIGHT_P,
-    DEVICE_ACTIVATION_MODE_AUTO,
     DOMAIN,
 )
 from .device_installer import (
@@ -582,18 +582,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 _SETUP_VIDEO_ENABLED_DEFAULT,
                             )
                         ),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_MODE,
-                            DEVICE_ACTIVATION_MODE_AUTO,
-                        ),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-                            DEFAULT_STAIR_LIGHT_P,
-                        ),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-                            DEFAULT_STAIR_LIGHT_N,
-                        ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
@@ -614,9 +602,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user_features",
             data_schema=_setup_features_schema(
                 _SETUP_VIDEO_ENABLED_DEFAULT,
-                default_device_activation_mode=DEVICE_ACTIVATION_MODE_AUTO,
-                default_device_activation_stair_light_p=DEFAULT_STAIR_LIGHT_P,
-                default_device_activation_stair_light_n=DEFAULT_STAIR_LIGHT_N,
                 default_create_homeassistant_user=_CREATE_HOMEASSISTANT_USER_DEFAULT,
             ),
             errors=errors,
@@ -630,6 +615,19 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if not self._setup_feature_data:
             return await self.async_step_user_features()
+
+        self._setup_feature_data, setting_errors = _activation_settings_step(
+            user_input,
+            self._setup_feature_data,
+        )
+        if setting_errors:
+            return _activation_manage_form(
+                self.async_show_form,
+                step_id="user_device_activations",
+                items=self._setup_device_activations,
+                feature_data=self._setup_feature_data,
+                errors=setting_errors,
+            )
 
         result = _activation_manage_step(
             user_input,
@@ -654,6 +652,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.async_show_form,
             step_id="user_device_activations",
             items=result.items,
+            feature_data=self._setup_feature_data,
             errors=result.errors,
         )
 
@@ -915,18 +914,6 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="reconfigure_features",
                     data_schema=_reconfigure_features_schema(
                         bool(user_input.get(CONF_VIDEO_ENABLED, False)),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_MODE,
-                            feature_defaults[CONF_DEVICE_ACTIVATION_MODE],
-                        ),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-                            feature_defaults[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
-                        ),
-                        user_input.get(
-                            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-                            feature_defaults[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
-                        ),
                         default_create_homeassistant_user=bool(
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
@@ -964,6 +951,19 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not self._reconfigure_feature_data:
             return await self.async_step_reconfigure_features()
 
+        self._reconfigure_feature_data, setting_errors = _activation_settings_step(
+            user_input,
+            self._reconfigure_feature_data,
+        )
+        if setting_errors:
+            return _activation_manage_form(
+                self.async_show_form,
+                step_id="reconfigure_device_activations",
+                items=self._reconfigure_device_activations,
+                feature_data=self._reconfigure_feature_data,
+                errors=setting_errors,
+            )
+
         result = _activation_manage_step(
             user_input,
             self._reconfigure_device_activations,
@@ -987,6 +987,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.async_show_form,
             step_id="reconfigure_device_activations",
             items=result.items,
+            feature_data=self._reconfigure_feature_data,
             errors=result.errors,
         )
 
@@ -1332,6 +1333,19 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         if not self._feature_options:
             return await self.async_step_features()
 
+        self._feature_options, setting_errors = _activation_settings_step(
+            user_input,
+            self._feature_options,
+        )
+        if setting_errors:
+            return _activation_manage_form(
+                self.async_show_form,
+                step_id="device_activations",
+                items=self._device_activations,
+                feature_data=self._feature_options,
+                errors=setting_errors,
+            )
+
         result = _activation_manage_step(
             user_input,
             self._device_activations,
@@ -1355,6 +1369,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             self.async_show_form,
             step_id="device_activations",
             items=result.items,
+            feature_data=self._feature_options,
             errors=result.errors,
         )
 

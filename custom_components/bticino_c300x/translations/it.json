@@ -39,21 +39,21 @@
       },
       "user_features": {
         "title": "Funzioni BTicino C300X",
-        "description": "Seleziona le funzioni media e dispositivo di Home Assistant esposte da questa installazione C300X.",
+        "description": "Seleziona le funzioni media di Home Assistant esposte da questa installazione C300X.",
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_p": "Indirizzo P luce scale",
-          "device_activation_stair_light_n": "Indirizzo N luce scale"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
         }
       },
       "user_device_activations": {
         "title": "Attivazioni dispositivo aggiuntive",
         "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
         "data": {
+          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale",
           "device_activation_flow_action": "Azione",
           "device_activation_flow_target": "Attivazione"
         }
@@ -103,21 +103,21 @@
       },
       "reconfigure_features": {
         "title": "Riconfigura funzioni BTicino C300X",
-        "description": "Aggiorna impostazioni media, utente media Home Assistant e attivazione dispositivo.",
+        "description": "Aggiorna impostazioni media e utente media Home Assistant.",
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_p": "Indirizzo P luce scale",
-          "device_activation_stair_light_n": "Indirizzo N luce scale"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
         }
       },
       "reconfigure_device_activations": {
         "title": "Attivazioni dispositivo aggiuntive",
         "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
         "data": {
+          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale",
           "device_activation_flow_action": "Azione",
           "device_activation_flow_target": "Attivazione"
         }
@@ -193,21 +193,21 @@
       },
       "features": {
         "title": "Funzioni BTicino C300X",
-        "description": "Configura impostazioni media, utente media Home Assistant e attivazione dispositivo.",
+        "description": "Configura impostazioni media e utente media Home Assistant.",
         "data": {
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
-          "device_activation_stair_light_p": "Indirizzo P luce scale",
-          "device_activation_stair_light_n": "Indirizzo N luce scale"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
         }
       },
       "device_activations": {
         "title": "Attivazioni dispositivo aggiuntive",
         "description": "Attivazioni aggiuntive configurate: {device_activation_count}\n\n{device_activation_items}\n\nAggiungere, modificare o rimuovere cambia solo la configurazione Home Assistant in sospeso. Il device agent viene sincronizzato dopo il salvataggio e solo se la sua configurazione attivazioni e diversa.",
         "data": {
+          "device_activation_mode": "Modalita indirizzo attivazioni dispositivo",
+          "device_activation_stair_light_p": "Indirizzo P luce scale",
+          "device_activation_stair_light_n": "Indirizzo N luce scale",
           "device_activation_flow_action": "Azione",
           "device_activation_flow_target": "Attivazione"
         }

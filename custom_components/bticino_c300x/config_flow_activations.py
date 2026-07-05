@@ -6,6 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import voluptuous as vol
+
+from .activation_address import normalize_stair_light_part
 from .config_schemas import (
     device_activation_item_schema,
     device_activation_manage_schema,
@@ -18,12 +21,18 @@ from .const import (
     CONF_DEVICE_ACTIVATION_ITEM_NAME,
     CONF_DEVICE_ACTIVATION_ITEM_TYPE,
     CONF_DEVICE_ACTIVATION_MODE,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+    CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
+    DEFAULT_STAIR_LIGHT_N,
+    DEFAULT_STAIR_LIGHT_P,
     DEVICE_ACTIVATION_FLOW_ACTION_ADD,
     DEVICE_ACTIVATION_FLOW_ACTION_DONE,
     DEVICE_ACTIVATION_FLOW_ACTION_EDIT,
     DEVICE_ACTIVATION_FLOW_ACTION_REMOVE,
+    DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODE_MANUAL,
+    DEVICE_ACTIVATION_MODES,
 )
 from .device_activations import (
     MAX_DEVICE_ACTIVATIONS,
@@ -59,6 +68,65 @@ def activation_items_from_feature_data(
     return list(feature_data.get(CONF_DEVICE_ACTIVATIONS, []) or [])
 
 
+def activation_settings_step(
+    user_input: dict[str, Any] | None,
+    feature_data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Handle activation address settings from the management step."""
+
+    if user_input is None:
+        return dict(feature_data), {}
+
+    data = dict(feature_data)
+    errors: dict[str, str] = {}
+
+    mode = str(
+        user_input.get(
+            CONF_DEVICE_ACTIVATION_MODE,
+            data.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO),
+        )
+        or DEVICE_ACTIVATION_MODE_AUTO
+    ).strip()
+    if mode not in DEVICE_ACTIVATION_MODES:
+        errors[CONF_DEVICE_ACTIVATION_MODE] = "invalid_device_activation_mode"
+        mode = str(data.get(CONF_DEVICE_ACTIVATION_MODE, DEVICE_ACTIVATION_MODE_AUTO))
+
+    try:
+        stair_light_p = normalize_stair_light_part(
+            user_input.get(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
+                data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P),
+            ),
+            default=DEFAULT_STAIR_LIGHT_P,
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] = "invalid_stair_light_part"
+        stair_light_p = _stair_light_part_default(
+            data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P, DEFAULT_STAIR_LIGHT_P),
+            default=DEFAULT_STAIR_LIGHT_P,
+        )
+
+    try:
+        stair_light_n = normalize_stair_light_part(
+            user_input.get(
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
+                data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N),
+            ),
+            default=DEFAULT_STAIR_LIGHT_N,
+        )
+    except vol.Invalid:
+        errors[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = "invalid_stair_light_part"
+        stair_light_n = _stair_light_part_default(
+            data.get(CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N, DEFAULT_STAIR_LIGHT_N),
+            default=DEFAULT_STAIR_LIGHT_N,
+        )
+
+    data[CONF_DEVICE_ACTIVATION_MODE] = mode
+    data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] = stair_light_p
+    data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] = stair_light_n
+    return data, errors
+
+
 def activation_manage_step(
     user_input: dict[str, Any] | None,
     items: list[dict[str, Any]],
@@ -78,6 +146,13 @@ def activation_manage_step(
     )
     target = str(user_input.get(CONF_DEVICE_ACTIVATION_FLOW_TARGET, "")).strip()
     if action == DEVICE_ACTIVATION_FLOW_ACTION_DONE:
+        if len(items) > _bounded_max_items(max_items):
+            return ActivationStepResult(
+                ACTIVATION_STEP_MANAGE,
+                items,
+                None,
+                {"base": "invalid_device_activations"},
+            )
         return ActivationStepResult(ACTIVATION_STEP_DONE, items, None, {})
     if action == DEVICE_ACTIVATION_FLOW_ACTION_ADD:
         if len(items) >= _bounded_max_items(max_items):
@@ -168,13 +243,14 @@ def activation_manage_form(
     *,
     step_id: str,
     items: list[dict[str, Any]],
+    feature_data: dict[str, Any],
     errors: dict[str, str],
 ) -> FlowResult:
     """Return the Home Assistant manage form result."""
 
     return show_form(
         step_id=step_id,
-        data_schema=device_activation_manage_schema(items),
+        data_schema=device_activation_manage_schema(items, feature_data),
         errors=errors,
         description_placeholders=activation_placeholders(items),
     )
@@ -291,3 +367,10 @@ def _activation_from_form(
 
 def _activation_mode_is_manual(feature_data: dict[str, Any]) -> bool:
     return feature_data.get(CONF_DEVICE_ACTIVATION_MODE) == DEVICE_ACTIVATION_MODE_MANUAL
+
+
+def _stair_light_part_default(value: Any, *, default: str) -> str:
+    try:
+        return normalize_stair_light_part(value, default=default)
+    except vol.Invalid:
+        return normalize_stair_light_part(default, default=default)

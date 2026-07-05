@@ -635,9 +635,9 @@ def test_setup_features_schema_keeps_initial_video_defaults() -> None:
     assert CONF_VIDEO_STREAM_PATH not in result
     assert CONF_DEVICE_UI_ENABLED not in result
     assert CONF_DASHBOARD_PREVENT_RETURN not in result
-    assert result[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
-    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
-    assert result[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
+    assert CONF_DEVICE_ACTIVATION_MODE not in result
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in result
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N not in result
 
 
 def test_feature_input_allows_clearing_gui_entities_and_actions() -> None:
@@ -992,7 +992,6 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: True,
-                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
             }
         )
     )
@@ -1890,9 +1889,9 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_VIDEO_STREAM_PATH not in features
     assert CONF_DEVICE_UI_ENABLED not in features
     assert CONF_DASHBOARD_PREVENT_RETURN not in features
-    assert features[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_MANUAL
-    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
-    assert features[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N] == DEFAULT_STAIR_LIGHT_N
+    assert CONF_DEVICE_ACTIVATION_MODE not in features
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in features
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N not in features
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
@@ -2107,7 +2106,9 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
         CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     ]
-    assert enabled_keys[4] == CONF_DEVICE_ACTIVATION_MODE
+    assert CONF_DEVICE_ACTIVATION_MODE not in enabled_keys
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in enabled_keys
+    assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N not in enabled_keys
     assert CONF_DEVICE_UI_ENABLED not in enabled_keys
     assert CONF_ALARM_ENTITY_ID not in enabled_keys
     assert CONF_WEATHER_ENTITY_ID not in enabled_keys
@@ -2262,15 +2263,17 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: False,
                 CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
-                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
             }
         )
     )
     activation_item_form = asyncio.run(
         flow.async_step_device_activations(
-            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD}
+            {
+                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+                CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD,
+            }
         )
     )
     activation_manage_form = asyncio.run(
@@ -2433,15 +2436,17 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             {
                 CONF_VIDEO_ENABLED: True,
                 CONF_CREATE_HOMEASSISTANT_USER: True,
-                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "03",
             }
         )
     )
     activation_item_form = asyncio.run(
         flow.async_step_reconfigure_device_activations(
-            {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD}
+            {
+                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "03",
+                CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD,
+            }
         )
     )
     activation_manage_form = asyncio.run(

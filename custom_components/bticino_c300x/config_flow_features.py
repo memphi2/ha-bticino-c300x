@@ -141,21 +141,6 @@ def options_features_schema(
     )
     return _reconfigure_features_schema(
         default_video_enabled,
-        _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_MODE,
-            DEVICE_ACTIVATION_MODE_AUTO,
-        ),
-        _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
-            DEFAULT_STAIR_LIGHT_P,
-        ),
-        _config_default(
-            config_entry,
-            CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
-            DEFAULT_STAIR_LIGHT_N,
-        ),
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
@@ -302,9 +287,6 @@ def reconfigure_features_schema_from_current(
     current = current_feature_options(config_entry)
     return _reconfigure_features_schema(
         bool(current[CONF_VIDEO_ENABLED]),
-        current[CONF_DEVICE_ACTIVATION_MODE],
-        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P],
-        current[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N],
         default_create_homeassistant_user=bool(current[CONF_CREATE_HOMEASSISTANT_USER]),
         default_doorstation_audio_gain_db=float(
             current[CONF_DOORSTATION_AUDIO_GAIN_DB]

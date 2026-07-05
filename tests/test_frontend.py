@@ -569,7 +569,9 @@ def test_bundled_card_starts_ring_preview_without_answer_audio() -> None:
 
     assert "async _ensureDoorbellPreview()" in source
     assert "if (view.shouldAutoPreview) {" in source
-    assert 'shouldAutoPreview: action === "answer" && c300xIsRingPreviewAvailable(cameraEntity)' in state_source
+    assert 'shouldAutoPreview: action === "answer" && c300xShouldAutoPreviewRing(cameraEntity)' in state_source
+    assert "function c300xShouldAutoPreviewRing(cameraEntity)" in state_source
+    assert "return c300xIsRingCallPending(cameraEntity);" in state_source
     assert "c300xIsRingPreviewAvailable(cameraEntity)" in state_source
     assert 'c300xMediaState(cameraEntity) === "ring_preview_active"' in state_source
     assert "this._ringPreviewActive = true;" in source
@@ -615,6 +617,7 @@ def test_bundled_card_transitions_answer_without_clearing_preview() -> None:
     assert "this._transitionWebrtc = null;" in source
     assert '<video class="transition-video" playsinline autoplay></video>' in source
     assert "async _startAnsweredDoorbellStream()" in source
+    assert "async _replaceDoorbellWebrtcStream({" in source
     assert "this._transitionVideoEl.addEventListener(\"loadeddata\", promote)" in source
     assert "this._transitionVideoEl.addEventListener(\"playing\", promote)" in source
     assert "this._videoEl.srcObject = next.remoteStream;" in source
@@ -623,6 +626,40 @@ def test_bundled_card_transitions_answer_without_clearing_preview() -> None:
     assert "this._closePeer(true, { keepMediaElement: true });" not in source
     assert "attachOnFirstTrack = false" in webrtc_source
     assert "attachMedia();" in webrtc_source
+
+
+def test_bundled_card_transitions_passive_preview_after_ring_answer() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+
+    update_block = source[
+        source.index("  _updateState()") : source.index(
+            "  async _handlePrimaryAction()",
+            source.index("  _updateState()"),
+        )
+    ]
+    passive_start = source.index("async _startPassiveAnsweredDoorbellPreview()")
+    passive_block = source[
+        passive_start : source.index(
+            "  async _replaceDoorbellWebrtcStream",
+            passive_start,
+        )
+    ]
+    replace_block = source[
+        source.index("async _replaceDoorbellWebrtcStream(") : source.index(
+            "  async _prepareMicrophone()",
+            source.index("async _replaceDoorbellWebrtcStream("),
+        )
+    ]
+
+    assert 'mediaState === "ring_active"' in update_block
+    assert "this._ringPreviewActive" in update_block
+    assert "!this._doorbellAnswered" in update_block
+    assert "this._startPassiveAnsweredDoorbellPreview();" in update_block
+    assert "microphoneStream: null" in passive_block
+    assert "receiveAudio: false" in passive_block
+    assert "this._doorbellAnswered = false;" in passive_block
+    assert "previous.close();" in replace_block
+    assert "onPromoted();" in replace_block
 
 
 def test_bundled_card_does_not_restart_preview_during_answer_transition() -> None:
@@ -703,6 +740,7 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
         update_block.index("this._ringPreviewSuppressed = false;")
         < update_block.index("if (!ringLifecycleActive)")
     )
+    assert "this._closePeer(true);" in update_block
     assert "|| this._ringPreviewSuppressed" in preview_guard
     assert 'reason === "ring_call_answered"' in closed_handler
     assert "this._ringPreviewActive && !this._doorbellAnswered" in closed_handler

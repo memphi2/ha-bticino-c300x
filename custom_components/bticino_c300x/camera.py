@@ -584,11 +584,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     "provider": str(getattr(provider, "domain", type(provider).__name__)),
                 },
             )
-            if session.ring_call and session.wants_audio:
-                await self._async_close_other_ring_preview_webrtc_sessions(
-                    session_id,
-                    drain=True,
-                )
             provider_offer_failed = False
 
             def _send_provider_message(message: Any) -> None:
@@ -635,10 +630,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     },
                 )
                 await self._async_flush_provider_webrtc_candidates(session_id)
-                if session.ring_call and session.wants_audio:
-                    await self._async_close_other_ring_preview_webrtc_sessions(
-                        session_id
-                    )
         finally:
             _PROVIDER_WEBRTC_STREAM_CONTEXT.reset(token)
 
@@ -712,37 +703,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session_id,
                 session.pending_candidates.pop(0),
             )
-
-    async def _async_close_other_ring_preview_webrtc_sessions(
-        self,
-        answered_session_id: str,
-        *,
-        drain: bool = False,
-    ) -> None:
-        """Close passive Ring preview sessions once one browser owns the answer."""
-
-        session_ids = [
-            session_id
-            for session_id, session in self._provider_webrtc_sessions.items()
-            if session_id != answered_session_id
-            and session.owner == "doorbell"
-            and session.ring_preview
-        ]
-        if not session_ids:
-            return
-        await asyncio.gather(
-            *(
-                self._async_close_webrtc_session(
-                    session_id,
-                    stop_media=False,
-                    notify_client=True,
-                    reason="ring_call_answered",
-                )
-                for session_id in session_ids
-            )
-        )
-        if drain:
-            await self._async_wait_for_provider_rtsp_clients_to_drain()
 
     @callback
     def close_webrtc_session(self, session_id: str) -> None:
@@ -1097,17 +1057,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             if session.owner == "doorbell" and session.ring_preview
         ]
 
-    def _has_answered_ring_webrtc_session(self) -> bool:
-        """Return true when HA owns an answered Ring WebRTC media session."""
-
-        return any(
-            session.owner == "doorbell"
-            and session.ring_call
-            and session.wants_audio
-            and not session.ring_preview
-            for session in self._provider_webrtc_sessions.values()
-        )
-
     def _has_webrtc_sessions(self) -> bool:
         """Return true when any HA-side WebRTC session remains registered."""
 
@@ -1255,8 +1204,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         )
         self._apply_event_media_facts(event.data)
         self._refresh_derived_media_state()
-        if self._last_media_state in {MediaState.RING_ANSWERING, MediaState.RING_ACTIVE}:
-            self._close_ring_preview_webrtc_sessions_after_answer_event()
         self._record_media_timeline(
             "agent_event",
             event_type,
@@ -1331,29 +1278,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     notify_client=True,
                     reason="doorbell_media_closed",
                 )
-
-        self.hass.async_create_task(_close_sessions())
-
-    def _close_ring_preview_webrtc_sessions_after_answer_event(self) -> None:
-        """Close passive Ring previews after an authoritative answered event."""
-
-        if not self._has_answered_ring_webrtc_session():
-            return
-        session_ids = self._ring_preview_webrtc_session_ids()
-        if (
-            not session_ids
-            or not hasattr(self, "hass")
-            or not hasattr(self.hass, "async_create_task")
-        ):
-            return
-
-        async def _close_sessions() -> None:
-            await self._async_close_webrtc_sessions(
-                session_ids,
-                stop_media=False,
-                notify_client=True,
-                reason="ring_call_answered",
-            )
 
         self.hass.async_create_task(_close_sessions())
 

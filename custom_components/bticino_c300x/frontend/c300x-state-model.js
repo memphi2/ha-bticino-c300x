@@ -108,7 +108,7 @@ export function c300xCardViewModel({
     showMedia: true,
     showEmpty: !active,
     ringbackActive: false,
-    shouldAutoPreview: action === "answer" && c300xIsRingPreviewAvailable(cameraEntity),
+    shouldAutoPreview: action === "answer" && c300xShouldAutoPreviewRing(cameraEntity),
   };
 }
 
@@ -244,6 +244,10 @@ export function c300xIsRingCallPending(cameraEntity) {
     mediaState === "ring_pending"
     || mediaState === "ring_preview_active"
   ) && !c300xIsExternalDoorstationMedia(cameraEntity);
+}
+
+export function c300xShouldAutoPreviewRing(cameraEntity) {
+  return c300xIsRingCallPending(cameraEntity);
 }
 
 export function c300xIsRingPreviewAvailable(cameraEntity) {

@@ -1379,15 +1379,15 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
         f"ring-preview-browser-{browser_index}" for browser_index in range(4)
     ]
     answer_session = camera._provider_webrtc_sessions["ring-answer-browser"]
-    assert not any(
-        session_id in camera._provider_webrtc_sessions
-        for session_id in preview_session_ids
-    )
+    assert list(camera._provider_webrtc_sessions) == [
+        *preview_session_ids,
+        "ring-answer-browser",
+    ]
     assert answer_session.resource_id == "ring:entry-1"
     assert answer_session.wants_audio is True
     assert answer_session.ready is True
     assert camera._active_local_media_sessions() == 1
-    assert provider.closed == preview_session_ids
+    assert provider.closed == []
     assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     assert provider.support_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     assert len(provider.offers) == 5
@@ -1397,9 +1397,7 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
         for message in sent_messages
         if _webrtc_message_value(message, "type") == "closed"
     ]
-    assert [
-        _webrtc_message_value(message, "reason") for message in closed_messages
-    ] == ["ring_call_answered"] * 4
+    assert closed_messages == []
     assert api.activate_calls == []
     assert ready_urls == [
         *(["rtsp://127.0.0.1:6554/doorbell-video"] * 8),
@@ -1412,7 +1410,7 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
     )
 
 
-def test_ring_answer_audio_closes_preview_before_provider_offer(
+def test_ring_answer_audio_keeps_passive_preview_registered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -1497,11 +1495,15 @@ def test_ring_answer_audio_closes_preview_before_provider_offer(
 
     asyncio.run(_run())
 
-    assert events.index("close:ring-preview-browser") < events.index(
-        "offer-start:ring-answer-browser"
-    )
-    assert list(camera._provider_webrtc_sessions) == ["ring-answer-browser"]
-    assert provider.closed == ["ring-preview-browser"]
+    assert events == [
+        "offer-start:ring-preview-browser",
+        "offer-start:ring-answer-browser",
+    ]
+    assert list(camera._provider_webrtc_sessions) == [
+        "ring-preview-browser",
+        "ring-answer-browser",
+    ]
+    assert provider.closed == []
     assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     assert api.hangup_calls == 0
     assert api.stop_calls == 0
@@ -1510,9 +1512,7 @@ def test_ring_answer_audio_closes_preview_before_provider_offer(
         for message in messages
         if _webrtc_message_value(message, "type") == "closed"
     ]
-    assert [
-        _webrtc_message_value(message, "reason") for message in closed_messages
-    ] == ["ring_call_answered"]
+    assert closed_messages == []
 
 
 def test_ring_call_answer_without_microphone_omits_rtsp_backchannel(
@@ -2277,13 +2277,24 @@ def test_doorbell_media_closed_closes_local_doorbell_webrtc_without_agent_stop()
             return task
 
     camera.hass = _FakeHass()  # type: ignore[assignment]
-    camera._provider_webrtc_sessions["session-doorbell"] = _ProviderWebRTCSession(
+    camera._provider_webrtc_sessions["ring-preview-browser"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=messages.append,
+        wants_audio=False,
+        wants_backchannel=False,
+        resource_id="ring:entry-1",
+        ring_preview=True,
+        ready=True,
+    )
+    camera._provider_webrtc_sessions["ring-answer-browser"] = _ProviderWebRTCSession(
         provider=provider,
         owner="doorbell",
         send_message=messages.append,
         wants_audio=True,
-        wants_backchannel=False,
-        resource_id="doorbell:entry-1:audio",
+        wants_backchannel=True,
+        resource_id="ring:entry-1",
+        ring_call=True,
         ready=True,
     )
 
@@ -2302,12 +2313,15 @@ def test_doorbell_media_closed_closes_local_doorbell_webrtc_without_agent_stop()
     asyncio.run(_run())
 
     assert camera._provider_webrtc_sessions == {}
-    assert provider.closed == ["session-doorbell"]
-    assert messages == [{"type": "closed", "reason": "doorbell_media_closed"}]
+    assert provider.closed == ["ring-preview-browser", "ring-answer-browser"]
+    assert messages == [
+        {"type": "closed", "reason": "doorbell_media_closed"},
+        {"type": "closed", "reason": "doorbell_media_closed"},
+    ]
     assert entry.runtime_data.api.stop_calls == 0
 
 
-def test_ring_answer_event_closes_passive_preview_webrtc_sessions() -> None:
+def test_ring_answer_event_keeps_passive_preview_webrtc_sessions() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     provider = _FakeWebRTCProvider()
@@ -2370,9 +2384,12 @@ def test_ring_answer_event_closes_passive_preview_webrtc_sessions() -> None:
 
     asyncio.run(_run())
 
-    assert list(camera._provider_webrtc_sessions) == ["ring-answer-browser"]
-    assert provider.closed == ["ring-preview-browser"]
-    assert messages == [{"type": "closed", "reason": "ring_call_answered"}]
+    assert list(camera._provider_webrtc_sessions) == [
+        "ring-preview-browser",
+        "ring-answer-browser",
+    ]
+    assert provider.closed == []
+    assert messages == []
     assert entry.runtime_data.api.stop_calls == 0
 
 

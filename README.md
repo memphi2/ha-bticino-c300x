@@ -124,7 +124,7 @@ and hard-reload the browser if the card picker still shows old frontend state.
 | Device QML display pages | [Device QML UI](device_qml/README.md) |
 | Quality scale tracking | [Quality scale](docs/quality-scale.md) |
 | Privacy, security, and legal notes | [Privacy](PRIVACY.md), [Security](SECURITY.md), [Legal notes](docs/legal.md) |
-| Historical evidence and baselines | [Provenance audit](docs/audits/2026-06-22-provenance.md), [Media refactor baseline](docs/dev/media-refactor-baseline.md) |
+| Evidence and baselines | [Current legal/provenance audit](docs/audits/current-legal-provenance.md), [Media refactor baseline](docs/dev/media-refactor-baseline.md) |
 | Release history | [Changelog](CHANGELOG.md) |
 
 ## Project Status

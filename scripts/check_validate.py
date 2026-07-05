@@ -27,6 +27,10 @@ def main() -> int:
 
     steps: list[ValidationStep] = [
         ValidationStep("Repository checks", (sys.executable, "scripts/check_repo.py")),
+        ValidationStep(
+            "Legal/provenance audit",
+            (sys.executable, "scripts/check_legal_audit.py"),
+        ),
         ValidationStep("Native agent ARMHF stack check", ("make", "-C", "native_agent", "armhf-stack-check")),
     ]
 

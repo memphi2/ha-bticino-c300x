@@ -83,6 +83,6 @@ and any jurisdiction-specific patent or licensing requirements.
 common firmware/archive payloads, foreign runtime directories, tracked stock QML
 pages, private values, and third-party reference markers in runtime code.
 
-Historical local provenance evidence is retained under
-[docs/audits](audits/2026-06-22-provenance.md). Those files are audit snapshots,
-not live legal opinions.
+The current local provenance evidence is retained under
+[docs/audits/current-legal-provenance.md](audits/current-legal-provenance.md).
+That file is a technical audit snapshot, not a live legal opinion.

@@ -103,12 +103,14 @@ REQUIRED_PATHS = [
     "custom_components/bticino_c300x/diagnostics.py",
     "custom_components/bticino_c300x/repair_issues.py",
     "docs/architecture.md",
+    "docs/audits/current-legal-provenance.md",
     "docs/legal.md",
     "docs/native-agent.md",
     "docs/quality-scale.md",
     "docs/user-guide.md",
     "scripts/check_quality_scale.py",
     "scripts/check_coverage.py",
+    "scripts/check_legal_audit.py",
     "scripts/check_release_tag.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
@@ -190,6 +192,7 @@ def main() -> int:
     failures.extend(check_native_agent_example_config())
     failures.extend(check_secret_patterns())
     failures.extend(check_legal_hygiene())
+    failures.extend(check_current_audit_snapshot())
     failures.extend(check_release_metadata())
     failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
@@ -396,6 +399,23 @@ def check_legal_hygiene() -> list[str]:
     for phrase in required_legal_phrases:
         if phrase not in legal_text:
             failures.append(f"docs/legal.md must mention {phrase!r}")
+    return failures
+
+
+def check_current_audit_snapshot() -> list[str]:
+    """Require one current audit snapshot instead of accumulating old reports."""
+
+    audit_dir = ROOT / "docs" / "audits"
+    current = audit_dir / "current-legal-provenance.md"
+    failures: list[str] = []
+    if not current.is_file():
+        failures.append("missing current legal/provenance audit snapshot")
+    audit_files = sorted(path.name for path in audit_dir.glob("*.md"))
+    if audit_files != ["current-legal-provenance.md"]:
+        failures.append(
+            "docs/audits must contain only current-legal-provenance.md, got "
+            + ", ".join(audit_files)
+        )
     return failures
 
 

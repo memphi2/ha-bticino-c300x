@@ -101,6 +101,20 @@ Agent binary reuse is allowed only if none of these paths changed:
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
 
+## Legal and Provenance Audit
+
+Run the focused legal/provenance gate before each release:
+
+```bash
+.venv/bin/python scripts/check_legal_audit.py
+```
+
+This verifies the tracked repository does not contain firmware/APK/capture
+payloads, foreign runtime directories, stock vendor QML pages, copied
+third-party controller markers in runtime code, runtime Python requirements, or
+undocumented brand-asset changes. The normal local/CI validation command also
+runs this gate through `scripts/check_validate.py`.
+
 ## Privacy and Artifacts
 
 Do not commit:

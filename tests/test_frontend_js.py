@@ -9,13 +9,18 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_frontend_state_model_node_tests_pass() -> None:
+def test_frontend_node_tests_pass() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
+    test_files = sorted(ROOT.glob("tests/frontend/*.test.mjs"))
 
     result = subprocess.run(
-        [node, "--test", "tests/frontend/c300x_state_model.test.mjs"],
+        [
+            node,
+            "--test",
+            *(str(path.relative_to(ROOT)) for path in test_files),
+        ],
         cwd=ROOT,
         check=False,
         capture_output=True,

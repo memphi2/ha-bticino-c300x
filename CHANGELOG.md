@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.3 - Unreleased
+
+No user-facing changes yet.
+
 ## v1.7.2 - 2026-07-05
 
 ### Fixed

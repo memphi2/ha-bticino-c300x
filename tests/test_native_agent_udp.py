@@ -41,6 +41,7 @@ def test_openwebnet_local_action_events_are_deduplicated_before_dispatch() -> No
     assert 'strcmp(type, "door_unlock.started") == 0' in text
     assert 'strcmp(type, "door_unlock.ended") == 0' in text
     assert 'strcmp(type, "stair_light.activated") == 0' in text
+    assert 'strcmp(type, "stair_light.released") == 0' in text
     assert (
         'local_action_event_is_duplicate(runtime, "door_unlock.started", address)'
         in map_body
@@ -51,6 +52,10 @@ def test_openwebnet_local_action_events_are_deduplicated_before_dispatch() -> No
     )
     assert (
         'local_action_event_is_duplicate(runtime, "stair_light.activated", address)'
+        in map_body
+    )
+    assert (
+        'local_action_event_is_duplicate(runtime, "stair_light.released", address)'
         in map_body
     )
     assert map_body.index(

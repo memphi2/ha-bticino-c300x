@@ -5823,6 +5823,7 @@ static int is_local_action_event(const char *type)
             strcmp(type, "door_unlock.started") == 0
             || strcmp(type, "door_unlock.ended") == 0
             || strcmp(type, "stair_light.activated") == 0
+            || strcmp(type, "stair_light.released") == 0
         );
 }
 
@@ -6078,6 +6079,15 @@ static int map_openwebnet_event(
         }
         c300x_json_string(address, address_json, sizeof(address_json));
         c300x_copy_string(type, type_len, "stair_light.activated");
+        return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
+    }
+    if (parse_openwebnet_address_event(msg, "*8*22*", address, sizeof(address))) {
+        size_t used = 0;
+        if (local_action_event_is_duplicate(runtime, "stair_light.released", address)) {
+            return 0;
+        }
+        c300x_json_string(address, address_json, sizeof(address_json));
+        c300x_copy_string(type, type_len, "stair_light.released");
         return c300x_appendf(data, data_len, &used, "{\"raw\":%s,\"address\":%s}", raw_json, address_json);
     }
     if (strncmp(msg, "*8*1#5#4#", strlen("*8*1#5#4#")) == 0) {

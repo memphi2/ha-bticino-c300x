@@ -322,6 +322,7 @@
           "ringer_volume_changed": "Klingel-Lautstärke geändert",
           "smartphone_forwarding_changed": "Smartphone-Weiterleitung geändert",
           "stair_light_activated": "Treppenlicht aktiviert",
+          "stair_light_released": "Treppenlicht freigegeben",
           "activation_executed": "Geräteaktion ausgeführt"
         }
       }

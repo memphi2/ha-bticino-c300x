@@ -12,6 +12,7 @@ def test_normalize_event_type_handles_canonical_agent_events() -> None:
     assert normalize_event_type("doorbell_pressed") == "doorbell_pressed"
     assert normalize_event_type("agent.restarted") == "agent_restarted"
     assert normalize_event_type("doorbell.media.closed") == "doorbell_media_closed"
+    assert normalize_event_type("stair_light.released") == "stair_light_released"
     assert normalize_event_type("activation.executed") == "activation_executed"
     assert normalize_event_type("home_call.ended") == "home_call_ended"
     assert normalize_event_type("ringer.volume_changed") == "ringer_volume_changed"
@@ -34,5 +35,5 @@ def test_agent_event_key_prefers_machine_fields() -> None:
 
 
 def test_payload_event_key_reads_nested_data() -> None:
-    payload = {"data": {"event_type": "stair_light.activated"}}
-    assert payload_event_key(payload) == "stair_light_activated"
+    payload = {"data": {"event_type": "stair_light.released"}}
+    assert payload_event_key(payload) == "stair_light_released"

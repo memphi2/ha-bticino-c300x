@@ -8,7 +8,7 @@ from typing import Any
 DOORBELL_EVENTS = ("doorbell.pressed", "doorbell.view_requested")
 DOORBELL_VIDEO_EVENTS = ("doorbell.media.closed",)
 DOOR_UNLOCK_EVENTS = ("door_unlock.started", "door_unlock.ended")
-STAIR_LIGHT_EVENTS = ("stair_light.activated",)
+STAIR_LIGHT_EVENTS = ("stair_light.activated", "stair_light.released")
 ACTIVATION_EVENTS = ("activation.executed",)
 CALL_EVENTS = ("call.started", "call.ended")
 HOME_CALL_EVENTS = ("home_call.started", "home_call.answered", "home_call.ended")
@@ -27,6 +27,7 @@ HA_EVENT_TYPES: dict[str, str] = {
     "door_unlock.started": "door_unlock_started",
     "door_unlock.ended": "door_unlock_ended",
     "stair_light.activated": "stair_light_activated",
+    "stair_light.released": "stair_light_released",
     "activation.executed": "activation_executed",
     "call.started": "call_started",
     "call.ended": "call_ended",

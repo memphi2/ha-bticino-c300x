@@ -31,6 +31,8 @@ def test_stair_light_event_source_is_openwebnet_echo() -> None:
 
     assert 'parse_openwebnet_address_event(msg, "*8*21*", address, sizeof(address))' in body
     assert 'c300x_copy_string(type, type_len, "stair_light.activated");' in body
+    assert 'parse_openwebnet_address_event(msg, "*8*22*", address, sizeof(address))' in body
+    assert 'c300x_copy_string(type, type_len, "stair_light.released");' in body
     assert (
         'return c300x_appendf(data, data_len, &used, "{\\"raw\\":%s,\\"address\\":%s}", '
         "raw_json, address_json);"

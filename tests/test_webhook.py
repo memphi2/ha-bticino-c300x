@@ -193,9 +193,9 @@ def test_event_type_value_prefers_nested_alias() -> None:
 
 
 def test_event_type_value_handles_stair_light_event_from_namespace() -> None:
-    payload = {"event_type": "stair_light.activated"}
+    payload = {"event_type": "stair_light.released"}
 
-    assert _event_type_value(payload) == "stair_light_activated"
+    assert _event_type_value(payload) == "stair_light_released"
 
 
 def test_normalize_event_type_aliases_do_not_raise() -> None:
@@ -207,6 +207,7 @@ def test_normalize_event_type_aliases_do_not_raise() -> None:
 
 def test_normalize_event_type_includes_stair_light_activation() -> None:
     assert _normalize_event_type("stair_light.activated") == "stair_light_activated"
+    assert _normalize_event_type("stair_light.released") == "stair_light_released"
 
 
 def test_event_payload_rejects_non_post_or_invalid_json() -> None:
@@ -822,6 +823,36 @@ def test_door_unlock_event_keeps_address_in_public_event_data() -> None:
     assert response.status == 200
     assert event_state.door_unlock_state == "door_unlock_started"
     assert event_state.last_event_data["address"] == "20"
+
+
+def test_stair_light_release_event_keeps_address_in_public_event_data() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {"event": "stair_light.released", "data": {"address": "21"}},
+    )
+
+    response = asyncio.run(
+        _async_handle_agent_event(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            event_state,
+            request,  # type: ignore[arg-type]
+        )
+    )
+
+    assert response.status == 200
+    assert event_state.last_event_data["event_key"] == "stair_light_released"
+    assert event_state.last_event_data["address"] == "21"
+    assert event_state.last_event_data["data"]["address"] == "21"
 
 
 def test_call_events_update_call_active_state() -> None:

@@ -322,6 +322,7 @@
           "ringer_volume_changed": "Volume suoneria modificato",
           "smartphone_forwarding_changed": "Inoltro smartphone modificato",
           "stair_light_activated": "Luce scale attivata",
+          "stair_light_released": "Luce scale rilasciata",
           "activation_executed": "Attivazione dispositivo eseguita"
         }
       }

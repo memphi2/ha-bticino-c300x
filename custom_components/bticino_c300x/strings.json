@@ -322,6 +322,7 @@
           "ringer_volume_changed": "Ringer volume changed",
           "smartphone_forwarding_changed": "Smartphone forwarding changed",
           "stair_light_activated": "Stair light activated",
+          "stair_light_released": "Stair light released",
           "activation_executed": "Device activation executed"
         }
       }

@@ -199,6 +199,7 @@ def test_async_setup_entry_adds_supported_event_entities() -> None:
         C300XDeviceAgentEventEntity,
     ]
     assert "stair_light_activated" in added[1]._attr_event_types
+    assert "stair_light_released" in added[1]._attr_event_types
 
 
 def test_async_setup_entry_keeps_always_registered_agent_events() -> None:

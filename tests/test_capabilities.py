@@ -73,6 +73,7 @@ def test_events_for_capabilities_includes_future_real_capabilities() -> None:
         "door_unlock.started",
         "door_unlock.ended",
         "stair_light.activated",
+        "stair_light.released",
         "call.started",
         "call.ended",
         "ringer.muted",
@@ -230,6 +231,7 @@ def test_ha_event_types_for_capabilities_uses_supported_agent_events() -> None:
         "door_unlock_started",
         "door_unlock_ended",
         "stair_light_activated",
+        "stair_light_released",
         "activation_executed",
         "call_started",
         "call_ended",
@@ -249,6 +251,7 @@ def test_event_label_returns_localized_event_names() -> None:
     assert event_label("door_unlock_started", "de") == "Türöffner gestartet"
     assert event_label("door_unlock_started", "it") == "Apertura porta avviata"
     assert event_label("stair_light_activated", "de") == "Treppenlicht aktiviert"
+    assert event_label("stair_light_released", "de") == "Treppenlicht freigegeben"
     assert event_label("activation_executed", "de") == "Geräteaktion ausgeführt"
     assert event_label("ringer_unmuted", "de") == "Klingelton aktiviert"
     assert event_label("ringer_volume_changed", "de") == "Klingel-Lautstärke geändert"
@@ -298,6 +301,7 @@ def test_capability_event_helpers_avoid_duplicate_stair_light_action_event() -> 
         {"stair_light": {"supported": True}}
     ) == [
         "stair_light_activated",
+        "stair_light_released",
         "agent_restarted",
     ]
 

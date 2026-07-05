@@ -495,7 +495,12 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
                 doorbell_state,
             )
         )
-    elif context.event_type in {"door_unlock_started", "door_unlock_ended"}:
+    elif context.event_type in {
+        "door_unlock_started",
+        "door_unlock_ended",
+        "stair_light_activated",
+        "stair_light_released",
+    }:
         event_data["address"] = context.data.get("address")
     elif context.event_type in {"ringer_muted", "ringer_unmuted"}:
         event_data["muted"] = context.event_state.ringer_muted

@@ -569,6 +569,9 @@ def test_native_agent_openwebnet_address_events_do_not_use_greedy_scanf() -> Non
 
 def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    smartphone_forwarding = (
+        ROOT / "native_agent" / "src" / "smartphone_forwarding.c"
+    ).read_text(encoding="utf-8")
     event_body = text.split("static int map_openwebnet_event", maxsplit=1)[1].split(
         "static void handle_udp_event",
         maxsplit=1,
@@ -595,6 +598,10 @@ def test_native_agent_smartphone_forwarding_events_are_change_based() -> None:
     assert "c300x_video_set_ring_forwarding_enabled" not in remember_body
     assert '\\"smartphone_forwarding\\":%s' in state_body
     assert "refresh_smartphone_forwarding_mode(config, runtime)" in text
+    assert 'return "unprovisioned";' in smartphone_forwarding
+    assert '*#8**#37*3##' not in text
+    assert "invalid_smartphone_forwarding_mode" in text
+    assert "runtime->smartphone_forwarding_mode_code == 1" in text
 
 
 def test_native_agent_ringer_events_are_change_based() -> None:

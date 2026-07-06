@@ -58,6 +58,7 @@ def test_smartphone_forwarding_select_translates_internal_options() -> None:
             "enabled",
             "homeassistant",
             "blocked",
+            "unprovisioned",
         } <= set(translated_states)
         assert translated_states["homeassistant"] != "homeassistant"
 

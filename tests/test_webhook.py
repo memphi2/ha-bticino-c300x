@@ -796,6 +796,35 @@ def test_smartphone_forwarding_event_updates_state_and_public_event_data() -> No
     assert event_state.last_event_data["mode"] == "blocked"
 
 
+def test_smartphone_forwarding_event_preserves_unprovisioned_state() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={},
+        runtime_data=SimpleNamespace(event_state=event_state),
+    )
+    request = _FakeRequest(
+        "event-token",
+        {"event": "smartphone_forwarding.changed", "data": {"mode": 3}},
+    )
+
+    response = asyncio.run(
+        _async_handle_agent_event(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            event_state,
+            request,  # type: ignore[arg-type]
+        )
+    )
+
+    assert response.status == 200
+    assert event_state.smartphone_forwarding_mode == "unprovisioned"
+    assert event_state.last_event_data["mode"] == "unprovisioned"
+
+
 def test_door_unlock_event_keeps_address_in_public_event_data() -> None:
     hass = _FakeHass()
     event_state = C300XEventState()

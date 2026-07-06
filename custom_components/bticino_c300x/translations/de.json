@@ -338,7 +338,8 @@
         "state": {
           "enabled": "Smartphone",
           "homeassistant": "Home Assistant",
-          "blocked": "Blocked"
+          "blocked": "Blocked",
+          "unprovisioned": "Unprovisioned"
         }
       }
     },

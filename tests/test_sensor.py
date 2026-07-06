@@ -547,6 +547,35 @@ def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> N
     assert readiness["recommended_action"] == "set_forwarding_to_homeassistant"
 
 
+def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"doorbell_call": {"supported": True}},
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "unprovisioned"
+
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["status"] == "blocked"
+    assert readiness["forwarding_state"] == "unprovisioned"
+    assert readiness["forwarding_homeassistant"] is False
+    assert "forwarding_homeassistant" in readiness["failed_checks"]
+
+
 def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
     entry = _FakeEntry()
     entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]

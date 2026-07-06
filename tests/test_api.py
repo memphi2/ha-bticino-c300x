@@ -3209,6 +3209,14 @@ def test_normalize_smartphone_forwarding_from_numeric_agent_state() -> None:
     }
 
 
+def test_normalize_smartphone_forwarding_from_unprovisioned_agent_state() -> None:
+    assert normalize_smartphone_forwarding({"state": {"smartphone_forwarding": 3}}) == {
+        "mode": 3,
+        "state": "unprovisioned",
+        "raw": {"state": {"smartphone_forwarding": 3}},
+    }
+
+
 def test_normalize_smartphone_forwarding_handles_missing_agent_state() -> None:
     assert normalize_smartphone_forwarding({"state": {}}) == {
         "mode": None,
@@ -3233,6 +3241,16 @@ def test_normalize_smartphone_forwarding_from_agent_command_response() -> None:
     }
 
 
+def test_normalize_smartphone_forwarding_from_unprovisioned_agent_response() -> None:
+    assert normalize_smartphone_forwarding(
+        {"mode": "unprovisioned", "raw": "*#8**37*3##"}
+    ) == {
+        "mode": 3,
+        "state": "unprovisioned",
+        "raw": "*#8**37*3##",
+    }
+
+
 def test_normalize_smartphone_forwarding_accepts_unknown_agent_response() -> None:
     assert normalize_smartphone_forwarding({"mode": None, "state": "unknown", "raw": "*#*1##"}) == {
         "mode": None,
@@ -3254,6 +3272,8 @@ def test_normalize_smartphone_forwarding_accepts_boolean_agent_state() -> None:
 def test_normalize_smartphone_forwarding_mode_rejects_unknown_mode() -> None:
     with pytest.raises(C300XAgentApiResponseError):
         normalize_smartphone_forwarding_mode("unknown")
+    with pytest.raises(C300XAgentApiResponseError):
+        normalize_smartphone_forwarding_mode("unprovisioned")
 
 
 def test_normalize_smartphone_forwarding_rejects_missing_mode() -> None:

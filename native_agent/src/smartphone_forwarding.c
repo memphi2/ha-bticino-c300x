@@ -13,6 +13,9 @@ const char *c300x_smartphone_mode_from_code(int code)
     if (code == 2) {
         return "blocked";
     }
+    if (code == 3) {
+        return "unprovisioned";
+    }
     return NULL;
 }
 

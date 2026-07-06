@@ -13,6 +13,7 @@ from .api import C300XAgentApiError
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
     SMARTPHONE_FORWARDING_MODES,
+    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED,
 )
 from .entity import C300XEntity, supports_capability
 from .entry_types import BticinoC300XConfigEntry
@@ -24,10 +25,16 @@ if TYPE_CHECKING:
 
 PARALLEL_UPDATES = 1
 
-_FORWARDING_OPTION_LABELS = {
+_FORWARDING_STATE_LABELS = {
     "enabled": "Smartphone",
     "homeassistant": "Home Assistant",
     "blocked": "Blocked",
+    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED: "Unprovisioned",
+}
+_FORWARDING_OPTION_LABELS = {
+    mode: label
+    for mode, label in _FORWARDING_STATE_LABELS.items()
+    if mode in SMARTPHONE_FORWARDING_MODES
 }
 _FORWARDING_MODE_BY_LABEL = {
     label: mode for mode, label in _FORWARDING_OPTION_LABELS.items()
@@ -66,7 +73,7 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
     def current_option(self) -> str | None:
         """Return the current forwarding mode."""
 
-        return _FORWARDING_OPTION_LABELS.get(self._state)
+        return _FORWARDING_STATE_LABELS.get(self._state)
 
     @property
     def extra_state_attributes(self) -> dict[str, str | int | None]:

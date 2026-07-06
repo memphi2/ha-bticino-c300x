@@ -175,6 +175,19 @@ def test_smartphone_forwarding_select_ignores_invalid_options() -> None:
     assert entity.current_option is None
 
 
+def test_smartphone_forwarding_select_shows_unprovisioned_but_does_not_write() -> None:
+    entry = _FakeEntry()
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+
+    entity._apply_status({"mode": 3, "state": "unprovisioned"})
+    asyncio.run(entity.async_select_option("Unprovisioned"))
+
+    assert "Unprovisioned" not in entity._attr_options
+    assert entry.runtime_data.api.selected == []
+    assert entity.current_option == "Unprovisioned"
+    assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
+
+
 def test_smartphone_forwarding_select_accepts_raw_mode_for_automation() -> None:
     entry = _FakeEntry()
     entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
@@ -200,6 +213,23 @@ def test_smartphone_forwarding_event_updates_select_state() -> None:
 
     assert entity.current_option == "Home Assistant"
     assert entity.extra_state_attributes == {"mode": 1, "state": "homeassistant"}
+
+
+def test_smartphone_forwarding_event_shows_unprovisioned_state() -> None:
+    entity = C300XSmartphoneForwardingModeSelect(_FakeEntry())  # type: ignore[arg-type]
+
+    entity._handle_agent_event(
+        SimpleNamespace(
+            data={
+                "entry_id": "entry-1",
+                "event_type": "smartphone_forwarding_changed",
+                "mode": 3,
+            }
+        )
+    )
+
+    assert entity.current_option == "Unprovisioned"
+    assert entity.extra_state_attributes == {"mode": 3, "state": "unprovisioned"}
 
 
 def test_smartphone_forwarding_select_subscribes_to_agent_events() -> None:

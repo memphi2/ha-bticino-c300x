@@ -200,12 +200,6 @@ def test_self_test_contract_normalizes_nested_checks() -> None:
                     "ipv4_state": "original",
                 },
                 "rtsp": {"ok": True, "reason": "rtsp_ready", "clients": 0},
-                "sip_server": {
-                    "ok": False,
-                    "reason": "sip_tls_certificates_missing",
-                    "tcp_connect_ok": False,
-                    "tls_certificates_present": False,
-                },
             },
         }
     )
@@ -216,11 +210,6 @@ def test_self_test_contract_normalizes_nested_checks() -> None:
     assert status.checks["firewall"].reason == "ipv4_media_ports_missing"
     assert status.checks["firewall"].details == {"ipv4_state": "original"}
     assert status["checks"]["rtsp"]["details"]["clients"] == 0
-    assert status.checks["sip_server"].reason == "sip_tls_certificates_missing"
-    assert status.checks["sip_server"].details == {
-        "tcp_connect_ok": False,
-        "tls_certificates_present": False,
-    }
 
 
 def test_self_test_contract_handles_bool_strings_and_ignores_bad_checks() -> None:

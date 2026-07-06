@@ -17,9 +17,6 @@ You need:
 - Home Assistant `2026.5.0` or newer.
 - A BTicino Classe 300X / C300X on firmware `1.7.x`.
 - Root or SSH access on the C300X for the first device-agent installation.
-- For local media and Ring Call, a C300X that has been paired once with the
-  app. This provisions the device-side SIP/Flexisip certificate; the
-  integration does not create it.
 - A trusted local network between Home Assistant and the C300X.
 
 This integration cannot root a stock device. If a separate rooting or

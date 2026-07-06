@@ -39,9 +39,6 @@ forwarding controls, messages and optional display pages.
 - Home Assistant `2026.5.0` or newer.
 - BTicino Classe 300X / C300X firmware `1.7.x`.
 - Rooted or SSH-enabled C300X for the first device-agent installation.
-- For local media and Ring Call, the C300X must have been paired once with the
-  app so the device provisions its local SIP/Flexisip certificate.
-  The integration does not perform this vendor provisioning.
 - A trusted local network between Home Assistant and the C300X.
 
 If your device is still stock, root or SSH-enable it first with a separate

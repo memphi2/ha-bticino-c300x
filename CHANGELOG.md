@@ -2,11 +2,6 @@
 
 ## v1.7.4 - 2026-07-06
 
-### Added
-
-- Add SIP server readiness diagnostics so media readiness can distinguish a
-  missing or stopped local SIP server from generic media setup failures.
-
 ### Fixed
 
 - Fix Android Ring Call notification **Answer** handling so it answers first

@@ -305,7 +305,6 @@ Response shape:
     "capabilities": {"ok": true, "reason": "ok"},
     "firewall": {"ok": true, "reason": "media_ports_open"},
     "rtsp": {"ok": true, "reason": "rtsp_ready"},
-    "sip_server": {"ok": true, "reason": "sip_server_ready"},
     "talkback_rtp": {"ok": true, "reason": "talkback_rtp_ready"},
     "homeassistant_user": {"ok": true, "reason": "homeassistant_user_ok"},
     "device_routing": {"ok": true, "reason": "device_routing_ok"},
@@ -324,9 +323,6 @@ Check scope:
   managed media-port blocks. It does not run iptables or ip6tables.
 - `rtsp`: reads in-process video bridge state. It does not activate media and
   does not open a client connection.
-- `sip_server`: checks the configured local SIP endpoint with a short read-only
-  TCP connection and reports whether local SIP TLS certificate material is
-  present. It does not start, stop or reconfigure Flexisip.
 - `talkback_rtp`: verifies configured talkback RTP infrastructure and firewall
   readiness. It does not send RTP packets.
 - `homeassistant_user`: reads Flexisip user and route files and reports whether
@@ -1171,7 +1167,7 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.7.4 | 1.1 | 1.7.x | Adds read-only local SIP server/Flexisip readiness reporting. |
+| 1.7.4 | 1.1 | 1.7.x | Keeps media readiness on stable agent-owned checks. |
 | 1.7.0 | 1.1 | 1.7.x | Adds structured additional device activations and activation config synchronization. |
 | 1.6.4 | 1.1 | 1.7.x | Adds configurable live doorstation audio gain for on-demand video and Ring Call audio. |
 | 1.6.1 | 1.1 | 1.7.x | Fixes RTSP backchannel negotiation for provider-based browser talkback. |

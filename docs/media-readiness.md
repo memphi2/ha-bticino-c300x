@@ -24,7 +24,6 @@ callback state into one status.
 | `media_user_ok` | The Home Assistant media user and routing are ready. |
 | `forwarding_homeassistant` | Ring Call forwarding is set to Home Assistant. |
 | `rtsp_ok` | RTSP/media infrastructure is ready according to the agent self-test. |
-| `sip_server_ok` | The local C300X SIP/Flexisip server is reachable according to the agent self-test. |
 | `talkback_rtp_ok` | Talkback RTP infrastructure is ready according to the agent self-test. |
 | `callback_url_ok` | The C300X can use the configured Home Assistant callback URL. |
 | `ring_call_supported` | The installed agent reports Ring Call capability. |
@@ -42,7 +41,6 @@ callback state into one status.
 | `capabilities` | Agent answered without usable media capabilities. | Update or reconfigure the device agent. |
 | `firewall` | Required IPv4 media ports are not open on the C300X. | Apply the C300X firewall Repair. |
 | `rtsp` | RTSP server or stream config is not ready. | Update/reconfigure the agent, then re-check readiness. |
-| `sip_server` | The local SIP/Flexisip server is not reachable. On a never-paired device, the local SIP certificate may be missing. | Pair the C300X once with the app, then set Forwarding to Home Assistant and re-check readiness. |
 | `talkback_rtp` | Talkback RTP port is not open or not reported ready. | Apply the firewall Repair. IPv6 is optional. |
 | `homeassistant_user` | Dedicated media user is missing. | Run Home Assistant media-user setup. |
 | `device_routing` | Local media-user route files are incomplete. | Run Home Assistant media-user setup. |
@@ -65,11 +63,6 @@ The guided Repair can:
 - guide you to set a reachable callback URL.
 
 Repairs are explicit. They do not run just because Home Assistant starts.
-
-The integration does not provision the vendor SIP certificate itself. If
-Readiness reports `sip_server` with `sip_tls_certificates_missing`, pair the
-C300X once with the app first. After that, use Home Assistant to set
-forwarding to Home Assistant and check `Media readiness` again.
 
 If a Repair changes device-side media setup, wait for it to finish, then check
 `Media readiness` again before testing the card.

@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
+from ..camera_media.state_machine import (
+    MediaState,
+    derive_media_state,
+    media_state_input_from_video_status,
+)
 from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from .common import ensure_doorbell_video_supported, raise_agent_command_failed
 
@@ -35,6 +41,21 @@ class DoorbellVideoUseCase:
         )
         if prepare_stop is not None:
             await prepare_stop()
+        if await _async_agent_already_reports_idle(self._entry):
+            return
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_stop_doorbell_video()
         )
+
+
+async def _async_agent_already_reports_idle(entry: Any) -> bool:
+    """Return true when the native media state is already idle."""
+
+    try:
+        status = await entry.runtime_data.api.async_doorbell_video_status()
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(status, Mapping):
+        return False
+    facts = media_state_input_from_video_status(status)
+    return derive_media_state(facts).state is MediaState.IDLE

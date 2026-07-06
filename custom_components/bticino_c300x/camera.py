@@ -933,7 +933,13 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     def close_webrtc_session(self, session_id: str) -> None:
         """Close an active WebRTC provider session."""
 
-        self.hass.async_create_task(self._async_close_webrtc_session(session_id))
+        self.hass.async_create_task(
+            self._async_close_webrtc_session(
+                session_id,
+                stop_media=False,
+                reason="webrtc_session_closed",
+            )
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""

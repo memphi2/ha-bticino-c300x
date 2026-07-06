@@ -68,18 +68,37 @@ if "homeassistant.components.button" not in sys.modules:
     class EntityCategory:  # pragma: no cover - import-time stub only
         CONFIG = "config"
 
+    class Event:  # pragma: no cover - import-time stub only
+        pass
+
     class HomeAssistant:  # pragma: no cover - import-time stub only
         pass
 
     class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
         pass
 
+    class ServiceValidationError(HomeAssistantError):  # pragma: no cover - import-time stub only
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args)
+            self.translation_key = kwargs.get("translation_key")
+
     button.ButtonEntity = ButtonEntity
     config_entries.ConfigEntry = ConfigEntry
+    const.ATTR_ENTITY_ID = "entity_id"
     const.EntityCategory = EntityCategory
+    core.Event = Event
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
-    exceptions.HomeAssistantError = HomeAssistantError
+    exceptions.HomeAssistantError = getattr(
+        exceptions,
+        "HomeAssistantError",
+        HomeAssistantError,
+    )
+    exceptions.ServiceValidationError = getattr(
+        exceptions,
+        "ServiceValidationError",
+        ServiceValidationError,
+    )
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
@@ -187,6 +206,16 @@ class _FakeMemoApi:
         self.restart_agent_calls = 0
         self.reload_gui_calls = 0
         self.stop_video_calls = 0
+        self.doorbell_video_status: dict[str, Any] = {
+            "media_owner": "agent",
+            "window_available": True,
+            "bridge": {
+                "media_owner": "agent",
+                "clients": 0,
+                "media_active": True,
+            },
+        }
+        self.doorbell_video_status_calls = 0
         self.memos_calls = 0
         self.video_messages_calls = 0
         self._refreshed_memos = refreshed_memos or {}
@@ -242,6 +271,10 @@ class _FakeMemoApi:
     async def async_stop_doorbell_video(self) -> dict[str, Any]:
         self.stop_video_calls += 1
         return {"ok": True}
+
+    async def async_doorbell_video_status(self) -> dict[str, Any]:
+        self.doorbell_video_status_calls += 1
+        return self.doorbell_video_status
 
     async def async_answering_machine_messages(self) -> dict[str, Any]:
         self.video_messages_calls += 1
@@ -803,7 +836,9 @@ def test_stop_doorbell_video_button_translates_agent_errors() -> None:
             C300XAgentApiError("failed"),
         ):
             entry = _FakeEntry(
+                data={CONF_VIDEO_ENABLED: True},
                 runtime_data=_FakeRuntimeData(
+                    capabilities={"doorbell_video": {"supported": True}},
                     api=_FailingMemoApi("stop_doorbell_video", error)
                 )
             )

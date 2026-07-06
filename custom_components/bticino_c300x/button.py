@@ -43,6 +43,7 @@ from .message_refresh import (
     schedule_memos_refresh,
 )
 from .qml_patch import async_refresh_qml_patch_status
+from .use_cases.doorbell_video import DoorbellVideoUseCase
 from .video_messages import (
     latest_video_message_id,
 )
@@ -202,14 +203,7 @@ class C300XStopDoorbellVideoButton(C300XEntity, ButtonEntity):
         """Stop the active doorbell video session."""
 
         try:
-            prepare_stop = getattr(
-                self._entry.runtime_data,
-                "prepare_doorbell_video_stop",
-                None,
-            )
-            if prepare_stop is not None:
-                await prepare_stop()
-            await self._entry.runtime_data.api.async_stop_doorbell_video()
+            await DoorbellVideoUseCase(self._entry).stop()
         except C300XAgentApiUnsupportedError as err:
             raise HomeAssistantError(
                 "The installed C300X device agent does not support doorbell video"

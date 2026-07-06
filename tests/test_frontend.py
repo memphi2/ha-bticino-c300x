@@ -763,8 +763,11 @@ def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> 
     )
     assert "this._closePeer(true);" in update_block
     assert "canStartDoorbellPreview" in preview_guard
-    assert 'reason === "ring_call_answered"' in lifecycle_source
-    assert "this.ringPreviewActive && !this.doorbellAnswered" in lifecycle_source
+    assert "C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS" in lifecycle_source
+    assert '"doorbell_video_stopped"' in lifecycle_source
+    assert '"doorbell_media_closed"' in lifecycle_source
+    assert "const hadPreview = this.ringPreviewActive || this.ringPreviewStarted;" in lifecycle_source
+    assert "!this.ringPreviewSuppressed" in lifecycle_source
     assert "this._lifecycle.ringPreviewSuppressed = true;" in closed_handler
 
 

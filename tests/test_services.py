@@ -46,13 +46,17 @@ class _ServiceCall:  # pragma: no cover - import-time stub only
     data: dict[str, Any] = {}
 
 
-class _ServiceValidationError(Exception):  # pragma: no cover - import-time stub only
+class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+    pass
+
+
+class _ServiceValidationError(_HomeAssistantError):  # pragma: no cover - import-time stub only
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args)
         self.translation_key = kwargs.get("translation_key")
 
 
-class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+class _Event:  # pragma: no cover - import-time stub only
     pass
 
 
@@ -70,19 +74,12 @@ class _Entity:  # pragma: no cover - import-time stub only
 
 config_entries.ConfigEntry = _ConfigEntry
 const.ATTR_ENTITY_ID = "entity_id"
+core.Event = getattr(core, "Event", _Event)
 core.HomeAssistant = getattr(core, "HomeAssistant", object)
 core.ServiceCall = getattr(core, "ServiceCall", _ServiceCall)
 core.callback = getattr(core, "callback", lambda func: func)
-exceptions.ServiceValidationError = getattr(
-    exceptions,
-    "ServiceValidationError",
-    _ServiceValidationError,
-)
-exceptions.HomeAssistantError = getattr(
-    exceptions,
-    "HomeAssistantError",
-    _HomeAssistantError,
-)
+exceptions.ServiceValidationError = _ServiceValidationError
+exceptions.HomeAssistantError = _HomeAssistantError
 config_validation.string = str
 config_validation.entity_id = str
 config_validation.config_entry_only_config_schema = lambda _domain: None
@@ -161,6 +158,7 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     api: Any = None
+    prepare_doorbell_video_stop: Any = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
     memos: dict[str, Any] = field(default_factory=dict)
@@ -1384,6 +1382,15 @@ def test_activate_doorbell_video_service_calls_agent_api() -> None:
 def test_stop_doorbell_video_service_calls_agent_api() -> None:
     async def _run() -> None:
         api = _FakeApi()
+        api.doorbell_video_status = {
+            "media_owner": "agent",
+            "window_available": True,
+            "bridge": {
+                "media_owner": "agent",
+                "clients": 0,
+                "media_active": True,
+            },
+        }
         entry = _FakeEntry(
             _FakeRuntimeData(
                 capabilities={"doorbell_video": {"supported": True}},
@@ -1398,6 +1405,43 @@ def test_stop_doorbell_video_service_calls_agent_api() -> None:
         await handler(types.SimpleNamespace(data={}))
 
         assert api.stop_video_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_stop_doorbell_video_service_skips_agent_stop_when_prepare_reaches_idle() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        calls: list[str] = []
+
+        async def _prepare_stop() -> None:
+            calls.append("prepare_stop")
+            api.doorbell_video_status = {
+                "media_owner": "idle",
+                "window_available": False,
+                "bridge": {
+                    "media_owner": "idle",
+                    "clients": 0,
+                },
+            }
+
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_video": {"supported": True}},
+                api=api,
+                prepare_doorbell_video_stop=_prepare_stop,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_STOP_DOORBELL_VIDEO)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert calls == ["prepare_stop"]
+        assert api.doorbell_video_status_calls == 1
+        assert api.stop_video_calls == 0
 
     asyncio.run(_run())
 

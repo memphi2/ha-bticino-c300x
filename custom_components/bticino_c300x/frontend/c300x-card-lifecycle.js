@@ -1,7 +1,13 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=f1eb07dfec07c6ee";
+} from "./c300x-ring-preview-state.js?v=ae4ec9e62922eb5e";
+
+const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
+  "agent_cpu_watchdog",
+  "doorbell_media_closed",
+  "doorbell_video_stopped",
+]);
 
 export class C300XCardLifecycleState {
   constructor() {
@@ -60,12 +66,13 @@ export class C300XCardLifecycleState {
   }
 
   shouldStartPassiveAnsweredPreview({ mediaState, webrtcRunning, transitionActive }) {
+    const hadPreview = this.ringPreviewActive || this.ringPreviewStarted;
     return (
       mediaState === "ring_active"
-      && this.ringPreviewActive
+      && hadPreview
       && !this.doorbellAnswered
       && !this.passiveAnsweredPreviewStarted
-      && webrtcRunning
+      && !this.ringPreviewSuppressed
       && !transitionActive
     );
   }
@@ -81,7 +88,6 @@ export class C300XCardLifecycleState {
   }
 
   shouldSuppressPreviewOnClose(reason) {
-    return reason === "ring_call_answered"
-      || (this.ringPreviewActive && !this.doorbellAnswered);
+    return C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS.has(reason);
   }
 }

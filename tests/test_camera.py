@@ -115,6 +115,7 @@ from custom_components.bticino_c300x.camera import (
     TALKBACK_RTP_PAYLOAD_TYPE,
     C300XDoorbellCamera,
     _ProviderWebRTCSession,
+    _ProviderWebRTCStreamContext,
     async_setup_entry,
 )
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
@@ -915,6 +916,109 @@ def test_doorbell_camera_prepare_stop_waits_for_provider_rtsp_clients_to_drain(
     ]
     assert provider.closed == ["doorbell-session"]
     assert api.stop_calls == 0
+
+
+def test_doorbell_camera_ha_webrtc_close_does_not_stop_agent_media() -> None:
+    async def _run() -> tuple[_FakeApi, _FakeWebRTCProvider, list[asyncio.Task[None]]]:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+            provider=provider,
+            owner="doorbell",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="doorbell:entry-1:audio",
+            ready=True,
+        )
+
+        camera.close_webrtc_session("doorbell-session")
+        await asyncio.gather(*tasks)
+        return api, provider, tasks
+
+    api, provider, tasks = asyncio.run(_run())
+
+    assert len(tasks) == 1
+    assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 0
+
+
+def test_doorbell_camera_home_call_offer_without_audio_is_rejected() -> None:
+    api = _FakeApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    sent_messages: list[Any] = []
+
+    asyncio.run(
+        camera.async_handle_home_call_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-home-no-audio",
+            sent_messages.append,
+            duration_seconds=30,
+        )
+    )
+
+    assert _webrtc_message_value(sent_messages[0], "type") == "error"
+    assert _webrtc_message_value(sent_messages[0], "code") == "bticino_webrtc_offer_failed"
+    assert api.home_call_start_calls == []
+    assert camera._webrtc_session_ids() == []
+
+
+def test_doorbell_camera_remove_clears_callbacks_and_stops_media() -> None:
+    api = _FakeApi()
+    runtime_data = _FakeRuntimeData(api=api)
+    runtime_data.prepare_doorbell_video_stop = object()
+    runtime_data.prepare_home_call_stop = object()
+    entry = _FakeEntry(runtime_data=runtime_data)
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _FakeWebRTCProvider()
+    camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+
+    asyncio.run(camera.async_will_remove_from_hass())
+
+    assert runtime_data.prepare_doorbell_video_stop is None
+    assert runtime_data.prepare_home_call_stop is None
+    assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 2
+    assert camera._webrtc_session_ids() == []
+
+
+def test_doorbell_camera_failed_offer_without_registered_session_stops_owned_media() -> None:
+    api = _FakeApi()
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    stream_context = _ProviderWebRTCStreamContext(
+        owner="doorbell",
+        session_id="missing-session",
+        wants_audio=True,
+        wants_backchannel=False,
+        media_started=True,
+        resource_id="doorbell:entry-1:audio",
+    )
+
+    asyncio.run(
+        camera._async_cleanup_failed_provider_offer(
+            "missing-session",
+            owner="doorbell",
+            stream_context=stream_context,
+        )
+    )
+
+    assert api.stop_calls == 1
 
 
 def test_doorbell_camera_closing_last_webrtc_session_drains_provider_before_stop(

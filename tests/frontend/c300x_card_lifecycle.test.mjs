@@ -74,6 +74,37 @@ test("lifecycle allows passive preview transition only after a remote answer", (
   );
 });
 
+test("lifecycle continues passive preview after source switch closed the old preview", () => {
+  const lifecycle = new C300XCardLifecycleState();
+  lifecycle.ringPreviewStarted = true;
+
+  assert.equal(lifecycle.shouldSuppressPreviewOnClose("closed"), false);
+  assert.equal(
+    lifecycle.shouldStartPassiveAnsweredPreview({
+      mediaState: "ring_active",
+      webrtcRunning: false,
+      transitionActive: false,
+    }),
+    true,
+  );
+});
+
+test("lifecycle suppresses passive preview after explicit backend stop", () => {
+  const lifecycle = new C300XCardLifecycleState();
+  lifecycle.ringPreviewStarted = true;
+
+  assert.equal(lifecycle.shouldSuppressPreviewOnClose("doorbell_video_stopped"), true);
+  lifecycle.ringPreviewSuppressed = true;
+  assert.equal(
+    lifecycle.shouldStartPassiveAnsweredPreview({
+      mediaState: "ring_active",
+      webrtcRunning: false,
+      transitionActive: false,
+    }),
+    false,
+  );
+});
+
 test("lifecycle clearPeer keeps suppression but clears local session state", () => {
   const lifecycle = new C300XCardLifecycleState();
   lifecycle.ringPreviewSuppressed = true;

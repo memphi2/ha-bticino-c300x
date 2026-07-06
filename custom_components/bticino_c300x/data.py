@@ -215,6 +215,7 @@ class BticinoC300XRuntimeData:
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: datetime | None = None
     answering_machine_messages_refresh_task: Any | None = None
+    startup_sync_task: Any | None = None
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: datetime | None = None
     memos_refresh_task: Any | None = None

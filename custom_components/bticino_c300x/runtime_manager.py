@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -114,7 +115,6 @@ class C300XRuntimeManager:
         await self.async_validate_agent()
         await self.async_register_callbacks()
         self._store_runtime_data()
-        await self.async_sync_device_state()
         _async_remove_stale_gui_dependent_entities(self.hass, self.entry)
 
         from .repair_issues import async_sync_entry_repair_issues
@@ -124,6 +124,7 @@ class C300XRuntimeManager:
         self.entry.async_on_unload(self.entry.add_update_listener(_async_update_listener))
         await async_setup_services(self.hass)
         await self.async_forward_platforms()
+        self.async_schedule_startup_sync()
         return True
 
     async def async_validate_agent(self) -> None:
@@ -216,6 +217,37 @@ class C300XRuntimeManager:
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
 
+    def async_schedule_startup_sync(self) -> None:
+        """Run slow startup-only agent synchronization after entity setup."""
+
+        from .repair_issues import async_sync_entry_repair_issues
+
+        async def _async_run_startup_sync() -> None:
+            sync_repairs = False
+            try:
+                await self.async_sync_device_state()
+                sync_repairs = True
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001 - keep entry setup available
+                _LOGGER.warning(
+                    "C300X startup device-state sync failed after setup: %s",
+                    compact_error_text(err),
+                )
+                sync_repairs = True
+            finally:
+                if sync_repairs:
+                    async_sync_entry_repair_issues(self.hass, self.entry)
+                self.entry.runtime_data.startup_sync_task = None
+
+        create_task = getattr(self.hass, "async_create_task", None)
+        task = (
+            create_task(_async_run_startup_sync())
+            if callable(create_task)
+            else asyncio.create_task(_async_run_startup_sync())
+        )
+        self.entry.runtime_data.startup_sync_task = task
+
     async def async_forward_platforms(self) -> None:
         """Set up media routes and forward entity platforms."""
 
@@ -248,6 +280,10 @@ class C300XRuntimeManager:
             if runtime_data.answering_machine_messages_refresh_task:
                 runtime_data.answering_machine_messages_refresh_task.cancel()
                 runtime_data.answering_machine_messages_refresh_task = None
+            startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
+            if startup_sync_task:
+                startup_sync_task.cancel()
+                runtime_data.startup_sync_task = None
             runtime_data.unregister_event_webhook()
             runtime_data.unregister_webhook()
             self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
@@ -357,7 +393,7 @@ def _async_remove_stale_gui_dependent_entities(
     if entry_device_ui_enabled(entry):
         return
 
-    from homeassistant.helpers import entity_registry as er
+    import homeassistant.helpers.entity_registry as er
 
     registry = er.async_get(hass)
     states = getattr(hass, "states", None)

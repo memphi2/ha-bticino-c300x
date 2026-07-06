@@ -274,15 +274,16 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     assert integration.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
     assert entry.runtime_data.agent_update_state == {"available": False}
     assert calls == [
-        "activations",
-        "display",
-        "qml",
-        "user",
         "remove-stale",
         "repair-sync",
         "services",
         "media-view",
         "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
+        "activations",
+        "display",
+        "qml",
+        "user",
+        "repair-sync",
     ]
     assert entry.added_listeners
 

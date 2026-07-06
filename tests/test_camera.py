@@ -280,9 +280,9 @@ def _install_fake_webrtc_provider(
     monkeypatch: pytest.MonkeyPatch,
     provider: _FakeWebRTCProvider | None,
 ) -> None:
-    async def _provider(hass: Any, camera: C300XDoorbellCamera) -> Any:
+    async def _provider(hass: Any, stream_source: str) -> Any:
         if provider is not None:
-            provider.support_sources.append(await camera.stream_source())
+            provider.support_sources.append(stream_source)
         return provider
 
     monkeypatch.setattr(
@@ -690,7 +690,7 @@ def test_doorbell_camera_provider_exception_before_stream_source_keeps_media(
 
     async def _provider_without_source(
         _hass: Any,
-        _camera: C300XDoorbellCamera,
+        _stream_source: str,
     ) -> Any:
         return provider
 
@@ -1039,9 +1039,7 @@ def test_doorbell_camera_provider_offer_uses_backchannel_for_talkback(
     assert provider.offer_sources == [
         "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
     ]
-    assert provider.support_sources == [
-        "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
-    ]
+    assert provider.support_sources == ["rtsp://127.0.0.1:6554/doorbell"]
 
 
 def test_doorbell_camera_provider_offer_omits_backchannel_without_microphone(
@@ -1244,7 +1242,7 @@ def test_doorbell_camera_provider_video_only_offer_uses_on_demand_audio_path(
     assert session.wants_backchannel is False
     assert provider.offer_sources == ["rtsp://127.0.0.1:6554/doorbell"]
     assert provider.support_sources == ["rtsp://127.0.0.1:6554/doorbell"]
-    assert entry.runtime_data.api.activate_calls == [True, True]
+    assert entry.runtime_data.api.activate_calls == [True]
 
 
 def test_doorbell_camera_uses_active_ring_media_without_on_demand_activation() -> None:
@@ -1614,7 +1612,7 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
     assert camera._active_local_media_sessions() == 1
     assert provider.closed == []
     assert provider.offer_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
-    assert provider.support_sources[-1] == "rtsp://127.0.0.1:6554/doorbell#backchannel=1"
+    assert provider.support_sources[-1] == "rtsp://127.0.0.1:6554/doorbell"
     assert len(provider.offers) == 5
     assert [session_id for session_id, _offer in provider.offers[:4]] == preview_session_ids
     closed_messages = [
@@ -1625,8 +1623,7 @@ def test_doorbell_camera_ring_webrtc_offers_share_one_rtsp_source(
     assert closed_messages == []
     assert api.activate_calls == []
     assert ready_urls == [
-        *(["rtsp://127.0.0.1:6554/doorbell-video"] * 8),
-        "rtsp://127.0.0.1:6554/doorbell",
+        *(["rtsp://127.0.0.1:6554/doorbell-video"] * 4),
         "rtsp://127.0.0.1:6554/doorbell",
     ]
     assert not any(
@@ -2080,13 +2077,11 @@ def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session(
     asyncio.run(_run())
 
     assert api.home_call_start_calls == [30, 30]
-    assert api.home_call_status_calls == 4
+    assert api.home_call_status_calls == 2
     assert api.home_call_stop_calls == 2
     assert api.activate_calls == []
     assert api.stop_calls == 0
     assert ready_urls == [
-        "rtsp://127.0.0.1:6554/doorbell",
-        "rtsp://127.0.0.1:6554/doorbell",
         "rtsp://127.0.0.1:6554/doorbell",
         "rtsp://127.0.0.1:6554/doorbell",
     ]

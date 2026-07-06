@@ -265,14 +265,23 @@ def _rtsp_client_count_from_status(status: Mapping[str, Any] | None) -> int | No
         return None
 
 
-async def _async_get_supported_webrtc_provider(hass: HomeAssistant, camera: Camera) -> Any:
-    """Return HA's active WebRTC provider without importing it in test stubs."""
+async def _async_get_supported_webrtc_provider(
+    hass: HomeAssistant,
+    stream_source: str,
+) -> Any:
+    """Return HA's active WebRTC provider without starting C300X media."""
 
     from homeassistant.components.camera.webrtc import (  # noqa: PLC0415
-        async_get_supported_provider,
+        DATA_WEBRTC_PROVIDERS,
     )
 
-    return await async_get_supported_provider(hass, camera)
+    providers = hass.data.get(DATA_WEBRTC_PROVIDERS)
+    if not providers or not stream_source:
+        return None
+    for provider in providers:
+        if provider.async_is_supported(stream_source):
+            return provider
+    return None
 
 
 async def async_setup_entry(
@@ -626,12 +635,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
 
         token = _PROVIDER_WEBRTC_STREAM_CONTEXT.set(stream_context)
         try:
-            provider = await _async_get_supported_webrtc_provider(self.hass, self)
+            decision = await self._async_provider_webrtc_decision_snapshot(owner=owner)
+            support_stream_url = self._provider_webrtc_support_stream_url(
+                owner=owner,
+                wants_audio=wants_audio,
+                decision=decision,
+            )
+            provider = await _async_get_supported_webrtc_provider(
+                self.hass,
+                support_stream_url,
+            )
             if provider is None:
                 raise HomeAssistantError(
                     "No Home Assistant WebRTC provider is available for the C300X RTSP stream"
                 )
-            decision = self._last_media_decision
             session = _ProviderWebRTCSession(
                 provider=provider,
                 owner=owner,
@@ -759,6 +776,35 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         finally:
             _PROVIDER_WEBRTC_STREAM_CONTEXT.reset(token)
 
+    async def _async_provider_webrtc_decision_snapshot(
+        self,
+        *,
+        owner: str,
+    ) -> MediaStateOutput:
+        """Return a fresh media decision without starting native RTSP media."""
+
+        if owner == "home_call":
+            return self._last_media_decision
+        status = await self._async_refresh_video_status_or_none(apply_status=False)
+        if status is None:
+            return self._last_media_decision
+        return self._derive_media_decision(status)
+
+    def _provider_webrtc_support_stream_url(
+        self,
+        *,
+        owner: str,
+        wants_audio: bool,
+        decision: MediaStateOutput,
+    ) -> str:
+        """Build a provider-support URL without activating native media."""
+
+        if owner == "home_call" or wants_audio:
+            return self._build_stream_url(audio=True)
+        return self._build_stream_url(
+            audio=not _media_decision_is_unanswered_ring(decision)
+        )
+
     def _provider_webrtc_resource_id(
         self,
         *,
@@ -824,7 +870,9 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             return False
         decision = self._last_media_decision
         return not (
-            _media_decision_is_ring_call(decision)
+            stream_context.ring_call
+            or stream_context.ring_preview
+            or _media_decision_is_ring_call(decision)
             or _media_decision_is_unanswered_ring(decision)
         )
 

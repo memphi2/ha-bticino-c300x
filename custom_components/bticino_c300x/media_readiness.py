@@ -20,6 +20,7 @@ MEDIA_READINESS_REQUIRED_SELF_TEST_CHECKS = (
     "capabilities",
     "firewall",
     "rtsp",
+    "sip_server",
     "talkback_rtp",
     "homeassistant_user",
     "device_routing",
@@ -103,6 +104,7 @@ def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
         "forwarding_homeassistant": forwarding_homeassistant,
         "forwarding_state": forwarding_state,
         "rtsp_ok": check_results["rtsp"],
+        "sip_server_ok": check_results["sip_server"],
         "webrtc_available": video_enabled and doorbell_video_supported,
         "https_microphone_requirement": "secure_context_required_for_microphone",
         "talkback_rtp_ok": check_results["talkback_rtp"],
@@ -170,4 +172,3 @@ def event_callback_ready(connection_state: Any) -> bool | None:
         "mdns",
         "unknown",
     }
-

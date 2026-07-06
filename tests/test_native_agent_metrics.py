@@ -231,6 +231,25 @@ def test_native_agent_self_test_keeps_device_routing_independent_from_qml_label(
     assert "run_qml_status_script" not in text
 
 
+def test_native_agent_self_test_checks_sip_server_read_only() -> None:
+    text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(
+        encoding="utf-8"
+    )
+    body = text.split("int c300x_self_test_json", maxsplit=1)[1].split(
+        "static void write_all",
+        maxsplit=1,
+    )[0]
+
+    assert '\\"sip_server\\"' in body
+    assert "tcp_endpoint_ready(" in body
+    assert "directory_has_visible_entries(" in body
+    assert "sip_tls_certificates_missing" in body
+    assert "sip_server_not_running" in body
+    assert "system(" not in body
+    assert "start-stop-daemon" not in body
+    assert "flexisipsh start" not in body
+
+
 def test_native_agent_device_user_keeps_homeassistant_out_of_external_route() -> None:
     text = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"

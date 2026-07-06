@@ -4,11 +4,18 @@
 #include "device_routing.h"
 #include "string_util.h"
 
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #ifndef PATH_MAX
@@ -21,8 +28,10 @@
 #define C300X_SELF_TEST_IPV6_FIREWALL_BEGIN "# c300x-native-agent ipv6 firewall begin"
 #define C300X_SELF_TEST_IPV6_FIREWALL_END "# c300x-native-agent ipv6 firewall end"
 #define C300X_SELF_TEST_FILE_MAX 49152
+#define C300X_SELF_TEST_SIP_CONNECT_TIMEOUT_MS 250
 #define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
 #define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
+#define C300X_FLEXISIP_TLS_DIR "/etc/flexisip/tls"
 
 static const char *bool_json(int value)
 {
@@ -191,6 +200,110 @@ static const char *read_firewall_state(
     return state;
 }
 
+static int directory_has_visible_entries(const char *path, int *exists)
+{
+    DIR *directory;
+    struct dirent *entry;
+
+    if (exists != NULL) {
+        *exists = 0;
+    }
+    directory = opendir(path);
+    if (directory == NULL) {
+        return 0;
+    }
+    if (exists != NULL) {
+        *exists = 1;
+    }
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            closedir(directory);
+            return 1;
+        }
+    }
+    closedir(directory);
+    return 0;
+}
+
+static int connect_ready_with_timeout(
+    const struct addrinfo *addr,
+    int timeout_ms
+)
+{
+    int fd;
+    int flags;
+    int socket_error = 0;
+    socklen_t socket_error_len = sizeof(socket_error);
+    fd_set writefds;
+    struct timeval timeout;
+    int selected;
+
+    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+    if (fd < 0) {
+        return 0;
+    }
+    flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+        close(fd);
+        return 0;
+    }
+    if (connect(fd, addr->ai_addr, addr->ai_addrlen) == 0) {
+        close(fd);
+        return 1;
+    }
+    if (errno != EINPROGRESS) {
+        close(fd);
+        return 0;
+    }
+
+    FD_ZERO(&writefds);
+    FD_SET(fd, &writefds);
+    timeout.tv_sec = timeout_ms / 1000;
+    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+    selected = select(fd + 1, NULL, &writefds, NULL, &timeout);
+    if (selected <= 0 || !FD_ISSET(fd, &writefds)) {
+        close(fd);
+        return 0;
+    }
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len) != 0) {
+        close(fd);
+        return 0;
+    }
+    close(fd);
+    return socket_error == 0;
+}
+
+static int tcp_endpoint_ready(const char *host, unsigned int port, int timeout_ms)
+{
+    struct addrinfo hints;
+    struct addrinfo *result = NULL;
+    struct addrinfo *item;
+    char port_text[16];
+    const char *connect_host = host;
+    int ready = 0;
+
+    if (connect_host == NULL || connect_host[0] == '\0') {
+        connect_host = "127.0.0.1";
+    }
+    if (port == 0 || snprintf(port_text, sizeof(port_text), "%u", port) >= (int)sizeof(port_text)) {
+        return 0;
+    }
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_NUMERICSERV;
+    if (getaddrinfo(connect_host, port_text, &hints, &result) != 0) {
+        return 0;
+    }
+    for (item = result; item != NULL; item = item->ai_next) {
+        if (connect_ready_with_timeout(item, timeout_ms)) {
+            ready = 1;
+            break;
+        }
+    }
+    freeaddrinfo(result);
+    return ready;
+}
+
 int c300x_self_test_json(
     const struct c300x_config *config,
     const struct c300x_video_status *video_status,
@@ -203,6 +316,7 @@ int c300x_self_test_json(
     char firmware_json[64];
     char ipv4_state[32] = "unknown";
     char ipv6_state[32] = "unknown";
+    char sip_host_json[C300X_MAX_HOST_LEN * 6 + 3];
     char user_error_json[C300X_DEVICE_USER_ERROR_LEN * 6 + 3];
     char routing_state_json[96];
     char routing_error_json[C300X_DEVICE_ROUTING_ERROR_LEN * 6 + 3];
@@ -215,6 +329,10 @@ int c300x_self_test_json(
     int ipv4_firewall_ok = 1;
     int ipv6_firewall_ok = 1;
     int rtsp_ok = 1;
+    int sip_server_ok = 1;
+    int sip_tcp_ok = 0;
+    int sip_tls_dir_exists = 0;
+    int sip_tls_certificates_present = 0;
     int talkback_ok = 1;
     int user_ok = 1;
     int routing_read_ok = 0;
@@ -223,6 +341,7 @@ int c300x_self_test_json(
     int video_enabled = config != NULL && config->video_enabled;
     const char *firewall_reason = "media_disabled";
     const char *rtsp_reason = "media_disabled";
+    const char *sip_server_reason = "media_disabled";
     const char *talkback_reason = "media_disabled";
     const char *user_reason = "media_disabled";
     const char *device_routing_reason = "not_required_without_homeassistant_user";
@@ -282,6 +401,24 @@ int c300x_self_test_json(
             rtsp_reason = "rtsp_ready";
         }
 
+        sip_tls_certificates_present = directory_has_visible_entries(
+            C300X_FLEXISIP_TLS_DIR,
+            &sip_tls_dir_exists
+        );
+        sip_tcp_ok = tcp_endpoint_ready(
+            config->video_sip_local_ip,
+            config->video_sip_local_port,
+            C300X_SELF_TEST_SIP_CONNECT_TIMEOUT_MS
+        );
+        if (sip_tcp_ok) {
+            sip_server_reason = "sip_server_ready";
+        } else {
+            sip_server_ok = 0;
+            sip_server_reason = sip_tls_certificates_present
+                ? "sip_server_not_running"
+                : "sip_tls_certificates_missing";
+        }
+
         talkback_ok = firewall_ok && C300X_TALKBACK_RTP_PORT > 0;
         talkback_reason = talkback_ok ? "talkback_rtp_ready" : "talkback_rtp_firewall_missing";
 
@@ -325,6 +462,7 @@ int c300x_self_test_json(
     }
 
     json_string(firmware_family(config), firmware_json, sizeof(firmware_json));
+    json_string(config->video_sip_local_ip, sip_host_json, sizeof(sip_host_json));
     json_string(user_status.error, user_error_json, sizeof(user_error_json));
     json_string(routing_status.state, routing_state_json, sizeof(routing_state_json));
     json_string(routing_status.error, routing_error_json, sizeof(routing_error_json));
@@ -341,6 +479,8 @@ int c300x_self_test_json(
         "\"ipv6_state\":\"%s\",\"ipv6_exists\":%s,\"ipv6_enabled\":%s,\"rtsp_port\":%u,\"talkback_rtp_port\":%u},"
         "\"rtsp\":{\"ok\":%s,\"reason\":\"%s\",\"enabled\":%s,\"running\":%s,\"bridge_running\":%s,"
         "\"clients\":%d,\"max_clients\":%d},"
+        "\"sip_server\":{\"ok\":%s,\"reason\":\"%s\",\"host\":%s,\"port\":%u,"
+        "\"tcp_connect_ok\":%s,\"tls_directory_exists\":%s,\"tls_certificates_present\":%s},"
         "\"talkback_rtp\":{\"ok\":%s,\"reason\":\"%s\",\"port\":%u},"
         "\"homeassistant_user\":{\"ok\":%s,\"reason\":\"%s\",\"supported\":%s,\"media_identity_available\":%s,"
         "\"homeassistant_user_present\":%s,\"routes_consistent\":%s,\"error\":%s},"
@@ -355,6 +495,7 @@ int c300x_self_test_json(
             capabilities_ok
             && firewall_ok
             && rtsp_ok
+            && sip_server_ok
             && talkback_ok
             && user_ok != 0
             && device_routing_ok != 0
@@ -380,6 +521,13 @@ int c300x_self_test_json(
         bool_json(video_status != NULL && video_status->bridge_running),
         video_status != NULL ? video_status->clients : 0,
         video_status != NULL ? video_status->max_clients : 0,
+        bool_json(sip_server_ok),
+        sip_server_reason,
+        sip_host_json,
+        config->video_sip_local_port,
+        bool_json(sip_tcp_ok),
+        bool_json(sip_tls_dir_exists),
+        bool_json(sip_tls_certificates_present),
         bool_json(talkback_ok),
         talkback_reason,
         C300X_TALKBACK_RTP_PORT,

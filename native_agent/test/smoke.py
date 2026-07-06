@@ -753,6 +753,7 @@ def run_smoke(
                 "capabilities",
                 "firewall",
                 "rtsp",
+                "sip_server",
                 "talkback_rtp",
                 "homeassistant_user",
                 "device_routing",

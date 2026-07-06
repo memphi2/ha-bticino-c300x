@@ -15,6 +15,7 @@ NON_DEVICE_USER_MEDIA_SETUP_CHECKS = frozenset(
         "capabilities",
         "firewall",
         "rtsp",
+        "sip_server",
         "talkback_rtp",
         "forwarding_homeassistant",
     }
@@ -43,6 +44,12 @@ SELF_TEST_REASON_TEXT = {
     "video_runtime_unavailable": "the device-agent video runtime is unavailable",
     "rtsp_server_not_running": "the device-agent RTSP server is not running",
     "rtsp_config_missing": "the RTSP port or stream path is missing",
+    "sip_server_not_running": "the device SIP server is not reachable",
+    "sip_tls_certificates_missing": (
+        "the device SIP server is not reachable and no local SIP TLS certificates "
+        "were found; pair the C300X once with the app so the device "
+        "provisions its SIP certificate"
+    ),
     "media_identity_missing": "no usable C300X media identity is configured",
     "homeassistant_routes_inconsistent": (
         "the Home Assistant media-user route files are inconsistent"
@@ -99,6 +106,16 @@ def self_test_repair_action(check_name: str, reason: str) -> str | None:
         return (
             "Check that doorbell video is enabled and restart or update the C300X "
             "device agent if RTSP is not running."
+        )
+    if check_name == "sip_server":
+        if reason == "sip_tls_certificates_missing":
+            return (
+                "Pair the C300X once with the app, then set forwarding "
+                "to Home Assistant and re-check Media readiness."
+            )
+        return (
+            "Restart the C300X or check whether the local SIP server is running, "
+            "then re-check Media readiness."
         )
     if check_name == "homeassistant_user":
         return "Open the integration options and run the Home Assistant media-user setup."
@@ -212,6 +229,8 @@ def media_readiness_action(
         return "check_agent_reachability_and_token"
     if "capabilities" in failed or "media_capabilities_missing" in warnings:
         return "update_or_reconfigure_device_agent"
+    if "sip_server" in failed:
+        return "pair_device_once_or_check_sip_server"
     if "firewall" in failed or "talkback_rtp" in failed or "rtsp" in failed:
         return "apply_firewall_or_update_device_agent"
     if "homeassistant_user" in failed or "device_routing" in failed:

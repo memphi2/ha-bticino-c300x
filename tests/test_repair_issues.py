@@ -629,6 +629,32 @@ def test_failed_self_test_talkback_points_to_ipv4_firewall_switch() -> None:
     assert "IPv6 firewall switch is only needed" in issue["translation_placeholders"]["actions"]
 
 
+def test_failed_self_test_sip_server_points_to_pairing_prerequisite() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "sip_server": {
+                        "ok": False,
+                        "reason": "sip_tls_certificates_missing",
+                    },
+                },
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+    ]
+    assert issue["is_fixable"] is False
+    assert issue["translation_placeholders"]["failed_checks"] == "sip_server"
+    assert "SIP TLS certificates" in issue["translation_placeholders"]["reasons"]
+    assert "the app" in issue["translation_placeholders"]["actions"]
+
+
 def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
@@ -871,6 +897,14 @@ def test_self_test_helpers_explain_known_and_unknown_failures() -> None:
         is False
     )
     assert "doorbell video is enabled" in self_test_repair_action("rtsp", "failed")
+    assert "the app" in self_test_repair_action(
+        "sip_server",
+        "sip_tls_certificates_missing",
+    )
+    assert "local SIP server" in self_test_repair_action(
+        "sip_server",
+        "sip_server_not_running",
+    )
     assert "media-user setup" in self_test_repair_action(
         "homeassistant_user",
         "missing",

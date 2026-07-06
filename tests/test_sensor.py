@@ -477,6 +477,7 @@ def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> Non
                     "capabilities": {"ok": True},
                     "firewall": {"ok": True},
                     "rtsp": {"ok": True},
+                    "sip_server": {"ok": True},
                     "talkback_rtp": {"ok": True},
                     "homeassistant_user": {"ok": True},
                     "device_routing": {"ok": True},
@@ -494,6 +495,7 @@ def test_media_readiness_sensor_reports_ready_when_required_checks_pass() -> Non
     assert entity.extra_state_attributes["media_user_ok"] is True
     assert entity.extra_state_attributes["forwarding_homeassistant"] is True
     assert entity.extra_state_attributes["forwarding_state"] == "homeassistant"
+    assert entity.extra_state_attributes["sip_server_ok"] is True
     assert "https_microphone_ok" not in entity.extra_state_attributes
     assert entity.extra_state_attributes["failed_checks"] == []
 
@@ -529,6 +531,7 @@ def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> N
                     "capabilities": {"ok": True},
                     "firewall": {"ok": True},
                     "rtsp": {"ok": True},
+                    "sip_server": {"ok": True},
                     "talkback_rtp": {"ok": True},
                     "homeassistant_user": {"ok": True},
                     "device_routing": {"ok": True},
@@ -558,6 +561,7 @@ def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
                     "capabilities": {"ok": True},
                     "firewall": {"ok": True},
                     "rtsp": {"ok": True},
+                    "sip_server": {"ok": True},
                     "talkback_rtp": {"ok": True},
                     "homeassistant_user": {"ok": True},
                     "device_routing": {"ok": True},
@@ -574,6 +578,39 @@ def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
     assert readiness["forwarding_state"] == "unprovisioned"
     assert readiness["forwarding_homeassistant"] is False
     assert "forwarding_homeassistant" in readiness["failed_checks"]
+
+
+def test_media_readiness_blocks_when_sip_server_is_not_ready() -> None:
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "sip_server": {
+                        "ok": False,
+                        "reason": "sip_tls_certificates_missing",
+                        "tls_certificates_present": False,
+                    },
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {"ok": True},
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["status"] == "blocked"
+    assert readiness["sip_server_ok"] is False
+    assert "sip_server" in readiness["failed_checks"]
+    assert readiness["recommended_action"] == "pair_device_once_or_check_sip_server"
 
 
 def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
@@ -669,6 +706,7 @@ def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
                         "reason": "ipv6_media_ports_missing",
                     },
                     "rtsp": {"ok": True},
+                    "sip_server": {"ok": True},
                     "talkback_rtp": {
                         "ok": False,
                         "reason": "talkback_rtp_firewall_missing",

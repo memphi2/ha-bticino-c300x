@@ -146,6 +146,62 @@ _PROVIDER_WEBRTC_STREAM_CONTEXT: ContextVar[_ProviderWebRTCStreamContext | None]
 )
 
 
+def _debug_safe_details(details: Mapping[str, Any]) -> dict[str, Any]:
+    """Return compact debug fields without SDP, ICE candidates, tokens or URLs."""
+
+    safe: dict[str, Any] = {}
+    for key, value in details.items():
+        text_key = str(key)
+        lowered = text_key.lower()
+        if any(
+            unsafe in lowered
+            for unsafe in ("candidate", "password", "sdp", "secret", "token", "url")
+        ):
+            continue
+        if value is None or isinstance(value, bool | int | float):
+            safe[text_key] = value
+        elif isinstance(value, str):
+            safe[text_key] = value[:160]
+    return safe
+
+
+def _debug_status_details(status: Mapping[str, Any]) -> dict[str, Any]:
+    """Return selected native media status fields useful for EOF RCA."""
+
+    details: dict[str, Any] = {}
+    bridge_data = status.get("bridge")
+    bridge = bridge_data if isinstance(bridge_data, Mapping) else {}
+    for key in (
+        "media_owner",
+        "external_media_active",
+        "external_owner",
+        "last_block_reason",
+        "last_error",
+        "last_rtsp_reject_reason",
+        "video_bridge_stop_in_progress",
+    ):
+        if key in status:
+            details[f"status_{key}"] = status[key]
+    for key in (
+        "clients",
+        "max_clients",
+        "media_owner",
+        "media_active",
+        "running",
+        "stop_in_progress",
+        "ring_call_active",
+        "ring_media_active",
+        "ring_audio_active",
+        "ring_answer_requested",
+        "ring_answered",
+        "ring_hangup_requested",
+        "unanswered_ring_call",
+    ):
+        if key in bridge:
+            details[f"bridge_{key}"] = bridge[key]
+    return _debug_safe_details(details)
+
+
 def _media_decision_is_call_media(decision: MediaStateOutput) -> bool:
     return decision.state in CALL_MEDIA_STATES
 
@@ -374,7 +430,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
             provider_context.media_started = True
             if provider_context.wants_backchannel:
-                return f"{stream_url}#backchannel=1"
+                stream_url = f"{stream_url}#backchannel=1"
+            self._log_webrtc_debug(
+                "provider_stream_source",
+                session_id=provider_context.session_id,
+                owner=provider_context.owner,
+                provider=provider_context.provider_domain,
+                wants_audio=provider_context.wants_audio,
+                wants_backchannel=provider_context.wants_backchannel,
+                ring_call=provider_context.ring_call,
+                ring_preview=provider_context.ring_preview,
+                resource_id=provider_context.resource_id,
+                rtsp_path=self._debug_rtsp_path(stream_url),
+                media_started=provider_context.media_started,
+            )
             return stream_url
         return await self._async_prepare_rtsp_stream(audio=True)
 
@@ -480,6 +549,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         home_call_started = False
         stream_context = _ProviderWebRTCStreamContext(
             owner=owner,
+            session_id=session_id,
             wants_audio=wants_audio,
             wants_backchannel=talkback_requested,
         )
@@ -499,6 +569,16 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 stream_context=stream_context,
             )
         except HomeAssistantError as err:
+            self._log_webrtc_debug(
+                "provider_offer_unavailable",
+                session_id=session_id,
+                owner=owner,
+                wants_audio=wants_audio,
+                wants_backchannel=talkback_requested,
+                media_started=stream_context.media_started,
+                error_type=type(err).__name__,
+                error=str(err),
+            )
             self._presession_webrtc_candidates.pop(session_id, None)
             await self._async_cleanup_failed_provider_offer(
                 session_id,
@@ -510,6 +590,16 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     await self._entry.runtime_data.api.async_stop_home_call()
             send_message(WebRTCError("bticino_webrtc_unavailable", str(err)))
         except Exception as err:
+            self._log_webrtc_debug(
+                "provider_offer_exception",
+                session_id=session_id,
+                owner=owner,
+                wants_audio=wants_audio,
+                wants_backchannel=talkback_requested,
+                media_started=stream_context.media_started,
+                error_type=type(err).__name__,
+                error=str(err),
+            )
             self._presession_webrtc_candidates.pop(session_id, None)
             await self._async_cleanup_failed_provider_offer(
                 session_id,
@@ -563,6 +653,12 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     [],
                 ),
             )
+            stream_context.provider_domain = str(
+                getattr(provider, "domain", type(provider).__name__)
+            )
+            stream_context.resource_id = session.resource_id
+            stream_context.ring_call = session.ring_call
+            stream_context.ring_preview = session.ring_preview
             self._provider_webrtc_sessions[session_id] = session
             _LOGGER.debug(
                 "C300X WebRTC provider session prepared: session=%s owner=%s "
@@ -593,6 +689,20 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 nonlocal provider_offer_failed
                 if _webrtc_message_is_error(message):
                     provider_offer_failed = True
+                    self._log_webrtc_debug(
+                        "provider_message_error",
+                        session_id=session_id,
+                        owner=owner,
+                        provider=stream_context.provider_domain,
+                        wants_audio=wants_audio,
+                        wants_backchannel=talkback_requested,
+                        ring_call=session.ring_call,
+                        ring_preview=session.ring_preview,
+                        resource_id=session.resource_id,
+                        error_code=self._webrtc_message_field(message, "code"),
+                        error_message=self._webrtc_message_field(message, "message"),
+                        media_started=stream_context.media_started,
+                    )
                 send_message(message)
 
             await provider.async_handle_async_webrtc_offer(
@@ -622,6 +732,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     )
                     return
                 session.ready = True
+                self._log_webrtc_debug(
+                    "provider_session_ready",
+                    session_id=session_id,
+                    owner=owner,
+                    provider=stream_context.provider_domain,
+                    wants_audio=wants_audio,
+                    wants_backchannel=talkback_requested,
+                    ring_call=session.ring_call,
+                    ring_preview=session.ring_preview,
+                    resource_id=session.resource_id,
+                    media_started=stream_context.media_started,
+                )
                 self._record_media_timeline(
                     "webrtc",
                     "session_ready",
@@ -665,6 +787,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         """Close a failed provider offer without stopping unrelated media."""
 
         had_provider_session = session_id in self._provider_webrtc_sessions
+        self._log_webrtc_debug(
+            "provider_offer_cleanup",
+            session_id=session_id,
+            owner=owner,
+            wants_audio=stream_context.wants_audio,
+            wants_backchannel=stream_context.wants_backchannel,
+            media_started=stream_context.media_started,
+            had_provider_session=had_provider_session,
+            provider=stream_context.provider_domain,
+            resource_id=stream_context.resource_id,
+        )
         await self._async_close_webrtc_session(
             session_id,
             stop_media=owner != "home_call" and stream_context.media_started,
@@ -806,13 +939,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
         deadline = asyncio.get_running_loop().time() + (
             WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS
         )
+        last_logged_clients: int | None = None
         while True:
             status = await self._async_refresh_video_status_or_none(apply_status=False)
             clients = _rtsp_client_count_from_status(status)
+            if clients != last_logged_clients:
+                self._log_webrtc_debug(
+                    "provider_rtsp_drain",
+                    status=status,
+                    clients=clients,
+                )
+                last_logged_clients = clients
             if clients is None or clients <= 0:
                 return
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
+                self._log_webrtc_debug(
+                    "provider_rtsp_drain_timeout",
+                    status=status,
+                    clients=clients,
+                )
                 return
             await asyncio.sleep(
                 min(WEBRTC_PROVIDER_CLOSE_DRAIN_INTERVAL_SECONDS, remaining)
@@ -829,6 +975,26 @@ class C300XDoorbellCamera(C300XEntity, Camera):
     ) -> None:
         provider_session = self._provider_webrtc_sessions.pop(session_id, None)
         if provider_session is not None:
+            self._log_webrtc_debug(
+                "provider_session_closing",
+                session_id=session_id,
+                owner=provider_session.owner,
+                provider=getattr(
+                    provider_session.provider,
+                    "domain",
+                    type(provider_session.provider).__name__,
+                ),
+                wants_audio=provider_session.wants_audio,
+                wants_backchannel=provider_session.wants_backchannel,
+                ring_call=provider_session.ring_call,
+                ring_preview=provider_session.ring_preview,
+                ready=provider_session.ready,
+                resource_id=provider_session.resource_id,
+                stop_media=stop_media,
+                force_stop_media=force_stop_media,
+                notify_client=notify_client,
+                reason=reason,
+            )
             self._record_media_timeline(
                 "webrtc",
                 "session_closed",
@@ -874,6 +1040,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 )
             )
             if should_stop_media:
+                self._log_webrtc_debug(
+                    "provider_session_stop_media",
+                    session_id=session_id,
+                    owner=provider_session.owner,
+                    wants_audio=provider_session.wants_audio,
+                    wants_backchannel=provider_session.wants_backchannel,
+                    ring_call=provider_session.ring_call,
+                    ring_preview=provider_session.ring_preview,
+                    resource_id=provider_session.resource_id,
+                    reason=reason,
+                )
                 await self._async_wait_for_provider_rtsp_clients_to_drain()
                 if provider_session.owner == "home_call":
                     with suppress(Exception):
@@ -1427,6 +1604,65 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ready_sessions=ready_sessions,
             details=details,
         )
+
+    def _log_webrtc_debug(
+        self,
+        event: str,
+        *,
+        session_id: str | None = None,
+        owner: str | None = None,
+        provider: str | None = None,
+        status: Mapping[str, Any] | None = None,
+        **details: Any,
+    ) -> None:
+        """Log compact media RCA breadcrumbs only when integration debug is enabled."""
+
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+        safe_details = _debug_safe_details(details)
+        if status is not None:
+            safe_details.update(_debug_status_details(status))
+        detail_text = " ".join(
+            f"{key}={value}" for key, value in sorted(safe_details.items())
+        )
+        _LOGGER.debug(
+            "C300X WebRTC debug: event=%s session=%s owner=%s provider=%s "
+            "media_state=%s video_owner=%s sessions=%s ready_sessions=%s %s",
+            event,
+            _short_session_id(session_id or ""),
+            owner or "-",
+            provider or "-",
+            self._last_media_state.value,
+            self._video_owner,
+            len(self._provider_webrtc_sessions),
+            sum(1 for session in self._provider_webrtc_sessions.values() if session.ready),
+            detail_text,
+        )
+
+    def _debug_rtsp_path(self, stream_url: str) -> str:
+        """Return the RTSP path/query fragment without logging the private host."""
+
+        path_start = stream_url.find("/", len("rtsp://"))
+        if path_start == -1:
+            return ""
+        return stream_url[path_start:]
+
+    def _webrtc_message_field(self, message: Any, field: str) -> str | None:
+        """Return one safe field from a provider WebRTC message."""
+
+        if isinstance(message, Mapping):
+            value = message.get(field)
+        else:
+            as_dict = getattr(message, "as_dict", None)
+            value = None
+            if callable(as_dict):
+                with suppress(Exception):
+                    data = as_dict()
+                    if isinstance(data, Mapping):
+                        value = data.get(field)
+            if value is None:
+                value = getattr(message, field, None)
+        return str(value)[:160] if value is not None else None
 
     def _agent_event_timeline_details(
         self,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import types
 from contextlib import suppress
@@ -535,6 +536,132 @@ def test_doorbell_camera_provider_offer_error_closes_local_session(
     assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
         "go2rtc_offer_failed"
     ]
+
+
+def test_doorbell_camera_provider_offer_error_debug_logging_is_debug_only(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offer_sources.append(await camera.stream_source())
+            self.offers.append((session_id, offer_sdp))
+            send_message(camera_module.WebRTCError("go2rtc_offer_failed", "boom"))
+
+    async def _run_once() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            data={"agent_host": "127.0.0.1", "video_port": 6554},
+            runtime_data=_FakeRuntimeData(api=api),
+        )
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera.hass = SimpleNamespace()
+        provider = _ErrorWebRTCProvider()
+        _install_fake_webrtc_provider(monkeypatch, provider)
+        _stub_rtsp_ready(camera)
+        await camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-debug-error",
+            lambda _message: None,
+        )
+
+    caplog.set_level(logging.INFO, logger="custom_components.bticino_c300x.camera")
+    asyncio.run(_run_once())
+    assert "C300X WebRTC debug" not in caplog.text
+
+    caplog.clear()
+    caplog.set_level(logging.DEBUG, logger="custom_components.bticino_c300x.camera")
+    asyncio.run(_run_once())
+    assert "C300X WebRTC debug: event=provider_message_error" in caplog.text
+    assert "error_code=go2rtc_offer_failed" in caplog.text
+    assert "rtsp://127.0.0.1" not in caplog.text
+
+
+def test_doorbell_camera_webrtc_debug_details_are_sanitized() -> None:
+    assert camera_module._debug_safe_details(
+        {
+            "candidate": "candidate-secret",
+            "error_message": "boom",
+            "rtsp_url": "rtsp://127.0.0.1:6554/doorbell",
+            "sdp": "v=0",
+            "token": "secret-token",
+            "rtsp_path": "/doorbell#backchannel=1",
+            "clients": 2,
+        }
+    ) == {
+        "error_message": "boom",
+        "rtsp_path": "/doorbell#backchannel=1",
+        "clients": 2,
+    }
+    assert camera_module._debug_status_details(
+        {
+            "media_owner": "ring",
+            "external_media_active": False,
+            "last_error": "ondemand_sip_setup_failed",
+            "stream_path": "/private",
+            "bridge": {
+                "clients": 2,
+                "max_clients": 4,
+                "media_owner": "ring",
+                "stop_in_progress": True,
+                "ring_answered": True,
+                "token": "ignored",
+            },
+        }
+    ) == {
+        "status_media_owner": "ring",
+        "status_external_media_active": False,
+        "status_last_error": "ondemand_sip_setup_failed",
+        "bridge_clients": 2,
+        "bridge_max_clients": 4,
+        "bridge_media_owner": "ring",
+        "bridge_stop_in_progress": True,
+        "bridge_ring_answered": True,
+    }
+
+
+def test_doorbell_camera_provider_rtsp_drain_debug_logs_status(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _BusyApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "available": True,
+                "media_owner": "ring",
+                "last_error": "media_start_failed",
+                "bridge": {
+                    "clients": 2,
+                    "max_clients": 4,
+                    "media_owner": "ring",
+                    "running": True,
+                    "stop_in_progress": True,
+                    "ring_answered": True,
+                },
+            }
+
+    monkeypatch.setattr(
+        camera_module,
+        "WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS",
+        0,
+    )
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=_BusyApi()))
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    caplog.set_level(logging.DEBUG, logger="custom_components.bticino_c300x.camera")
+
+    asyncio.run(camera._async_wait_for_provider_rtsp_clients_to_drain())
+
+    assert "C300X WebRTC debug: event=provider_rtsp_drain" in caplog.text
+    assert "C300X WebRTC debug: event=provider_rtsp_drain_timeout" in caplog.text
+    assert "bridge_clients=2" in caplog.text
+    assert "bridge_stop_in_progress=True" in caplog.text
+    assert "status_last_error=media_start_failed" in caplog.text
 
 
 def test_doorbell_camera_provider_exception_before_stream_source_keeps_media(

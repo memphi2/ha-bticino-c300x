@@ -13,9 +13,14 @@ class ProviderWebRTCStreamContext:
     """Provider stream-source context for one WebRTC offer."""
 
     owner: str
+    session_id: str
     wants_audio: bool
     wants_backchannel: bool
     media_started: bool = False
+    provider_domain: str | None = None
+    resource_id: str | None = None
+    ring_call: bool = False
+    ring_preview: bool = False
 
 
 @dataclass

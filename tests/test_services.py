@@ -104,6 +104,9 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.entity"] = entity
 
+from custom_components.bticino_c300x import (
+    ring_capture as ring_capture_module,  # noqa: E402
+)
 from custom_components.bticino_c300x import services as service_module  # noqa: E402
 from custom_components.bticino_c300x.action import ActionValidationError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
@@ -136,6 +139,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from custom_components.bticino_c300x.exceptions import (  # noqa: E402
+    service_validation_error,
+)
 from custom_components.bticino_c300x.services import async_setup_services  # noqa: E402
 from custom_components.bticino_c300x.use_cases import (
     common as common_use_cases,  # noqa: E402
@@ -151,6 +157,8 @@ from custom_components.bticino_c300x.use_cases import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+SERVICE_VALIDATION_ERROR = type(service_validation_error("test_error"))
+ring_capture_use_cases.HomeAssistantError = ring_capture_module.HomeAssistantError
 
 
 @dataclass
@@ -723,7 +731,7 @@ def test_service_entry_lookup_requires_entry_id_for_multiple_entries() -> None:
 
         try:
             await handler(types.SimpleNamespace(data={"activation_id": "scene_1"}))
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "entry_id_required"
         else:
             raise AssertionError("missing entry id was accepted")
@@ -734,7 +742,7 @@ def test_service_entry_lookup_requires_entry_id_for_multiple_entries() -> None:
                     data={"entry_id": "missing", "activation_id": "scene_1"}
                 )
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "unknown_entry"
         else:
             raise AssertionError("unknown entry id was accepted")
@@ -840,7 +848,7 @@ def test_action_and_alarm_services_translate_executor_errors(monkeypatch) -> Non
             await hass.services.handlers[(DOMAIN, SERVICE_RUN_ACTION)](
                 types.SimpleNamespace(data={"action_id": "entry_light"})
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "invalid_action_id"
         else:
             raise AssertionError("action validation error was not translated")
@@ -850,7 +858,7 @@ def test_action_and_alarm_services_translate_executor_errors(monkeypatch) -> Non
             await hass.services.handlers[(DOMAIN, SERVICE_RUN_ACTION)](
                 types.SimpleNamespace(data={"action_id": "entry_light"})
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "unknown_action"
         else:
             raise AssertionError("unknown action was not translated")
@@ -859,7 +867,7 @@ def test_action_and_alarm_services_translate_executor_errors(monkeypatch) -> Non
             await hass.services.handlers[(DOMAIN, SERVICE_ALARM_COMMAND)](
                 types.SimpleNamespace(data={"command": "bad"})
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "invalid_alarm_command"
         else:
             raise AssertionError("alarm validation error was not translated")
@@ -869,7 +877,7 @@ def test_action_and_alarm_services_translate_executor_errors(monkeypatch) -> Non
             await hass.services.handlers[(DOMAIN, SERVICE_ALARM_COMMAND)](
                 types.SimpleNamespace(data={"command": "disarm"})
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "alarm_not_configured"
         else:
             raise AssertionError("alarm config error was not translated")
@@ -911,7 +919,7 @@ def test_maintenance_services_require_supported_token() -> None:
             await hass.services.handlers[(DOMAIN, SERVICE_REBOOT)](
                 types.SimpleNamespace(data={})
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert (
                 getattr(err, "translation_key", None)
                 == "maintenance_action_not_supported"
@@ -1264,7 +1272,7 @@ def test_ring_analysis_use_case_requires_entry_for_matching_unlock(monkeypatch) 
             await ring_analysis_use_cases.RingAnalysisUseCase(_FakeHass([])).evaluate(
                 unlock_on_match=True,
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "entry_id_required"
         else:
             raise AssertionError("entry_id_required was not raised")
@@ -1681,7 +1689,7 @@ def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> 
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert getattr(err, "translation_key", None) == "ring_capture_busy"
         else:
             raise AssertionError("busy ring capture was not rejected")
@@ -1722,7 +1730,7 @@ def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("status failure was not translated")
@@ -1983,7 +1991,7 @@ def test_capture_doorbell_call_translates_hangup_failure_after_successful_captur
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         try:
             await handler(types.SimpleNamespace(data={}))
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("hangup failure was not translated")
@@ -2119,14 +2127,14 @@ def test_common_use_case_guards_reject_missing_capabilities() -> None:
     for guard, expected_key in cases:
         try:
             guard(entry)
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == expected_key
         else:
             raise AssertionError(f"{expected_key} guard accepted missing capability")
 
     try:
         common_use_cases.ensure_maintenance_action(entry, "reboot")
-    except exceptions.ServiceValidationError as err:
+    except SERVICE_VALIDATION_ERROR as err:
         assert _translation_key(err) == "maintenance_action_not_supported"
     else:
         raise AssertionError("maintenance guard accepted missing token/capability")
@@ -2157,7 +2165,7 @@ def test_common_use_case_guards_reject_disabled_video() -> None:
     ]:
         try:
             guard(entry)
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == expected_key
         else:
             raise AssertionError(f"{expected_key} guard accepted disabled video")
@@ -2170,7 +2178,7 @@ def test_common_agent_command_failures_are_translated() -> None:
     async def _run() -> None:
         try:
             await common_use_cases.raise_agent_command_failed(_failing_command())
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("agent failure was not translated")
@@ -2209,7 +2217,7 @@ def test_common_gui_patch_refresh_failures_are_translated(monkeypatch) -> None: 
 
         try:
             await common_use_cases.async_ensure_gui_function_patch(entry)
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("failed GUI patch refresh was not translated")
@@ -2228,7 +2236,7 @@ def test_common_gui_patch_still_inactive_after_refresh_is_rejected(monkeypatch) 
 
         try:
             await common_use_cases.async_ensure_gui_function_patch(entry)
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "gui_function_patch_required"
         else:
             raise AssertionError("inactive GUI patch was accepted after refresh")
@@ -2293,7 +2301,7 @@ def test_common_latest_item_id_translates_refresh_and_empty_results() -> None:
                 latest=lambda payload: payload.get("latest"),
                 unavailable_error="missing_item",
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("refresh failure was not translated")
@@ -2309,7 +2317,7 @@ def test_common_latest_item_id_translates_refresh_and_empty_results() -> None:
                 latest=lambda payload: payload.get("latest"),
                 unavailable_error="missing_item",
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "missing_item"
         else:
             raise AssertionError("missing item was accepted")
@@ -2376,7 +2384,7 @@ def test_common_refresh_after_message_mutation_translates_refresh_failures() -> 
                 refresh=_refresh,
                 signal="signal-name",
             )
-        except exceptions.ServiceValidationError as err:
+        except SERVICE_VALIDATION_ERROR as err:
             assert _translation_key(err) == "agent_command_failed"
         else:
             raise AssertionError("refresh failure was not translated")

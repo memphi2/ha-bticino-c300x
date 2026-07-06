@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.7.5 - 2026-07-06
+
+### Fixed
+
+- Refresh Media readiness and related Repairs after the startup/reload sync
+  reads the current device-user and self-test state.
+- Keep Media readiness on stable agent-owned checks so reloads do not wait on
+  a live SIP reachability probe.
+- Avoid side effects while selecting the Home Assistant WebRTC provider for a
+  C300X media session.
+- Stop C300X doorbell media after failed or closed WebRTC provider sessions
+  more reliably.
+- Keep bundled blueprint installation compatible with existing Home Assistant
+  installations.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled frontend modules are refreshed from the installed integration
+  version.
+- Update the native C300X device agent from Home Assistant to `1.7.5`.
+
 ## v1.7.4 - 2026-07-06
 
 ### Fixed

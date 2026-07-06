@@ -128,6 +128,7 @@ if "homeassistant.components.button" not in sys.modules:
     sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
+from custom_components.bticino_c300x import button as button_module  # noqa: E402
 from custom_components.bticino_c300x.api_errors import (  # noqa: E402
     C300XAgentApiError,
     C300XAgentApiUnsupportedError,
@@ -164,6 +165,8 @@ from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
     async_restore_qml_core_patch_and_confirm,
     async_restore_qml_patch_and_confirm,
 )
+
+HOME_ASSISTANT_ERROR = button_module.HomeAssistantError
 
 
 def test_maintenance_buttons_default_visibility() -> None:
@@ -776,7 +779,7 @@ def test_device_activation_button_translates_agent_errors() -> None:
 
             try:
                 await button.async_press()
-            except exceptions.HomeAssistantError:
+            except HOME_ASSISTANT_ERROR:
                 pass
             else:
                 raise AssertionError("activation agent error was not translated")
@@ -846,7 +849,7 @@ def test_stop_doorbell_video_button_translates_agent_errors() -> None:
 
             try:
                 await button.async_press()
-            except exceptions.HomeAssistantError:
+            except HOME_ASSISTANT_ERROR:
                 pass
             else:
                 raise AssertionError("stop-video agent error was not translated")
@@ -918,7 +921,7 @@ def test_action_buttons_translate_executor_agent_errors(monkeypatch) -> None:  #
 
                 try:
                     await button.async_press()
-                except exceptions.HomeAssistantError:
+                except HOME_ASSISTANT_ERROR:
                     assert calls == [expected_call]
                 else:
                     raise AssertionError("executor agent error was not translated")
@@ -1131,7 +1134,7 @@ def test_maintenance_buttons_translate_agent_errors() -> None:
 
                 try:
                     await button.async_press()
-                except exceptions.HomeAssistantError:
+                except HOME_ASSISTANT_ERROR:
                     pass
                 else:
                     raise AssertionError(f"{method} agent error was not translated")
@@ -1522,7 +1525,7 @@ def test_delete_latest_text_memo_button_translates_refresh_failure() -> None:
 
         try:
             await entity.async_press()
-        except exceptions.HomeAssistantError:
+        except HOME_ASSISTANT_ERROR:
             assert entity.available is False
         else:
             raise AssertionError("memo refresh failure was not translated")
@@ -1591,7 +1594,7 @@ def test_delete_latest_video_message_button_translates_refresh_failure() -> None
 
         try:
             await entity.async_press()
-        except exceptions.HomeAssistantError:
+        except HOME_ASSISTANT_ERROR:
             assert entity.available is False
         else:
             raise AssertionError("video-message refresh failure was not translated")
@@ -1649,7 +1652,7 @@ def test_delete_latest_buttons_translate_delete_failures() -> None:
 
             try:
                 await button.async_press()
-            except exceptions.HomeAssistantError:
+            except HOME_ASSISTANT_ERROR:
                 pass
             else:
                 raise AssertionError("delete failure was not translated")
@@ -1680,7 +1683,7 @@ def test_delete_latest_buttons_translate_unsupported_memo_delete() -> None:
 
         try:
             await button.async_press()
-        except exceptions.HomeAssistantError:
+        except HOME_ASSISTANT_ERROR:
             pass
         else:
             raise AssertionError("unsupported memo delete was not translated")
@@ -2115,7 +2118,7 @@ def test_delete_latest_text_memo_button_requires_display_patch_after_refresh() -
 
         try:
             await entity.async_press()
-        except exceptions.HomeAssistantError:
+        except HOME_ASSISTANT_ERROR:
             assert entry.runtime_data.qml_patch_status["patched"] is False
         else:
             raise AssertionError("missing Display patch was not rejected")

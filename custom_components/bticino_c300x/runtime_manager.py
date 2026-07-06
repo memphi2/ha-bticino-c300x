@@ -220,6 +220,8 @@ class C300XRuntimeManager:
     def async_schedule_startup_sync(self) -> None:
         """Run slow startup-only agent synchronization after entity setup."""
 
+        from homeassistant.helpers.dispatcher import async_dispatcher_send
+
         from .repair_issues import async_sync_entry_repair_issues
 
         async def _async_run_startup_sync() -> None:
@@ -238,6 +240,11 @@ class C300XRuntimeManager:
             finally:
                 if sync_repairs:
                     async_sync_entry_repair_issues(self.hass, self.entry)
+                    async_dispatcher_send(
+                        self.hass,
+                        SIGNAL_CONNECTION_STATE_CHANGED,
+                        self.entry.entry_id,
+                    )
                 self.entry.runtime_data.startup_sync_task = None
 
         create_task = getattr(self.hass, "async_create_task", None)

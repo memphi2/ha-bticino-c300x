@@ -792,6 +792,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             ),
             errors=errors,
+            description_placeholders={
+                "qml_patch_status": _QML_PATCH_STATUS_UNKNOWN,
+            },
         )
 
     def _async_show_user_dashboard_entity_display_form(

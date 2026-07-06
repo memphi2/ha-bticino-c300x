@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,20 @@ def test_agent_event_translations_cover_all_mapped_event_types() -> None:
             "state",
         )
         assert expected <= set(translated_states)
+
+
+def test_localized_translation_placeholders_match_base_strings() -> None:
+    base_placeholders = _translation_placeholders(
+        _load_json(INTEGRATION / "strings.json")
+    )
+
+    for path in (
+        TRANSLATIONS / "en.json",
+        TRANSLATIONS / "de.json",
+        TRANSLATIONS / "it.json",
+        TRANSLATIONS / "fr.json",
+    ):
+        assert _translation_placeholders(_load_json(path)) == base_placeholders
 
 
 def test_fixable_agent_update_repair_uses_ha_issue_fix_flow_schema() -> None:
@@ -240,3 +255,19 @@ def _leaf_paths(value: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]
     for key, child in value.items():
         paths.update(_leaf_paths(child, (*prefix, key)))
     return paths
+
+
+def _translation_placeholders(
+    value: Any,
+    prefix: tuple[str, ...] = (),
+) -> dict[tuple[str, ...], set[str]]:
+    if isinstance(value, str):
+        placeholders = set(re.findall(r"{([a-zA-Z0-9_]+)}", value))
+        return {prefix: placeholders} if placeholders else {}
+    if not isinstance(value, dict):
+        return {}
+
+    placeholders: dict[tuple[str, ...], set[str]] = {}
+    for key, child in value.items():
+        placeholders.update(_translation_placeholders(child, (*prefix, key)))
+    return placeholders

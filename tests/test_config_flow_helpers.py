@@ -2,10 +2,13 @@ from __future__ import annotations
 
 # ruff: noqa: E402, I001
 
+import ast
 import asyncio
+import json
 import sys
 import types
 from collections.abc import Callable
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -2214,6 +2217,57 @@ def test_qml_patch_status_placeholder_refreshes_agent_once() -> None:
     assert api.calls == 1
     assert entry.runtime_data.qml_patch_status["state"] == "original"
     assert entry.runtime_data.qml_patch_status_updated_at is not None
+
+
+def test_user_dashboard_form_passes_qml_patch_status_placeholder() -> None:
+    flow = BticinoC300XConfigFlow()
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = flow._async_show_user_dashboard_form(None, {})  # noqa: SLF001
+
+    assert result["step_id"] == "user_dashboard"
+    assert result["description_placeholders"] == {"qml_patch_status": "unknown"}
+
+
+def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    strings = json.loads(
+        (repo_root / "custom_components/bticino_c300x/strings.json").read_text()
+    )
+    qml_patch_steps = {
+        step_id
+        for section in ("config", "options")
+        for step_id, step in strings[section]["step"].items()
+        if "{qml_patch_status}" in step.get("description", "")
+    }
+    source_path = repo_root / "custom_components/bticino_c300x/config_flow.py"
+    tree = ast.parse(source_path.read_text(), filename=str(source_path))
+    missing_placeholders: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "async_show_form":
+            continue
+
+        step_id = None
+        has_description_placeholders = False
+        for keyword in node.keywords:
+            if keyword.arg == "description_placeholders":
+                has_description_placeholders = True
+            if (
+                keyword.arg == "step_id"
+                and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+            ):
+                step_id = keyword.value.value
+
+        if step_id in qml_patch_steps and not has_description_placeholders:
+            missing_placeholders.append(f"{step_id}:{node.lineno}")
+
+    assert missing_placeholders == []
 
 
 def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:

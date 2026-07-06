@@ -232,14 +232,15 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     ]
     assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
-        "notify_service",
-        "notify_service",
         "bticino_c300x.answer_doorbell_call",
+        "notify_service",
+        "notify_service",
     ]
-    assert answer_sequence[2]["data"] == {"entry_id": "{{ entry_id }}"}
-    assert answer_sequence[0]["data"]["message"] == "clear_notification"
+    assert answer_sequence[0]["data"] == {"entry_id": "{{ entry_id }}"}
     assert answer_sequence[1]["data"]["message"] == "command_webview"
     assert answer_sequence[1]["data"]["data"]["command"] == "{{ dashboard_path }}"
+    assert answer_sequence[2]["data"]["message"] == "clear_notification"
+    assert answer_sequence[2]["data"]["data"]["tag"] == "{{ ring_tag }}"
     assert answer_sequence[3]["data"]["data"]["tag"] == "{{ active_tag }}"
     assert answer_sequence[3]["data"]["data"]["importance"] == "low"
     assert answer_sequence[4]["wait_for_trigger"] == [
@@ -298,6 +299,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
     assert notify_data["actions"][0] == {
         "action": "{{ answer_action }}",
         "title": "{{ answer_title }}",
+        "uri": "{{ dashboard_path }}",
         "activationMode": "foreground",
         "authenticationRequired": False,
     }

@@ -210,19 +210,19 @@ action:
               {{ wait.trigger is not none
                  and wait.trigger.event.data.action == answer_action }}
         sequence:
-          - service: !input notify_service
+          - service: bticino_c300x.answer_doorbell_call
             data:
-              message: clear_notification
-              data:
-                tag: "{{ ring_tag }}"
+              entry_id: "{{ entry_id }}"
           - service: !input notify_service
             data:
               message: command_webview
               data:
                 command: "{{ dashboard_path }}"
-          - service: bticino_c300x.answer_doorbell_call
+          - service: !input notify_service
             data:
-              entry_id: "{{ entry_id }}"
+              message: clear_notification
+              data:
+                tag: "{{ ring_tag }}"
           - service: !input notify_service
             data:
               title: "{{ title }}"

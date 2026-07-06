@@ -49,19 +49,22 @@ device and derives the camera entity for notification templates.
 
 Use **C300X Ring Call Android phone alert** for Android phones. It
 creates a high-priority notification with **Answer**, **Hang Up** and **Open**
-actions. **Answer** clears the ringing notification, opens the configured
-dashboard in the Companion App and calls `bticino_c300x.answer_doorbell_call`.
+actions. **Answer** calls `bticino_c300x.answer_doorbell_call` first, then asks
+the Companion App to open the configured dashboard and clears the ringing
+notification.
 After answering, a quiet in-call notification keeps a **Hang Up** action
 available.
 
 The phone sound comes from the Android notification channel configured in the
 blueprint. Open the Home Assistant Companion App notification settings and set
 the sound for that channel to the ringtone you want.
+Android dashboard opening uses the Companion App `command_webview` notification
+command; the app may ask once for its display-over-apps permission.
 
 Use **C300X Ring Call iOS phone alert** for iPhones. It sends an iOS critical
 notification with **Answer**, **Hang Up** and **Open** actions. **Answer**
-opens the Companion App in the foreground, clears the ringing notification and
-calls `bticino_c300x.answer_doorbell_call`.
+opens the configured dashboard in the Companion App and calls
+`bticino_c300x.answer_doorbell_call`.
 
 For the dedicated phone alert blueprints, set the notify service to the matching
 Companion App service, for example:

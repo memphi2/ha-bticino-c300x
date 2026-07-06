@@ -176,6 +176,7 @@ action:
         actions:
           - action: "{{ answer_action }}"
             title: "{{ answer_title }}"
+            uri: "{{ dashboard_path }}"
             activationMode: foreground
             authenticationRequired: false
           - action: "{{ hangup_action }}"

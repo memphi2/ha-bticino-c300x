@@ -1,8 +1,25 @@
 # Changelog
 
-## v1.7.4 - Unreleased
+## v1.7.4 - 2026-07-06
 
-No user-facing changes yet.
+### Added
+
+- Add SIP server readiness diagnostics so media readiness can distinguish a
+  missing or stopped local SIP server from generic media setup failures.
+
+### Fixed
+
+- Fix Android Ring Call notification **Answer** handling so it answers first
+  and then opens the configured Home Assistant dashboard in the Companion App.
+- Fix iOS Ring Call notification **Answer** handling so it opens the configured
+  dashboard when the Companion App comes to the foreground.
+- Show the unprovisioned smartphone forwarding state as a read-only status
+  instead of reporting it as an unknown mode.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant to `1.7.4`.
 
 ## v1.7.3 - 2026-07-06
 

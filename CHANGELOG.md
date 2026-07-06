@@ -1,8 +1,18 @@
 # Changelog
 
-## v1.7.3 - Unreleased
+## v1.7.3 - 2026-07-06
 
-No user-facing changes yet.
+### Fixed
+
+- Fix the initial display dashboard setup page so Home Assistant receives the
+  required Display patch status placeholder and no longer logs a missing
+  `qml_patch_status` translation value.
+- Add validation coverage for Display patch status placeholders and translated
+  placeholder parity.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
 
 ## v1.7.2 - 2026-07-05
 

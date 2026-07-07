@@ -7,7 +7,7 @@ import types
 from contextlib import suppress
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -275,6 +275,14 @@ class _FakeWebRTCProvider:
 
     def async_close_session(self, session_id: str) -> None:
         self.closed.append(session_id)
+
+
+class _FakeGo2RtcWsClient:
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    async def close(self) -> None:
+        self._events.append("ws-close")
 
 
 def _install_fake_webrtc_provider(
@@ -627,6 +635,115 @@ def test_doorbell_camera_webrtc_debug_details_are_sanitized() -> None:
     }
 
 
+def test_doorbell_camera_go2rtc_debug_details_are_sanitized(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class _StreamsApi:
+        async def list(self) -> dict[str, Any]:
+            return {
+                "camera.bticino": {
+                    "producers": [
+                        {"url": "rtsp://192.0.2.60:6554/doorbell"},
+                    ],
+                    "consumers": [object(), object()],
+                },
+                "other": SimpleNamespace(
+                    producers=[
+                        SimpleNamespace(url="rtsp://198.51.100.1:6554/other"),
+                    ],
+                    consumers=[object()],
+                ),
+            }
+
+    provider = _FakeWebRTCProvider()
+    provider._sessions = {"session-abcdef": object()}  # type: ignore[attr-defined]
+    provider._rest_client = SimpleNamespace(  # type: ignore[attr-defined]
+        streams=_StreamsApi(),
+    )
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert camera._go2rtc_provider_debug_details(provider)["go2rtc_ws_sessions"] == 1
+
+    caplog.set_level(logging.INFO, logger="custom_components.bticino_c300x.camera")
+    asyncio.run(
+        camera._async_log_go2rtc_debug(
+            provider,
+            "provider_go2rtc_test",
+            session_id="session-debug",
+            owner="doorbell",
+        )
+    )
+    assert "provider_go2rtc_test" not in caplog.text
+
+    caplog.clear()
+    caplog.set_level(logging.DEBUG, logger="custom_components.bticino_c300x.camera")
+    asyncio.run(
+        camera._async_log_go2rtc_debug(
+            provider,
+            "provider_go2rtc_test",
+            session_id="session-debug",
+            owner="doorbell",
+        )
+    )
+
+    assert "C300X WebRTC debug: event=provider_go2rtc_test" in caplog.text
+    assert "go2rtc_c300x_consumers=2" in caplog.text
+    assert "go2rtc_c300x_producers=1" in caplog.text
+    assert "go2rtc_c300x_paths=/doorbell" in caplog.text
+    assert "go2rtc_c300x_stream_ids=camera.bticino" in caplog.text
+    assert "rtsp://192.0.2.60" not in caplog.text
+
+
+def test_doorbell_camera_go2rtc_debug_details_cover_edge_shapes() -> None:
+    class _FailingStreamsApi:
+        async def list(self) -> dict[str, Any]:
+            raise RuntimeError("boom")
+
+    class _ListStreamsApi:
+        async def list(self) -> list[str]:
+            return ["not-a-mapping"]
+
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert asyncio.run(
+        camera._async_go2rtc_stream_debug_details(SimpleNamespace())
+    ) == {"go2rtc_stream_inventory": "unavailable"}
+    assert asyncio.run(
+        camera._async_go2rtc_stream_debug_details(
+            SimpleNamespace(_rest_client=SimpleNamespace(streams=_FailingStreamsApi()))
+        )
+    ) == {"go2rtc_stream_inventory_error": "RuntimeError"}
+    assert asyncio.run(
+        camera._async_go2rtc_stream_debug_details(
+            SimpleNamespace(_rest_client=SimpleNamespace(streams=_ListStreamsApi()))
+        )
+    ) == {"go2rtc_stream_inventory": "list"}
+    assert camera._go2rtc_stream_is_c300x(
+        "plain-stream",
+        SimpleNamespace(producers=[SimpleNamespace(url="rtsp://192.0.2.10/other")]),
+    ) is False
+    assert camera._debug_rtsp_path("not-a-url") == ""
+
+
+def test_doorbell_camera_webrtc_message_field_reads_safe_shapes() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+
+    assert camera._webrtc_message_field({"type": "answer"}, "type") == "answer"
+    assert camera._webrtc_message_field(
+        SimpleNamespace(as_dict=lambda: {"message": "boom"}),
+        "message",
+    ) == "boom"
+
+    def _raise_as_dict() -> dict[str, Any]:
+        raise RuntimeError("broken")
+
+    assert camera._webrtc_message_field(
+        SimpleNamespace(as_dict=_raise_as_dict, code="fallback"),
+        "code",
+    ) == "fallback"
+    assert camera._webrtc_message_field(SimpleNamespace(), "missing") is None
+
+
 def test_doorbell_camera_provider_rtsp_drain_debug_logs_status(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
@@ -946,6 +1063,48 @@ def test_doorbell_camera_ha_webrtc_close_does_not_stop_agent_media() -> None:
 
     assert len(tasks) == 1
     assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 0
+
+
+def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning() -> None:
+    async def _run() -> tuple[
+        _FakeApi,
+        _FakeWebRTCProvider,
+        list[str],
+        list[asyncio.Task[None]],
+    ]:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        events: list[str] = []
+        provider._sessions = {  # type: ignore[attr-defined]
+            "doorbell-session": _FakeGo2RtcWsClient(events)
+        }
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+            provider=provider,
+            owner="doorbell",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="doorbell:entry-1:audio",
+            ready=True,
+        )
+
+        camera.close_webrtc_session("doorbell-session")
+        await asyncio.gather(*tasks)
+        return api, provider, events, tasks
+
+    api, provider, events, tasks = asyncio.run(_run())
+
+    assert len(tasks) == 1
+    assert provider.closed == []
+    assert cast(Any, provider)._sessions == {}
+    assert events == ["ws-close"]
     assert api.stop_calls == 0
 
 

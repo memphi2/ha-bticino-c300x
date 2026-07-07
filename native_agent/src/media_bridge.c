@@ -5948,6 +5948,19 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     && !recorder
                     && compatible_shared_path
                 );
+            bool explicit_stop_guard =
+                !ring_audio
+                && !home_call_audio
+                && !recorder
+                && c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)
+                && !g_bridge.media_active
+                && !g_bridge.media_starting;
+            if (explicit_stop_guard) {
+                pthread_mutex_unlock(&g_bridge.mutex);
+                rtsp_note_describe_reject(&g_bridge, "explicit_stop_guard");
+                send_rtsp_response(fd, 503, cseq, NULL, NULL);
+                break;
+            }
             if (slot != NULL && allow_shared_path) {
                 slot->audio_enabled = wants_audio;
                 slot->recorder = recorder;

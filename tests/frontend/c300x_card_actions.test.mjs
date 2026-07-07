@@ -89,7 +89,7 @@ test("action controller answers a ring call before promoting the answered stream
   assert.equal(card._lifecycle.doorbellAnswered, true);
 });
 
-test("action controller closes the local peer before stopping doorstation media", async () => {
+test("action controller stops doorstation media before closing the local peer", async () => {
   const { calls, card } = fakeCard({
     _doorstationView() {
       return { action: "hang_up" };
@@ -108,7 +108,6 @@ test("action controller closes the local peer before stopping doorstation media"
   await actions.handlePrimaryAction();
 
   assert.deepEqual(calls, [
-    ["close_peer", false],
     ["service", "bticino_c300x", "hangup_doorbell_call", { entry_id: "entry-1" }],
     ["service", "bticino_c300x", "stop_doorbell_video", { entry_id: "entry-1" }],
     ["close_peer", true],

@@ -1289,6 +1289,12 @@ def run_smoke(
             assert_json_field(video["bridge"], "running", True)
             assert_json_field(video["bridge"], "call_active", False)
             assert_json_field(video["bridge"], "media_active", False)
+            rtsp_describe_status(rtsp_port, "/doorbell-video", 503)
+            assert_json_field(
+                api_post(api_port, "/api/v1/video/doorbell/actions/activate", {}),
+                "ok",
+                True,
+            )
             rtsp_describe(rtsp_port, "/doorbell-video")
             assert_json_field(video["bridge"], "rtp_packets", 0)
             assert_json_field(video["bridge"], "last_error", None)
@@ -2169,6 +2175,10 @@ def send_udp_event(udp_port: int, frame: str) -> None:
 
 
 def rtsp_describe(rtsp_port: int, path: str) -> None:
+    rtsp_describe_status(rtsp_port, path, 200)
+
+
+def rtsp_describe_status(rtsp_port: int, path: str, expected_status: int) -> None:
     request = (
         f"DESCRIBE rtsp://127.0.0.1:{rtsp_port}{path} RTSP/1.0\r\n"
         "CSeq: 1\r\n"
@@ -2178,8 +2188,12 @@ def rtsp_describe(rtsp_port: int, path: str) -> None:
     with socket.create_connection(("127.0.0.1", rtsp_port), timeout=3) as sock:
         sock.sendall(request)
         response = sock.recv(4096)
-    if b"RTSP/1.0 200" not in response:
-        raise AssertionError("RTSP DESCRIBE did not return 200 OK")
+    expected = f"RTSP/1.0 {expected_status}".encode()
+    if expected not in response:
+        raise AssertionError(
+            f"RTSP DESCRIBE did not return {expected_status}: "
+            f"{response[:80]!r}"
+        )
 
 
 def wait_for_callback(callback: CallbackServer) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=ae4ec9e62922eb5e";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=5dafdb0d42407b42";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack }) {
@@ -186,7 +186,7 @@ export class C300XWebrtcClient {
               if (this._closing) {
                 return;
               }
-              this._onClosed?.(message.reason || "closed");
+              this._handleProviderClosed(message.reason || "closed");
               return;
             }
             if (message.type === "candidate" && message.candidate) {
@@ -239,6 +239,11 @@ export class C300XWebrtcClient {
           reject(err);
         });
     });
+  }
+
+  _handleProviderClosed(reason) {
+    this.close();
+    this._onClosed?.(reason || "closed");
   }
 
   _sendOrQueueCandidate(candidate) {

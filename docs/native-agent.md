@@ -9,7 +9,7 @@ notes, use [native_agent/README.md](../native_agent/README.md).
 
 The device runtime is a native C binary from `native_agent/`. Node.js and `node_modules` are not part of the runtime path.
 
-Current packaged agent version: `1.7.5`.
+Current packaged agent version: `1.7.6`.
 
 ## Build
 

@@ -86,7 +86,6 @@ export class C300XCardActions {
     const homeCallMode = card._lifecycle.activeHomeCallSession || card._isHomeCallMode();
     let ok = true;
     try {
-      card._closePeer(false);
       if (homeCallMode) {
         await this.stopHomeCall();
       } else {
@@ -112,7 +111,6 @@ export class C300XCardActions {
     const hadDoorbellRingCallSession = this.hasDoorbellRingCallSession();
     let ok = true;
     try {
-      card._closePeer(false);
       if (hadDoorbellRingCallSession) {
         try {
           await this.hangupDoorbellCall({ closePeer: false });

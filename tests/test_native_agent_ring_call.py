@@ -292,7 +292,7 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "c300x_media_session_stop_in_progress(g_bridge.video)" in rtsp_body
     assert "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)" in rtsp_body
     assert rtsp_body.index("c300x_media_session_stop_in_progress") < rtsp_body.index(
-        "c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)"
+        "start_media_session(&g_bridge)"
     )
     assert rtsp_body.index("c300x_media_session_guard_blocks_start") < rtsp_body.index(
         "start_media_session(&g_bridge)"

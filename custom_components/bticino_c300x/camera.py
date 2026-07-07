@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from contextlib import suppress
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
@@ -24,6 +25,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
+from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
 )
@@ -55,6 +57,7 @@ from .camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
+from .camera_media.webrtc_debug import WebRTCDebugMixin
 from .camera_media.webrtc_session import (
     ProviderWebRTCSession as _ProviderWebRTCSession,
 )
@@ -144,62 +147,8 @@ _LOGGER = logging.getLogger(__name__)
 _PROVIDER_WEBRTC_STREAM_CONTEXT: ContextVar[_ProviderWebRTCStreamContext | None] = (
     ContextVar("bticino_c300x_provider_webrtc_stream_context", default=None)
 )
-
-
-def _debug_safe_details(details: Mapping[str, Any]) -> dict[str, Any]:
-    """Return compact debug fields without SDP, ICE candidates, tokens or URLs."""
-
-    safe: dict[str, Any] = {}
-    for key, value in details.items():
-        text_key = str(key)
-        lowered = text_key.lower()
-        if any(
-            unsafe in lowered
-            for unsafe in ("candidate", "password", "sdp", "secret", "token", "url")
-        ):
-            continue
-        if value is None or isinstance(value, bool | int | float):
-            safe[text_key] = value
-        elif isinstance(value, str):
-            safe[text_key] = value[:160]
-    return safe
-
-
-def _debug_status_details(status: Mapping[str, Any]) -> dict[str, Any]:
-    """Return selected native media status fields useful for EOF RCA."""
-
-    details: dict[str, Any] = {}
-    bridge_data = status.get("bridge")
-    bridge = bridge_data if isinstance(bridge_data, Mapping) else {}
-    for key in (
-        "media_owner",
-        "external_media_active",
-        "external_owner",
-        "last_block_reason",
-        "last_error",
-        "last_rtsp_reject_reason",
-        "video_bridge_stop_in_progress",
-    ):
-        if key in status:
-            details[f"status_{key}"] = status[key]
-    for key in (
-        "clients",
-        "max_clients",
-        "media_owner",
-        "media_active",
-        "running",
-        "stop_in_progress",
-        "ring_call_active",
-        "ring_media_active",
-        "ring_audio_active",
-        "ring_answer_requested",
-        "ring_answered",
-        "ring_hangup_requested",
-        "unanswered_ring_call",
-    ):
-        if key in bridge:
-            details[f"bridge_{key}"] = bridge[key]
-    return _debug_safe_details(details)
+_debug_safe_details = _webrtc_debug.debug_safe_details
+_debug_status_details = _webrtc_debug.debug_status_details
 
 
 def _media_decision_is_call_media(decision: MediaStateOutput) -> bool:
@@ -295,7 +244,7 @@ async def async_setup_entry(
         async_add_entities([C300XDoorbellCamera(entry)])
 
 
-class C300XDoorbellCamera(C300XEntity, Camera):
+class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     """Camera that exposes the agent media bridge through native WebRTC."""
 
     _attr_icon = "mdi:cctv"
@@ -445,6 +394,11 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 session_id=provider_context.session_id,
                 owner=provider_context.owner,
                 provider=provider_context.provider_domain,
+                status=(
+                    await self._async_refresh_video_status_or_none(apply_status=False)
+                    if _LOGGER.isEnabledFor(logging.DEBUG)
+                    else None
+                ),
                 wants_audio=provider_context.wants_audio,
                 wants_backchannel=provider_context.wants_backchannel,
                 ring_call=provider_context.ring_call,
@@ -677,6 +631,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             stream_context.ring_call = session.ring_call
             stream_context.ring_preview = session.ring_preview
             self._provider_webrtc_sessions[session_id] = session
+            await self._async_log_go2rtc_debug(
+                provider,
+                "provider_go2rtc_before_offer",
+                session_id=session_id,
+                owner=owner,
+                wants_audio=wants_audio,
+                wants_backchannel=talkback_requested,
+                ring_call=session.ring_call,
+                ring_preview=session.ring_preview,
+                resource_id=session.resource_id,
+                support_rtsp_path=self._debug_rtsp_path(support_stream_url),
+            )
             _LOGGER.debug(
                 "C300X WebRTC provider session prepared: session=%s owner=%s "
                 "audio=%s talkback=%s ring_call=%s ring_preview=%s provider=%s",
@@ -727,6 +693,18 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 offer_sdp,
                 session_id,
                 _send_provider_message,
+            )
+            await self._async_log_go2rtc_debug(
+                provider,
+                "provider_go2rtc_after_offer",
+                session_id=session_id,
+                owner=owner,
+                wants_audio=wants_audio,
+                wants_backchannel=talkback_requested,
+                ring_call=session.ring_call,
+                ring_preview=session.ring_preview,
+                resource_id=session.resource_id,
+                media_started=stream_context.media_started,
             )
             current_session = self._provider_webrtc_sessions.get(session_id)
             if current_session is session:
@@ -988,7 +966,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             await self._async_wait_for_provider_rtsp_clients_to_drain()
 
     async def _async_wait_for_provider_rtsp_clients_to_drain(self) -> None:
-        """Let the WebRTC provider close RTSP before the agent is stopped."""
+        """Wait until the provider has dropped native RTSP clients after close."""
 
         deadline = asyncio.get_running_loop().time() + (
             WEBRTC_PROVIDER_CLOSE_DRAIN_TIMEOUT_SECONDS
@@ -1066,13 +1044,47 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 },
             )
             self._presession_webrtc_candidates.pop(session_id, None)
-            with suppress(Exception):
-                provider_session.provider.async_close_session(session_id)
             if notify_client:
                 with suppress(Exception):
                     provider_session.send_message(
                         {"type": "closed", "reason": reason}
                     )
+            await self._async_log_go2rtc_debug(
+                provider_session.provider,
+                "provider_go2rtc_before_close",
+                session_id=session_id,
+                owner=provider_session.owner,
+                wants_audio=provider_session.wants_audio,
+                wants_backchannel=provider_session.wants_backchannel,
+                ring_call=provider_session.ring_call,
+                ring_preview=provider_session.ring_preview,
+                ready=provider_session.ready,
+                resource_id=provider_session.resource_id,
+                stop_media=stop_media,
+                reason=reason,
+            )
+            provider_close_path = await self._async_close_provider_webrtc_session(
+                provider_session.provider,
+                session_id,
+            )
+            await self._async_log_go2rtc_debug(
+                provider_session.provider,
+                "provider_go2rtc_after_close",
+                session_id=session_id,
+                owner=provider_session.owner,
+                wants_audio=provider_session.wants_audio,
+                wants_backchannel=provider_session.wants_backchannel,
+                ring_call=provider_session.ring_call,
+                ring_preview=provider_session.ring_preview,
+                ready=provider_session.ready,
+                resource_id=provider_session.resource_id,
+                stop_media=stop_media,
+                reason=reason,
+                provider_close_path=provider_close_path,
+            )
+            last_resource_session = not self._has_webrtc_sessions_for_resource(
+                provider_session.resource_id
+            )
             if provider_session.ring_preview:
                 with suppress(Exception):
                     provider_session.ring_preview = _media_decision_is_unanswered_ring(
@@ -1081,9 +1093,7 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                         )
                     )
             should_stop_media = (
-                not self._has_webrtc_sessions_for_resource(
-                    provider_session.resource_id
-                )
+                last_resource_session
                 and stop_media
                 and (
                     force_stop_media
@@ -1106,6 +1116,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                     reason=reason,
                 )
                 await self._async_wait_for_provider_rtsp_clients_to_drain()
+                await self._async_log_video_status_debug(
+                    "provider_agent_stop_before_request",
+                    session_id=session_id,
+                    owner=provider_session.owner,
+                    wants_audio=provider_session.wants_audio,
+                    wants_backchannel=provider_session.wants_backchannel,
+                    ring_call=provider_session.ring_call,
+                    ring_preview=provider_session.ring_preview,
+                    resource_id=provider_session.resource_id,
+                    reason=reason,
+                )
                 if provider_session.owner == "home_call":
                     with suppress(Exception):
                         await self._entry.runtime_data.api.async_stop_home_call()
@@ -1117,6 +1138,17 @@ class C300XDoorbellCamera(C300XEntity, Camera):
                 else:
                     with suppress(Exception):
                         await self._entry.runtime_data.api.async_stop_doorbell_video()
+                await self._async_log_video_status_debug(
+                    "provider_agent_stop_after_request",
+                    session_id=session_id,
+                    owner=provider_session.owner,
+                    wants_audio=provider_session.wants_audio,
+                    wants_backchannel=provider_session.wants_backchannel,
+                    ring_call=provider_session.ring_call,
+                    ring_preview=provider_session.ring_preview,
+                    resource_id=provider_session.resource_id,
+                    reason=reason,
+                )
             return
 
         self._presession_webrtc_candidates.pop(session_id, None)
@@ -1331,6 +1363,54 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             for session_id, session in self._provider_webrtc_sessions.items()
             if session.owner == "doorbell" and session.ring_preview
         ]
+
+    async def _async_close_provider_webrtc_session(
+        self,
+        provider: Any,
+        session_id: str,
+    ) -> str:
+        """Close the provider session and await HA go2rtc consumer shutdown."""
+
+        sessions = getattr(provider, "_sessions", None)
+        if isinstance(sessions, MutableMapping):
+            ws_client = sessions.pop(session_id, None)
+            if ws_client is None:
+                return "go2rtc_ws_missing"
+            close = getattr(ws_client, "close", None)
+            if not callable(close):
+                return "go2rtc_ws_close_missing"
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+                    return "go2rtc_ws_awaited"
+                return "go2rtc_ws_sync"
+            except Exception as err:  # noqa: BLE001 - close cleanup must continue
+                self._log_webrtc_debug(
+                    "provider_go2rtc_ws_close_failed",
+                    session_id=session_id,
+                    provider=str(getattr(provider, "domain", type(provider).__name__)),
+                    error_type=type(err).__name__,
+                )
+                return "go2rtc_ws_failed"
+
+        close_session = getattr(provider, "async_close_session", None)
+        if not callable(close_session):
+            return "provider_close_missing"
+        try:
+            result = close_session(session_id)
+            if inspect.isawaitable(result):
+                await result
+                return "provider_close_awaited"
+            return "provider_close_sync"
+        except Exception as err:  # noqa: BLE001 - close cleanup must continue
+            self._log_webrtc_debug(
+                "provider_close_failed",
+                session_id=session_id,
+                provider=str(getattr(provider, "domain", type(provider).__name__)),
+                error_type=type(err).__name__,
+            )
+            return "provider_close_failed"
 
     def _has_webrtc_sessions(self) -> bool:
         """Return true when any HA-side WebRTC session remains registered."""
@@ -1658,65 +1738,6 @@ class C300XDoorbellCamera(C300XEntity, Camera):
             ready_sessions=ready_sessions,
             details=details,
         )
-
-    def _log_webrtc_debug(
-        self,
-        event: str,
-        *,
-        session_id: str | None = None,
-        owner: str | None = None,
-        provider: str | None = None,
-        status: Mapping[str, Any] | None = None,
-        **details: Any,
-    ) -> None:
-        """Log compact media RCA breadcrumbs only when integration debug is enabled."""
-
-        if not _LOGGER.isEnabledFor(logging.DEBUG):
-            return
-        safe_details = _debug_safe_details(details)
-        if status is not None:
-            safe_details.update(_debug_status_details(status))
-        detail_text = " ".join(
-            f"{key}={value}" for key, value in sorted(safe_details.items())
-        )
-        _LOGGER.debug(
-            "C300X WebRTC debug: event=%s session=%s owner=%s provider=%s "
-            "media_state=%s video_owner=%s sessions=%s ready_sessions=%s %s",
-            event,
-            _short_session_id(session_id or ""),
-            owner or "-",
-            provider or "-",
-            self._last_media_state.value,
-            self._video_owner,
-            len(self._provider_webrtc_sessions),
-            sum(1 for session in self._provider_webrtc_sessions.values() if session.ready),
-            detail_text,
-        )
-
-    def _debug_rtsp_path(self, stream_url: str) -> str:
-        """Return the RTSP path/query fragment without logging the private host."""
-
-        path_start = stream_url.find("/", len("rtsp://"))
-        if path_start == -1:
-            return ""
-        return stream_url[path_start:]
-
-    def _webrtc_message_field(self, message: Any, field: str) -> str | None:
-        """Return one safe field from a provider WebRTC message."""
-
-        if isinstance(message, Mapping):
-            value = message.get(field)
-        else:
-            as_dict = getattr(message, "as_dict", None)
-            value = None
-            if callable(as_dict):
-                with suppress(Exception):
-                    data = as_dict()
-                    if isinstance(data, Mapping):
-                        value = data.get(field)
-            if value is None:
-                value = getattr(message, field, None)
-        return str(value)[:160] if value is not None else None
 
     def _agent_event_timeline_details(
         self,

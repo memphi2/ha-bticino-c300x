@@ -3,5 +3,5 @@
   "current_homeassistant": "2026.7.1",
   "python": "3.14",
   "c300x_firmware": "1.7.x",
-  "integration_version": "1.7.5"
+  "integration_version": "1.7.6"
 }

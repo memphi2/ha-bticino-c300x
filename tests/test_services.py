@@ -1417,10 +1417,29 @@ def test_stop_doorbell_video_service_calls_agent_api() -> None:
     asyncio.run(_run())
 
 
-def test_stop_doorbell_video_service_skips_agent_stop_when_prepare_reaches_idle() -> None:
+def test_stop_doorbell_video_service_stops_agent_after_prepare_reaches_idle() -> None:
     async def _run() -> None:
-        api = _FakeApi()
         calls: list[str] = []
+
+        class _RecordingApi(_FakeApi):
+            async def async_doorbell_video_status(self) -> dict[str, Any]:
+                calls.append("status")
+                return await super().async_doorbell_video_status()
+
+            async def async_stop_doorbell_video(self) -> dict[str, Any]:
+                calls.append("agent_stop")
+                return await super().async_stop_doorbell_video()
+
+        api = _RecordingApi()
+        api.doorbell_video_status = {
+            "media_owner": "agent",
+            "window_available": True,
+            "bridge": {
+                "media_owner": "agent",
+                "clients": 1,
+                "media_active": True,
+            },
+        }
 
         async def _prepare_stop() -> None:
             calls.append("prepare_stop")
@@ -1447,9 +1466,9 @@ def test_stop_doorbell_video_service_skips_agent_stop_when_prepare_reaches_idle(
         handler = hass.services.handlers[(DOMAIN, SERVICE_STOP_DOORBELL_VIDEO)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert calls == ["prepare_stop"]
+        assert calls == ["status", "prepare_stop", "agent_stop"]
         assert api.doorbell_video_status_calls == 1
-        assert api.stop_video_calls == 0
+        assert api.stop_video_calls == 1
 
     asyncio.run(_run())
 
@@ -1491,6 +1510,40 @@ def test_hangup_doorbell_call_service_calls_agent_api() -> None:
         handler = hass.services.handlers[(DOMAIN, SERVICE_HANGUP_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> None:
+    async def _run() -> None:
+        calls: list[str] = []
+
+        class _RecordingApi(_FakeApi):
+            async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+                calls.append("agent_hangup")
+                return await super().async_hangup_doorbell_call()
+
+        api = _RecordingApi()
+
+        async def _prepare_stop() -> None:
+            calls.append("prepare_stop")
+
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={"doorbell_call": {"supported": True}},
+                api=api,
+                prepare_doorbell_video_stop=_prepare_stop,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_HANGUP_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert calls == ["prepare_stop", "agent_hangup"]
         assert api.hangup_doorbell_call_calls == 1
 
     asyncio.run(_run())

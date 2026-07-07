@@ -39,9 +39,10 @@ class DoorbellVideoUseCase:
             "prepare_doorbell_video_stop",
             None,
         )
+        was_idle = await _async_agent_already_reports_idle(self._entry)
         if prepare_stop is not None:
             await prepare_stop()
-        if await _async_agent_already_reports_idle(self._entry):
+        if was_idle:
             return
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_stop_doorbell_video()

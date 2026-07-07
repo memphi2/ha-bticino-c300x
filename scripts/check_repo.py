@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_CONFIG_PATH = ROOT / "project-versions.json"
 
@@ -212,12 +214,7 @@ def main() -> int:
     failures.extend(check_media_reference_flow())
     failures.extend(check_python_compile())
     failures.extend(check_native_agent())
-    if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
-    sys.stdout.write("Repository validation passed\n")
-    return 0
+    return report_failures(failures, "Repository validation passed")
 
 
 def check_required_paths() -> list[str]:

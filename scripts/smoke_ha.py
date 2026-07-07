@@ -11,6 +11,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from check_reporting import report_failures
+
 DOMAIN = "bticino_c300x"
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
@@ -96,9 +98,7 @@ def main() -> int:
     failures.extend(check_entities(client))
 
     if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
+        return report_failures(failures)
 
     sys.stdout.write(
         "HA smoke passed: supported Home Assistant/Python runtime, "

@@ -114,6 +114,40 @@ test("action controller stops doorstation media before closing the local peer", 
   ]);
 });
 
+test("action controller keeps ring-call hangup failures visible after video stop", async () => {
+  const { calls, card } = fakeCard({
+    _doorstationView() {
+      return { action: "hang_up" };
+    },
+    _hass: {
+      async callService(domain, service, data) {
+        calls.push(["service", domain, service, data]);
+        if (service === "hangup_doorbell_call") {
+          throw new Error("ring hangup failed");
+        }
+      },
+    },
+    _lifecycle: {
+      activeHomeCallSession: false,
+      answeringDoorbell: false,
+      doorbellAnswered: true,
+      hangupInProgress: false,
+      ringPreviewActive: false,
+      startingCall: false,
+    },
+  });
+  const actions = new C300XCardActions(card);
+
+  await actions.handlePrimaryAction();
+
+  assert.deepEqual(calls, [
+    ["service", "bticino_c300x", "hangup_doorbell_call", { entry_id: "entry-1" }],
+    ["service", "bticino_c300x", "stop_doorbell_video", { entry_id: "entry-1" }],
+    ["close_peer", false],
+  ]);
+  assert.equal(card._error, "ring hangup failed");
+});
+
 test("action controller starts a home-call audio session through the shared talkback path", async () => {
   const { calls, card } = fakeCard({
     _isAutoMode() {

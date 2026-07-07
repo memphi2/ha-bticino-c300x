@@ -58,6 +58,7 @@ from .device_user import (
     homeassistant_account_label,
 )
 from .entry_config import entry_config_value as _entry_config_value
+from .entry_locks import clear_entry_locks
 from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 
@@ -274,29 +275,34 @@ class C300XRuntimeManager:
             self.entry,
             runtime_data.loaded_platforms,
         )
-        if unload_ok:
-            if runtime_data.unregister_event_registration:
-                runtime_data.unregister_event_registration()
-            if runtime_data.unregister_display_bridge_updates:
-                runtime_data.unregister_display_bridge_updates()
-            if runtime_data.connection_state.expire_unavailable:
-                runtime_data.connection_state.expire_unavailable()
-            if runtime_data.memos_refresh_task:
-                runtime_data.memos_refresh_task.cancel()
-                runtime_data.memos_refresh_task = None
-            if runtime_data.answering_machine_messages_refresh_task:
-                runtime_data.answering_machine_messages_refresh_task.cancel()
-                runtime_data.answering_machine_messages_refresh_task = None
-            startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
-            if startup_sync_task:
-                startup_sync_task.cancel()
-                runtime_data.startup_sync_task = None
-            runtime_data.unregister_event_webhook()
-            runtime_data.unregister_webhook()
-            self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
-                self.entry.entry_id,
-                None,
-            )
+        # Release our own background tasks, webhooks, and registrations
+        # unconditionally: HA removes a config entry from its registry even
+        # when platform unload fails (e.g. on integration removal), and it
+        # will never call this again for that entry, so gating cleanup
+        # behind unload_ok would leak these resources permanently.
+        if runtime_data.unregister_event_registration:
+            runtime_data.unregister_event_registration()
+        if runtime_data.unregister_display_bridge_updates:
+            runtime_data.unregister_display_bridge_updates()
+        if runtime_data.connection_state.expire_unavailable:
+            runtime_data.connection_state.expire_unavailable()
+        if runtime_data.memos_refresh_task:
+            runtime_data.memos_refresh_task.cancel()
+            runtime_data.memos_refresh_task = None
+        if runtime_data.answering_machine_messages_refresh_task:
+            runtime_data.answering_machine_messages_refresh_task.cancel()
+            runtime_data.answering_machine_messages_refresh_task = None
+        startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
+        if startup_sync_task:
+            startup_sync_task.cancel()
+            runtime_data.startup_sync_task = None
+        runtime_data.unregister_event_webhook()
+        runtime_data.unregister_webhook()
+        clear_entry_locks(self.entry.entry_id)
+        self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
+            self.entry.entry_id,
+            None,
+        )
         return unload_ok
 
     def _build_agent_api(self) -> C300XAgentApi:

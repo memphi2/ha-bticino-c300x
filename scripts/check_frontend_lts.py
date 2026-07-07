@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from check_reporting import report_failures
 from update_frontend_hashes import (
     FRONTEND_IMPORT_VERSION_PATTERN,
     FRONTEND_MODULES,
@@ -50,9 +51,7 @@ REQUIRED_CONTRACT_SNIPPETS = {
 def main() -> int:
     failures = check_frontend_lts()
     if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
+        return report_failures(failures)
     versions = _project_versions()
     sys.stdout.write(
         "Frontend LTS gate passed "

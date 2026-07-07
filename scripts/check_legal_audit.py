@@ -9,6 +9,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 
 FORBIDDEN_DIRS = {
@@ -81,9 +83,7 @@ def main() -> int:
     failures.extend(_check_brand_assets())
 
     if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
+        return report_failures(failures)
 
     classes = _extension_counts(tracked)
     sys.stdout.write("Legal/provenance audit passed\n")

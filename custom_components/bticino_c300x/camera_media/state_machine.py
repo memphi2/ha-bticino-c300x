@@ -259,17 +259,22 @@ def derive_media_state(facts: MediaStateInput) -> MediaStateOutput:
         return _output(MediaState.RING_PENDING, MediaPrimaryAction.ANSWER_RING)
 
     if _owner(facts) == "agent":
-        if facts.video_window_available:
+        if not facts.video_window_available:
+            return _output(
+                MediaState.ON_DEMAND_STARTING,
+                MediaPrimaryAction.WAIT,
+                capture_blocked=True,
+            )
+        if facts.rtsp_clients != 0 or facts.local_sessions != 0:
             return _output(
                 MediaState.ON_DEMAND_ACTIVE,
                 MediaPrimaryAction.STOP_STREAM,
                 capture_blocked=True,
             )
-        return _output(
-            MediaState.ON_DEMAND_STARTING,
-            MediaPrimaryAction.WAIT,
-            capture_blocked=True,
-        )
+        # video_window_available can lag one status poll behind a stop that
+        # already dropped every real client; fall through to be
+        # re-evaluated below instead of reporting a stoppable stream that
+        # nothing is actually using.
 
     active_clients = (facts.rtsp_clients or 0) + facts.local_sessions
     if active_clients > 0:

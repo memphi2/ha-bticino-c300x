@@ -48,6 +48,7 @@ from .json_io import async_write_json_file
 from .ring_talkback import (
     async_keep_talkback_alive_when_ready as _async_keep_talkback_alive_when_ready,
 )
+from .value_parsing import optional_mapping
 
 _RTSP_READY_TIMEOUT_SECONDS = 5.0
 _CAPTURE_WORK_DIR = Path("/config/c300x")
@@ -169,8 +170,7 @@ def _capture_metadata_payload(
     include_audio: bool,
     announcement_used: bool,
 ) -> dict[str, Any]:
-    bridge = status.get("bridge")
-    bridge_status = bridge if isinstance(bridge, Mapping) else {}
+    bridge_status = optional_mapping(status.get("bridge"))
     payload: dict[str, Any] = {
         "capture_id": capture_id,
         "created_at": datetime.now(UTC).isoformat(),

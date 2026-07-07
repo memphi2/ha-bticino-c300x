@@ -76,59 +76,60 @@ export class C300XCardActions {
     }
   }
 
-  async hangup() {
+  async _withHangupGuard(run) {
     const card = this._card;
     if (card._lifecycle.hangupInProgress) {
       return;
     }
     card._lifecycle.hangupInProgress = true;
     card._lifecycle.startingCall = false;
-    const homeCallMode = card._lifecycle.activeHomeCallSession || card._isHomeCallMode();
     let ok = true;
     try {
-      if (homeCallMode) {
-        await this.stopHomeCall();
-      } else {
-        await this.stopDoorbellVideo();
-      }
-    } catch (err) {
-      console.error("C300X hangup failed", err);
-      card._error = err?.message || `${err}`;
-      ok = false;
+      ok = await run();
     } finally {
       card._lifecycle.hangupInProgress = false;
       card._closePeer(ok);
     }
   }
 
+  async hangup() {
+    const card = this._card;
+    const homeCallMode = card._lifecycle.activeHomeCallSession || card._isHomeCallMode();
+    await this._withHangupGuard(async () => {
+      try {
+        await (homeCallMode ? this.stopHomeCall() : this.stopDoorbellVideo());
+        return true;
+      } catch (err) {
+        console.error("C300X hangup failed", err);
+        card._error = err?.message || `${err}`;
+        return false;
+      }
+    });
+  }
+
   async hangupDoorstation() {
     const card = this._card;
-    if (card._lifecycle.hangupInProgress) {
-      return;
-    }
-    card._lifecycle.hangupInProgress = true;
-    card._lifecycle.startingCall = false;
     const hadDoorbellRingCallSession = this.hasDoorbellRingCallSession();
-    let ok = true;
-    try {
-      if (hadDoorbellRingCallSession) {
-        try {
-          await this.hangupDoorbellCall({ closePeer: false });
-        } catch (err) {
-          console.error("C300X ring-call hangup failed", err);
-          card._error = err?.message || `${err}`;
-          ok = false;
+    await this._withHangupGuard(async () => {
+      let ok = true;
+      try {
+        if (hadDoorbellRingCallSession) {
+          try {
+            ok = await this.hangupDoorbellCall({ closePeer: false }) && ok;
+          } catch (err) {
+            console.error("C300X ring-call hangup failed", err);
+            card._error = err?.message || `${err}`;
+            ok = false;
+          }
         }
+        await this.stopDoorbellVideo();
+      } catch (err) {
+        console.error("C300X doorbell video stop failed", err);
+        card._error = err?.message || `${err}`;
+        ok = false;
       }
-      await this.stopDoorbellVideo();
-    } catch (err) {
-      console.error("C300X doorbell video stop failed", err);
-      card._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      card._lifecycle.hangupInProgress = false;
-      card._closePeer(ok);
-    }
+      return ok;
+    });
   }
 
   hasDoorbellRingCallSession() {
@@ -145,22 +146,16 @@ export class C300XCardActions {
 
   async hangupHomeCall() {
     const card = this._card;
-    if (card._lifecycle.hangupInProgress) {
-      return;
-    }
-    card._lifecycle.hangupInProgress = true;
-    card._lifecycle.startingCall = false;
-    let ok = true;
-    try {
-      await this.stopHomeCall();
-    } catch (err) {
-      console.error("C300X home-call hangup failed", err);
-      card._error = err?.message || `${err}`;
-      ok = false;
-    } finally {
-      card._lifecycle.hangupInProgress = false;
-      card._closePeer(ok);
-    }
+    await this._withHangupGuard(async () => {
+      try {
+        await this.stopHomeCall();
+        return true;
+      } catch (err) {
+        console.error("C300X home-call hangup failed", err);
+        card._error = err?.message || `${err}`;
+        return false;
+      }
+    });
   }
 
   async stopDoorbellVideo() {
@@ -186,7 +181,7 @@ export class C300XCardActions {
   async hangupDoorbellCall({ closePeer = true } = {}) {
     const card = this._card;
     if (!card._hass) {
-      return;
+      return false;
     }
     let ok = true;
     try {
@@ -200,5 +195,6 @@ export class C300XCardActions {
         card._closePeer(ok);
       }
     }
+    return ok;
   }
 }

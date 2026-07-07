@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import web
 from homeassistant.components import webhook
@@ -62,6 +62,7 @@ from .media_watchdog import handle_runtime_cpu_metrics_changed
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
     DEFAULT_TRUE_VALUES,
+    optional_mapping,
 )
 from .value_parsing import (
     optional_bool as _parse_optional_bool,
@@ -99,12 +100,6 @@ class _AgentEventContext:
     event_type: str
     payload: dict[str, Any]
     data: dict[str, Any]
-
-
-def _json_object(value: Any) -> dict[str, Any]:
-    """Return a JSON object value or an empty object."""
-
-    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
 
 
 def async_register_webhook(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> Callable[[], None]:
@@ -299,7 +294,7 @@ async def _async_handle_agent_event(
     if not event_type:
         return _json_error("unsupported_event", status=400)
 
-    data = _json_object(payload.get("data"))
+    data = optional_mapping(payload.get("data"))
     snapshot = _is_snapshot_payload(payload)
     if event_type == "system_metrics_changed":
         _apply_system_metrics_event(hass, entry, data)
@@ -437,7 +432,7 @@ def _activate_video_state(
     *,
     default_available: bool,
 ) -> None:
-    video = _json_object(context.data.get("video"))
+    video = optional_mapping(context.data.get("video"))
     external_media_active = _optional_bool(video.get("external_media_active")) is True
     context.event_state.video_available = (
         bool(video.get("available", default_available)) and not external_media_active
@@ -520,7 +515,7 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
 
 def _apply_voicemail_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
     raw_voicemail = data.get("voicemail")
-    voicemail = _json_object(raw_voicemail) if isinstance(raw_voicemail, dict) else data
+    voicemail = raw_voicemail if isinstance(raw_voicemail, dict) else data
     event_state.voicemail_available = _optional_bool(voicemail.get("available"))
     event_state.voicemail_total = _optional_int(voicemail.get("total"))
     event_state.voicemail_unread = _optional_int(voicemail.get("unread"))
@@ -540,7 +535,7 @@ def _voicemail_event_data(event_state: C300XEventState) -> dict[str, Any]:
 
 def _apply_memos_event(event_state: C300XEventState, data: dict[str, Any]) -> None:
     raw_memos = data.get("memos")
-    memos = _json_object(raw_memos) if isinstance(raw_memos, dict) else data
+    memos = raw_memos if isinstance(raw_memos, dict) else data
     event_state.memos_available = _optional_bool(memos.get("available"))
     event_state.memos_total = _optional_int(memos.get("total"))
     event_state.memos_text_total = _optional_int(memos.get("text_total"))
@@ -639,7 +634,7 @@ def _video_event_data(
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     camera_entity_id = resolve_doorbell_camera_entity_id(hass, entry)
-    video = _json_object(source.get("video") if source is not None else None)
+    video = optional_mapping(source.get("video") if source is not None else None)
     stream_path = safe_stream_path(
         event_state.video_stream_path
         or entry_config_value(entry, CONF_VIDEO_STREAM_PATH, DEFAULT_VIDEO_STREAM_PATH)
@@ -660,8 +655,8 @@ def _video_event_data(
     ):
         if key in video:
             event_data[key] = video[key]
-    bridge = video.get("bridge")
-    if isinstance(bridge, Mapping):
+    bridge = optional_mapping(video.get("bridge"))
+    if bridge:
         event_data["bridge"] = dict(bridge)
     if camera_entity_id is not None:
         event_data["camera_entity_id"] = camera_entity_id

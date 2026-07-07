@@ -1,4 +1,4 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=5dafdb0d42407b42";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=6f83dd7b2ca2ae84";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack }) {
@@ -96,7 +96,7 @@ export class C300XWebrtcClient {
       }
       const state = pc.connectionState || pc.iceConnectionState;
       if (["closed", "disconnected", "failed"].includes(state)) {
-        this._onClosed?.(state);
+        this._handleProviderClosed(state);
       }
     };
 
@@ -242,8 +242,12 @@ export class C300XWebrtcClient {
   }
 
   _handleProviderClosed(reason) {
-    this.close();
+    // Notify the caller (which reads pc/remoteStream/running to decide
+    // whether there is anything left to tear down) before this client
+    // clears that same state via close(), then hard-close regardless of
+    // what the callback did so no caller can leak the peer connection.
     this._onClosed?.(reason || "closed");
+    this.close();
   }
 
   _sendOrQueueCandidate(candidate) {

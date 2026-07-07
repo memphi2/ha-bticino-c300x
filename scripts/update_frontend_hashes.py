@@ -9,6 +9,8 @@ import sys
 from hashlib import sha256
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "custom_components" / "bticino_c300x" / "frontend"
 FRONTEND_IMPORT_VERSION_PATTERN = re.compile(r"\?v=[0-9a-f]{16}")
@@ -41,9 +43,7 @@ def main() -> int:
 
     failures = _validate_module_list()
     if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
+        return report_failures(failures)
 
     bundle_hash = frontend_bundle_hash()
     changed = update_frontend_import_hashes(bundle_hash, check=args.check)

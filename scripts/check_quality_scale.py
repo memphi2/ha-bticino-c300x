@@ -11,6 +11,8 @@ import re
 import sys
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 QUALITY_SCALE = ROOT / "custom_components" / "bticino_c300x" / "quality_scale.yaml"
 QUALITY_DOC = ROOT / "docs" / "quality-scale.md"
@@ -83,12 +85,7 @@ STATUS_RE = re.compile(r"^    status: (?P<status>[a-z]+)$")
 
 def main() -> int:
     failures = validate_quality_scale()
-    if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
-    sys.stdout.write("Quality scale validation passed\n")
-    return 0
+    return report_failures(failures, "Quality scale validation passed")
 
 
 def validate_quality_scale() -> list[str]:

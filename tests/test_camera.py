@@ -1156,6 +1156,29 @@ def test_doorbell_camera_remove_clears_callbacks_and_stops_media() -> None:
     assert camera._webrtc_session_ids() == []
 
 
+def test_doorbell_camera_remove_hangs_up_active_ring_call() -> None:
+    api = _FakeApi()
+    runtime_data = _FakeRuntimeData(api=api)
+    entry = _FakeEntry(runtime_data=runtime_data)
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    provider = _FakeWebRTCProvider()
+    camera._provider_webrtc_sessions["ring-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+        ring_call=True,
+    )
+
+    asyncio.run(camera.async_will_remove_from_hass())
+
+    assert api.hangup_calls == 1
+    assert camera._webrtc_session_ids() == []
+
+
 def test_doorbell_camera_failed_offer_without_registered_session_stops_owned_media() -> None:
     api = _FakeApi()
     entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
@@ -2225,6 +2248,65 @@ def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
 
     assert api.activate_calls == [True, True]
     assert api.max_active_activate_calls == 1
+
+
+def test_doorbell_camera_serializes_stop_against_parallel_rtsp_warmup() -> None:
+    class _DelayedApi(_FakeApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active_calls = 0
+            self.max_active_calls = 0
+
+        async def async_activate_doorbell_video(
+            self,
+            audio: bool = True,
+        ) -> dict[str, Any]:
+            self.active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self.active_calls)
+            try:
+                await asyncio.sleep(0.02)
+                return await super().async_activate_doorbell_video(audio=audio)
+            finally:
+                self.active_calls -= 1
+
+        async def async_stop_doorbell_video(self) -> dict[str, Any]:
+            self.active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self.active_calls)
+            try:
+                await asyncio.sleep(0.02)
+                return await super().async_stop_doorbell_video()
+            finally:
+                self.active_calls -= 1
+
+    api = _DelayedApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    _stub_rtsp_ready(camera)
+    provider = _FakeWebRTCProvider()
+    camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+        provider=provider,
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+
+    async def _run() -> None:
+        await asyncio.gather(
+            camera._async_prepare_rtsp_stream(audio=True),
+            camera._async_close_webrtc_session("doorbell-session"),
+        )
+
+    asyncio.run(_run())
+
+    assert api.max_active_calls == 1
+    assert api.activate_calls == [True]
+    assert api.stop_calls == 1
 
 
 def test_doorbell_camera_home_call_webrtc_offer_starts_audio_only_session(

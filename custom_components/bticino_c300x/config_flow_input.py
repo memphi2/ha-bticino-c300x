@@ -281,11 +281,13 @@ def _connection_input(
         CONF_AGENT_HOST: agent_host,
         CONF_AGENT_PORT: int(user_input.get(CONF_AGENT_PORT, DEFAULT_AGENT_PORT)),
         CONF_AGENT_TOKEN: agent_token,
-        CONF_MAINTENANCE_TOKEN: user_input.get(CONF_MAINTENANCE_TOKEN, "").strip(),
+        CONF_MAINTENANCE_TOKEN: str(
+            user_input.get(CONF_MAINTENANCE_TOKEN, "")
+        ).strip(),
         CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:
-        data[CONF_NAME] = user_input.get(CONF_NAME, DEFAULT_NAME).strip()
+        data[CONF_NAME] = str(user_input.get(CONF_NAME, DEFAULT_NAME)).strip()
     if include_rotate:
         data[CONF_ROTATE_SHARED_SECRET] = bool(
             user_input.get(CONF_ROTATE_SHARED_SECRET, False)

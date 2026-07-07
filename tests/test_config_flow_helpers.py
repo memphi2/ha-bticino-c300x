@@ -340,6 +340,23 @@ def test_connection_input_allows_blank_agent_token_for_no_auth_entries() -> None
     assert data[CONF_CALLBACK_BASE_URL] == ""
 
 
+def test_connection_input_coerces_none_maintenance_token_and_name() -> None:
+    data, errors = _connection_input(
+        {
+            CONF_NAME: None,
+            CONF_AGENT_HOST: "c300x-agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "",
+            CONF_MAINTENANCE_TOKEN: None,
+        },
+        include_name=True,
+    )
+
+    assert errors == {}
+    assert data[CONF_MAINTENANCE_TOKEN] == "None"
+    assert data[CONF_NAME] == "None"
+
+
 def test_connection_input_accepts_callback_base_url_override() -> None:
     data, errors = _connection_input(
         {

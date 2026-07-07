@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -9,6 +10,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SMOKE_HA_PATH = ROOT / "scripts" / "smoke_ha.py"
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
+
+# smoke_ha.py imports the shared check_reporting helper as a plain top-level
+# module, matching how it resolves when run directly (python scripts/foo.py
+# puts its own directory on sys.path).
+sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def _load_smoke_ha() -> ModuleType:

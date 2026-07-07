@@ -551,6 +551,12 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
             if input_data is not None:
                 channel.sendall(input_data)
             channel.shutdown_write()
+            # recv_ready()/recv_stderr_ready()/exit_status_ready() are
+            # non-blocking polls, so channel.settimeout() above never fires
+            # here; a remote command that never exits (wedged process,
+            # dropped connection that doesn't surface as an error) would
+            # otherwise spin this loop forever on a worker thread.
+            deadline = time.monotonic() + _SSH_COMMAND_TIMEOUT
             while True:
                 while channel.recv_ready():
                     stdout_chunks.append(channel.recv(65536))
@@ -563,6 +569,8 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
                     while channel.recv_stderr_ready():
                         stderr_chunks.append(channel.recv_stderr(65536))
                     break
+                if time.monotonic() >= deadline:
+                    raise C300XDeviceInstallError("device_install_failed")
                 time.sleep(0.01)
         except (OSError, TimeoutError, self._paramiko.SSHException) as err:
             raise C300XDeviceInstallError("device_install_failed") from err

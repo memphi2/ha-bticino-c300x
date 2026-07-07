@@ -9,6 +9,7 @@ from typing import Any
 from .config_audio import audio_gain_db_or_default
 from .const import CONF_DOORSTATION_AUDIO_GAIN_DB, DEFAULT_DOORSTATION_AUDIO_GAIN_DB
 from .entry_config import entry_config_value
+from .value_parsing import optional_mapping
 
 _GAIN_EPSILON_DB = 0.05
 
@@ -31,8 +32,7 @@ def agent_doorstation_audio_gain_db(status: Mapping[str, Any] | None) -> float |
 
     if not isinstance(status, Mapping):
         return None
-    bridge_data = status.get("bridge")
-    bridge = bridge_data if isinstance(bridge_data, Mapping) else {}
+    bridge = optional_mapping(status.get("bridge"))
     value = bridge.get(CONF_DOORSTATION_AUDIO_GAIN_DB)
     if value is None:
         return None

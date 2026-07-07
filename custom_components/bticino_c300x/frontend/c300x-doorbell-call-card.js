@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=5dafdb0d42407b42";
+} from "./c300x-translations.js?v=6f83dd7b2ca2ae84";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_CARD_TAG,
@@ -13,21 +13,21 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=5dafdb0d42407b42";
+} from "./c300x-entity-resolver.js?v=6f83dd7b2ca2ae84";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=5dafdb0d42407b42";
-import { C300XCardActions } from "./c300x-card-actions.js?v=5dafdb0d42407b42";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=5dafdb0d42407b42";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=5dafdb0d42407b42";
+} from "./c300x-card-editor.js?v=6f83dd7b2ca2ae84";
+import { C300XCardActions } from "./c300x-card-actions.js?v=6f83dd7b2ca2ae84";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=6f83dd7b2ca2ae84";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=6f83dd7b2ca2ae84";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaState,
-} from "./c300x-state-model.js?v=5dafdb0d42407b42";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=5dafdb0d42407b42";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=5dafdb0d42407b42";
+} from "./c300x-state-model.js?v=6f83dd7b2ca2ae84";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=6f83dd7b2ca2ae84";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=6f83dd7b2ca2ae84";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 
@@ -448,6 +448,8 @@ class C300XDoorbellCallCard extends HTMLElement {
         if (this._transitionWebrtc === next) {
           this._transitionWebrtc = null;
           if (this._transitionVideoEl) {
+            this._transitionVideoEl.removeEventListener("loadeddata", promote);
+            this._transitionVideoEl.removeEventListener("playing", promote);
             this._transitionVideoEl.srcObject = null;
           }
           this._error = reason || "closed";

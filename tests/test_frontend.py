@@ -714,7 +714,14 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
         '              this._handleProviderClosed(message.reason || "closed");'
         in webrtc_source
     )
-    assert "  _handleProviderClosed(reason) {\n    this.close();" in webrtc_source
+    assert (
+        '  _handleProviderClosed(reason) {\n'
+        in webrtc_source
+    )
+    assert (
+        webrtc_source.index("this._onClosed?.(reason")
+        < webrtc_source.index("this.close();", webrtc_source.index("_handleProviderClosed(reason) {"))
+    )
 
 
 def test_bundled_card_suppresses_passive_preview_until_ring_lifecycle_ends() -> None:
@@ -942,6 +949,9 @@ def test_doorstation_hangup_stops_backend_before_closing_local_webrtc() -> None:
     actions_source = CARD_ACTIONS_SOURCE.read_text(encoding="utf-8")
     source = CARD_SOURCE.read_text(encoding="utf-8")
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
+    guard_start = actions_source.index("async _withHangupGuard(run)")
+    guard_end = actions_source.index("  async hangup()", guard_start)
+    guard_body = actions_source[guard_start:guard_end]
     generic_hangup_start = actions_source.index("async hangup()")
     generic_hangup_end = actions_source.index("  async hangupDoorstation()", generic_hangup_start)
     generic_hangup_body = actions_source[generic_hangup_start:generic_hangup_end]
@@ -952,30 +962,29 @@ def test_doorstation_hangup_stops_backend_before_closing_local_webrtc() -> None:
     ring_session_end = actions_source.index("  async stopHomeCall()", ring_session_start)
     ring_session_body = actions_source[ring_session_start:ring_session_end]
 
-    assert "if (card._lifecycle.hangupInProgress)" in hangup_body
-    assert "card._lifecycle.hangupInProgress = true;" in hangup_body
-    assert "card._lifecycle.hangupInProgress = false;" in hangup_body
+    assert "if (card._lifecycle.hangupInProgress)" in guard_body
+    assert "card._lifecycle.hangupInProgress = true;" in guard_body
+    assert "card._lifecycle.hangupInProgress = false;" in guard_body
+    assert "card._closePeer(false);" not in guard_body
+    assert guard_body.index("ok = await run();") < guard_body.index("card._closePeer(ok);")
     assert "_hasLocalDoorstationWebrtcSession" not in source
     assert "const homeCallMode = card._lifecycle.activeHomeCallSession || card._isHomeCallMode();" in generic_hangup_body
+    assert "this._withHangupGuard(" in generic_hangup_body
     assert "card._closePeer(false);" not in generic_hangup_body
-    assert generic_hangup_body.index("await this.stopDoorbellVideo();") < generic_hangup_body.index(
-        "card._closePeer(ok);"
-    )
     assert "const hadDoorbellRingCallSession = this.hasDoorbellRingCallSession();" in hangup_body
+    assert "this._withHangupGuard(" in hangup_body
     assert "if (hadDoorbellRingCallSession)" in hangup_body
     assert "card._closePeer(false);" not in hangup_body
-    assert "await this.hangupDoorbellCall({ closePeer: false });" in hangup_body
+    assert "ok = await this.hangupDoorbellCall({ closePeer: false }) && ok;" in hangup_body
     assert 'console.error("C300X ring-call hangup failed", err);' in hangup_body
-    assert hangup_body.index("await this.hangupDoorbellCall({ closePeer: false });") < hangup_body.index(
-        "await this.stopDoorbellVideo();"
-    )
+    assert hangup_body.index(
+        "ok = await this.hangupDoorbellCall({ closePeer: false }) && ok;"
+    ) < hangup_body.index("await this.stopDoorbellVideo();")
     assert hangup_body.index('console.error("C300X ring-call hangup failed", err);') < hangup_body.index(
         "await this.stopDoorbellVideo();"
     )
     assert "await this.stopDoorbellVideo();" in hangup_body
-    assert hangup_body.index("await this.stopDoorbellVideo();") < hangup_body.index(
-        "card._closePeer(ok)"
-    )
+    assert hangup_body.index("await this.stopDoorbellVideo();") < hangup_body.index("return ok;")
     assert "return this._card._lifecycle.doorbellAnswered;" in ring_session_body
     assert "this._lifecycle.ringPreviewActive" not in ring_session_body
     assert 'mediaState === "ring_active"' in state_source

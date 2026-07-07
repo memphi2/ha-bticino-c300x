@@ -229,7 +229,7 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
 
 async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) -> None:
     relative_path = str(entry.get("path") or "")
-    sha256 = str(entry.get("sha256") or "")
+    sha256_hex = str(entry.get("sha256") or "")
     mode = str(entry.get("mode") or "600")
     source = (COMPONENT_DIR / relative_path).resolve()
     if (
@@ -246,7 +246,7 @@ async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) 
     if not data:
         await api.async_upload_agent_update_chunk(
             path=relative_path,
-            sha256=sha256,
+            sha256=sha256_hex,
             mode=mode,
             offset=0,
             data=b"",
@@ -257,7 +257,7 @@ async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) 
         chunk = data[offset : offset + UPLOAD_CHUNK_SIZE]
         await api.async_upload_agent_update_chunk(
             path=relative_path,
-            sha256=sha256,
+            sha256=sha256_hex,
             mode=mode,
             offset=offset,
             data=chunk,

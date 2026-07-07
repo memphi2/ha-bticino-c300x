@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import stat
@@ -13,6 +12,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+from manifest_version import read_integration_version
 from stage_device_agent_bundle import AGENT_BINARY, stage_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,8 +88,7 @@ def main() -> int:
 
 
 def _integration_version() -> str:
-    manifest = json.loads((COMPONENT_SRC / "manifest.json").read_text(encoding="utf-8"))
-    return str(manifest["version"])
+    return read_integration_version(COMPONENT_SRC / "manifest.json")
 
 
 def _prepare_package(version: str) -> None:

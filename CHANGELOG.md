@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.7.7 - Unreleased
+
+### Fixed
+
+- Fix the doorbell/Home Call card getting stuck in the busy/on-call state
+  (frozen video, hot microphone, hang-up button stuck active) after a
+  backend-initiated close, such as the native agent stopping media on
+  hang-up. The WebRTC client now notifies the card before it clears its own
+  peer-connection state, so the card can tell there was an active session to
+  tear down.
+- Hang up an active/answered doorbell ring call when Home Assistant removes
+  the camera entity (reload, restart, or config-entry unload) instead of only
+  stopping doorbell video, so the C300X doesn't keep an SIP call open after
+  Home Assistant believes it has ended.
+
 ## v1.7.6 - 2026-07-07
 
 ### Fixed

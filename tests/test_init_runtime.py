@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 import custom_components.bticino_c300x as integration
+import custom_components.bticino_c300x.entry_locks as entry_locks
 import custom_components.bticino_c300x.runtime_manager as runtime_manager
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
@@ -1117,6 +1118,53 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
     assert cancelled == ["memos", "messages"]
     assert entry.runtime_data.memos_refresh_task is None
     assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
+
+
+def test_unload_entry_still_cleans_runtime_state_when_platform_unload_fails() -> None:
+    cancelled: list[str] = []
+    callbacks: list[str] = []
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(
+        loaded_platforms=("sensor", "camera"),
+        unregister_event_registration=lambda: callbacks.append("registration"),
+        unregister_display_bridge_updates=lambda: callbacks.append("display"),
+        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+        unregister_webhook=lambda: callbacks.append("webhook"),
+        connection_state=SimpleNamespace(
+            expire_unavailable=lambda: callbacks.append("expire")
+        ),
+        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
+        answering_machine_messages_refresh_task=SimpleNamespace(
+            cancel=lambda: cancelled.append("messages")
+        ),
+    )
+    entry_locks.entry_lock(entry.entry_id, "message_refresh:memos")
+    entry_locks.entry_lock(entry.entry_id, "ring_capture")
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            # A platform failed to unload (unload_ok=False): HA still removes
+            # the config entry from its registry on integration removal and
+            # will never call async_unload_entry again for it, so our own
+            # background tasks/webhooks must not be left leaking forever.
+            async_unload_platforms=lambda _entry, _platforms: _async_value(False)
+        ),
+        data={
+            DOMAIN: {
+                DATA_RUNTIME_ENTRIES: {
+                    entry.entry_id: entry.runtime_data,
+                }
+            }
+        },
+    )
+
+    assert asyncio.run(integration.async_unload_entry(hass, entry)) is False
+
+    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert cancelled == ["memos", "messages"]
+    assert entry.runtime_data.memos_refresh_task is None
+    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert not any(key[0] == entry.entry_id for key in entry_locks._locks)
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
 

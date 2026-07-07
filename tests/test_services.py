@@ -1755,6 +1755,47 @@ def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> 
     asyncio.run(_run())
 
 
+def test_capture_doorbell_call_service_rejects_concurrent_second_capture(monkeypatch) -> None:  # noqa: ANN001
+    """Two overlapping capture calls (e.g. duplicate automation triggers) must not both start."""
+
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[dict[str, Any]] = []
+
+        async def _capture(*args: Any, **kwargs: Any) -> None:
+            calls.append({"args": args, "kwargs": kwargs})
+            await asyncio.sleep(0.02)
+
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+
+        results = await asyncio.gather(
+            handler(types.SimpleNamespace(data={})),
+            handler(types.SimpleNamespace(data={})),
+            return_exceptions=True,
+        )
+
+        errors = [result for result in results if isinstance(result, BaseException)]
+        assert len(errors) == 1
+        assert getattr(errors[0], "translation_key", None) == "ring_capture_busy"
+        assert len(calls) == 1
+
+    asyncio.run(_run())
+
+
 def test_capture_doorbell_call_service_translates_status_failures(monkeypatch) -> None:  # noqa: ANN001
     async def _run() -> None:
         api = _FakeApi()

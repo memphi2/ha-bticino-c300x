@@ -59,7 +59,7 @@ from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
     async_apply_qml_core_patch_and_confirm,
-    async_apply_qml_patch_and_confirm,
+    async_restore_qml_patches_after_update,
 )
 from .repair_flows_device_user import DeviceUserRepairFlow
 from .repair_flows_frontend import FrontendCardSetupRepairFlow
@@ -776,11 +776,10 @@ async def _async_restore_external_patch_state(
             await api.async_set_ipv6_firewall_enabled(True)
         await api.async_apply_ipv6_firewall()
     if changed.qml_patch_changed:
-        entry.runtime_data.qml_patch_status = await api.async_apply_qml_core_patch()
-        if patch_state.qml_patch_required:
-            await async_apply_qml_patch_and_confirm(entry)
-        await api.async_reload_gui()
-        entry.runtime_data.qml_patch_status = await api.async_qml_patch_status()
+        await async_restore_qml_patches_after_update(
+            entry,
+            apply_full_patch=patch_state.qml_patch_required,
+        )
     elif changed.runtime_changed and patch_state.qml_patch_required:
         await api.async_reload_gui()
 

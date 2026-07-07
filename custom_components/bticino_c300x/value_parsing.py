@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 DEFAULT_TRUE_VALUES = frozenset({"true", "1", "on", "enabled", "yes"})
@@ -44,3 +45,9 @@ def optional_string(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def optional_mapping(value: Any) -> dict[str, Any]:
+    """Return a nested status Mapping as a plain dict, or an empty dict."""
+
+    return dict(value) if isinstance(value, Mapping) else {}

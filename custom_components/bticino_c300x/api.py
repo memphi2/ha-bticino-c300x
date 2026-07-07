@@ -68,6 +68,9 @@ from .value_parsing import (
     optional_int as _optional_int,
 )
 from .value_parsing import (
+    optional_mapping as _json_object,
+)
+from .value_parsing import (
     optional_string as _optional_string,
 )
 
@@ -1184,12 +1187,6 @@ def display_bridge_callback_fingerprint(
 
     material = f"{1 if enabled else 0}\n{webhook_url if enabled else ''}\n{shared_secret if enabled else ''}"
     return fnv1a64_fingerprint(material)
-
-
-def _json_object(value: Any) -> dict[str, Any]:
-    """Return a JSON object value or an empty object."""
-
-    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
 
 
 def _json_list(value: Any) -> list[Any]:

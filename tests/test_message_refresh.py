@@ -68,6 +68,26 @@ def _entry(api: _FakeApi) -> SimpleNamespace:
     )
 
 
+def test_concurrent_memos_refresh_after_ttl_expiry_coalesces_into_one_agent_call() -> None:
+    class _SlowApi(_FakeApi):
+        async def async_memos(self) -> dict[str, Any]:
+            await asyncio.sleep(0.02)
+            return await super().async_memos()
+
+    api = _SlowApi(memos={"available": True, "total": 42})
+    entry = _entry(api)
+    entry.runtime_data.memos_updated_at = None  # already stale/expired
+
+    async def _run() -> tuple[dict[str, Any], dict[str, Any]]:
+        return await asyncio.gather(async_memos(entry), async_memos(entry))
+
+    first, second = asyncio.run(_run())
+
+    assert api.memo_reads == 1
+    assert first == {"available": True, "total": 42}
+    assert second == {"available": True, "total": 42}
+
+
 def test_memos_cache_hit_skips_agent_read() -> None:
     api = _FakeApi()
     entry = _entry(api)

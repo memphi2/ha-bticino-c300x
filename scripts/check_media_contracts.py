@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "custom_components" / "bticino_c300x" / "manifest.json"
 CAMERA = ROOT / "custom_components" / "bticino_c300x" / "camera.py"
@@ -32,12 +34,7 @@ REQUIRED_CAMERA_TESTS = (
 
 def main() -> int:
     failures = check_media_contracts()
-    if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
-    sys.stdout.write("Media/go2rtc contract validation passed\n")
-    return 0
+    return report_failures(failures, "Media/go2rtc contract validation passed")
 
 
 def check_media_contracts() -> list[str]:

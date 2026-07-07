@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from asyncio import Lock
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from ..entry_locks import entry_lock
 from ..exceptions import service_validation_error
 from ..ring_capture import (
     async_capture_doorbell_ring_call,
@@ -16,6 +18,12 @@ from ..ring_capture import (
 from .common import ensure_doorbell_call_supported, raise_agent_command_failed
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _capture_lock(entry_id: str) -> Lock:
+    """Return the per-entry lock that rejects overlapping capture() calls."""
+
+    return entry_lock(entry_id, "ring_capture")
 
 
 class RingCaptureUseCase:
@@ -37,40 +45,48 @@ class RingCaptureUseCase:
         """Capture a short C300X doorbell ring-call clip on Home Assistant."""
 
         ensure_doorbell_call_supported(self._entry)
-        await self._async_ensure_not_busy()
-        answered_call = False
-        if include_audio or announcement_path is not None:
-            await raise_agent_command_failed(
-                self._entry.runtime_data.api.async_answer_doorbell_call()
-            )
-            answered_call = True
+        lock = _capture_lock(self._entry.entry_id)
+        if lock.locked():
+            # Reject immediately instead of queuing behind an in-flight
+            # capture: a second concurrent call (e.g. two automations
+            # reacting to the same doorbell event) should not silently start
+            # its own capture once the first one finishes.
+            raise service_validation_error("ring_capture_busy")
+        async with lock:
+            await self._async_ensure_not_busy()
+            answered_call = False
+            if include_audio or announcement_path is not None:
+                await raise_agent_command_failed(
+                    self._entry.runtime_data.api.async_answer_doorbell_call()
+                )
+                answered_call = True
 
-        capture_error: Exception | None = None
-        try:
-            await async_capture_doorbell_ring_call(
-                self._hass,
-                self._entry,
-                output_path=output_path,
-                wav_output_dir=wav_output_dir,
-                duration_seconds=duration_seconds,
-                include_audio=include_audio,
-                announcement_path=announcement_path,
-            )
-        except Exception as err:
-            capture_error = err
-            raise
-        finally:
-            if answered_call:
-                try:
-                    await self._entry.runtime_data.api.async_hangup_doorbell_call()
-                except Exception as err:
-                    if capture_error is not None:
-                        _LOGGER.warning(
-                            "C300X doorbell capture failed and hangup also failed",
-                            exc_info=err,
-                        )
-                    else:
-                        raise service_validation_error("agent_command_failed") from err
+            capture_error: Exception | None = None
+            try:
+                await async_capture_doorbell_ring_call(
+                    self._hass,
+                    self._entry,
+                    output_path=output_path,
+                    wav_output_dir=wav_output_dir,
+                    duration_seconds=duration_seconds,
+                    include_audio=include_audio,
+                    announcement_path=announcement_path,
+                )
+            except Exception as err:
+                capture_error = err
+                raise
+            finally:
+                if answered_call:
+                    try:
+                        await self._entry.runtime_data.api.async_hangup_doorbell_call()
+                    except Exception as err:
+                        if capture_error is not None:
+                            _LOGGER.warning(
+                                "C300X doorbell capture failed and hangup also failed",
+                                exc_info=err,
+                            )
+                        else:
+                            raise service_validation_error("agent_command_failed") from err
 
     async def _async_ensure_not_busy(self) -> None:
         try:

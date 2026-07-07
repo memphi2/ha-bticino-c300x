@@ -843,6 +843,61 @@ def test_paramiko_client_run_reports_nonzero_exit() -> None:
         raise AssertionError("nonzero command exit was accepted")
 
 
+def test_paramiko_client_run_times_out_when_command_never_exits(
+    monkeypatch: Any,
+) -> None:
+    """A remote command that never reports an exit status must not hang forever."""
+
+    monkeypatch.setattr(device_installer, "_SSH_COMMAND_TIMEOUT", 0.05)
+
+    class FakeChannel:
+        def settimeout(self, _timeout: float) -> None:
+            return None
+
+        def exec_command(self, _command: str) -> None:
+            return None
+
+        def shutdown_write(self) -> None:
+            return None
+
+        def recv_ready(self) -> bool:
+            return False
+
+        def recv(self, _size: int) -> bytes:
+            return b""
+
+        def recv_stderr_ready(self) -> bool:
+            return False
+
+        def recv_stderr(self, _size: int) -> bytes:
+            return b""
+
+        def exit_status_ready(self) -> bool:
+            return False
+
+        def close(self) -> None:
+            return None
+
+    class FakeTransport:
+        def is_active(self) -> bool:
+            return True
+
+        def open_session(self, *, timeout: float) -> FakeChannel:
+            assert timeout > 0
+            return FakeChannel()
+
+    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
+    client._client = types.SimpleNamespace(get_transport=lambda: FakeTransport())
+
+    try:
+        client.run("agent status")
+    except device_installer.C300XDeviceInstallError as err:
+        assert err.reason == "device_install_failed"
+    else:  # pragma: no cover
+        raise AssertionError("a command that never exits was not bounded by a deadline")
+
+
 def test_paramiko_put_file_replaces_changed_payload(tmp_path: Path) -> None:
     payload = tmp_path / "config.json"
     payload.write_bytes(b"new")

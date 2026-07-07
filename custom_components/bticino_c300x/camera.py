@@ -87,6 +87,7 @@ from .media_status import (
     home_call_payload as _home_call_payload,
 )
 from .media_watchdog import AgentCpuWatchdog, handle_agent_cpu_metrics_changed
+from .value_parsing import optional_mapping
 from .video import (
     doorbell_camera_unique_id,
     optional_string,
@@ -102,15 +103,6 @@ PARALLEL_UPDATES = 0
 VIDEO_WINDOW_EVENTS = {"doorbell_pressed", "doorbell_view_requested"}
 VIDEO_WINDOW_CLOSED_EVENTS = {"doorbell_media_closed"}
 HOME_CALL_EVENTS = {"home_call_started", "home_call_answered", "home_call_ended"}
-CALL_MEDIA_STATES = {
-    MediaState.RING_PENDING,
-    MediaState.RING_PREVIEW_ACTIVE,
-    MediaState.RING_ANSWERING,
-    MediaState.RING_ACTIVE,
-    MediaState.HOME_CALL_STARTING,
-    MediaState.HOME_CALL_RINGING,
-    MediaState.HOME_CALL_ACTIVE,
-}
 RING_CALL_STATES = {
     MediaState.RING_PENDING,
     MediaState.RING_PREVIEW_ACTIVE,
@@ -121,12 +113,6 @@ RING_CALL_STATES = {
 UNANSWERED_RING_STATES = {
     MediaState.RING_PENDING,
     MediaState.RING_PREVIEW_ACTIVE,
-}
-HOME_CALL_STATES = {
-    MediaState.HOME_CALL_STARTING,
-    MediaState.HOME_CALL_RINGING,
-    MediaState.HOME_CALL_ACTIVE,
-    MediaState.HOME_CALL_STOPPING,
 }
 RTSP_READY_CONNECT_TIMEOUT_SECONDS = 1.0
 RTSP_READY_INTERVAL_SECONDS = 0.25
@@ -151,20 +137,12 @@ _debug_safe_details = _webrtc_debug.debug_safe_details
 _debug_status_details = _webrtc_debug.debug_status_details
 
 
-def _media_decision_is_call_media(decision: MediaStateOutput) -> bool:
-    return decision.state in CALL_MEDIA_STATES
-
-
 def _media_decision_is_ring_call(decision: MediaStateOutput) -> bool:
     return decision.state in RING_CALL_STATES
 
 
 def _media_decision_is_unanswered_ring(decision: MediaStateOutput) -> bool:
     return decision.state in UNANSWERED_RING_STATES
-
-
-def _media_decision_is_home_call(decision: MediaStateOutput) -> bool:
-    return decision.state in HOME_CALL_STATES
 
 
 def _capability_supported_if_known(entry: BticinoC300XConfigEntry, capability: str) -> bool:
@@ -202,9 +180,7 @@ def _rtsp_client_count_from_status(status: Mapping[str, Any] | None) -> int | No
 
     if status is None:
         return None
-    bridge = status.get("bridge")
-    if not isinstance(bridge, Mapping):
-        return None
+    bridge = optional_mapping(status.get("bridge"))
     clients = bridge.get("clients")
     if clients is None:
         return None
@@ -925,7 +901,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._entry.runtime_data.prepare_doorbell_video_stop = None
         self._entry.runtime_data.prepare_home_call_stop = None
         for session_id in self._webrtc_session_ids():
-            await self._async_close_webrtc_session(session_id)
+            await self._async_close_webrtc_session(session_id, force_stop_media=True)
         with suppress(Exception):
             await self._entry.runtime_data.api.async_stop_doorbell_video()
 
@@ -1115,40 +1091,44 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     resource_id=provider_session.resource_id,
                     reason=reason,
                 )
-                await self._async_wait_for_provider_rtsp_clients_to_drain()
-                await self._async_log_video_status_debug(
-                    "provider_agent_stop_before_request",
-                    session_id=session_id,
-                    owner=provider_session.owner,
-                    wants_audio=provider_session.wants_audio,
-                    wants_backchannel=provider_session.wants_backchannel,
-                    ring_call=provider_session.ring_call,
-                    ring_preview=provider_session.ring_preview,
-                    resource_id=provider_session.resource_id,
-                    reason=reason,
-                )
-                if provider_session.owner == "home_call":
-                    with suppress(Exception):
-                        await self._entry.runtime_data.api.async_stop_home_call()
-                elif provider_session.ring_call:
-                    with suppress(Exception):
-                        await self._entry.runtime_data.api.async_hangup_doorbell_call()
-                    with suppress(Exception):
-                        await self._entry.runtime_data.api.async_stop_doorbell_video()
-                else:
-                    with suppress(Exception):
-                        await self._entry.runtime_data.api.async_stop_doorbell_video()
-                await self._async_log_video_status_debug(
-                    "provider_agent_stop_after_request",
-                    session_id=session_id,
-                    owner=provider_session.owner,
-                    wants_audio=provider_session.wants_audio,
-                    wants_backchannel=provider_session.wants_backchannel,
-                    ring_call=provider_session.ring_call,
-                    ring_preview=provider_session.ring_preview,
-                    resource_id=provider_session.resource_id,
-                    reason=reason,
-                )
+                # Serialize against CameraRtspOrchestrator's activation methods
+                # (which take the same lock) so a concurrent new offer cannot
+                # activate media while this stop is still tearing it down.
+                async with self._rtsp_prepare_lock:
+                    await self._async_wait_for_provider_rtsp_clients_to_drain()
+                    await self._async_log_video_status_debug(
+                        "provider_agent_stop_before_request",
+                        session_id=session_id,
+                        owner=provider_session.owner,
+                        wants_audio=provider_session.wants_audio,
+                        wants_backchannel=provider_session.wants_backchannel,
+                        ring_call=provider_session.ring_call,
+                        ring_preview=provider_session.ring_preview,
+                        resource_id=provider_session.resource_id,
+                        reason=reason,
+                    )
+                    if provider_session.owner == "home_call":
+                        with suppress(Exception):
+                            await self._entry.runtime_data.api.async_stop_home_call()
+                    elif provider_session.ring_call:
+                        with suppress(Exception):
+                            await self._entry.runtime_data.api.async_hangup_doorbell_call()
+                        with suppress(Exception):
+                            await self._entry.runtime_data.api.async_stop_doorbell_video()
+                    else:
+                        with suppress(Exception):
+                            await self._entry.runtime_data.api.async_stop_doorbell_video()
+                    await self._async_log_video_status_debug(
+                        "provider_agent_stop_after_request",
+                        session_id=session_id,
+                        owner=provider_session.owner,
+                        wants_audio=provider_session.wants_audio,
+                        wants_backchannel=provider_session.wants_backchannel,
+                        ring_call=provider_session.ring_call,
+                        ring_preview=provider_session.ring_preview,
+                        resource_id=provider_session.resource_id,
+                        reason=reason,
+                    )
             return
 
         self._presession_webrtc_candidates.pop(session_id, None)
@@ -1476,7 +1456,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
 
     def _apply_status(self, status: dict[str, Any]) -> None:
         self._bridge_available = bool(status.get("available"))
-        self._bridge_status = status.get("bridge") or {}
+        self._bridge_status = optional_mapping(status.get("bridge"))
         self._video_window_available = bool(status.get("window_available"))
         self._attr_is_streaming = self._video_window_available
         self._video_owner = str(status.get("media_owner") or "unknown")
@@ -1753,8 +1733,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         ):
             if key in data:
                 details[key] = bool(data[key])
-        bridge = data.get("bridge")
-        if isinstance(bridge, Mapping):
+        bridge = optional_mapping(data.get("bridge"))
+        if bridge:
             for key in (
                 "clients",
                 "media_active",
@@ -1827,8 +1807,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         )
 
     def _apply_event_media_facts(self, data: Mapping[str, Any]) -> None:
-        bridge = data.get("bridge")
-        if isinstance(bridge, Mapping):
+        bridge = optional_mapping(data.get("bridge"))
+        if bridge:
             self._bridge_status = {**self._bridge_status, **bridge}
         for data_key, attr_name in (
             ("media_owner", "_video_owner"),

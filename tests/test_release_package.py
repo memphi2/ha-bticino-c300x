@@ -15,9 +15,13 @@ RELEASE_ASSETS_SCRIPT = ROOT / "scripts" / "write_release_assets.py"
 RELEASE_TAG_SCRIPT = ROOT / "scripts" / "check_release_tag.py"
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
 
+# Scripts under scripts/ import each other and the shared manifest_version
+# helper as plain top-level modules, matching how they resolve imports when
+# run directly (python scripts/foo.py adds its own directory to sys.path).
+sys.path.insert(0, str(ROOT / "scripts"))
+
 
 def _load_release_builder():
-    sys.path.insert(0, str(ROOT / "scripts"))
     spec = importlib.util.spec_from_file_location("build_hacs_release", SCRIPT)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)

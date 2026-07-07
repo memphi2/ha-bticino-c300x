@@ -40,7 +40,6 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
     DASHBOARD_ENTITY_STAIR_LIGHT,
-    DOMAIN,
     EVENT_ACTION_RECEIVED,
 )
 from .dashboard_entities import (
@@ -92,12 +91,6 @@ try:
     from homeassistant.util import dt as dt_util
 except ImportError:  # pragma: no cover - local test stubs
     dt_util = None
-
-er: Any
-try:
-    from homeassistant.helpers import entity_registry as er
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
-    er = None
 
 
 def _alarm_feature(name: str, fallback: int) -> AlarmControlPanelEntityFeature:
@@ -2161,22 +2154,3 @@ def _state_active_since(state: Any) -> tuple[str | None, str | None]:
         else f"Seit {active_since}"
     )
     return active_since, active_since_label
-
-
-def _entity_state(
-    hass: HomeAssistant,
-    entry: BticinoC300XConfigEntry,
-    domain: str,
-    key: str,
-) -> str | None:
-    if er is None:
-        return None
-    try:
-        registry = er.async_get(hass)
-    except Exception:  # noqa: BLE001 - tests and early setup may not have a registry
-        return None
-    entity_id = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{key}")
-    if entity_id is None:
-        return None
-    state = hass.states.get(entity_id)
-    return state.state if state is not None else None

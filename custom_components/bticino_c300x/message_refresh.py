@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from asyncio import Task
+from asyncio import Lock, Task
 from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -12,10 +12,17 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import C300XAgentApiError
 from .const import SIGNAL_MEMOS_CHANGED, SIGNAL_VIDEO_MESSAGES_CHANGED
+from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 
 _VOICEMAIL_CACHE_SECONDS = 10
 _MEMOS_CACHE_SECONDS = 10
+
+
+def _refresh_lock(entry: BticinoC300XConfigEntry, payload_attr: str) -> Lock:
+    """Return the per-(entry, payload) lock that coalesces concurrent refreshes."""
+
+    return entry_lock(entry.entry_id, f"message_refresh:{payload_attr}")
 
 
 def schedule_memos_refresh(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
@@ -141,19 +148,39 @@ async def _async_cached_payload(
 ) -> dict[str, Any]:
     """Return one cached agent payload, refreshing after TTL or on demand."""
 
-    now = datetime.now(UTC)
+    if not force_refresh:
+        cached = _fresh_cached_payload(entry, payload_attr, ttl_seconds)
+        if cached is not None:
+            return cached
+
+    async with _refresh_lock(entry, payload_attr):
+        if not force_refresh:
+            # Re-check: a concurrent caller may have just refreshed this
+            # payload while we were waiting for the lock.
+            cached = _fresh_cached_payload(entry, payload_attr, ttl_seconds)
+            if cached is not None:
+                return cached
+        payload = await refresh()
+        _store_payload(entry, payload_attr, payload)
+        return payload
+
+
+def _fresh_cached_payload(
+    entry: BticinoC300XConfigEntry,
+    payload_attr: str,
+    ttl_seconds: int,
+) -> dict[str, Any] | None:
+    """Return the cached payload if it is still within its TTL."""
+
     payload = getattr(entry.runtime_data, payload_attr)
     updated_at = getattr(entry.runtime_data, f"{payload_attr}_updated_at")
     if (
-        not force_refresh
-        and payload
+        payload
         and updated_at is not None
-        and (now - updated_at).total_seconds() < ttl_seconds
+        and (datetime.now(UTC) - updated_at).total_seconds() < ttl_seconds
     ):
         return cast(dict[str, Any], payload)
-    payload = await refresh()
-    _store_payload(entry, payload_attr, payload, updated_at=now)
-    return payload
+    return None
 
 
 def _store_payload(

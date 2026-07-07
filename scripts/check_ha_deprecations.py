@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from check_reporting import report_failures
+
 ROOT = Path(__file__).resolve().parents[1]
 THIS_FILE = Path(__file__).resolve()
 
@@ -56,12 +58,7 @@ MQTT_RETAIN_NONE_RE = re.compile(
 
 def main() -> int:
     failures = check_ha_deprecations()
-    if failures:
-        for failure in failures:
-            sys.stderr.write(f"FAIL: {failure}\n")
-        return 1
-    sys.stdout.write("Home Assistant deprecation gate passed\n")
-    return 0
+    return report_failures(failures, "Home Assistant deprecation gate passed")
 
 
 def check_ha_deprecations() -> list[str]:

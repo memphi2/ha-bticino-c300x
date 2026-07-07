@@ -377,6 +377,55 @@ def test_doorbell_on_demand_lifecycle_sequence() -> None:
         assert result.primary_action is action
 
 
+def test_on_demand_stale_window_flag_with_confirmed_zero_clients_is_not_active() -> None:
+    """A window flag that lags behind a stop must not read as a live, stoppable stream."""
+
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="agent",
+            video_window_available=True,
+            rtsp_clients=0,
+            local_sessions=0,
+        )
+    )
+
+    assert result.state is MediaState.UNKNOWN
+    assert result.primary_action is MediaPrimaryAction.REFRESH
+    assert result.refresh_status_required is True
+
+
+def test_on_demand_active_with_unknown_client_count_still_trusts_window_flag() -> None:
+    """Without a confirmed client count, the window flag remains authoritative."""
+
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="agent",
+            video_window_available=True,
+            rtsp_clients=None,
+            local_sessions=0,
+        )
+    )
+
+    assert result.state is MediaState.ON_DEMAND_ACTIVE
+    assert result.primary_action is MediaPrimaryAction.STOP_STREAM
+
+
+def test_on_demand_active_with_local_session_ignores_zero_rtsp_clients() -> None:
+    """A local HA-owned session alone is enough to keep the stream state active."""
+
+    result = derive_media_state(
+        MediaStateInput(
+            video_owner="agent",
+            video_window_available=True,
+            rtsp_clients=0,
+            local_sessions=1,
+        )
+    )
+
+    assert result.state is MediaState.ON_DEMAND_ACTIVE
+    assert result.primary_action is MediaPrimaryAction.STOP_STREAM
+
+
 def test_ring_call_lifecycle_sequence() -> None:
     """Ring Call states cover pending, preview, answer, active, and hangup."""
 

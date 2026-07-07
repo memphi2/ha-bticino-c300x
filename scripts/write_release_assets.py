@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from manifest_version import read_integration_version
+
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_MANIFEST = ROOT / "custom_components" / "bticino_c300x" / "manifest.json"
 NATIVE_AGENT_VERSION = ROOT / "native_agent" / "VERSION"
@@ -356,11 +358,10 @@ def _device_bundle_summary(zip_path: Path) -> dict[str, str] | None:
 
 
 def _integration_version() -> str:
-    manifest = cast(dict[str, Any], json.loads(COMPONENT_MANIFEST.read_text(encoding="utf-8")))
-    version = manifest.get("version")
-    if not isinstance(version, str):
-        raise ReleaseAssetError("manifest.json version must be a string")
-    return version
+    try:
+        return read_integration_version(COMPONENT_MANIFEST)
+    except ValueError as err:
+        raise ReleaseAssetError(str(err)) from err
 
 
 def _project_versions() -> dict[str, str]:

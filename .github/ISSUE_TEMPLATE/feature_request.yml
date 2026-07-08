@@ -1,0 +1,91 @@
+name: Feature request
+description: Suggest a new integration, card, automation, media or native-agent feature.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Please describe the workflow and expected behavior, not only the implementation idea.
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What are you trying to achieve?
+      placeholder: I want Home Assistant to...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Related workflow
+      multiple: true
+      options:
+        - Install / update
+        - Lovelace card
+        - On-demand video
+        - Ring Call
+        - Home Call
+        - Talkback / audio
+        - Ring Capture
+        - Activations
+        - Display / QML
+        - Native agent
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_behavior
+    attributes:
+      label: Proposed behavior
+      description: What should the integration do?
+      placeholder: When ..., the integration should ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: default_or_optional
+    attributes:
+      label: Should this be default behavior or optional?
+      options:
+        - Optional
+        - Default behavior
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device_write
+    attributes:
+      label: Would this require writing to the C300X device?
+      description: Device writes include config changes, patches, display changes, reboots or agent updates.
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware_limitations
+    attributes:
+      label: Hardware or testing constraints
+      description: Mention any hardware, firmware, camera, forwarding or network setup details that may matter.
+      placeholder: My setup uses...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workaround do you use today, if any?
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Screenshots, links, examples or related issues.

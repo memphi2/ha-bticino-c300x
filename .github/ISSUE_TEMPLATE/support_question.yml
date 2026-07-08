@@ -1,0 +1,90 @@
+name: Setup or support question
+description: Ask for help with installation, card setup, media readiness or configuration.
+title: "[Support]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when you are stuck during setup or configuration and do not yet have a confirmed bug.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe the setup or action you are trying to complete.
+      placeholder: I am trying to add the C300X Doorbell Call Card...
+    validations:
+      required: true
+
+  - type: textarea
+    id: stuck
+    attributes:
+      label: Where are you stuck?
+      description: Include the exact screen, step, repair issue, error message or card behavior.
+      placeholder: I cannot find the card in the picker...
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      placeholder: "1.7.7"
+    validations:
+      required: true
+
+  - type: input
+    id: home_assistant_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.7.1"
+    validations:
+      required: true
+
+  - type: input
+    id: native_agent_version
+    attributes:
+      label: Native agent version, if relevant
+      placeholder: "1.7.6 / not installed / unknown"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Setup checks
+      options:
+        - label: I read the Quickstart.
+          required: true
+        - label: I restarted Home Assistant after installing or updating.
+          required: true
+        - label: I checked Media readiness when the question is related to camera, Ring Call, Home Call, talkback or audio.
+          required: false
+        - label: I hard-reloaded the browser or cleared the Home Assistant app/WebView cache when the question is related to the Lovelace card.
+          required: false
+
+  - type: input
+    id: media_readiness
+    attributes:
+      label: Media readiness state and reason, if relevant
+      placeholder: "ready / warning / blocked / unavailable, reason: ..."
+
+  - type: input
+    id: lovelace_resource
+    attributes:
+      label: Lovelace card resource, if relevant
+      description: Check Settings -> Dashboards -> Resources.
+      placeholder: "/bticino_c300x/frontend/c300x-doorbell-call-card.js?v=..."
+
+  - type: textarea
+    id: screenshot_or_log
+    attributes:
+      label: Screenshot or log excerpt
+      description: Paste the relevant excerpt only. Redact tokens and private URLs.
+      render: text
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Browser/app, install method, forwarding mode, network path or anything else that helps.

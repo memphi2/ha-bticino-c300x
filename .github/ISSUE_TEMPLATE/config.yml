@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Quickstart
+    url: https://github.com/memphi2/ha-bticino-c300x/blob/main/docs/quickstart.md
+    about: Follow the recommended HACS, integration, agent, Media readiness and card setup path.
+  - name: Media troubleshooting
+    url: https://github.com/memphi2/ha-bticino-c300x/blob/main/docs/media-troubleshooting.md
+    about: Check this first for card, camera, Ring Call, Home Call, talkback and audio problems.
+  - name: Releases and update notes
+    url: https://github.com/memphi2/ha-bticino-c300x/releases
+    about: Review current release notes, update instructions and known migration notes.

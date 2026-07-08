@@ -1,0 +1,163 @@
+name: Bug report
+description: Report a reproducible problem with the integration, card, media path or native agent.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please fill in the fields below so the issue can be analyzed without repeated back-and-forth.
+
+        Do not paste tokens, passwords, public callback URLs, private endpoint URLs or full diagnostics containing personal data.
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Select every area that is affected.
+      multiple: true
+      options:
+        - Install / update
+        - Lovelace card / card picker
+        - On-demand video
+        - Ring Call
+        - Home Call
+        - Talkback / audio
+        - Device agent / repair
+        - Activations
+        - Display / QML
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      description: "Example: 1.7.7"
+      placeholder: "1.7.7"
+    validations:
+      required: true
+
+  - type: input
+    id: home_assistant_version
+    attributes:
+      label: Home Assistant version
+      description: "Example: 2026.7.1"
+      placeholder: "2026.7.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - HACS
+        - Manual custom_components copy
+        - Development checkout
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: native_agent_version
+    attributes:
+      label: Native agent version
+      description: Check the device diagnostics or agent self-test. Enter "not installed" if media/device-agent features are not used.
+      placeholder: "1.7.6"
+    validations:
+      required: true
+
+  - type: input
+    id: bundle_hash
+    attributes:
+      label: Bundle hash, if shown
+      description: Optional. Include the bundle hash only if Home Assistant shows it in diagnostics or repair text.
+      placeholder: "sha256:..."
+
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: Pre-checks
+      description: Please complete these before submitting.
+      options:
+        - label: I restarted Home Assistant after installing or updating the integration.
+          required: true
+        - label: I hard-reloaded the browser or cleared the Home Assistant app/WebView cache.
+          required: true
+        - label: I checked the Media readiness entity when the issue is related to camera, Ring Call, Home Call, talkback or audio.
+          required: false
+        - label: I searched existing issues and release notes.
+          required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen?
+      placeholder: The card should appear in the picker...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happens instead?
+      placeholder: The card does not appear...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact path, button, service or card action used.
+      placeholder: |
+        1. Open Settings -> Dashboards -> ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: media_readiness
+    attributes:
+      label: Media readiness state and reason
+      description: Required for media/card/call/audio reports. Use "not applicable" for unrelated bugs.
+      placeholder: "ready / warning / blocked / unavailable, reason: ..."
+    validations:
+      required: true
+
+  - type: input
+    id: lovelace_resource
+    attributes:
+      label: Lovelace card resource
+      description: For card picker or custom-card problems, check Settings -> Dashboards -> Resources. Use "not applicable" for unrelated bugs.
+      placeholder: "/bticino_c300x/frontend/c300x-doorbell-call-card.js?v=..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only the relevant Home Assistant or agent log excerpt. Redact tokens and private URLs.
+      render: text
+      placeholder: |
+        Logger: custom_components.bticino_c300x...
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Attach diagnostics if possible. Redact tokens, public URLs and private data.
+      placeholder: Drag and drop the diagnostic file here, or explain why it is not available.
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Screenshots, browser/app details, network path, forwarding mode or anything else that helps.

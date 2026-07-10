@@ -219,20 +219,6 @@ def _language(hass: HomeAssistant | None) -> str | None:
     return getattr(getattr(hass, "config", None), "language", None)
 
 
-def _display_event_types(
-    event_keys: list[str],
-    language: str | None = None,
-) -> list[str]:
-    """Return stable event entity values.
-
-    Home Assistant translates these values through strings.json. The actual
-    event_type values must remain stable so automations and event validation
-    do not depend on the active UI language.
-    """
-
-    return event_keys
-
-
 def _nested_dict_value(
     data: dict[str, Any],
     parent_key: str,

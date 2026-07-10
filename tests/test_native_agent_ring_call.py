@@ -114,8 +114,13 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     assert "build_ring_sdp(sdp_answer" in ring_invite_body
     assert "bridge->ring_srtp_state = srtp_ready ? &srtp : NULL;" in ring_invite_body
     assert "start_talkback_proxy(bridge)" in ring_invite_body
-    assert '"m=audio %d RTP/SAVP 96 101\\r\\n"' in media_bridge
-    assert '"a=rtpmap:96 speex/8000\\r\\n"' in media_bridge
+    # Ring answer is codec-configurable: the audio m-line payload is %s
+    # (speex "96" by default, PCMU "0" opt-in), the speex rtpmap+fmtp are one
+    # literal, and PCMU has its own rtpmap.
+    assert '"m=audio %d RTP/SAVP %s 101\\r\\n"' in media_bridge
+    assert 'use_pcmu ? "0" : "96"' in media_bridge
+    assert '"a=rtpmap:96 speex/8000\\r\\na=fmtp:96 vbr=on\\r\\n"' in media_bridge
+    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in media_bridge
     assert '"a=inactive\\r\\n"' in media_bridge
     assert '"m=video %d RTP/SAVP 96\\r\\n"' in media_bridge
     assert '"a=recvonly\\r\\n"' in media_bridge
@@ -433,7 +438,9 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
         in home_call_body
     )
     assert "bridge->home_call_rtp_proxy = target_audio_port != 7078;" in home_call_body
-    assert "send_media_audio_silence(audio_fd, target_audio_port" in home_call_body
+    # Silence keepalive is now codec-aware via the payload-type variant.
+    assert "send_media_audio_silence_payload_type(" in home_call_body
+    assert "talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)" in home_call_body
     assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1" in home_call_body
     assert "start_bt_av_media" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
@@ -701,6 +708,10 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
         media_bridge.index("void c300x_media_session_stop")
     ]
+    ring_cleanup_body = media_bridge[
+        media_bridge.index("static void ring_call_cleanup(") :
+        media_bridge.index("static void ring_media_loop(")
+    ]
     rtsp_drain_body = media_bridge[
         media_bridge.index("static bool wait_for_rtsp_clients_to_drain") :
         media_bridge.index("static bool ring_talkback_recent_locked")
@@ -778,6 +789,14 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         'c300x_video_dispatch_event(video, "doorbell.media.closed", "{}", 0);'
     ) == 2
     assert "active = (g_bridge.ring_call_active || g_bridge.ring_media_active) && !g_bridge.ring_call_stop;" in media_bridge
+    # An unanswered ring drains (force-closing on overstay) its leftover
+    # auto-preview RTSP client BEFORE signalling media closed, so HA's
+    # event-triggered status poll sees clients==0 instead of latching a
+    # transient RTSP_BUSY (the "card stuck on busy after an unanswered ring").
+    assert "was_unanswered = was_active && !bridge->ring_answered;" in ring_cleanup_body
+    assert ring_cleanup_body.index("shutdown_rtsp_clients_after_drain(bridge)") < ring_cleanup_body.index(
+        'c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0)'
+    )
     assert "bool c300x_media_session_stop_in_progress" in media_bridge
     assert "ring_sleep_seconds(bridge, RING_RETRY_SECONDS)" in media_bridge
     assert "pthread_join(ring_thread, NULL)" in media_bridge

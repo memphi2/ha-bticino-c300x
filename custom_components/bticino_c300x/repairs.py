@@ -18,7 +18,10 @@ from .agent_update import (
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
-from .callback_url import async_suggest_callback_base_url, normalize_callback_base_url
+from .callback_url import async_suggest_callback_base_url
+from .callback_url import (
+    validated_callback_base_url as _validated_callback_base_url,
+)
 from .capabilities import (
     entry_device_ui_enabled,
     gate_capabilities,
@@ -793,19 +796,6 @@ def _ssh_install_schema() -> vol.Schema:
             vol.Required(CONF_BOOTSTRAP_SSH_PASSWORD): str,
         }
     )
-
-
-def _validated_callback_base_url(
-    user_input: dict[str, Any],
-    errors: dict[str, str],
-) -> str:
-    """Validate a required local callback base URL for the repair flow."""
-
-    try:
-        return normalize_callback_base_url(user_input.get(CONF_CALLBACK_BASE_URL, ""))
-    except ValueError:
-        errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
-        return ""
 
 
 def _runtime_qml_patch_status(entry: Any) -> str:

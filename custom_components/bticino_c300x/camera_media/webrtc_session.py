@@ -5,11 +5,62 @@ from __future__ import annotations
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 
 
+class SessionOwner(StrEnum):
+    """Owner of an active media / WebRTC session (also the camera media_owner)."""
+
+    DOORBELL = "doorbell"
+    HOME_CALL = "home_call"
+    RING = "ring"
+    EXTERNAL_MEDIA = "external_media"
+    IDLE = "idle"
+    UNKNOWN = "unknown"
+
+
+def owner_is_home_call(owner: str) -> bool:
+    """Return true for a Home Call owner."""
+
+    return owner == SessionOwner.HOME_CALL
+
+
+def owner_requires_explicit_stop(owner: str) -> bool:
+    """Whether this owner's device media needs an explicit stop when its last
+    session closes. Home Call has no RTSP-drain backstop (unlike doorbell), so
+    a closed subscription must stop it or it lingers to its duration timeout."""
+
+    return owner == SessionOwner.HOME_CALL
+
+
+def owner_is_doorbell_media(owner: str) -> bool:
+    """Whether this owner carries the ring/doorbell media stream -- i.e. any
+    owner that is not a Home Call."""
+
+    return owner != SessionOwner.HOME_CALL
+
+
+class _OwnedSession:
+    """Shared owner-capability predicates for the session dataclasses."""
+
+    owner: str
+
+    @property
+    def is_home_call(self) -> bool:
+        return owner_is_home_call(self.owner)
+
+    @property
+    def requires_explicit_stop(self) -> bool:
+        return owner_requires_explicit_stop(self.owner)
+
+    @property
+    def is_doorbell_media(self) -> bool:
+        return owner_is_doorbell_media(self.owner)
+
+
 @dataclass
-class ProviderWebRTCStreamContext:
+class ProviderWebRTCStreamContext(_OwnedSession):
     """Provider stream-source context for one WebRTC offer."""
 
     owner: str
@@ -24,7 +75,7 @@ class ProviderWebRTCStreamContext:
 
 
 @dataclass
-class ProviderWebRTCSession:
+class ProviderWebRTCSession(_OwnedSession):
     """Local HA-side WebRTC provider session state."""
 
     provider: Any

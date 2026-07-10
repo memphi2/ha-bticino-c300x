@@ -7,6 +7,7 @@
 #include "json_util.h"
 #include "local_action_events.h"
 #include "device_routing.h"
+#include "audio_codec.h"
 #include "memo_store.h"
 #include "media_bridge.h"
 #include "mdns.h"
@@ -220,6 +221,7 @@ struct agent_runtime {
     char last_write_class[32];
     char last_wake_reason[64];
     char qml_patch_last_action[32];
+    char audio_codec_running_state[C300X_AUDIO_CODEC_STATE_LEN];
     struct c300x_recent_events recent_events;
     struct c300x_video *video;
     struct voicemail_runtime voicemail;
@@ -487,6 +489,21 @@ static void handle_firewall_status(
     const struct request *request
 );
 static void handle_firewall_action(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request,
+    const char *action,
+    const char *confirmation
+);
+static int run_detached_command(const char *program, const char *argument, int delay_ms);
+static void handle_audio_codec_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct agent_runtime *runtime,
+    const struct request *request
+);
+static void handle_audio_codec_action(
     int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
@@ -3695,6 +3712,132 @@ static void handle_device_user_restore(
     send_json(client_fd, 200, "OK", body);
 }
 
+static void init_audio_codec_running_state(struct agent_runtime *runtime)
+{
+    struct c300x_audio_codec_status status;
+
+    if (runtime == NULL) {
+        return;
+    }
+    if (c300x_audio_codec_read_status(&status) && status.state[0] != '\0') {
+        c300x_copy_string(
+            runtime->audio_codec_running_state,
+            sizeof(runtime->audio_codec_running_state),
+            status.state
+        );
+        return;
+    }
+    c300x_copy_string(
+        runtime->audio_codec_running_state,
+        sizeof(runtime->audio_codec_running_state),
+        "unknown"
+    );
+}
+
+static void handle_audio_codec_status(
+    int client_fd,
+    const struct c300x_config *config,
+    const struct agent_runtime *runtime,
+    const struct request *request
+)
+{
+    struct c300x_audio_codec_status status;
+    char body[320];
+
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    (void)c300x_audio_codec_read_status(&status);
+    c300x_audio_codec_status_body(
+        &status,
+        runtime != NULL ? runtime->audio_codec_running_state : NULL,
+        body,
+        sizeof(body)
+    );
+    send_json(client_fd, 200, "OK", body);
+}
+
+static void handle_audio_codec_action(
+    int client_fd,
+    const struct c300x_config *config,
+    struct agent_runtime *runtime,
+    const struct request *request,
+    const char *action,
+    const char *confirmation
+)
+{
+    struct c300x_audio_codec_status status;
+    char error[C300X_MAX_ERROR_LEN] = "";
+    char error_json[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN)];
+    char body[C300X_JSON_QUOTED_LEN(C300X_MAX_ERROR_LEN) + 256];
+    int ok;
+
+    if (!maintenance_authorized(config, request)) {
+        send_maintenance_unauthorized(client_fd);
+        return;
+    }
+    if (!confirm_matches(request, confirmation)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
+        return;
+    }
+    if (strcmp(action, "apply") == 0) {
+        ok = c300x_audio_codec_apply(&status, error, sizeof(error));
+    } else {
+        ok = c300x_audio_codec_restore(&status, error, sizeof(error));
+    }
+    if (!ok) {
+        c300x_json_string(error, error_json, sizeof(error_json));
+        snprintf(
+            body,
+            sizeof(body),
+            "{\"ok\":false,\"error\":\"audio_codec_%s_failed\",\"detail\":%s}\n",
+            action,
+            error_json
+        );
+        send_json(client_fd, 500, "Internal Server Error", body);
+        return;
+    }
+    /* No agent config to persist: the agent derives its codec mode from the
+     * device (stack_open.xml) at the next start, so the reboot below is what
+     * makes both the device and the agent adopt the new codec together. */
+    if (status.changed) {
+        record_agent_write(config, runtime, "audio_codec", action);
+    }
+    /* The codec change only takes effect after a reboot (bt_av_media, linphone
+     * and the agent all read their config at start). Chain it by default so the
+     * one action lands the device in the new mode; gate on the reboot
+     * capability and let "reboot": false defer it. */
+    {
+        int reboot_requested = 1;
+        const char *running_state = runtime != NULL
+            ? runtime->audio_codec_running_state
+            : NULL;
+        int reboot_required = c300x_audio_codec_reboot_required(
+            &status,
+            running_state
+        );
+        int rebooting = 0;
+
+        (void)c300x_json_bool_field(request->body, "reboot", &reboot_requested);
+        if (reboot_required && reboot_requested && config->maintenance_reboot_enabled) {
+            rebooting = run_detached_command(
+                "/sbin/reboot",
+                NULL,
+                config->maintenance_reboot_delay_ms
+            );
+        }
+        c300x_audio_codec_action_body(
+            &status,
+            running_state,
+            rebooting,
+            body,
+            sizeof(body)
+        );
+    }
+    send_json(client_fd, 200, "OK", body);
+}
+
 static void handle_diagnostics_get(int client_fd, const struct agent_runtime *runtime)
 {
     char last_write_class[C300X_JSON_QUOTED_LEN(sizeof(runtime->last_write_class))];
@@ -6734,7 +6877,7 @@ static void api_capabilities(
         "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
         "\"device_user\":{\"supported\":true},"
         "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
-        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s},"
+        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s},"
         "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
         "}"
         "}\n",
@@ -6811,6 +6954,9 @@ static void api_capabilities(
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
         (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
+        maintenance_supported ? "true" : "false",
         config->display_bridge_enabled ? "true" : "false"
     );
     if (written < 0 || written >= C300X_LARGE_RESPONSE_SIZE) {
@@ -6925,6 +7071,8 @@ static void handle_doorbell_video_get(
     int media_starting = 0;
     int stream_audio = 0;
     int talkback_running = 0;
+    int device_codec_known = 0;
+    int device_codec_pcmu = 0;
     int bridge_running = 0;
     int bridge_media_active = 0;
     int bridge_stop_in_progress = 0;
@@ -6991,6 +7139,8 @@ static void handle_doorbell_video_get(
         media_starting = video_status.media_starting;
         stream_audio = video_status.stream_audio;
         talkback_running = video_status.talkback_running;
+        device_codec_known = video_status.device_codec_known;
+        device_codec_pcmu = video_status.device_codec_pcmu;
         bridge_running = video_status.bridge_running;
         bridge_media_active = video_status.bridge_media_active;
         bridge_stop_in_progress = video_status.bridge_stop_in_progress;
@@ -7126,6 +7276,7 @@ static void handle_doorbell_video_get(
         "\"stream_path\":\"%s\","
         "\"audio_stream_path\":\"%s\","
         "\"recorder_stream_path\":\"%s\","
+        "\"device_audio_codec\":\"%s\","
         "\"audio_codec\":\"%s\","
         "\"talkback_supported\":true,"
         "\"talkback_running\":%s,"
@@ -7192,11 +7343,12 @@ static void handle_doorbell_video_get(
         stream_path,
         audio_stream_path,
         recorder_stream_path,
+        device_codec_known ? (device_codec_pcmu ? "pcmu" : "speex") : "unknown",
         C300X_RTSP_AUDIO_CODEC,
         talkback_running ? "true" : "false",
         C300X_TALKBACK_RTP_PORT,
-        C300X_TALKBACK_RTP_PAYLOAD_TYPE,
-        C300X_TALKBACK_CODEC
+        device_codec_pcmu ? 0 : C300X_TALKBACK_RTP_PAYLOAD_TYPE,
+        device_codec_pcmu ? "PCMU/8000" : C300X_TALKBACK_CODEC
     );
     send_json(client_fd, 200, "OK", body);
     free(body);
@@ -11789,6 +11941,34 @@ static void handle_api_request(
         );
         return;
     }
+    if (strcmp(request->path, "/api/v1/maintenance/audio-codec") == 0) {
+        if (strcmp(request->method, "GET") == 0) {
+            handle_audio_codec_status(client_fd, config, runtime, request);
+            return;
+        }
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/audio-codec/actions/apply") == 0) {
+        handle_audio_codec_action(
+            client_fd,
+            config,
+            runtime,
+            request,
+            "apply",
+            "apply_audio_codec_patch"
+        );
+        return;
+    }
+    if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/audio-codec/actions/restore") == 0) {
+        handle_audio_codec_action(
+            client_fd,
+            config,
+            runtime,
+            request,
+            "restore",
+            "restore_audio_codec_patch"
+        );
+        return;
+    }
     if (strcmp(request->path, "/api/v1/maintenance/ipv6-firewall") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             handle_ipv6_firewall_status(client_fd, config, request);
@@ -12211,6 +12391,7 @@ int c300x_run(struct c300x_config *config)
         return 2;
     }
     runtime->config = config;
+    init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);

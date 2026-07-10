@@ -76,55 +76,6 @@ def test_warmup_video_refreshes_after_activation_failure() -> None:
     assert owner.state_writes == 1
 
 
-def test_restart_video_reader_keeps_existing_ring_media() -> None:
-    owner = _FakeOwner(
-        status_queue=[{"media_owner": "ring", "bridge": {"ring_call_active": True}}],
-    )
-    orchestrator = _orchestrator(owner)
-    ready_urls: list[str] = []
-    orchestrator.async_wait_for_rtsp_ready = _record_ready(ready_urls)  # type: ignore[method-assign]
-
-    asyncio.run(orchestrator.async_restart_video_reader(audio=True))
-
-    assert ready_urls == ["rtsp://agent.local:6554/doorbell-audio"]
-    assert owner.api.stop_calls == 0
-    assert owner.api.activate_audio == []
-
-
-def test_restart_video_reader_waits_for_external_event_to_become_ring_media() -> None:
-    owner = _FakeOwner(
-        status_queue=[{"media_owner": "external_media", "external_media_active": True}],
-    )
-    orchestrator = _orchestrator(owner)
-    ready_urls: list[str] = []
-    orchestrator.async_wait_for_call_media_after_external_event = _return_status(  # type: ignore[method-assign]
-        {"media_owner": "ring", "bridge": {"ring_call_active": True}}
-    )
-    orchestrator.async_wait_for_rtsp_ready = _record_ready(ready_urls)  # type: ignore[method-assign]
-
-    asyncio.run(orchestrator.async_restart_video_reader(audio=False))
-
-    assert ready_urls == ["rtsp://agent.local:6554/doorbell-video"]
-    assert owner.api.stop_calls == 0
-
-
-def test_restart_video_reader_restarts_on_demand_media(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def no_sleep(_delay: float) -> None:
-        return None
-
-    monkeypatch.setattr(rtsp_orchestrator.asyncio, "sleep", no_sleep)
-    owner = _FakeOwner(status_queue=[{"media_owner": "idle", "bridge": {}}])
-    orchestrator = _orchestrator(owner)
-    ready_urls: list[str] = []
-    orchestrator.async_wait_for_rtsp_ready = _record_ready(ready_urls)  # type: ignore[method-assign]
-
-    asyncio.run(orchestrator.async_restart_video_reader(audio=False))
-
-    assert owner.api.stop_calls == 0
-    assert owner.api.activate_audio == [False]
-    assert ready_urls == ["rtsp://agent.local:6554/doorbell-video"]
-
-
 def test_prepare_doorbell_rtsp_stream_sets_audio_gain_only_when_changed() -> None:
     owner = _FakeOwner(
         status_queue=[
@@ -215,19 +166,6 @@ def test_prepare_home_call_rtsp_stream_uses_audio_url() -> None:
     assert stream_url == "rtsp://agent.local:6554/doorbell-audio"
     assert ready_urls == ["rtsp://agent.local:6554/doorbell-audio"]
     assert owner.applied_home_call_statuses == [{"target_audio_port": 40004}]
-
-
-def test_restart_home_call_reader_waits_for_audio_rtsp() -> None:
-    api = _FakeApi(home_call_statuses=[{"rtp_proxy": True}])
-    owner = _FakeOwner(api=api)
-    orchestrator = _orchestrator(owner)
-    ready_urls: list[str] = []
-    orchestrator.async_wait_for_rtsp_ready = _record_ready(ready_urls)  # type: ignore[method-assign]
-
-    asyncio.run(orchestrator.async_restart_home_call_reader())
-
-    assert ready_urls == ["rtsp://agent.local:6554/doorbell-audio"]
-    assert owner.applied_home_call_statuses == [{"rtp_proxy": True}]
 
 
 def test_rtsp_probe_sends_describe_and_closes_writer(
@@ -622,10 +560,3 @@ def _record_probe(calls: list[str]) -> Any:
         calls.append(stream_url)
 
     return probe
-
-
-def _return_status(status: dict[str, Any]) -> Any:
-    async def wait(_original_status: dict[str, Any]) -> dict[str, Any]:
-        return status
-
-    return wait

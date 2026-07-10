@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -115,3 +115,10 @@ def _agent_info_string(entry: BticinoC300XConfigEntry, key: str) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+async def async_refresh_initial_states(entities: Iterable[Entity]) -> None:
+    """Populate entity states once during setup without enabling periodic polling."""
+
+    for entity in entities:
+        await cast(Any, entity).async_update()

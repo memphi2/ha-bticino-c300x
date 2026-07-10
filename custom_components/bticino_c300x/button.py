@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
@@ -27,22 +27,16 @@ from .capabilities import (
 )
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
-    SIGNAL_MEMOS_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
-    SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .entity import C300XEntity, entry_video_enabled, supports_capability
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .executor import async_trigger_stair_light, async_unlock_door
 from .memos import latest_memo_id
-from .message_refresh import (
-    async_answering_machine_messages,
-    async_memos,
-    schedule_answering_machine_messages_refresh,
-    schedule_memos_refresh,
-)
+from .message_refresh import async_answering_machine_messages
 from .qml_patch import async_refresh_qml_patch_status
+from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
 from .use_cases.doorbell_video import DoorbellVideoUseCase
 from .video_messages import (
     latest_video_message_id,
@@ -322,11 +316,95 @@ class C300XReloadGuiButton(C300XMaintenanceButton):
             raise HomeAssistantError("C300X Display reload command failed") from err
 
 
-class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
+class C300XDeleteLatestStoredItemButton(C300XEntity, ButtonEntity):
+    """Button that deletes the latest device-stored item of one family."""
+
+    _items_spec: ClassVar[StoredItemsSpec]
+
+    def _latest_item_id(self) -> str | None:
+        """Return the id of the newest deletable item."""
+
+        raise NotImplementedError
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to item refresh notifications."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_AGENT_EVENT_RECEIVED,
+                self._handle_agent_event,
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._items_spec.signal,
+                self._handle_items_changed,
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_QML_PATCH_CHANGED,
+                self._handle_qml_patch_changed,
+            )
+        )
+
+    async def async_press(self) -> None:
+        """Delete the newest stored item and refresh item state."""
+
+        spec = self._items_spec
+        await _async_ensure_gui_function_patch(self._entry)
+
+        item_id = self._latest_item_id()
+        if item_id is None:
+            try:
+                items = await spec.fetch(self._entry, force_refresh=True)
+            except C300XAgentApiError as err:
+                self._attr_available = False
+                raise HomeAssistantError(spec.refresh_error) from err
+            self._attr_available = bool(items.get("available", True))
+            item_id = self._latest_item_id()
+        if item_id is None:
+            async_dispatcher_send(self.hass, spec.signal, self._entry.entry_id)
+            return
+
+        try:
+            await spec.delete_item(self._entry.runtime_data.api, item_id)
+            items = await spec.fetch(self._entry, force_refresh=True)
+        except C300XAgentApiUnsupportedError as err:
+            raise HomeAssistantError(spec.unsupported_error) from err
+        except C300XAgentApiError as err:
+            raise HomeAssistantError(spec.delete_error) from err
+
+        self._attr_available = bool(items.get("available", True))
+        async_dispatcher_send(self.hass, spec.signal, self._entry.entry_id)
+        await async_refresh_agent_diagnostics(self.hass, self._entry)
+
+    @callback
+    def _handle_items_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_agent_event(self, event: Event) -> None:
+        if event.data.get("entry_id") != self._entry.entry_id:
+            return
+        if agent_event_key(event.data) == self._items_spec.agent_event_key:
+            self._items_spec.schedule_refresh(self.hass, self._entry)
+
+    @callback
+    def _handle_qml_patch_changed(self, entry_id: str) -> None:
+        if entry_id == self._entry.entry_id:
+            self.async_write_ha_state()
+
+
+class C300XDeleteLatestMemoButton(C300XDeleteLatestStoredItemButton):
     """Button that deletes the latest local memo of one kind."""
 
+    _items_spec = MEMO_ITEMS
     _memo_kind = ""
-    _memo_label = "memo"
 
     def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         super().__init__(entry, key)
@@ -361,79 +439,8 @@ class C300XDeleteLatestMemoButton(C300XEntity, ButtonEntity):
             "latest_memo_id": memo_id,
         }
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to memo refresh notifications."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_MEMOS_CHANGED,
-                self._handle_memos_changed,
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_QML_PATCH_CHANGED,
-                self._handle_qml_patch_changed,
-            )
-        )
-
-    async def async_press(self) -> None:
-        """Delete the newest memo and refresh memo state."""
-
-        await _async_ensure_gui_function_patch(self._entry)
-
-        memo_id = latest_memo_id(self._entry.runtime_data.memos, self._memo_kind)
-        if memo_id is None:
-            try:
-                memos = await async_memos(self._entry, force_refresh=True)
-            except C300XAgentApiError as err:
-                self._attr_available = False
-                raise HomeAssistantError("C300X memo refresh failed") from err
-            self._attr_available = bool(memos.get("available", True))
-            memo_id = latest_memo_id(self._entry.runtime_data.memos, self._memo_kind)
-        if memo_id is None:
-            async_dispatcher_send(self.hass, SIGNAL_MEMOS_CHANGED, self._entry.entry_id)
-            return
-
-        try:
-            await self._entry.runtime_data.api.async_delete_memo(memo_id)
-            memos = await async_memos(self._entry, force_refresh=True)
-        except C300XAgentApiUnsupportedError as err:
-            raise HomeAssistantError(
-                "The installed C300X device agent does not support deleting memos"
-            ) from err
-        except C300XAgentApiError as err:
-            raise HomeAssistantError("C300X memo delete failed") from err
-
-        self._attr_available = bool(memos.get("available", True))
-        async_dispatcher_send(self.hass, SIGNAL_MEMOS_CHANGED, self._entry.entry_id)
-        await async_refresh_agent_diagnostics(self.hass, self._entry)
-
-    @callback
-    def _handle_memos_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        if agent_event_key(event.data) == "memos_changed":
-            schedule_memos_refresh(self.hass, self._entry)
-
-    @callback
-    def _handle_qml_patch_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
+    def _latest_item_id(self) -> str | None:
+        return latest_memo_id(self._entry.runtime_data.memos, self._memo_kind)
 
 
 class C300XDeleteLatestTextMemoButton(C300XDeleteLatestMemoButton):
@@ -441,7 +448,6 @@ class C300XDeleteLatestTextMemoButton(C300XDeleteLatestMemoButton):
 
     _attr_translation_key = "delete_latest_text_memo"
     _memo_kind = "text"
-    _memo_label = "text"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_text_memo")
@@ -452,16 +458,16 @@ class C300XDeleteLatestVoiceMemoButton(C300XDeleteLatestMemoButton):
 
     _attr_translation_key = "delete_latest_voice_memo"
     _memo_kind = "voice"
-    _memo_label = "voice"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_voice_memo")
 
 
-class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
+class C300XDeleteLatestVideoMessageButton(C300XDeleteLatestStoredItemButton):
     """Button that displays and deletes the latest stored video message."""
 
     _attr_translation_key = "delete_latest_video_message"
+    _items_spec = VIDEO_MESSAGE_ITEMS
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "delete_latest_video_message")
@@ -496,31 +502,6 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
             "latest_message_id": message_id,
         }
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to video-message refresh notifications."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_VIDEO_MESSAGES_CHANGED,
-                self._handle_video_messages_changed,
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_QML_PATCH_CHANGED,
-                self._handle_qml_patch_changed,
-            )
-        )
-
     async def async_update(self) -> None:
         """Refresh message metadata on explicit HA update requests."""
 
@@ -534,74 +515,10 @@ class C300XDeleteLatestVideoMessageButton(C300XEntity, ButtonEntity):
             return
         self._attr_available = bool(messages.get("available", True))
 
-    async def async_press(self) -> None:
-        """Delete the newest stored video message and refresh state."""
-
-        await _async_ensure_gui_function_patch(self._entry)
-
-        message_id = latest_video_message_id(
+    def _latest_item_id(self) -> str | None:
+        return latest_video_message_id(
             self._entry.runtime_data.answering_machine_messages
         )
-        if message_id is None:
-            try:
-                messages = await async_answering_machine_messages(
-                    self._entry,
-                    force_refresh=True,
-                )
-            except C300XAgentApiError as err:
-                self._attr_available = False
-                raise HomeAssistantError("C300X video-message refresh failed") from err
-            self._attr_available = bool(messages.get("available", True))
-            message_id = latest_video_message_id(
-                self._entry.runtime_data.answering_machine_messages
-            )
-        if message_id is None:
-            async_dispatcher_send(
-                self.hass,
-                SIGNAL_VIDEO_MESSAGES_CHANGED,
-                self._entry.entry_id,
-            )
-            return
-
-        try:
-            await self._entry.runtime_data.api.async_delete_answering_machine_message(
-                message_id
-            )
-            messages = await async_answering_machine_messages(
-                self._entry,
-                force_refresh=True,
-            )
-        except C300XAgentApiUnsupportedError as err:
-            raise HomeAssistantError(
-                "The installed C300X device agent does not support deleting video messages"
-            ) from err
-        except C300XAgentApiError as err:
-            raise HomeAssistantError("C300X video-message delete failed") from err
-
-        self._attr_available = bool(messages.get("available", True))
-        async_dispatcher_send(
-            self.hass,
-            SIGNAL_VIDEO_MESSAGES_CHANGED,
-            self._entry.entry_id,
-        )
-        await async_refresh_agent_diagnostics(self.hass, self._entry)
-
-    @callback
-    def _handle_video_messages_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_agent_event(self, event: Event) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        if agent_event_key(event.data) == "answering_machine_messages_changed":
-            schedule_answering_machine_messages_refresh(self.hass, self._entry)
-
-    @callback
-    def _handle_qml_patch_changed(self, entry_id: str) -> None:
-        if entry_id == self._entry.entry_id:
-            self.async_write_ha_state()
 
 
 async def _async_activation_items(entry: BticinoC300XConfigEntry) -> list[dict[str, Any]]:

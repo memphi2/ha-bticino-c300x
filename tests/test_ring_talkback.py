@@ -60,6 +60,78 @@ def test_build_talkback_rtp_packet_sets_marker_payload_and_header() -> None:
     )
 
 
+def test_build_talkback_rtp_packet_uses_pcmu_payload_type() -> None:
+    packet = ring_talkback._build_talkback_rtp_packet(
+        b"payload",
+        sequence=0x1234,
+        timestamp=0x01020304,
+        ssrc=0x05060708,
+        marker=True,
+        payload_type=ring_talkback._TALKBACK_PCMU_PAYLOAD_TYPE,
+    )
+
+    # PT 0 (PCMU) with the marker bit set -> 0x80; speex default would be 0xe1.
+    assert packet[1] == 0x80
+    assert packet[1] & 0x7F == ring_talkback._TALKBACK_PCMU_PAYLOAD_TYPE
+
+
+def test_create_talkback_encoder_selects_codec_and_options_by_mode() -> None:
+    pcmu = ring_talkback._create_talkback_encoder(
+        SimpleNamespace(CodecContext=_FakeCodecContext(["pcm_mulaw"])),
+        codec_pcmu=True,
+    )
+    assert pcmu.name == "pcm_mulaw"
+    assert pcmu.opened is True
+    # pcm_mulaw has no VBR and rejects unknown options.
+    assert getattr(pcmu, "options", None) is None
+
+    speex = ring_talkback._create_talkback_encoder(
+        SimpleNamespace(CodecContext=_FakeCodecContext(["speex"])),
+        codec_pcmu=False,
+    )
+    assert speex.name == "speex"
+    assert speex.opened is True
+    assert speex.options == {"vbr": "on"}
+
+
+def test_create_pcmu_encoder_reports_missing_codec() -> None:
+    with pytest.raises(
+        ring_talkback.HomeAssistantError, match="PCMU encoding is not available"
+    ):
+        ring_talkback._create_pcmu_encoder(
+            SimpleNamespace(CodecContext=_FakeCodecContext([]))
+        )
+
+
+def test_keep_talkback_alive_sync_pcmu_emits_payload_type_0(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_av(monkeypatch, with_audio=False)
+    monkeypatch.setattr(ring_talkback.time, "sleep", lambda *_args: None)
+    monkeypatch.setattr(ring_talkback, "_ANNOUNCEMENT_PREROLL_SECONDS", 0.04)
+    sys.modules["av"].CodecContext = _FakeCodecContext(["pcm_mulaw"])
+    sock = _FakeSocket()
+    monkeypatch.setattr(
+        ring_talkback,
+        "_open_talkback_socket",
+        lambda _host: (sock, ("192.0.2.10", 40004)),
+    )
+    monkeypatch.setattr(ring_talkback.random, "randrange", lambda *_args: 1)
+    stop_event = threading.Event()
+    stop_event.set()
+
+    ring_talkback._keep_talkback_alive_sync(
+        "192.0.2.10", None, stop_event, codec_pcmu=True
+    )
+
+    assert sock.closed is True
+    # 2 preroll frames + 1 flush packet, all carrying PT 0; marker only on the first.
+    assert len(sock.sent) == 3
+    assert sock.sent[0][0][1] == 0x80
+    for data, _target in sock.sent:
+        assert data[1] & 0x7F == ring_talkback._TALKBACK_PCMU_PAYLOAD_TYPE
+
+
 def test_talkback_host_for_socket_strips_ipv6_brackets_and_zone_encoding() -> None:
     assert ring_talkback._talkback_host_for_socket("[fe80::1%25eth0]") == "fe80::1%eth0"
     assert ring_talkback._talkback_host_for_socket(" 192.0.2.10 ") == "192.0.2.10"
@@ -410,10 +482,16 @@ def test_async_play_and_keepalive_map_worker_errors(
     async def ok_wait(_entry: Any) -> None:
         return None
 
-    def broken_play(_host: str, _source: Path) -> None:
+    def broken_play(_host: str, _source: Path, *, codec_pcmu: bool = False) -> None:
         raise RuntimeError("boom")
 
-    def broken_keepalive(_host: str, _source: Path | None, _stop_event: threading.Event) -> None:
+    def broken_keepalive(
+        _host: str,
+        _source: Path | None,
+        _stop_event: threading.Event,
+        *,
+        codec_pcmu: bool = False,
+    ) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(ring_talkback, "_async_wait_talkback_ready", ok_wait)
@@ -447,13 +525,15 @@ def test_async_play_and_keepalive_propagate_homeassistant_errors(
     async def ok_wait(_entry: Any) -> None:
         return None
 
-    def broken_play(_host: str, _source: Path) -> None:
+    def broken_play(_host: str, _source: Path, *, codec_pcmu: bool = False) -> None:
         raise ring_talkback.HomeAssistantError("expected play failure")
 
     def broken_keepalive(
         _host: str,
         _source: Path | None,
         _stop_event: threading.Event,
+        *,
+        codec_pcmu: bool = False,
     ) -> None:
         raise ring_talkback.HomeAssistantError("expected keepalive failure")
 
@@ -489,7 +569,13 @@ def test_play_announcement_sync_sets_single_shot_stop_event(
 ) -> None:
     seen: list[tuple[str, Path | None, bool]] = []
 
-    def _keepalive(host: str, source: Path | None, stop_event: threading.Event) -> None:
+    def _keepalive(
+        host: str,
+        source: Path | None,
+        stop_event: threading.Event,
+        *,
+        codec_pcmu: bool = False,
+    ) -> None:
         seen.append((host, source, stop_event.is_set()))
 
     monkeypatch.setattr(ring_talkback, "_keep_talkback_alive_sync", _keepalive)

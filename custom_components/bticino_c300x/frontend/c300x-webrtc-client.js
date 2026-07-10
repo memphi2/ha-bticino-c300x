@@ -1,12 +1,14 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=6f83dd7b2ca2ae84";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=615e3b720e2a7be6";
 
 export class C300XWebrtcClient {
-  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack }) {
+  constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
     this._getHass = getHass;
     this._getEntityId = getEntityId;
     this._isHomeCallMode = isHomeCallMode;
     this._onClosed = onClosed;
     this._onTrack = onTrack;
+    this._getCardGainDb = getCardGainDb || null;
+    this._mediaAttachment = null;
     this._pc = null;
     this._remoteStream = null;
     this._unsub = null;
@@ -30,6 +32,18 @@ export class C300XWebrtcClient {
     return this._pc;
   }
 
+  // Re-apply the client-side gain (call when the codec mode or configured
+  // gain changes while a stream is playing).
+  refreshGain() {
+    return this._mediaAttachment?.refreshGain();
+  }
+
+  // Move the client-side gain/muting to the element that now renders the
+  // stream (used when a preview stream is promoted to the main element).
+  retargetMedia(mediaElement) {
+    return this._mediaAttachment?.retarget(mediaElement);
+  }
+
   async start({
     microphoneStream = null,
     receiveAudio = true,
@@ -48,7 +62,10 @@ export class C300XWebrtcClient {
     });
     const rtcConfig = c300xNormalizeRtcConfig(clientConfig);
     this._remoteStream = new MediaStream();
-    const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream);
+    const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream, {
+      getGainDb: this._getCardGainDb,
+    });
+    this._mediaAttachment = mediaAttachment;
     if (!attachOnFirstTrack) {
       mediaAttachment.attach();
     }
@@ -135,6 +152,10 @@ export class C300XWebrtcClient {
       reject(new Error("HA WebRTC offer cancelled"));
     }
 
+    if (this._mediaAttachment) {
+      this._mediaAttachment.detach();
+      this._mediaAttachment = null;
+    }
     if (this._remoteStream) {
       for (const track of this._remoteStream.getTracks()) {
         track.stop();

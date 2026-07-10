@@ -132,8 +132,8 @@ from custom_components.bticino_c300x import agent_diagnostics
 from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
+    SIGNAL_CONNECTION_STATE_CHANGED,
 )
-from custom_components.bticino_c300x.doorbell_state import normalize_doorbell_state
 from custom_components.bticino_c300x.media_readiness import media_readiness
 from custom_components.bticino_c300x.sensor import (
     C300XAgentDiagnosticsSensor,
@@ -314,9 +314,6 @@ class _FakeApi:
             "home_call_active": False,
             "raw": {},
         }
-
-    async def async_state(self) -> dict[str, Any]:
-        return {"doorbell": "view_requested"}
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         self.doorbell_video_status_calls += 1
@@ -648,6 +645,67 @@ def test_media_readiness_sensor_subscribes_to_readiness_sources() -> None:
         entity.wrote_state = False
         entity._handle_readiness_changed("other")
         assert entity.wrote_state is False
+
+    asyncio.run(_run())
+
+
+def test_media_readiness_sensor_refreshes_on_deferred_startup_sync_signal(
+    monkeypatch: Any,
+) -> None:
+    import custom_components.bticino_c300x.sensor as sensor_module
+
+    async def _run() -> None:
+        callbacks: dict[str, Any] = {}
+
+        def _connect(_hass: Any, signal: str, callback: Any) -> Any:
+            callbacks[signal] = callback
+            return lambda: None
+
+        monkeypatch.setattr(sensor_module, "async_dispatcher_connect", _connect)
+        connection = _FakeConnectionState()
+        connection.event_subscription_last_success_at = "2026-07-10T10:00:00Z"
+        entry = _FakeEntry(
+            options={"video_enabled": True},
+            runtime_data=_FakeRuntimeData(
+                connection_state=connection,
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                    "home_call": {"supported": True},
+                },
+            ),
+        )
+        entry.runtime_data.event_state.smartphone_forwarding_mode = "homeassistant"
+        entity = C300XMediaReadinessSensor(entry)  # type: ignore[arg-type]
+        entity.hass = _FakeHass()
+        writes: list[str] = []
+        entity.async_write_ha_state = lambda: writes.append(entity.native_value)  # type: ignore[method-assign]
+
+        await entity.async_added_to_hass()
+        entity._handle_readiness_changed(entry.entry_id)
+        assert writes == ["warning"]
+
+        entry.runtime_data.device_user_status = {
+            "homeassistant_user_present": True,
+            "media_identity_available": True,
+            "routes_consistent": True,
+            "device_routing_applied": True,
+        }
+        entry.runtime_data.self_test_status = {
+            "ok": True,
+            "checks": {
+                "capabilities": {"ok": True},
+                "firewall": {"ok": True},
+                "rtsp": {"ok": True},
+                "talkback_rtp": {"ok": True},
+                "homeassistant_user": {"ok": True},
+                "device_routing": {"ok": True},
+                "startup": {"ok": True},
+            },
+        }
+        callbacks[SIGNAL_CONNECTION_STATE_CHANGED](entry.entry_id)
+
+        assert writes == ["warning", "ready"]
 
     asyncio.run(_run())
 
@@ -1779,15 +1837,6 @@ def test_doorbell_state_sensor_does_not_clear_active_ring_from_status_refresh() 
     assert entry.runtime_data.api.doorbell_video_status_calls == 1
 
 
-def test_doorbell_state_accepts_only_agent_canonical_values() -> None:
-    assert normalize_doorbell_state({"doorbell": "idle"}) == "idle"
-    assert normalize_doorbell_state({"doorbell": "ringing"}) == "ringing"
-    assert normalize_doorbell_state({"doorbell": "view_requested"}) == "view_requested"
-    assert normalize_doorbell_state({"doorbell": "pressed"}) is None
-    assert normalize_doorbell_state({"doorbell": "doorbell_view_requested"}) is None
-    assert normalize_doorbell_state({"state": {"doorbell": "pressed"}}) is None
-
-
 def test_system_metric_sensor_does_not_refresh_while_reconnecting() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
@@ -2154,10 +2203,10 @@ def test_memo_refresh_signal_updates_availability() -> None:
     )
     entity = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
 
-    entity._handle_memos_refreshed("other")
+    entity._handle_items_refreshed("other")
     assert getattr(entity, "wrote_state", False) is False
 
-    entity._handle_memos_refreshed("entry-1")
+    entity._handle_items_refreshed("entry-1")
 
     assert entity.available is False
     assert entity.wrote_state is True
@@ -2171,13 +2220,50 @@ def test_video_messages_refresh_signal_updates_availability() -> None:
     )
     entity = C300XVoicemailMessagesSensor(entry)  # type: ignore[arg-type]
 
-    entity._handle_video_messages_refreshed("other")
+    entity._handle_items_refreshed("other")
     assert getattr(entity, "wrote_state", False) is False
 
-    entity._handle_video_messages_refreshed("entry-1")
+    entity._handle_items_refreshed("entry-1")
 
     assert entity.available is False
     assert entity.wrote_state is True
+
+
+def test_invalid_agent_event_payload_keeps_family_specific_refresh_behavior() -> None:
+    """Pin the historic twin quirk: memos still refresh, voicemail bails out."""
+
+    async def _run() -> None:
+        entry = _FakeEntry()
+        voicemail = C300XVoicemailMessagesSensor(entry)  # type: ignore[arg-type]
+        memo = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
+        voicemail.hass = _FakeHass()
+        memo.hass = voicemail.hass
+        memo.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+
+        voicemail._handle_agent_event(
+            types.SimpleNamespace(
+                data={
+                    "entry_id": entry.entry_id,
+                    "event_key": "answering_machine_messages_changed",
+                    "voicemail": "not-a-dict",
+                }
+            )
+        )
+        memo._handle_agent_event(
+            types.SimpleNamespace(
+                data={
+                    "entry_id": entry.entry_id,
+                    "event_key": "memos_changed",
+                    "memos": "not-a-dict",
+                }
+            )
+        )
+        await _drain_tasks()
+
+        assert entry.runtime_data.api.answering_machine_messages_calls == 0
+        assert entry.runtime_data.api.memos_calls == 1
+
+    asyncio.run(_run())
 
 
 def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:

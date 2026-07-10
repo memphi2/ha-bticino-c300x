@@ -21,7 +21,6 @@ from custom_components.bticino_c300x.ring_ai import (
     _async_read_wav,
     _async_read_wyoming_event,
     _async_ring_analysis_source,
-    _async_ring_wav_path,
     _async_write_wyoming_event,
     _async_wyoming_transcribe,
     _latest_ring_capture_metadata_path,
@@ -254,7 +253,7 @@ def test_read_wav_accepts_mono_16_bit_audio(tmp_path: Path) -> None:
     assert hass.executor_jobs == ["_read"]
 
 
-def test_async_ring_wav_path_and_read_wav_use_thread_fallback(
+def test_async_read_wav_uses_thread_fallback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -263,7 +262,6 @@ def test_async_ring_wav_path_and_read_wav_use_thread_fallback(
     hass = SimpleNamespace(config=_FakeConfig(tmp_path))
     monkeypatch.setattr(ring_ai_module.asyncio, "to_thread", _to_thread_inline)
 
-    assert asyncio.run(_async_ring_wav_path(hass, str(source))) == source
     assert asyncio.run(_async_read_wav(hass, source))["audio"] == b"\x01\x00\x02\x00"
 
 

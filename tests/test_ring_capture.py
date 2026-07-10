@@ -80,6 +80,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_rtsp_options,
     _async_run_ffmpeg,
     _async_run_ffmpeg_command,
+    _async_talkback_codec_is_pcmu,
     _async_wait_rtsp_ready,
     _capture_audio_gain_db,
     _capture_frame_offsets,
@@ -90,6 +91,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _resolve_root,
     _rtsp_url_from_status,
     _safe_c300x_path,
+    _talkback_codec_is_pcmu,
     _validate_duration,
     async_capture_doorbell_ring_call,
     raise_if_ring_capture_blocked,
@@ -126,16 +128,27 @@ class _FakeHass:
 @dataclass
 class _FakeApi:
     status: dict[str, Any]
+    audio_codec_status: dict[str, Any] | Exception | None = None
+    audio_codec_status_calls: int = 0
 
     async def async_doorbell_video_status(self) -> dict[str, Any]:
         bridge = {"media_owner": "idle", "clients": 0}
         bridge.update(self.status.get("bridge", {}))
         return {**self.status, "bridge": bridge}
 
+    async def async_audio_codec_status(self) -> dict[str, Any]:
+        self.audio_codec_status_calls += 1
+        if isinstance(self.audio_codec_status, Exception):
+            raise self.audio_codec_status
+        return self.audio_codec_status or {}
+
 
 @dataclass
 class _FakeRuntimeData:
     api: _FakeApi
+    event_state: Any = field(
+        default_factory=lambda: types.SimpleNamespace(audio_codec="speex")
+    )
 
 
 @dataclass
@@ -642,8 +655,10 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
         host: str,
         source: Path | None,
         _stop_event: Any,
+        *,
+        codec_pcmu: bool = False,
     ) -> None:
-        calls.append(("talkback", (host, source)))
+        calls.append(("talkback", (host, source, codec_pcmu)))
 
     monkeypatch.setattr(
         "custom_components.bticino_c300x.ring_capture._async_wait_rtsp_ready",
@@ -681,7 +696,7 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
                 6.0,
         ),
     ) in calls
-    assert ("talkback", ("192.0.2.10", None)) in calls
+    assert ("talkback", ("192.0.2.10", None, False)) in calls
     metadata_path = _capture_metadata_path(tmp_path / "config" / "c300x")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["capture_id"]
@@ -1146,8 +1161,10 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
         host: str,
         source: Path | None,
         _stop_event: Any,
+        *,
+        codec_pcmu: bool = False,
     ) -> None:
-        calls.append(("talkback", (host, source)))
+        calls.append(("talkback", (host, source, codec_pcmu)))
 
     monkeypatch.setattr(
         "custom_components.bticino_c300x.ring_capture._async_wait_rtsp_ready",
@@ -1173,7 +1190,7 @@ def test_capture_plays_announcement_in_parallel(monkeypatch: pytest.MonkeyPatch,
         )
     )
 
-    assert ("talkback", ("192.0.2.10", announcement)) in calls
+    assert ("talkback", ("192.0.2.10", announcement, False)) in calls
 
 
 def test_capture_cancels_long_announcement_after_capture(
@@ -1229,3 +1246,107 @@ def test_capture_cancels_long_announcement_after_capture(
     )
 
     assert events == ["capture_done", "talkback_cancelled"]
+
+
+def _entry_with_codec(codec: str | None) -> Any:
+    return types.SimpleNamespace(
+        runtime_data=types.SimpleNamespace(
+            event_state=types.SimpleNamespace(audio_codec=codec)
+        )
+    )
+
+
+def test_talkback_codec_is_pcmu_reads_runtime_event_state() -> None:
+    # Reads the durable codec the select mirrors into runtime state -- not the
+    # entity's live state, which goes unavailable during an agent blip.
+    assert _talkback_codec_is_pcmu(_entry_with_codec("pcmu")) is True
+    assert _talkback_codec_is_pcmu(_entry_with_codec("speex")) is False
+    assert _talkback_codec_is_pcmu(_entry_with_codec("unknown")) is False
+    assert _talkback_codec_is_pcmu(_entry_with_codec(None)) is False
+
+
+def test_talkback_codec_is_pcmu_defaults_false_when_runtime_state_missing() -> None:
+    # The sync helper is cache-only for callers that cannot refresh.
+    assert (
+        _talkback_codec_is_pcmu(types.SimpleNamespace(runtime_data=object())) is False
+    )
+    assert _talkback_codec_is_pcmu(object()) is False
+
+
+def test_talkback_codec_is_pcmu_reads_native_status_before_cache() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            _FakeApi({"bridge": {"device_audio_codec": "pcmu"}}),
+            event_state=types.SimpleNamespace(audio_codec=None),
+        ),
+        data={},
+    )
+
+    assert (
+        asyncio.run(
+            _async_talkback_codec_is_pcmu(
+                entry,
+                {"bridge": {"device_audio_codec": "pcmu"}},
+            )
+        )
+        is True
+    )
+    assert entry.runtime_data.event_state.audio_codec == "pcmu"
+
+
+def test_talkback_codec_is_pcmu_reuses_legacy_talkback_codec() -> None:
+    api = _FakeApi(
+        {"bridge": {"talkback_codec": "speex/8000"}},
+        audio_codec_status=RuntimeError("maintenance denied"),
+    )
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            api,
+            event_state=types.SimpleNamespace(audio_codec=None),
+        ),
+        data={},
+    )
+
+    assert (
+        asyncio.run(
+            _async_talkback_codec_is_pcmu(
+                entry,
+                {"bridge": {"talkback_codec": "speex/8000"}},
+            )
+        )
+        is False
+    )
+    assert api.audio_codec_status_calls == 0
+    assert entry.runtime_data.event_state.audio_codec == "speex"
+
+
+def test_talkback_codec_is_pcmu_refreshes_unknown_cache() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            _FakeApi(
+                {"bridge": {"device_audio_codec": "unknown"}},
+                audio_codec_status={"running_state": "pcmu"},
+            ),
+            event_state=types.SimpleNamespace(audio_codec=None),
+        ),
+        data={},
+    )
+
+    assert asyncio.run(_async_talkback_codec_is_pcmu(entry, {})) is True
+    assert entry.runtime_data.event_state.audio_codec == "pcmu"
+
+
+def test_talkback_codec_is_pcmu_rejects_unresolved_codec() -> None:
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            _FakeApi(
+                {"bridge": {"device_audio_codec": "unknown"}},
+                audio_codec_status=RuntimeError("maintenance denied"),
+            ),
+            event_state=types.SimpleNamespace(audio_codec=None),
+        ),
+        data={},
+    )
+
+    with pytest.raises(HomeAssistantError, match="talkback codec is unknown"):
+        asyncio.run(_async_talkback_codec_is_pcmu(entry, {}))

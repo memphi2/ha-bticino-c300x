@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import C300XAgentApiError
+from .capabilities import entry_maintenance_action_is_advertised
 from .const import (
     EVENT_AGENT_EVENT_RECEIVED,
+    SIGNAL_CONNECTION_STATE_CHANGED,
     SMARTPHONE_FORWARDING_MODES,
     SMARTPHONE_FORWARDING_STATE_UNPROVISIONED,
 )
 from .entity import C300XEntity, supports_capability
+from .entity import (
+    async_refresh_initial_states as _async_refresh_initial_states,
+)
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .forwarding import coerce_forwarding_mode_state
@@ -51,6 +58,8 @@ async def async_setup_entry(
     entities: list[SelectEntity] = []
     if supports_capability(entry, "smartphone_forwarding"):
         entities.append(C300XSmartphoneForwardingModeSelect(entry))
+    if entry_maintenance_action_is_advertised(entry, "audio_codec_apply"):
+        entities.append(C300XAudioCodecSelect(entry))
     if entities:
         await _async_refresh_initial_states(entities)
         async_add_entities(entities)
@@ -139,12 +148,154 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
         self.async_write_ha_state()
 
 
+class C300XAudioCodecSelect(C300XEntity, SelectEntity):
+    """Select the on-demand/intercom audio codec (speex or native PCMU).
+
+    Enabled by default and the single source of truth in HA for the codec
+    mode: the card reads this entity's state (no agent round-trip). Choosing an
+    option patches the device config and reboots for the change to take effect.
+    """
+
+    _attr_should_poll = False
+    _attr_translation_key = "audio_codec"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = ["speex", "pcmu"]
+
+    def __init__(self, entry: BticinoC300XConfigEntry) -> None:
+        super().__init__(entry, "audio_codec")
+        self._state = "unknown"
+        self._pending_option: str | None = None
+        self._seen_reboot_gap = False
+        self._resolving_pending = False
+        self._attr_available = True
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the codec the device is currently running (None while partial)."""
+
+        return self._state if self._state in ("speex", "pcmu") else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | None]:
+        """Expose the live state plus any codec change staged for a reboot."""
+
+        return {"state": self._state, "pending_option": self._pending_option}
+
+    async def async_select_option(self, option: str) -> None:
+        """Switch the device codec (apply=PCMU, restore=speex); reboots."""
+
+        api = self._entry.runtime_data.api
+        if option == "pcmu":
+            status = await api.async_apply_audio_codec()
+        elif option == "speex":
+            status = await api.async_restore_audio_codec()
+        else:
+            return
+        self._apply_action_result(option, status)
+        self.async_write_ha_state()
+
+    async def async_update(self) -> None:
+        """Refresh the codec state from the device."""
+
+        try:
+            status = await self._entry.runtime_data.api.async_audio_codec_status()
+        except C300XAgentApiError:
+            self._attr_available = False
+            return
+        self._apply_status(status)
+
+    def _apply_action_result(self, target: str, status: Mapping[str, Any]) -> None:
+        # apply/restore patch the config files, which the status reports as the
+        # target codec immediately -- but bt_av_media, linphone and the agent
+        # only adopt it on reboot. Until the codec is actually live, keep
+        # reporting the running codec (the card keys its gain path off this
+        # entity) and surface the change as pending. It resolves when the agent
+        # actually restarts: the connection drops and comes back, and we then
+        # re-read the now-live codec (see _handle_reboot_reconnect) -- no polling.
+        if bool(status.get("reboot_required")):
+            self._pending_option = target
+            self._seen_reboot_gap = False
+        else:
+            self._clear_pending()
+            self._state = target
+            self._record_running_codec()
+        self._attr_available = True
+
+    @callback
+    def _handle_reboot_reconnect(self, entry_id: str) -> None:
+        # Resolve a pending codec change without polling. A codec change only
+        # goes live on a device restart, which makes the agent drop off and come
+        # back. We wait for that down->up gap (so a mere connection blip does not
+        # resolve prematurely) and then re-read the actual codec -- this works
+        # whether we triggered the reboot or the user did it manually, and never
+        # optimistically claims a switch that the device did not make.
+        if entry_id != self._entry.entry_id or not self._pending_option:
+            return
+        if not self._entry.runtime_data.connection_state.available:
+            self._seen_reboot_gap = True
+            return
+        if not self._seen_reboot_gap or self._resolving_pending:
+            return
+        self._resolving_pending = True
+        self.hass.async_create_task(self._async_resolve_pending())
+
+    async def _async_resolve_pending(self) -> None:
+        try:
+            await self.async_update()
+        finally:
+            self._resolving_pending = False
+        self.async_write_ha_state()
+
+    def _clear_pending(self) -> None:
+        self._pending_option = None
+        self._seen_reboot_gap = False
+
+    async def async_added_to_hass(self) -> None:
+        """Resolve pending codec changes when the agent reconnects post-reboot."""
+
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_CONNECTION_STATE_CHANGED,
+                self._handle_reboot_reconnect,
+            )
+        )
+
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
+        # New agents report both the running codec and the configured on-disk
+        # target. Older agents only reported the on-disk state; if we already
+        # know a change is pending, keep the live state until a reboot gap was
+        # observed and resolved through _handle_reboot_reconnect.
+        has_running_state = isinstance(status.get("running_state"), str)
+        if self._pending_option and not self._seen_reboot_gap and not has_running_state:
+            self._attr_available = True
+            return
+        state = status.get("running_state", status.get("state", "unknown"))
+        self._state = state if isinstance(state, str) else "unknown"
+        configured_state = status.get("configured_state", status.get("state"))
+        if (
+            bool(status.get("reboot_required"))
+            and configured_state in ("speex", "pcmu")
+            and configured_state != self._state
+        ):
+            self._pending_option = str(configured_state)
+            self._seen_reboot_gap = False
+        else:
+            self._clear_pending()
+        self._record_running_codec()
+        self._attr_available = True
+
+    def _record_running_codec(self) -> None:
+        # Mirror the resolved running codec into shared runtime state so
+        # consumers (ring-capture talkback) still see it while this entity is
+        # unavailable during an agent-connection blip. Only real codecs are
+        # published; "unknown" leaves the last-known value untouched.
+        if self._state in ("speex", "pcmu"):
+            self._entry.runtime_data.event_state.audio_codec = self._state
+
+
 def _normalize_smartphone_forwarding_event(
     payload: Mapping[str, Any],
 ) -> dict[str, str | int | None]:
     return coerce_forwarding_mode_state(payload.get("mode"), payload.get("state"))
-
-
-async def _async_refresh_initial_states(entities: list[SelectEntity]) -> None:
-    for entity in entities:
-        await cast(Any, entity).async_update()

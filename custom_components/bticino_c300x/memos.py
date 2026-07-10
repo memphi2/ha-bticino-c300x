@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .const import DOMAIN
-from .message_metadata import latest_metadata_item, localized_choice, metadata_sort_key
+from .message_metadata import latest_metadata_item, localized_choice
 
 MAX_MEMO_STATE_LENGTH = 255
 DEFAULT_VOICE_MEMO_MIME_TYPE = "audio/wav"
@@ -48,18 +48,6 @@ def latest_memo_id(memos: dict[str, Any], kind: str) -> str | None:
     return memo_id if isinstance(memo_id, str) and memo_id else None
 
 
-def latest_text_memo_id(memos: dict[str, Any]) -> str | None:
-    """Return the newest text memo id."""
-
-    return latest_memo_id(memos, "text")
-
-
-def latest_voice_memo_id(memos: dict[str, Any]) -> str | None:
-    """Return the newest voice memo id."""
-
-    return latest_memo_id(memos, "voice")
-
-
 def voice_memo_items(memos: dict[str, Any]) -> list[dict[str, Any]]:
     """Return playable manual voice memo items."""
 
@@ -84,26 +72,6 @@ def latest_voice_memo_audio_id(memos: dict[str, Any]) -> str | None:
     return memo_id if isinstance(memo_id, str) and memo_id else None
 
 
-def latest_memo_label(
-    memos: dict[str, Any],
-    kind: str,
-    *,
-    language: str | None = None,
-) -> str:
-    """Return a human-readable latest memo label for entity state."""
-
-    latest = latest_memo(memos, kind)
-    if latest is None:
-        return no_memo_label(kind, language)
-    if kind == "text":
-        text = memo_state_text(latest.get("text"))
-        if text:
-            return text
-    timestamp = latest.get("iso_time") or latest.get("date")
-    name = memo_kind_label(kind, language)
-    return f"{name} {timestamp}" if timestamp else name
-
-
 def memo_kind_label(kind: str, language: str | None = None) -> str:
     """Return a translated memo kind label."""
 
@@ -124,24 +92,6 @@ def memo_kind_label(kind: str, language: str | None = None) -> str:
     )
 
 
-def no_memo_label(kind: str, language: str | None = None) -> str:
-    """Return a translated no-memo state."""
-
-    if kind == "voice":
-        return localized_choice(
-            language,
-            de="Keine Sprach-Memos",
-            it="Nessun memo vocale",
-            fr="Aucun memo vocal",
-            en="No voice memo",
-        )
-    return localized_choice(
-        language,
-        de="Keine Text-Memos",
-        it="Nessun memo testuale",
-        fr="Aucun memo texte",
-        en="No text memo",
-    )
 
 
 def latest_memo_attributes(
@@ -233,12 +183,6 @@ def _voice_memo_entry_name(memo_id: str) -> str:
     if not isinstance(memo_id, str) or not memo_id.startswith("voice/"):
         raise ValueError("voice memo id must start with voice/")
     return memo_id.split("/", 1)[1]
-
-
-def memo_sort_key(memo: dict[str, Any]) -> tuple[int, str, str]:
-    """Return a stable newest-first sort key for memo metadata."""
-
-    return metadata_sort_key(memo)
 
 
 def memo_state_text(value: Any) -> str | None:

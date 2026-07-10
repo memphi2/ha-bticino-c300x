@@ -23,17 +23,24 @@ _TALKBACK_READY_TIMEOUT_SECONDS = 5.0
 _TALKBACK_SAMPLE_RATE = 8000
 _TALKBACK_FRAME_SAMPLES = 160
 _ANNOUNCEMENT_PREROLL_SECONDS = 1.0
+# RTP payload types the agent relays verbatim to the device. Speex is the stock
+# codec (dynamic PT 97); when the device runs native PCMU the talkback must be
+# G.711 µ-law (PT 0) or the device receive pipeline cannot decode it.
+_TALKBACK_SPEEX_PAYLOAD_TYPE = 97
+_TALKBACK_PCMU_PAYLOAD_TYPE = 0
 
 
 async def async_play_announcement_when_ready(
     entry: Any,
     host: str,
     source: Path,
+    *,
+    codec_pcmu: bool = False,
 ) -> None:
     """Wait for ring-call talkback and play one HA-local announcement file."""
 
     await _async_wait_talkback_ready(entry)
-    await _async_play_announcement(host, source)
+    await _async_play_announcement(host, source, codec_pcmu=codec_pcmu)
 
 
 async def async_keep_talkback_alive_when_ready(
@@ -41,12 +48,20 @@ async def async_keep_talkback_alive_when_ready(
     host: str,
     source: Path | None,
     stop_event: threading.Event,
+    *,
+    codec_pcmu: bool = False,
 ) -> None:
     """Wait for ring-call talkback, optionally play an announcement, then keep it alive."""
 
     await _async_wait_talkback_ready(entry)
     try:
-        await asyncio.to_thread(_keep_talkback_alive_sync, host, source, stop_event)
+        await asyncio.to_thread(
+            _keep_talkback_alive_sync,
+            host,
+            source,
+            stop_event,
+            codec_pcmu=codec_pcmu,
+        )
     except HomeAssistantError:
         raise
     except Exception as err:
@@ -71,27 +86,38 @@ async def _async_wait_talkback_ready(entry: Any) -> None:
     )
 
 
-async def _async_play_announcement(host: str, source: Path) -> None:
+async def _async_play_announcement(
+    host: str,
+    source: Path,
+    *,
+    codec_pcmu: bool = False,
+) -> None:
     """Play one HA-local announcement file into the C300X talkback RTP port."""
 
     try:
-        await asyncio.to_thread(_play_announcement_sync, host, source)
+        await asyncio.to_thread(
+            _play_announcement_sync, host, source, codec_pcmu=codec_pcmu
+        )
     except HomeAssistantError:
         raise
     except Exception as err:
         raise HomeAssistantError("C300X announcement playback failed") from err
 
 
-def _play_announcement_sync(host: str, source: Path) -> None:
+def _play_announcement_sync(
+    host: str, source: Path, *, codec_pcmu: bool = False
+) -> None:
     stop_event = threading.Event()
     stop_event.set()
-    _keep_talkback_alive_sync(host, source, stop_event)
+    _keep_talkback_alive_sync(host, source, stop_event, codec_pcmu=codec_pcmu)
 
 
 def _keep_talkback_alive_sync(
     host: str,
     source: Path | None,
     stop_event: threading.Event,
+    *,
+    codec_pcmu: bool = False,
 ) -> None:
     try:
         import av
@@ -104,14 +130,11 @@ def _keep_talkback_alive_sync(
     timestamp = random.randrange(0, 2**32)
     ssrc = random.randrange(1, 2**32)
     marker = True
+    payload_type = (
+        _TALKBACK_PCMU_PAYLOAD_TYPE if codec_pcmu else _TALKBACK_SPEEX_PAYLOAD_TYPE
+    )
     sock, target = _open_talkback_socket(host)
-    encoder = _create_speex_encoder(av)
-    encoder.sample_rate = _TALKBACK_SAMPLE_RATE
-    encoder.layout = "mono"
-    encoder.format = "s16"
-    encoder.time_base = Fraction(1, _TALKBACK_SAMPLE_RATE)
-    encoder.options = {"vbr": "on"}
-    encoder.open()
+    encoder = _create_talkback_encoder(av, codec_pcmu=codec_pcmu)
     fifo = AudioFifo()
     resampler = AudioResampler(
         format="s16",
@@ -128,6 +151,7 @@ def _keep_talkback_alive_sync(
             timestamp,
             ssrc,
             marker,
+            payload_type=payload_type,
         )
         if source is not None:
             with av.open(str(source)) as container:
@@ -156,6 +180,7 @@ def _keep_talkback_alive_sync(
                             timestamp,
                             ssrc,
                             marker,
+                            payload_type=payload_type,
                         )
                 while fifo.samples:
                     fifo_frame = fifo.read(min(_TALKBACK_FRAME_SAMPLES, fifo.samples))
@@ -170,6 +195,7 @@ def _keep_talkback_alive_sync(
                         timestamp,
                         ssrc,
                         marker,
+                        payload_type=payload_type,
                     )
         while not stop_event.is_set():
             frame = _new_silence_frame(av)
@@ -182,12 +208,15 @@ def _keep_talkback_alive_sync(
                 timestamp,
                 ssrc,
                 marker,
+                payload_type=payload_type,
             )
         for packet in encoder.encode(None):
             payload = bytes(packet)
             if not payload:
                 continue
-            rtp = _build_talkback_rtp_packet(payload, sequence, timestamp, ssrc, marker)
+            rtp = _build_talkback_rtp_packet(
+                payload, sequence, timestamp, ssrc, marker, payload_type=payload_type
+            )
             sock.sendto(rtp, target)
             sequence = (sequence + 1) & 0xFFFF
             timestamp = (
@@ -218,6 +247,8 @@ def _send_talkback_silence_preroll(
     timestamp: int,
     ssrc: int,
     marker: bool,
+    *,
+    payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
 ) -> tuple[int, int, bool]:
     frames = int(_ANNOUNCEMENT_PREROLL_SECONDS * _TALKBACK_SAMPLE_RATE / _TALKBACK_FRAME_SAMPLES)
     for _ in range(frames):
@@ -231,6 +262,7 @@ def _send_talkback_silence_preroll(
             timestamp,
             ssrc,
             marker,
+            payload_type=payload_type,
         )
     return sequence, timestamp, marker
 
@@ -274,6 +306,8 @@ def _send_ready_talkback_frames(
     timestamp: int,
     ssrc: int,
     marker: bool,
+    *,
+    payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
 ) -> tuple[int, int, bool]:
     while fifo.samples >= _TALKBACK_FRAME_SAMPLES:
         frame = fifo.read(_TALKBACK_FRAME_SAMPLES)
@@ -288,6 +322,7 @@ def _send_ready_talkback_frames(
             timestamp,
             ssrc,
             marker,
+            payload_type=payload_type,
         )
     return sequence, timestamp, marker
 
@@ -301,13 +336,17 @@ def _send_encoded_talkback_frame(
     timestamp: int,
     ssrc: int,
     marker: bool,
+    *,
+    payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
 ) -> tuple[int, int, bool]:
     samples = max(1, int(getattr(frame, "samples", _TALKBACK_FRAME_SAMPLES) or _TALKBACK_FRAME_SAMPLES))
     for packet in encoder.encode(frame):
         payload = bytes(packet)
         if not payload:
             continue
-        rtp = _build_talkback_rtp_packet(payload, sequence, timestamp, ssrc, marker)
+        rtp = _build_talkback_rtp_packet(
+            payload, sequence, timestamp, ssrc, marker, payload_type=payload_type
+        )
         sock.sendto(rtp, target)
         sequence = (sequence + 1) & 0xFFFF
         timestamp = (
@@ -316,6 +355,25 @@ def _send_encoded_talkback_frame(
         marker = False
         time.sleep(samples / _TALKBACK_SAMPLE_RATE)
     return sequence, timestamp, marker
+
+
+def _create_talkback_encoder(av_module: Any, *, codec_pcmu: bool) -> Any:
+    """Return an opened, configured talkback encoder for the device codec."""
+
+    encoder = (
+        _create_pcmu_encoder(av_module)
+        if codec_pcmu
+        else _create_speex_encoder(av_module)
+    )
+    encoder.sample_rate = _TALKBACK_SAMPLE_RATE
+    encoder.layout = "mono"
+    encoder.format = "s16"
+    encoder.time_base = Fraction(1, _TALKBACK_SAMPLE_RATE)
+    if not codec_pcmu:
+        # Speex-only knob; pcm_mulaw has no VBR and rejects unknown options.
+        encoder.options = {"vbr": "on"}
+    encoder.open()
+    return encoder
 
 
 def _create_speex_encoder(av_module: Any) -> Any:
@@ -330,13 +388,26 @@ def _create_speex_encoder(av_module: Any) -> Any:
     raise HomeAssistantError("Speex encoding is not available on Home Assistant") from last_error
 
 
+def _create_pcmu_encoder(av_module: Any) -> Any:
+    """Return a G.711 µ-law (PCMU) encoder for native-PCMU device talkback."""
+
+    try:
+        return av_module.CodecContext.create("pcm_mulaw", "w")
+    except Exception as err:  # noqa: BLE001
+        raise HomeAssistantError(
+            "PCMU encoding is not available on Home Assistant"
+        ) from err
+
+
 def _build_talkback_rtp_packet(
     payload: bytes,
     sequence: int,
     timestamp: int,
     ssrc: int,
     marker: bool,
+    *,
+    payload_type: int = _TALKBACK_SPEEX_PAYLOAD_TYPE,
 ) -> bytes:
-    marker_payload = 97 | (0x80 if marker else 0)
+    marker_payload = (payload_type & 0x7F) | (0x80 if marker else 0)
     header = struct.pack("!BBHII", 0x80, marker_payload, sequence, timestamp, ssrc)
     return header + payload

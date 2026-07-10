@@ -108,6 +108,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/use_cases/ring_analysis.py",
     "custom_components/bticino_c300x/use_cases/ring_call.py",
     "custom_components/bticino_c300x/use_cases/ring_capture.py",
+    "custom_components/bticino_c300x/stored_items.py",
     "custom_components/bticino_c300x/value_parsing.py",
     "custom_components/bticino_c300x/validation_patterns.py",
     "custom_components/bticino_c300x/video.py",

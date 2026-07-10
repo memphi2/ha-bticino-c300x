@@ -1,4 +1,5 @@
 #include "c300x_agent.h"
+#include "audio_codec.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -8,7 +9,8 @@ static void print_usage(const char *program)
 {
     fprintf(
         stderr,
-        "Usage: %s [--config PATH] [--check-config] [--diagnose-startup] [--version]\n",
+        "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
+        " [--audio-codec status|apply|restore] [--version]\n",
         program
     );
 }
@@ -16,6 +18,38 @@ static void print_usage(const char *program)
 static const char *json_bool(int value)
 {
     return value ? "true" : "false";
+}
+
+/* Self-contained CLI for the native audio-codec patch (paths are
+ * env-overridable, so this doubles as the offline test entrypoint). */
+static int run_audio_codec_cli(const char *action)
+{
+    struct c300x_audio_codec_status status;
+    char error[C300X_MAX_ERROR_LEN] = {0};
+    int ok;
+
+    if (strcmp(action, "status") == 0) {
+        ok = c300x_audio_codec_read_status(&status);
+    } else if (strcmp(action, "apply") == 0) {
+        ok = c300x_audio_codec_apply(&status, error, sizeof(error));
+    } else if (strcmp(action, "restore") == 0) {
+        ok = c300x_audio_codec_restore(&status, error, sizeof(error));
+    } else {
+        fprintf(stderr, "fatal: invalid_arguments: --audio-codec needs status|apply|restore\n");
+        return 2;
+    }
+    if (ok) {
+        printf(
+            "{\"ok\":true,\"state\":\"%s\",\"supported\":%s,\"backup_present\":%s,\"changed\":%s}\n",
+            status.state,
+            json_bool(status.supported),
+            json_bool(status.backup_present),
+            json_bool(status.changed)
+        );
+        return 0;
+    }
+    printf("{\"ok\":false,\"error\":\"%s\"}\n", error[0] != '\0' ? error : "failed");
+    return 1;
 }
 
 static void print_json_string(FILE *out, const char *value)
@@ -99,6 +133,7 @@ int main(int argc, char **argv)
     const char *config_path = "config.json";
     int check_config = 0;
     int diagnose_startup = 0;
+    const char *audio_codec_action = NULL;
     struct c300x_config config;
     char error[256] = {0};
 
@@ -110,6 +145,13 @@ int main(int argc, char **argv)
                 return 2;
             }
             config_path = argv[++index];
+        } else if (strcmp(argv[index], "--audio-codec") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "fatal: invalid_arguments: --audio-codec requires an action\n");
+                print_usage(argv[0]);
+                return 2;
+            }
+            audio_codec_action = argv[++index];
         } else if (strcmp(argv[index], "--check-config") == 0) {
             check_config = 1;
         } else if (strcmp(argv[index], "--diagnose-startup") == 0) {
@@ -122,6 +164,10 @@ int main(int argc, char **argv)
             print_usage(argv[0]);
             return 2;
         }
+    }
+
+    if (audio_codec_action != NULL) {
+        return run_audio_codec_cli(audio_codec_action);
     }
 
     if (!c300x_load_config(config_path, &config, error, sizeof(error))) {

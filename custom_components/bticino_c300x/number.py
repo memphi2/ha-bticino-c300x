@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.core import HomeAssistant, callback
@@ -13,6 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import C300XAgentApiError
 from .const import EVENT_AGENT_EVENT_RECEIVED
 from .entity import C300XEntity
+from .entity import (
+    async_refresh_initial_states as _async_refresh_initial_states,
+)
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 
@@ -138,8 +141,3 @@ def _coerce_active_ringer_volume(value: Any) -> int | None:
     if _RINGER_VOLUME_MIN <= volume <= _RINGER_VOLUME_MAX:
         return volume
     return None
-
-
-async def _async_refresh_initial_states(entities: list[NumberEntity]) -> None:
-    for entity in entities:
-        await cast(Any, entity).async_update()

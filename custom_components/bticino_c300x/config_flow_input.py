@@ -8,7 +8,9 @@ import voluptuous as vol
 from homeassistant.const import CONF_NAME
 
 from .action import ActionValidationError, parse_actions_json
-from .callback_url import normalize_callback_base_url
+from .callback_url import (
+    validated_callback_base_url as _validated_callback_base_url,
+)
 from .config_audio import audio_gain_db
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -198,19 +200,6 @@ def _agent_host(value: Any) -> str:
     if not host:
         raise vol.Invalid("invalid agent host")
     return host
-
-
-def _validated_callback_base_url(
-    user_input: dict[str, Any],
-    errors: dict[str, str],
-) -> str:
-    """Validate the optional local HA callback base URL override."""
-
-    try:
-        return normalize_callback_base_url(user_input.get(CONF_CALLBACK_BASE_URL, ""))
-    except ValueError:
-        errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
-        return ""
 
 
 def _initial_connection_input(

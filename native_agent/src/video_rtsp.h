@@ -23,6 +23,8 @@ struct c300x_video_status {
     int media_starting;
     int stream_audio;
     int talkback_running;
+    int device_codec_known;
+    int device_codec_pcmu;
     int bridge_running;
     int bridge_media_active;
     int bridge_stop_in_progress;

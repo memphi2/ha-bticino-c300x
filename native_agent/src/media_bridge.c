@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "audio_codec.h"
 #include "device_user.h"
 #include "media_audio.h"
 #include "media_base64.h"
@@ -283,6 +284,7 @@ typedef struct {
     char last_rtsp_reject_reason[64];
     int invite_cseq;
     const struct c300x_config *config;
+    int device_codec_pcmu;
     struct c300x_video *video;
 } media_bridge_t;
 
@@ -1055,7 +1057,6 @@ static int media_srtp_init_audio_inbound(media_srtp_state_t *state, const unsign
 }
 
 static void send_stun_binding_request(int fd, int port);
-static void send_media_audio_silence(int fd, int port, media_srtp_state_t *state);
 static void send_media_audio_silence_payload_type(
     int fd,
     int port,
@@ -1460,7 +1461,95 @@ static void drain_rtsp_interleaved_payload(
     }
 }
 
+// Per-connection buffered reader for the RTSP control stream. The stream
+// interleaves text requests and binary "$"-framed RTP, so reads must never
+// consume past one message. Buffering lets us bulk-recv instead of one
+// select()+recv() per byte (the old text-request path) while keeping the
+// no-over-read guarantee: leftover bytes stay buffered for the next call.
+typedef struct {
+    unsigned char *data;
+    size_t cap;
+    size_t start;
+    size_t len;
+} rtsp_read_buffer_t;
+
+static void rtsp_buf_compact(rtsp_read_buffer_t *buf) {
+    if (buf->start == 0) {
+        return;
+    }
+    if (buf->len > 0) {
+        memmove(buf->data, buf->data + buf->start, buf->len);
+    }
+    buf->start = 0;
+}
+
+// Append at least one new byte from the socket. One trailing byte is always
+// reserved so callers can NUL-terminate for text scanning.
+// Returns 1 on data appended, 0 on timeout, -1 on error/close/full.
+static int rtsp_buf_fill(rtsp_read_buffer_t *buf, int fd, int timeout_seconds) {
+    rtsp_buf_compact(buf);
+    if (buf->len + 1 >= buf->cap) {
+        return -1;
+    }
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(fd, &readfds);
+    struct timeval timeout = {timeout_seconds, 0};
+    int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
+    if (ready <= 0) {
+        return ready == 0 ? 0 : -1;
+    }
+    ssize_t n = recv(fd, buf->data + buf->len, buf->cap - 1 - buf->len, 0);
+    if (n <= 0) {
+        return -1;
+    }
+    buf->len += (size_t)n;
+    return 1;
+}
+
+// Ensure at least `want` bytes are buffered. 1 ok, 0 timeout, -1 error.
+static int rtsp_buf_ensure(
+    rtsp_read_buffer_t *buf,
+    int fd,
+    size_t want,
+    int timeout_seconds
+) {
+    while (buf->len < want) {
+        int r = rtsp_buf_fill(buf, fd, timeout_seconds);
+        if (r <= 0) {
+            return r;
+        }
+    }
+    return 1;
+}
+
+static void rtsp_buf_consume(rtsp_read_buffer_t *buf, size_t n) {
+    if (n >= buf->len) {
+        buf->start = 0;
+        buf->len = 0;
+        return;
+    }
+    buf->start += n;
+    buf->len -= n;
+}
+
+// Discard `n` bytes: from the buffer first, then straight from the socket.
+static void rtsp_buf_discard(
+    rtsp_read_buffer_t *buf,
+    int fd,
+    size_t n,
+    int timeout_seconds
+) {
+    size_t from_buf = buf->len < n ? buf->len : n;
+    rtsp_buf_consume(buf, from_buf);
+    n -= from_buf;
+    if (n > 0) {
+        drain_rtsp_interleaved_payload(fd, n, timeout_seconds);
+    }
+}
+
 static rtsp_read_result_t read_rtsp_request_or_interleaved(
+    rtsp_read_buffer_t *buf,
     int fd,
     char *request,
     size_t request_size,
@@ -1470,12 +1559,9 @@ static rtsp_read_result_t read_rtsp_request_or_interleaved(
     size_t *interleaved_len,
     int timeout_seconds
 ) {
-    unsigned char first;
-    size_t used;
-    int ok;
-
     if (
-        request == NULL
+        buf == NULL
+        || request == NULL
         || request_size < 2
         || interleaved == NULL
         || interleaved_channel == NULL
@@ -1487,59 +1573,67 @@ static rtsp_read_result_t read_rtsp_request_or_interleaved(
     *interleaved_channel = -1;
     *interleaved_len = 0;
 
-    ok = recv_exact_timeout(fd, &first, 1, timeout_seconds);
-    if (ok == 0) {
+    int r = rtsp_buf_ensure(buf, fd, 1, timeout_seconds);
+    if (r == 0) {
         return RTSP_READ_TIMEOUT;
     }
-    if (ok < 0) {
+    if (r < 0) {
         return RTSP_READ_ERROR;
     }
-    if (first == '$') {
-        unsigned char header[3];
-        size_t frame_len;
-        ok = recv_exact_timeout(fd, header, sizeof(header), timeout_seconds);
-        if (ok <= 0) {
+
+    if (buf->data[buf->start] == '$') {
+        if (rtsp_buf_ensure(buf, fd, 4, timeout_seconds) <= 0) {
             return RTSP_READ_ERROR;
         }
-        frame_len = ((size_t)header[1] << 8) | header[2];
-        *interleaved_channel = header[0];
+        const unsigned char *hdr = buf->data + buf->start;
+        size_t frame_len = ((size_t)hdr[2] << 8) | hdr[3];
+        *interleaved_channel = hdr[1];
         if (frame_len > interleaved_size) {
-            drain_rtsp_interleaved_payload(fd, frame_len, timeout_seconds);
+            rtsp_buf_consume(buf, 4);
+            rtsp_buf_discard(buf, fd, frame_len, timeout_seconds);
             return RTSP_READ_INTERLEAVED;
         }
-        ok = recv_exact_timeout(fd, interleaved, frame_len, timeout_seconds);
-        if (ok <= 0) {
+        if (rtsp_buf_ensure(buf, fd, 4 + frame_len, timeout_seconds) <= 0) {
             return RTSP_READ_ERROR;
         }
+        memcpy(interleaved, buf->data + buf->start + 4, frame_len);
+        rtsp_buf_consume(buf, 4 + frame_len);
         *interleaved_len = frame_len;
         return RTSP_READ_INTERLEAVED;
     }
 
-    used = 1;
-    request[0] = (char)first;
-    request[1] = '\0';
-    while (used < request_size - 1) {
-        char *header_end = strstr(request, "\r\n\r\n");
+    // Text RTSP request: copy exactly one message, leave the rest buffered.
+    // A message that cannot be framed within the buffer — a header section
+    // with no terminator, or a Content-Length body larger than capacity — is
+    // a protocol violation we cannot consume without desyncing the stream, so
+    // close the connection instead of returning a truncated request.
+    const size_t max_request = request_size - 1;
+    for (;;) {
+        buf->data[buf->start + buf->len] = '\0';
+        char *text = (char *)(buf->data + buf->start);
+        char *header_end = strstr(text, "\r\n\r\n");
         if (header_end != NULL) {
-            size_t header_len = (size_t)(header_end + 4 - request);
-            int body_len = c300x_media_sip_content_length(request);
-            if ((int)(used - header_len) >= body_len) {
+            size_t header_len = (size_t)(header_end + 4 - text);
+            int body_len = c300x_media_sip_content_length(text);
+            size_t message_len =
+                header_len + (body_len > 0 ? (size_t)body_len : 0);
+            if (message_len > max_request) {
+                return RTSP_READ_ERROR;
+            }
+            if (buf->len >= message_len) {
+                memcpy(request, text, message_len);
+                request[message_len] = '\0';
+                rtsp_buf_consume(buf, message_len);
                 return RTSP_READ_REQUEST;
             }
         }
-        ok = recv_exact_timeout(
-            fd,
-            (unsigned char *)request + used,
-            1,
-            timeout_seconds
-        );
-        if (ok <= 0) {
+        if (buf->len >= max_request) {
             return RTSP_READ_ERROR;
         }
-        used++;
-        request[used] = '\0';
+        if (rtsp_buf_fill(buf, fd, timeout_seconds) <= 0) {
+            return RTSP_READ_ERROR;
+        }
     }
-    return RTSP_READ_REQUEST;
 }
 
 static bool read_sip_domain(char *domain, size_t domain_len) {
@@ -1838,10 +1932,14 @@ static bool build_ring_sdp(
     const char *from_user,
     const char *audio_key,
     const char *video_key,
-    bool audio_active
+    bool audio_active,
+    bool use_pcmu
 ) {
     int session_id = (int)(time(NULL) % 10000);
 
+    // The ring INVITE comes from the device; we answer with the codec that
+    // matches the configured mode. In pcmu mode the device offers PCMU
+    // (static payload 0), so answer PCMU; otherwise keep the speex answer.
     return snprintf(
         out,
         out_len,
@@ -1852,9 +1950,8 @@ static bool build_ring_sdp(
         "b=AS:380\r\n"
         "t=0 0\r\n"
         "a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r\n"
-        "m=audio %d RTP/SAVP 96 101\r\n"
-        "a=rtpmap:96 speex/8000\r\n"
-        "a=fmtp:96 vbr=on\r\n"
+        "m=audio %d RTP/SAVP %s 101\r\n"
+        "%s"
         "a=rtpmap:101 telephone-event/8000\r\n"
         "%s"
         "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:%s\r\n"
@@ -1873,6 +1970,10 @@ static bool build_ring_sdp(
         session_id,
         audio_active ? 2 : 1,
         RING_AUDIO_RTP_PORT,
+        use_pcmu ? "0" : "96",
+        use_pcmu
+            ? "a=rtpmap:0 PCMU/8000\r\n"
+            : "a=rtpmap:96 speex/8000\r\na=fmtp:96 vbr=on\r\n",
         audio_active ? "" : "a=inactive\r\n",
         audio_key,
         RING_VIDEO_RTP_PORT,
@@ -2145,8 +2246,35 @@ static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
         || payload_type == MEDIA_AUDIO_PAYLOAD_TYPE;
 }
 
+static bool bridge_audio_codec_is_pcmu(const media_bridge_t *bridge) {
+    /* Read the cached device-derived flag (set once at c300x_media_bridge_start)
+     * rather than the device file per packet. */
+    return bridge != NULL && bridge->device_codec_pcmu != 0;
+}
+
+// Payload type the agent stamps on talkback frames sent to the device.
+// pcmu mode → PCMU (static payload 0); speex mode keeps the caller's historical
+// speex payload type (ring uses 96, on-demand/home use 98), so speex behaviour
+// is untouched.
+static unsigned char talkback_output_payload_type(
+    const media_bridge_t *bridge,
+    unsigned char speex_payload_type
+) {
+    return bridge_audio_codec_is_pcmu(bridge)
+        ? RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+        : speex_payload_type;
+}
+
 static int current_doorstation_audio_gain_q12(media_bridge_t *bridge) {
     int gain_q12;
+
+    // In PCMU mode the device already emits PCMU, so forcing neutral gain
+    // keeps the shared inbound path on its zero-copy passthrough (no
+    // decode/gain/re-encode) — the whole point of the native-PCMU path.
+    // Any level adjustment is done card-side in the browser later.
+    if (bridge_audio_codec_is_pcmu(bridge)) {
+        return DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL;
+    }
 
     pthread_mutex_lock(&bridge->mutex);
     gain_q12 = bridge->doorstation_audio_gain_q12;
@@ -2505,6 +2633,7 @@ static void close_ring_media_fds_locked(media_bridge_t *bridge) {
 
 static void ring_call_cleanup(media_bridge_t *bridge) {
     bool was_active;
+    bool was_unanswered;
 
     pthread_mutex_lock(&bridge->mutex);
     was_active = (
@@ -2513,6 +2642,10 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
         || bridge->ring_answered
         || bridge->ring_answer_requested
     );
+    // An unanswered ring tears down here (remote CANCEL / loop exit) without
+    // going through the answered-hangup path that drains RTSP clients, so its
+    // leftover auto-preview client can outlive the ring by a few dozen ms.
+    was_unanswered = was_active && !bridge->ring_answered;
     close_ring_media_fds_locked(bridge);
     bridge->ring_call_active = false;
     bridge->ring_media_active = false;
@@ -2528,6 +2661,14 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     reset_backchannel_talkback_locked(bridge);
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_stopped(bridge->video);
+    // Drain (force-close on overstay) the leftover preview client BEFORE
+    // signalling media closed. The event makes HA poll the agent status
+    // immediately; without this it can catch the still-draining client
+    // (clients==1), derive RTSP_BUSY, and latch that stale state until the
+    // next event — the "card stuck on busy after an unanswered ring" bug.
+    if (was_unanswered) {
+        shutdown_rtsp_clients_after_drain(bridge);
+    }
     if (was_active && c300x_video_consume_media_closed_event(bridge->video)) {
         c300x_video_dispatch_event(bridge->video, "doorbell.media.closed", "{}", 0);
     }
@@ -2691,14 +2832,14 @@ static void ring_media_loop(
                     audio_fd,
                     target_audio_port,
                     srtp,
-                    RING_AUDIO_PAYLOAD_TYPE,
+                    talkback_output_payload_type(bridge, RING_AUDIO_PAYLOAD_TYPE),
                     &bridge->ring_last_talkback_ms
                 ) && !ring_talkback_recent_locked(bridge, now)) {
                     send_media_audio_silence_payload_type(
                         audio_fd,
                         target_audio_port,
                         srtp,
-                        RING_AUDIO_PAYLOAD_TYPE
+                        talkback_output_payload_type(bridge, RING_AUDIO_PAYLOAD_TYPE)
                     );
                 }
             }
@@ -2765,8 +2906,8 @@ static void handle_ring_invite(
     }
     srtp_ready = true;
     if (
-        !build_ring_sdp(sdp_early, sizeof(sdp_early), from_user, answer_audio_key, answer_video_key, false)
-        || !build_ring_sdp(sdp_answer, sizeof(sdp_answer), from_user, answer_audio_key, answer_video_key, true)
+        !build_ring_sdp(sdp_early, sizeof(sdp_early), from_user, answer_audio_key, answer_video_key, false, bridge_audio_codec_is_pcmu(bridge))
+        || !build_ring_sdp(sdp_answer, sizeof(sdp_answer), from_user, answer_audio_key, answer_video_key, true, bridge_audio_codec_is_pcmu(bridge))
     ) {
         goto cleanup;
     }
@@ -3171,15 +3312,15 @@ static void send_media_audio_silence_payload_type(
     store_be16(packet + 2, state->audio_seq);
     store_be32(packet + 4, state->audio_timestamp);
     store_be32(packet + 8, state->audio_ssrc);
-    packet[12] = MEDIA_AUDIO_SILENCE_PAYLOAD;
+    // PCMU digital silence is 0xFF (µ-law zero); the speex silence byte 0x00
+    // would decode as a loud sample under µ-law, so pick by payload type.
+    packet[12] = payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+        ? 0xFF
+        : MEDIA_AUDIO_SILENCE_PAYLOAD;
     if (protect_and_send_srtp(state->audio, fd, port, packet, 13)) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
     }
-}
-
-static void send_media_audio_silence(int fd, int port, media_srtp_state_t *state) {
-    send_media_audio_silence_payload_type(fd, port, state, MEDIA_AUDIO_PAYLOAD_TYPE);
 }
 
 static bool send_queued_talkback_payload_locked(
@@ -3290,7 +3431,19 @@ static bool forward_ring_talkback_packet(
     state = (media_srtp_state_t *)bridge->ring_srtp_state;
     memset(out, 0, sizeof(out));
     out[0] = 0x80;
-    out[1] = (unsigned char)((packet[1] & 0x80) | RING_AUDIO_PAYLOAD_TYPE);
+    /* Relay the pre-encoded UDP talkback stream (ring-capture keepalive /
+     * announcements). The bytes cannot be transcoded here, but a speex
+     * stream must be restamped: the HA sender labels speex as 97 while the
+     * ring SDP answer negotiates 96, and the device drops payload types
+     * outside the negotiated map. A PCMU label (static 0) is never
+     * restamped — in pcmu mode the negotiated type IS 0, and in speex mode
+     * relabelling mu-law bytes as speex would decode as noise, so the
+     * mismatched stream stays 0 and is dropped (silent) instead. */
+    if (bridge_audio_codec_is_pcmu(bridge) || (packet[1] & 0x7f) == 0) {
+        out[1] = packet[1];
+    } else {
+        out[1] = (unsigned char)((packet[1] & 0x80) | RING_AUDIO_PAYLOAD_TYPE);
+    }
     store_be16(out + 2, state->audio_seq);
     store_be32(out + 4, state->audio_timestamp);
     store_be32(out + 8, state->audio_ssrc);
@@ -3355,7 +3508,8 @@ static bool forward_home_call_talkback_packet(
     state = (media_srtp_state_t *)bridge->home_call_srtp_state;
     memset(out, 0, sizeof(out));
     out[0] = 0x80;
-    out[1] = (unsigned char)((packet[1] & 0x80) | MEDIA_AUDIO_PAYLOAD_TYPE);
+    out[1] = (unsigned char)((packet[1] & 0x80)
+        | talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE));
     store_be16(out + 2, state->audio_seq);
     store_be32(out + 4, state->audio_timestamp);
     store_be32(out + 8, state->audio_ssrc);
@@ -3420,7 +3574,8 @@ static bool forward_ondemand_talkback_packet(
     state = (media_srtp_state_t *)bridge->ondemand_srtp_state;
     memset(out, 0, sizeof(out));
     out[0] = 0x80;
-    out[1] = (unsigned char)((packet[1] & 0x80) | MEDIA_AUDIO_PAYLOAD_TYPE);
+    out[1] = (unsigned char)((packet[1] & 0x80)
+        | talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE));
     store_be16(out + 2, state->audio_seq);
     store_be32(out + 4, state->audio_timestamp);
     store_be32(out + 8, state->audio_ssrc);
@@ -3540,7 +3695,16 @@ static bool forward_pcm_backchannel_packet(
         if (!have_frame) {
             continue;
         }
-        if (!speex_encode_pcm_frame(
+        // In pcmu mode the device wants PCMU; re-encode the decoded PCM frame
+        // as µ-law (the same 160-sample cadence) instead of speex. This makes
+        // both PCMU and PCMA inbound talkback come out as PCMU regardless of
+        // which G.711 flavor go2rtc chose. speex mode is unchanged.
+        if (bridge_audio_codec_is_pcmu(bridge)) {
+            for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
+                speex_payload[index] = c300x_pcmu_encode(samples[index]);
+            }
+            speex_len = RTSP_BACKCHANNEL_FRAME_SAMPLES;
+        } else if (!speex_encode_pcm_frame(
             samples,
             speex_payload,
             sizeof(speex_payload),
@@ -3812,10 +3976,15 @@ static void *ondemand_media_thread(void *arg) {
                     audio_rtp_fd,
                     target_audio_port,
                     &srtp,
-                    MEDIA_AUDIO_PAYLOAD_TYPE,
+                    talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE),
                     &bridge->ondemand_last_talkback_ms
                 ) && !ondemand_talkback_recent_locked(bridge, now)) {
-                    send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp);
+                    send_media_audio_silence_payload_type(
+                        audio_rtp_fd,
+                        target_audio_port,
+                        &srtp,
+                        talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)
+                    );
                 }
             }
             pthread_mutex_unlock(&bridge->mutex);
@@ -5043,10 +5212,15 @@ static void *home_call_thread_func(void *arg) {
                     audio_fd,
                     target_audio_port,
                     &srtp,
-                    MEDIA_AUDIO_PAYLOAD_TYPE,
+                    talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE),
                     &bridge->home_call_last_talkback_ms
                 ) && !home_call_talkback_recent_locked(bridge, now)) {
-                    send_media_audio_silence(audio_fd, target_audio_port, &srtp);
+                    send_media_audio_silence_payload_type(
+                        audio_fd,
+                        target_audio_port,
+                        &srtp,
+                        talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)
+                    );
                 }
             }
             pthread_mutex_unlock(&bridge->mutex);
@@ -5695,6 +5869,8 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.video == video) {
         status->bridge_running = g_bridge.running ? 1 : 0;
+        status->device_codec_known = g_bridge.running ? 1 : 0;
+        status->device_codec_pcmu = g_bridge.device_codec_pcmu ? 1 : 0;
         status->bridge_media_active = (
             g_bridge.media_active
             || g_bridge.ring_media_active
@@ -5844,6 +6020,8 @@ static void send_rtsp_response(
 
 static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     char *request = calloc(1, RTSP_BUFFER_SIZE);
+    unsigned char *read_buffer_data = malloc(RTSP_BUFFER_SIZE);
+    rtsp_read_buffer_t read_buffer = {read_buffer_data, RTSP_BUFFER_SIZE, 0, 0};
     unsigned char interleaved[2048];
     char method[16];
     char uri[512];
@@ -5855,7 +6033,9 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     int slot_index = -1;
     int remaining_clients = 0;
 
-    if (request == NULL) {
+    if (request == NULL || read_buffer_data == NULL) {
+        free(request);
+        free(read_buffer_data);
         close(fd);
         return;
     }
@@ -5866,6 +6046,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     if (!accepted) {
         send_rtsp_response(fd, 453, "1", NULL, NULL);
         free(request);
+        free(read_buffer_data);
         close(fd);
         return;
     }
@@ -5875,6 +6056,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         int interleaved_channel = -1;
         size_t interleaved_len = 0;
         rtsp_read_result_t read_result = read_rtsp_request_or_interleaved(
+            &read_buffer,
             fd,
             request,
             RTSP_BUFFER_SIZE,
@@ -5948,16 +6130,25 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     && !recorder
                     && compatible_shared_path
                 );
+            bool ondemand_describe_context =
+                !ring_audio && !home_call_audio && !recorder;
+            // Mirror the PLAY handler's stop_in_progress guard here: without
+            // it a client can get a 200 SDP answer + SETUP mid-teardown and
+            // only be rejected at PLAY, leaving go2rtc with a half-open
+            // session it must abort (the EOF-on-stop race).
+            bool stop_in_progress_guard =
+                ondemand_describe_context && g_bridge.stop_in_progress;
             bool explicit_stop_guard =
-                !ring_audio
-                && !home_call_audio
-                && !recorder
+                ondemand_describe_context
                 && c300x_media_session_guard_blocks_start(&g_bridge.ondemand_guard)
                 && !g_bridge.media_active
                 && !g_bridge.media_starting;
-            if (explicit_stop_guard) {
+            if (stop_in_progress_guard || explicit_stop_guard) {
+                const char *reject_reason = stop_in_progress_guard
+                    ? "stop_in_progress"
+                    : "explicit_stop_guard";
                 pthread_mutex_unlock(&g_bridge.mutex);
-                rtsp_note_describe_reject(&g_bridge, "explicit_stop_guard");
+                rtsp_note_describe_reject(&g_bridge, reject_reason);
                 send_rtsp_response(fd, 503, cseq, NULL, NULL);
                 break;
             }
@@ -6225,6 +6416,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         c300x_video_bridge_media_stopped(g_bridge.video);
     }
     free(request);
+    free(read_buffer_data);
     close(fd);
 }
 
@@ -6360,6 +6552,10 @@ bool c300x_media_bridge_start(const struct c300x_config *config, struct c300x_vi
     close_fd_if_open(&g_bridge.listen_fd);
     close_all_rtsp_clients_locked(&g_bridge);
     g_bridge.config = config;
+    /* Derive the codec mode from the device once at start (bt_av_media reads
+     * the same stack_open.xml flag at boot), so the agent always matches the
+     * device without a separate config value that could drift. */
+    g_bridge.device_codec_pcmu = c300x_audio_codec_device_is_pcmu();
     g_bridge.video = video;
     g_bridge.listen_fd = -1;
     g_bridge.startup_done = false;

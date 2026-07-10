@@ -359,11 +359,12 @@ static void build_activation_id(
     if (strcmp(activation->type, "lock") == 0
         && activation->address[0] != '\0'
         && strlen(activation->address) <= 20) {
-        snprintf(out, out_len, "device_lock_%s", activation->address);
+        /* precision matches the length guard so truncation is provably absent */
+        snprintf(out, out_len, "device_lock_%.20s", activation->address);
     } else if (strcmp(activation->type, "stair_light") == 0
         && activation->address[0] != '\0'
         && strlen(activation->address) <= 19) {
-        snprintf(out, out_len, "device_stair_%s", activation->address);
+        snprintf(out, out_len, "device_stair_%.19s", activation->address);
     } else {
         snprintf(out, out_len, "device_action_%08x", fnv1a32(activation->press_command));
     }

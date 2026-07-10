@@ -5,17 +5,12 @@ import pytest
 from custom_components.bticino_c300x.memos import (
     MAX_MEMO_STATE_LENGTH,
     latest_memo_attributes,
-    latest_memo_label,
-    latest_text_memo_id,
     latest_voice_memo_audio_id,
-    latest_voice_memo_id,
     memo_kind_counts,
     memo_kind_items,
     memo_kind_label,
-    memo_sort_key,
     memo_state_text,
     memo_text_was_state_truncated,
-    no_memo_label,
     voice_memo_media_source_id,
     voice_memo_media_url,
     voice_memo_title,
@@ -77,44 +72,6 @@ def test_memo_kind_filters_counts_and_latest_ids() -> None:
         "text/new",
     ]
     assert memo_kind_counts(memos, "text") == (1, 1)
-    assert latest_text_memo_id(memos) == "text/new"
-    assert latest_voice_memo_id(memos) == "voice/new"
-
-
-def test_latest_memo_label_prefers_text_then_timestamp_then_empty_state() -> None:
-    assert latest_memo_label({"memos": []}, "text", language="en") == "No text memo"
-    assert latest_memo_label({"memos": []}, "voice", language="de") == (
-        "Keine Sprach-Memos"
-    )
-    assert (
-        latest_memo_label(
-            {"memos": [{"kind": "text", "text": "Bitte melden", "unix_time": 1}]},
-            "text",
-        )
-        == "Bitte melden"
-    )
-    assert latest_memo_label(
-        {
-            "memos": [
-                {
-                    "kind": "voice",
-                    "id": "voice/1",
-                    "iso_time": "2026-06-13T12:00:00+00:00",
-                    "unix_time": 1,
-                }
-            ]
-        },
-        "voice",
-        language="fr",
-    ) == "Memo vocal 2026-06-13T12:00:00+00:00"
-    assert (
-        latest_memo_label(
-            {"memos": [{"kind": "voice", "id": "voice/1", "unix_time": 1}]},
-            "voice",
-            language="it",
-        )
-        == "Memo vocale"
-    )
 
 
 def test_memo_labels_are_localized() -> None:
@@ -123,8 +80,6 @@ def test_memo_labels_are_localized() -> None:
     assert memo_kind_label("voice", "fr") == "Memo vocal"
     assert memo_kind_label("voice", "en") == "Voice memo"
     assert memo_kind_label("text", "de") == "Text-Memo"
-    assert no_memo_label("text", "it") == "Nessun memo testuale"
-    assert no_memo_label("voice", "fr") == "Aucun memo vocal"
 
 
 def test_latest_memo_attributes_include_text_and_voice_metadata() -> None:
@@ -193,8 +148,7 @@ def test_voice_memo_titles_and_invalid_ids() -> None:
         voice_memo_media_url("entry", "bad")
 
 
-def test_memo_sort_key_and_state_text_are_stable() -> None:
-    assert memo_sort_key({"id": "b", "unix_time": 2}) == (2, "", "b")
+def test_memo_state_text_is_stable() -> None:
     assert memo_state_text(None) is None
     assert memo_state_text("") is None
     assert memo_state_text("short") == "short"

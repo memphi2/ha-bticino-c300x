@@ -58,11 +58,13 @@ from .executor import (
     async_trigger_stair_light,
 )
 from .forwarding import forwarding_state_from_value
+from .http_body import read_capped_body
 from .media_watchdog import handle_runtime_cpu_metrics_changed
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
     DEFAULT_TRUE_VALUES,
     optional_mapping,
+    optional_string,
 )
 from .value_parsing import (
     optional_bool as _parse_optional_bool,
@@ -71,12 +73,14 @@ from .value_parsing import (
     optional_int as _optional_int,
 )
 from .video import (
-    optional_string,
     resolve_doorbell_camera_entity_id,
     safe_stream_path,
 )
 
 _LOGGER = logging.getLogger(__name__)
+# Defensive cap on agent event webhook bodies read into memory. Agent events
+# are small JSON; this only guards against a runaway or hostile body.
+_MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
 type _DisplayBridgeHandler = Callable[["_DisplayBridgeContext"], Awaitable[dict[str, Any]]]
 type _AgentEventStateHandler = Callable[["_AgentEventContext"], None]
 
@@ -346,7 +350,14 @@ async def _event_payload(request: web.Request) -> dict[str, Any]:
     if request.method != "POST":
         return {}
     try:
-        payload = await request.json()
+        raw = await read_capped_body(
+            request.content,
+            request.content_length,
+            _MAX_WEBHOOK_BODY_BYTES,
+        )
+        if raw is None:
+            return {}
+        payload = json.loads(raw)
     except Exception:  # noqa: BLE001 - event parsing must not leak details
         return {}
     return payload if isinstance(payload, dict) else {}

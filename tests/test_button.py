@@ -1958,7 +1958,7 @@ def test_delete_button_callbacks_ignore_other_entries_and_refresh_on_own_entry()
     )
     entity = C300XDeleteLatestTextMemoButton(entry)  # type: ignore[arg-type]
 
-    entity._handle_memos_changed("other-entry")
+    entity._handle_items_changed("other-entry")
     assert not getattr(entity, "wrote_state", False)
 
     entity._handle_qml_patch_changed("other-entry")
@@ -1971,7 +1971,7 @@ def test_delete_button_callbacks_ignore_other_entries_and_refresh_on_own_entry()
     )
     assert entry.runtime_data.memos_refresh_task is None
 
-    entity._handle_memos_changed(entry.entry_id)
+    entity._handle_items_changed(entry.entry_id)
     assert entity.wrote_state is True
 
 
@@ -1991,7 +1991,7 @@ def test_delete_video_button_callbacks_ignore_other_entries_and_refresh_on_own_e
     )
     entity = C300XDeleteLatestVideoMessageButton(entry)  # type: ignore[arg-type]
 
-    entity._handle_video_messages_changed("other-entry")
+    entity._handle_items_changed("other-entry")
     assert not getattr(entity, "wrote_state", False)
 
     entity._handle_qml_patch_changed("other-entry")
@@ -2007,7 +2007,7 @@ def test_delete_video_button_callbacks_ignore_other_entries_and_refresh_on_own_e
     )
     assert entry.runtime_data.answering_machine_messages_refresh_task is None
 
-    entity._handle_video_messages_changed(entry.entry_id)
+    entity._handle_items_changed(entry.entry_id)
     assert entity.wrote_state is True
 
 

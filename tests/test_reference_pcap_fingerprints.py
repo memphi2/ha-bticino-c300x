@@ -24,9 +24,10 @@ def _read_camera() -> str:
 
 
 def _read_api() -> str:
-    return (ROOT / "custom_components" / "bticino_c300x" / "api.py").read_text(
-        encoding="utf-8"
-    )
+    # The client class is split across api.py + its domain mixin modules.
+    api_dir = ROOT / "custom_components" / "bticino_c300x"
+    names = ("api.py", "_api_media.py", "_api_maintenance.py", "_api_device.py")
+    return "".join((api_dir / name).read_text(encoding="utf-8") for name in names)
 
 
 def _read_const() -> str:
@@ -263,7 +264,13 @@ def test_reference_ring_call_fingerprint_matches_native_ring_media_flow() -> Non
     native = fingerprint["native_ring_sdp"]
     ha_ref = fingerprint["ha_reference"]
 
-    _assert_media_line(ring_sdp, "audio", native["audio"]["payloads"])
+    # The ring answer is now codec-configurable (speex default, PCMU opt-in),
+    # so the audio m-line carries its payload type via %s rather than a
+    # literal. The reference (speex) pcap payloads remain what the default
+    # mode offers; PCMU (static payload 0) is the opt-in alternative.
+    assert native["audio"]["payloads"] == ["96", "101"]
+    assert '"m=audio %d RTP/SAVP %s 101\\r\\n"' in ring_sdp
+    assert 'use_pcmu ? "0" : "96"' in ring_sdp
     _assert_codecs(ring_sdp, native["audio"]["codecs"])
     _assert_crypto_suites(ring_sdp, native["audio"]["crypto_suites"])
     _assert_media_line(ring_sdp, "video", native["video"]["payloads"])

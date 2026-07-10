@@ -248,7 +248,7 @@ def collect_code_checks(mode: str, root: Path = ROOT) -> list[Check]:
     http = _read(root / "native_agent" / "src" / "http.c")
     webhook = _read(root / "custom_components" / "bticino_c300x" / "webhook.py")
     camera = _read(root / "custom_components" / "bticino_c300x" / "camera.py")
-    api = _read(root / "custom_components" / "bticino_c300x" / "api.py")
+    api = _read_api_sources(root)
     const = _read(root / "custom_components" / "bticino_c300x" / "const.py")
     state_model = _read(
         root
@@ -603,7 +603,7 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
         "static void handle_rtsp_client",
         "static int create_rtsp_listener",
     )
-    api = _read(root / "custom_components" / "bticino_c300x" / "api.py")
+    api = _read_api_sources(root)
     camera = _read(root / "custom_components" / "bticino_c300x" / "camera.py")
     const = _read(root / "custom_components" / "bticino_c300x" / "const.py")
     offer = _fixture("on_demand")["offer"]
@@ -653,7 +653,7 @@ def _collect_home_call_code_checks(media_bridge: str, root: Path) -> list[Check]
         "static void handle_rtsp_client",
         "static int create_rtsp_listener",
     )
-    api = _read(root / "custom_components" / "bticino_c300x" / "api.py")
+    api = _read_api_sources(root)
     camera = _read(root / "custom_components" / "bticino_c300x" / "camera.py")
     offer = _fixture("home_call")["offer"]
     checks = _collect_media_code_checks(
@@ -1107,6 +1107,14 @@ def _first_packet_containing(packets: list[Packet], *needles: str) -> Packet | N
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _read_api_sources(root: Path) -> str:
+    # The client class is split across api.py + its domain mixin modules; scan
+    # them together so endpoint checks find methods wherever they now live.
+    api_dir = root / "custom_components" / "bticino_c300x"
+    parts = ["api.py", "_api_media.py", "_api_maintenance.py", "_api_device.py", "_api_content.py"]
+    return "".join(_read(api_dir / name) for name in parts)
 
 
 def _section(text: str, start: str, end: str) -> str:

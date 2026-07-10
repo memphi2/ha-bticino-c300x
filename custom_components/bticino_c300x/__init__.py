@@ -41,6 +41,7 @@ from .runtime_manager import (
     _entry_activation_config,
     _entry_platforms,
     _offline_setup_data,
+    cleanup_entry_runtime_resources,
 )
 
 if TYPE_CHECKING:
@@ -129,7 +130,12 @@ async def async_migrate_entry(
 async def async_setup_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> bool:
     """Set up a C300X config entry."""
 
-    return await C300XRuntimeManager(hass, entry).async_prepare()
+    setup_ok = await C300XRuntimeManager(hass, entry).async_prepare()
+    if setup_ok:
+        from .memory_diagnostics import async_start_memory_diagnostics
+
+        async_start_memory_diagnostics(hass, entry)
+    return setup_ok
 
 
 def _ensure_generated_setup_secret(
@@ -151,3 +157,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry
     """Unload a C300X config entry."""
 
     return await C300XRuntimeManager(hass, entry).async_unload()
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
+    """Clean up after a permanently removed config entry.
+
+    Repairs issues are keyed by entry_id and are only deleted by the
+    per-issue sync while the entry is loaded, so without this hook any
+    open issue would outlive the removed entry in the issue registry.
+    """
+
+    from .repair_issues import async_clear_entry_repair_issues
+
+    cleanup_entry_runtime_resources(hass, entry)
+    async_clear_entry_repair_issues(hass, entry.entry_id)

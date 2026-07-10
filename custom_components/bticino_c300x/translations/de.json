@@ -341,6 +341,13 @@
           "blocked": "Blocked",
           "unprovisioned": "Unprovisioned"
         }
+      },
+      "audio_codec": {
+        "name": "Audio-Codec",
+        "state": {
+          "speex": "Speex (Werk)",
+          "pcmu": "PCMU"
+        }
       }
     },
     "number": {

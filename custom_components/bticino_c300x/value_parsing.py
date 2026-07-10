@@ -51,3 +51,18 @@ def optional_mapping(value: Any) -> dict[str, Any]:
     """Return a nested status Mapping as a plain dict, or an empty dict."""
 
     return dict(value) if isinstance(value, Mapping) else {}
+
+
+def freeze_state_value(value: Any) -> Any:
+    """Return a hashable, order-stable snapshot of an entity state value."""
+
+    if isinstance(value, Mapping):
+        return tuple(
+            (str(key), freeze_state_value(item))
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((freeze_state_value(item) for item in value), key=repr))
+    if isinstance(value, (list, tuple)):
+        return tuple(freeze_state_value(item) for item in value)
+    return value

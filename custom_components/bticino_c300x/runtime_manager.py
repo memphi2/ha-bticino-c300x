@@ -104,6 +104,7 @@ class C300XRuntimeManager:
         self.unregister_event_registration: Callable[[], None] | None = None
         self.on_runtime_registration_created: Callable[[], Any] | None = None
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
+        self._platform_gate_state_loaded = False
 
     async def async_prepare(self) -> bool:
         """Prepare runtime data and finish Home Assistant setup."""
@@ -124,6 +125,7 @@ class C300XRuntimeManager:
         async_sync_entry_repair_issues(self.hass, self.entry)
         self.entry.async_on_unload(self.entry.add_update_listener(_async_update_listener))
         await async_setup_services(self.hass)
+        await self.async_sync_platform_gate_state()
         await self.async_forward_platforms()
         self.async_schedule_startup_sync()
         return True
@@ -214,9 +216,19 @@ class C300XRuntimeManager:
         api = self._api()
         await _async_configure_device_activations(self.entry, api)
         await _async_configure_display_bridge(self.hass, self.entry, api)
-        await _async_sync_device_ui_patch(self.entry)
+        if not self._platform_gate_state_loaded:
+            await self.async_sync_platform_gate_state()
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
+
+    async def async_sync_platform_gate_state(self) -> None:
+        """Synchronize read-only state needed before platform entity creation."""
+
+        if not self.connection_state.available:
+            return
+        self._platform_gate_state_loaded = (
+            await _async_sync_device_ui_patch(self.entry)
+        ) is not False
 
     def async_schedule_startup_sync(self) -> None:
         """Run slow startup-only agent synchronization after entity setup."""
@@ -224,6 +236,9 @@ class C300XRuntimeManager:
         from homeassistant.helpers.dispatcher import async_dispatcher_send
 
         from .repair_issues import async_sync_entry_repair_issues
+
+        runtime_data = self.entry.runtime_data
+        task: asyncio.Task[None] | None = None
 
         async def _async_run_startup_sync() -> None:
             sync_repairs = False
@@ -246,7 +261,8 @@ class C300XRuntimeManager:
                         SIGNAL_CONNECTION_STATE_CHANGED,
                         self.entry.entry_id,
                     )
-                self.entry.runtime_data.startup_sync_task = None
+                if runtime_data.startup_sync_task is task:
+                    runtime_data.startup_sync_task = None
 
         create_task = getattr(self.hass, "async_create_task", None)
         task = (
@@ -254,7 +270,7 @@ class C300XRuntimeManager:
             if callable(create_task)
             else asyncio.create_task(_async_run_startup_sync())
         )
-        self.entry.runtime_data.startup_sync_task = task
+        runtime_data.startup_sync_task = task
 
     async def async_forward_platforms(self) -> None:
         """Set up media routes and forward entity platforms."""
@@ -275,34 +291,8 @@ class C300XRuntimeManager:
             self.entry,
             runtime_data.loaded_platforms,
         )
-        # Release our own background tasks, webhooks, and registrations
-        # unconditionally: HA removes a config entry from its registry even
-        # when platform unload fails (e.g. on integration removal), and it
-        # will never call this again for that entry, so gating cleanup
-        # behind unload_ok would leak these resources permanently.
-        if runtime_data.unregister_event_registration:
-            runtime_data.unregister_event_registration()
-        if runtime_data.unregister_display_bridge_updates:
-            runtime_data.unregister_display_bridge_updates()
-        if runtime_data.connection_state.expire_unavailable:
-            runtime_data.connection_state.expire_unavailable()
-        if runtime_data.memos_refresh_task:
-            runtime_data.memos_refresh_task.cancel()
-            runtime_data.memos_refresh_task = None
-        if runtime_data.answering_machine_messages_refresh_task:
-            runtime_data.answering_machine_messages_refresh_task.cancel()
-            runtime_data.answering_machine_messages_refresh_task = None
-        startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
-        if startup_sync_task:
-            startup_sync_task.cancel()
-            runtime_data.startup_sync_task = None
-        runtime_data.unregister_event_webhook()
-        runtime_data.unregister_webhook()
-        clear_entry_locks(self.entry.entry_id)
-        self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
-            self.entry.entry_id,
-            None,
-        )
+        if unload_ok:
+            cleanup_entry_runtime_resources(self.hass, self.entry, runtime_data)
         return unload_ok
 
     def _build_agent_api(self) -> C300XAgentApi:
@@ -451,6 +441,41 @@ def _offline_setup_data(err: Exception) -> dict[str, Any]:
     }
 
 
+def cleanup_entry_runtime_resources(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+    runtime_data: BticinoC300XRuntimeData | None = None,
+) -> None:
+    """Release runtime-only resources after confirmed unload or removal."""
+
+    runtime_data = runtime_data or getattr(entry, "runtime_data", None)
+    if runtime_data is not None:
+        if runtime_data.unregister_event_registration:
+            runtime_data.unregister_event_registration()
+        if runtime_data.unregister_display_bridge_updates:
+            runtime_data.unregister_display_bridge_updates()
+        runtime_data.display_bridge_alarm_notify_pending = False
+        if runtime_data.connection_state.expire_unavailable:
+            runtime_data.connection_state.expire_unavailable()
+        if runtime_data.memos_refresh_task:
+            runtime_data.memos_refresh_task.cancel()
+            runtime_data.memos_refresh_task = None
+        if runtime_data.answering_machine_messages_refresh_task:
+            runtime_data.answering_machine_messages_refresh_task.cancel()
+            runtime_data.answering_machine_messages_refresh_task = None
+        startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
+        if startup_sync_task:
+            startup_sync_task.cancel()
+            runtime_data.startup_sync_task = None
+        runtime_data.unregister_event_webhook()
+        runtime_data.unregister_webhook()
+    clear_entry_locks(entry.entry_id)
+    hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
+        entry.entry_id,
+        None,
+    )
+
+
 def _async_start_setup_recovery(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
@@ -507,7 +532,7 @@ def _entry_video_enabled(entry: BticinoC300XConfigEntry) -> bool:
     return bool(_entry_config_value(entry, CONF_VIDEO_ENABLED, False))
 
 
-async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
+async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> bool:
     """Refresh Display patch status without mutating the device."""
 
     from .qml_patch import async_refresh_qml_patch_status
@@ -522,11 +547,12 @@ async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> None:
         else:
             status = {}
         entry.runtime_data.qml_patch_status = status
+        return True
     except C300XAgentApiError as err:
         error = compact_error_text(err)
         diagnostics.mark_failure(error, datetime.now(UTC))
         _LOGGER.warning("C300X Display patch status sync failed: %s", error)
-        return
+        return False
 
 
 async def _async_sync_device_user(
@@ -901,24 +927,38 @@ def _async_schedule_display_bridge_notify(
     """Schedule one non-blocking display bridge wake-up."""
 
     runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None:
+        return
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not connection_state.available:
         return
-    hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry)
+    if getattr(runtime_data, "display_bridge_alarm_notify_pending", False):
+        return
+    runtime_data.display_bridge_alarm_notify_pending = True
+    hass.add_job(_async_notify_display_bridge_alarm_if_listening, entry, runtime_data)
 
 
 async def _async_notify_display_bridge_alarm_if_listening(
     entry: BticinoC300XConfigEntry,
+    runtime_data: BticinoC300XRuntimeData | None = None,
 ) -> None:
     """Notify the display bridge only while a local QML page is listening."""
 
+    runtime_data = runtime_data or getattr(entry, "runtime_data", None)
     try:
-        diagnostics = await entry.runtime_data.api.async_diagnostics()
+        if runtime_data is None or getattr(entry, "runtime_data", None) is not runtime_data:
+            return
+        diagnostics = await runtime_data.api.async_diagnostics()
+        if getattr(entry, "runtime_data", None) is not runtime_data:
+            return
         waiters = diagnostics.get("ui_event_waiters")
         if not isinstance(waiters, int) or waiters <= 0:
             return
-        await entry.runtime_data.api.async_notify_display_bridge_event("alarm")
+        await runtime_data.api.async_notify_display_bridge_event("alarm")
     except C300XAgentApiUnsupportedError:
         _LOGGER.debug("C300X device agent does not support display bridge events")
     except C300XAgentApiError:
         _LOGGER.debug("C300X display bridge alarm notification failed", exc_info=True)
+    finally:
+        if runtime_data is not None:
+            runtime_data.display_bridge_alarm_notify_pending = False

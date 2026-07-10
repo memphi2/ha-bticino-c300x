@@ -166,6 +166,72 @@ test("doorbell card custom element renders with fake Home Assistant state", asyn
   assert.equal(globalThis.window.customCards[0].type, "c300x-doorbell-call-card");
 });
 
+test("card derives the PCMU browser gain from HA state, zero for speex", async () => {
+  const registry = installFakeDom();
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?card-gain-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+
+  const hass = fakeHass();
+  hass.entities["select.bticino_c300x_audio_codec"] = {
+    config_entry_id: "entry-1",
+    platform: "bticino_c300x",
+    translation_key: "audio_codec",
+    unique_id: "entry-1_audio_codec",
+  };
+  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
+  hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };
+  card.hass = hass;
+
+  // PCMU: the agent runs passthrough, so the card applies the configured gain.
+  assert.equal(card._cardGainDb(), 6);
+
+  // speex: the agent applies the gain, so the card stays neutral.
+  hass.states["select.bticino_c300x_audio_codec"].state = "speex";
+  assert.equal(card._cardGainDb(), 0);
+});
+
+test("card keeps its gain when the codec select entity blips to unavailable", async () => {
+  const registry = installFakeDom();
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?card-gain-blip-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+
+  const hass = fakeHass();
+  hass.entities["select.bticino_c300x_audio_codec"] = {
+    config_entry_id: "entry-1",
+    platform: "bticino_c300x",
+    translation_key: "audio_codec",
+    unique_id: "entry-1_audio_codec",
+  };
+  hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
+  hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };
+  card.hass = hass;
+  let refreshes = 0;
+  card._webrtc = { refreshGain: () => (refreshes += 1) };
+  card._lastCardGainDb = 6;
+
+  // The select entity blips to 'unavailable' (integration reload) mid-call.
+  hass.states["select.bticino_c300x_audio_codec"].state = "unavailable";
+  card._maybeRefreshCardGain();
+
+  // Gain must NOT be disengaged: no refresh, last value unchanged.
+  assert.equal(refreshes, 0);
+  assert.equal(card._lastCardGainDb, 6);
+});
+
 test("doorbell card updates from direct camera state events without page reload", async () => {
   const registry = installFakeDom();
   const subscriptions = [];

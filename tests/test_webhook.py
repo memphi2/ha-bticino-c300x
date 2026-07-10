@@ -5,7 +5,10 @@ import datetime
 import json
 import sys
 import types
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
+
+import pytest
 
 homeassistant = sys.modules.setdefault(
     "homeassistant",
@@ -158,6 +161,28 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
     async_register_webhook,
 )  # pylint: disable=wrong-import-position
 
+_REQUEST_CONTENT_LENGTH_AUTO = object()
+
+
+class _FakeRequestContent:
+    def __init__(self, raw: bytes, error: Exception | None) -> None:
+        self._raw = raw
+        self._error = error
+
+    async def read(self, size: int = -1) -> bytes:
+        if self._error is not None:
+            raise self._error
+        if size is None or size < 0:
+            return self._raw
+        return self._raw[:size]
+
+    async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
+        if self._error is not None:
+            raise self._error
+        step = max(1, len(self._raw))
+        for start in range(0, len(self._raw), step):
+            yield self._raw[start : start + step]
+
 
 class _FakeRequest:
     def __init__(
@@ -168,16 +193,55 @@ class _FakeRequest:
         method: str = "POST",
         extra_headers: dict[str, str] | None = None,
         json_error: Exception | None = None,
+        raw: bytes | None = None,
+        content_length: object = _REQUEST_CONTENT_LENGTH_AUTO,
     ) -> None:
         self.method = method
         self.headers = {HEADER_EVENT_TOKEN: token, **(extra_headers or {})}
         self._payload = payload
         self._json_error = json_error
+        self._raw = raw if raw is not None else json.dumps(payload).encode()
+        self._content_length_override = content_length
+        self.content = _FakeRequestContent(self._raw, json_error)
+
+    @property
+    def content_length(self) -> int | None:
+        if self._content_length_override is _REQUEST_CONTENT_LENGTH_AUTO:
+            return len(self._raw)
+        return self._content_length_override  # type: ignore[return-value]
 
     async def json(self) -> object:
         if self._json_error is not None:
             raise self._json_error
         return self._payload
+
+
+def test_event_payload_rejects_oversized_body_via_content_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.webhook._MAX_WEBHOOK_BODY_BYTES", 8
+    )
+    request = _FakeRequest("token", {"type": "status", "pad": "far too long"})
+
+    assert asyncio.run(_event_payload(request)) == {}
+
+
+def test_event_payload_rejects_oversized_body_via_read_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.webhook._MAX_WEBHOOK_BODY_BYTES", 8
+    )
+    # content_length withheld (chunked) -> the bounded read must reject it.
+    request = _FakeRequest(
+        "token",
+        {"type": "status"},
+        raw=b'{"type":"status"}',
+        content_length=None,
+    )
+
+    assert asyncio.run(_event_payload(request)) == {}
 
 
 def test_event_type_value_prefers_payload_aliases() -> None:

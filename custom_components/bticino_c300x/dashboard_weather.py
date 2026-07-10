@@ -362,11 +362,6 @@ def _weather_forecast_temperature(item: dict[str, Any], fallback_unit: str) -> s
     return f"{value} {unit}"
 
 
-def _weather_sun(hass: HomeAssistant, _language: str) -> str:
-    sunrise, sunset = _weather_sun_times(hass)
-    return _weather_sun_text(sunrise, sunset)
-
-
 def _weather_sun_text(sunrise: str, sunset: str) -> str:
     if sunrise and sunset:
         return f"{sunrise}   {sunset}"

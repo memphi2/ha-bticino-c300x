@@ -196,12 +196,6 @@ def entry_gui_function_patch_active(entry: Any) -> bool:
     return qml_patch_status_is_active(status)
 
 
-def entry_gui_dependent_features_active(entry: Any) -> bool:
-    """Return true when HA and the device both allow GUI-coupled features."""
-
-    return entry_device_ui_enabled(entry) and entry_gui_function_patch_active(entry)
-
-
 def entry_device_ui_configured(entry: Any) -> bool | None:
     """Return the explicit HA device-UI setting or ``None`` when it is unknown."""
 
@@ -352,13 +346,6 @@ def answering_machine_message_delete_supported(capabilities: dict[str, Any]) -> 
 
     messages = _answering_machine_messages_capability(capabilities)
     return bool(messages and messages.get("delete"))
-
-
-def answering_machine_message_media_supported(capabilities: dict[str, Any]) -> bool:
-    """Return true when the agent can serve stored video messages."""
-
-    messages = _answering_machine_messages_capability(capabilities)
-    return bool(messages and messages.get("media"))
 
 
 def _answering_machine_messages_capability(

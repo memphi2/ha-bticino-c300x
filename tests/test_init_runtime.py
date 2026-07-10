@@ -278,11 +278,11 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "remove-stale",
         "repair-sync",
         "services",
+        "qml",
         "media-view",
         "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
         "activations",
         "display",
-        "qml",
         "user",
         "repair-sync",
     ]
@@ -295,6 +295,47 @@ def test_setup_entry_rejects_missing_required_fields() -> None:
     entry = _entry(data={})
 
     assert asyncio.run(integration.async_setup_entry(hass, entry)) is False
+
+
+def test_remove_entry_clears_repair_issues_and_runtime_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import custom_components.bticino_c300x.repair_issues as repair_issues
+
+    cleared: list[str] = []
+    cancelled: list[str] = []
+    callbacks: list[str] = []
+    monkeypatch.setattr(
+        repair_issues,
+        "async_clear_entry_repair_issues",
+        lambda _hass, entry_id: cleared.append(entry_id),
+    )
+    entry = _entry(data={})
+    entry.runtime_data = SimpleNamespace(
+        unregister_event_registration=lambda: callbacks.append("registration"),
+        unregister_display_bridge_updates=lambda: callbacks.append("display"),
+        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+        unregister_webhook=lambda: callbacks.append("webhook"),
+        connection_state=SimpleNamespace(expire_unavailable=lambda: callbacks.append("expire")),
+        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
+        answering_machine_messages_refresh_task=SimpleNamespace(
+            cancel=lambda: cancelled.append("messages")
+        ),
+    )
+    entry_locks.entry_lock(entry.entry_id, "ring_capture")
+    hass = SimpleNamespace(
+        data={DOMAIN: {DATA_RUNTIME_ENTRIES: {entry.entry_id: entry.runtime_data}}}
+    )
+
+    asyncio.run(integration.async_remove_entry(hass, entry))
+
+    assert cleared == [entry.entry_id]
+    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert cancelled == ["memos", "messages"]
+    assert entry.runtime_data.memos_refresh_task is None
+    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert not any(key[0] == entry.entry_id for key in entry_locks._locks)
+    assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
 
 def test_setup_recovery_retries_until_agent_returns(
@@ -1044,6 +1085,66 @@ def test_display_bridge_notify_requires_active_ui_waiter() -> None:
     assert calls == ["diagnostics:0", "diagnostics:1", "event:alarm"]
 
 
+def test_display_bridge_notify_coalesces_inflight_jobs() -> None:
+    calls: list[str] = []
+    jobs: list[tuple[Any, ...]] = []
+
+    class FakeApi:
+        async def async_diagnostics(self) -> dict[str, Any]:
+            calls.append("diagnostics")
+            return {"ui_event_waiters": 0}
+
+    runtime_data = SimpleNamespace(
+        api=FakeApi(),
+        connection_state=SimpleNamespace(available=True),
+        display_bridge_alarm_notify_pending=False,
+    )
+    entry = _entry()
+    entry.runtime_data = runtime_data
+    hass = SimpleNamespace(add_job=lambda *args: jobs.append(args))
+
+    integration._async_schedule_display_bridge_notify(hass, entry)
+    integration._async_schedule_display_bridge_notify(hass, entry)
+
+    assert len(jobs) == 1
+    assert runtime_data.display_bridge_alarm_notify_pending is True
+
+    asyncio.run(jobs[0][0](*jobs[0][1:]))
+
+    assert calls == ["diagnostics"]
+    assert runtime_data.display_bridge_alarm_notify_pending is False
+
+
+def test_display_bridge_notify_ignores_stale_runtime() -> None:
+    calls: list[str] = []
+
+    class FakeApi:
+        async def async_diagnostics(self) -> dict[str, Any]:
+            calls.append("diagnostics")
+            return {"ui_event_waiters": 1}
+
+        async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+            calls.append(f"event:{topic}")
+            return {"ok": True}
+
+    old_runtime = SimpleNamespace(
+        api=FakeApi(),
+        display_bridge_alarm_notify_pending=True,
+    )
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(api=FakeApi())
+
+    asyncio.run(
+        integration._async_notify_display_bridge_alarm_if_listening(
+            entry,
+            old_runtime,  # type: ignore[arg-type]
+        )
+    )
+
+    assert calls == []
+    assert old_runtime.display_bridge_alarm_notify_pending is False
+
+
 def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> None:  # noqa: ANN001
     import homeassistant.helpers.entity_registry as entity_registry
 
@@ -1121,7 +1222,7 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
 
-def test_unload_entry_still_cleans_runtime_state_when_platform_unload_fails() -> None:
+def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> None:
     cancelled: list[str] = []
     callbacks: list[str] = []
     entry = _entry()
@@ -1143,10 +1244,6 @@ def test_unload_entry_still_cleans_runtime_state_when_platform_unload_fails() ->
     entry_locks.entry_lock(entry.entry_id, "ring_capture")
     hass = SimpleNamespace(
         config_entries=SimpleNamespace(
-            # A platform failed to unload (unload_ok=False): HA still removes
-            # the config entry from its registry on integration removal and
-            # will never call async_unload_entry again for it, so our own
-            # background tasks/webhooks must not be left leaking forever.
             async_unload_platforms=lambda _entry, _platforms: _async_value(False)
         ),
         data={
@@ -1160,12 +1257,72 @@ def test_unload_entry_still_cleans_runtime_state_when_platform_unload_fails() ->
 
     assert asyncio.run(integration.async_unload_entry(hass, entry)) is False
 
-    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
-    assert cancelled == ["memos", "messages"]
-    assert entry.runtime_data.memos_refresh_task is None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
-    assert not any(key[0] == entry.entry_id for key in entry_locks._locks)
-    assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
+    assert callbacks == []
+    assert cancelled == []
+    assert entry.runtime_data.memos_refresh_task is not None
+    assert entry.runtime_data.answering_machine_messages_refresh_task is not None
+    assert any(key[0] == entry.entry_id for key in entry_locks._locks)
+    assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {entry.entry_id: entry.runtime_data}
+
+
+def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
+    async def _run() -> None:
+        started = asyncio.Event()
+        release = asyncio.Event()
+        repairs: list[str] = []
+        dispatches: list[tuple[Any, ...]] = []
+
+        async def _sync_device_state(self: runtime_manager.C300XRuntimeManager) -> None:
+            started.set()
+            await release.wait()
+
+        def _repair(_hass: Any, entry: Any) -> None:
+            repairs.append(entry.entry_id)
+
+        def _dispatch(*args: Any) -> None:
+            dispatches.append(args)
+
+        _stub_homeassistant_http()
+        dispatcher_module = sys.modules["homeassistant.helpers.dispatcher"]
+        previous_dispatch = dispatcher_module.async_dispatcher_send
+        dispatcher_module.async_dispatcher_send = _dispatch
+        repair_module_name = "custom_components.bticino_c300x.repair_issues"
+        previous_repair_module = sys.modules.get(repair_module_name)
+        repair_module = types.ModuleType("custom_components.bticino_c300x.repair_issues")
+        repair_module.async_sync_entry_repair_issues = _repair
+        sys.modules[repair_module_name] = repair_module
+
+        old_runtime = SimpleNamespace(startup_sync_task=None)
+        new_task = SimpleNamespace(cancel=lambda: None)
+        entry = _entry()
+        entry.runtime_data = old_runtime
+        hass = SimpleNamespace(async_create_task=asyncio.create_task)
+        manager = runtime_manager.C300XRuntimeManager(hass, entry)
+        original_sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
+        runtime_manager.C300XRuntimeManager.async_sync_device_state = _sync_device_state
+        try:
+            manager.async_schedule_startup_sync()
+            old_task = old_runtime.startup_sync_task
+            assert old_task is not None
+            await started.wait()
+
+            entry.runtime_data = SimpleNamespace(startup_sync_task=new_task)
+            release.set()
+            await old_task
+        finally:
+            runtime_manager.C300XRuntimeManager.async_sync_device_state = original_sync
+            dispatcher_module.async_dispatcher_send = previous_dispatch
+            if previous_repair_module is None:
+                sys.modules.pop(repair_module_name, None)
+            else:
+                sys.modules[repair_module_name] = previous_repair_module
+
+        assert old_runtime.startup_sync_task is None
+        assert entry.runtime_data.startup_sync_task is new_task
+        assert repairs == [entry.entry_id]
+        assert dispatches
+
+    asyncio.run(_run())
 
 
 async def _async_value(value: Any) -> Any:

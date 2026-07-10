@@ -69,6 +69,7 @@ if "homeassistant.components.select" not in sys.modules:
 
 from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.select import (  # noqa: E402
+    C300XAudioCodecSelect,
     C300XSmartphoneForwardingModeSelect,
     async_setup_entry,
 )
@@ -79,6 +80,10 @@ class _FakeApi:
         self.active_reads = 0
         self.selected: list[str] = []
         self.fail_status = fail_status
+        self.audio_codec_calls: list[tuple[str, bool]] = []
+        self.audio_codec_state = "speex"
+        self.audio_codec_running_state = "speex"
+        self.audio_codec_reboots = True
 
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         self.active_reads += 1
@@ -90,6 +95,46 @@ class _FakeApi:
         self.selected.append(mode)
         return {"mode": 1, "state": mode}
 
+    async def async_audio_codec_status(self) -> dict[str, Any]:
+        self.active_reads += 1
+        if self.fail_status:
+            raise C300XAgentApiError("offline")
+        return {
+            "ok": True,
+            "supported": True,
+            "state": self.audio_codec_running_state,
+            "configured_state": self.audio_codec_state,
+            "running_state": self.audio_codec_running_state,
+            "backup_present": self.audio_codec_state == "pcmu",
+            "reboot_required": self.audio_codec_state != self.audio_codec_running_state,
+        }
+
+    async def async_apply_audio_codec(self, *, reboot: bool = True) -> dict[str, Any]:
+        self.audio_codec_calls.append(("apply", reboot))
+        self.audio_codec_state = "pcmu"
+        rebooting = reboot and self.audio_codec_reboots
+        return {
+            "ok": True,
+            "state": self.audio_codec_running_state,
+            "configured_state": "pcmu",
+            "running_state": self.audio_codec_running_state,
+            "reboot_required": self.audio_codec_state != self.audio_codec_running_state,
+            "rebooting": rebooting,
+        }
+
+    async def async_restore_audio_codec(self, *, reboot: bool = True) -> dict[str, Any]:
+        self.audio_codec_calls.append(("restore", reboot))
+        self.audio_codec_state = "speex"
+        rebooting = reboot and self.audio_codec_reboots
+        return {
+            "ok": True,
+            "state": self.audio_codec_running_state,
+            "configured_state": "speex",
+            "running_state": self.audio_codec_running_state,
+            "reboot_required": self.audio_codec_state != self.audio_codec_running_state,
+            "rebooting": rebooting,
+        }
+
 
 @dataclass
 class _FakeRuntimeData:
@@ -98,6 +143,9 @@ class _FakeRuntimeData:
     )
     api: _FakeApi = field(default_factory=_FakeApi)
     event_state: SimpleNamespace = field(default_factory=SimpleNamespace)
+    connection_state: SimpleNamespace = field(
+        default_factory=lambda: SimpleNamespace(available=True)
+    )
 
 
 @dataclass
@@ -278,3 +326,190 @@ def test_smartphone_forwarding_select_ignores_unrelated_events() -> None:
 
     assert entity.current_option is None
     assert entity.extra_state_attributes == {"mode": 99, "state": "not-a-mode"}
+
+
+def _audio_codec_entry(*, fail_status: bool = False) -> _FakeEntry:
+    return _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            capabilities={"maintenance": {"supported": True, "audio_codec_apply": True}},
+            api=_FakeApi(fail_status=fail_status),
+        )
+    )
+
+
+def test_audio_codec_select_added_when_advertised() -> None:
+    entry = _audio_codec_entry()
+    added: list[list[Any]] = []
+
+    asyncio.run(async_setup_entry("hass", entry, added.append))  # type: ignore[arg-type]
+
+    entities = added[0]
+    assert any(isinstance(entity, C300XAudioCodecSelect) for entity in entities)
+
+
+def test_audio_codec_select_skipped_when_not_advertised() -> None:
+    entry = _FakeEntry(runtime_data=_FakeRuntimeData(capabilities={}))
+    added: list[list[Any]] = []
+
+    asyncio.run(async_setup_entry("hass", entry, added.append))  # type: ignore[arg-type]
+
+    assert added == []
+
+
+def test_audio_codec_select_reflects_and_switches_codec() -> None:
+    entry = _audio_codec_entry()
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes == {"state": "speex", "pending_option": None}
+    # The running codec is mirrored into shared runtime state for consumers.
+    assert entry.runtime_data.event_state.audio_codec == "speex"
+
+    # Selecting pcmu stages the change and triggers a reboot, but the running
+    # codec stays speex until the reboot lands -- no optimistic jump.
+    asyncio.run(entity.async_select_option("pcmu"))
+    assert entry.runtime_data.api.audio_codec_calls == [("apply", True)]
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+    # The mirror also stays on the running codec while the switch is pending.
+    assert entry.runtime_data.event_state.audio_codec == "speex"
+
+    # The reboot drops the agent and it comes back -> re-read the now-live codec
+    # (the fake status now reports pcmu), rather than optimistically assuming it.
+    scheduled: list[Any] = []
+    entity.hass = SimpleNamespace(async_create_task=scheduled.append)
+    entry.runtime_data.connection_state.available = False
+    entity._handle_reboot_reconnect("entry-1")
+    entry.runtime_data.api.audio_codec_running_state = "pcmu"
+    entry.runtime_data.connection_state.available = True
+    entity._handle_reboot_reconnect("entry-1")
+    assert len(scheduled) == 1
+    asyncio.run(scheduled[0])
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] is None
+    # Once the switch is live, the mirror follows to the new running codec.
+    assert entry.runtime_data.event_state.audio_codec == "pcmu"
+
+
+def test_audio_codec_select_pending_resolves_on_manual_reboot_when_not_rebooted() -> None:
+    # reboot disabled: apply patches the files but the agent does not reboot, so
+    # the change stays pending. A later manual reboot (a real down->up gap) must
+    # still resolve it by re-reading the now-live codec.
+    entry = _audio_codec_entry()
+    entry.runtime_data.api.audio_codec_reboots = False
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+    entity.hass = SimpleNamespace(async_create_task=scheduled.append)
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_select_option("pcmu"))
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+    entry.runtime_data.connection_state.available = False
+    entity._handle_reboot_reconnect("entry-1")
+    entry.runtime_data.api.audio_codec_running_state = "pcmu"
+    entry.runtime_data.connection_state.available = True
+    entity._handle_reboot_reconnect("entry-1")
+    assert len(scheduled) == 1
+    asyncio.run(scheduled[0])
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] is None
+
+
+def test_audio_codec_select_reconnect_without_reboot_gap_does_not_switch() -> None:
+    entry = _audio_codec_entry()
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_select_option("pcmu"))
+    assert entity.current_option == "speex"
+
+    # A connection blip that never went unavailable must not resolve the pending
+    # change (only a real down->up reboot cycle does).
+    entity._handle_reboot_reconnect("entry-1")
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+
+def test_audio_codec_select_subscribes_to_connection_signal() -> None:
+    entity = C300XAudioCodecSelect(_audio_codec_entry())  # type: ignore[arg-type]
+    removers: list[Any] = []
+    entity.hass = SimpleNamespace()
+    entity.async_on_remove = removers.append  # type: ignore[method-assign]
+
+    asyncio.run(entity.async_added_to_hass())
+
+    assert removers
+    assert all(callable(remover) for remover in removers)
+
+
+def test_audio_codec_select_stays_on_live_codec_while_reboot_is_deferred() -> None:
+    entry = _audio_codec_entry()
+    entry.runtime_data.api.audio_codec_reboots = False
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+    assert entity.current_option == "speex"
+
+    # Files are patched to pcmu, but no reboot fired: the running codec is still
+    # speex, so the select must keep reporting speex (so the card does not switch
+    # its gain path) and expose pcmu only as the pending change.
+    asyncio.run(entity.async_select_option("pcmu"))
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes == {
+        "state": "speex",
+        "pending_option": "pcmu",
+    }
+    asyncio.run(entity.async_update())
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes == {
+        "state": "speex",
+        "pending_option": "pcmu",
+    }
+
+
+def test_audio_codec_select_reloads_staged_codec_as_pending() -> None:
+    entry = _audio_codec_entry()
+    entry.runtime_data.api.audio_codec_state = "pcmu"
+    entry.runtime_data.api.audio_codec_running_state = "speex"
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes == {
+        "state": "speex",
+        "pending_option": "pcmu",
+    }
+    assert entry.runtime_data.event_state.audio_codec == "speex"
+
+
+def test_audio_codec_select_partial_state_has_no_option() -> None:
+    entry = _audio_codec_entry()
+    entry.runtime_data.api.audio_codec_state = "partial"
+    entry.runtime_data.api.audio_codec_running_state = "partial"
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.current_option is None
+
+
+def test_audio_codec_select_unknown_option_is_ignored() -> None:
+    entry = _audio_codec_entry()
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_select_option("opus"))
+
+    assert entry.runtime_data.api.audio_codec_calls == []
+
+
+def test_audio_codec_select_marks_unavailable_on_api_error() -> None:
+    entry = _audio_codec_entry(fail_status=True)
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+
+    asyncio.run(entity.async_update())
+
+    assert entity.available is False

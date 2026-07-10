@@ -121,6 +121,19 @@ def normalize_callback_base_url(value: object) -> str:
     return urlunsplit(("http", parts.netloc, "", "", ""))
 
 
+def validated_callback_base_url(
+    user_input: dict[str, Any],
+    errors: dict[str, str],
+) -> str:
+    """Validate a local HA callback base URL from flow input, recording errors."""
+
+    try:
+        return normalize_callback_base_url(user_input.get(CONF_CALLBACK_BASE_URL, ""))
+    except ValueError:
+        errors[CONF_CALLBACK_BASE_URL] = "invalid_callback_base_url"
+        return ""
+
+
 def apply_callback_base_url(callback_url: str, callback_base_url: str) -> str:
     """Return a callback URL using an optional configured base endpoint."""
 

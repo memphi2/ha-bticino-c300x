@@ -135,12 +135,6 @@ def _ring_wav_path(hass: Any, wav_path: str | None) -> Path:
     return _validate_ring_wav(source)
 
 
-async def _async_ring_wav_path(hass: Any, wav_path: str | None) -> Path:
-    if hasattr(hass, "async_add_executor_job"):
-        return cast(Path, await hass.async_add_executor_job(_ring_wav_path, hass, wav_path))
-    return await asyncio.to_thread(_ring_wav_path, hass, wav_path)
-
-
 def _latest_ring_wav_path(hass: Any) -> Path:
     candidates = sorted(_ring_wav_candidates(hass), key=_safe_mtime, reverse=True)
     if not candidates:

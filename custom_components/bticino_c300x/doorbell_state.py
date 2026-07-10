@@ -15,12 +15,6 @@ DOORBELL_STATES = (
 _DOORBELL_STATE_SET = frozenset(DOORBELL_STATES)
 
 
-def normalize_doorbell_state(state: dict[str, Any]) -> str | None:
-    """Return a supported raw doorbell state from an agent state payload."""
-
-    return raw_doorbell_state_value(state.get("doorbell"))
-
-
 def raw_doorbell_state_value(value: Any) -> str | None:
     """Return a supported raw doorbell state without semantic remapping."""
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from asyncio import Task
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -23,11 +23,7 @@ from homeassistant.helpers.dispatcher import (
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .agent_diagnostics import async_refresh_agent_diagnostics
-from .api import (
-    C300XAgentApiError,
-    normalize_answering_machine_messages,
-    normalize_memos,
-)
+from .api import C300XAgentApiError
 from .camera_media.state_machine import (
     MediaState,
     derive_media_state,
@@ -44,9 +40,7 @@ from .const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
-    SIGNAL_MEMOS_CHANGED,
     SIGNAL_SYSTEM_METRICS_CHANGED,
-    SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .device_user import media_user_attributes
 from .doorbell_state import (
@@ -60,15 +54,14 @@ from .entity import C300XEntity
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_readiness import MEDIA_READINESS_STATUS_OPTIONS, media_readiness
-from .memos import (
-    latest_memo,
-    latest_memo_attributes,
-)
+from .memos import latest_memo_attributes
 from .message_refresh import (
     async_answering_machine_messages,
     async_memos,
-    schedule_answering_machine_messages_refresh,
-    schedule_memos_refresh,
+)
+from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
+from .value_parsing import (
+    freeze_state_value as _freeze_state_value,
 )
 from .video_messages import (
     latest_video_message_attributes,
@@ -161,19 +154,6 @@ def _entity_state_snapshot(entity: Any) -> _EntityStateSnapshot:
         getattr(entity, "available", True),
         _freeze_state_value(getattr(entity, "extra_state_attributes", {})),
     )
-
-
-def _freeze_state_value(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return tuple(
-            (str(key), _freeze_state_value(item))
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        )
-    if isinstance(value, (set, frozenset)):
-        return tuple(sorted((_freeze_state_value(item) for item in value), key=repr))
-    if isinstance(value, (list, tuple)):
-        return tuple(_freeze_state_value(item) for item in value)
-    return value
 
 
 def _strict_number(value: Any) -> float | None:
@@ -1003,14 +983,14 @@ class C300XDeviceCpuSensor(C300XSystemMetricSensor):
         return {"cpu_count": self._metrics.get("cpu_count")}
 
 
-class C300XVoicemailSensor(C300XEntity, SensorEntity):
-    """Base class for event-driven video message metadata sensors."""
+class C300XStoredItemsSensor(C300XEntity, SensorEntity):
+    """Base class for event-driven device-stored item metadata sensors."""
 
     _attr_should_poll = False
-    _attr_translation_key = "voicemail_messages"
+    _items_spec: ClassVar[StoredItemsSpec]
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to message change events."""
+        """Subscribe to item change events."""
 
         await super().async_added_to_hass()
         self.async_on_remove(
@@ -1022,63 +1002,71 @@ class C300XVoicemailSensor(C300XEntity, SensorEntity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
-                SIGNAL_VIDEO_MESSAGES_CHANGED,
-                self._handle_video_messages_refreshed,
+                self._items_spec.signal,
+                self._handle_items_refreshed,
             )
         )
 
     async def async_update(self) -> None:
-        """Refresh message metadata on explicit HA update requests."""
+        """Refresh item metadata on explicit HA update requests."""
 
         try:
-            messages = await async_answering_machine_messages(self._entry)
+            items = await self._items_spec.fetch(self._entry)
         except C300XAgentApiError:
             self._attr_available = False
             return
-        self._apply_messages(messages)
+        self._apply_items(items)
 
     @property
-    def _messages(self) -> dict[str, Any]:
-        return self._entry.runtime_data.answering_machine_messages
+    def _items(self) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            getattr(self._entry.runtime_data, self._items_spec.payload_attr),
+        )
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
+        spec = self._items_spec
         if event.data.get("entry_id") != self._entry.entry_id:
             return
-        if agent_event_key(event.data) != "answering_machine_messages_changed":
+        if agent_event_key(event.data) != spec.agent_event_key:
             return
-        voicemail = event.data.get("voicemail")
-        if not isinstance(voicemail, dict):
+        payload = event.data.get(spec.event_payload_key)
+        if isinstance(payload, dict):
+            items = spec.normalize(
+                {**payload, spec.items_key: self._items.get(spec.items_key, [])}
+            )
+            self._apply_items(items)
+        elif not spec.schedule_refresh_on_invalid_event_payload:
             return
-        messages = normalize_answering_machine_messages(
-            {**voicemail, "messages": self._messages.get("messages", [])}
-        )
-        self._apply_messages(messages)
         if hasattr(self, "hass"):
-            schedule_answering_machine_messages_refresh(self.hass, self._entry)
+            spec.schedule_refresh(self.hass, self._entry)
 
     @callback
-    def _handle_video_messages_refreshed(self, entry_id: str) -> None:
+    def _handle_items_refreshed(self, entry_id: str) -> None:
         if entry_id != self._entry.entry_id:
             return
-        self._attr_available = bool(self._messages.get("available", True))
+        self._attr_available = bool(self._items.get("available", True))
         self.async_write_ha_state()
 
-    def _apply_messages(self, messages: dict[str, Any], *, write_state: bool = True) -> None:
-        self._entry.runtime_data.answering_machine_messages = messages
-        self._entry.runtime_data.answering_machine_messages_updated_at = datetime.now(
-            UTC
+    def _apply_items(self, items: dict[str, Any], *, write_state: bool = True) -> None:
+        setattr(self._entry.runtime_data, self._items_spec.payload_attr, items)
+        setattr(
+            self._entry.runtime_data,
+            self._items_spec.updated_at_attr,
+            datetime.now(UTC),
         )
-        self._attr_available = bool(messages.get("available", True))
+        self._attr_available = bool(items.get("available", True))
         if write_state:
             self.async_write_ha_state()
 
 
-class C300XVoicemailMessagesSensor(C300XVoicemailSensor):
+class C300XVoicemailMessagesSensor(C300XStoredItemsSensor):
     """Total video messages stored on the device."""
 
     _attr_native_unit_of_measurement = "messages"
     _attr_translation_key = "voicemail_messages"
+    _items_spec = VIDEO_MESSAGE_ITEMS
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "voicemail_messages")
@@ -1087,97 +1075,26 @@ class C300XVoicemailMessagesSensor(C300XVoicemailSensor):
     def native_value(self) -> int | None:
         """Return total video message count."""
 
-        return self._messages.get("total")
+        return self._items.get("total")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return non-sensitive video message summary metadata."""
 
         return {
-            "unread": self._messages.get("unread"),
-            "read": self._messages.get("read"),
-            "newest_at": self._messages.get("newest_at"),
-            **latest_video_message_attributes(self._messages, self._entry.entry_id),
+            "unread": self._items.get("unread"),
+            "read": self._items.get("read"),
+            "newest_at": self._items.get("newest_at"),
+            **latest_video_message_attributes(self._items, self._entry.entry_id),
         }
 
 
-class C300XMemoSensor(C300XEntity, SensorEntity):
-    """Base class for event-driven manual memo metadata sensors."""
-
-    _attr_should_poll = False
-    _attr_translation_key = "memos"
-    _memo_kind = ""
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to memo change events."""
-
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.hass.bus.async_listen(
-                EVENT_AGENT_EVENT_RECEIVED,
-                self._handle_agent_event,
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_MEMOS_CHANGED,
-                self._handle_memos_refreshed,
-            )
-        )
-
-    async def async_update(self) -> None:
-        """Refresh memo metadata on explicit HA update requests."""
-
-        try:
-            memos = await async_memos(self._entry)
-        except C300XAgentApiError:
-            self._attr_available = False
-            return
-        self._apply_memos(memos)
-
-    @property
-    def _memos(self) -> dict[str, Any]:
-        return self._entry.runtime_data.memos
-
-    @callback
-    def _handle_agent_event(self, event: Any) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
-            return
-        if agent_event_key(event.data) != "memos_changed":
-            return
-        memos = event.data.get("memos")
-        if isinstance(memos, dict):
-            normalized = normalize_memos(
-                {**memos, "memos": self._memos.get("memos", [])}
-            )
-            self._apply_memos(normalized)
-        if hasattr(self, "hass"):
-            schedule_memos_refresh(self.hass, self._entry)
-
-    @callback
-    def _handle_memos_refreshed(self, entry_id: str) -> None:
-        if entry_id != self._entry.entry_id:
-            return
-        self._attr_available = bool(self._memos.get("available", True))
-        self.async_write_ha_state()
-
-    def _apply_memos(self, memos: dict[str, Any], *, write_state: bool = True) -> None:
-        self._entry.runtime_data.memos = memos
-        self._entry.runtime_data.memos_updated_at = datetime.now(UTC)
-        self._attr_available = bool(memos.get("available", True))
-        if write_state:
-            self.async_write_ha_state()
-
-    def _latest_item(self) -> dict[str, Any] | None:
-        return latest_memo(self._memos, self._memo_kind)
-
-
-class C300XTextMemosSensor(C300XMemoSensor):
+class C300XTextMemosSensor(C300XStoredItemsSensor):
     """Manual text memos stored on the device."""
 
     _attr_native_unit_of_measurement = "memos"
     _attr_translation_key = "text_memos"
+    _items_spec = MEMO_ITEMS
     _memo_kind = "text"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
@@ -1187,28 +1104,29 @@ class C300XTextMemosSensor(C300XMemoSensor):
     def native_value(self) -> int | None:
         """Return text memo count."""
 
-        return self._memos.get("text_total")
+        return self._items.get("text_total")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return text memo counters and latest memo metadata."""
 
         return {
-            "all_memos_total": self._memos.get("total"),
-            "newest_at": self._memos.get("newest_at"),
+            "all_memos_total": self._items.get("total"),
+            "newest_at": self._items.get("newest_at"),
             **latest_memo_attributes(
-                self._memos,
+                self._items,
                 self._memo_kind,
                 include_text=True,
             ),
         }
 
 
-class C300XVoiceMemosSensor(C300XMemoSensor):
+class C300XVoiceMemosSensor(C300XStoredItemsSensor):
     """Manual voice memos stored on the device."""
 
     _attr_native_unit_of_measurement = "memos"
     _attr_translation_key = "voice_memos"
+    _items_spec = MEMO_ITEMS
     _memo_kind = "voice"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
@@ -1218,17 +1136,17 @@ class C300XVoiceMemosSensor(C300XMemoSensor):
     def native_value(self) -> int | None:
         """Return voice memo count."""
 
-        return self._memos.get("voice_total")
+        return self._items.get("voice_total")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return voice memo counters and latest playable metadata."""
 
         return {
-            "all_memos_total": self._memos.get("total"),
-            "newest_at": self._memos.get("newest_at"),
+            "all_memos_total": self._items.get("total"),
+            "newest_at": self._items.get("newest_at"),
             **latest_memo_attributes(
-                self._memos,
+                self._items,
                 self._memo_kind,
                 entry_id=self._entry.entry_id,
             ),

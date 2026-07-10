@@ -133,7 +133,6 @@ def _stub_rtsp_ready(
         if ready_urls is not None:
             ready_urls.append(stream_url)
 
-    camera._async_wait_for_rtsp_ready = _wait_for_rtsp_ready  # type: ignore[method-assign]
     camera._rtsp_orchestrator.async_wait_for_rtsp_ready = _wait_for_rtsp_ready  # type: ignore[method-assign]
 
 
@@ -441,11 +440,22 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
         "external_owner": "external_client",
         "last_video_block_reason": "external_session_active",
             "talkback_supported": True,
+            "doorstation_audio_gain_db": 0.0,
             "media_user": {
                 "account": "homeassistant",
                 "label": "Home Assistant Test",
             },
     }
+
+
+def test_doorbell_camera_gain_attribute_comes_from_config_option() -> None:
+    entry = _FakeEntry()
+    entry.options["doorstation_audio_gain_db"] = 6.0
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+
+    # sourced from HA's own config-flow option, not the agent bridge status
+    camera._bridge_status = {"doorstation_audio_gain_db": -12.0}
+    assert camera.extra_state_attributes["doorstation_audio_gain_db"] == 6.0
 
 
 def test_doorbell_camera_refresh_applies_bridge_audio_metadata() -> None:
@@ -925,6 +935,50 @@ def test_doorbell_camera_home_call_provider_offer_error_stops_call(
     ]
 
 
+def test_doorbell_camera_home_call_provider_offer_error_before_stream_stops_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _EarlyErrorWebRTCProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            self.offers.append((session_id, offer_sdp))
+            send_message(camera_module.WebRTCError("go2rtc_offer_failed", "boom"))
+
+    api = _FakeApi()
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        runtime_data=_FakeRuntimeData(api=api),
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    provider = _EarlyErrorWebRTCProvider()
+    sent_messages: list[Any] = []
+    _install_fake_webrtc_provider(monkeypatch, provider)
+
+    asyncio.run(
+        camera.async_handle_home_call_webrtc_offer(
+            "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\n",
+            "session-home-early-error",
+            sent_messages.append,
+            duration_seconds=30,
+        )
+    )
+
+    assert camera._webrtc_session_ids() == []
+    assert provider.closed == ["session-home-early-error"]
+    assert provider.offer_sources == []
+    assert api.home_call_start_calls == [30]
+    assert api.home_call_stop_calls == 1
+    assert [_webrtc_message_value(message, "code") for message in sent_messages] == [
+        "go2rtc_offer_failed"
+    ]
+
+
 def test_doorbell_camera_buffers_provider_ice_candidate_before_offer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1063,6 +1117,40 @@ def test_doorbell_camera_ha_webrtc_close_does_not_stop_agent_media() -> None:
 
     assert len(tasks) == 1
     assert provider.closed == ["doorbell-session"]
+    assert api.stop_calls == 0
+
+
+def test_doorbell_camera_ha_webrtc_close_stops_home_call_media() -> None:
+    async def _run() -> tuple[_FakeApi, _FakeWebRTCProvider, list[asyncio.Task[None]]]:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["home-call-session"] = _ProviderWebRTCSession(
+            provider=provider,
+            owner="home_call",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="home_call:entry-1",
+            ready=True,
+        )
+
+        camera.close_webrtc_session("home-call-session")
+        await asyncio.gather(*tasks)
+        return api, provider, tasks
+
+    api, provider, tasks = asyncio.run(_run())
+
+    # Home Call has no RTSP-drain backstop, so a closing subscription must stop
+    # the device call instead of letting it run to the duration timeout.
+    assert len(tasks) == 1
+    assert provider.closed == ["home-call-session"]
+    assert api.home_call_stop_calls == 1
     assert api.stop_calls == 0
 
 
@@ -1610,38 +1698,6 @@ def test_doorbell_camera_waits_for_ring_call_after_external_event(
     assert api.activate_calls == []
 
 
-def test_doorbell_camera_ring_reader_restart_does_not_restart_on_demand() -> None:
-    class _RingApi(_FakeApi):
-        async def async_doorbell_video_status(self) -> dict[str, Any]:
-            status = await super().async_doorbell_video_status()
-            status["media_owner"] = "ring"
-            status["bridge"] = {
-                **status["bridge"],
-                "media_owner": "ring",
-                "ring_call_active": True,
-                "ring_media_active": True,
-            }
-            return status
-
-        async def async_stop_doorbell_video(self) -> dict[str, Any]:
-            raise AssertionError("ring RTSP restart must not stop the ring call")
-
-    api = _RingApi()
-    entry = _FakeEntry(
-        data={"agent_host": "127.0.0.1", "video_port": 6554},
-        runtime_data=_FakeRuntimeData(api=api),
-    )
-    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
-    _stub_rtsp_ready(camera)
-
-    async def _run() -> None:
-        await camera._async_restart_video_reader(audio=True)
-
-    asyncio.run(_run())
-
-    assert api.activate_calls == []
-
-
 def test_doorbell_camera_on_demand_clears_finished_home_call_without_local_session() -> None:
     class _IdleAfterHomeCallApi(_FakeApi):
         async def async_doorbell_video_status(self) -> dict[str, Any]:
@@ -2175,39 +2231,6 @@ def test_doorbell_camera_blocks_doorbell_rtsp_while_home_call_is_active() -> Non
     assert camera.extra_state_attributes["last_video_block_reason"] == "home_call_active"
 
 
-def test_doorbell_camera_home_call_reader_restart_does_not_restart_on_demand() -> None:
-    class _HomeCallApi(_FakeApi):
-        async def async_doorbell_video_status(self) -> dict[str, Any]:
-            status = await super().async_doorbell_video_status()
-            status["media_owner"] = "home_call"
-            status["bridge"] = {
-                **status["bridge"],
-                "media_owner": "home_call",
-                "home_call_running": True,
-                "home_call_active": True,
-                "home_call_answered": True,
-            }
-            return status
-
-        async def async_stop_doorbell_video(self) -> dict[str, Any]:
-            raise AssertionError("home-call RTSP restart must not stop the call")
-
-    api = _HomeCallApi()
-    entry = _FakeEntry(
-        data={"agent_host": "127.0.0.1", "video_port": 6554},
-        runtime_data=_FakeRuntimeData(api=api),
-    )
-    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
-    _stub_rtsp_ready(camera)
-
-    async def _run() -> None:
-        await camera._async_restart_video_reader(audio=True)
-
-    asyncio.run(_run())
-
-    assert api.activate_calls == []
-
-
 def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
     class _DelayedApi(_FakeApi):
         def __init__(self) -> None:
@@ -2487,7 +2510,7 @@ def test_doorbell_camera_home_call_wait_ignores_pre_answer_running_state(
     entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
 
-    status = asyncio.run(camera._async_wait_for_home_call_active())
+    status = asyncio.run(camera._rtsp_orchestrator.async_wait_for_home_call_active())
 
     assert api.home_call_status_calls == 2
     assert status["active"] is True

@@ -21,8 +21,12 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    assert path.stat().st_size <= 433_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_680
+    # Bumped from 433_000 for the maintenance audio-codec endpoints (+ persist
+    # of media.audioCodec on apply/restore). Splitting this monolith is a
+    # separate backlog refactor; this interim ceiling keeps pressure on
+    # unrelated growth.
+    assert path.stat().st_size <= 440_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 12_720
 
 
 def test_native_agent_event_payload_module_stays_small() -> None:
@@ -51,7 +55,12 @@ def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "media_bridge.c"
 
-    assert path.stat().st_size <= 229_000
+    # Bumped from 229_000 for the compatible PCMU talkback path (codec-aware
+    # payload types + silence), then to 232_500 for the codec-aware ring
+    # talkback restamp (speex 97 -> negotiated 96). Splitting this monolith is
+    # a separate backlog refactor; this interim ceiling keeps pressure on
+    # unrelated growth.
+    assert path.stat().st_size <= 232_500
     assert path.read_text(encoding="utf-8").count("\n") <= 6_900
 
 
@@ -86,6 +95,11 @@ def test_large_python_modules_stay_within_interim_budget() -> None:
     ]
 
     assert oversized == []
+
+    # api.py was refactored down from ~76.5k; keep it small so the client class
+    # does not grow back into a god-object.
+    api_py = ROOT / "custom_components" / "bticino_c300x" / "api.py"
+    assert api_py.stat().st_size <= 45_000
 
 
 def test_tracked_runtime_payload_budget_excludes_generated_archives() -> None:

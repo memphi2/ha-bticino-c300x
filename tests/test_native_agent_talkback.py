@@ -409,7 +409,10 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert ondemand_media_body.index("if (max_fd < 0)") < ondemand_media_body.index(
         "select(max_fd + 1"
     )
-    assert "send_media_audio_silence(audio_rtp_fd, target_audio_port, &srtp)" in ondemand_media_body
+    # Silence keepalive is now codec-aware (PCMU 0xFF vs speex 0x00) via the
+    # payload-type variant.
+    assert "send_media_audio_silence_payload_type(" in ondemand_media_body
+    assert "talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)" in ondemand_media_body
     assert "drain_ondemand_media_socket(bridge, audio_rtp_fd, srtp.audio_in, false, true, NULL)" in ondemand_media_body
     assert "drain_ondemand_media_socket(bridge, audio_rtcp_fd, srtp.audio_in, true, true, NULL)" in ondemand_media_body
     assert "drain_ondemand_media_socket(bridge, video_rtp_fd, srtp.video_in, false, false, &video_ssrc)" in ondemand_media_body

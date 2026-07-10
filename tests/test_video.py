@@ -4,12 +4,11 @@ from types import SimpleNamespace
 
 from custom_components.bticino_c300x import video as video_module
 from custom_components.bticino_c300x.const import DEFAULT_VIDEO_STREAM_PATH
+from custom_components.bticino_c300x.value_parsing import optional_string
 from custom_components.bticino_c300x.video import (
     TRANSPARENT_CAMERA_PROXY_IMAGE,
     doorbell_camera_unique_id,
-    optional_string,
     resolve_doorbell_camera_entity_id,
-    safe_optional_stream_path,
     safe_stream_path,
 )
 
@@ -63,9 +62,11 @@ def test_resolve_doorbell_camera_entity_id_ignores_non_string_results(
     ) is None
 
 
-def test_optional_string_returns_non_empty_text_only() -> None:
+def test_optional_string_strips_and_returns_non_empty_text_only() -> None:
     assert optional_string(None) is None
     assert optional_string("") is None
+    assert optional_string("   ") is None
+    assert optional_string(" x ") == "x"
     assert optional_string(123) == "123"
 
 
@@ -73,10 +74,3 @@ def test_safe_stream_path_never_exposes_rtsp_url() -> None:
     assert safe_stream_path(None) == DEFAULT_VIDEO_STREAM_PATH
     assert safe_stream_path("/doorbell") == "/doorbell"
     assert safe_stream_path("rtsp://device/doorbell") == DEFAULT_VIDEO_STREAM_PATH
-
-
-def test_safe_optional_stream_path_never_exposes_rtsp_url() -> None:
-    assert safe_optional_stream_path(None) is None
-    assert safe_optional_stream_path("") is None
-    assert safe_optional_stream_path("/doorbell") == "/doorbell"
-    assert safe_optional_stream_path("rtsp://device/doorbell") is None

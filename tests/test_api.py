@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 
 import pytest
 from aiohttp import ClientError
@@ -23,7 +23,6 @@ from custom_components.bticino_c300x.api import (
     C300XAgentApiUnsupportedError,
     build_agent_base_url,
     display_bridge_callback_fingerprint,
-    encode_endpoint_url,
     normalize_activation_id,
     normalize_activations,
     normalize_agent_diagnostics,
@@ -53,6 +52,23 @@ from custom_components.bticino_c300x.api import (
 )
 from custom_components.bticino_c300x.const import HEADER_MAINTENANCE_TOKEN
 
+_CONTENT_LENGTH_AUTO = object()
+
+
+class _FakeContent:
+    def __init__(self, raw: bytes, *, chunk: int | None = None) -> None:
+        self._raw = raw
+        self._chunk = chunk or max(1, len(raw))
+
+    async def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            return self._raw
+        return self._raw[:size]
+
+    async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
+        for start in range(0, len(self._raw), self._chunk):
+            yield self._raw[start : start + self._chunk]
+
 
 class _FakeResponse:
     def __init__(
@@ -61,11 +77,28 @@ class _FakeResponse:
         text: str = '{"ok": true}',
         body: bytes | None = None,
         content_type: str = "application/json",
+        content_length: object = _CONTENT_LENGTH_AUTO,
     ) -> None:
         self.status = status
         self._text = text
         self._body = body
         self.headers = {"Content-Type": content_type}
+        self.charset = "utf-8"
+        self._content_length_override = content_length
+
+    @property
+    def _raw(self) -> bytes:
+        return self._body if self._body is not None else self._text.encode()
+
+    @property
+    def content_length(self) -> int | None:
+        if self._content_length_override is _CONTENT_LENGTH_AUTO:
+            return len(self._raw)
+        return self._content_length_override
+
+    @property
+    def content(self) -> _FakeContent:
+        return _FakeContent(self._raw)
 
     async def __aenter__(self) -> _FakeResponse:
         return self
@@ -77,7 +110,7 @@ class _FakeResponse:
         return self._text
 
     async def read(self) -> bytes:
-        return self._body if self._body is not None else self._text.encode()
+        return self._raw
 
 
 class _FakeSession:
@@ -88,12 +121,14 @@ class _FakeSession:
         response_status: int = 200,
         response_body: bytes | None = None,
         content_type: str = "application/json",
+        response_content_length: object = _CONTENT_LENGTH_AUTO,
     ) -> None:
         self.requests: list[dict[str, object]] = []
         self._response_text = response_text
         self._response_status = response_status
         self._response_body = response_body
         self._content_type = content_type
+        self._response_content_length = response_content_length
 
     def request(self, *args: object, **kwargs: object) -> _FakeResponse:
         self.requests.append({"args": args, "kwargs": kwargs})
@@ -102,6 +137,7 @@ class _FakeSession:
             text=self._response_text,
             body=self._response_body,
             content_type=self._content_type,
+            content_length=self._response_content_length,
         )
 
 
@@ -134,12 +170,6 @@ def test_build_agent_base_url_defaults_to_http() -> None:
 
 def test_build_agent_base_url_handles_ipv6() -> None:
     assert build_agent_base_url("fd00::1", 8080) == "http://[fd00::1]:8080"
-
-
-def test_encode_endpoint_url_uses_base64() -> None:
-    assert encode_endpoint_url("https://ha.example/api/webhook/x") == (
-        "aHR0cHM6Ly9oYS5leGFtcGxlL2FwaS93ZWJob29rL3g="
-    )
 
 
 def test_validate_setup_uses_native_agent_version() -> None:
@@ -189,7 +219,7 @@ def test_json_request_rejects_invalid_json() -> None:
     )
 
     with pytest.raises(C300XAgentApiResponseError, match="invalid JSON"):
-        asyncio.run(api.async_state())
+        asyncio.run(api.async_home_call_status())
 
 
 @pytest.mark.parametrize(
@@ -211,7 +241,7 @@ def test_json_request_wraps_transport_errors(
     )
 
     with pytest.raises(C300XAgentApiConnectionError, match=message):
-        asyncio.run(api.async_state())
+        asyncio.run(api.async_home_call_status())
 
 
 def test_byte_request_reports_unsupported_endpoint() -> None:
@@ -636,7 +666,7 @@ def test_api_object_methods_reject_non_object_json(
         asyncio.run(getattr(api, method_name)(*call_args))
 
 
-def test_api_delete_subscription_and_update_status_use_expected_headers() -> None:
+def test_api_delete_subscription_uses_expected_headers() -> None:
     calls: list[tuple[str, str, dict[str, object]]] = []
     api = C300XAgentApi(
         _FakeSession(),  # type: ignore[arg-type]
@@ -652,15 +682,9 @@ def test_api_delete_subscription_and_update_status_use_expected_headers() -> Non
     api._request_json = request_json  # type: ignore[method-assign]
 
     asyncio.run(api.async_delete_event_subscription("sub-1"))
-    assert asyncio.run(api.async_agent_update_status()) == {"ok": True}
 
     assert calls == [
         ("DELETE", "/api/v1/events/subscriptions/sub-1", {}),
-        (
-            "GET",
-            "/api/v1/maintenance/update/status",
-            {"extra_headers": {HEADER_MAINTENANCE_TOKEN: "maintenance-token"}},
-        ),
     ]
 
 
@@ -819,7 +843,7 @@ def test_agent_http_error_omits_unusable_detail(response_text: str) -> None:
         C300XAgentApiConnectionError,
         match="device agent returned HTTP 500$",
     ):
-        asyncio.run(api.async_state())
+        asyncio.run(api.async_home_call_status())
 
 
 def test_agent_http_error_compacts_long_detail() -> None:
@@ -837,7 +861,7 @@ def test_agent_http_error_compacts_long_detail() -> None:
     )
 
     with pytest.raises(C300XAgentApiConnectionError) as err:
-        asyncio.run(api.async_state())
+        asyncio.run(api.async_home_call_status())
 
     message = str(err.value)
     assert message.startswith("device agent returned HTTP 500: very long")
@@ -1058,29 +1082,6 @@ def test_list_event_subscriptions_requests_authenticated_endpoint() -> None:
     assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
     }
-
-
-def test_start_ssh_sends_maintenance_token_and_confirmation() -> None:
-    session = _FakeSession()
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-        maintenance_token="maintenance-token",
-    )
-
-    assert asyncio.run(api.async_start_ssh()) == {"ok": True}
-
-    request = session.requests[0]
-    assert request["args"] == (
-        "POST",
-        "http://agent.local:8080/api/v1/maintenance/ssh/actions/start",
-    )
-    assert request["kwargs"]["headers"] == {
-        "Authorization": "Bearer agent-token",
-        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
-    }
-    assert request["kwargs"]["json"] == {"confirm": "start_ssh"}
 
 
 def test_auth_config_status_uses_maintenance_endpoint() -> None:
@@ -1367,42 +1368,19 @@ def test_agent_update_methods_use_maintenance_endpoints() -> None:
     }
 
 
-def test_start_ssh_omits_maintenance_token_when_unconfigured() -> None:
-    session = _FakeSession()
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-    )
-
-    assert asyncio.run(api.async_start_ssh()) == {"ok": True}
-
-    assert session.requests[0]["kwargs"]["headers"] == {
-        "Authorization": "Bearer agent-token",
-    }
-
-
-def test_stop_ssh_sends_maintenance_token_and_confirmation() -> None:
+def test_maintenance_request_omits_token_when_unconfigured() -> None:
     session = _FakeSession('{"ok": true, "running": false}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
         "http://agent.local:8080",
         "agent-token",
-        maintenance_token="maintenance-token",
     )
 
-    assert asyncio.run(api.async_stop_ssh())["running"] is False
+    assert asyncio.run(api.async_ssh_status())["running"] is False
 
-    request = session.requests[0]
-    assert request["args"] == (
-        "POST",
-        "http://agent.local:8080/api/v1/maintenance/ssh/actions/stop",
-    )
-    assert request["kwargs"]["headers"] == {
+    assert session.requests[0]["kwargs"]["headers"] == {
         "Authorization": "Bearer agent-token",
-        HEADER_MAINTENANCE_TOKEN: "maintenance-token",
     }
-    assert request["kwargs"]["json"] == {"confirm": "stop_ssh"}
 
 
 def test_set_ssh_enabled_uses_switch_endpoint() -> None:
@@ -1609,6 +1587,57 @@ def test_restore_firewall_sends_maintenance_confirmation() -> None:
         "http://agent.local:8080/api/v1/maintenance/firewall/actions/restore",
     )
     assert request["kwargs"]["json"] == {"confirm": "restore_firewall"}
+
+
+def _audio_codec_api(body: str) -> tuple[C300XAgentApi, _FakeSession]:
+    session = _FakeSession(body)
+    api = C300XAgentApi(
+        session,  # type: ignore[arg-type]
+        "http://agent.local:8080",
+        "agent-token",
+        maintenance_token="maintenance-token",
+    )
+    return api, session
+
+
+def test_audio_codec_status_uses_maintenance_endpoint() -> None:
+    api, session = _audio_codec_api('{"ok": true, "state": "speex", "supported": true}')
+
+    assert asyncio.run(api.async_audio_codec_status())["state"] == "speex"
+    assert session.requests[0]["args"] == (
+        "GET",
+        "http://agent.local:8080/api/v1/maintenance/audio-codec",
+    )
+
+
+def test_apply_audio_codec_sends_confirmation_and_reboot() -> None:
+    api, session = _audio_codec_api('{"ok": true, "state": "pcmu", "rebooting": true}')
+
+    assert asyncio.run(api.async_apply_audio_codec())["state"] == "pcmu"
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/audio-codec/actions/apply",
+    )
+    assert request["kwargs"]["json"] == {
+        "confirm": "apply_audio_codec_patch",
+        "reboot": True,
+    }
+
+
+def test_restore_audio_codec_can_defer_reboot() -> None:
+    api, session = _audio_codec_api('{"ok": true, "state": "speex", "rebooting": false}')
+
+    assert asyncio.run(api.async_restore_audio_codec(reboot=False))["state"] == "speex"
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST",
+        "http://agent.local:8080/api/v1/maintenance/audio-codec/actions/restore",
+    )
+    assert request["kwargs"]["json"] == {
+        "confirm": "restore_audio_codec_patch",
+        "reboot": False,
+    }
 
 
 def test_ipv6_firewall_methods_use_separate_maintenance_endpoint() -> None:
@@ -2696,27 +2725,6 @@ def test_normalize_video_message_id_rejects_paths() -> None:
             normalize_video_message_id(value)
 
 
-def test_smartphone_forwarding_cached_status_uses_agent_state_endpoint() -> None:
-    session = _FakeSession(
-        '{"state": {"smartphone_forwarding": "blocked"}}'
-    )
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-    )
-
-    assert asyncio.run(api.async_smartphone_forwarding_cached_status()) == {
-        "mode": 2,
-        "state": "blocked",
-        "raw": {"state": {"smartphone_forwarding": "blocked"}},
-    }
-    assert session.requests[0]["args"] == (
-        "GET",
-        "http://agent.local:8080/api/v1/state",
-    )
-
-
 def test_normalize_smartphone_forwarding_mode_accepts_known_values() -> None:
     assert normalize_smartphone_forwarding_mode(" Enabled ") == "enabled"
 
@@ -2740,20 +2748,6 @@ def test_smartphone_forwarding_status_falls_back_to_state_endpoint() -> None:
         ("GET", "http://agent.local:8080/api/v1/state"),
     ]
 
-
-def test_state_returns_empty_dict_for_non_object_agent_state() -> None:
-    session = _FakeSession("[]")
-    api = C300XAgentApi(
-        session,  # type: ignore[arg-type]
-        "http://agent.local:8080",
-        "agent-token",
-    )
-
-    assert asyncio.run(api.async_state()) == {}
-    assert session.requests[0]["args"] == (
-        "GET",
-        "http://agent.local:8080/api/v1/state",
-    )
 
 
 def test_ringer_status_falls_back_to_state_endpoint() -> None:
@@ -2932,9 +2926,10 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
             "bridge": {
                 "enabled": True,
                 "running": True,
+                "device_audio_codec": "pcmu",
                 "audio_codec": "PCMU/8000",
                 "talkback_supported": True,
-                "talkback_payload_type": 97,
+                "talkback_payload_type": 0,
             },
         }
     ) == {
@@ -2950,9 +2945,10 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
         "bridge": {
             "enabled": True,
             "running": True,
+            "device_audio_codec": "pcmu",
             "audio_codec": "PCMU/8000",
             "talkback_supported": True,
-            "talkback_payload_type": 97,
+            "talkback_payload_type": 0,
         },
         "raw": {
             "available": True,
@@ -2963,9 +2959,10 @@ def test_normalize_doorbell_video_from_agent_bridge() -> None:
             "bridge": {
                 "enabled": True,
                 "running": True,
+                "device_audio_codec": "pcmu",
                 "audio_codec": "PCMU/8000",
                 "talkback_supported": True,
-                "talkback_payload_type": 97,
+                "talkback_payload_type": 0,
             },
         },
     }
@@ -3633,3 +3630,33 @@ def test_normalize_memos_drops_invalid_entries_and_counts_remaining() -> None:
             ]
         },
     }
+
+
+def test_request_json_rejects_oversized_response_via_content_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x._api_core._MAX_JSON_RESPONSE_BYTES", 8
+    )
+    session = _FakeSession(response_text='{"value": "far too long to fit in eight"}')
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+
+    with pytest.raises(C300XAgentApiResponseError, match="too large"):
+        asyncio.run(api._request_json("GET", "/api/v1/state"))
+
+
+def test_request_json_rejects_oversized_response_via_read_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x._api_core._MAX_JSON_RESPONSE_BYTES", 8
+    )
+    # content_length withheld (e.g. chunked) -> the bounded read must reject it.
+    session = _FakeSession(
+        response_text='{"value": "far too long to fit in eight"}',
+        response_content_length=None,
+    )
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+
+    with pytest.raises(C300XAgentApiResponseError, match="too large"):
+        asyncio.run(api._request_json("GET", "/api/v1/state"))

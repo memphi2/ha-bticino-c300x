@@ -1,19 +1,33 @@
 # Changelog
 
-## v1.7.7 - Unreleased
+## v1.8.0 - 2026-07-11
+
+### Added
+
+- Add native PCMU audio-codec mode for the C300X device agent, exposed through
+  the Home Assistant audio-codec select.
+- Adapt the bundled doorbell card for PCMU doorstation audio gain, including a
+  soft limiter so boosted audio does not hard-clip.
 
 ### Fixed
 
-- Fix the doorbell/Home Call card getting stuck in the busy/on-call state
-  (frozen video, hot microphone, hang-up button stuck active) after a
-  backend-initiated close, such as the native agent stopping media on
-  hang-up. The WebRTC client now notifies the card before it clears its own
-  peer-connection state, so the card can tell there was an active session to
-  tear down.
-- Hang up an active/answered doorbell ring call when Home Assistant removes
-  the camera entity (reload, restart, or config-entry unload) instead of only
-  stopping doorbell video, so the C300X doesn't keep an SIP call open after
-  Home Assistant believes it has ended.
+- Keep Ring Call capture, announcements and talkback aligned with the codec
+  currently running on the device, including legacy Speex agents and unresolved
+  startup codec state.
+- Keep the audio-codec select on the live codec until the required reboot makes
+  a pending PCMU/Speex change active.
+- Reduce idle task/coroutine growth by coalescing repeated Display bridge alarm
+  notifications.
+- Preserve user-customized bundled blueprint files during setup and upgrades.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled frontend modules are refreshed from the installed integration version.
+- Update the native C300X device agent from Home Assistant to `1.8.0`.
+- Audio-codec changes require the device/agent reboot prompted by the
+  integration before the new codec is active.
 
 ## v1.7.6 - 2026-07-07
 

@@ -51,30 +51,10 @@ def resolve_doorbell_camera_entity_id(
     return entity_id if isinstance(entity_id, str) else None
 
 
-def optional_string(value: Any) -> str | None:
-    """Return a non-empty string value."""
-
-    if value is None:
-        return None
-    text = str(value)
-    return text if text else None
-
-
 def safe_stream_path(path: Any) -> str:
     """Return a stream path without exposing full RTSP URLs as attributes."""
 
     text = str(path or DEFAULT_VIDEO_STREAM_PATH)
     if text.startswith("rtsp://"):
         return DEFAULT_VIDEO_STREAM_PATH
-    return text
-
-
-def safe_optional_stream_path(path: Any) -> str | None:
-    """Return an optional safe stream path."""
-
-    if not path:
-        return None
-    text = str(path)
-    if text.startswith("rtsp://"):
-        return None
     return text

@@ -11,11 +11,9 @@ from custom_components.bticino_c300x import (
 )
 from custom_components.bticino_c300x.capabilities import (
     answering_machine_message_delete_supported,
-    answering_machine_message_media_supported,
     auth_config_supported,
     entry_device_ui_enabled,
     entry_device_ui_enabled_or_patch_active,
-    entry_gui_dependent_features_active,
     event_label,
     events_for_capabilities,
     gate_capabilities,
@@ -361,9 +359,7 @@ def test_entry_ui_capability_helpers_follow_options_data_and_patch_status() -> N
 
     assert entry_device_ui_enabled(patched_entry) is False
     assert entry_device_ui_enabled_or_patch_active(patched_entry) is True
-    assert entry_gui_dependent_features_active(patched_entry) is False
     assert entry_device_ui_enabled(option_entry) is True
-    assert entry_gui_dependent_features_active(option_entry) is False
     assert entry_device_ui_enabled_or_patch_active(disabled_entry) is False
 
 
@@ -376,11 +372,10 @@ def test_message_and_memo_capability_helpers_require_exact_support_flags() -> No
     }
 
     assert answering_machine_message_delete_supported(messages)
-    assert answering_machine_message_media_supported(messages)
     assert not answering_machine_message_delete_supported(
         {"answering_machine": {"supported": True, "messages": True}}
     )
-    assert not answering_machine_message_media_supported(
+    assert not answering_machine_message_delete_supported(
         {"answering_machine": {"supported": True, "messages": {"supported": False}}}
     )
     assert memo_delete_supported({"memos": {"supported": True, "delete": True}})

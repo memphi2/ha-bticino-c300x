@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+from custom_components.bticino_c300x import blueprint_installer as installer_module
 from custom_components.bticino_c300x.blueprint_installer import (
     async_install_bundled_blueprints,
     install_bundled_blueprints,
@@ -31,18 +32,58 @@ def test_install_bundled_blueprints_copies_missing_files(tmp_path: Path) -> None
 
 def test_install_bundled_blueprints_updates_existing_managed_files(
     tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "blueprints" / "automation" / "bticino_c300x"
+    source = tmp_path / "source"
+    source.mkdir()
+    bundled = source / "ring_capture.yaml"
+    bundled.write_text("old bundled blueprint\n", encoding="utf-8")
+    monkeypatch.setattr(installer_module, "_SOURCE_DIR", source)
+
+    installed = install_bundled_blueprints(target)
+    assert target / "ring_capture.yaml" in installed.installed
+
+    bundled.write_text("new bundled blueprint\n", encoding="utf-8")
+
+    result = install_bundled_blueprints(target)
+
+    existing = target / "ring_capture.yaml"
+    assert existing.read_text(encoding="utf-8") == "new bundled blueprint\n"
+    assert existing in result.updated
+    assert existing not in result.installed
+
+
+def test_install_bundled_blueprints_preserves_customized_bundled_file(
+    tmp_path: Path,
 ) -> None:
     target = tmp_path / "blueprints" / "automation" / "bticino_c300x"
     target.mkdir(parents=True)
     existing = target / "ring_capture.yaml"
-    existing.write_text("old bundled blueprint\n", encoding="utf-8")
+    existing.write_text("user edited\n", encoding="utf-8")
 
     result = install_bundled_blueprints(target)
 
-    assert existing.read_text(encoding="utf-8") != "old bundled blueprint\n"
-    assert existing in result.updated
+    assert existing.read_text(encoding="utf-8") == "user edited\n"
+    assert existing not in result.updated
     assert existing not in result.installed
     assert (target / "doorbell_notification.yaml").exists()
+
+
+def test_install_bundled_blueprints_preserves_modified_managed_files(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "blueprints" / "automation" / "bticino_c300x"
+    installed = install_bundled_blueprints(target)
+    assert installed.installed
+    existing = target / "ring_capture.yaml"
+    existing.write_text("user edited after install\n", encoding="utf-8")
+
+    result = install_bundled_blueprints(target)
+
+    assert existing.read_text(encoding="utf-8") == "user edited after install\n"
+    assert existing not in result.updated
+    assert existing not in result.installed
 
 
 def test_install_bundled_blueprints_preserves_extra_files(tmp_path: Path) -> None:

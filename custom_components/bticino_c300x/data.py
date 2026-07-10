@@ -169,6 +169,11 @@ class C300XEventState:
     video_window_available: bool = False
     video_stream_path: str | None = None
     smartphone_forwarding_mode: str | None = None
+    # Last codec the audio_codec select resolved as running on the device
+    # (speex|pcmu). Durable across entity unavailability so consumers -- e.g.
+    # ring-capture talkback -- can pick the matching RTP payload even during an
+    # agent-connection blip. None until the select first resolves it.
+    audio_codec: str | None = None
     ringer_muted: bool | None = None
     ringer_volume: int | None = None
     door_unlock_state: str | None = None
@@ -229,6 +234,7 @@ class BticinoC300XRuntimeData:
     display_bridge_diagnostics: C300XCallbackDiagnostics = field(
         default_factory=C300XCallbackDiagnostics
     )
+    display_bridge_alarm_notify_pending: bool = False
     qml_patch_diagnostics: C300XOperationDiagnostics = field(
         default_factory=C300XOperationDiagnostics
     )

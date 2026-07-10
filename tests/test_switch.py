@@ -139,7 +139,6 @@ def test_config_switches_are_disabled_by_default() -> None:
 class _FakeApi:
     def __init__(self) -> None:
         self.active_smartphone_reads = 0
-        self.cached_smartphone_reads = 0
         self.ringer_reads = 0
         self.ringer_sets: list[bool] = []
         self.ringer_status_error = False
@@ -183,10 +182,6 @@ class _FakeApi:
     async def async_smartphone_forwarding_status(self) -> dict[str, Any]:
         self.active_smartphone_reads += 1
         return {"mode": 2, "state": "blocked"}
-
-    async def async_smartphone_forwarding_cached_status(self) -> dict[str, Any]:
-        self.cached_smartphone_reads += 1
-        return {"mode": None, "state": "unknown"}
 
     async def async_ringer_status(self) -> dict[str, Any]:
         self.ringer_reads += 1

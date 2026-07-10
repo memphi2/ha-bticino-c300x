@@ -116,6 +116,9 @@ def main() -> int:
     assert_overlong_activation_id_is_rejected(binary)
     assert_startup_diagnostics_are_read_only(binary)
     assert_graceful_shutdown_signal_is_handled(binary)
+    assert_audio_codec_patch_roundtrip(binary)
+    assert_audio_codec_partial_state_detection(binary)
+    assert_audio_codec_apply_rejects_unpatchable_target(binary)
 
     with (
         managed_tcp_server(OpenWebNetServer()) as openwebnet,
@@ -299,6 +302,183 @@ def assert_graceful_shutdown_signal_is_handled(binary: Path) -> None:
             raise AssertionError("video destroy must stop all media subsystems")
 
 
+def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
+    """Native speex<->PCMU patch: lock-step apply, idempotency, byte-identical restore.
+
+    Exercised against synthetic fixtures via env-overridable paths and
+    NO_REMOUNT, so no vendor device files are needed and no mount is attempted.
+    """
+
+    stock_stack = (
+        "<bt_av_media>\n"
+        "<enable_speex>1</enable_speex>\n"
+        "<audio_compression>1</audio_compression>\n"
+        "</bt_av_media>\n"
+    )
+    stock_linphone = (
+        "[sound]\nrtp_io=1\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
+        "udp_gst_shrd_port=4000\n\n"
+        "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=0\n\n"
+        "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=1\n\n"
+        "[audio_codec_2]\nmime=speex\nrate=16000\nchannels=1\nenabled=0\n"
+    )
+    with tempfile.TemporaryDirectory(prefix="c300x-audio-codec-smoke-") as temp_dir:
+        temp = Path(temp_dir)
+        stack = temp / "stack_open.xml"
+        linphone = temp / "linphone.conf"
+        stack.write_text(stock_stack, encoding="utf-8")
+        linphone.write_text(stock_linphone, encoding="utf-8")
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "C300X_AUDIO_STACK_OPEN": str(stack),
+                "C300X_AUDIO_LINPHONE_CONF": str(linphone),
+                "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
+                "C300X_AUDIO_NO_REMOUNT": "1",
+            }
+        )
+
+        def run(action: str) -> tuple[int, dict[str, Any]]:
+            result = subprocess.run(
+                [str(binary), "--audio-codec", action],
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return result.returncode, json.loads(result.stdout)
+
+        code, status = run("status")
+        if code != 0 or status.get("state") != "speex":
+            raise AssertionError(f"audio codec status should be speex: {status!r}")
+        code, applied = run("apply")
+        if code != 0 or applied.get("state") != "pcmu":
+            raise AssertionError(f"audio codec apply should reach pcmu: {applied!r}")
+        if applied.get("changed") is not True:
+            raise AssertionError(f"first audio codec apply should report changed: {applied!r}")
+        stack_text = stack.read_text(encoding="utf-8")
+        linphone_text = linphone.read_text(encoding="utf-8")
+        if "<enable_speex>0</enable_speex>" not in stack_text:
+            raise AssertionError("apply did not flip enable_speex")
+        if "rtp_map=PCMU/8000/1\n" not in linphone_text or "rtp_ptnum=0\n" not in linphone_text:
+            raise AssertionError("apply did not switch the linphone [sound] codec")
+        if linphone_text.count("enabled=1") != 1:
+            raise AssertionError("apply must enable exactly the PCMU codec")
+        if "mime=PCMU\nrate=8000\nchannels=1\nenabled=1" not in linphone_text:
+            raise AssertionError("apply must enable the PCMU codec")
+        if "mime=speex\nrate=8000\nchannels=1\nenabled=0" not in linphone_text:
+            raise AssertionError("apply must disable the speex codec")
+        _, reapplied = run("apply")
+        if reapplied.get("state") != "pcmu":
+            raise AssertionError("apply must be idempotent")
+        if reapplied.get("changed") is not False:
+            raise AssertionError("second apply must report no change")
+        if (stack.read_text(encoding="utf-8"), linphone.read_text(encoding="utf-8")) != (
+            stack_text,
+            linphone_text,
+        ):
+            raise AssertionError("second apply must not change the files")
+        code, restored = run("restore")
+        if code != 0 or restored.get("state") != "speex":
+            raise AssertionError(f"restore should return to speex: {restored!r}")
+        if restored.get("changed") is not True:
+            raise AssertionError(f"restore should report changed: {restored!r}")
+        if stack.read_text(encoding="utf-8") != stock_stack:
+            raise AssertionError("restore must return byte-identical stack_open.xml")
+        if linphone.read_text(encoding="utf-8") != stock_linphone:
+            raise AssertionError("restore must return byte-identical linphone.conf")
+        _, rerestored = run("restore")
+        if rerestored.get("state") != "speex" or rerestored.get("changed") is not False:
+            raise AssertionError(f"second restore must be a no-op: {rerestored!r}")
+
+
+def assert_audio_codec_partial_state_detection(binary: Path) -> None:
+    """A half-applied config reads 'partial', not a false 'pcmu'/'speex'.
+
+    Here the linphone [sound] rtp_map already says PCMU but the codec enabled
+    flags are still stock-speex; strict detection must not call this pcmu.
+    """
+
+    stack_pcmu_side = "<bt_av_media>\n<enable_speex>0</enable_speex>\n</bt_av_media>\n"
+    linphone_inconsistent = (
+        "[sound]\nrtp_ptnum=0\nrtp_map=PCMU/8000/1\n\n"
+        "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=0\n\n"
+        "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=1\n"
+    )
+    with tempfile.TemporaryDirectory(prefix="c300x-audio-codec-partial-") as temp_dir:
+        temp = Path(temp_dir)
+        stack = temp / "stack_open.xml"
+        linphone = temp / "linphone.conf"
+        stack.write_text(stack_pcmu_side, encoding="utf-8")
+        linphone.write_text(linphone_inconsistent, encoding="utf-8")
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "C300X_AUDIO_STACK_OPEN": str(stack),
+                "C300X_AUDIO_LINPHONE_CONF": str(linphone),
+                "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
+                "C300X_AUDIO_NO_REMOUNT": "1",
+            }
+        )
+        result = subprocess.run(
+            [str(binary), "--audio-codec", "status"],
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        status = json.loads(result.stdout)
+        if status.get("state") != "partial":
+            raise AssertionError(f"inconsistent codec flags must read partial: {status!r}")
+
+
+def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
+    """Apply must not report success unless the resulting config is fully PCMU."""
+
+    unpatchable_stack = (
+        "<bt_av_media>\n"
+        "<enable_speex>unexpected</enable_speex>\n"
+        "</bt_av_media>\n"
+    )
+    stock_linphone = (
+        "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n\n"
+        "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=0\n\n"
+        "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=1\n"
+    )
+    with tempfile.TemporaryDirectory(prefix="c300x-audio-codec-invalid-") as temp_dir:
+        temp = Path(temp_dir)
+        stack = temp / "stack_open.xml"
+        linphone = temp / "linphone.conf"
+        stack.write_text(unpatchable_stack, encoding="utf-8")
+        linphone.write_text(stock_linphone, encoding="utf-8")
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "C300X_AUDIO_STACK_OPEN": str(stack),
+                "C300X_AUDIO_LINPHONE_CONF": str(linphone),
+                "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
+                "C300X_AUDIO_NO_REMOUNT": "1",
+            }
+        )
+        result = subprocess.run(
+            [str(binary), "--audio-codec", "apply"],
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            raise AssertionError(f"unpatchable apply must fail: {result.stdout!r}")
+        if json.loads(result.stdout).get("error") != "transform_failed":
+            raise AssertionError(
+                f"unpatchable apply failed with the wrong error: {result.stdout!r}"
+            )
+        if stack.read_text(encoding="utf-8") != unpatchable_stack:
+            raise AssertionError("failed apply must not alter stack_open.xml")
+        if linphone.read_text(encoding="utf-8") != stock_linphone:
+            raise AssertionError("failed apply must not alter linphone.conf")
+
+
 def run_smoke(
     binary: Path,
     openwebnet: OpenWebNetServer,
@@ -326,6 +506,19 @@ def run_smoke(
         ipv6_firewall_backup_path = temp_path / "backup" / "iptables6"
         firewall_runtime_bin = temp_path / "firewall-runtime-bin"
         firewall_runtime_log = temp_path / "firewall-runtime.log"
+        audio_stack_open = temp_path / "stack_open.xml"
+        audio_linphone = temp_path / "linphone.conf"
+        audio_backup_dir = temp_path / "audio-backup"
+        audio_stack_open.write_text(
+            "<bt_av_media>\n<enable_speex>1</enable_speex>\n</bt_av_media>\n",
+            encoding="utf-8",
+        )
+        audio_linphone.write_text(
+            "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n\n"
+            "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=0\n\n"
+            "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=1\n",
+            encoding="utf-8",
+        )
         config_path = temp_path / "config.json"
         text_memos_root.mkdir()
         voice_memos_root.mkdir()
@@ -541,6 +734,10 @@ def run_smoke(
         environment = os.environ.copy()
         environment["C300X_AGENT_TOKEN"] = TOKEN
         environment["C300X_FIREWALL_RUNTIME_PATH"] = str(firewall_runtime_bin)
+        environment["C300X_AUDIO_STACK_OPEN"] = str(audio_stack_open)
+        environment["C300X_AUDIO_LINPHONE_CONF"] = str(audio_linphone)
+        environment["C300X_AUDIO_BACKUP_DIR"] = str(audio_backup_dir)
+        environment["C300X_AUDIO_NO_REMOUNT"] = "1"
         process = subprocess.Popen(
             [str(binary), "--config", str(config_path)],
             env=environment,
@@ -789,6 +986,9 @@ def run_smoke(
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_core_patch", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_core_restore", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "qml_restore", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "audio_codec_status", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "audio_codec_apply", True)
+            assert_json_field(capabilities["capabilities"]["maintenance"], "audio_codec_restore", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_status", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_apply", True)
             assert_json_field(capabilities["capabilities"]["maintenance"], "firewall_restore", True)
@@ -1010,6 +1210,102 @@ def run_smoke(
             assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(diagnostics, "last_write_class", "qml_patch")
             assert_json_field(diagnostics, "qml_patch_last_action", "restore")
+            audio_status = maintenance_get(api_port, "/api/v1/maintenance/audio-codec")
+            assert_json_field(audio_status, "state", "speex")
+            assert_json_field(audio_status, "configured_state", "speex")
+            assert_json_field(audio_status, "running_state", "speex")
+            assert_json_field(audio_status, "supported", True)
+            assert_json_field(
+                api_request(
+                    api_port,
+                    "GET",
+                    "/api/v1/maintenance/audio-codec",
+                    None,
+                    authorized=True,
+                    maintenance=False,
+                    expected_status=403,
+                ),
+                "error",
+                "maintenance_unauthorized",
+            )
+            assert_json_field(
+                api_request(
+                    api_port,
+                    "POST",
+                    "/api/v1/maintenance/audio-codec/actions/apply",
+                    {},
+                    maintenance=True,
+                    expected_status=400,
+                ),
+                "error",
+                "maintenance_confirmation_required",
+            )
+            audio_applied = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/apply",
+                {"confirm": "apply_audio_codec_patch"},
+            )
+            expected_agent_writes += 1
+            assert_json_field(audio_applied, "state", "speex")
+            assert_json_field(audio_applied, "configured_state", "pcmu")
+            assert_json_field(audio_applied, "running_state", "speex")
+            assert_json_field(audio_applied, "changed", True)
+            assert_json_field(audio_applied, "backup_present", True)
+            # reboot is disabled in the smoke config, so the action reports it is
+            # required but must not actually reboot the test host.
+            assert_json_field(audio_applied, "reboot_required", True)
+            assert_json_field(audio_applied, "rebooting", False)
+            if "<enable_speex>0</enable_speex>" not in audio_stack_open.read_text(
+                encoding="utf-8"
+            ):
+                raise AssertionError("audio-codec apply did not patch stack_open.xml")
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_write_class", "audio_codec")
+            assert_json_field(diagnostics, "last_write_reason", "apply")
+            audio_reapplied = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/apply",
+                {"confirm": "apply_audio_codec_patch"},
+            )
+            assert_json_field(audio_reapplied, "state", "speex")
+            assert_json_field(audio_reapplied, "configured_state", "pcmu")
+            assert_json_field(audio_reapplied, "running_state", "speex")
+            assert_json_field(audio_reapplied, "changed", False)
+            assert_json_field(audio_reapplied, "reboot_required", True)
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            audio_restored = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/restore",
+                {"confirm": "restore_audio_codec_patch"},
+            )
+            expected_agent_writes += 1
+            assert_json_field(audio_restored, "state", "speex")
+            assert_json_field(audio_restored, "configured_state", "speex")
+            assert_json_field(audio_restored, "running_state", "speex")
+            assert_json_field(audio_restored, "changed", True)
+            assert_json_field(audio_restored, "rebooting", False)
+            if "<enable_speex>1</enable_speex>" not in audio_stack_open.read_text(
+                encoding="utf-8"
+            ):
+                raise AssertionError("audio-codec restore did not restore stack_open.xml")
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_write_class", "audio_codec")
+            assert_json_field(diagnostics, "last_write_reason", "restore")
+            audio_rerestored = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/restore",
+                {"confirm": "restore_audio_codec_patch"},
+            )
+            assert_json_field(audio_rerestored, "state", "speex")
+            assert_json_field(audio_rerestored, "configured_state", "speex")
+            assert_json_field(audio_rerestored, "running_state", "speex")
+            assert_json_field(audio_rerestored, "changed", False)
+            assert_json_field(audio_rerestored, "reboot_required", False)
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(
                 maintenance_post(
                     api_port,
@@ -1229,6 +1525,9 @@ def run_smoke(
             assert_json_field(video["bridge"], "ring_receiver_running", True)
             assert_json_field(video["bridge"], "ring_registered", False)
             assert_json_field(video["bridge"], "last_error", None)
+            assert_json_field(video["bridge"], "device_audio_codec", "speex")
+            assert_json_field(video["bridge"], "talkback_codec", "speex/8000")
+            assert_json_field(video["bridge"], "talkback_payload_type", 97)
             assert_json_field(video["bridge"], "doorstation_audio_gain_db", 0.0)
             assert_json_field(
                 api_post(

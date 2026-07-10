@@ -102,7 +102,6 @@ from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
     _weather_forecast_cache,
     _weather_forecast_temperature,
     _weather_forecast_time_label,
-    _weather_sun,
     dashboard_weather_payload,
 )
 from custom_components.bticino_c300x.executor import (  # noqa: E402
@@ -2787,17 +2786,7 @@ def test_dashboard_weather_cache_helpers_handle_unusable_cache() -> None:
     )
 
 
-def test_dashboard_weather_private_helpers_cover_sun_and_truncation() -> None:
-    hass = FakeHass(
-        states=FakeStates(
-            {
-                "sun.sun": FakeState(
-                    "above_horizon",
-                    attributes={"next_rising": "2026-05-30T03:20:00+00:00"},
-                )
-            }
-        )
-    )
+def test_dashboard_weather_private_helpers_cover_truncation() -> None:
     long_forecast = [
         {
             "time": "very-long-unparseable-weather-time-label",
@@ -2813,7 +2802,6 @@ def test_dashboard_weather_private_helpers_cover_sun_and_truncation() -> None:
         },
     ]
 
-    assert _weather_sun(hass, "en") == "03:20"
     assert _weather_forecast_time_label(None, "hourly") == ""
     assert _weather_forecast_temperature({}, "C") == ""
     assert _weather_forecast({}, "en", forecast_items=long_forecast).endswith("...")

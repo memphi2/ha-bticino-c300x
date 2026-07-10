@@ -184,52 +184,6 @@ class CameraRtspOrchestrator:
         with suppress(Exception):
             await self._owner._async_refresh_video_status()
 
-    async def async_restart_video_reader(self, *, audio: bool = False) -> None:
-        """Restart the on-demand RTSP reader without stealing call media."""
-
-        async with self._owner._rtsp_prepare_lock:
-            status = await self._owner._async_refresh_video_status_or_none()
-            decision = (
-                self._owner._derive_media_decision(status)
-                if status is not None
-                else None
-            )
-            if decision is not None and media_decision_is_call_media(decision):
-                await self.async_wait_for_rtsp_ready(
-                    self._owner._build_stream_url(audio=audio)
-                )
-                return
-            if (
-                status is not None
-                and decision is not None
-                and decision.external_owner_blocks
-            ):
-                status = await self.async_wait_for_call_media_after_external_event(status)
-                decision = (
-                    self._owner._derive_media_decision(status)
-                    if status is not None
-                    else None
-                )
-                if decision is not None and media_decision_is_call_media(decision):
-                    await self.async_wait_for_rtsp_ready(
-                        self._owner._build_stream_url(audio=audio)
-                    )
-                    return
-            await self.async_warmup_video(audio=audio)
-            await self.async_wait_for_rtsp_ready(
-                self._owner._build_stream_url(audio=audio)
-            )
-
-    async def async_restart_home_call_reader(self) -> None:
-        """Restart Home Call audio-only RTSP after the call is active."""
-
-        async with self._owner._rtsp_prepare_lock:
-            await self.async_wait_for_home_call_active()
-            await self.async_wait_for_rtsp_ready(
-                self._owner._build_stream_url(audio=True),
-                cooldown_scope="home_call",
-            )
-
     async def async_prepare_rtsp_stream(self, *, audio: bool = False) -> str:
         """Activate video and return a URL only after RTSP answers."""
 

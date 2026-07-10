@@ -44,6 +44,7 @@ from .const import (
     DEFAULT_VIDEO_STREAM_PATH,
 )
 from .entry_config import entry_config_value
+from .error_text import compact_error_text
 from .json_io import async_write_json_file
 from .ring_talkback import (
     async_keep_talkback_alive_when_ready as _async_keep_talkback_alive_when_ready,
@@ -82,6 +83,11 @@ async def async_capture_doorbell_ring_call(
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
     await _async_mkdir(hass, work_dir)
+    codec_pcmu = (
+        await _async_talkback_codec_is_pcmu(entry, status)
+        if include_audio or announcement is not None
+        else False
+    )
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -93,18 +99,17 @@ async def async_capture_doorbell_ring_call(
         )
     )
     talkback_stop = threading.Event()
-    talkback_task = (
-        asyncio.create_task(
+    talkback_task: asyncio.Task[None] | None = None
+    if include_audio or announcement is not None:
+        talkback_task = asyncio.create_task(
             _async_keep_talkback_alive_when_ready(
                 entry,
                 _agent_host(entry),
                 announcement,
                 talkback_stop,
+                codec_pcmu=codec_pcmu,
             )
         )
-        if include_audio or announcement is not None
-        else None
-    )
     try:
         await capture_task
         if talkback_task is not None:
@@ -139,6 +144,87 @@ async def async_capture_doorbell_ring_call(
             with contextlib.suppress(asyncio.CancelledError):
                 await talkback_task
     return target
+
+
+def _normalized_audio_codec(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    codec = value.strip().lower()
+    if codec in {"pcmu", "speex"}:
+        return codec
+    if codec.startswith("pcmu/"):
+        return "pcmu"
+    if codec.startswith("speex/"):
+        return "speex"
+    return None
+
+
+def _record_talkback_codec(entry: Any, codec: str) -> None:
+    try:
+        entry.runtime_data.event_state.audio_codec = codec
+    except Exception:  # noqa: BLE001
+        return
+
+
+def _status_talkback_codec(status: Mapping[str, Any]) -> str | None:
+    bridge = optional_mapping(status.get("bridge"))
+    for value in (
+        bridge.get("device_audio_codec"),
+        status.get("device_audio_codec"),
+        bridge.get("running_audio_codec"),
+        status.get("running_audio_codec"),
+        bridge.get("talkback_codec"),
+        status.get("talkback_codec"),
+    ):
+        codec = _normalized_audio_codec(value)
+        if codec is not None:
+            return codec
+    return None
+
+
+def _cached_talkback_codec(entry: Any) -> str | None:
+    try:
+        return _normalized_audio_codec(entry.runtime_data.event_state.audio_codec)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _talkback_codec_is_pcmu(entry: Any) -> bool:
+    """Return True when the device's last-known running codec is PCMU.
+
+    The audio_codec select publishes the resolved device codec into shared
+    This legacy helper is intentionally cache-only; capture paths use
+    _async_talkback_codec_is_pcmu so an unresolved cache is refreshed before
+    talkback starts.
+    """
+
+    return _cached_talkback_codec(entry) == "pcmu"
+
+
+async def _async_talkback_codec_is_pcmu(
+    entry: Any,
+    status: Mapping[str, Any],
+) -> bool:
+    codec = _status_talkback_codec(status) or _cached_talkback_codec(entry)
+    if codec is None:
+        api = getattr(getattr(entry, "runtime_data", None), "api", None)
+        status_fn = getattr(api, "async_audio_codec_status", None)
+        if not callable(status_fn):
+            raise HomeAssistantError("C300X talkback codec is unknown")
+        try:
+            refreshed = await status_fn()
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(
+                f"C300X talkback codec is unknown: {compact_error_text(err)}"
+            ) from err
+        if isinstance(refreshed, Mapping):
+            codec = _normalized_audio_codec(
+                refreshed.get("running_state", refreshed.get("state"))
+            )
+    if codec is None:
+        raise HomeAssistantError("C300X talkback codec is unknown")
+    _record_talkback_codec(entry, codec)
+    return codec == "pcmu"
 
 
 def _capture_metadata_path(work_dir: Path) -> Path:

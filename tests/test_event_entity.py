@@ -119,7 +119,6 @@ from custom_components.bticino_c300x.entity import C300XEntity  # noqa: E402
 from custom_components.bticino_c300x.event import (  # noqa: E402
     C300XDeviceAgentEventEntity,
     C300XDoorbellEventEntity,
-    _display_event_types,
     _language,
     _nested_dict_value,
     async_setup_entry,
@@ -460,13 +459,6 @@ def test_device_event_attributes_use_nested_message_counters() -> None:
     assert attrs["memos_total"] == 3
     assert attrs["memos_text_total"] == 1
     assert attrs["memos_voice_total"] == 2
-
-
-def test_display_event_types_remain_stable_for_ha_state_translations() -> None:
-    assert _display_event_types(["door_unlock_started", "ringer_unmuted"], "de") == [
-        "door_unlock_started",
-        "ringer_unmuted",
-    ]
 
 
 def test_language_and_nested_dict_helpers_handle_missing_data() -> None:

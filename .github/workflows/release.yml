@@ -127,6 +127,7 @@ jobs:
           set -euo pipefail
           if [ -n "${C300X_DEVICE_SYSROOT:-}" ] \
             && [ -f "${C300X_DEVICE_SYSROOT}/lib/libc.so.6" ]; then
+            echo "asset_source=build" >> "$GITHUB_OUTPUT"
             echo "reuse_args=" >> "$GITHUB_OUTPUT"
             echo "reused_from=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -150,12 +151,17 @@ jobs:
             scripts/stage_device_agent_bundle.py)"
           if [ -n "$changed_inputs" ]; then
             printf '%s\n' "$changed_inputs"
-            mkdir -p .release/reuse-current
-            if gh release download "$RELEASE_TAG" \
-              --pattern ha-bticino-c300x.zip \
-              --pattern build-metadata.json \
-              --dir .release/reuse-current \
-              --clobber; then
+            for attempt in $(seq 1 60); do
+              rm -rf .release/reuse-current
+              mkdir -p .release/reuse-current
+              if gh release view "$RELEASE_TAG" >/dev/null 2>&1 \
+                && gh release download "$RELEASE_TAG" \
+                  --pattern ha-bticino-c300x.zip \
+                  --pattern SHA256SUMS \
+                  --pattern build-metadata.json \
+                  --pattern sbom.spdx.json \
+                  --dir .release/reuse-current \
+                  --clobber; then
               CURRENT_RELEASE_TAG="$RELEASE_TAG" python - <<'PY'
           import json
           import os
@@ -181,12 +187,26 @@ jobs:
               print("current release asset agent version mismatch", file=sys.stderr)
               sys.exit(1)
           PY
-              test -s .release/reuse-current/ha-bticino-c300x.zip
-              echo "reuse_args=--reuse-agent-from-release-zip .release/reuse-current/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
-              echo "reused_from=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+              (
+                cd .release/reuse-current
+                sha256sum -c SHA256SUMS
+              )
+              mkdir -p .release
+              cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"
+              cp .release/reuse-current/SHA256SUMS "$RELEASE_SHA256SUMS"
+              cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"
+              cp .release/reuse-current/sbom.spdx.json "$RELEASE_SBOM"
+              echo "asset_source=current-release" >> "$GITHUB_OUTPUT"
+              echo "reuse_args=" >> "$GITHUB_OUTPUT"
+              echo "reused_from=" >> "$GITHUB_OUTPUT"
               exit 0
-            fi
-            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT or a verified current release asset is required"
+              fi
+              if [ "$attempt" -lt 60 ]; then
+                echo "Waiting for same-tag release assets for $RELEASE_TAG ($attempt/60)"
+                sleep 10
+              fi
+            done
+            echo "::error::Native agent/bundle inputs changed since $previous_tag; C300X_DEVICE_SYSROOT or same-tag release assets built from this commit are required"
             exit 1
           fi
           mkdir -p .release/reuse
@@ -195,11 +215,14 @@ jobs:
             --dir .release/reuse \
             --clobber
           test -s .release/reuse/ha-bticino-c300x.zip
+          echo "asset_source=build" >> "$GITHUB_OUTPUT"
           echo "reuse_args=--reuse-agent-from-release-zip .release/reuse/ha-bticino-c300x.zip" >> "$GITHUB_OUTPUT"
           echo "reused_from=$previous_tag" >> "$GITHUB_OUTPUT"
       - name: Build HACS release zip
+        if: steps.reusable-agent.outputs.asset_source == 'build'
         run: scripts/build_hacs_release.py ${{ steps.reusable-agent.outputs.reuse_args }}
       - name: Generate release metadata
+        if: steps.reusable-agent.outputs.asset_source == 'build'
         run: |
           scripts/write_release_assets.py \
             --zip "$RELEASE_ZIP" \

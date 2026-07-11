@@ -148,6 +148,40 @@ def test_release_builder_can_reuse_agent_from_release_zip(
     assert agent_binary.stat().st_mode & 0o777 == 0o700
 
 
+def test_release_workflow_accepts_verified_same_tag_assets() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    changed_inputs_block = workflow.split(
+        'if [ -n "$changed_inputs" ]; then',
+        1,
+    )[1].split(
+        'echo "::error::Native agent/bundle inputs changed',
+        1,
+    )[0]
+
+    assert "Waiting for same-tag release assets" in changed_inputs_block
+    assert "--pattern ha-bticino-c300x.zip" in changed_inputs_block
+    assert "--pattern SHA256SUMS" in changed_inputs_block
+    assert "--pattern build-metadata.json" in changed_inputs_block
+    assert "--pattern sbom.spdx.json" in changed_inputs_block
+    assert "sha256sum -c SHA256SUMS" in changed_inputs_block
+    assert 'cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"' in (
+        changed_inputs_block
+    )
+    assert 'cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"' in (
+        changed_inputs_block
+    )
+    assert 'echo "asset_source=current-release" >> "$GITHUB_OUTPUT"' in (
+        changed_inputs_block
+    )
+    assert "--reuse-agent-from-release-zip .release/reuse-current" not in (
+        changed_inputs_block
+    )
+    assert (
+        "if: steps.reusable-agent.outputs.asset_source == 'build'"
+        in workflow
+    )
+
+
 def test_release_tag_checker_matches_current_metadata() -> None:
     checker = _load_release_tag_checker()
     version = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))[

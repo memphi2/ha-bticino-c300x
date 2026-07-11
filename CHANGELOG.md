@@ -1,11 +1,12 @@
 # Changelog
 
-## v1.8.0 - 2026-07-11
+## v1.8.1 - 2026-07-11
 
 ### Added
 
-- Add native PCMU audio-codec mode for the C300X device agent, exposed through
-  the Home Assistant audio-codec select.
+- Add opt-in experimental native PCMU audio-codec mode for the C300X device
+  agent, exposed through a Home Assistant audio-codec select that is disabled
+  by default.
 - Adapt the bundled doorbell card for PCMU doorstation audio gain, including a
   soft limiter so boosted audio does not hard-clip.
 
@@ -25,9 +26,10 @@
 - Restart Home Assistant after updating.
 - Hard-reload all open Home Assistant browser dashboards after updating so the
   bundled frontend modules are refreshed from the installed integration version.
-- Update the native C300X device agent from Home Assistant to `1.8.0`.
-- Audio-codec changes require the device/agent reboot prompted by the
-  integration before the new codec is active.
+- Update the native C300X device agent from Home Assistant to `1.8.1`.
+- PCMU mode is experimental and opt-in; enable the audio-codec select manually
+  before using it. Audio-codec changes require the device/agent reboot prompted
+  by the integration before the new codec is active.
 
 ## v1.7.6 - 2026-07-07
 

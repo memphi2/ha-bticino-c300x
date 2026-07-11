@@ -287,6 +287,9 @@ int c300x_video_activate(struct c300x_video *video, int include_audio)
     if (c300x_media_session_keepalive(video, include_audio != 0)) {
         return 1;
     }
+    if (c300x_media_session_resume_parked_rtsp(video, include_audio != 0)) {
+        return 1;
+    }
     pthread_mutex_lock(&video->mutex);
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';

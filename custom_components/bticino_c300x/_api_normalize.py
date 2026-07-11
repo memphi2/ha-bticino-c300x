@@ -227,6 +227,7 @@ def normalize_agent_diagnostics(data: Any) -> AgentDiagnosticsStatus:
         raise C300XAgentApiResponseError("diagnostics returned non-object JSON")
     return AgentDiagnosticsStatus(
         raw=data,
+        agent_uptime_seconds=_optional_int(data.get("uptime_seconds")),
         agent_write_count=_optional_int(data.get("agent_write_count")) or 0,
         last_write_at=_optional_int(data.get("last_write_at")),
         last_write_reason=_optional_string(data.get("last_write_reason")),

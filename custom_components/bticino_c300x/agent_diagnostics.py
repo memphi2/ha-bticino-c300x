@@ -116,6 +116,7 @@ def _store_agent_diagnostics(
     """Store diagnostics and dispatch only when the visible state should change."""
 
     runtime_data = entry.runtime_data
+    _update_device_reboot_count(runtime_data, diagnostics)
     changed = diagnostics != runtime_data.agent_diagnostics
     if not changed and not notify_if_unchanged:
         return False
@@ -130,6 +131,27 @@ def _store_agent_diagnostics(
 
     async_sync_entry_repair_issues(hass, entry)
     return True
+
+
+def _update_device_reboot_count(
+    runtime_data: Any,
+    diagnostics: Mapping[str, Any],
+) -> None:
+    """Count a device/agent reboot when the reported agent uptime drops.
+
+    The agent reports a monotonic uptime; within one process it only grows, so a
+    new sample lower than the previous one means the agent restarted -- on this
+    device that is (almost always) a full reboot. Old agents that do not report
+    an uptime leave the value None and are simply skipped.
+    """
+
+    new_uptime = diagnostics.get("agent_uptime_seconds")
+    if not isinstance(new_uptime, int):
+        return
+    previous = runtime_data.agent_uptime_seconds
+    if isinstance(previous, int) and new_uptime < previous:
+        runtime_data.device_reboot_count += 1
+    runtime_data.agent_uptime_seconds = new_uptime
 
 
 def _agent_diagnostics_change_reason(

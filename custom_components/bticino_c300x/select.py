@@ -151,14 +151,16 @@ class C300XSmartphoneForwardingModeSelect(C300XEntity, SelectEntity):
 class C300XAudioCodecSelect(C300XEntity, SelectEntity):
     """Select the on-demand/intercom audio codec (speex or native PCMU).
 
-    Enabled by default and the single source of truth in HA for the codec
-    mode: the card reads this entity's state (no agent round-trip). Choosing an
-    option patches the device config and reboots for the change to take effect.
+    Disabled by default because native PCMU mode is experimental. Once enabled,
+    this is the single source of truth in HA for the codec mode: the card reads
+    this entity's state (no agent round-trip). Choosing an option patches the
+    device config and reboots for the change to take effect.
     """
 
     _attr_should_poll = False
     _attr_translation_key = "audio_codec"
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
     _attr_options = ["speex", "pcmu"]
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
@@ -223,18 +225,23 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
 
     @callback
     def _handle_reboot_reconnect(self, entry_id: str) -> None:
-        # Resolve a pending codec change without polling. A codec change only
-        # goes live on a device restart, which makes the agent drop off and come
-        # back. We wait for that down->up gap (so a mere connection blip does not
-        # resolve prematurely) and then re-read the actual codec -- this works
-        # whether we triggered the reboot or the user did it manually, and never
-        # optimistically claims a switch that the device did not make.
+        # Resolve a pending codec change without polling by re-reading the live
+        # codec whenever the agent is reachable. A codec change only goes live on
+        # a device restart; `_apply_status` keeps it pending until the device
+        # actually reports the new *running* codec, so re-reading is safe even
+        # before the reboot and never optimistically claims a switch the device
+        # did not make. We do NOT require first observing a down->up availability
+        # gap: a reboot triggered by the codec apply often re-registers within the
+        # reconnect grace window, so `available` never flips and the gap is never
+        # seen -- which used to leave the change stuck pending until a manual
+        # reload. (The gap flag is still recorded for legacy agents that report
+        # only the on-disk codec; see `_apply_status`.)
         if entry_id != self._entry.entry_id or not self._pending_option:
             return
         if not self._entry.runtime_data.connection_state.available:
             self._seen_reboot_gap = True
             return
-        if not self._seen_reboot_gap or self._resolving_pending:
+        if self._resolving_pending:
             return
         self._resolving_pending = True
         self.hass.async_create_task(self._async_resolve_pending())

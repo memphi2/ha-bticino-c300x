@@ -242,5 +242,11 @@ class BticinoC300XRuntimeData:
     agent_diagnostics_updated_at: datetime | None = None
     agent_diagnostics_updated_by: str | None = None
     agent_diagnostics_change_reason: str | None = None
+    # Count of observed agent restarts (device reboots): the agent-reported
+    # uptime dropping between two diagnostics samples means the process (and, on
+    # this device, usually the whole unit) restarted. Session-scoped like
+    # C300XConnectionState.reconnect_count.
+    device_reboot_count: int = 0
+    agent_uptime_seconds: int | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: Any | None = None

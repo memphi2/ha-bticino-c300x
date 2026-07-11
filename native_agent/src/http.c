@@ -214,6 +214,7 @@ struct agent_runtime {
     unsigned long loop_iterations;
     unsigned long poll_wakeups;
     unsigned long accepted_clients;
+    long long start_monotonic_ms;
     time_t last_write_at;
     int last_poll_timeout_ms;
     int last_poll_count;
@@ -3850,6 +3851,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
     struct c300x_video_status video_status;
     int video_media_running;
     int open_fd_count = count_open_fds();
+    long uptime_seconds = (long)((c300x_monotonic_ms() - runtime->start_monotonic_ms) / 1000);
     int flexisip_backup_available = path_exists(C300X_FLEXISIP_INIT_BACKUP);
     int flexisip_restart_marker = flexisip_restart_marker_present();
     int flexisip_backup_marker = flexisip_backup_marker_present();
@@ -3877,6 +3879,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             sizeof(body),
             "{"
             "\"ok\":true,"
+            "\"uptime_seconds\":%ld,"
             "\"agent_write_count\":%lu,"
             "\"last_write_at\":%ld,"
             "\"last_write_reason\":%s,"
@@ -3927,6 +3930,7 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"flexisip_backup_marker\":%s,"
             "\"flexisip_reference_state\":\"%s\""
             "}\n",
+            uptime_seconds,
             runtime->agent_write_count,
             (long)runtime->last_write_at,
             last_write_reason,
@@ -11024,15 +11028,19 @@ static int agent_update_manifest_sha_for_path(
 {
     const char *found;
 
-    if (sha256_len > 0) {
-        sha256[0] = '\0';
-    }
+    if (sha256_len > 0) { sha256[0] = '\0'; }
     found = strstr(manifest, bundle_path);
-    if (found == NULL) {
-        return 0;
-    }
+    if (found == NULL) { return 0; }
     c300x_json_string_field(found, "sha256", sha256, sha256_len);
     return sha256[0] != '\0';
+}
+
+static int running_agent_binary_differs_from_update_manifest(const char *manifest)
+{
+    char expected_sha256[65], running_sha256[65];
+    return agent_update_manifest_sha_for_path(manifest, "device_agent/armhf/c300x-agent-native", expected_sha256, sizeof(expected_sha256))
+        && c300x_sha256_file_hex("/proc/self/exe", running_sha256, sizeof(running_sha256))
+        && !constant_time_equal(running_sha256, strlen(running_sha256), expected_sha256);
 }
 
 static int apply_agent_update_file(
@@ -11296,11 +11304,8 @@ static int apply_agent_update_files(
 
     if (summary != NULL) {
         memset(summary, 0, sizeof(*summary));
-        summary->runtime_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "runtime_hash"
-        );
+        summary->runtime_changed = agent_update_manifest_field_changed(installed_manifest, manifest, "runtime_hash")
+            || running_agent_binary_differs_from_update_manifest(manifest);
         summary->qml_patch_changed = agent_update_manifest_field_changed(
             installed_manifest,
             manifest,
@@ -12391,6 +12396,7 @@ int c300x_run(struct c300x_config *config)
         return 2;
     }
     runtime->config = config;
+    runtime->start_monotonic_ms = c300x_monotonic_ms();
     init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
     c300x_mdns_init(&mdns);

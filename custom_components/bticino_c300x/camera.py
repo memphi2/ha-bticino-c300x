@@ -1517,6 +1517,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     notify_client=True,
                     reason="home_call_ended",
                 )
+            # Re-derive after the sessions drop out of local_sessions so a
+            # transient RTSP_BUSY at the home_call_ended event does not latch.
+            self._refresh_derived_media_state()
+            self._async_write_ha_state_if_ready()
 
         self.hass.async_create_task(_close_sessions())
 
@@ -1539,6 +1543,12 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     notify_client=True,
                     reason="doorbell_media_closed",
                 )
+            # The closed sessions no longer count toward local_sessions. Re-derive
+            # and write state so a transient RTSP_BUSY -- owner is already idle at
+            # the media.closed event but the sessions were still counted then --
+            # does not latch and block the next capture (a second viewer).
+            self._refresh_derived_media_state()
+            self._async_write_ha_state_if_ready()
 
         self.hass.async_create_task(_close_sessions())
 

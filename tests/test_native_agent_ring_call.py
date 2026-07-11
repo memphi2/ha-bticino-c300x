@@ -38,7 +38,7 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
     ]
     ring_preview_share_body = media_bridge[
         media_bridge.index("static bool ring_preview_sharing_allowed_locked") :
-        media_bridge.index("static int rtsp_client_count_locked")
+        media_bridge.index("static void sync_legacy_rtsp_client_locked")
     ]
     ring_talkback_body = media_bridge[
         media_bridge.index("static bool forward_ring_talkback_packet") :
@@ -173,12 +173,15 @@ def test_native_agent_ring_receiver_matches_captured_sip_media_flow() -> None:
 
 def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> None:
     media_bridge = _read_media_bridge()
+    rtsp_clients_header = (
+        ROOT / "native_agent" / "src" / "media_rtsp_clients.h"
+    ).read_text(encoding="utf-8")
     guard_header = (ROOT / "native_agent" / "src" / "media_session_guard.h").read_text(
         encoding="utf-8"
     )
     register_body = media_bridge[
         media_bridge.index("static bool register_rtsp_client_locked") :
-        media_bridge.index("static rtsp_client_slot_t *rtsp_client_slot_locked")
+        media_bridge.index("static void rtsp_note_request")
     ]
     describe_body = media_bridge[
         media_bridge.index('} else if (strcmp(method, "DESCRIBE") == 0)') :
@@ -186,14 +189,15 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
     ]
     sharing_body = media_bridge[
         media_bridge.index("static bool ondemand_audio_stream_sharing_allowed_locked") :
-        media_bridge.index("static int rtsp_client_count_locked")
+        media_bridge.index("static bool rtsp_client_sharing_allowed_locked")
     ]
 
     assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked" not in register_body
     assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
+    assert "evict_parked_rtsp_client_locked(bridge)" in register_body
     assert "ondemand_audio_stream_sharing_allowed_locked(&g_bridge)" in describe_body
     assert "rtsp_existing_clients_compatible_locked(" in describe_body
-    assert "if (!slot->described)" in register_body
+    assert "if (!slot->described)" in rtsp_clients_header
     assert "slot->described = true;" in describe_body
     assert "&& wants_audio" in describe_body
     assert "&& !preview_path" in describe_body
@@ -870,6 +874,112 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert 'snprintf(status->media_owner, sizeof(status->media_owner), "%s", "home_call")' in video
 
 
+def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> None:
+    media_bridge = _read_media_bridge()
+    media_header = (ROOT / "native_agent" / "src" / "media_bridge.h").read_text(
+        encoding="utf-8"
+    )
+    rtsp_clients_header = (
+        ROOT / "native_agent" / "src" / "media_rtsp_clients.h"
+    ).read_text(encoding="utf-8")
+    video = (ROOT / "native_agent" / "src" / "video_rtsp.c").read_text(
+        encoding="utf-8"
+    )
+    slot_struct = rtsp_clients_header[
+        rtsp_clients_header.index("typedef struct {") :
+        rtsp_clients_header.index("} rtsp_client_slot_t;")
+    ]
+    register_body = media_bridge[
+        media_bridge.index("static bool register_rtsp_client_locked") :
+        media_bridge.index("static void rtsp_note_request")
+    ]
+    logical_count_body = media_bridge[
+        media_bridge.index("#define rtsp_client_count_locked") :
+        media_bridge.index("#define evict_parked_rtsp_client_locked")
+    ]
+    send_targets_body = rtsp_clients_header[
+        rtsp_clients_header.index("static inline size_t c300x_rtsp_client_slots_send_targets") :
+        rtsp_clients_header.index("#endif")
+    ]
+    stop_helper_body = media_bridge[
+        media_bridge.index("static void stage_rtsp_clients_for_stop_locked") :
+        media_bridge.index("static bool ring_talkback_recent_locked")
+    ]
+    stop_body = media_bridge[
+        media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
+        media_bridge.index("void c300x_media_session_stop")
+    ]
+    unpark_body = media_bridge[
+        media_bridge.index("static bool unpark_played_rtsp_clients_locked") :
+        media_bridge.index("static void close_all_rtsp_clients_locked")
+    ]
+    resume_body = media_bridge[
+        media_bridge.index("bool c300x_media_session_resume_parked_rtsp") :
+        media_bridge.index("bool c300x_media_ring_call_answer")
+    ]
+    status_body = media_bridge[
+        media_bridge.index("void c300x_media_bridge_status") :
+        media_bridge.index("void c300x_media_bridge_set_doorstation_audio_gain_tenths")
+    ]
+    rtsp_body = media_bridge[
+        media_bridge.index("static void handle_rtsp_client") :
+        media_bridge.index("static int create_rtsp_listener")
+    ]
+    activate_body = video[
+        video.index("int c300x_video_activate") : video.index("void c300x_video_stop")
+    ]
+    backchannel_body = media_bridge[
+        media_bridge.index("static bool handle_rtsp_backchannel_frame") :
+        media_bridge.index("static void drain_ondemand_media_socket")
+    ]
+
+    assert "bool played;" in slot_struct
+    assert "bool parked;" in slot_struct
+    assert "active_clients = rtsp_physical_client_count_locked(bridge);" in register_body
+    assert "evict_parked_rtsp_client_locked(bridge)" in register_body
+    assert "slot->fd = fd;" in register_body
+    assert "c300x_rtsp_client_slots_active_count" in logical_count_body
+    assert "slot->fd == fd" in rtsp_clients_header
+    assert "if (!slot->active || slot->fd < 0 || slot->parked)" in send_targets_body
+    assert "(void)park_rtsp_clients_locked(bridge);" in stop_helper_body
+    assert "*drain_clients = true;" in stop_helper_body
+    assert "int evicted_clients = 0;" in rtsp_body
+    assert "stage_rtsp_clients_for_stop_locked(&g_bridge, explicit_stop, &drain_clients)" in stop_body
+    assert "slot->played = true;" in rtsp_body
+    assert "slot->parked = false;" in rtsp_body
+    assert "rtsp_client_slot_for_fd_locked(" in rtsp_body
+    assert "unregistered = unregister_rtsp_client_locked(" in rtsp_body
+    assert "bool c300x_media_session_resume_parked_rtsp" in media_header
+    assert "unparked = unpark_played_rtsp_clients_locked(" in resume_body
+    # A resume must not tear down / disconnect other clients: parked preview
+    # clients in another browser keep running across an audio-mode resume.
+    assert "c300x_video_bridge_client_disconnected" not in resume_body
+    assert "slot->parked = false;" in unpark_body
+    assert "audio_enabled != audio" not in unpark_body
+    assert "c300x_rtsp_client_slot_evict" not in unpark_body
+    assert "if (!start_media_session(&g_bridge))" in resume_body
+    # Backchannel frames resolve their slot via the fd-validated lookup, so a
+    # slot reused by another client cannot receive stale talkback.
+    assert "rtsp_client_slot_for_fd_locked(" in backchannel_body
+    # Teardown/cleanup only signal a disconnect and stop media when they truly
+    # removed this fd's slot -- guards against a double teardown of a reused slot.
+    assert "if (unregistered)" in rtsp_body
+    assert "if (unregistered && media_started && remaining_clients == 0)" in rtsp_body
+    # Register drains exactly one client-disconnected per evicted parked client.
+    assert "while (evicted_clients > 0)" in rtsp_body
+    assert "c300x_video_bridge_client_disconnected(g_bridge.video);" in rtsp_body
+    # Every request handler bails out when its fd's slot was reclaimed mid-request.
+    assert rtsp_body.count("if (slot == NULL)") >= 3
+    assert "open_fds += rtsp_physical_client_count_locked(&g_bridge);" in status_body
+    assert "status->clients = rtsp_client_count_locked(&g_bridge);" in status_body
+    assert activate_body.index("c300x_media_session_keepalive") < activate_body.index(
+        "c300x_media_session_resume_parked_rtsp"
+    )
+    assert activate_body.index("c300x_media_session_resume_parked_rtsp") < activate_body.index(
+        "video->stream_audio = include_audio != 0;"
+    )
+
+
 def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() -> None:
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
@@ -1024,7 +1134,7 @@ def test_native_agent_rtsp_answer_and_teardown_avoid_eof_prone_closes() -> None:
 
     assert "shutdown_ring_preview_clients_except_locked" not in media_bridge
     assert "close_preview_after_play" not in client_body
-    assert "unregister_rtsp_client_locked(&g_bridge, slot_index);" in teardown_body
+    assert "unregister_rtsp_client_locked(\n                &g_bridge," in teardown_body
     assert "slot_index = -1;" in teardown_body
     assert "teardown_seen = true;" in teardown_body
     assert "break;" not in teardown_body

@@ -2732,6 +2732,86 @@ def test_doorbell_camera_updates_derived_media_state_from_agent_clients() -> Non
     assert camera._last_media_decision.capture_blocked is True
 
 
+def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> None:
+    """media.closed closes the WebRTC sessions asynchronously; media_state must be
+    re-derived once they drop out of local_sessions so a transient RTSP_BUSY does
+    not latch and block the next viewer's capture (webrtc answer timeout)."""
+
+    async def _run() -> MediaState:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        provider._sessions = {  # type: ignore[attr-defined]
+            "doorbell-session": _FakeGo2RtcWsClient([])
+        }
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
+            provider=provider,
+            owner="doorbell",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="doorbell:entry-1:audio",
+            ready=True,
+        )
+
+        # media.closed: owner goes idle and native clients drop to 0, but the
+        # still-ready local session keeps local_sessions == 1 -> RTSP_BUSY.
+        camera._clear_video_window()
+        assert camera._last_media_state is MediaState.RTSP_BUSY
+        assert camera._active_local_media_sessions() == 1
+
+        camera._close_doorbell_webrtc_sessions_from_event()
+        await asyncio.gather(*tasks)
+        assert camera._active_local_media_sessions() == 0
+        return camera._last_media_state
+
+    assert asyncio.run(_run()) is MediaState.IDLE
+
+
+def test_unanswered_ring_preview_media_closed_rederives_state_after_close() -> None:
+    """The unanswered-ring preview ends via the same doorbell_media_closed path; its
+    ready preview session must not latch RTSP_BUSY after the async close either."""
+
+    async def _run() -> MediaState:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        provider._sessions = {  # type: ignore[attr-defined]
+            "ring-preview-session": _FakeGo2RtcWsClient([])
+        }
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["ring-preview-session"] = (
+            _ProviderWebRTCSession(
+                provider=provider,
+                owner="doorbell",
+                send_message=lambda _message: None,
+                wants_audio=False,
+                wants_backchannel=False,
+                resource_id="ring:entry-1",
+                ready=True,
+                ring_preview=True,
+            )
+        )
+
+        camera._clear_video_window()
+        assert camera._last_media_state is MediaState.RTSP_BUSY
+
+        camera._close_doorbell_webrtc_sessions_from_event()
+        await asyncio.gather(*tasks)
+        return camera._last_media_state
+
+    assert asyncio.run(_run()) is MediaState.IDLE
+
+
 def test_doorbell_camera_keeps_capabilities_permissive_until_agent_reports_them() -> None:
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]

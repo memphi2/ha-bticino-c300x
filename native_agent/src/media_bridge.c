@@ -5,6 +5,7 @@
 #include "media_audio.h"
 #include "media_base64.h"
 #include "media_bridge.h"
+#include "media_rtsp_clients.h"
 #include "media_session_guard.h"
 #include "media_sip.h"
 #include "sha256.h"
@@ -127,28 +128,6 @@ static int doorbell_devaddr(const struct c300x_config *config) {
     int devaddr = atoi(config->video_sip_devaddr);
     return devaddr > 0 ? devaddr : 20;
 }
-
-typedef struct {
-    bool active;
-    int fd;
-    bool described;
-    bool transport_tcp;
-    bool audio_enabled;
-    bool recorder;
-    bool backchannel_enabled;
-    int video_interleaved_channel;
-    int audio_interleaved_channel;
-    int backchannel_interleaved_channel;
-    struct sockaddr_in udp_client;
-    char session_id[32];
-} rtsp_client_slot_t;
-
-typedef struct {
-    int fd;
-    bool transport_tcp;
-    int channel;
-    struct sockaddr_in udp_client;
-} rtsp_send_target_t;
 
 typedef struct {
     int fd;
@@ -316,6 +295,19 @@ static media_bridge_t g_bridge = {
     .doorstation_audio_gain_q12 = DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL,
 };
 
+#define rtsp_physical_client_count_locked(bridge) \
+    c300x_rtsp_client_slots_physical_count((bridge)->rtsp_clients)
+#define rtsp_client_count_locked(bridge) \
+    c300x_rtsp_client_slots_active_count((bridge)->rtsp_clients)
+#define evict_parked_rtsp_client_locked(bridge) \
+    c300x_rtsp_client_slots_evict_parked((bridge)->rtsp_clients)
+#define rtsp_existing_clients_compatible_locked(bridge, fd, wants_audio, recorder) \
+    c300x_rtsp_client_slots_compatible((bridge)->rtsp_clients, fd, wants_audio, recorder)
+#define rtsp_client_slot_for_fd_locked(bridge, slot_index, fd) \
+    c300x_rtsp_client_slot_for_fd((bridge)->rtsp_clients, slot_index, fd)
+#define rtsp_send_targets_locked(bridge, audio, targets, targets_len) \
+    c300x_rtsp_client_slots_send_targets((bridge)->rtsp_clients, audio, targets, targets_len)
+
 static void close_fd_if_open(int *fd) {
     if (fd != NULL && *fd >= 0) {
         close(*fd);
@@ -371,17 +363,6 @@ static bool rtsp_client_sharing_allowed_locked(const media_bridge_t *bridge) {
     );
 }
 
-static int rtsp_client_count_locked(const media_bridge_t *bridge) {
-    int count = 0;
-
-    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
-        if (bridge->rtsp_clients[index].active && bridge->rtsp_clients[index].fd >= 0) {
-            count++;
-        }
-    }
-    return count;
-}
-
 static void sync_legacy_rtsp_client_locked(media_bridge_t *bridge) {
     bridge->client_fd = -1;
     bridge->transport_tcp = true;
@@ -393,7 +374,7 @@ static void sync_legacy_rtsp_client_locked(media_bridge_t *bridge) {
 
     for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
         rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
-        if (!slot->active || slot->fd < 0) {
+        if (!slot->active || slot->fd < 0 || slot->parked) {
             continue;
         }
         bridge->client_fd = slot->fd;
@@ -407,9 +388,21 @@ static void sync_legacy_rtsp_client_locked(media_bridge_t *bridge) {
     }
 }
 
-static bool register_rtsp_client_locked(media_bridge_t *bridge, int fd, int *slot_index) {
-    int active_clients = rtsp_client_count_locked(bridge);
+static bool register_rtsp_client_locked(
+    media_bridge_t *bridge,
+    int fd,
+    int *slot_index,
+    int *evicted_clients
+) {
+    int active_clients = rtsp_physical_client_count_locked(bridge);
 
+    if (active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS) {
+        int evicted = evict_parked_rtsp_client_locked(bridge);
+        if (evicted_clients != NULL) {
+            *evicted_clients += evicted;
+        }
+        active_clients -= evicted;
+    }
     if (active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS) {
         bridge->rtsp_rejected_clients++;
         snprintf(
@@ -488,48 +481,25 @@ static void rtsp_note_play_failure(media_bridge_t *bridge, const char *reason) {
     pthread_mutex_unlock(&bridge->mutex);
 }
 
-static bool rtsp_existing_clients_compatible_locked(
+static bool unregister_rtsp_client_locked(
     media_bridge_t *bridge,
-    int current_slot_index,
-    bool wants_audio,
-    bool recorder
+    int slot_index,
+    int fd
 ) {
-    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
-        rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
-        if (!slot->active || slot->fd < 0 || (int)index == current_slot_index) {
-            continue;
-        }
-        if (!slot->described) {
-            continue;
-        }
-        if (slot->audio_enabled != wants_audio || slot->recorder != recorder) {
-            return false;
-        }
-    }
-    return true;
-}
-
-static rtsp_client_slot_t *rtsp_client_slot_locked(media_bridge_t *bridge, int slot_index) {
-    if (slot_index < 0 || slot_index >= (int)C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS) {
-        return NULL;
-    }
-    rtsp_client_slot_t *slot = &bridge->rtsp_clients[slot_index];
-    if (!slot->active || slot->fd < 0) {
-        return NULL;
-    }
-    return slot;
-}
-
-static void unregister_rtsp_client_locked(media_bridge_t *bridge, int slot_index) {
-    rtsp_client_slot_t *slot = rtsp_client_slot_locked(bridge, slot_index);
+    rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+        bridge,
+        slot_index,
+        fd
+    );
 
     if (slot == NULL) {
-        return;
+        return false;
     }
     slot->active = false;
     slot->fd = -1;
     sync_legacy_rtsp_client_locked(bridge);
     pthread_cond_broadcast(&bridge->ready_cond);
+    return true;
 }
 
 static void shutdown_all_rtsp_clients_locked(media_bridge_t *bridge) {
@@ -539,6 +509,45 @@ static void shutdown_all_rtsp_clients_locked(media_bridge_t *bridge) {
             shutdown(slot->fd, SHUT_RDWR);
         }
     }
+}
+
+static int park_rtsp_clients_locked(media_bridge_t *bridge) {
+    int parked = 0;
+
+    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
+        rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
+        if (!slot->active || slot->fd < 0 || slot->parked) {
+            continue;
+        }
+        slot->parked = true;
+        parked++;
+    }
+    if (parked > 0) {
+        sync_legacy_rtsp_client_locked(bridge);
+        pthread_cond_broadcast(&bridge->ready_cond);
+    }
+    return parked;
+}
+
+static bool unpark_played_rtsp_clients_locked(media_bridge_t *bridge) {
+    bool unparked = false;
+
+    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS; index++) {
+        rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
+        if (!slot->active || slot->fd < 0 || !slot->parked || !slot->played) {
+            continue;
+        }
+        // Unpark every parked+played client regardless of audio mode:
+        // rtsp_send_targets already delivers only what each client negotiated,
+        // so a preview in another browser keeps running instead of being evicted.
+        slot->parked = false;
+        unparked = true;
+    }
+    if (unparked) {
+        sync_legacy_rtsp_client_locked(bridge);
+        pthread_cond_broadcast(&bridge->ready_cond);
+    }
+    return unparked;
 }
 
 static void close_all_rtsp_clients_locked(media_bridge_t *bridge) {
@@ -551,31 +560,6 @@ static void close_all_rtsp_clients_locked(media_bridge_t *bridge) {
         slot->fd = -1;
     }
     sync_legacy_rtsp_client_locked(bridge);
-}
-
-static size_t rtsp_send_targets_locked(
-    const media_bridge_t *bridge,
-    bool audio,
-    rtsp_send_target_t *targets,
-    size_t targets_len
-) {
-    size_t count = 0;
-
-    for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS && count < targets_len; index++) {
-        const rtsp_client_slot_t *slot = &bridge->rtsp_clients[index];
-        if (!slot->active || slot->fd < 0) {
-            continue;
-        }
-        if (audio && !slot->audio_enabled) {
-            continue;
-        }
-        targets[count].fd = slot->fd;
-        targets[count].transport_tcp = slot->transport_tcp;
-        targets[count].channel = audio ? slot->audio_interleaved_channel : slot->video_interleaved_channel;
-        targets[count].udp_client = slot->udp_client;
-        count++;
-    }
-    return count;
 }
 
 static bool start_bt_av_media(media_bridge_t *bridge);
@@ -1273,6 +1257,14 @@ static void shutdown_rtsp_clients_after_drain(media_bridge_t *bridge) {
     pthread_mutex_unlock(&bridge->mutex);
 }
 
+static void stage_rtsp_clients_for_stop_locked(media_bridge_t *bridge, bool explicit_stop, bool *drain_clients) {
+    if (explicit_stop) {
+        (void)park_rtsp_clients_locked(bridge);
+    } else {
+        *drain_clients = true;
+    }
+}
+
 static bool ring_talkback_recent_locked(const media_bridge_t *bridge, long long now) {
     return bridge->ring_last_talkback_ms > 0
         && now - bridge->ring_last_talkback_ms <= RING_TALKBACK_SILENCE_GRACE_MS;
@@ -1461,11 +1453,6 @@ static void drain_rtsp_interleaved_payload(
     }
 }
 
-// Per-connection buffered reader for the RTSP control stream. The stream
-// interleaves text requests and binary "$"-framed RTP, so reads must never
-// consume past one message. Buffering lets us bulk-recv instead of one
-// select()+recv() per byte (the old text-request path) while keeping the
-// no-over-read guarantee: leftover bytes stay buffered for the next call.
 typedef struct {
     unsigned char *data;
     size_t cap;
@@ -1483,9 +1470,6 @@ static void rtsp_buf_compact(rtsp_read_buffer_t *buf) {
     buf->start = 0;
 }
 
-// Append at least one new byte from the socket. One trailing byte is always
-// reserved so callers can NUL-terminate for text scanning.
-// Returns 1 on data appended, 0 on timeout, -1 on error/close/full.
 static int rtsp_buf_fill(rtsp_read_buffer_t *buf, int fd, int timeout_seconds) {
     rtsp_buf_compact(buf);
     if (buf->len + 1 >= buf->cap) {
@@ -1533,7 +1517,6 @@ static void rtsp_buf_consume(rtsp_read_buffer_t *buf, size_t n) {
     buf->len -= n;
 }
 
-// Discard `n` bytes: from the buffer first, then straight from the socket.
 static void rtsp_buf_discard(
     rtsp_read_buffer_t *buf,
     int fd,
@@ -1602,11 +1585,6 @@ static rtsp_read_result_t read_rtsp_request_or_interleaved(
         return RTSP_READ_INTERLEAVED;
     }
 
-    // Text RTSP request: copy exactly one message, leave the rest buffered.
-    // A message that cannot be framed within the buffer — a header section
-    // with no terminator, or a Content-Length body larger than capacity — is
-    // a protocol violation we cannot consume without desyncing the stream, so
-    // close the connection instead of returning a truncated request.
     const size_t max_request = request_size - 1;
     for (;;) {
         buf->data[buf->start + buf->len] = '\0';
@@ -1937,9 +1915,6 @@ static bool build_ring_sdp(
 ) {
     int session_id = (int)(time(NULL) % 10000);
 
-    // The ring INVITE comes from the device; we answer with the codec that
-    // matches the configured mode. In pcmu mode the device offers PCMU
-    // (static payload 0), so answer PCMU; otherwise keep the speex answer.
     return snprintf(
         out,
         out_len,
@@ -2247,15 +2222,9 @@ static bool rtsp_audio_payload_is_speex_8khz(unsigned char payload_type) {
 }
 
 static bool bridge_audio_codec_is_pcmu(const media_bridge_t *bridge) {
-    /* Read the cached device-derived flag (set once at c300x_media_bridge_start)
-     * rather than the device file per packet. */
     return bridge != NULL && bridge->device_codec_pcmu != 0;
 }
 
-// Payload type the agent stamps on talkback frames sent to the device.
-// pcmu mode → PCMU (static payload 0); speex mode keeps the caller's historical
-// speex payload type (ring uses 96, on-demand/home use 98), so speex behaviour
-// is untouched.
 static unsigned char talkback_output_payload_type(
     const media_bridge_t *bridge,
     unsigned char speex_payload_type
@@ -2268,10 +2237,6 @@ static unsigned char talkback_output_payload_type(
 static int current_doorstation_audio_gain_q12(media_bridge_t *bridge) {
     int gain_q12;
 
-    // In PCMU mode the device already emits PCMU, so forcing neutral gain
-    // keeps the shared inbound path on its zero-copy passthrough (no
-    // decode/gain/re-encode) — the whole point of the native-PCMU path.
-    // Any level adjustment is done card-side in the browser later.
     if (bridge_audio_codec_is_pcmu(bridge)) {
         return DOORSTATION_AUDIO_GAIN_Q12_NEUTRAL;
     }
@@ -2642,9 +2607,6 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
         || bridge->ring_answered
         || bridge->ring_answer_requested
     );
-    // An unanswered ring tears down here (remote CANCEL / loop exit) without
-    // going through the answered-hangup path that drains RTSP clients, so its
-    // leftover auto-preview client can outlive the ring by a few dozen ms.
     was_unanswered = was_active && !bridge->ring_answered;
     close_ring_media_fds_locked(bridge);
     bridge->ring_call_active = false;
@@ -2661,11 +2623,6 @@ static void ring_call_cleanup(media_bridge_t *bridge) {
     reset_backchannel_talkback_locked(bridge);
     pthread_mutex_unlock(&bridge->mutex);
     c300x_video_bridge_media_stopped(bridge->video);
-    // Drain (force-close on overstay) the leftover preview client BEFORE
-    // signalling media closed. The event makes HA poll the agent status
-    // immediately; without this it can catch the still-draining client
-    // (clients==1), derive RTSP_BUSY, and latch that stale state until the
-    // next event — the "card stuck on busy after an unanswered ring" bug.
     if (was_unanswered) {
         shutdown_rtsp_clients_after_drain(bridge);
     }
@@ -3312,8 +3269,6 @@ static void send_media_audio_silence_payload_type(
     store_be16(packet + 2, state->audio_seq);
     store_be32(packet + 4, state->audio_timestamp);
     store_be32(packet + 8, state->audio_ssrc);
-    // PCMU digital silence is 0xFF (µ-law zero); the speex silence byte 0x00
-    // would decode as a loud sample under µ-law, so pick by payload type.
     packet[12] = payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
         ? 0xFF
         : MEDIA_AUDIO_SILENCE_PAYLOAD;
@@ -3695,10 +3650,6 @@ static bool forward_pcm_backchannel_packet(
         if (!have_frame) {
             continue;
         }
-        // In pcmu mode the device wants PCMU; re-encode the decoded PCM frame
-        // as µ-law (the same 160-sample cadence) instead of speex. This makes
-        // both PCMU and PCMA inbound talkback come out as PCMU regardless of
-        // which G.711 flavor go2rtc chose. speex mode is unchanged.
         if (bridge_audio_codec_is_pcmu(bridge)) {
             for (size_t index = 0; index < RTSP_BACKCHANNEL_FRAME_SAMPLES; index++) {
                 speex_payload[index] = c300x_pcmu_encode(samples[index]);
@@ -3768,6 +3719,7 @@ static bool forward_rtsp_backchannel_packet(
 static bool handle_rtsp_backchannel_frame(
     media_bridge_t *bridge,
     int slot_index,
+    int fd,
     int channel,
     const unsigned char *packet,
     size_t packet_len
@@ -3775,7 +3727,11 @@ static bool handle_rtsp_backchannel_frame(
     bool matches_backchannel = false;
 
     pthread_mutex_lock(&bridge->mutex);
-    rtsp_client_slot_t *slot = rtsp_client_slot_locked(bridge, slot_index);
+    rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+        bridge,
+        slot_index,
+        fd
+    );
     matches_backchannel = slot != NULL
         && slot->backchannel_enabled
         && slot->transport_tcp
@@ -5593,7 +5549,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
     c300x_media_session_guard_note_stop(&g_bridge.ondemand_guard, explicit_stop);
     if (g_bridge.stop_in_progress) {
         if (close_client) {
-            drain_clients = true;
+            stage_rtsp_clients_for_stop_locked(&g_bridge, explicit_stop, &drain_clients);
         }
         pthread_mutex_unlock(&g_bridge.mutex);
         if (drain_clients) {
@@ -5618,7 +5574,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
         && g_bridge.talkback_fd < 0
     ) {
         if (close_client) {
-            drain_clients = true;
+            stage_rtsp_clients_for_stop_locked(&g_bridge, explicit_stop, &drain_clients);
         }
         pthread_mutex_unlock(&g_bridge.mutex);
         if (drain_clients) {
@@ -5653,7 +5609,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
     snprintf(contact_uri, sizeof(contact_uri), "%s", g_bridge.contact_uri);
     g_bridge.sip_fd = -1;
     if (close_client) {
-        drain_clients = true;
+        stage_rtsp_clients_for_stop_locked(&g_bridge, explicit_stop, &drain_clients);
     }
     pthread_mutex_unlock(&g_bridge.mutex);
 
@@ -5821,6 +5777,43 @@ bool c300x_media_session_keepalive(struct c300x_video *video, bool audio) {
     return true;
 }
 
+bool c300x_media_session_resume_parked_rtsp(struct c300x_video *video, bool audio) {
+    bool ready;
+    bool unparked;
+
+    // Parked clients resume regardless of the requested audio mode; per-client
+    // send routing handles the difference, so no client is evicted here.
+    (void)audio;
+
+    pthread_mutex_lock(&g_bridge.mutex);
+    ready = (
+        g_bridge.running
+        && g_bridge.config != NULL
+        && g_bridge.video == video
+        && !g_bridge.stop_in_progress
+        && !g_bridge.media_active
+        && !g_bridge.media_starting
+        && !home_call_active_locked(&g_bridge)
+        && !ring_call_active_locked(&g_bridge)
+    );
+    if (!ready) {
+        pthread_mutex_unlock(&g_bridge.mutex);
+        return false;
+    }
+    unparked = unpark_played_rtsp_clients_locked(&g_bridge);
+    pthread_mutex_unlock(&g_bridge.mutex);
+    if (!unparked) {
+        return false;
+    }
+    if (!start_media_session(&g_bridge)) {
+        pthread_mutex_lock(&g_bridge.mutex);
+        (void)park_rtsp_clients_locked(&g_bridge);
+        pthread_mutex_unlock(&g_bridge.mutex);
+        return false;
+    }
+    return true;
+}
+
 bool c300x_media_ring_call_answer(struct c300x_video *video) {
     bool ready;
 
@@ -5916,7 +5909,7 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
             ? C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS
             : 1;
         open_fds += g_bridge.listen_fd >= 0 ? 1 : 0;
-        open_fds += rtsp_client_count_locked(&g_bridge);
+        open_fds += rtsp_physical_client_count_locked(&g_bridge);
         open_fds += g_bridge.rtp_fd >= 0 ? 1 : 0;
         open_fds += g_bridge.audio_rtp_fd >= 0 ? 1 : 0;
         open_fds += g_bridge.ondemand_audio_rtp_fd >= 0 ? 1 : 0;
@@ -5941,6 +5934,7 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         active_threads += g_bridge.ring_started ? 1 : 0;
         active_threads += g_bridge.home_call_started ? 1 : 0;
         active_threads += g_bridge.rtsp_client_threads;
+        status->clients = rtsp_client_count_locked(&g_bridge);
         status->bridge_open_fds = open_fds;
         status->bridge_active_threads = active_threads;
     }
@@ -6032,6 +6026,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     bool teardown_seen = false;
     int slot_index = -1;
     int remaining_clients = 0;
+    int evicted_clients = 0;
 
     if (request == NULL || read_buffer_data == NULL) {
         free(request);
@@ -6041,16 +6036,30 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     }
 
     pthread_mutex_lock(&g_bridge.mutex);
-    bool accepted = register_rtsp_client_locked(&g_bridge, fd, &slot_index);
+    bool accepted = register_rtsp_client_locked(
+        &g_bridge,
+        fd,
+        &slot_index,
+        &evicted_clients
+    );
     pthread_mutex_unlock(&g_bridge.mutex);
     if (!accepted) {
+        // A rejected registration never evicts (eviction only happens on a
+        // successful register), so evicted_clients is 0 here.
         send_rtsp_response(fd, 453, "1", NULL, NULL);
         free(request);
         free(read_buffer_data);
         close(fd);
         return;
     }
+    // Count the new client before releasing any evicted parked client so
+    // video->clients nets to its final value without a transient dip to 0,
+    // which would momentarily disable the transient-media-closed grace guards.
     c300x_video_bridge_client_connected(g_bridge.video);
+    while (evicted_clients > 0) {
+        c300x_video_bridge_client_disconnected(g_bridge.video);
+        evicted_clients--;
+    }
 
     while (g_bridge.running) {
         int interleaved_channel = -1;
@@ -6073,6 +6082,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 (void)handle_rtsp_backchannel_frame(
                     &g_bridge,
                     slot_index,
+                    fd,
                     interleaved_channel,
                     interleaved,
                     interleaved_len
@@ -6102,13 +6112,17 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             bool ring_audio = ring_call_active_locked(&g_bridge);
             bool home_call_audio = home_call_active_locked(&g_bridge);
             bool shared_client = rtsp_client_count_locked(&g_bridge) > 1;
-            rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             bool ring_preview_sharing = ring_preview_sharing_allowed_locked(&g_bridge);
             bool ring_answer_stream_sharing = ring_answer_stream_sharing_allowed_locked(&g_bridge);
             bool ondemand_audio_stream_sharing = ondemand_audio_stream_sharing_allowed_locked(&g_bridge);
             bool compatible_shared_path = rtsp_existing_clients_compatible_locked(
                 &g_bridge,
-                slot_index,
+                fd,
                 wants_audio,
                 recorder
             );
@@ -6132,10 +6146,6 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 );
             bool ondemand_describe_context =
                 !ring_audio && !home_call_audio && !recorder;
-            // Mirror the PLAY handler's stop_in_progress guard here: without
-            // it a client can get a 200 SDP answer + SETUP mid-teardown and
-            // only be rejected at PLAY, leaving go2rtc with a half-open
-            // session it must abort (the EOF-on-stop race).
             bool stop_in_progress_guard =
                 ondemand_describe_context && g_bridge.stop_in_progress;
             bool explicit_stop_guard =
@@ -6152,7 +6162,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 send_rtsp_response(fd, 503, cseq, NULL, NULL);
                 break;
             }
-            if (slot != NULL && allow_shared_path) {
+            if (slot == NULL) {
+                pthread_mutex_unlock(&g_bridge.mutex);
+                break;
+            }
+            if (allow_shared_path) {
                 slot->audio_enabled = wants_audio;
                 slot->recorder = recorder;
                 slot->described = true;
@@ -6254,7 +6268,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             int client_port = parse_client_port(transport);
             int interleaved_channel = parse_interleaved_channel(transport);
             pthread_mutex_lock(&g_bridge.mutex);
-            rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             bool rtsp_audio_enabled = slot != NULL && slot->audio_enabled;
             pthread_mutex_unlock(&g_bridge.mutex);
             bool is_backchannel = rtsp_audio_enabled
@@ -6272,7 +6290,11 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                     : (is_audio ? 0 : (rtsp_audio_enabled ? 2 : 0));
             }
             pthread_mutex_lock(&g_bridge.mutex);
-            slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             if (slot == NULL) {
                 pthread_mutex_unlock(&g_bridge.mutex);
                 break;
@@ -6323,14 +6345,24 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         } else if (strcmp(method, "PLAY") == 0) {
             bool rtsp_audio_enabled = false;
             pthread_mutex_lock(&g_bridge.mutex);
-            rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             if (slot != NULL) {
                 rtsp_audio_enabled = slot->audio_enabled;
+                slot->played = true;
+                slot->parked = false;
                 snprintf(session_id, sizeof(session_id), "%s", slot->session_id);
+                sync_legacy_rtsp_client_locked(&g_bridge);
             } else {
                 session_id[0] = '\0';
             }
             pthread_mutex_unlock(&g_bridge.mutex);
+            if (slot == NULL) {
+                break;
+            }
             bool home_call_session = request_home_call_media_if_active(&g_bridge, rtsp_audio_enabled);
             bool ring_session = !home_call_session && ring_session_active(&g_bridge);
             if (recorder && !ring_session && !home_call_session) {
@@ -6375,24 +6407,39 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
         } else if (strcmp(method, "GET_PARAMETER") == 0) {
             char headers[128];
             pthread_mutex_lock(&g_bridge.mutex);
-            rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             snprintf(session_id, sizeof(session_id), "%s", slot != NULL ? slot->session_id : "");
             pthread_mutex_unlock(&g_bridge.mutex);
             snprintf(headers, sizeof(headers), "Session: %s\r\n", session_id);
             send_rtsp_response(fd, 200, cseq, headers, NULL);
         } else if (strcmp(method, "TEARDOWN") == 0) {
             char headers[128];
+            bool unregistered;
             pthread_mutex_lock(&g_bridge.mutex);
-            rtsp_client_slot_t *slot = rtsp_client_slot_locked(&g_bridge, slot_index);
+            rtsp_client_slot_t *slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             snprintf(session_id, sizeof(session_id), "%s", slot != NULL ? slot->session_id : "");
-            unregister_rtsp_client_locked(&g_bridge, slot_index);
+            unregistered = unregister_rtsp_client_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
             slot_index = -1;
             remaining_clients = rtsp_client_count_locked(&g_bridge);
             pthread_mutex_unlock(&g_bridge.mutex);
             snprintf(headers, sizeof(headers), "Session: %s\r\n", session_id);
             send_rtsp_response(fd, 200, cseq, headers, NULL);
-            c300x_video_bridge_client_disconnected(g_bridge.video);
-            if (media_started && remaining_clients == 0) {
+            if (unregistered) {
+                c300x_video_bridge_client_disconnected(g_bridge.video);
+            }
+            if (unregistered && media_started && remaining_clients == 0) {
                 c300x_media_session_stop_after_rtsp_disconnect(g_bridge.video);
                 c300x_video_bridge_media_stopped(g_bridge.video);
             }
@@ -6404,11 +6451,20 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     }
 
     if (slot_index >= 0) {
+        bool unregistered;
         pthread_mutex_lock(&g_bridge.mutex);
-        unregister_rtsp_client_locked(&g_bridge, slot_index);
+        unregistered = unregister_rtsp_client_locked(
+            &g_bridge,
+            slot_index,
+            fd
+        );
         remaining_clients = rtsp_client_count_locked(&g_bridge);
         pthread_mutex_unlock(&g_bridge.mutex);
-        c300x_video_bridge_client_disconnected(g_bridge.video);
+        if (unregistered) {
+            c300x_video_bridge_client_disconnected(g_bridge.video);
+        } else {
+            media_started = false;
+        }
     }
 
     if (media_started && remaining_clients == 0) {
@@ -6552,9 +6608,6 @@ bool c300x_media_bridge_start(const struct c300x_config *config, struct c300x_vi
     close_fd_if_open(&g_bridge.listen_fd);
     close_all_rtsp_clients_locked(&g_bridge);
     g_bridge.config = config;
-    /* Derive the codec mode from the device once at start (bt_av_media reads
-     * the same stack_open.xml flag at boot), so the agent always matches the
-     * device without a separate config value that could drift. */
     g_bridge.device_codec_pcmu = c300x_audio_codec_device_is_pcmu();
     g_bridge.video = video;
     g_bridge.listen_fd = -1;

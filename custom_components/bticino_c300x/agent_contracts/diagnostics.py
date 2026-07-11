@@ -60,3 +60,4 @@ class AgentDiagnosticsStatus(AgentContract):
     flexisip_restart_marker: bool | None
     flexisip_backup_marker: bool | None
     flexisip_reference_state: str | None
+    agent_uptime_seconds: int | None = None

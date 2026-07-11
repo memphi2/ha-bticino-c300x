@@ -15,6 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .agent_update import (
     agent_update_repair_placeholders,
     async_apply_packaged_agent_update,
+    async_load_packaged_bundle_metadata,
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
@@ -439,6 +440,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 entry.runtime_data.api,
             )
             setup_data = await _async_verify_agent_after_update(
+                self.hass,
                 entry.runtime_data.api,
                 update_result,
             )
@@ -586,35 +588,66 @@ async def _async_wait_for_agent_after_update(
     api: Any,
     *,
     initial_delay: float = 0.0,
+    target_bundle: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Wait briefly for the native agent to restart after self-update."""
 
     last_error: Exception | None = None
+    saw_stale_setup = False
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
-    for _attempt in range(12):
+    for attempt in range(12):
         try:
-            return cast(dict[str, Any], await api.async_validate_setup())
+            setup_data = cast(dict[str, Any], await api.async_validate_setup())
+            if target_bundle is None or _agent_setup_matches_bundle(
+                setup_data,
+                target_bundle,
+            ):
+                return setup_data
+            saw_stale_setup = True
         except Exception as err:  # noqa: BLE001 - retry during controlled restart
             last_error = err
+        if attempt < 11:
             await asyncio.sleep(1)
-    if last_error is not None:
+    if last_error is not None and not saw_stale_setup:
         raise last_error
     raise RuntimeError("agent update verification failed")
 
 
 async def _async_verify_agent_after_update(
+    hass: HomeAssistant,
     api: Any,
     update_result: dict[str, Any],
 ) -> dict[str, Any]:
-    """Verify the native agent after an update, waiting only after restarts."""
+    """Verify the native agent after an update against the packaged bundle."""
 
+    target_bundle = await async_load_packaged_bundle_metadata(hass)
+    if not target_bundle:
+        raise RuntimeError("packaged native-agent bundle is missing")
     if update_result.get("restart_scheduled") is True:
         return await _async_wait_for_agent_after_update(
             api,
             initial_delay=_AGENT_UPDATE_RESTART_SETTLE_SECONDS,
+            target_bundle=target_bundle,
         )
-    return cast(dict[str, Any], await api.async_validate_setup())
+    setup_data = cast(dict[str, Any], await api.async_validate_setup())
+    if _agent_setup_matches_bundle(setup_data, target_bundle):
+        return setup_data
+    await api.async_restart_agent()
+    return await _async_wait_for_agent_after_update(
+        api,
+        initial_delay=_AGENT_UPDATE_RESTART_SETTLE_SECONDS,
+        target_bundle=target_bundle,
+    )
+
+
+def _agent_setup_matches_bundle(
+    setup_data: dict[str, Any],
+    target_bundle: dict[str, Any],
+) -> bool:
+    """Return true when the running agent reports the packaged bundle."""
+
+    return not compare_agent_bundle(setup_data, target_bundle).update_required
 
 
 async def _async_apply_repaired_agent_setup(
@@ -623,8 +656,6 @@ async def _async_apply_repaired_agent_setup(
     setup_data: dict[str, Any],
 ) -> None:
     """Update runtime metadata after a successful agent repair."""
-
-    from .agent_update import async_load_packaged_bundle_metadata
 
     capabilities = setup_data.get("capabilities", {})
     if not isinstance(capabilities, dict):

@@ -344,7 +344,11 @@ def test_audio_codec_select_added_when_advertised() -> None:
     asyncio.run(async_setup_entry("hass", entry, added.append))  # type: ignore[arg-type]
 
     entities = added[0]
-    assert any(isinstance(entity, C300XAudioCodecSelect) for entity in entities)
+    codec_entities = [
+        entity for entity in entities if isinstance(entity, C300XAudioCodecSelect)
+    ]
+    assert codec_entities
+    assert codec_entities[0]._attr_entity_registry_enabled_default is False
 
 
 def test_audio_codec_select_skipped_when_not_advertised() -> None:
@@ -418,19 +422,49 @@ def test_audio_codec_select_pending_resolves_on_manual_reboot_when_not_rebooted(
     assert entity.extra_state_attributes["pending_option"] is None
 
 
-def test_audio_codec_select_reconnect_without_reboot_gap_does_not_switch() -> None:
+def test_audio_codec_select_reconnect_keeps_pending_until_device_switches() -> None:
     entry = _audio_codec_entry()
     entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+    entity.hass = SimpleNamespace(async_create_task=scheduled.append)
 
     asyncio.run(entity.async_update())
     asyncio.run(entity.async_select_option("pcmu"))
     assert entity.current_option == "speex"
 
-    # A connection blip that never went unavailable must not resolve the pending
-    # change (only a real down->up reboot cycle does).
+    # A reconnect re-reads the live codec, but while the device still runs speex
+    # (no reboot happened yet) the change stays pending -- the safety against a
+    # premature switch comes from running_state, not from observing a down gap.
     entity._handle_reboot_reconnect("entry-1")
+    assert len(scheduled) == 1
+    asyncio.run(scheduled[0])
     assert entity.current_option == "speex"
     assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+
+def test_audio_codec_select_resolves_on_reconnect_without_observed_gap() -> None:
+    # Regression: a device reboot from the codec apply often re-registers within
+    # the reconnect grace window, so HA never sees `available` flip to False. The
+    # pending change must still resolve on the reconnect signal -- it previously
+    # stayed stuck on speex until a manual reload even though the device was pcmu.
+    entry = _audio_codec_entry()
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+    entity.hass = SimpleNamespace(async_create_task=scheduled.append)
+
+    asyncio.run(entity.async_update())
+    asyncio.run(entity.async_select_option("pcmu"))
+    assert entity.current_option == "speex"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+
+    # Device rebooted into pcmu and the agent re-registers (a connection signal)
+    # WITHOUT HA ever having marked it unavailable.
+    entry.runtime_data.api.audio_codec_running_state = "pcmu"
+    entity._handle_reboot_reconnect("entry-1")
+    assert len(scheduled) == 1
+    asyncio.run(scheduled[0])
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] is None
 
 
 def test_audio_codec_select_subscribes_to_connection_signal() -> None:

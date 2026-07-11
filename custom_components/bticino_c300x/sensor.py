@@ -51,6 +51,7 @@ from .doorbell_state import (
     raw_doorbell_state_value,
 )
 from .entity import C300XEntity
+from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_readiness import MEDIA_READINESS_STATUS_OPTIONS, media_readiness
@@ -347,6 +348,12 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
+            "device_reboot_count": getattr(
+                self._entry.runtime_data, "device_reboot_count", 0
+            ),
+            "agent_uptime_seconds": getattr(
+                self._entry.runtime_data, "agent_uptime_seconds", None
+            ),
             "media_watchdog_trigger_count": getattr(
                 getattr(self._entry.runtime_data, "agent_cpu_watchdog", None),
                 "trigger_count",
@@ -798,10 +805,12 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
     async def async_update(self) -> None:
         """Refresh cached system metrics from the device agent."""
 
+        needs_refresh = self._metric_needs_refresh()
         try:
             await _async_system_metrics(
                 self._entry,
-                force_refresh=self._metric_needs_refresh(),
+                force_refresh=needs_refresh,
+                required_key=self._metric_key if needs_refresh else None,
             )
         except C300XAgentApiError:
             self._attr_available = False
@@ -1157,21 +1166,53 @@ async def _async_system_metrics(
     entry: BticinoC300XConfigEntry,
     *,
     force_refresh: bool = False,
+    required_key: str | None = None,
 ) -> dict[str, Any]:
     """Return cached device-agent system metrics."""
 
     now = datetime.now(UTC)
+    if cached := _fresh_system_metrics_cache(
+        entry,
+        now=now,
+        force_refresh=force_refresh,
+        required_key=required_key,
+    ):
+        return cached
+
+    async with entry_lock(entry.entry_id, "system_metrics"):
+        now = datetime.now(UTC)
+        if cached := _fresh_system_metrics_cache(
+            entry,
+            now=now,
+            force_refresh=force_refresh,
+            required_key=required_key,
+        ):
+            return cached
+        metrics = cast(dict[str, Any], await entry.runtime_data.api.async_system_metrics())
+        entry.runtime_data.system_metrics = metrics
+        entry.runtime_data.system_metrics_updated_at = datetime.now(UTC)
+        return metrics
+
+
+def _fresh_system_metrics_cache(
+    entry: BticinoC300XConfigEntry,
+    *,
+    now: datetime,
+    force_refresh: bool,
+    required_key: str | None,
+) -> dict[str, Any] | None:
+    """Return fresh cached metrics when they satisfy the current request."""
+
+    metrics = entry.runtime_data.system_metrics
     updated_at = entry.runtime_data.system_metrics_updated_at
     if (
-        not force_refresh
-        and entry.runtime_data.system_metrics
-        and updated_at is not None
-        and (now - updated_at).total_seconds() < _METRICS_CACHE_SECONDS
+        not metrics
+        or updated_at is None
+        or (now - updated_at).total_seconds() >= _METRICS_CACHE_SECONDS
     ):
-        return entry.runtime_data.system_metrics
-    metrics = cast(dict[str, Any], await entry.runtime_data.api.async_system_metrics())
-    entry.runtime_data.system_metrics = metrics
-    entry.runtime_data.system_metrics_updated_at = now
+        return None
+    if force_refresh and (required_key is None or metrics.get(required_key) is None):
+        return None
     return metrics
 
 

@@ -148,6 +148,7 @@ from custom_components.bticino_c300x.sensor import (
     C300XVoicemailMessagesSensor,
     C300XVoiceMemosSensor,
     _agent_diagnostics_status,
+    _async_system_metrics,
 )
 from custom_components.bticino_c300x.sensor import (
     async_setup_entry as async_setup_sensor_entry,
@@ -437,6 +438,8 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
         "reconnect_count": 0,
+        "device_reboot_count": 0,
+        "agent_uptime_seconds": None,
         "media_watchdog_trigger_count": 0,
     }
 
@@ -1880,6 +1883,72 @@ def test_system_metric_sensor_recovers_when_cached_metric_is_unknown() -> None:
 
         assert entry.runtime_data.api.metrics_calls == 1
         assert entity.native_value == 5.5
+
+    asyncio.run(_run())
+
+
+def test_system_metrics_refresh_coalesces_concurrent_sensor_requests() -> None:
+    async def _run() -> None:
+        api = _FakeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        first_call_started = asyncio.Event()
+        release_first_call = asyncio.Event()
+
+        async def _slow_system_metrics() -> dict[str, Any]:
+            api.metrics_calls += 1
+            first_call_started.set()
+            await release_first_call.wait()
+            return {
+                "cpu_count": 2,
+                "cpu_usage_percent": 3.5,
+                "load_1m": 0.11,
+                "load_5m": 0.22,
+                "load_15m": 0.33,
+                "load_1m_percent": 5.5,
+                "load_5m_percent": 11.0,
+                "load_15m_percent": 16.5,
+                "memory_total_kb": 262144,
+                "memory_available_kb": 196608,
+                "memory_used_kb": 65536,
+                "memory_usage_percent": 25.0,
+                "temperature_c": 40.0,
+                "temperature_source": "sysfs",
+                "raw": {},
+            }
+
+        api.async_system_metrics = _slow_system_metrics  # type: ignore[method-assign]
+        tasks = [
+            asyncio.create_task(
+                _async_system_metrics(
+                    entry, force_refresh=True, required_key="cpu_usage_percent"
+                )
+            ),
+            asyncio.create_task(
+                _async_system_metrics(
+                    entry, force_refresh=True, required_key="load_1m_percent"
+                )
+            ),
+            asyncio.create_task(
+                _async_system_metrics(
+                    entry, force_refresh=True, required_key="memory_usage_percent"
+                )
+            ),
+            asyncio.create_task(
+                _async_system_metrics(
+                    entry, force_refresh=True, required_key="temperature_c"
+                )
+            ),
+        ]
+
+        await first_call_started.wait()
+        await asyncio.sleep(0)
+        assert api.metrics_calls == 1
+
+        release_first_call.set()
+        results = await asyncio.gather(*tasks)
+
+        assert api.metrics_calls == 1
+        assert all(result is entry.runtime_data.system_metrics for result in results)
 
     asyncio.run(_run())
 

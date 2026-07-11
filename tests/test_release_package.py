@@ -478,6 +478,26 @@ def test_native_self_update_apply_repairs_existing_startup_link() -> None:
     assert "ensure_agent_init_link()" in repair
 
 
+def test_native_self_update_restarts_when_running_binary_is_stale() -> None:
+    """Self-update must not trust bundle.json when the old process is still running."""
+
+    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
+    stale_check = native_http.split(
+        "static int running_agent_binary_differs_from_update_manifest",
+        1,
+    )[1].split("static int apply_agent_update_file", 1)[0]
+    apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
+        "static void handle_agent_update_apply",
+        1,
+    )[0]
+
+    assert '"/proc/self/exe"' in stale_check
+    assert "c300x_sha256_file_hex" in stale_check
+    assert '"device_agent/armhf/c300x-agent-native"' in stale_check
+    assert "running_agent_binary_differs_from_update_manifest(manifest)" in apply_files
+    assert "summary->runtime_changed" in apply_files
+
+
 def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
     """Stock rc links are usually relative but still point to the same init script."""
 

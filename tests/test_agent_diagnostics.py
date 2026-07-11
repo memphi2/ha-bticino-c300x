@@ -35,6 +35,8 @@ def _entry(*, api: _FakeApi | None = None, capabilities: dict[str, Any] | None =
             agent_diagnostics_updated_at=None,
             agent_diagnostics_updated_by=None,
             agent_diagnostics_change_reason=None,
+            device_reboot_count=0,
+            agent_uptime_seconds=None,
         ),
     )
 
@@ -66,6 +68,44 @@ def test_refresh_agent_diagnostics_stores_status_and_notifies(
     assert entry.runtime_data.agent_diagnostics_change_reason == "api_refresh"
     assert sent == [("hass", "bticino_c300x_agent_diagnostics_changed", "entry-1")]
     assert synced == ["entry-1"]
+
+
+def test_agent_diagnostics_counts_device_reboot_on_uptime_drop(monkeypatch) -> None:
+    entry = _entry()
+    monkeypatch.setattr(
+        diagnostics_module,
+        "async_dispatcher_send",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.repair_issues.async_sync_entry_repair_issues",
+        lambda *_args: None,
+    )
+
+    # First sample establishes the baseline -- no reboot counted.
+    apply_agent_diagnostics_event(
+        "hass", entry, {"agent_write_count": 1, "uptime_seconds": 500}
+    )
+    assert entry.runtime_data.device_reboot_count == 0
+    assert entry.runtime_data.agent_uptime_seconds == 500
+
+    # Uptime grows within the same process -> still no reboot.
+    apply_agent_diagnostics_event(
+        "hass", entry, {"agent_write_count": 2, "uptime_seconds": 800}
+    )
+    assert entry.runtime_data.device_reboot_count == 0
+
+    # Uptime drops -> the agent (device) restarted.
+    apply_agent_diagnostics_event(
+        "hass", entry, {"agent_write_count": 1, "uptime_seconds": 12}
+    )
+    assert entry.runtime_data.device_reboot_count == 1
+    assert entry.runtime_data.agent_uptime_seconds == 12
+
+    # An agent that does not report uptime leaves the counter untouched.
+    apply_agent_diagnostics_event("hass", entry, {"agent_write_count": 5})
+    assert entry.runtime_data.device_reboot_count == 1
+    assert entry.runtime_data.agent_uptime_seconds == 12
 
 
 def test_refresh_agent_diagnostics_skips_unsupported_or_failed_status() -> None:

@@ -263,7 +263,7 @@ def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_upda
     )
     register_body = media_bridge[
         media_bridge.index("static bool register_rtsp_client_locked") :
-        media_bridge.index("static rtsp_client_slot_t *rtsp_client_slot_locked")
+        media_bridge.index("static void rtsp_note_request")
     ]
     client_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
@@ -272,7 +272,9 @@ def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_upda
 
     assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)" not in register_body
     assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
-    assert "bool accepted = register_rtsp_client_locked(&g_bridge, fd, &slot_index);" in client_body
+    assert "evict_parked_rtsp_client_locked(bridge)" in register_body
+    assert "bool accepted = register_rtsp_client_locked(" in client_body
+    assert "&evicted_clients" in client_body
     assert "send_rtsp_response(fd, 453" in client_body
     assert client_body.index("if (!accepted)") < client_body.index(
         "c300x_video_bridge_client_connected"

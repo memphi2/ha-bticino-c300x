@@ -29,6 +29,7 @@ void c300x_media_session_stop_after_rtsp_disconnect(struct c300x_video *video);
 void c300x_media_session_note_explicit_activate(struct c300x_video *video);
 bool c300x_media_session_stop_in_progress(const struct c300x_video *video);
 bool c300x_media_session_keepalive(struct c300x_video *video, bool audio);
+bool c300x_media_session_resume_parked_rtsp(struct c300x_video *video, bool audio);
 bool c300x_media_ring_call_answer(struct c300x_video *video);
 void c300x_media_ring_call_hangup(struct c300x_video *video);
 void c300x_media_bridge_set_doorstation_audio_gain_tenths(

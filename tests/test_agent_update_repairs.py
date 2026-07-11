@@ -225,6 +225,7 @@ class FakeUpdateVerifyApi:
             "capabilities": {"system_metrics": {"supported": True, "memory": True}},
             "agent": {
                 "version": "0.3.1",
+                "bundle_hash": "sha256:bundle",
                 "self_update_supported": True,
             },
         }
@@ -406,7 +407,11 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
         calls.append("apply_update")
         return {"ok": True, "restart_scheduled": False}
 
-    async def verify_update(_api: Any, result: dict[str, Any]) -> dict[str, Any]:
+    async def verify_update(
+        _hass: Any,
+        _api: Any,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
         calls.append(f"verify:{result['ok']}")
         return {"version": "1.1.0", "capabilities": {}}
 
@@ -487,6 +492,9 @@ def test_agent_update_repair_self_update_normalizes_changed_config(
             "config_schema_changed": True,
         }
 
+    async def bundle_metadata(_hass: Any) -> dict[str, str]:
+        return {"agent_version": "1.1.0", "api_version": "1"}
+
     async def restore_state(*_args: Any) -> None:
         return None
 
@@ -499,6 +507,7 @@ def test_agent_update_repair_self_update_normalizes_changed_config(
         )
 
     monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", bundle_metadata)
     monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
     monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
     monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
@@ -521,7 +530,11 @@ def test_agent_update_repair_self_update_reports_verify_failure(monkeypatch) -> 
     async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
         return {"ok": True}
 
-    async def verify_update(_api: Any, _result: dict[str, Any]) -> dict[str, Any]:
+    async def verify_update(
+        _hass: Any,
+        _api: Any,
+        _result: dict[str, Any],
+    ) -> dict[str, Any]:
         return {"version": "1.1.0", "capabilities": {}}
 
     async def apply_setup(_hass: Any, setup_entry: Any, _setup: dict[str, Any]) -> None:
@@ -2078,7 +2091,6 @@ def test_frontend_card_repair_adds_cards_to_selected_dashboard_and_view(
 
 
 def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None:
-    import custom_components.bticino_c300x.agent_update as agent_update
     import custom_components.bticino_c300x.repairs as repairs
 
     dispatched: list[tuple[str, str]] = []
@@ -2092,7 +2104,7 @@ def test_apply_repaired_agent_setup_refreshes_runtime_state(monkeypatch) -> None
         lambda _hass, signal, entry_id: dispatched.append((signal, entry_id)),
     )
     monkeypatch.setattr(
-        agent_update,
+        repairs,
         "async_load_packaged_bundle_metadata",
         async_bundle_metadata,
     )
@@ -2155,15 +2167,25 @@ def test_verify_agent_update_waits_for_scheduled_restart(
     import custom_components.bticino_c300x.repairs as repairs
 
     api = FakeUpdateVerifyApi()
+    hass = FakeHass(FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi())))
     sleeps: list[float] = []
+
+    async def bundle_metadata(_hass: Any) -> dict[str, str]:
+        return {
+            "agent_version": "0.3.1",
+            "api_version": "1",
+            "bundle_hash": "sha256:bundle",
+        }
 
     async def fake_sleep(delay: float) -> None:
         sleeps.append(delay)
 
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", bundle_metadata)
     monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
 
     result = asyncio.run(
         _async_verify_agent_after_update(
+            hass,  # type: ignore[arg-type]
             api,
             {"ok": True, "restart_scheduled": True},
         )
@@ -2172,6 +2194,65 @@ def test_verify_agent_update_waits_for_scheduled_restart(
     assert result["version"] == "0.3.1"
     assert sleeps == [_AGENT_UPDATE_RESTART_SETTLE_SECONDS]
     assert api.calls == ["validate_setup"]
+
+
+def test_verify_agent_update_restarts_when_running_agent_is_stale(
+    monkeypatch,
+) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    class StaleThenUpdatedApi:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+            self.restarted = False
+
+        async def async_validate_setup(self) -> dict[str, Any]:
+            self.calls.append("validate_setup")
+            version = "0.3.0" if not self.restarted else "0.3.1"
+            return {
+                "version": version,
+                "api_version": "1",
+                "agent": {
+                    "version": version,
+                    "bundle_hash": "sha256:bundle",
+                    "self_update_supported": True,
+                },
+                "capabilities": {},
+            }
+
+        async def async_restart_agent(self) -> dict[str, Any]:
+            self.calls.append("restart_agent")
+            self.restarted = True
+            return {"ok": True, "action": "restart_agent", "scheduled": True}
+
+    async def bundle_metadata(_hass: Any) -> dict[str, str]:
+        return {
+            "agent_version": "0.3.1",
+            "api_version": "1",
+            "bundle_hash": "sha256:bundle",
+        }
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    api = StaleThenUpdatedApi()
+    hass = FakeHass(FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi())))
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", bundle_metadata)
+    monkeypatch.setattr(repairs.asyncio, "sleep", fake_sleep)
+
+    result = asyncio.run(
+        _async_verify_agent_after_update(
+            hass,  # type: ignore[arg-type]
+            api,
+            {"ok": True, "restart_scheduled": False},
+        )
+    )
+
+    assert result["version"] == "0.3.1"
+    assert api.calls == ["validate_setup", "restart_agent", "validate_setup"]
+    assert sleeps == [_AGENT_UPDATE_RESTART_SETTLE_SECONDS]
 
 
 def test_wait_for_agent_after_update_retries_until_setup_succeeds(

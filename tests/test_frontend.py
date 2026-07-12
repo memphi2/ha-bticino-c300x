@@ -708,7 +708,20 @@ def test_bundled_card_does_not_restart_preview_during_answer_transition() -> Non
     )
     assert "canStartDoorbellPreview" in preview_guard
     assert "transitionActive: !!this._transitionWebrtc" in preview_guard
+    assert "const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;" in webrtc_source
     assert "if (this._closing) {\n        return;\n      }\n      const state" in webrtc_source
+    assert 'if (state === "closed" || state === "failed") {' in webrtc_source
+    assert 'if (state === "disconnected") {' in webrtc_source
+    assert "this._scheduleDisconnectedClose();" in webrtc_source
+    assert '["closed", "disconnected", "failed"]' not in webrtc_source
+    assert "pc.oniceconnectionstatechange = handleConnectionStateChange;" in webrtc_source
+    assert "this._clearDisconnectedTimer();" in webrtc_source
+    assert (
+        'const state = this._pc.connectionState || this._pc.iceConnectionState;\n'
+        '      if (state === "disconnected") {\n'
+        '        this._handleProviderClosed("disconnected");'
+        in webrtc_source
+    )
     assert (
         'if (this._closing) {\n                return;\n              }\n'
         '              this._handleProviderClosed(message.reason || "closed");'

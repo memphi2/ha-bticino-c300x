@@ -1,4 +1,6 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=615e3b720e2a7be6";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=5d09b31793441325";
+
+const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
@@ -18,6 +20,7 @@ export class C300XWebrtcClient {
     this._pendingCandidates = [];
     this._pendingRemoteCandidates = [];
     this._running = false;
+    this._disconnectedTimer = null;
   }
 
   get running() {
@@ -107,15 +110,24 @@ export class C300XWebrtcClient {
       this._sendOrQueueCandidate(event.candidate.toJSON());
     };
 
-    pc.onconnectionstatechange = () => {
+    const handleConnectionStateChange = () => {
       if (this._closing) {
         return;
       }
       const state = pc.connectionState || pc.iceConnectionState;
-      if (["closed", "disconnected", "failed"].includes(state)) {
+      if (state === "closed" || state === "failed") {
+        this._clearDisconnectedTimer();
         this._handleProviderClosed(state);
+        return;
       }
+      if (state === "disconnected") {
+        this._scheduleDisconnectedClose();
+        return;
+      }
+      this._clearDisconnectedTimer();
     };
+    pc.onconnectionstatechange = handleConnectionStateChange;
+    pc.oniceconnectionstatechange = handleConnectionStateChange;
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -138,6 +150,7 @@ export class C300XWebrtcClient {
     }
     this._pc = null;
     this._running = false;
+    this._clearDisconnectedTimer();
 
     if (this._unsub) {
       this._unsub();
@@ -269,6 +282,30 @@ export class C300XWebrtcClient {
     // what the callback did so no caller can leak the peer connection.
     this._onClosed?.(reason || "closed");
     this.close();
+  }
+
+  _scheduleDisconnectedClose() {
+    if (this._disconnectedTimer) {
+      return;
+    }
+    this._disconnectedTimer = window.setTimeout(() => {
+      this._disconnectedTimer = null;
+      if (this._closing || !this._pc) {
+        return;
+      }
+      const state = this._pc.connectionState || this._pc.iceConnectionState;
+      if (state === "disconnected") {
+        this._handleProviderClosed("disconnected");
+      }
+    }, C300X_WEBRTC_DISCONNECTED_GRACE_MS);
+  }
+
+  _clearDisconnectedTimer() {
+    if (!this._disconnectedTimer) {
+      return;
+    }
+    window.clearTimeout(this._disconnectedTimer);
+    this._disconnectedTimer = null;
   }
 
   _sendOrQueueCandidate(candidate) {

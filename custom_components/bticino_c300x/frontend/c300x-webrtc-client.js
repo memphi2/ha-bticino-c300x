@@ -1,6 +1,8 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=5d09b31793441325";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=8b2200722dc92619";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
+const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=8b2200722dc92619";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
@@ -21,6 +23,7 @@ export class C300XWebrtcClient {
     this._pendingRemoteCandidates = [];
     this._running = false;
     this._disconnectedTimer = null;
+    this._statsDebug = null;
   }
 
   get running() {
@@ -128,6 +131,7 @@ export class C300XWebrtcClient {
     };
     pc.onconnectionstatechange = handleConnectionStateChange;
     pc.oniceconnectionstatechange = handleConnectionStateChange;
+    this._maybeStartStatsDebug(mediaElement);
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -143,6 +147,7 @@ export class C300XWebrtcClient {
 
   close() {
     this._closing = true;
+    this._stopStatsDebug("close");
     if (this._pc) {
       try {
         this._pc.close();
@@ -232,6 +237,9 @@ export class C300XWebrtcClient {
             }
             if (message.type === "session" && message.session_id) {
               this._sessionId = message.session_id;
+              if (this._pc) {
+                this._pc.__c300x_session_id = message.session_id;
+              }
               this._flushPendingCandidates();
               return;
             }
@@ -306,6 +314,80 @@ export class C300XWebrtcClient {
     }
     window.clearTimeout(this._disconnectedTimer);
     this._disconnectedTimer = null;
+  }
+
+  async _maybeStartStatsDebug(mediaElement) {
+    const pc = this._pc;
+    if (this._statsDebug || !pc?.getStats) {
+      return;
+    }
+    let status;
+    try {
+      status = await this._callWs({ type: C300X_WEBRTC_DEBUG_STATUS_COMMAND });
+    } catch (_err) {
+      return;
+    }
+    if (this._closing || this._pc !== pc || status?.webrtc_stats !== true) {
+      return;
+    }
+    this._sendStatsDebugProbe("debug_setup", {
+      debug_state: "enabled",
+    });
+    try {
+      const { C300XWebrtcDebugCollector } = await import(C300X_WEBRTC_DEBUG_MODULE);
+      if (this._closing || this._pc !== pc || this._statsDebug) {
+        return;
+      }
+      pc.__c300x_session_id = this._sessionId || "";
+      this._statsDebug = new C300XWebrtcDebugCollector({
+        getEntityId: this._getEntityId,
+        getRemoteStream: () => this._remoteStream,
+        isHomeCallMode: this._isHomeCallMode,
+        sendSnapshot: (snapshot) => this._sendStatsDebugSnapshot(snapshot),
+      });
+      if (!this._statsDebug.start(pc, mediaElement)) {
+        this._sendStatsDebugProbe("debug_setup_failed", {
+          reason: "collector_not_started",
+        });
+        this._statsDebug = null;
+      }
+    } catch (err) {
+      this._sendStatsDebugProbe("debug_setup_failed", {
+        message: c300xDebugErrorMessage(err),
+        reason: "module_import_failed",
+      });
+      return;
+    }
+  }
+
+  _stopStatsDebug(reason) {
+    if (this._statsDebug) {
+      this._statsDebug.stop(reason);
+      this._statsDebug = null;
+    }
+  }
+
+  _sendStatsDebugSnapshot(snapshot) {
+    this._callWs({
+      type: "bticino_c300x/debug/webrtc_stats",
+      snapshot,
+    }).catch((_err) => {});
+  }
+
+  _sendStatsDebugProbe(event, details = {}) {
+    const pc = this._pc;
+    this._sendStatsDebugSnapshot({
+      event,
+      entity_id: this._getEntityId?.() || "",
+      mode: this._isHomeCallMode?.() ? "home_call" : "doorbell",
+      session_id: this._sessionId || pc?.__c300x_session_id || "",
+      connection_state: pc?.connectionState || "",
+      ice_connection_state: pc?.iceConnectionState || "",
+      ice_gathering_state: pc?.iceGatheringState || "",
+      signaling_state: pc?.signalingState || "",
+      timestamp: new Date().toISOString(),
+      ...details,
+    });
   }
 
   _sendOrQueueCandidate(candidate) {
@@ -390,4 +472,8 @@ export function c300xNormalizeRtcConfig(config) {
   delete result.ice_servers;
   delete result.configuration;
   return result;
+}
+
+function c300xDebugErrorMessage(err) {
+  return `${err?.message || err || "unknown"}`.slice(0, 180);
 }

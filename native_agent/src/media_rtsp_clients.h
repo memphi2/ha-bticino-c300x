@@ -135,7 +135,7 @@ static inline size_t c300x_rtsp_client_slots_send_targets(
 
     for (size_t index = 0; index < C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS && count < targets_len; index++) {
         const rtsp_client_slot_t *slot = &slots[index];
-        if (!slot->active || slot->fd < 0 || slot->parked) {
+        if (!slot->active || slot->fd < 0 || slot->parked || !slot->played) {
             continue;
         }
         if (audio && !slot->audio_enabled) {

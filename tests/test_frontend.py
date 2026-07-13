@@ -39,6 +39,7 @@ CARD_RING_PREVIEW_STATE_SOURCE = FRONTEND_DIR / "c300x-ring-preview-state.js"
 CARD_STATE_SOURCE = FRONTEND_DIR / "c300x-state-model.js"
 CARD_TRANSLATIONS_SOURCE = FRONTEND_DIR / "c300x-translations.js"
 CARD_WEBRTC_SOURCE = FRONTEND_DIR / "c300x-webrtc-client.js"
+CARD_WEBRTC_DEBUG_SOURCE = FRONTEND_DIR / "c300x-webrtc-debug.js"
 MANIFEST_SOURCE = Path("custom_components/bticino_c300x/manifest.json")
 FRONTEND_MODULE_SOURCES = (
     CARD_SOURCE,
@@ -54,6 +55,7 @@ FRONTEND_MODULE_SOURCES = (
     CARD_STATE_SOURCE,
     CARD_TRANSLATIONS_SOURCE,
     CARD_WEBRTC_SOURCE,
+    CARD_WEBRTC_DEBUG_SOURCE,
 )
 FRONTEND_IMPORT_VERSION_PATTERN = re.compile(r"\?v=[0-9a-f]{16}")
 
@@ -952,6 +954,9 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
     assert f'from "./c300x-ring-preview-state.js?v={bundle_version}"' in lifecycle_source
     assert f'import "./{DOORBELL_CALL_CARD_FILENAME}?v={bundle_version}";' in metadata_source
     assert f'from "./c300x-media-attach.js?v={bundle_version}"' in CARD_WEBRTC_SOURCE.read_text(
+        encoding="utf-8"
+    )
+    assert f'./c300x-webrtc-debug.js?v={bundle_version}' in CARD_WEBRTC_SOURCE.read_text(
         encoding="utf-8"
     )
     assert "1.4.1-dev" not in card_source

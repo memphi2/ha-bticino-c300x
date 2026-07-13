@@ -212,9 +212,12 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
 
 def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     media_bridge = _read_media_bridge()
+    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+        encoding="utf-8"
+    )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static bool send_bt_av_media_command")
+        media_bridge.index("static void send_sip_bye")
     ]
     start_pos = media_bridge.index(
         "static bool start_media_session(media_bridge_t *bridge) {"
@@ -222,9 +225,11 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     start_body = media_bridge[
         start_pos : media_bridge.index("static void stop_media_session", start_pos)
     ]
+    stop_pos = media_bridge.index(
+        "static void stop_media_session(bool close_client, bool explicit_stop) {"
+    )
     stop_body = media_bridge[
-        media_bridge.index("static void stop_media_session(bool close_client, bool explicit_stop)") :
-        media_bridge.index("void c300x_media_session_stop")
+        stop_pos : media_bridge.index("void c300x_media_session_stop", stop_pos)
     ]
     rtsp_body = media_bridge[
         media_bridge.index("static void handle_rtsp_client") :
@@ -251,14 +256,37 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert setup_body.count('"a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
-    assert "start_bt_av_media(bridge)" in media_bridge
+    assert "c300x_media_bt_av_start(bridge->config)" in media_bridge
+    assert "c300x_media_bt_av_takeover(bridge->config)" in start_body
+    assert start_body.index("if (!start_talkback_proxy(bridge))") < start_body.index(
+        "if (!c300x_media_bt_av_takeover(bridge->config))"
+    )
+    ondemand_media_body = media_bridge[
+        media_bridge.index("static void *ondemand_media_thread") :
+        media_bridge.index("static bool send_sip_setup")
+    ]
+    assert "c300x_media_bt_av_stop();" not in ondemand_media_body
+    assert "c300x_media_bt_av_takeover" not in ondemand_media_body
+    takeover_body = media_bt_av[
+        media_bt_av.index("bool c300x_media_bt_av_takeover") :
+    ]
+    assert "#define BT_AV_TAKEOVER_SETTLE_MS 800" in media_bt_av
+    assert "c300x_media_bt_av_stop();" not in takeover_body
+    assert takeover_body.count("c300x_media_bt_av_start(config)") == 2
+    assert takeover_body.index("bool started = c300x_media_bt_av_start(config);") < takeover_body.index(
+        "sleep_ms(BT_AV_TAKEOVER_SETTLE_MS);"
+    )
+    assert takeover_body.index("sleep_ms(BT_AV_TAKEOVER_SETTLE_MS);") < takeover_body.rindex(
+        "c300x_media_bt_av_start(config)"
+    )
+    assert "return c300x_media_bt_av_start(config) || started;" in takeover_body
     assert '#include "media_base64.h"' in media_bridge
     assert '#include "time_util.h"' in media_bridge
     assert "static bool base64_encode(" not in media_bridge
     assert "static long long monotonic_ms" not in media_bridge
     assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
     assert stop_body.index("send_sip_bye(") < stop_body.index(
-        "send_bt_av_media_stop();"
+        "c300x_media_bt_av_stop();"
     )
     assert "request_ring_answer_if_active" not in start_body
     assert "sdp_audio_video" in rtsp_body
@@ -446,7 +474,8 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "send_media_audio_silence_payload_type(" in home_call_body
     assert "talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)" in home_call_body
     assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1" in home_call_body
-    assert "start_bt_av_media" not in home_call_body
+    assert "c300x_media_bt_av_start" not in home_call_body
+    assert "c300x_media_bt_av_takeover" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
     assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread
@@ -571,6 +600,32 @@ def test_native_agent_ondemand_relay_prioritizes_video_over_audio_work() -> None
         "drain_relay_audio_packet(bridge, audio_rtp_fd);"
     )
     assert relay_body.count("drain_relay_video_packets(bridge, rtp_fd);") >= 2
+
+
+def test_native_agent_ondemand_rtsp_client_receives_media_after_play_response() -> None:
+    media_bridge = _read_media_bridge()
+    rtsp_clients = (ROOT / "native_agent" / "src" / "media_rtsp_clients.h").read_text(
+        encoding="utf-8"
+    )
+    send_targets_body = rtsp_clients[
+        rtsp_clients.index("static inline size_t c300x_rtsp_client_slots_send_targets") :
+        rtsp_clients.index("#endif")
+    ]
+    play_body = media_bridge[
+        media_bridge.index('} else if (strcmp(method, "PLAY") == 0) {') :
+        media_bridge.index('} else if (strcmp(method, "GET_PARAMETER") == 0) {')
+    ]
+
+    assert "|| !slot->played" in send_targets_body
+    assert "slot->played = false;" in play_body
+    assert "slot->played = true;" in play_body
+    assert play_body.index("slot->played = false;") < play_body.index(
+        "start_media_session(&g_bridge)"
+    )
+    assert "send_rtsp_response(fd, 200, cseq, headers, NULL);" in play_body
+    assert play_body.index("send_rtsp_response(fd, 200, cseq, headers, NULL);") < (
+        play_body.rindex("slot->played = true;")
+    )
 
 
 def test_native_agent_home_call_stop_matches_app_cancel_before_answer() -> None:
@@ -940,7 +995,7 @@ def test_native_agent_explicit_ondemand_stop_parks_persistent_rtsp_source() -> N
     assert "slot->fd = fd;" in register_body
     assert "c300x_rtsp_client_slots_active_count" in logical_count_body
     assert "slot->fd == fd" in rtsp_clients_header
-    assert "if (!slot->active || slot->fd < 0 || slot->parked)" in send_targets_body
+    assert "if (!slot->active || slot->fd < 0 || slot->parked || !slot->played)" in send_targets_body
     assert "(void)park_rtsp_clients_locked(bridge);" in stop_helper_body
     assert "*drain_clients = true;" in stop_helper_body
     assert "int evicted_clients = 0;" in rtsp_body

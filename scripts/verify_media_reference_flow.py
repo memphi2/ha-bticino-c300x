@@ -33,6 +33,10 @@ RTSP_PATH_RE = re.compile(
     r"\b(?:DESCRIBE|SETUP|PLAY|TEARDOWN|OPTIONS)\s+"
     r"(?:rtsp://[^/\s]+)?(/[A-Za-z0-9._~/-]+)"
 )
+RTSP_STATUS_RE = re.compile(r"RTSP/1\.0\s+(?P<code>[0-9]{3})\b")
+BT_AV_START_RE = re.compile(
+    r"\*7\*300#127#0#0#1#(?P<port>\d+)#(?P<mode>\d+)\*##"
+)
 
 
 @dataclass(frozen=True)
@@ -93,11 +97,14 @@ def collect_pcap_checks(packets: list[Packet], *, mode: str) -> list[Check]:
             for key, value in _fixture(mode).items()
             if key in {"offer", "answer"}
         }
-        return collect_fingerprint_checks(
+        checks = collect_fingerprint_checks(
             fingerprint_from_text("\n".join(packet.text for packet in packets)),
             expected,
             prefix=f"pcap.{mode}",
         )
+        if mode == "on_demand":
+            checks.extend(_on_demand_runtime_pcap_checks(packets))
+        return checks
 
     events = _event_packets(packets)
     pressed = events.get("doorbell.pressed")
@@ -114,7 +121,8 @@ def collect_pcap_checks(packets: list[Packet], *, mode: str) -> list[Check]:
     checks.extend(
         [
             Check("pcap.event_order.pressed_before_closed", _before(pressed, closed)),
-            Check("pcap.event_order.closed_before_view", _before(closed, view)),
+            Check("pcap.event_order.pressed_before_view", _before(pressed, view)),
+            Check("pcap.event_order.view_before_closed", _before(view, closed)),
             Check(
                 "pcap.pressed_state.ringing",
                 _has_json_value(pressed.text, "doorbell", "ringing"),
@@ -149,7 +157,7 @@ def collect_pcap_checks(packets: list[Packet], *, mode: str) -> list[Check]:
             ),
             Check(
                 "pcap.preview_media_after_pressed",
-                _has_packet_between(packets, pressed, closed, min_length=900),
+                _has_packet_between(packets, pressed, view, min_length=900),
             ),
             Check(
                 "pcap.answered_control_after_view",
@@ -596,7 +604,7 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static bool send_bt_av_media_command",
+        "static void send_sip_bye",
     )
     rtsp_body = _section(
         media_bridge,
@@ -919,17 +927,27 @@ def _timing_checks(
         return [
             Check("pcap.timing.timestamps_present", False),
         ]
-    first_large = _first_packet_between(packets, pressed, closed, min_length=900)
+    answer_post = _first_packet_containing(
+        packets,
+        "POST /api/v1/calls/doorbell/actions/answer",
+    )
+    first_large = _first_packet_between(packets, pressed, view, min_length=900)
     first_small = _first_packet_after(packets, view, max_length=350)
     checks = [
         Check("pcap.timing.timestamps_present", True),
         Check(
-            "pcap.timing.view_follows_close_quickly",
-            0 <= (view.timestamp - closed.timestamp).total_seconds() <= 1.0,
+            "pcap.timing.view_follows_answer_quickly",
+            answer_post is not None
+            and answer_post.timestamp is not None
+            and 0 <= (view.timestamp - answer_post.timestamp).total_seconds() <= 2.0,
         ),
         Check(
             "pcap.timing.preview_window_reasonable",
-            1.0 <= (closed.timestamp - pressed.timestamp).total_seconds() <= 30.0,
+            0 <= (view.timestamp - pressed.timestamp).total_seconds() <= 30.0,
+        ),
+        Check(
+            "pcap.timing.media_closed_after_view",
+            (closed.timestamp - view.timestamp).total_seconds() >= 0,
         ),
     ]
     if first_large is None or first_large.timestamp is None:
@@ -950,6 +968,85 @@ def _timing_checks(
                 0 <= (first_small.timestamp - view.timestamp).total_seconds() <= 2.0,
             )
         )
+    return checks
+
+
+def _on_demand_runtime_pcap_checks(packets: list[Packet]) -> list[Check]:
+    play_packets = _rtsp_play_packets(packets)
+    play_responses = [
+        _first_rtsp_response_after(packets, packet) for packet in play_packets
+    ]
+    play_ok_packets = [
+        packet
+        for packet in play_responses
+        if packet is not None and "RTSP/1.0 200" in packet.text
+    ]
+    media_before_play_response = _rtsp_server_payload_before_responses(
+        packets,
+        play_packets,
+        play_responses,
+    )
+    closed_before_play_response = _packets_between_requests_and_responses(
+        packets,
+        play_packets,
+        play_responses,
+        "doorbell.media.closed",
+    )
+    bt_av_seen = any(
+        "30007" in packet.text or BT_AV_START_RE.search(packet.text)
+        for packet in packets
+    )
+    custom_starts = _bt_av_custom_start_packets(packets)
+    custom_start_failures = _bt_av_custom_start_keys_without_ack(
+        packets,
+        custom_starts,
+    )
+
+    checks = [
+        Check("pcap.on_demand.rtsp_play_seen", bool(play_packets)),
+        Check(
+            "pcap.on_demand.rtsp_play_response_200",
+            bool(play_packets)
+            and all(
+                response is not None and "RTSP/1.0 200" in response.text
+                for response in play_responses
+            ),
+            detail=_diff_detail(
+                [_rtsp_response_code(packet) for packet in play_responses],
+                ["200"] * len(play_responses),
+            ),
+        ),
+        Check(
+            "pcap.on_demand.no_media_closed_before_play_200",
+            bool(play_ok_packets) and not closed_before_play_response,
+            detail=(
+                ""
+                if not closed_before_play_response
+                else f"media_closed_before_play_200={len(closed_before_play_response)}"
+            ),
+        ),
+        Check(
+            "pcap.on_demand.no_rtp_before_play_200",
+            bool(play_ok_packets) and not media_before_play_response,
+            detail=(
+                ""
+                if not media_before_play_response
+                else f"payload_before_play_200={len(media_before_play_response)}"
+            ),
+        ),
+        Check(
+            "pcap.on_demand.bt_av_custom_start_seen",
+            not bt_av_seen or bool(custom_starts),
+        ),
+        Check(
+            "pcap.on_demand.bt_av_custom_start_ack",
+            not custom_start_failures,
+            detail=_diff_detail(
+                custom_start_failures,
+                [],
+            ),
+        ),
+    ]
     return checks
 
 
@@ -978,20 +1075,27 @@ def _ring_timing(packets: list[Packet]) -> dict[str, float]:
     pressed = events.get("doorbell.pressed")
     closed = events.get("doorbell.media.closed")
     view = events.get("doorbell.view_requested")
+    answer_post = _first_packet_containing(
+        packets,
+        "POST /api/v1/calls/doorbell/actions/answer",
+    )
     if (
         pressed is None
         or closed is None
         or view is None
+        or answer_post is None
         or pressed.timestamp is None
         or closed.timestamp is None
         or view.timestamp is None
+        or answer_post.timestamp is None
     ):
         return {}
-    first_large = _first_packet_between(packets, pressed, closed, min_length=900)
+    first_large = _first_packet_between(packets, pressed, view, min_length=900)
     first_small = _first_packet_after(packets, view, max_length=350)
     timings = {
-        "preview_duration": (closed.timestamp - pressed.timestamp).total_seconds(),
-        "view_after_close": (view.timestamp - closed.timestamp).total_seconds(),
+        "view_after_answer": (view.timestamp - answer_post.timestamp).total_seconds(),
+        "preview_duration": (view.timestamp - pressed.timestamp).total_seconds(),
+        "close_after_view": (closed.timestamp - view.timestamp).total_seconds(),
     }
     if first_large is not None and first_large.timestamp is not None:
         timings["large_media_after_pressed"] = (
@@ -1001,10 +1105,6 @@ def _ring_timing(packets: list[Packet]) -> dict[str, float]:
         timings["small_media_after_view"] = (
             first_small.timestamp - view.timestamp
         ).total_seconds()
-    answer_post = _first_packet_containing(
-        packets,
-        "POST /api/v1/calls/doorbell/actions/answer",
-    )
     preview_play = _first_packet_containing(
         packets,
         "PLAY rtsp://",
@@ -1103,6 +1203,128 @@ def _first_packet_containing(packets: list[Packet], *needles: str) -> Packet | N
         if all(needle in packet.text for needle in needles):
             return packet
     return None
+
+
+def _packets_between_requests_and_responses(
+    packets: list[Packet],
+    requests: list[Packet],
+    responses: list[Packet | None],
+    *needles: str,
+) -> list[Packet]:
+    matches: list[Packet] = []
+    for request, response in zip(requests, responses, strict=False):
+        if request.timestamp is None or response is None or response.timestamp is None:
+            continue
+        for packet in packets:
+            if packet.timestamp is None:
+                continue
+            if (
+                request.timestamp < packet.timestamp < response.timestamp
+                and all(needle in packet.text for needle in needles)
+            ):
+                matches.append(packet)
+    return matches
+
+
+def _rtsp_play_packets(packets: list[Packet]) -> list[Packet]:
+    return [
+        packet
+        for packet in packets
+        if "PLAY rtsp://" in packet.text and "RTSP/1.0" in packet.text
+    ]
+
+
+def _first_rtsp_response_after(packets: list[Packet], start: Packet) -> Packet | None:
+    if start.timestamp is None:
+        return None
+    for packet in packets:
+        if packet.timestamp is None or packet.timestamp <= start.timestamp:
+            continue
+        if RTSP_STATUS_RE.search(packet.text):
+            return packet
+    return None
+
+
+def _rtsp_response_code(packet: Packet | None) -> str | None:
+    if packet is None:
+        return None
+    match = RTSP_STATUS_RE.search(packet.text)
+    return match.group("code") if match else None
+
+
+def _rtsp_server_payload_before_responses(
+    packets: list[Packet],
+    requests: list[Packet],
+    responses: list[Packet | None],
+) -> list[Packet]:
+    offenders: list[Packet] = []
+    for request, response in zip(requests, responses, strict=False):
+        if request.timestamp is None or response is None or response.timestamp is None:
+            continue
+        for packet in packets:
+            if packet.timestamp is None:
+                continue
+            if not request.timestamp < packet.timestamp < response.timestamp:
+                continue
+            if not _looks_like_rtsp_server_payload(packet):
+                continue
+            offenders.append(packet)
+    return offenders
+
+
+def _looks_like_rtsp_server_payload(packet: Packet) -> bool:
+    if ".6554 > " not in packet.text:
+        return False
+    if packet.length is None or packet.length <= 4:
+        return False
+    return RTSP_STATUS_RE.search(packet.text) is None
+
+
+def _bt_av_custom_start_packets(packets: list[Packet]) -> list[Packet]:
+    custom: list[Packet] = []
+    for packet in packets:
+        for match in BT_AV_START_RE.finditer(packet.text):
+            port = int(match.group("port"))
+            mode = match.group("mode")
+            if port >= 10000 and mode in {"0", "1", "2"}:
+                custom.append(packet)
+                break
+    return custom
+
+
+def _bt_av_custom_start_keys_without_ack(
+    packets: list[Packet],
+    starts: list[Packet],
+) -> list[str]:
+    seen: dict[str, bool] = {}
+    for packet in starts:
+        match = BT_AV_START_RE.search(packet.text)
+        if match is None:
+            continue
+        key = f"{match.group('port')}#{match.group('mode')}"
+        seen.setdefault(key, False)
+        reply = _first_openwebnet_reply_after(packets, packet)
+        if reply is not None and "*#*1##" in reply.text:
+            seen[key] = True
+    return [key for key, acked in seen.items() if not acked]
+
+
+def _first_openwebnet_reply_after(packets: list[Packet], start: Packet) -> Packet | None:
+    if start.timestamp is None:
+        return None
+    for packet in packets:
+        if packet.timestamp is None or packet.timestamp <= start.timestamp:
+            continue
+        if re.search(r"\*#\*[01]##", packet.text):
+            return packet
+    return None
+
+
+def _openwebnet_reply(packet: Packet | None) -> str | None:
+    if packet is None:
+        return None
+    match = re.search(r"\*#\*[01]##", packet.text)
+    return match.group(0) if match else None
 
 
 def _read(path: Path) -> str:

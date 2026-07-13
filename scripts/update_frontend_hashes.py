@@ -29,6 +29,7 @@ FRONTEND_MODULES = (
     "c300x-state-model.js",
     "c300x-translations.js",
     "c300x-webrtc-client.js",
+    "c300x-webrtc-debug.js",
 )
 
 

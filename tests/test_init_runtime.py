@@ -131,6 +131,8 @@ def test_async_setup_registers_frontend_services_and_websocket(
     frontend.async_setup_frontend = lambda _hass: _async_value(calls.append("frontend"))
     services = types.ModuleType("custom_components.bticino_c300x.services")
     services.async_setup_services = lambda _hass: _async_value(calls.append("services"))
+    debug_ws = types.ModuleType("custom_components.bticino_c300x.debug_ws")
+    debug_ws.async_register_debug_ws = lambda _hass: calls.append("debug-ws")
     camera = types.ModuleType("custom_components.bticino_c300x.camera")
     camera.async_register_home_call_ws = lambda _hass: calls.append("ws")
     monkeypatch.setitem(
@@ -148,13 +150,18 @@ def test_async_setup_registers_frontend_services_and_websocket(
         "custom_components.bticino_c300x.services",
         services,
     )
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.bticino_c300x.debug_ws",
+        debug_ws,
+    )
     monkeypatch.setitem(sys.modules, "custom_components.bticino_c300x.camera", camera)
     hass = SimpleNamespace(data={})
 
     assert asyncio.run(integration.async_setup(hass, {})) is True
 
     assert hass.data[DOMAIN] == {}
-    assert calls == ["blueprints", "frontend", "services", "ws"]
+    assert calls == ["blueprints", "frontend", "services", "debug-ws", "ws"]
 
 
 def test_setup_entry_builds_runtime_and_forwards_platforms(

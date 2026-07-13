@@ -22,6 +22,7 @@
 #define C300X_EXTERNAL_MEDIA_GUARD_MAX_SECONDS 120
 #define C300X_ONDEMAND_START_MEDIA_CLOSED_GRACE_MS 3500
 #define C300X_DOORBELL_PRESSED_DEDUPE_MS 1000
+#define C300X_LAST_RTP_AT_UPDATE_MS 1000
 
 struct c300x_video;
 static void clear_external_media_active_locked(struct c300x_video *video);
@@ -50,6 +51,7 @@ struct c300x_video {
     unsigned long long bt_media_start_attempts;
     unsigned long long bt_media_stop_attempts;
     unsigned long long rtp_packets;
+    long long last_rtp_at_update_ms;
     char last_rtp_at[40];
     char last_media_started_at[40];
     char last_error[128];
@@ -589,6 +591,7 @@ void c300x_video_bridge_media_started(struct c300x_video *video, int include_aud
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     video->last_block_reason[0] = '\0';
+    video->last_rtp_at_update_ms = 0;
     clear_external_media_active_locked(video);
     utc_now(video->last_media_started_at, sizeof(video->last_media_started_at));
     pthread_mutex_unlock(&video->mutex);
@@ -606,6 +609,7 @@ void c300x_video_bridge_ring_media_started(struct c300x_video *video, int includ
     video->stream_audio = include_audio != 0;
     video->last_error[0] = '\0';
     video->last_block_reason[0] = '\0';
+    video->last_rtp_at_update_ms = 0;
     clear_external_media_active_locked(video);
     utc_now(video->last_media_started_at, sizeof(video->last_media_started_at));
     pthread_mutex_unlock(&video->mutex);
@@ -632,12 +636,21 @@ void c300x_video_bridge_media_stopped(struct c300x_video *video)
 
 void c300x_video_bridge_rtp_packet(struct c300x_video *video)
 {
+    long long now;
+
     if (video == NULL) {
         return;
     }
+    now = c300x_monotonic_ms();
     pthread_mutex_lock(&video->mutex);
     video->rtp_packets++;
-    utc_now(video->last_rtp_at, sizeof(video->last_rtp_at));
+    if (
+        video->last_rtp_at_update_ms == 0
+        || now - video->last_rtp_at_update_ms >= C300X_LAST_RTP_AT_UPDATE_MS
+    ) {
+        utc_now(video->last_rtp_at, sizeof(video->last_rtp_at));
+        video->last_rtp_at_update_ms = now;
+    }
     pthread_mutex_unlock(&video->mutex);
 }
 

@@ -335,9 +335,12 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     device_user = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"
     )
+    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+        encoding="utf-8"
+    )
     setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static bool send_bt_av_media_command")
+        media_bridge.index("static void send_sip_bye")
     ]
 
     assert 'FLEXISIP_USERS_FILE "/etc/flexisip/users/users.db.txt"' in device_user
@@ -358,7 +361,16 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "MEDIA_VIDEO_RTCP_PORT 28773" in media_bridge
     assert "generate_sdes_key(audio_key_raw" in setup_body
     assert "memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw" in setup_body
-    assert "start_bt_av_media(bridge)" in media_bridge
+    assert "c300x_media_bt_av_takeover(bridge->config)" in media_bridge
+    assert "c300x_media_bt_av_start(bridge->config)" in media_bridge
+    assert 'send_bt_av_media_command("*7*0*##", reply, sizeof(reply))' in media_bt_av
+    assert '"*7*300#127#0#0#1#%d#%d*##"' in media_bt_av
+    assert "BT_AV_TAKEOVER_SETTLE_MS" in media_bt_av
+    takeover_body = media_bt_av[
+        media_bt_av.index("bool c300x_media_bt_av_takeover") :
+    ]
+    assert "c300x_media_bt_av_stop();" not in takeover_body
+    assert "return c300x_media_bt_av_start(config) || started;" in takeover_body
     assert "MEDIA_RENEW_SECONDS" in media_bridge
     assert '"sip:webrtc@' not in media_bridge
     assert "dummykey" not in media_bridge
@@ -386,7 +398,7 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     ]
     send_sip_setup_body = media_bridge[
         media_bridge.index("static bool send_sip_setup") :
-        media_bridge.index("static bool send_bt_av_media_command")
+        media_bridge.index("static void send_sip_bye")
     ]
 
     assert 'dlopen("libsrtp.so.1", RTLD_NOW | RTLD_LOCAL)' in media_bridge

@@ -82,6 +82,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
     from .blueprint_installer import async_install_bundled_blueprints
     from .camera import async_register_home_call_ws
+    from .debug_ws import async_register_debug_ws
     from .frontend import async_setup_frontend
     from .services import async_setup_services
 
@@ -89,6 +90,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     await async_install_bundled_blueprints(hass)
     await async_setup_frontend(hass)
     await async_setup_services(hass)
+    async_register_debug_ws(hass)
     async_register_home_call_ws(hass)
     return True
 

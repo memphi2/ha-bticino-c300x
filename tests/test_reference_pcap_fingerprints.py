@@ -193,7 +193,7 @@ def test_reference_on_demand_fingerprint_matches_native_invite_offer() -> None:
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static bool send_bt_av_media_command",
+        "static void send_sip_bye",
     )
     offer = fingerprint["offer"]
 
@@ -215,7 +215,7 @@ def test_on_demand_offer_does_not_reintroduce_static_pcmu_pcma_rtpmap() -> None:
     setup_body = _section(
         media_bridge,
         "static bool send_sip_setup",
-        "static bool send_bt_av_media_command",
+        "static void send_sip_bye",
     )
 
     assert "known_code_differences" not in fingerprint

@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.8.3 - 2026-07-13
+
+### Fixed
+
+- Fix intermittent HA Cloud/on-demand video freezes during startup by keeping
+  the native media window alive until the RTSP client has actually entered
+  `PLAY`.
+- Fix answered Ring Call sessions where the answering browser could remain on
+  the preview stream while another dashboard continued to play the call preview.
+- Reduce native-agent CPU work during streaming by forwarding interleaved RTP
+  packets with a single write and throttling high-rate RTP timestamp bookkeeping.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled frontend modules are refreshed from the installed integration
+  version.
+- Update the native C300X device agent from Home Assistant to `1.8.3`.
+
 ## v1.8.2 - 2026-07-12
 
 ### Fixed

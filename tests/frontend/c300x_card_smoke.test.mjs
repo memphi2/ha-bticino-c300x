@@ -13,6 +13,7 @@ function installFakeDom() {
       };
       this.disabled = false;
       this.listeners = new Map();
+      this.readyState = 0;
       this.srcObject = null;
       this.style = {};
       this.textContent = "";
@@ -20,6 +21,12 @@ function installFakeDom() {
 
     addEventListener(type, listener) {
       this.listeners.set(type, listener);
+    }
+
+    removeEventListener(type, listener) {
+      if (this.listeners.get(type) === listener) {
+        this.listeners.delete(type);
+      }
     }
 
     dispatch(type) {
@@ -94,6 +101,7 @@ function installFakeDom() {
       this.type = type;
     }
   };
+  globalThis.HTMLMediaElement = { HAVE_CURRENT_DATA: 2 };
   globalThis.history = { pushState() {} };
   globalThis.window = globalThis;
   globalThis.window.customCards = [];
@@ -286,6 +294,84 @@ test("doorbell card updates from direct camera state events without page reload"
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   card.disconnectedCallback();
   assert.equal(subscriptions[0].active, false);
+});
+
+test("doorbell answer transition promotes when the cloud session receives video", async () => {
+  const registry = installFakeDom();
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?answer-transition-track-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+  card.hass = fakeHass({
+    cameraEntity: {
+      attributes: {
+        friendly_name: "Door",
+        media_primary_action: "wait",
+        media_state: "ring_active",
+      },
+      state: "streaming",
+    },
+  });
+  card._lifecycle.ringPreviewActive = true;
+
+  const calls = [];
+  const previous = {
+    close() {
+      calls.push("previous.close");
+    },
+  };
+  card._webrtc = previous;
+
+  let onTrack;
+  let startArgs;
+  let promoted = false;
+  const remoteStream = {
+    getVideoTracks() {
+      return [{ id: "video-1", kind: "video" }];
+    },
+  };
+  const next = {
+    remoteStream,
+    async start(args) {
+      startArgs = args;
+      onTrack();
+    },
+    close() {
+      calls.push("next.close");
+    },
+    retargetMedia(element) {
+      calls.push(`next.retarget:${element.selector}`);
+    },
+  };
+  card._createWebrtcClient = (options) => {
+    onTrack = options.onTrack;
+    return next;
+  };
+
+  await card._replaceDoorbellWebrtcStream({
+    microphoneStream: { getAudioTracks: () => [] },
+    receiveAudio: true,
+    onPromoted: () => {
+      promoted = true;
+      card._lifecycle.ringPreviewActive = false;
+      card._lifecycle.doorbellAnswered = true;
+    },
+  });
+
+  assert.equal(startArgs.mediaElement.selector, ".transition-video");
+  assert.equal(card._webrtc, next);
+  assert.equal(card._transitionWebrtc, null);
+  assert.equal(card.shadowRoot.querySelector("video").srcObject, remoteStream);
+  assert.equal(card.shadowRoot.querySelector(".transition-video").srcObject, null);
+  assert.equal(promoted, true);
+  assert.equal(card._lifecycle.ringPreviewActive, false);
+  assert.equal(card._lifecycle.doorbellAnswered, true);
+  assert.deepEqual(calls, ["previous.close", "next.retarget:video"]);
 });
 
 test("doorbell card coalesces unchanged hass updates into one animation frame", async () => {

@@ -5,6 +5,7 @@
 #include "media_audio.h"
 #include "media_base64.h"
 #include "media_bridge.h"
+#include "media_bt_av.h"
 #include "media_rtsp_clients.h"
 #include "media_session_guard.h"
 #include "media_sip.h"
@@ -27,6 +28,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -36,7 +38,6 @@
 #define SIP_BUFFER_SIZE 8192
 #define SIP_DOMAIN_FILE "/etc/flexisip/domain-registration.conf"
 #define DEFAULT_SIP_PORT 5060
-#define BT_AV_MEDIA_PORT 30007
 #define RTSP_IDLE_TIMEOUT_SECONDS 180
 #define RTSP_TEARDOWN_CLOSE_WAIT_SECONDS 3
 #define RTSP_CLIENT_DRAIN_TIMEOUT_MS 800
@@ -562,8 +563,6 @@ static void close_all_rtsp_clients_locked(media_bridge_t *bridge) {
     sync_legacy_rtsp_client_locked(bridge);
 }
 
-static bool start_bt_av_media(media_bridge_t *bridge);
-
 typedef void *c300x_srtp_t;
 
 typedef struct {
@@ -1078,26 +1077,59 @@ static ssize_t send_all(int fd, const void *buf, size_t len) {
     return (ssize_t)len;
 }
 
-static int connect_local_tcp(int port) {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        return -1;
+static ssize_t send_all_pair(
+    int fd,
+    const void *first,
+    size_t first_len,
+    const void *second,
+    size_t second_len
+) {
+    struct iovec iov[2];
+    struct iovec *pending = iov;
+    size_t pending_count = 0;
+    size_t total = first_len + second_len;
+    size_t sent = 0;
+
+    if (first_len > 0) {
+        iov[pending_count].iov_base = (void *)first;
+        iov[pending_count].iov_len = first_len;
+        pending_count++;
+    }
+    if (second_len > 0) {
+        iov[pending_count].iov_base = (void *)second;
+        iov[pending_count].iov_len = second_len;
+        pending_count++;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
-        close(fd);
-        return -1;
-    }
+    while (pending_count > 0) {
+        struct msghdr message;
+        ssize_t n;
+        size_t advanced;
 
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return -1;
+        memset(&message, 0, sizeof(message));
+        message.msg_iov = pending;
+        message.msg_iovlen = pending_count;
+
+        n = sendmsg(fd, &message, MSG_NOSIGNAL);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            return n;
+        }
+        sent += (size_t)n;
+        advanced = (size_t)n;
+        while (pending_count > 0 && advanced >= pending[0].iov_len) {
+            advanced -= pending[0].iov_len;
+            pending++;
+            pending_count--;
+        }
+        if (pending_count > 0 && advanced > 0) {
+            pending[0].iov_base = (char *)pending[0].iov_base + advanced;
+            pending[0].iov_len -= advanced;
+        }
     }
-    return fd;
+    return sent == total ? (ssize_t)sent : -1;
 }
 
 static bool copy_checked(char *out, size_t out_len, const char *value) {
@@ -2197,10 +2229,13 @@ static void forward_rtsp_packet(media_bridge_t *bridge, const unsigned char *pac
             frame_header[1] = (unsigned char)target->channel;
             frame_header[2] = (unsigned char)(((unsigned)packet_len >> 8) & 0xff);
             frame_header[3] = (unsigned char)((unsigned)packet_len & 0xff);
-            if (
-                send_all(target->fd, frame_header, sizeof(frame_header)) <= 0
-                || send_all(target->fd, packet, (size_t)packet_len) <= 0
-            ) {
+            if (send_all_pair(
+                target->fd,
+                frame_header,
+                sizeof(frame_header),
+                packet,
+                (size_t)packet_len
+            ) <= 0) {
                 shutdown(target->fd, SHUT_RDWR);
             }
         } else {
@@ -3965,7 +4000,7 @@ static void *ondemand_media_thread(void *arg) {
             next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
         }
         if (next_bt_av_renew == 0 || now >= next_bt_av_renew) {
-            (void)start_bt_av_media(bridge);
+            (void)c300x_media_bt_av_start(bridge->config);
             next_bt_av_renew = now + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
         }
     }
@@ -4369,61 +4404,6 @@ static bool send_sip_setup(media_bridge_t *bridge) {
     secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
     secure_zero(answer_video_key_raw, sizeof(answer_video_key_raw));
     return monitor_started && ondemand_media_started;
-}
-
-static bool send_bt_av_media_command(const char *command, char *reply, size_t reply_len) {
-    int fd = connect_local_tcp(BT_AV_MEDIA_PORT);
-    if (fd < 0) {
-        return false;
-    }
-    bool ok = false;
-    if (send_all(fd, command, strlen(command)) > 0) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(fd, &readfds);
-        struct timeval timeout = {2, 0};
-        if (select(fd + 1, &readfds, NULL, NULL, &timeout) > 0) {
-            ssize_t n = recv(fd, reply, reply_len - 1, 0);
-            if (n > 0) {
-                reply[n] = '\0';
-                ok = strstr(reply, "*#*1##") != NULL;
-            }
-        }
-    }
-    close(fd);
-    return ok;
-}
-
-static bool start_bt_av_media(media_bridge_t *bridge) {
-    char command[128];
-    char reply[128] = {0};
-    int quality = bridge->config->video_av_high_resolution ? 0 : 1;
-    snprintf(
-        command,
-        sizeof(command),
-        "*7*300#127#0#0#1#%d#%d*##",
-        video_rtp_port(bridge->config),
-        quality
-    );
-    if (!send_bt_av_media_command(command, reply, sizeof(reply))) {
-        return false;
-    }
-
-    struct timespec audio_delay = {0, 300000000L};
-    (void)nanosleep(&audio_delay, NULL);
-    snprintf(
-        command,
-        sizeof(command),
-        "*7*300#127#0#0#1#%d#2*##",
-        audio_rtp_port(bridge->config)
-    );
-    (void)send_bt_av_media_command(command, reply, sizeof(reply));
-    return true;
-}
-
-static void send_bt_av_media_stop(void) {
-    char reply[128] = {0};
-    (void)send_bt_av_media_command("*7*0*##", reply, sizeof(reply));
 }
 
 static void send_sip_bye(
@@ -5490,7 +5470,7 @@ static bool start_media_session(media_bridge_t *bridge) {
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
-    if (!start_bt_av_media(bridge)) {
+    if (!c300x_media_bt_av_takeover(bridge->config)) {
         c300x_video_bridge_set_error(bridge->video, "bt_av_media_start_failed");
         stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
@@ -5639,7 +5619,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
         close(sip_fd);
     }
     if (send_media_stop) {
-        send_bt_av_media_stop();
+        c300x_media_bt_av_stop();
     }
 
     pthread_mutex_lock(&g_bridge.mutex);
@@ -6352,7 +6332,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             );
             if (slot != NULL) {
                 rtsp_audio_enabled = slot->audio_enabled;
-                slot->played = true;
+                slot->played = false;
                 slot->parked = false;
                 snprintf(session_id, sizeof(session_id), "%s", slot->session_id);
                 sync_legacy_rtsp_client_locked(&g_bridge);
@@ -6404,6 +6384,18 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 home_call_session ? 0 : 1
             );
             send_rtsp_response(fd, 200, cseq, headers, NULL);
+            pthread_mutex_lock(&g_bridge.mutex);
+            slot = rtsp_client_slot_for_fd_locked(
+                &g_bridge,
+                slot_index,
+                fd
+            );
+            if (slot != NULL) {
+                slot->played = true;
+                sync_legacy_rtsp_client_locked(&g_bridge);
+                pthread_cond_broadcast(&g_bridge.ready_cond);
+            }
+            pthread_mutex_unlock(&g_bridge.mutex);
         } else if (strcmp(method, "GET_PARAMETER") == 0) {
             char headers[128];
             pthread_mutex_lock(&g_bridge.mutex);

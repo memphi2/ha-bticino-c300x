@@ -4,6 +4,104 @@ import test from "node:test";
 import { C300XWebrtcDebugCollector } from "../../custom_components/bticino_c300x/frontend/c300x-webrtc-debug.js";
 import { C300XWebrtcClient } from "../../custom_components/bticino_c300x/frontend/c300x-webrtc-client.js";
 
+test("WebRTC client start accepts omitted options", async () => {
+  const calls = [];
+  globalThis.window = {
+    clearTimeout() {},
+    setTimeout() {
+      return 1;
+    },
+  };
+  globalThis.MediaStream = class FakeMediaStream {
+    constructor() {
+      this.tracks = [];
+    }
+
+    addTrack(track) {
+      this.tracks.push(track);
+    }
+
+    getTracks() {
+      return this.tracks;
+    }
+  };
+  globalThis.RTCPeerConnection = class FakeRTCPeerConnection {
+    constructor(config) {
+      this.config = config;
+      this.localDescription = null;
+      this.transceivers = [];
+    }
+
+    addTransceiver(kind, options) {
+      this.transceivers.push([kind, options]);
+      calls.push(["transceiver", kind, options.direction]);
+    }
+
+    createOffer() {
+      calls.push(["createOffer"]);
+      return Promise.resolve({ sdp: "v=0", type: "offer" });
+    }
+
+    setLocalDescription(description) {
+      this.localDescription = description;
+      calls.push(["local", description.type]);
+      return Promise.resolve();
+    }
+
+    setRemoteDescription(description) {
+      calls.push(["remote", description.type, description.sdp]);
+      return Promise.resolve();
+    }
+
+    close() {
+      calls.push(["close"]);
+    }
+
+    getTransceivers() {
+      return this.transceivers.map(([kind]) => ({
+        receiver: { track: { kind } },
+        sender: { track: null },
+      }));
+    }
+  };
+
+  const client = new C300XWebrtcClient({
+    getEntityId: () => "camera.bticino_c300x_doorbell_camera",
+    getHass: () => ({
+      callWS(message) {
+        calls.push(["ws", message.type]);
+        if (message.type === "bticino_c300x/debug/status") {
+          return Promise.resolve({ enabled: false, webrtc_stats: false });
+        }
+        return Promise.resolve({ iceServers: [] });
+      },
+      connection: {
+        subscribeMessage(callback, message) {
+          calls.push(["subscribe", message.type, message.offer]);
+          callback({ session_id: "session-1", type: "session" });
+          callback({ answer: "v=0 answer", type: "answer" });
+          return Promise.resolve(() => calls.push(["unsubscribe"]));
+        },
+      },
+    }),
+    isHomeCallMode: () => false,
+  });
+
+  await client.start();
+
+  assert.equal(client.running, true);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === "transceiver"),
+    [
+      ["transceiver", "video", "recvonly"],
+      ["transceiver", "audio", "recvonly"],
+    ],
+  );
+  assert.deepEqual(calls.at(-1), ["remote", "answer", "v=0 answer"]);
+
+  client.close();
+});
+
 test("WebRTC client hard-closes the peer when the backend closes a session", async () => {
   const calls = [];
   globalThis.window = {
@@ -142,7 +240,13 @@ test("WebRTC stats debug ignores stale backend replies after peer replacement", 
   assert.equal(globalThis.window.__c300xWebrtcStats, undefined);
 });
 
-test("WebRTC stats debug samples browser media stats in backend debug mode", async () => {
+test("WebRTC stats debug samples browser media stats in backend debug mode", async (t) => {
+  const originalDateNow = Date.now;
+  let nowMs = 1_000_000;
+  Date.now = () => nowMs;
+  t.after(() => {
+    Date.now = originalDateNow;
+  });
   const calls = [];
   const intervals = [];
   const clearedIntervals = [];
@@ -310,6 +414,7 @@ test("WebRTC stats debug samples browser media stats in backend debug mode", asy
   assert.equal(mediaListeners.has("waiting"), true);
 
   mediaElement.currentTime = 2;
+  nowMs += 1000;
   await intervals[0][0]();
   mediaListeners.get("waiting")({ type: "waiting" });
   peerListeners.get("iceconnectionstatechange")();

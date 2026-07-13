@@ -13,6 +13,54 @@ from ..value_parsing import (
     optional_string as _optional_string,
 )
 
+# Only an explicit idle/empty owner counts as positively idle. "unknown" means
+# the owner is not known -- an ambiguous state, never a destructive idle signal.
+IDLE_MEDIA_OWNERS = frozenset({"", "idle"})
+
+
+def status_reports_agent_idle(
+    status: Mapping[str, object] | None,
+    *,
+    cached_video_owner: str | None = None,
+    cached_video_window_available: bool = False,
+    cached_external_media_active: bool = False,
+) -> bool:
+    """Whether the agent positively reports no live media (clients == 0, idle
+    owner, no active/starting/stopping flags). An empty or unknown status is
+    never treated as idle, so real media is never false-idled and a ready HA
+    WebRTC session is only discounted when the device really is idle."""
+
+    if not status:
+        return False
+    bridge = status.get("bridge")
+    bridge = bridge if isinstance(bridge, Mapping) else {}
+    clients = _optional_int(bridge.get("clients"))
+    if clients is None or clients > 0:
+        return False
+    window = status.get("window_available")
+    if bool(cached_video_window_available if window is None else window):
+        return False
+    if bool(bridge.get("media_active")) or bool(bridge.get("media_starting")):
+        return False
+    if bool(bridge.get("stop_in_progress")):
+        return False
+    external = status.get("external_media_active")
+    if bool(
+        cached_external_media_active if external is None else external
+    ) or bool(bridge.get("external_media_active")):
+        return False
+    owner = (
+        str(
+            _optional_string(status.get("media_owner"))
+            or _optional_string(bridge.get("media_owner"))
+            or cached_video_owner
+            or "idle"
+        )
+        .strip()
+        .lower()
+    )
+    return owner in IDLE_MEDIA_OWNERS
+
 
 class MediaState(StrEnum):
     """Derived C300X media state."""

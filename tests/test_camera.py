@@ -2733,9 +2733,10 @@ def test_doorbell_camera_updates_derived_media_state_from_agent_clients() -> Non
 
 
 def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> None:
-    """media.closed closes the WebRTC sessions asynchronously; media_state must be
-    re-derived once they drop out of local_sessions so a transient RTSP_BUSY does
-    not latch and block the next viewer's capture (webrtc answer timeout)."""
+    """media.closed closes the WebRTC sessions asynchronously; the agent is the
+    source of truth, so once it reports idle the still-ready local session is
+    discounted immediately -- the state drops straight to IDLE with no transient
+    RTSP_BUSY that could latch and block the next viewer (webrtc answer timeout)."""
 
     async def _run() -> MediaState:
         api = _FakeApi()
@@ -2759,11 +2760,12 @@ def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> N
             ready=True,
         )
 
-        # media.closed: owner goes idle and native clients drop to 0, but the
-        # still-ready local session keeps local_sessions == 1 -> RTSP_BUSY.
+        # media.closed: owner goes idle and native clients drop to 0. The agent
+        # is authoritatively idle, so the still-ready session is discounted and
+        # the state is IDLE at once (no transient RTSP_BUSY latch).
         camera._clear_video_window()
-        assert camera._last_media_state is MediaState.RTSP_BUSY
-        assert camera._active_local_media_sessions() == 1
+        assert camera._last_media_state is MediaState.IDLE
+        assert camera._active_local_media_sessions() == 0
 
         camera._close_doorbell_webrtc_sessions_from_event()
         await asyncio.gather(*tasks)
@@ -2774,8 +2776,9 @@ def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> N
 
 
 def test_unanswered_ring_preview_media_closed_rederives_state_after_close() -> None:
-    """The unanswered-ring preview ends via the same doorbell_media_closed path; its
-    ready preview session must not latch RTSP_BUSY after the async close either."""
+    """The unanswered-ring preview ends via the same doorbell_media_closed path; once
+    the agent reports idle its ready preview session is discounted at once (IDLE),
+    never latching RTSP_BUSY."""
 
     async def _run() -> MediaState:
         api = _FakeApi()
@@ -2803,13 +2806,267 @@ def test_unanswered_ring_preview_media_closed_rederives_state_after_close() -> N
         )
 
         camera._clear_video_window()
-        assert camera._last_media_state is MediaState.RTSP_BUSY
+        assert camera._last_media_state is MediaState.IDLE
 
         camera._close_doorbell_webrtc_sessions_from_event()
         await asyncio.gather(*tasks)
         return camera._last_media_state
 
     assert asyncio.run(_run()) is MediaState.IDLE
+
+
+def _ready_doorbell_session() -> _ProviderWebRTCSession:
+    return _ProviderWebRTCSession(
+        provider=object(),
+        owner="doorbell",
+        send_message=lambda _message: None,
+        wants_audio=True,
+        wants_backchannel=False,
+        resource_id="doorbell:entry-1:audio",
+        ready=True,
+    )
+
+
+def test_active_local_media_sessions_discounts_stale_session_when_agent_idle() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    camera._provider_webrtc_sessions["stale"] = _ready_doorbell_session()
+
+    idle = {
+        "window_available": False,
+        "media_owner": "idle",
+        "bridge": {"clients": 0, "media_active": False, "media_owner": "idle"},
+    }
+    active = {
+        "window_available": True,
+        "media_owner": "agent",
+        "bridge": {"clients": 1, "media_active": True, "media_owner": "agent"},
+    }
+
+    # Agent authoritatively idle -> the stale session is discounted.
+    assert camera._active_local_media_sessions(idle) == 0
+    # Agent reports live media -> a real session still counts.
+    assert camera._active_local_media_sessions(active) == 1
+    # No positive idle evidence -> conservatively counts (never false-idle).
+    assert camera._active_local_media_sessions({}) == 1
+
+    # "unknown" owner means the state is not known -- it is ambiguous, never a
+    # (destructive) idle signal, so the session is not discounted.
+    unknown = {
+        "window_available": False,
+        "media_owner": "unknown",
+        "bridge": {"clients": 0, "media_active": False, "media_owner": "unknown"},
+    }
+    assert camera._active_local_media_sessions(unknown) == 1
+
+
+def test_apply_idle_status_unlatches_busy_media_state() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    camera._provider_webrtc_sessions["stale"] = _ready_doorbell_session()
+
+    camera._apply_status(
+        {
+            "available": True,
+            "window_available": False,
+            "media_owner": "idle",
+            "bridge": {
+                "clients": 0,
+                "media_active": False,
+                "media_owner": "idle",
+                "media_starting": False,
+                "stop_in_progress": False,
+                "external_media_active": False,
+            },
+        }
+    )
+
+    assert camera._last_media_state is MediaState.IDLE
+
+
+def test_metrics_heartbeat_schedules_reconcile_only_while_sessions_held() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+
+    def _create_task(coro: Any) -> Any:
+        scheduled.append(coro)
+        coro.close()  # we only assert it was scheduled
+        return SimpleNamespace()
+
+    camera.hass = SimpleNamespace(async_create_task=_create_task)
+
+    # No sessions held -> nothing to reconcile.
+    camera._handle_system_metrics_changed("entry-1")
+    assert scheduled == []
+
+    # A held session -> the heartbeat schedules a self-heal reconcile.
+    camera._provider_webrtc_sessions["s"] = _ready_doorbell_session()
+    camera._handle_system_metrics_changed("entry-1")
+    assert len(scheduled) == 1
+
+    # A different entry id is ignored.
+    camera._handle_system_metrics_changed("other-entry")
+    assert len(scheduled) == 1
+
+
+def test_reconcile_removes_stale_ready_session_when_agent_idle() -> None:
+    class _IdleApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "available": True,
+                "window_available": False,
+                "media_owner": "idle",
+                "bridge": {
+                    "clients": 0,
+                    "media_active": False,
+                    "media_owner": "idle",
+                    "media_starting": False,
+                    "stop_in_progress": False,
+                    "external_media_active": False,
+                },
+            }
+
+    async def _run() -> tuple[int, int]:
+        api = _IdleApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        provider._sessions = {  # type: ignore[attr-defined]
+            "doorbell-session": _FakeGo2RtcWsClient([])
+        }
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["doorbell-session"] = _ready_doorbell_session()
+        camera._provider_webrtc_sessions["doorbell-session"].provider = provider
+
+        await camera._async_reconcile_local_sessions()
+        await asyncio.gather(*tasks)
+        return len(camera._provider_webrtc_sessions), api.stop_calls
+
+    remaining, stop_calls = asyncio.run(_run())
+    assert remaining == 0  # stale session actually removed, not just hidden
+    assert stop_calls == 0  # no agent media-stop (device is already idle)
+
+
+def test_reconcile_keeps_not_ready_session_while_starting() -> None:
+    class _IdleApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "window_available": False,
+                "media_owner": "idle",
+                "bridge": {"clients": 0, "media_owner": "idle"},
+            }
+
+    async def _run() -> int:
+        api = _IdleApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: coro.close())
+        starting = _ready_doorbell_session()
+        starting.ready = False  # still starting -> must never be pruned
+        camera._provider_webrtc_sessions["starting"] = starting
+
+        await camera._async_reconcile_local_sessions()
+        return len(camera._provider_webrtc_sessions)
+
+    assert asyncio.run(_run()) == 1
+
+
+def test_reconcile_keeps_home_call_session_on_doorbell_idle() -> None:
+    class _IdleApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {
+                "window_available": False,
+                "bridge": {"clients": 0, "media_owner": "idle", "media_active": False},
+            }
+
+    async def _run() -> int:
+        api = _IdleApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: coro.close())
+        camera._provider_webrtc_sessions["home"] = _ProviderWebRTCSession(
+            provider=object(),
+            owner="home_call",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="home_call:entry-1",
+            ready=True,
+        )
+        await camera._async_reconcile_local_sessions()
+        return len(camera._provider_webrtc_sessions)
+
+    # Home Call has its own status path -> while it is active a doorbell-idle
+    # reconcile must not close it (would abort the browser session).
+    assert asyncio.run(_run()) == 1
+
+
+def test_reconcile_closes_finished_home_call_session_via_home_status() -> None:
+    class _EndedHomeApi(_FakeApi):
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            return {"window_available": False, "bridge": {"clients": 0}}
+
+        async def async_home_call_status(self) -> dict[str, Any]:
+            self.home_call_status_calls += 1
+            return {
+                "available": True,
+                "running": False,
+                "active": False,
+                "answered": False,
+                "rtp_proxy": False,
+                "target_audio_port": 0,
+            }
+
+    async def _run() -> int:
+        api = _EndedHomeApi()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+        provider = _FakeWebRTCProvider()
+        provider._sessions = {  # type: ignore[attr-defined]
+            "home": _FakeGo2RtcWsClient([])
+        }
+        tasks: list[asyncio.Task[None]] = []
+        camera.hass = SimpleNamespace(
+            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+        )
+        camera._provider_webrtc_sessions["home"] = _ProviderWebRTCSession(
+            provider=provider,
+            owner="home_call",
+            send_message=lambda _message: None,
+            wants_audio=True,
+            wants_backchannel=False,
+            resource_id="home_call:entry-1",
+            ready=True,
+        )
+        await camera._async_reconcile_local_sessions()
+        await asyncio.gather(*tasks)
+        return len(camera._provider_webrtc_sessions)
+
+    # Home Call ended (its own status path): the stale session is removed so it
+    # stops churning the heartbeat, without a doorbell-idle false abort.
+    assert asyncio.run(_run()) == 0
+
+
+def test_metrics_heartbeat_skips_reconcile_while_one_is_in_flight() -> None:
+    camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
+    scheduled: list[Any] = []
+
+    def _create_task(coro: Any) -> Any:
+        scheduled.append(coro)
+        coro.close()
+        return SimpleNamespace()
+
+    camera.hass = SimpleNamespace(async_create_task=_create_task)
+    camera._provider_webrtc_sessions["s"] = _ready_doorbell_session()
+
+    camera._reconcile_in_flight = True
+    camera._handle_system_metrics_changed("entry-1")
+    assert scheduled == []  # no pile-up while a reconcile is already running
+
+    camera._reconcile_in_flight = False
+    camera._handle_system_metrics_changed("entry-1")
+    assert len(scheduled) == 1
 
 
 def test_doorbell_camera_keeps_capabilities_permissive_until_agent_reports_them() -> None:

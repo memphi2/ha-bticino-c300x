@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.8.4 - 2026-07-13
+
+### Fixed
+
+- Clear stale camera busy states after interrupted WebRTC/on-demand browser
+  sessions once the device agent reports the camera is idle, so the doorbell
+  card can start the next view again without waiting for a missed close event.
+- Keep stale Home Call WebRTC sessions on their own cleanup path so a doorbell
+  idle refresh cannot interrupt an active Home Call.
+- Accept WebRTC start calls from the bundled card even when the browser omits
+  optional start parameters.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled frontend modules are refreshed from the installed integration
+  version.
+- The native C300X device agent is unchanged from `1.8.3`; no agent update is
+  required for this Home Assistant/frontend-only fix.
+
 ## v1.8.3 - 2026-07-13
 
 ### Fixed

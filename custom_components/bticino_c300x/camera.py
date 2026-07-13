@@ -53,6 +53,7 @@ from .camera_media.state_machine import (
     MediaStateOutput,
     derive_media_state,
     media_state_input_from_video_status,
+    status_reports_agent_idle,
 )
 from .camera_media.webrtc_debug import WebRTCDebugMixin
 from .camera_media.webrtc_session import (
@@ -263,6 +264,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._agent_cpu_watchdog = AgentCpuWatchdog()
         self._presession_webrtc_candidates: dict[str, list[Any]] = {}
         self._provider_webrtc_sessions: dict[str, _ProviderWebRTCSession] = {}
+        self._reconcile_in_flight = False
         self._last_state_snapshot: _CameraStateSnapshot | None = None
         if not hasattr(self, "stream_options"):
             self.stream_options = {}
@@ -1421,9 +1423,52 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
 
     @callback
     def _handle_system_metrics_changed(self, entry_id: str) -> None:
-        """Stop HA-held media if the device stays close to full CPU load."""
+        """React to the periodic agent metrics heartbeat: run the CPU watchdog
+        and self-heal a stale busy latch (the camera has no poll of its own)."""
 
         handle_agent_cpu_metrics_changed(self, entry_id)
+        if (
+            entry_id == self._entry.entry_id
+            and self._provider_webrtc_sessions
+            and not self._reconcile_in_flight
+        ):
+            self.hass.async_create_task(self._async_reconcile_local_sessions())
+
+    async def _async_reconcile_local_sessions(self) -> None:
+        """Refresh the doorbell status; when it is authoritatively idle, close
+        the stale ready doorbell/on-demand sessions it orphaned (no agent
+        media-stop -- the device is already idle) so they stop latching and
+        re-scheduling this heartbeat. Home Call is reconciled separately against
+        its own status path; a not-ready session is still starting and is left."""
+
+        self._reconcile_in_flight = True
+        try:
+            status = await self._async_refresh_video_status_or_none()
+            if status is not None and status_reports_agent_idle(
+                status,
+                cached_video_owner=self._video_owner,
+                cached_video_window_available=self._video_window_available,
+                cached_external_media_active=self._external_media_active,
+            ):
+                for session_id in [
+                    sid
+                    for sid, session in list(self._provider_webrtc_sessions.items())
+                    if session.ready and _owner_is_doorbell_media(session.owner)
+                ]:
+                    await self._async_close_webrtc_session(
+                        session_id,
+                        stop_media=False,
+                        notify_client=True,
+                        reason="agent_idle_reconcile",
+                    )
+            # Home Call is a separate status path: reconcile any held home-call
+            # session against async_home_call_status() so a missed end event does
+            # not leave it churning the heartbeat forever.
+            if self._webrtc_session_ids_by_owner("home_call"):
+                await self._async_close_finished_home_call_sessions()
+            self._async_write_ha_state_if_ready()
+        finally:
+            self._reconcile_in_flight = False
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
@@ -1709,7 +1754,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             cached_video_window_available=self._video_window_available,
             cached_external_media_active=self._external_media_active,
             cached_external_owner=self._external_owner,
-            local_sessions=self._active_local_media_sessions(),
+            local_sessions=self._active_local_media_sessions(source_status),
             last_error=(
                 None if self._rtsp_cooldown_scope == "home_call" else self._last_rtsp_error
             ),
@@ -1751,7 +1796,20 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 data.get("last_block_reason")
             )
 
-    def _active_local_media_sessions(self) -> int:
+    def _active_local_media_sessions(
+        self, status: Mapping[str, Any] | None = None
+    ) -> int:
+        # The agent is the source of truth. When it authoritatively reports idle,
+        # a still-tracked ready session is stale (an abnormal WebRTC end that
+        # skipped the close event) -- discount it so it cannot latch the derived
+        # media state busy while the device is idle (the card reads media_state).
+        if status_reports_agent_idle(
+            status if status is not None else {"bridge": self._bridge_status},
+            cached_video_owner=self._video_owner,
+            cached_video_window_available=self._video_window_available,
+            cached_external_media_active=self._external_media_active,
+        ):
+            return 0
         provider_resources = {
             session.resource_id
             for session in self._provider_webrtc_sessions.values()

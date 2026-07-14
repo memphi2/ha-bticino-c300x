@@ -12,6 +12,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -22,6 +23,7 @@ env:
 
 jobs:
   validate:
+    name: release validate (${{ matrix.name }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -35,7 +37,6 @@ jobs:
             python-version: "3.14"
             homeassistant: "2026.7.1"
             requirements-lock: requirements-dev.txt
-    name: validate (${{ matrix.name }})
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -64,6 +65,7 @@ jobs:
         run: python scripts/check_validate.py
 
   hacs:
+    name: release hacs
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -79,6 +81,7 @@ jobs:
           ignore: hacsjson integration_manifest
 
   hassfest:
+    name: release hassfest
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -88,12 +91,135 @@ jobs:
       - name: Hassfest
         uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c # master
 
+  main-validation:
+    name: main validation gate
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - name: Wait for canonical main validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          tag_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "$tag_sha" != "$main_sha" ]; then
+            echo "::error::Release tag $RELEASE_TAG points to $tag_sha, but origin/main is $main_sha"
+            exit 1
+          fi
+
+          expected_jobs="dependabot,hacs,hassfest,validate (min-ha),validate (current-ha)"
+          for attempt in $(seq 1 90); do
+            runs_json="$(gh api \
+              --method GET \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${REPOSITORY}/actions/workflows/validate.yml/runs" \
+              -f branch=main \
+              -f event=push \
+              -f head_sha="$tag_sha" \
+              -f per_page=10)"
+
+            run_summary="$(RUNS_JSON="$runs_json" TAG_SHA="$tag_sha" python - <<'PY'
+          import json
+          import os
+
+          data = json.loads(os.environ["RUNS_JSON"])
+          tag_sha = os.environ["TAG_SHA"]
+          runs = [
+              run for run in data.get("workflow_runs", [])
+              if run.get("head_sha") == tag_sha
+          ]
+          runs.sort(
+              key=lambda run: run.get("run_started_at") or run.get("created_at") or "",
+              reverse=True,
+          )
+          if not runs:
+              print("missing\t\t")
+          else:
+              run = runs[0]
+              print(
+                  "\t".join(
+                      [
+                          str(run["id"]),
+                          run.get("status") or "",
+                          run.get("conclusion") or "",
+                          run.get("html_url") or "",
+                      ]
+                  )
+              )
+          PY
+          )"
+            IFS=$'\t' read -r run_id run_status run_conclusion run_url <<EOF
+          $run_summary
+          EOF
+
+            if [ "$run_id" = "missing" ]; then
+              echo "Waiting for Validate workflow on main for $tag_sha ($attempt/90)"
+              sleep 10
+              continue
+            fi
+            if [ "$run_status" != "completed" ]; then
+              echo "Validate workflow $run_id is $run_status: $run_url ($attempt/90)"
+              sleep 10
+              continue
+            fi
+            if [ "$run_conclusion" != "success" ]; then
+              echo "::error::Validate workflow $run_id completed with $run_conclusion: $run_url"
+              exit 1
+            fi
+
+            jobs_json="$(gh api \
+              --paginate \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100")"
+            JOBS_JSON="$jobs_json" EXPECTED_JOBS="$expected_jobs" python - <<'PY'
+          import json
+          import os
+          import sys
+
+          data = json.loads(os.environ["JOBS_JSON"])
+          jobs = {
+              job.get("name"): job
+              for job in data.get("jobs", [])
+          }
+          expected = set(os.environ["EXPECTED_JOBS"].split(","))
+          missing = sorted(expected - set(jobs))
+          bad = sorted(
+              name for name in expected & set(jobs)
+              if jobs[name].get("status") != "completed"
+              or jobs[name].get("conclusion") != "success"
+          )
+          if missing or bad:
+              if missing:
+                  print(f"missing required Validate jobs: {', '.join(missing)}", file=sys.stderr)
+              if bad:
+                  print(f"unsuccessful required Validate jobs: {', '.join(bad)}", file=sys.stderr)
+              sys.exit(1)
+          PY
+            echo "Canonical main Validate workflow succeeded for $tag_sha: $run_url"
+            exit 0
+          done
+
+          echo "::error::Timed out waiting for Validate workflow on main for $tag_sha"
+          exit 1
+
   publish:
     runs-on: ubuntu-24.04
     needs:
       - validate
       - hacs
       - hassfest
+      - main-validation
     permissions:
       contents: write
       attestations: write

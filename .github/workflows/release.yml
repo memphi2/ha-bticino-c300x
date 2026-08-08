@@ -90,7 +90,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.tag || github.ref_name }}
       - name: Hassfest
-        uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb # master
+        uses: home-assistant/actions/hassfest@a7c616ce81ccda50150bf1595786c71b1883fabb # master
 
   main-validation:
     name: main validation gate
@@ -377,11 +377,11 @@ jobs:
             ${{ env.RELEASE_SBOM }}
           if-no-files-found: error
       - name: Generate artifact attestation
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: ${{ env.RELEASE_ZIP }}
       - name: Generate SBOM attestation
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: ${{ env.RELEASE_ZIP }}
           sbom-path: ${{ env.RELEASE_SBOM }}

@@ -23,25 +23,29 @@ def _version_minor_prefix(version: str) -> str:
     return version.rsplit(".", maxsplit=1)[0] + "."
 
 
-def _expected_ha_version_prefixes() -> tuple[str, str]:
-    return (
+def _dedupe_prefixes(prefixes: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(prefixes))
+
+
+def _expected_ha_version_prefixes() -> tuple[str, ...]:
+    return _dedupe_prefixes((
         _version_minor_prefix(str(PROJECT_VERSIONS["min_homeassistant"])),
         _version_minor_prefix(str(PROJECT_VERSIONS["current_homeassistant"])),
-    )
+    ))
 
 
 def _expected_python_prefixes() -> tuple[str]:
     return (str(PROJECT_VERSIONS["python"]) + ".",)
 
 
-EXPECTED_HA_VERSION_PREFIXES = tuple(
+EXPECTED_HA_VERSION_PREFIXES = _dedupe_prefixes(tuple(
     prefix.strip()
     for prefix in os.environ.get(
         "HA_EXPECTED_VERSION_PREFIXES",
         ",".join(_expected_ha_version_prefixes()),
     ).split(",")
     if prefix.strip()
-)
+))
 EXPECTED_PYTHON_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.environ.get(

@@ -17,6 +17,7 @@ class RingCallStatus(AgentContract):
     audio_active: bool
     answer_requested: bool
     answered: bool
+    hangup_requested: bool
     can_answer: bool
     can_hangup: bool
     media_owner: str

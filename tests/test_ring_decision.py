@@ -8,8 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.bticino_c300x import ring_ai as ring_ai_module
+from custom_components.bticino_c300x import ring_capture as ring_capture_module
 from custom_components.bticino_c300x import ring_decision as ring_decision_module
 from custom_components.bticino_c300x.ring_decision import (
     DEFAULT_RING_ANALYSIS_DECISION_PATH,
@@ -26,6 +27,10 @@ from custom_components.bticino_c300x.ring_decision import (
     async_evaluate_ring_analysis,
     async_mark_ring_capture_used,
 )
+
+ring_ai_module.HomeAssistantError = ring_capture_module.HomeAssistantError
+ring_decision_module.HomeAssistantError = ring_capture_module.HomeAssistantError
+HomeAssistantError = ring_capture_module.HomeAssistantError
 
 
 async def _to_thread_inline(func, /, *args, **kwargs):  # noqa: ANN001

@@ -62,6 +62,7 @@ from .const import (
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
+    CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_NAME,
@@ -70,9 +71,11 @@ from .const import (
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEFAULT_WEBRTC_ICE_POLICY,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
     WEATHER_DOMAIN,
+    WEBRTC_ICE_POLICIES,
 )
 from .device_activations import (
     DeviceActivationConfigError,
@@ -431,6 +434,16 @@ def _audio_feature_input(
     return doorstation_audio_gain_db, ring_capture_audio_gain_db
 
 
+def _webrtc_ice_policy_input(user_input: dict[str, Any]) -> str:
+    """Return a validated WebRTC ICE policy from feature page input."""
+
+    policy = str(
+        user_input.get(CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY)
+        or DEFAULT_WEBRTC_ICE_POLICY
+    ).strip()
+    return policy if policy in WEBRTC_ICE_POLICIES else DEFAULT_WEBRTC_ICE_POLICY
+
+
 def _feature_input(
     user_input: dict[str, Any],
     *,
@@ -489,6 +502,11 @@ def _feature_input(
                 ring_capture_audio_gain_db
                 if media_enabled
                 else DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB
+            ),
+            CONF_WEBRTC_ICE_POLICY: (
+                _webrtc_ice_policy_input(user_input)
+                if media_enabled
+                else DEFAULT_WEBRTC_ICE_POLICY
             ),
             CONF_VIDEO_PORT: int(user_input.get(CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)),
             CONF_VIDEO_STREAM_PATH: str(

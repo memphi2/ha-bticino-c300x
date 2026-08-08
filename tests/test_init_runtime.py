@@ -46,6 +46,12 @@ def _stub_homeassistant_http() -> None:
     )
     if not hasattr(core, "ServiceCall"):
         core.ServiceCall = type("ServiceCall", (), {})
+    const = sys.modules.setdefault(
+        "homeassistant.const",
+        types.ModuleType("homeassistant.const"),
+    )
+    if not hasattr(const, "ATTR_ENTITY_ID"):
+        const.ATTR_ENTITY_ID = "entity_id"
     dispatcher = sys.modules.setdefault(
         "homeassistant.helpers.dispatcher",
         types.ModuleType("homeassistant.helpers.dispatcher"),
@@ -54,6 +60,39 @@ def _stub_homeassistant_http() -> None:
         dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
     if not hasattr(dispatcher, "async_dispatcher_connect"):
         dispatcher.async_dispatcher_connect = lambda *_args, **_kwargs: lambda: None
+    exceptions = sys.modules.setdefault(
+        "homeassistant.exceptions",
+        types.ModuleType("homeassistant.exceptions"),
+    )
+    if not hasattr(exceptions, "HomeAssistantError"):
+
+        class HomeAssistantError(Exception):  # pragma: no cover - test stub only
+            pass
+
+        exceptions.HomeAssistantError = HomeAssistantError
+    if not hasattr(exceptions, "ServiceValidationError"):
+
+        class ServiceValidationError(  # pragma: no cover - test stub only
+            exceptions.HomeAssistantError
+        ):
+            pass
+
+        exceptions.ServiceValidationError = ServiceValidationError
+    helpers = sys.modules.setdefault(
+        "homeassistant.helpers",
+        types.ModuleType("homeassistant.helpers"),
+    )
+    network = sys.modules.setdefault(
+        "homeassistant.helpers.network",
+        types.ModuleType("homeassistant.helpers.network"),
+    )
+    if not hasattr(network, "NoURLAvailableError"):
+
+        class NoURLAvailableError(Exception):  # pragma: no cover - test stub only
+            pass
+
+        network.NoURLAvailableError = NoURLAvailableError
+    helpers.network = network
 
     components = sys.modules.setdefault(
         "homeassistant.components",
@@ -81,6 +120,8 @@ def _stub_homeassistant_http() -> None:
         webhook.async_register = lambda *_args, **_kwargs: None
     if not hasattr(webhook, "async_unregister"):
         webhook.async_unregister = lambda *_args, **_kwargs: None
+    if not hasattr(webhook, "async_generate_path"):
+        webhook.async_generate_path = lambda webhook_id: f"/api/webhook/{webhook_id}"
     components.webhook = webhook
 
 
@@ -286,9 +327,9 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         "repair-sync",
         "services",
         "qml",
+        "activations",
         "media-view",
         "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
-        "activations",
         "display",
         "user",
         "repair-sync",

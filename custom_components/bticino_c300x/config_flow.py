@@ -83,6 +83,9 @@ from .config_flow_features import (
 from .config_flow_features import (
     reconfigure_features_schema_from_current as _reconfigure_features_schema_from_current,
 )
+from .config_flow_features import (
+    webrtc_ice_policy_or_default as _webrtc_ice_policy_or_default,
+)
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
@@ -143,6 +146,7 @@ from .const import (
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
+    CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
     DEFAULT_NAME,
     DOMAIN,
@@ -208,6 +212,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_VIDEO_PORT,
         CONF_VIDEO_STREAM_PATH,
         CONF_WEATHER_ENTITY_ID,
+        CONF_WEBRTC_ICE_POLICY,
     }
 )
 
@@ -924,6 +929,18 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 feature_defaults[CONF_CREATE_HOMEASSISTANT_USER],
                             )
                         ),
+                        default_doorstation_audio_gain_db=float(
+                            feature_data[CONF_DOORSTATION_AUDIO_GAIN_DB]
+                        ),
+                        default_ring_capture_audio_gain_db=float(
+                            feature_data[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
+                        ),
+                        default_webrtc_ice_policy=_webrtc_ice_policy_or_default(
+                            user_input.get(
+                                CONF_WEBRTC_ICE_POLICY,
+                                feature_defaults[CONF_WEBRTC_ICE_POLICY],
+                            )
+                        ),
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -1300,6 +1317,12 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                             user_input.get(
                                 CONF_CREATE_HOMEASSISTANT_USER,
                                 _CREATE_HOMEASSISTANT_USER_DEFAULT,
+                            )
+                        ),
+                        webrtc_ice_policy=_webrtc_ice_policy_or_default(
+                            user_input.get(
+                                CONF_WEBRTC_ICE_POLICY,
+                                feature_defaults[CONF_WEBRTC_ICE_POLICY],
                             )
                         ),
                     ),

@@ -1,5 +1,6 @@
 #include "activations.h"
 #include "activation_discovery.h"
+#include "agent_update_paths.h"
 #include "c300x_agent.h"
 #include "device_user.h"
 #include "event_payload.h"
@@ -852,15 +853,7 @@ static int safe_agent_update_path(const char *path)
     if (strstr(path, "/../") != NULL || strstr(path, "../") == path || strstr(path, "/..") == path + len - 3) {
         return 0;
     }
-    if (
-        strcmp(path, "device_agent/armhf/c300x-agent-native") == 0
-        || strcmp(path, "device_agent/scripts/qml_patch.sh") == 0
-        || strcmp(path, "device_agent/scripts/remove_agent.sh") == 0
-        || strcmp(path, "device_agent/scripts/bootstrap_firewall.sh") == 0
-        || strcmp(path, "device_agent/init/c300x-native-agent") == 0
-        || strcmp(path, "device_agent/bundle.json") == 0
-        || strncmp(path, "device_agent/qml/", strlen("device_agent/qml/")) == 0
-    ) {
+    if (c300x_agent_update_file_path(path) || strncmp(path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
         return 1;
     }
     return 0;
@@ -910,7 +903,10 @@ static int agent_update_target_path(
         return 1;
     } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
         relative_target = C300X_AGENT_BUNDLE_MANIFEST;
-    } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
+    } else if (
+        c300x_agent_update_patch_path(bundle_path)
+        || strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0
+    ) {
         relative_target = bundle_path + strlen("device_agent/");
     }
     if (relative_target == NULL) {
@@ -7089,7 +7085,7 @@ static void handle_doorbell_video_get(
     int ring_media_active = 0;
     int ring_audio_active = 0;
     int ring_answer_requested = 0;
-    int ring_answered = 0;
+    int ring_answered = 0, ring_hangup = 0;
     int home_call_running = 0;
     int home_call_active = 0;
     int home_call_answered = 0;
@@ -7157,7 +7153,7 @@ static void handle_doorbell_video_get(
         ring_media_active = video_status.ring_media_active;
         ring_audio_active = video_status.ring_audio_active;
         ring_answer_requested = video_status.ring_answer_requested;
-        ring_answered = video_status.ring_answered;
+        ring_answered = video_status.ring_answered; ring_hangup = video_status.ring_hangup_requested;
         home_call_running = video_status.home_call_running;
         home_call_active = video_status.home_call_active;
         home_call_answered = video_status.home_call_answered;
@@ -7241,7 +7237,7 @@ static void handle_doorbell_video_get(
         "\"ring_media_active\":%s,"
         "\"ring_audio_active\":%s,"
         "\"ring_answer_requested\":%s,"
-        "\"ring_answered\":%s,"
+        "\"ring_answered\":%s,\"ring_hangup_requested\":%s,"
         "\"home_call_running\":%s,"
         "\"home_call_active\":%s,"
         "\"home_call_answered\":%s,"
@@ -7308,7 +7304,7 @@ static void handle_doorbell_video_get(
         ring_media_active ? "true" : "false",
         ring_audio_active ? "true" : "false",
         ring_answer_requested ? "true" : "false",
-        ring_answered ? "true" : "false",
+        ring_answered ? "true" : "false", ring_hangup ? "true" : "false",
         home_call_running ? "true" : "false",
         home_call_active ? "true" : "false",
         home_call_answered ? "true" : "false",
@@ -7439,7 +7435,7 @@ static void handle_doorbell_call_get(
     int early_media_active = 0;
     int audio_active = 0;
     int answer_requested = 0;
-    int answered = 0;
+    int answered = 0, hangup = 0;
     int can_answer = 0;
     int can_hangup = 0;
     int bridge_open_fds = 0;
@@ -7457,7 +7453,7 @@ static void handle_doorbell_call_get(
         early_media_active = video_status.ring_media_active;
         audio_active = video_status.ring_audio_active;
         answer_requested = video_status.ring_answer_requested;
-        answered = video_status.ring_answered;
+        answered = video_status.ring_answered; hangup = video_status.ring_hangup_requested;
         can_answer = video_status.ring_call_active && !video_status.ring_answered;
         can_hangup = video_status.ring_call_active || video_status.ring_media_active;
         bridge_open_fds = video_status.bridge_open_fds;
@@ -7480,7 +7476,7 @@ static void handle_doorbell_call_get(
         "\"early_media_active\":%s,"
         "\"audio_active\":%s,"
         "\"answer_requested\":%s,"
-        "\"answered\":%s,"
+        "\"answered\":%s,\"hangup_requested\":%s,"
         "\"can_answer\":%s,"
         "\"can_hangup\":%s,"
         "\"media_owner\":%s,"
@@ -7496,7 +7492,7 @@ static void handle_doorbell_call_get(
         early_media_active ? "true" : "false",
         audio_active ? "true" : "false",
         answer_requested ? "true" : "false",
-        answered ? "true" : "false",
+        answered ? "true" : "false", hangup ? "true" : "false",
         can_answer ? "true" : "false",
         can_hangup ? "true" : "false",
         media_owner_json,
@@ -11048,6 +11044,7 @@ static int apply_agent_update_file(
     const char *manifest,
     const char *bundle_path,
     mode_t fallback_mode,
+    int optional,
     struct agent_update_change_summary *summary
 )
 {
@@ -11063,7 +11060,7 @@ static int apply_agent_update_file(
         return 0;
     }
     if (access(stage_path, F_OK) != 0) {
-        return 0;
+        return optional && !agent_update_manifest_sha_for_path(manifest, bundle_path, sha256, sizeof(sha256));
     }
     if (
         strcmp(bundle_path, "device_agent/bundle.json") != 0
@@ -11100,6 +11097,8 @@ static int apply_agent_update_file(
             summary->script_changed = 1;
         } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
             summary->manifest_changed = 1;
+        } else if (c300x_agent_update_patch_path(bundle_path)) {
+            summary->script_changed = 1;
         } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
             summary->qml_patch_changed = 1;
         }
@@ -11285,23 +11284,6 @@ static int apply_agent_update_files(
     struct agent_update_change_summary *summary
 )
 {
-    static const struct {
-        const char *bundle_path;
-        mode_t mode;
-    } files[] = {
-        {"device_agent/armhf/c300x-agent-native", 0700},
-        {"device_agent/scripts/qml_patch.sh", 0700},
-        {"device_agent/scripts/remove_agent.sh", 0700},
-        {"device_agent/scripts/bootstrap_firewall.sh", 0700},
-        {"device_agent/init/c300x-native-agent", 0700},
-        {"device_agent/qml/Alarm.qml", 0644},
-        {"device_agent/qml/HomeAssistant.qml", 0644},
-        {"device_agent/qml/js/c300x_ha.js", 0644},
-        {"device_agent/qml/js/c300x_i18n.js", 0644},
-        {"device_agent/qml/js/c300x_memos.js", 0644},
-        {"device_agent/bundle.json", 0600},
-    };
-
     if (summary != NULL) {
         memset(summary, 0, sizeof(*summary));
         summary->runtime_changed = agent_update_manifest_field_changed(installed_manifest, manifest, "runtime_hash")
@@ -11332,13 +11314,14 @@ static int apply_agent_update_files(
             "config_schema_hash"
         );
     }
-    for (size_t index = 0; index < sizeof(files) / sizeof(files[0]); index++) {
+    for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
         if (
             !apply_agent_update_file(
                 config,
                 manifest,
-                files[index].bundle_path,
-                files[index].mode,
+                C300X_AGENT_UPDATE_FILES[index].path,
+                C300X_AGENT_UPDATE_FILES[index].mode,
+                C300X_AGENT_UPDATE_FILES[index].optional,
                 summary
             )
         ) {

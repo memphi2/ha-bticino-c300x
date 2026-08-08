@@ -44,7 +44,8 @@
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
         }
       },
       "user_device_activations": {
@@ -108,7 +109,8 @@
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
         }
       },
       "reconfigure_device_activations": {
@@ -198,7 +200,8 @@
           "video_enabled": "Tuerstations-Medien aktivieren (Klingeln, On-Demand, Home Call)",
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
-          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)"
+          "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
         }
       },
       "device_activations": {

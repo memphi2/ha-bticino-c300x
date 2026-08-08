@@ -50,8 +50,11 @@ device and derives the camera entity for notification templates.
 Use **C300X Ring Call Android phone alert** for Android phones. It
 creates a high-priority notification with **Answer**, **Hang Up** and **Open**
 actions. **Answer** calls `bticino_c300x.answer_doorbell_call` first, then asks
-the Companion App to open the configured dashboard and clears the ringing
-notification.
+the Companion App to open the configured dashboard after replacing the ringing
+notification with the in-call notification. The Android Answer path adds a
+temporary `c300x_ring_answer` URL marker so the opened card can attach to the
+already answered ring call automatically; the plain **Open** action does not
+answer the call.
 After answering, a quiet in-call notification keeps a **Hang Up** action
 available.
 
@@ -63,8 +66,8 @@ command; the app may ask once for its display-over-apps permission.
 
 Use **C300X Ring Call iOS phone alert** for iPhones. It sends an iOS critical
 notification with **Answer**, **Hang Up** and **Open** actions. **Answer**
-opens the configured dashboard in the Companion App and calls
-`bticino_c300x.answer_doorbell_call`.
+opens the configured dashboard in the Companion App with the same temporary
+answer marker and calls `bticino_c300x.answer_doorbell_call`.
 
 For the dedicated phone alert blueprints, set the notify service to the matching
 Companion App service, for example:

@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.9.0 - 2026-08-08
+
+### Added
+
+- Add opt-in WebRTC ICE candidate filtering for environments that need to avoid
+  selected local candidate families.
+- Keep the minimum Home Assistant baseline at `2026.5.0` while validating the
+  current matrix against `2026.8.1`; CI now installs Home Assistant separately
+  so repo-tracked dev locks do not pin Home Assistant transitive dependencies.
+
+### Fixed
+
+- Use the configured Callback base URL before asking Home Assistant for an
+  internal URL, and fall back to the local agent-route source address when no
+  internal URL is available.
+
 ## v1.8.4 - 2026-07-13
 
 ### Fixed

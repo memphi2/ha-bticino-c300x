@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from homeassistant.components.media_source import (
     BrowseMediaSource,
@@ -30,6 +31,12 @@ from .memos import (
     voice_memo_title,
 )
 from .message_refresh import async_answering_machine_messages, async_memos
+from .ring_capture import (
+    RING_CAPTURE_PLAYBACK_MIME_TYPE,
+    ring_capture_media_items,
+    ring_capture_media_path,
+    ring_capture_media_url,
+)
 from .video_messages import (
     VIDEO_MESSAGE_PLAYBACK_MIME_TYPE,
     video_message_items,
@@ -51,7 +58,7 @@ async def async_get_media_source(hass: HomeAssistant) -> C300XStoredMediaSource:
 
 
 class C300XStoredMediaSource(MediaSource):
-    """Provide stored answering-machine videos and voice memos as playable HA media."""
+    """Provide stored C300X media as playable HA media."""
 
     name: str = "BTicino C300X Media"
 
@@ -63,6 +70,15 @@ class C300XStoredMediaSource(MediaSource):
         """Resolve a stored C300X media-source id to the HA proxy URL."""
 
         media_kind, entry_id, media_id = _parse_identifier(item.identifier)
+        if media_kind == "capture":
+            path = await _async_ring_capture_path(self.hass, media_id)
+            if path is None:
+                raise Unresolvable(f"Could not resolve C300X ring capture: {media_id}")
+            return PlayMedia(
+                ring_capture_media_url(media_id),
+                RING_CAPTURE_PLAYBACK_MIME_TYPE,
+            )
+
         entry = runtime_entry(self.hass, entry_id)
         if entry is None:
             raise Unresolvable(f"Could not resolve C300X entry: {entry_id}")
@@ -104,6 +120,10 @@ class C300XStoredMediaSource(MediaSource):
     async def async_browse_media(self, item: MediaSourceItem) -> BrowseMediaSource:
         """Return browsable stored video messages."""
 
+        if item.identifier == "capture":
+            return _ring_capture_folder(
+                await _async_ring_capture_items(self.hass),
+            )
         if item.identifier:
             raise BrowseError("Unknown C300X media-source item")
 
@@ -119,6 +139,7 @@ class C300XStoredMediaSource(MediaSource):
                 memos = await _async_memos_for_entry(entry)
             children.extend(_message_children(entry.entry_id, messages))
             children.extend(_voice_memo_children(entry.entry_id, memos))
+        children.append(_ring_capture_folder())
 
         return BrowseMediaSource(
             domain=DOMAIN,
@@ -139,6 +160,18 @@ async def _async_messages_for_entry(entry: Any) -> dict[str, Any]:
 
 async def _async_memos_for_entry(entry: Any) -> dict[str, Any]:
     return await async_memos(entry, force_refresh=True)
+
+
+async def _async_ring_capture_items(hass: HomeAssistant) -> list[dict[str, Any]]:
+    if hasattr(hass, "async_add_executor_job"):
+        return await hass.async_add_executor_job(ring_capture_media_items, hass)
+    return await asyncio.to_thread(ring_capture_media_items, hass)
+
+
+async def _async_ring_capture_path(hass: HomeAssistant, file_name: str) -> Any:
+    if hasattr(hass, "async_add_executor_job"):
+        return await hass.async_add_executor_job(ring_capture_media_path, hass, file_name)
+    return await asyncio.to_thread(ring_capture_media_path, hass, file_name)
 
 
 def _message_children(entry_id: str, messages: dict[str, Any]) -> list[BrowseMediaSource]:
@@ -175,10 +208,48 @@ def _voice_memo_children(entry_id: str, memos: dict[str, Any]) -> list[BrowseMed
     ]
 
 
+def _ring_capture_folder(
+    items: list[dict[str, Any]] | None = None,
+) -> BrowseMediaSource:
+    children = None if items is None else _ring_capture_children(items)
+    return BrowseMediaSource(
+        domain=DOMAIN,
+        identifier="capture",
+        media_class=_directory_media_class(),
+        media_content_type="",
+        title="Ring captures",
+        can_play=False,
+        can_expand=True,
+        children_media_class=MediaClass.VIDEO,
+        children=children,
+    )
+
+
+def _ring_capture_children(items: list[dict[str, Any]]) -> list[BrowseMediaSource]:
+    return [
+        BrowseMediaSource(
+            domain=DOMAIN,
+            identifier=f"capture/{quote(str(item['id']), safe='')}",
+            media_class=MediaClass.VIDEO,
+            media_content_type=RING_CAPTURE_PLAYBACK_MIME_TYPE,
+            title=str(item.get("title") or item["id"]),
+            can_play=True,
+            can_expand=False,
+        )
+        for item in items
+        if item.get("id")
+    ]
+
+
 def _parse_identifier(identifier: str | None) -> tuple[str, str, str]:
     value = str(identifier or "").strip()
     if "/" not in value:
         raise Unresolvable("C300X media identifier is incomplete")
+    if value.startswith("capture/"):
+        file_name = unquote(value.split("/", 1)[1])
+        if not file_name:
+            raise Unresolvable("C300X ring-capture identifier is incomplete")
+        return "capture", "", file_name
     if value.startswith("voice/"):
         parts = value.split("/", 2)
         if len(parts) != 3:
@@ -207,3 +278,7 @@ def _parse_identifier(identifier: str | None) -> tuple[str, str, str]:
 
 def _voice_media_class() -> MediaClass:
     return getattr(MediaClass, "MUSIC", MediaClass.APP)
+
+
+def _directory_media_class() -> MediaClass:
+    return getattr(MediaClass, "DIRECTORY", MediaClass.APP)

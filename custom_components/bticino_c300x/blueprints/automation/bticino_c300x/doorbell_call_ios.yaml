@@ -141,6 +141,12 @@ variables:
   active_tag: "{{ 'c300x_ios_ring_call_active_' ~ action_scope | lower }}"
   answer_action: "{{ 'C300X_IOS_RING_ANSWER_' ~ action_scope }}"
   hangup_action: "{{ 'C300X_IOS_RING_HANGUP_' ~ action_scope }}"
+  answer_dashboard_path: >-
+    {% set parts = dashboard_path.split('#', 1) %}
+    {% set base = parts[0] %}
+    {% set fragment = '#' ~ parts[1] if parts | length > 1 else '' %}
+    {% set launch_target = event_camera_entity or camera_entity %}
+    {{ base ~ ('&' if '?' in base else '?') ~ 'c300x_ring_answer=' ~ (launch_target | urlencode) ~ fragment }}
 
 condition:
   - condition: template
@@ -176,7 +182,7 @@ action:
         actions:
           - action: "{{ answer_action }}"
             title: "{{ answer_title }}"
-            uri: "{{ dashboard_path }}"
+            uri: "{{ answer_dashboard_path }}"
             activationMode: foreground
             authenticationRequired: false
           - action: "{{ hangup_action }}"

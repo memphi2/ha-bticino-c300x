@@ -3,6 +3,7 @@ import test from "node:test";
 
 function installFakeDom() {
   const registry = new Map();
+  const globalListeners = new Map();
 
   class FakeElement {
     constructor(selector = "") {
@@ -100,6 +101,21 @@ function installFakeDom() {
     constructor(type) {
       this.type = type;
     }
+  };
+  globalThis.addEventListener = (type, listener) => {
+    const listeners = globalListeners.get(type) || new Set();
+    listeners.add(listener);
+    globalListeners.set(type, listeners);
+  };
+  globalThis.removeEventListener = (type, listener) => {
+    const listeners = globalListeners.get(type);
+    listeners?.delete(listener);
+  };
+  globalThis.dispatchEvent = (event) => {
+    for (const listener of globalListeners.get(event?.type) || []) {
+      listener.call(globalThis, event);
+    }
+    return true;
   };
   globalThis.HTMLMediaElement = { HAVE_CURRENT_DATA: 2 };
   globalThis.history = { pushState() {} };
@@ -372,6 +388,305 @@ test("doorbell answer transition promotes when the cloud session receives video"
   assert.equal(card._lifecycle.ringPreviewActive, false);
   assert.equal(card._lifecycle.doorbellAnswered, true);
   assert.deepEqual(calls, ["previous.close", "next.retarget:video"]);
+});
+
+test("doorbell card claims Android notification answer launches", async () => {
+  const registry = installFakeDom();
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  let replacedUrl = "";
+  globalThis.location = {
+    href: "https://example.test/lovelace/c300x?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+    search: "?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+  };
+  globalThis.history = {
+    state: { nav: "state" },
+    pushState() {},
+    replaceState(_state, _title, url) {
+      replacedUrl = url;
+      globalThis.location.href = `https://example.test${url}`;
+      globalThis.location.search = "";
+    },
+  };
+
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?android-answer-launch-test");
+
+    const Card = registry.get("c300x-doorbell-call-card");
+    const card = new Card();
+    card.setConfig({
+      type: "custom:c300x-doorbell-call-card",
+      entity: "camera.bticino_c300x_doorbell_camera",
+    });
+    card._webrtc = {
+      running: false,
+      close() {},
+      refreshGain() {},
+    };
+    const calls = [];
+    card._startTalkback = async (options) => {
+      calls.push(options || {});
+      card._webrtc.running = true;
+      return true;
+    };
+    card.hass = fakeHass({
+      cameraEntity: {
+        attributes: {
+          friendly_name: "Door",
+          media_primary_action: "hangup",
+          media_state: "ring_active",
+        },
+        state: "streaming",
+      },
+    });
+    await Promise.resolve();
+
+    assert.equal(card._lifecycle.doorbellAnswered, true);
+    assert.deepEqual(calls, [{}]);
+    assert.equal(replacedUrl, "/lovelace/c300x");
+
+    card._webrtc.running = false;
+    card._updateState();
+    await Promise.resolve();
+    assert.deepEqual(calls, [{}]);
+  } finally {
+    if (previousLocation === undefined) {
+      delete globalThis.location;
+    } else {
+      globalThis.location = previousLocation;
+    }
+    globalThis.history = previousHistory;
+  }
+});
+
+test("mounted doorbell card handles notification answer URL changes", async () => {
+  const registry = installFakeDom();
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  let replacedUrl = "";
+  globalThis.location = {
+    href: "https://example.test/lovelace/c300x",
+    search: "",
+  };
+  globalThis.history = {
+    state: {},
+    pushState() {},
+    replaceState(_state, _title, url) {
+      replacedUrl = url;
+      globalThis.location.href = `https://example.test${url}`;
+      globalThis.location.search = "";
+    },
+  };
+
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?mounted-answer-launch-test");
+
+    const Card = registry.get("c300x-doorbell-call-card");
+    const card = new Card();
+    card.setConfig({
+      type: "custom:c300x-doorbell-call-card",
+      entity: "camera.bticino_c300x_doorbell_camera",
+    });
+    card.connectedCallback();
+    card._webrtc = {
+      running: false,
+      close() {},
+      refreshGain() {},
+    };
+    const calls = [];
+    card._startTalkback = async (options) => {
+      calls.push(options || {});
+      card._webrtc.running = true;
+      return true;
+    };
+    card.hass = fakeHass({
+      cameraEntity: {
+        attributes: {
+          friendly_name: "Door",
+          media_primary_action: "hangup",
+          media_state: "ring_active",
+        },
+        state: "streaming",
+      },
+    });
+    await Promise.resolve();
+
+    assert.deepEqual(calls, []);
+    assert.equal(card._lifecycle.doorbellAnswered, false);
+
+    globalThis.location.href = "https://example.test/lovelace/c300x?c300x_ring_answer=camera.bticino_c300x_doorbell_camera";
+    globalThis.location.search = "?c300x_ring_answer=camera.bticino_c300x_doorbell_camera";
+    globalThis.dispatchEvent(new Event("location-changed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(card._lifecycle.doorbellAnswered, true);
+    assert.deepEqual(calls, [{}]);
+    assert.equal(replacedUrl, "/lovelace/c300x");
+  } finally {
+    delete globalThis.__c300xRingAnswerLaunchClaims;
+    if (previousLocation === undefined) {
+      delete globalThis.location;
+    } else {
+      globalThis.location = previousLocation;
+    }
+    globalThis.history = previousHistory;
+  }
+});
+
+test("home-call card ignores notification answer launches for doorbell cards", async () => {
+  const registry = installFakeDom();
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  let replacedUrl = "";
+  delete globalThis.__c300xRingAnswerLaunchClaims;
+  globalThis.location = {
+    href: "https://example.test/lovelace/c300x?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+    search: "?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+  };
+  globalThis.history = {
+    state: {},
+    pushState() {},
+    replaceState(_state, _title, url) {
+      replacedUrl = url;
+      globalThis.location.href = `https://example.test${url}`;
+      globalThis.location.search = "";
+    },
+  };
+
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?home-call-answer-launch-test");
+
+    const Card = registry.get("c300x-doorbell-call-card");
+    const cameraEntity = {
+      attributes: {
+        friendly_name: "Door",
+        media_primary_action: "hangup",
+        media_state: "ring_active",
+      },
+      state: "streaming",
+    };
+    const homeCard = new Card();
+    homeCard.setConfig({
+      type: "custom:c300x-doorbell-call-card",
+      entity: "camera.bticino_c300x_doorbell_camera",
+      mode: "home_call",
+    });
+    homeCard._webrtc = {
+      running: false,
+      close() {},
+      refreshGain() {},
+    };
+    const homeCalls = [];
+    homeCard._startTalkback = async () => {
+      homeCalls.push("home_call");
+      return true;
+    };
+    homeCard.hass = fakeHass({ cameraEntity });
+    await Promise.resolve();
+
+    assert.equal(homeCard._ringAnswerLaunchPending, false);
+    assert.equal(homeCard._lifecycle.doorbellAnswered, false);
+    assert.deepEqual(homeCalls, []);
+    assert.equal(replacedUrl, "");
+
+    const doorbellCard = new Card();
+    doorbellCard.setConfig({
+      type: "custom:c300x-doorbell-call-card",
+      entity: "camera.bticino_c300x_doorbell_camera",
+    });
+    doorbellCard._webrtc = {
+      running: false,
+      close() {},
+      refreshGain() {},
+    };
+    const doorbellCalls = [];
+    doorbellCard._startTalkback = async (options) => {
+      doorbellCalls.push(options || {});
+      doorbellCard._webrtc.running = true;
+      return true;
+    };
+    doorbellCard.hass = fakeHass({ cameraEntity });
+    await Promise.resolve();
+
+    assert.equal(doorbellCard._lifecycle.doorbellAnswered, true);
+    assert.deepEqual(doorbellCalls, [{}]);
+    assert.equal(replacedUrl, "/lovelace/c300x");
+  } finally {
+    delete globalThis.__c300xRingAnswerLaunchClaims;
+    if (previousLocation === undefined) {
+      delete globalThis.location;
+    } else {
+      globalThis.location = previousLocation;
+    }
+    globalThis.history = previousHistory;
+  }
+});
+
+test("doorbell card promotes preview after Android notification answer launches", async () => {
+  const registry = installFakeDom();
+  const previousLocation = globalThis.location;
+  const previousHistory = globalThis.history;
+  globalThis.location = {
+    href: "https://example.test/lovelace/c300x?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+    search: "?c300x_ring_answer=camera.bticino_c300x_doorbell_camera",
+  };
+  globalThis.history = {
+    state: {},
+    pushState() {},
+    replaceState(_state, _title, url) {
+      globalThis.location.href = `https://example.test${url}`;
+      globalThis.location.search = "";
+    },
+  };
+
+  try {
+    await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?android-answer-preview-promote-test");
+
+    const Card = registry.get("c300x-doorbell-call-card");
+    const card = new Card();
+    card.setConfig({
+      type: "custom:c300x-doorbell-call-card",
+      entity: "camera.bticino_c300x_doorbell_camera",
+    });
+    card._lifecycle.ringPreviewActive = true;
+    card._webrtc = {
+      pc: {},
+      running: true,
+      close() {},
+      refreshGain() {},
+    };
+    const calls = [];
+    card._startTalkback = async () => {
+      calls.push("talkback");
+    };
+    card._startAnsweredDoorbellStream = async () => {
+      calls.push("answered_stream");
+      card._lifecycle.ringPreviewActive = false;
+      card._lifecycle.doorbellAnswered = true;
+    };
+    card.hass = fakeHass({
+      cameraEntity: {
+        attributes: {
+          friendly_name: "Door",
+          media_primary_action: "hangup",
+          media_state: "ring_active",
+        },
+        state: "streaming",
+      },
+    });
+    await Promise.resolve();
+
+    assert.equal(card._lifecycle.doorbellAnswered, true);
+    assert.deepEqual(calls, ["answered_stream"]);
+  } finally {
+    if (previousLocation === undefined) {
+      delete globalThis.location;
+    } else {
+      globalThis.location = previousLocation;
+    }
+    globalThis.history = previousHistory;
+  }
 });
 
 test("doorbell card coalesces unchanged hass updates into one animation frame", async () => {

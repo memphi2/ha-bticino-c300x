@@ -871,6 +871,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
         "ring_audio_active",
         "ring_answer_requested",
         "ring_answered",
+        "ring_hangup_requested",
         "home_call_running",
         "home_call_active",
         "home_call_answered",
@@ -882,6 +883,8 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert '\\"max_clients\\":%d' in http
     assert '\\"ring_preview_sharing\\":%s' in http
     assert "status->max_clients = rtsp_client_sharing_allowed_locked(&g_bridge)" in media_bridge
+    assert "status->ring_hangup_requested = (" in media_bridge
+    assert "g_bridge.ring_call_stop || g_bridge.ring_send_bye" in media_bridge
     for field, marker in (
         ("home_call_target_audio_port", "%d"),
         ("home_call_rtp_packets", "%llu"),
@@ -1081,6 +1084,7 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
 
     assert "int ring_answer_requested;" in video_header
     assert "int ring_answered;" in video_header
+    assert "int ring_hangup_requested;" in video_header
     assert "bool c300x_media_ring_call_answer(struct c300x_video *video);" in media_header
     assert "void c300x_media_ring_call_hangup(struct c300x_video *video);" in media_header
     assert "int c300x_video_doorbell_call_answer(struct c300x_video *video);" in video_header
@@ -1133,6 +1137,7 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
     assert 'strcmp(event_type, "doorbell.media.closed") == 0' in event_payload
     assert "status.ring_call_active" in event_payload
     assert "status.ring_media_active" in event_payload
+    assert "status.ring_hangup_requested" in event_payload
     assert "status.ring_receiver_running" in event_payload
     assert "status.ring_registered" in event_payload
     assert 'ring_owner ? "ring" : status.media_owner' in event_payload

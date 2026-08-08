@@ -61,8 +61,7 @@ helpers.config_validation = config_validation
 homeassistant.helpers = helpers
 sys.modules["homeassistant.helpers.config_validation"] = config_validation
 
-from homeassistant.exceptions import HomeAssistantError
-
+from custom_components.bticino_c300x import ring_capture as ring_capture_module
 from custom_components.bticino_c300x.camera_media.rtsp_probe import (
     HomeAssistantError as RtspProbeHomeAssistantError,
 )
@@ -84,6 +83,7 @@ from custom_components.bticino_c300x.ring_capture import (
     _async_wait_rtsp_ready,
     _capture_audio_gain_db,
     _capture_frame_offsets,
+    _capture_media_dirs,
     _capture_metadata_path,
     _capture_output_path,
     _capture_stream_path,
@@ -95,6 +95,10 @@ from custom_components.bticino_c300x.ring_capture import (
     _validate_duration,
     async_capture_doorbell_ring_call,
     raise_if_ring_capture_blocked,
+    ring_capture_media_items,
+    ring_capture_media_path,
+    ring_capture_media_source_id,
+    ring_capture_media_url,
 )
 from custom_components.bticino_c300x.ring_talkback import (
     _create_speex_encoder,
@@ -102,10 +106,16 @@ from custom_components.bticino_c300x.ring_talkback import (
     _talkback_host_for_socket,
 )
 
+HomeAssistantError = ring_capture_module.HomeAssistantError
+
 
 @dataclass
 class _FakeConfig:
     root: Path
+    media_dirs: dict[str, str] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.media_dirs = {"local": str(self.root / "media")}
 
     def path(self, *parts: str) -> str:
         return str(self.root.joinpath(*parts))
@@ -341,6 +351,56 @@ def test_capture_output_path_rejects_paths_outside_allowed_roots(tmp_path: Path)
         _capture_output_path(hass, str(tmp_path / "config" / "www" / "bad.mp4"))
     with pytest.raises(HomeAssistantError):
         _capture_output_path(hass, "/media/c300x/clip.mkv")
+
+
+def test_capture_output_path_defaults_to_ha_local_media_dir(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path / "config")
+
+    target = _capture_output_path(hass, None)
+
+    assert target.parent == tmp_path / "config" / "media" / "c300x"
+    assert target.name.startswith("doorbell_")
+    assert target.suffix == ".mp4"
+
+
+def test_ring_capture_media_items_list_local_mp4s(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path / "config")
+    local_dir = tmp_path / "config" / "media" / "c300x"
+    local_dir.mkdir(parents=True)
+    older = local_dir / "doorbell_20260719_100000.mp4"
+    newer = local_dir / "doorbell_20260719_100001.mp4"
+    ignored = local_dir / "latest.raw.wav"
+    older.write_bytes(b"old")
+    newer.write_bytes(b"newer")
+    ignored.write_bytes(b"wav")
+
+    items = ring_capture_media_items(hass)
+
+    assert [item["id"] for item in items] == [newer.name, older.name]
+    assert items[0]["title"] == "Ring capture 2026-07-19 10:00:01"
+    assert ring_capture_media_path(hass, newer.name) == newer
+    assert ring_capture_media_path(hass, "../bad.mp4") is None
+    assert ring_capture_media_url(newer.name) == (
+        "/api/bticino_c300x/ring-captures/doorbell_20260719_100001.mp4"
+    )
+    assert ring_capture_media_source_id(newer.name) == (
+        "media-source://bticino_c300x/capture/doorbell_20260719_100001.mp4"
+    )
+
+
+def test_capture_media_dirs_include_configured_media_roots(tmp_path: Path) -> None:
+    hass = _FakeHass(tmp_path / "config")
+    custom_media = tmp_path / "custom-media"
+    hass.config.media_dirs = {
+        "local": str(custom_media),
+        "archive": str(tmp_path / "archive"),
+    }
+
+    assert _capture_media_dirs(hass)[:3] == (
+        custom_media / "c300x",
+        tmp_path / "archive" / "c300x",
+        tmp_path / "config" / "media" / "c300x",
+    )
 
 
 def test_capture_work_dir_defaults_below_config_c300x(tmp_path: Path) -> None:

@@ -14,6 +14,14 @@ STAGE_SCRIPT = ROOT / "scripts" / "stage_device_agent_bundle.py"
 RELEASE_ASSETS_SCRIPT = ROOT / "scripts" / "write_release_assets.py"
 RELEASE_TAG_SCRIPT = ROOT / "scripts" / "check_release_tag.py"
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
+RESERVED_DEVICE_PATCH_PATHS = (
+    "device_agent/patches/common.sh",
+    "device_agent/patches/display_qml.sh",
+    "device_agent/patches/firewall.sh",
+    "device_agent/patches/legacy_mqtt.sh",
+    "device_agent/patches/audio_codec.sh",
+    "device_agent/patches/device_routing.sh",
+)
 
 # Scripts under scripts/ import each other and the shared manifest_version
 # helper as plain top-level modules, matching how they resolve imports when
@@ -238,8 +246,8 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["lts_evidence"] == {
         "release": "v1.6.2",
         "min_homeassistant": "2026.5.0",
-        "current_homeassistant": "2026.7.1",
-        "validated_homeassistant": ["2026.5.0", "2026.7.1"],
+        "current_homeassistant": "2026.8.1",
+        "validated_homeassistant": ["2026.5.0", "2026.8.1"],
         "python": "3.14",
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,
@@ -350,6 +358,9 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert "device_agent/scripts/qml_patch.sh" in paths
     assert "device_agent/scripts/remove_agent.sh" in paths
     assert "device_agent/scripts/bootstrap_firewall.sh" in paths
+    assert not any(path.startswith("device_agent/patches/") for path in paths)
+    for path in RESERVED_DEVICE_PATCH_PATHS:
+        assert path not in paths
     modes = {entry["path"]: entry["mode"] for entry in bundle["files"]}
     assert modes["device_agent/armhf/c300x-agent-native"] == "700"
     assert modes["device_agent/init/c300x-native-agent"] == "700"
@@ -480,17 +491,47 @@ def test_bundle_hash_changes_with_native_agent_version_metadata(
 def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     """The native apply list must cover every staged self-update file."""
 
+    update_paths = (ROOT / "native_agent/src/agent_update_paths.h").read_text(encoding="utf-8")
+
+    assert '"device_agent/armhf/c300x-agent-native"' in update_paths
+    assert '"device_agent/scripts/qml_patch.sh"' in update_paths
+    assert '"device_agent/scripts/remove_agent.sh"' in update_paths
+    assert '"device_agent/scripts/bootstrap_firewall.sh"' in update_paths
+    assert '"device_agent/init/c300x-native-agent"' in update_paths
+
+
+def test_native_self_update_reserves_external_patch_scripts_without_staging() -> None:
+    """Carrier agent can receive future patch scripts without packaging them yet."""
+
     native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
+    update_paths = (ROOT / "native_agent/src/agent_update_paths.h").read_text(encoding="utf-8")
+    safe_path = native_http.split("static int safe_agent_update_path", 1)[1].split(
+        "static int agent_update_stage_path",
+        1,
+    )[0]
+    target_path = native_http.split("static int agent_update_target_path", 1)[1].split(
+        "static int read_agent_bundle_metadata",
+        1,
+    )[0]
+    apply_file = native_http.split("static int apply_agent_update_file", 1)[1].split(
+        "static int render_agent_init_script",
+        1,
+    )[0]
     apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
-        "if (summary != NULL)",
+        "static void handle_agent_update_apply",
         1,
     )[0]
 
-    assert '"device_agent/armhf/c300x-agent-native"' in apply_files
-    assert '"device_agent/scripts/qml_patch.sh"' in apply_files
-    assert '"device_agent/scripts/remove_agent.sh"' in apply_files
-    assert '"device_agent/scripts/bootstrap_firewall.sh"' in apply_files
-    assert '"device_agent/init/c300x-native-agent"' in apply_files
+    assert "c300x_agent_update_file_path(path)" in safe_path
+    assert "c300x_agent_update_patch_path(bundle_path)" in target_path
+    assert 'relative_target = bundle_path + strlen("device_agent/")' in target_path
+    assert "if (access(stage_path, F_OK) != 0)" in apply_file
+    assert "return optional && !agent_update_manifest_sha_for_path" in apply_file
+    assert "c300x_agent_update_patch_path(bundle_path)" in apply_file
+    assert "C300X_AGENT_UPDATE_FILE_COUNT" in apply_files
+    assert "C300X_AGENT_UPDATE_FILES[index].optional" in apply_files
+    for path in RESERVED_DEVICE_PATCH_PATHS:
+        assert f'"{path}"' in update_paths
 
 
 def test_native_self_update_apply_repairs_existing_startup_link() -> None:

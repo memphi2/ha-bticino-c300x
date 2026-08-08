@@ -38,6 +38,7 @@ struct c300x_video_status {
     int ring_audio_active;
     int ring_answer_requested;
     int ring_answered;
+    int ring_hangup_requested;
     int home_call_running;
     int home_call_active;
     int home_call_answered;

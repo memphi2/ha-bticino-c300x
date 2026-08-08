@@ -17,8 +17,9 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
-    # Dependabot updates requirements-dev.txt. The minimum-HA lock is tied to
-    # Home Assistant's 2026.5 transitive pins and is curated manually.
+    # Dependabot updates requirements-dev.txt. The minimum-HA validation lock is
+    # curated manually; Home Assistant transitive dependencies are installed from
+    # the selected Home Assistant matrix version instead of committed here.
     exclude-paths:
       - "requirements-dev-min-ha.txt"
     schedule:

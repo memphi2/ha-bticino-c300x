@@ -53,6 +53,7 @@ from .const import (
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
+    CONF_WEBRTC_ICE_POLICY,
     DEFAULT_AGENT_PORT,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
@@ -60,12 +61,21 @@ from .const import (
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEFAULT_WEBRTC_ICE_POLICY,
     DEVICE_ACTIVATION_MODE_AUTO,
+    WEBRTC_ICE_POLICIES,
 )
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
+
+
+def webrtc_ice_policy_or_default(value: Any) -> str:
+    """Return a valid WebRTC ICE policy, falling back to the default."""
+
+    policy = str(value or DEFAULT_WEBRTC_ICE_POLICY).strip()
+    return policy if policy in WEBRTC_ICE_POLICIES else DEFAULT_WEBRTC_ICE_POLICY
 
 
 def options_connection_schema(config_entry: BticinoC300XConfigEntry) -> vol.Schema:
@@ -106,6 +116,7 @@ def options_features_schema(
     *,
     video_enabled: bool | None = None,
     create_homeassistant_user: bool | None = None,
+    webrtc_ice_policy: str | None = None,
 ) -> vol.Schema:
     """Return the second options page schema."""
 
@@ -139,11 +150,17 @@ def options_features_schema(
         ),
         DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     )
+    default_webrtc_ice_policy = webrtc_ice_policy_or_default(
+        _config_default(config_entry, CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY)
+        if webrtc_ice_policy is None
+        else webrtc_ice_policy
+    )
     return _reconfigure_features_schema(
         default_video_enabled,
         default_create_homeassistant_user=bool(default_create_homeassistant_user),
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_webrtc_ice_policy=default_webrtc_ice_policy,
     )
 
 
@@ -178,6 +195,11 @@ def current_feature_options(
 
     return {
         CONF_ALARM_ENTITY_ID: _config_default(config_entry, CONF_ALARM_ENTITY_ID, ""),
+        CONF_ALARM_PAGE_ENTITY_ID: _config_default(
+            config_entry,
+            CONF_ALARM_PAGE_ENTITY_ID,
+            "",
+        ),
         CONF_WEATHER_ENTITY_ID: _config_default(
             config_entry,
             CONF_WEATHER_ENTITY_ID,
@@ -222,6 +244,11 @@ def current_feature_options(
                 DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
             ),
             DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+        ),
+        CONF_WEBRTC_ICE_POLICY: webrtc_ice_policy_or_default(
+            _config_default(
+                config_entry, CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY
+            )
         ),
         CONF_CREATE_HOMEASSISTANT_USER: bool(
             _config_default(
@@ -294,6 +321,9 @@ def reconfigure_features_schema_from_current(
         default_ring_capture_audio_gain_db=float(
             current[CONF_RING_CAPTURE_AUDIO_GAIN_DB]
         ),
+        default_webrtc_ice_policy=webrtc_ice_policy_or_default(
+            current[CONF_WEBRTC_ICE_POLICY]
+        ),
     )
 
 
@@ -346,6 +376,10 @@ def feature_input_defaults(
             CONF_RING_CAPTURE_AUDIO_GAIN_DB,
             DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
         ),
+    )
+    data.setdefault(
+        CONF_WEBRTC_ICE_POLICY,
+        defaults.get(CONF_WEBRTC_ICE_POLICY, DEFAULT_WEBRTC_ICE_POLICY),
     )
     data.setdefault(
         CONF_DEVICE_UI_ENABLED,

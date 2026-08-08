@@ -2125,7 +2125,7 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
         '{"ok": true, "supported": true, "active": true, '
         '"early_media_active": true, "audio_active": false, '
         '"answer_requested": false, "answered": false, "can_answer": true, '
-        '"can_hangup": true, "media_owner": "ring", '
+        '"hangup_requested": true, "can_hangup": true, "media_owner": "ring", '
         '"ring_receiver_running": true, "ring_registered": true, '
         '"capture_supported": false, "open_fds": 5, "active_threads": 2}'
     )
@@ -2140,6 +2140,7 @@ def test_doorbell_call_status_requests_authenticated_endpoint() -> None:
     assert isinstance(status, RingCallStatus)
     assert status["active"] is True
     assert status["can_answer"] is True
+    assert status["hangup_requested"] is True
     assert status["capture_supported"] is False
     assert status["open_fds"] == 5
     assert session.requests[0]["args"] == (

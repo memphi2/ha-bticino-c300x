@@ -44,7 +44,8 @@
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
         }
       },
       "user_device_activations": {
@@ -108,7 +109,8 @@
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
         }
       },
       "reconfigure_device_activations": {
@@ -198,7 +200,8 @@
           "video_enabled": "Abilita media posto esterno (campanello, on-demand, Home Call)",
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
-          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)"
+          "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
         }
       },
       "device_activations": {

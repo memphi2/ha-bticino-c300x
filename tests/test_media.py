@@ -4,6 +4,7 @@ import asyncio
 import builtins
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -64,6 +65,7 @@ from custom_components.bticino_c300x.api import (
 )
 from custom_components.bticino_c300x.const import DOMAIN
 from custom_components.bticino_c300x.media import (
+    C300XRingCaptureMediaView,
     C300XVideoMessageMediaView,
     C300XVoiceMemoMediaView,
     _should_transcode_video_message,
@@ -102,6 +104,7 @@ def test_media_view_registration_is_idempotent() -> None:
     assert [type(view) for view in registered] == [
         C300XVideoMessageMediaView,
         C300XVoiceMemoMediaView,
+        C300XRingCaptureMediaView,
     ]
     assert hass.data[DOMAIN]["video_message_view_registered"] is True
 
@@ -297,6 +300,64 @@ def test_voice_memo_view_maps_invalid_and_agent_errors() -> None:
         )
 
 
+def test_ring_capture_view_serves_local_mp4(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    capture_dir = tmp_path / "config" / "media" / "c300x"
+    capture_dir.mkdir(parents=True)
+    capture = capture_dir / "doorbell_20260719_100000.mp4"
+    capture.write_bytes(b"mp4")
+    responses: list[Any] = []
+
+    class _FakeFileResponse:
+        def __init__(self, path: Path, *, headers: dict[str, str]) -> None:
+            self.path = path
+            self.headers = headers
+            responses.append(self)
+
+    monkeypatch.setattr(media_module.web, "FileResponse", _FakeFileResponse)
+    hass = _fake_hass({})
+    hass.config = _FakeConfig(tmp_path / "config")
+    request = SimpleNamespace(
+        app={"hass": hass},
+        path=f"/api/{DOMAIN}/ring-captures/{capture.name}",
+    )
+
+    response = asyncio.run(
+        C300XRingCaptureMediaView().get(  # type: ignore[arg-type]
+            request,
+            capture.name,
+        )
+    )
+
+    assert response is responses[0]
+    assert response.path == capture
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Content-Type"] == "video/mp4"
+
+
+@pytest.mark.parametrize("file_name", ["missing.mp4", "../bad.mp4", "bad.wav"])
+def test_ring_capture_view_rejects_missing_or_invalid_files(
+    tmp_path: Path,
+    file_name: str,
+) -> None:
+    hass = _fake_hass({})
+    hass.config = _FakeConfig(tmp_path / "config")
+    request = SimpleNamespace(
+        app={"hass": hass},
+        path=f"/api/{DOMAIN}/ring-captures/{file_name}",
+    )
+
+    with pytest.raises(web.HTTPNotFound):
+        asyncio.run(
+            C300XRingCaptureMediaView().get(  # type: ignore[arg-type]
+                request,
+                file_name,
+            )
+        )
+
+
 def test_convert_video_message_to_mp4_muxes_video_and_audio(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -400,12 +461,25 @@ def _fake_entry(api: _FakeMediaApi) -> SimpleNamespace:
 
 
 def _fake_hass(entries: dict[str, object]) -> SimpleNamespace:
+    async def async_add_executor_job(func, *args):  # noqa: ANN001
+        return func(*args)
+
     return SimpleNamespace(
         data={},
         config_entries=SimpleNamespace(
             async_get_entry=lambda entry_id: entries.get(entry_id)
         ),
+        async_add_executor_job=async_add_executor_job,
     )
+
+
+class _FakeConfig:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.media_dirs = {"local": str(root / "media")}
+
+    def path(self, *parts: str) -> str:
+        return str(self.root.joinpath(*parts))
 
 
 def _install_fake_av(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Any, Any]:

@@ -177,11 +177,13 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     CONF_WEATHER_ENTITY_ID,
+    CONF_WEBRTC_ICE_POLICY,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
     DEFAULT_VIDEO_STREAM_PATH,
+    DEFAULT_WEBRTC_ICE_POLICY,
     DEVICE_ACTIVATION_FLOW_ACTION_ADD,
     DEVICE_ACTIVATION_FLOW_ACTION_DONE,
     DEVICE_ACTIVATION_MODE_AUTO,
@@ -289,6 +291,68 @@ def test_feature_schemas_are_serializable_for_home_assistant_forms() -> None:
 
     voluptuous_serialize.convert(_setup_features_schema(False))
     voluptuous_serialize.convert(_reconfigure_features_schema(False))
+
+
+def test_feature_input_persists_valid_webrtc_ice_policy() -> None:
+    result = _feature_input(
+        {CONF_VIDEO_ENABLED: True, CONF_WEBRTC_ICE_POLICY: "prefer_ipv4_ula"}
+    )[0]
+
+    assert result[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
+
+
+def test_feature_input_rejects_unknown_webrtc_ice_policy() -> None:
+    result = _feature_input(
+        {CONF_VIDEO_ENABLED: True, CONF_WEBRTC_ICE_POLICY: "bogus"}
+    )[0]
+
+    assert result[CONF_WEBRTC_ICE_POLICY] == DEFAULT_WEBRTC_ICE_POLICY
+
+
+def test_feature_input_defaults_webrtc_ice_policy_when_media_disabled() -> None:
+    result = _feature_input(
+        {CONF_VIDEO_ENABLED: False, CONF_WEBRTC_ICE_POLICY: "ipv4_only"}
+    )[0]
+
+    assert result[CONF_WEBRTC_ICE_POLICY] == DEFAULT_WEBRTC_ICE_POLICY
+
+
+def test_current_feature_options_reads_and_normalizes_webrtc_ice_policy() -> None:
+    good = SimpleNamespace(data={CONF_WEBRTC_ICE_POLICY: "ipv4_only"}, options={})
+    bad = SimpleNamespace(data={CONF_WEBRTC_ICE_POLICY: "bogus"}, options={})
+
+    assert _current_feature_options(good)[CONF_WEBRTC_ICE_POLICY] == "ipv4_only"
+    assert (
+        _current_feature_options(bad)[CONF_WEBRTC_ICE_POLICY]
+        == DEFAULT_WEBRTC_ICE_POLICY
+    )
+
+
+def test_reconfigure_features_schema_threads_webrtc_ice_policy_default() -> None:
+    # The reconfigure error re-display must preserve the chosen policy rather
+    # than silently resetting it to the "all" default (see config_flow.py).
+    schema = _reconfigure_features_schema(
+        True, default_webrtc_ice_policy="prefer_ipv4_ula"
+    )
+
+    assert schema({})[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
+
+
+def test_options_features_schema_threads_webrtc_ice_policy_default() -> None:
+    schema = _options_features_schema(
+        SimpleNamespace(data={}, options={}),
+        video_enabled=True,
+        webrtc_ice_policy="prefer_ipv4_ula",
+    )
+
+    assert schema({})[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
+
+
+def test_setup_features_schema_defaults_webrtc_ice_policy_to_all() -> None:
+    assert (
+        _setup_features_schema(True)({})[CONF_WEBRTC_ICE_POLICY]
+        == DEFAULT_WEBRTC_ICE_POLICY
+    )
 
 
 def test_non_empty_string_strips_input() -> None:
@@ -1854,6 +1918,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_MAINTENANCE_TOKEN: "old-maintenance",
             CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.old",
+            CONF_ALARM_PAGE_ENTITY_ID: "switch.old",
             CONF_WEATHER_ENTITY_ID: "weather.old",
             CONF_DASHBOARD_ENTITIES: ["switch.old"],
             CONF_VIDEO_ENABLED: False,
@@ -1868,6 +1933,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
             CONF_MAINTENANCE_TOKEN: "",
             CONF_CALLBACK_BASE_URL: "http://192.0.2.11:8123",
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
             CONF_WEATHER_ENTITY_ID: "weather.home",
             CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_VIDEO_ENABLED: True,
@@ -1913,6 +1979,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
     assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P not in features
     assert CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N not in features
     assert _current_feature_options(entry)[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert _current_feature_options(entry)[CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert _current_feature_options(entry)[CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert _current_feature_options(entry)[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert _current_feature_options(entry)[CONF_VIDEO_PORT] == 6555
@@ -2171,6 +2238,25 @@ def test_reconfigure_clears_stale_option_overrides() -> None:
     ]
 
 
+def test_reconfigure_clears_stale_webrtc_ice_policy_option_override() -> None:
+    updates: list[dict[str, object]] = []
+
+    class _FakeConfigEntries:
+        def async_update_entry(self, entry: object, *, options: dict[str, object]) -> None:
+            updates.append(options)
+
+    hass = SimpleNamespace(config_entries=_FakeConfigEntries())
+    entry = SimpleNamespace(options={CONF_WEBRTC_ICE_POLICY: "all", "unrelated": "keep"})
+
+    _clear_reconfigured_option_overrides(
+        hass, entry, {CONF_WEBRTC_ICE_POLICY: "prefer_ipv4_ula"}
+    )
+
+    # The stale options override must be cleared so the reconfigured data value
+    # is not shadowed by the old options value (options win over data).
+    assert updates == [{"unrelated": "keep"}]
+
+
 def test_reconfigure_preserves_existing_unique_id() -> None:
     assert _reconfigure_unique_id(SimpleNamespace(unique_id="c300x-serial")) == "c300x-serial"
     assert _reconfigure_unique_id(SimpleNamespace(unique_id=None)) == "bticino_c300x"
@@ -2185,6 +2271,7 @@ def test_dashboard_schema_defaults_keep_page_open_disabled() -> None:
 def test_dashboard_input_defaults_preserve_existing_keep_page_open() -> None:
     defaults = {
         CONF_ALARM_ENTITY_ID: "",
+        CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
         CONF_WEATHER_ENTITY_ID: "",
         CONF_DASHBOARD_ENTITIES: [],
         CONF_ACTIONS: {},
@@ -2194,6 +2281,7 @@ def test_dashboard_input_defaults_preserve_existing_keep_page_open() -> None:
     result = _dashboard_input_defaults({}, defaults)
 
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
+    assert result[CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
 
 
 @pytest.mark.parametrize(
@@ -2299,6 +2387,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             CONF_CREATE_HOMEASSISTANT_USER: False,
             CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_AUTO,
             CONF_ALARM_ENTITY_ID: "",
+            CONF_ALARM_PAGE_ENTITY_ID: "",
             CONF_WEATHER_ENTITY_ID: "",
             CONF_DASHBOARD_ENTITIES: [],
             CONF_ACTIONS: {},
@@ -2367,6 +2456,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             {
                 CONF_DEVICE_UI_ENABLED: True,
                 CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+                CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
                 CONF_WEATHER_ENTITY_ID: "weather.home",
                 CONF_DASHBOARD_ENTITIES: ["switch.entry"],
                 CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
@@ -2411,6 +2501,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     ]
     assert result["data"][CONF_DEVICE_UI_ENABLED] is True
     assert result["data"][CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert result["data"][CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
     assert result["data"][CONF_WEATHER_ENTITY_ID] == "weather.home"
     assert result["data"][CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert result["data"][CONF_DASHBOARD_PREVENT_RETURN] is True
@@ -2737,6 +2828,7 @@ def test_options_flow_invalid_feature_input_stays_on_features_page() -> None:
         flow.async_step_features(
             {
                 CONF_VIDEO_ENABLED: True,
+                CONF_WEBRTC_ICE_POLICY: "prefer_ipv4_ula",
                 CONF_DOORSTATION_AUDIO_GAIN_DB: 21,
                 CONF_RING_CAPTURE_AUDIO_GAIN_DB: -21,
             }
@@ -2748,6 +2840,7 @@ def test_options_flow_invalid_feature_input_stays_on_features_page() -> None:
         CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
         CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
     }
+    assert result["data_schema"]({})[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
 
 
 def test_reconfigure_invalid_connection_stays_on_reconfigure_page() -> None:
@@ -2780,6 +2873,29 @@ def test_reconfigure_invalid_connection_stays_on_reconfigure_page() -> None:
 
     assert result["step_id"] == "reconfigure"
     assert result["errors"] == {CONF_AGENT_HOST: "invalid_agent_host"}
+
+
+def test_reconfigure_invalid_audio_gain_redisplays_features_page() -> None:
+    entry = SimpleNamespace(data={}, options={}, runtime_data=None)
+    flow = BticinoC300XConfigFlow()
+    flow._get_reconfigure_entry = lambda: entry  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        flow.async_step_reconfigure_features(
+            {
+                CONF_VIDEO_ENABLED: True,
+                CONF_DOORSTATION_AUDIO_GAIN_DB: "bad",
+                CONF_RING_CAPTURE_AUDIO_GAIN_DB: "worse",
+            }
+        )
+    )
+
+    assert result["step_id"] == "reconfigure_features"
+    assert result["errors"] == {
+        CONF_DOORSTATION_AUDIO_GAIN_DB: "invalid_audio_gain",
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: "invalid_audio_gain",
+    }
 
 
 def test_reconfigure_missing_state_redirects_to_current_pages() -> None:

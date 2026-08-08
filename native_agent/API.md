@@ -642,6 +642,8 @@ Returns doorbell video availability, stream paths, media ownership, and bridge
 state. The endpoint must reflect agent/device state, not Home Assistant UI
 state. `bridge.doorstation_audio_gain_db` reports the runtime-only downstream
 gain that is applied to doorstation audio before RTSP output.
+`bridge.ring_hangup_requested` is true while the native ring-call hangup path is
+being driven.
 
 ### `POST /api/v1/video/doorbell/audio`
 
@@ -692,7 +694,8 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns active ring-call status, media ownership, and capture readiness.
+Returns active ring-call status, media ownership, capture readiness, and
+`hangup_requested` while the native ring-call hangup path is being driven.
 
 ### `POST /api/v1/calls/doorbell/actions/answer`
 

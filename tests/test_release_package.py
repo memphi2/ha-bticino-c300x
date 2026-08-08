@@ -13,6 +13,7 @@ SCRIPT = ROOT / "scripts" / "build_hacs_release.py"
 STAGE_SCRIPT = ROOT / "scripts" / "stage_device_agent_bundle.py"
 RELEASE_ASSETS_SCRIPT = ROOT / "scripts" / "write_release_assets.py"
 RELEASE_TAG_SCRIPT = ROOT / "scripts" / "check_release_tag.py"
+CHECK_REPO_SCRIPT = ROOT / "scripts" / "check_repo.py"
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
 RESERVED_DEVICE_PATCH_PATHS = (
     "device_agent/patches/common.sh",
@@ -59,6 +60,16 @@ def _load_release_assets():
 
 def _load_release_tag_checker():
     spec = importlib.util.spec_from_file_location("check_release_tag", RELEASE_TAG_SCRIPT)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_repo_checker():
+    spec = importlib.util.spec_from_file_location("check_repo", CHECK_REPO_SCRIPT)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -200,6 +211,38 @@ def test_release_tag_checker_matches_current_metadata() -> None:
     assert checker.validate_release_tag(version) == [
         f"release tag must use vX.Y.Z format, got {version!r}"
     ]
+
+
+def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() -> None:
+    checker = _load_repo_checker()
+
+    failures = checker._native_agent_version_bump_failures(
+        "v1.8.4",
+        [
+            "native_agent/src/http.c",
+            "device_qml/HomeAssistant.qml",
+        ],
+    )
+
+    assert failures == [
+        "native-agent bundle inputs changed since v1.8.4 without bumping "
+        "native_agent/VERSION: native_agent/src/http.c, device_qml/HomeAssistant.qml"
+    ]
+
+
+def test_native_agent_release_gate_accepts_matching_version_bump() -> None:
+    checker = _load_repo_checker()
+
+    assert (
+        checker._native_agent_version_bump_failures(
+            "v1.8.4",
+            [
+                "native_agent/src/http.c",
+                "native_agent/VERSION",
+            ],
+        )
+        == []
+    )
 
 
 def test_release_assets_are_reproducible_for_same_zip(

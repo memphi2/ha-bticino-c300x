@@ -37,6 +37,17 @@ CURRENT_HOME_ASSISTANT_VERSION = VERSION_CONFIG["current_homeassistant"]
 PYTHON_VERSION = VERSION_CONFIG["python"]
 CURRENT_RELEASE_VERSION = VERSION_CONFIG["integration_version"]
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
+NATIVE_AGENT_VERSION_PATH = "native_agent/VERSION"
+NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
+    "native_agent/src",
+    "native_agent/scripts",
+    NATIVE_AGENT_VERSION_PATH,
+    "native_agent/Makefile",
+    "native_agent/config.example.json",
+    "device_qml",
+    "custom_components/bticino_c300x/device_agent/init",
+    "scripts/stage_device_agent_bundle.py",
+)
 TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -133,6 +144,7 @@ REQUIRED_PATHS = [
     "requirements-dev-min-ha.txt",
     "hacs.json",
     "native_agent/Makefile",
+    "native_agent/VERSION",
     "native_agent/API.md",
     "native_agent/README.md",
     "native_agent/config.example.json",
@@ -204,6 +216,7 @@ def main() -> int:
     failures.extend(check_legal_hygiene())
     failures.extend(check_current_audit_snapshot())
     failures.extend(check_release_metadata())
+    failures.extend(check_native_agent_version_bump())
     failures.extend(check_home_assistant_deprecations())
     failures.extend(check_config_entry_typing())
     failures.extend(check_smoke_ha_versions())
@@ -489,6 +502,75 @@ def check_release_metadata() -> list[str]:
         if expected not in support:
             failures.append(f"SUPPORT.md must mention {expected!r}")
     return failures
+
+
+def check_native_agent_version_bump() -> list[str]:
+    """Require a native-agent version bump for release-visible bundle changes."""
+
+    previous_tag = _previous_release_tag()
+    if previous_tag is None:
+        return []
+    changed_paths = _git_changed_paths(previous_tag, *NATIVE_AGENT_BUNDLE_INPUT_PATHS)
+    if changed_paths is None:
+        return ["unable to inspect native-agent bundle input changes"]
+    return _native_agent_version_bump_failures(previous_tag, changed_paths)
+
+
+def _native_agent_version_bump_failures(
+    previous_tag: str,
+    changed_paths: list[str],
+) -> list[str]:
+    bundle_changes = [
+        path
+        for path in changed_paths
+        if _path_is_native_agent_bundle_input(path)
+        and path != NATIVE_AGENT_VERSION_PATH
+    ]
+    if not bundle_changes or NATIVE_AGENT_VERSION_PATH in changed_paths:
+        return []
+    shown = ", ".join(bundle_changes[:6])
+    if len(bundle_changes) > 6:
+        shown += ", ..."
+    return [
+        "native-agent bundle inputs changed since "
+        f"{previous_tag} without bumping {NATIVE_AGENT_VERSION_PATH}: {shown}"
+    ]
+
+
+def _previous_release_tag() -> str | None:
+    current_tag = f"v{CURRENT_RELEASE_VERSION}"
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "tag", "--merged", "HEAD", "--sort=-version:refname"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        tag = line.strip()
+        if re.fullmatch(r"v\d+\.\d+\.\d+", tag) and tag != current_tag:
+            return tag
+    return None
+
+
+def _git_changed_paths(base_ref: str, *paths: str) -> list[str] | None:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "diff", "--name-only", f"{base_ref}..HEAD", "--", *paths],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _path_is_native_agent_bundle_input(path: str) -> bool:
+    return any(
+        path == watched or path.startswith(f"{watched}/")
+        for watched in NATIVE_AGENT_BUNDLE_INPUT_PATHS
+    )
 
 
 def check_home_assistant_deprecations() -> list[str]:

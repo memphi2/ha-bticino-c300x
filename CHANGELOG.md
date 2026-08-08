@@ -2,6 +2,14 @@
 
 ## v1.9.1 - Unreleased
 
+### Fixed
+
+- Bump the packaged native-agent version to `1.9.1` after the v1.9.0 release
+  changed the agent binary while still reporting `1.8.3`, so Home Assistant can
+  reliably detect whether the restarted process is actually the updated agent.
+- Add a release gate that rejects native-agent or device-bundle changes unless
+  `native_agent/VERSION` is changed in the same release.
+
 ## v1.9.0 - 2026-08-08
 
 ### Added

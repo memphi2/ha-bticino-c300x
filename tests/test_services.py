@@ -265,6 +265,26 @@ class _FakeApi:
 
     async def async_answer_doorbell_call(self) -> dict[str, Any]:
         self.answer_doorbell_call_calls.append(True)
+        bridge = dict(self.doorbell_video_status.get("bridge", {}))
+        bridge.update(
+            {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "ring_audio_active": True,
+                "ring_answer_requested": False,
+                "ring_answered": True,
+                "ring_hangup_requested": False,
+                "unanswered_ring_call": False,
+            }
+        )
+        self.doorbell_video_status = {
+            **self.doorbell_video_status,
+            "available": True,
+            "window_available": True,
+            "media_owner": "ring",
+            "bridge": bridge,
+        }
         return {"ok": True, "audio": True}
 
     async def async_set_doorstation_audio_gain_db(
@@ -278,6 +298,9 @@ class _FakeApi:
         self.hangup_doorbell_call_calls += 1
         if self.hangup_doorbell_call_error is not None:
             raise self.hangup_doorbell_call_error
+        bridge = dict(self.doorbell_video_status.get("bridge", {}))
+        bridge["ring_hangup_requested"] = True
+        self.doorbell_video_status = {**self.doorbell_video_status, "bridge": bridge}
         return {"ok": True}
 
     async def async_capture_doorbell_call(self) -> dict[str, Any]:
@@ -1597,7 +1620,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
             }
         ]
         assert api.capture_doorbell_call_calls == 0
-        assert api.doorbell_video_status_calls == 1
+        assert api.doorbell_video_status_calls == 3
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1642,7 +1665,7 @@ def test_capture_doorbell_call_service_uses_stored_runtime_data(monkeypatch) -> 
         captured_entry = calls[0]["args"][1]
         assert captured_entry.entry_id == "entry-id"
         assert captured_entry.runtime_data is runtime_data
-        assert api.doorbell_video_status_calls == 1
+        assert api.doorbell_video_status_calls == 3
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1872,7 +1895,7 @@ def test_capture_doorbell_call_service_allows_shared_ring_preview(
         await handler(types.SimpleNamespace(data={}))
 
         assert len(calls) == 1
-        assert api.doorbell_video_status_calls == 1
+        assert api.doorbell_video_status_calls == 3
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 
@@ -1961,7 +1984,305 @@ def test_capture_doorbell_call_service_answers_audio_capture_without_announcemen
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
         await handler(types.SimpleNamespace(data={}))
 
-        assert api.doorbell_video_status_calls == 1
+        assert api.doorbell_video_status_calls == 3
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_waits_for_answered_ring_before_capture(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        statuses = [
+            {"bridge": {"media_owner": "idle", "clients": 0}},
+            {"bridge": {"media_owner": "ring", "ring_call_active": True}},
+            {
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "ring_answer_requested": True,
+                }
+            },
+            {
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "ring_audio_active": True,
+                    "ring_answered": True,
+                }
+            },
+        ]
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[str] = []
+
+        async def _status() -> dict[str, Any]:
+            if statuses:
+                return statuses.pop(0)
+            raise AssertionError("unexpected extra status poll")
+
+        async def _answer() -> dict[str, Any]:
+            calls.append("answer")
+            api.answer_doorbell_call_calls.append(True)
+            return {"ok": True, "audio": True}
+
+        async def _hangup() -> dict[str, Any]:
+            calls.append("hangup")
+            api.hangup_doorbell_call_calls += 1
+            return {"ok": True}
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            assert statuses == []
+            calls.append("capture")
+
+        api.async_doorbell_video_status = _status  # type: ignore[method-assign]
+        api.async_answer_doorbell_call = _answer  # type: ignore[method-assign]
+        api.async_hangup_doorbell_call = _hangup  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            ring_capture_use_cases,
+            "_RING_CAPTURE_ANSWER_READY_INTERVAL_SECONDS",
+            0,
+        )
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert calls == ["answer", "capture", "hangup"]
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_tolerates_transient_status_gap_after_answer(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        api = _FakeApi()
+        statuses = [
+            {"bridge": {"media_owner": "idle", "clients": 0}},
+            {"bridge": {"media_owner": "idle", "clients": 0}},
+            {
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "ring_answer_requested": True,
+                }
+            },
+            {
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "ring_audio_active": True,
+                    "ring_answered": True,
+                }
+            },
+        ]
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        calls: list[str] = []
+
+        async def _status() -> dict[str, Any]:
+            if statuses:
+                return statuses.pop(0)
+            raise AssertionError("unexpected extra status poll")
+
+        async def _answer() -> dict[str, Any]:
+            calls.append("answer")
+            api.answer_doorbell_call_calls.append(True)
+            return {"ok": True, "audio": True}
+
+        async def _hangup() -> dict[str, Any]:
+            calls.append("hangup")
+            api.hangup_doorbell_call_calls += 1
+            return {"ok": True}
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            assert statuses == []
+            calls.append("capture")
+
+        api.async_doorbell_video_status = _status  # type: ignore[method-assign]
+        api.async_answer_doorbell_call = _answer  # type: ignore[method-assign]
+        api.async_hangup_doorbell_call = _hangup  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            ring_capture_use_cases,
+            "_RING_CAPTURE_ANSWER_READY_INTERVAL_SECONDS",
+            0,
+        )
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert calls == ["answer", "capture", "hangup"]
+        assert api.answer_doorbell_call_calls == [True]
+        assert api.hangup_doorbell_call_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_ring_capture_answer_wait_reads_video_status_bridge_fields() -> None:
+    assert ring_capture_use_cases._ring_answer_media_ready(
+        {"bridge": {"ring_answered": True}}
+    )
+    assert ring_capture_use_cases._ring_answer_media_ready(
+        {"bridge": {"ring_audio_active": True}}
+    )
+    assert not ring_capture_use_cases._ring_answer_media_ready(
+        {"answered": True, "audio_active": True}
+    )
+    assert not ring_capture_use_cases._ring_call_still_active({"active": True})
+
+
+def test_capture_doorbell_call_service_uses_ring_hangup_prepare(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        calls: list[str] = []
+
+        class _OrderedApi(_FakeApi):
+            async def async_answer_doorbell_call(self) -> dict[str, Any]:
+                calls.append("answer")
+                return await super().async_answer_doorbell_call()
+
+            async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+                calls.append("hangup")
+                return await super().async_hangup_doorbell_call()
+
+        api = _OrderedApi()
+
+        async def _prepare_stop() -> None:
+            calls.append("prepare")
+
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+                prepare_doorbell_video_stop=_prepare_stop,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            calls.append("capture")
+
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        await handler(types.SimpleNamespace(data={}))
+
+        assert calls == ["answer", "capture", "prepare", "hangup"]
+
+    asyncio.run(_run())
+
+
+def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    async def _run() -> None:
+        calls: list[str] = []
+
+        class _OrderedApi(_FakeApi):
+            async def async_answer_doorbell_call(self) -> dict[str, Any]:
+                calls.append("answer")
+                self.answer_doorbell_call_calls.append(True)
+                return {"ok": True, "audio": True}
+
+            async def async_hangup_doorbell_call(self) -> dict[str, Any]:
+                calls.append("hangup")
+                self.hangup_doorbell_call_calls += 1
+                return {"ok": True}
+
+        api = _OrderedApi()
+        statuses = [
+            {"bridge": {"media_owner": "idle", "clients": 0}},
+            {
+                "bridge": {
+                    "media_owner": "ring",
+                    "ring_call_active": True,
+                    "ring_media_active": True,
+                    "ring_answer_requested": True,
+                }
+            },
+        ]
+
+        async def _status() -> dict[str, Any]:
+            api.doorbell_video_status_calls += 1
+            if statuses:
+                return statuses.pop(0)
+            return {"bridge": {"media_owner": "idle"}}
+
+        async def _prepare_stop() -> None:
+            calls.append("prepare")
+
+        async def _capture(*_args: Any, **_kwargs: Any) -> None:
+            raise AssertionError("capture must not start before answered media")
+
+        api.async_doorbell_video_status = _status  # type: ignore[method-assign]
+        entry = _FakeEntry(
+            _FakeRuntimeData(
+                capabilities={
+                    "doorbell_video": {"supported": True},
+                    "doorbell_call": {"supported": True},
+                },
+                api=api,
+                prepare_doorbell_video_stop=_prepare_stop,
+            ),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        monkeypatch.setattr(
+            ring_capture_use_cases,
+            "_RING_CAPTURE_ANSWER_READY_INTERVAL_SECONDS",
+            0,
+        )
+        monkeypatch.setattr(
+            ring_capture_use_cases,
+            "async_capture_doorbell_ring_call",
+            _capture,
+        )
+
+        await async_setup_services(hass)  # type: ignore[arg-type]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        try:
+            await handler(types.SimpleNamespace(data={}))
+        except SERVICE_VALIDATION_ERROR as err:
+            assert _translation_key(err) == "agent_command_failed"
+        else:
+            raise AssertionError("answer wait failure was not translated")
+
+        assert calls == ["answer", "prepare", "hangup"]
         assert api.answer_doorbell_call_calls == [True]
         assert api.hangup_doorbell_call_calls == 1
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
@@ -18,6 +19,10 @@ from .api import (
 )
 from .const import DOMAIN
 from .entry_types import BticinoC300XConfigEntry
+from .ring_capture import (
+    RING_CAPTURE_PLAYBACK_MIME_TYPE,
+    ring_capture_media_path,
+)
 from .video_messages import VIDEO_MESSAGE_PLAYBACK_MIME_TYPE
 
 if TYPE_CHECKING:
@@ -54,6 +59,7 @@ def async_setup_media_view(hass: HomeAssistant) -> None:
         return
     hass.http.register_view(cast(Any, C300XVideoMessageMediaView()))
     hass.http.register_view(cast(Any, C300XVoiceMemoMediaView()))
+    hass.http.register_view(cast(Any, C300XRingCaptureMediaView()))
     domain_data[_VIEW_REGISTERED] = True
 
 
@@ -157,6 +163,33 @@ class C300XVoiceMemoMediaView(HomeAssistantView):
             body=content,
             content_type=content_type,
             headers={"Cache-Control": "no-store"},
+        )
+
+
+class C300XRingCaptureMediaView(HomeAssistantView):
+    """Serve local C300X ring-capture MP4 files through HA auth."""
+
+    url = f"/api/{DOMAIN}/ring-captures/{{file_name}}"
+    name = f"api:{DOMAIN}:ring_capture"
+    requires_auth = True
+
+    async def get(self, request: web.Request, file_name: str) -> web.StreamResponse:
+        """Return a local ring-capture MP4 file."""
+
+        hass: HomeAssistant = request.app["hass"]
+        path: Path | None = await hass.async_add_executor_job(
+            ring_capture_media_path,
+            hass,
+            unquote(file_name),
+        )
+        if path is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(
+            path,
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Type": RING_CAPTURE_PLAYBACK_MIME_TYPE,
+            },
         )
 
 

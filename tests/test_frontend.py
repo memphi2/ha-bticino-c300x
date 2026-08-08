@@ -23,6 +23,7 @@ from custom_components.bticino_c300x.frontend import (
     _async_ensure_lovelace_resource,
     _frontend_asset_version,
     _register_frontend_module_url,
+    _static_path_config,
     async_setup_frontend,
 )
 
@@ -89,8 +90,8 @@ class _FakeHass:
 
 
 def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> None:
-    http_module = types.ModuleType("homeassistant.components.http")
-    http_module.StaticPathConfig = _StaticPathConfig
+    http_server_module = types.ModuleType("homeassistant.components.http.server")
+    http_server_module.StaticPathConfig = _StaticPathConfig
     frontend_module = types.ModuleType("homeassistant.components.frontend")
 
     def add_extra_js_url(hass: _FakeHass, url: str, es5: bool = False) -> None:
@@ -103,7 +104,11 @@ def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> N
 
     frontend_module.add_extra_js_url = add_extra_js_url
     frontend_module.remove_extra_js_url = remove_extra_js_url
-    monkeypatch.setitem(sys.modules, "homeassistant.components.http", http_module)
+    monkeypatch.setitem(
+        sys.modules,
+        "homeassistant.components.http.server",
+        http_server_module,
+    )
     monkeypatch.setitem(
         sys.modules,
         "homeassistant.components.frontend",
@@ -128,6 +133,28 @@ def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> N
     )
     assert hass.data[DOMAIN][DATA_FRONTEND_MODULE_URL] == module_url
     assert hass.extra_module_urls == [metadata_url]
+
+
+def test_static_path_config_uses_legacy_http_export(monkeypatch: Any) -> None:
+    import custom_components.bticino_c300x.frontend as frontend_module
+
+    http_module = types.ModuleType("homeassistant.components.http")
+    http_module.StaticPathConfig = _StaticPathConfig
+
+    def import_http_module(name: str) -> types.ModuleType:
+        if name == "homeassistant.components.http.server":
+            raise ModuleNotFoundError(name)
+        if name == "homeassistant.components.http":
+            return http_module
+        raise AssertionError(name)
+
+    monkeypatch.setattr(frontend_module, "import_module", import_http_module)
+
+    assert _static_path_config("/url", "/path", False) == _StaticPathConfig(
+        "/url",
+        "/path",
+        False,
+    )
 
 
 def test_frontend_asset_version_tracks_content_not_mtime(
@@ -1028,3 +1055,54 @@ def test_bundled_card_blocks_passive_ring_preview_hangup() -> None:
     assert 'return !doorbellAnswered && ringPreviewActive ? "busy" : "hang_up";' in state_source
     assert "return this._card._lifecycle.doorbellAnswered;" in actions_source
     assert "return this._lifecycle.doorbellAnswered;" not in source
+
+
+def test_bundled_card_consumes_notification_answer_marker_per_ring_lifecycle() -> None:
+    source = CARD_SOURCE.read_text(encoding="utf-8")
+    update_block = source[
+        source.index("  _updateState()") : source.index(
+            "  async _ensureDoorbellPreview()",
+            source.index("  _updateState()"),
+        )
+    ]
+    start_block = source[
+        source.index("  async _startNotificationAnsweredDoorbellStream()") : source.index(
+            "  async _startPassiveAnsweredDoorbellPreview()",
+            source.index("  async _startNotificationAnsweredDoorbellStream()"),
+        )
+    ]
+    should_start_block = source[
+        source.index("  _shouldStartNotificationAnsweredDoorbellStream(") : source.index(
+            "  _ringAnswerLaunchRequest(",
+            source.index("  _shouldStartNotificationAnsweredDoorbellStream("),
+        )
+    ]
+    sync_block = source[
+        source.index("  _syncRingAnswerLaunchRequest(") : source.index(
+            "  _claimRingAnswerLaunchRequest(",
+            source.index("  _syncRingAnswerLaunchRequest("),
+        )
+    ]
+    request_block = source[
+        source.index("  _ringAnswerLaunchRequest(") : source.index(
+            "  _syncRingAnswerLaunchRequest(",
+            source.index("  _ringAnswerLaunchRequest("),
+        )
+    ]
+    before_first_stream_await = start_block[: start_block.index("await")]
+
+    assert "C300X_RING_ANSWER_LAUNCH_CLAIMS_KEY" in source
+    assert 'this._ringAnswerLaunchClaimKey = "";' in source
+    assert "this._syncRingAnswerLaunchRequest(entity, mediaUpdate.ringLifecycleActive);" in update_block
+    assert "&& !this._isHomeCallMode()" in should_start_block
+    assert "&& this._ringAnswerLaunchPending" in should_start_block
+    assert "doorbellAnswered = true" not in before_first_stream_await
+    assert "if (started)" in start_block
+    assert "this._completeRingAnswerLaunchRequest();" in start_block
+    assert "this._failRingAnswerLaunchRequest();" in start_block
+    assert 'target !== "1" && target !== entityId' in request_block
+    assert "C300X_RING_ANSWER_LAUNCH_LEGACY_CLAIM" in request_block
+    assert "if (this._isHomeCallMode())" in sync_block
+    assert "this._claimRingAnswerLaunchRequest(entity);" in sync_block
+    assert "_ringAnswerLaunchRequest(entity, { allowLegacy: false })" in sync_block
+    assert "this._completeRingAnswerLaunchRequest();" in sync_block

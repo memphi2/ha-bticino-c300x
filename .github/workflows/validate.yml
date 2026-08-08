@@ -21,16 +21,17 @@ jobs:
             requirements-lock: requirements-dev-min-ha.txt
           - name: current-ha
             python-version: "3.14"
-            homeassistant: "2026.7.1"
+            homeassistant: "2026.8.1"
             requirements-lock: requirements-dev.txt
     name: validate (${{ matrix.name }})
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Python validation tools
         run: |
+          python -m pip install "homeassistant==${{ matrix.homeassistant }}"
           python -m pip install -r "${{ matrix.requirements-lock }}"
           python -m pip check
           python - <<'PY'
@@ -51,7 +52,7 @@ jobs:
   dependabot:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Dependabot configuration
         run: |
           test -f .github/dependabot.yml
@@ -61,7 +62,7 @@ jobs:
   hacs:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: HACS validation
         uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
@@ -73,6 +74,6 @@ jobs:
   hassfest:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Hassfest
-        uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c # master
+        uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb # master

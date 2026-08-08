@@ -42,6 +42,7 @@ from .const import (
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_VIDEO_PORT,
     DEFAULT_VIDEO_STREAM_PATH,
+    DOMAIN,
 )
 from .entry_config import entry_config_value
 from .error_text import compact_error_text
@@ -53,6 +54,7 @@ from .value_parsing import optional_mapping
 
 _RTSP_READY_TIMEOUT_SECONDS = 5.0
 _CAPTURE_WORK_DIR = Path("/config/c300x")
+RING_CAPTURE_PLAYBACK_MIME_TYPE = "video/mp4"
 _CAPTURE_FRAME_COUNT = 3
 _CAPTURE_FRAME_START_SECONDS = 1.0
 _CAPTURE_FRAME_END_MARGIN_SECONDS = 0.2
@@ -320,13 +322,143 @@ def _capture_output_path(hass: Any, output_path: str | None) -> Path:
     target = (
         Path(output_path).expanduser()
         if output_path
-        else Path("/media/c300x")
+        else _default_capture_output_dir(hass)
         / f"doorbell_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.mp4"
     )
     resolved = _safe_c300x_path(hass, target, "capture output")
     if resolved.suffix.lower() != ".mp4":
         raise HomeAssistantError("C300X capture output must be an MP4 file")
     return resolved
+
+
+def ring_capture_media_url(file_name: str) -> str:
+    """Return the authenticated Home Assistant URL for a ring-capture MP4."""
+
+    from urllib.parse import quote
+
+    return f"/api/{DOMAIN}/ring-captures/{quote(file_name, safe='')}"
+
+
+def ring_capture_media_source_id(file_name: str) -> str:
+    """Return the Home Assistant media-source id for a ring-capture MP4."""
+
+    from urllib.parse import quote
+
+    return f"media-source://{DOMAIN}/capture/{quote(file_name, safe='')}"
+
+
+def ring_capture_media_items(hass: Any) -> list[dict[str, Any]]:
+    """Return local ring-capture MP4s sorted newest first."""
+
+    items_by_name: dict[str, dict[str, Any]] = {}
+    for directory in _capture_media_dirs(hass):
+        safe_dir = _safe_c300x_path(hass, directory, "ring capture media directory")
+        if not safe_dir.is_dir():
+            continue
+        for path in safe_dir.glob("*.mp4"):
+            if not path.is_file():
+                continue
+            file_name = path.name
+            if file_name in items_by_name:
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            items_by_name[file_name] = {
+                "id": file_name,
+                "title": _ring_capture_title(file_name),
+                "path": str(path),
+                "modified_at": stat.st_mtime,
+                "size": stat.st_size,
+            }
+    return sorted(
+        items_by_name.values(),
+        key=lambda item: (float(item["modified_at"]), str(item["id"])),
+        reverse=True,
+    )
+
+
+def ring_capture_media_path(hass: Any, file_name: str) -> Path | None:
+    """Return a safe local path for a listed ring-capture MP4."""
+
+    try:
+        safe_name = _ring_capture_file_name(file_name)
+    except ValueError:
+        return None
+    for directory in _capture_media_dirs(hass):
+        path = _safe_c300x_path(
+            hass,
+            directory / safe_name,
+            "ring capture media file",
+        )
+        if path.is_file():
+            return path
+    return None
+
+
+def _default_capture_output_dir(hass: Any) -> Path:
+    return _capture_media_dirs(hass)[0]
+
+
+def _capture_media_dirs(hass: Any) -> tuple[Path, ...]:
+    config = getattr(hass, "config", None)
+    roots: list[Path] = []
+    media_dirs = getattr(config, "media_dirs", None)
+    if isinstance(media_dirs, Mapping):
+        local_media_dir = _media_dir_path(media_dirs.get("local"))
+        if local_media_dir is not None:
+            roots.append(local_media_dir / "c300x")
+        for media_dir in media_dirs.values():
+            media_path = _media_dir_path(media_dir)
+            if media_path is not None:
+                roots.append(media_path / "c300x")
+    if config is not None and hasattr(config, "path"):
+        roots.append(Path(config.path("media", "c300x")))
+    roots.append(Path("/media/c300x"))
+    return _dedupe_paths(roots)
+
+
+def _media_dir_path(value: Any) -> Path | None:
+    if isinstance(value, str) and value:
+        return Path(value)
+    return None
+
+
+def _dedupe_paths(paths: list[Path]) -> tuple[Path, ...]:
+    result: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return tuple(result)
+
+
+def _ring_capture_file_name(file_name: str) -> str:
+    candidate = file_name.strip()
+    if (
+        not candidate
+        or Path(candidate).name != candidate
+        or "/" in candidate
+        or "\\" in candidate
+        or Path(candidate).suffix.lower() != ".mp4"
+    ):
+        raise ValueError("invalid ring capture file name")
+    return candidate
+
+
+def _ring_capture_title(file_name: str) -> str:
+    stem = Path(file_name).stem
+    if not stem.startswith("doorbell_"):
+        return file_name
+    try:
+        timestamp = datetime.strptime(stem.removeprefix("doorbell_"), "%Y%m%d_%H%M%S")
+    except ValueError:
+        return file_name
+    return f"Ring capture {timestamp:%Y-%m-%d %H:%M:%S}"
 
 
 def _capture_work_dir(hass: Any, wav_output_dir: str | None = None) -> Path:
@@ -394,6 +526,15 @@ def _safe_c300x_path(hass: Any, target: Path, path_kind: str) -> Path:
         allowed_roots.append(Path(config.path("c300x")))
         allowed_roots.append(Path(config.path("media", "c300x")))
         allowed_roots.append(Path(config.path("www", "c300x")))
+        media_dirs = getattr(config, "media_dirs", None)
+        if isinstance(media_dirs, Mapping):
+            allowed_roots.extend(
+                media_dir / "c300x"
+                for media_dir in (
+                    _media_dir_path(value) for value in media_dirs.values()
+                )
+                if media_dir is not None
+            )
     else:
         allowed_roots.append(Path("/config/www/c300x"))
     allowed = [_resolve_root(root) for root in allowed_roots]

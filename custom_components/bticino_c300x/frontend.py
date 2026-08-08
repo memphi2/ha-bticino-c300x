@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from hashlib import sha256
+from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -43,10 +44,8 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
     previous_module_url = domain_data.get(DATA_FRONTEND_MODULE_URL)
     previous_metadata_url = domain_data.get(DATA_FRONTEND_METADATA_URL)
     if previous_module_url != module_url or previous_metadata_url != metadata_url:
-        from homeassistant.components.http import StaticPathConfig
-
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(FRONTEND_URL_PATH, str(FRONTEND_DIR), False)]
+            [_static_path_config(FRONTEND_URL_PATH, str(FRONTEND_DIR), False)]
         )
         _register_frontend_module_url(
             hass,
@@ -56,6 +55,18 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         domain_data[DATA_FRONTEND_MODULE_URL] = module_url
         domain_data[DATA_FRONTEND_METADATA_URL] = metadata_url
     await _async_ensure_lovelace_resource(hass, module_url)
+
+
+def _static_path_config(url_path: str, path: str, cache_headers: bool) -> Any:
+    """Build a static path config across supported Home Assistant versions."""
+
+    try:
+        module = import_module("homeassistant.components.http.server")
+        static_path_config = vars(module)["StaticPathConfig"]
+    except (ImportError, KeyError):
+        module = import_module("homeassistant.components.http")
+        static_path_config = vars(module)["StaticPathConfig"]
+    return static_path_config(url_path, path, cache_headers)
 
 
 def _register_frontend_module_url(

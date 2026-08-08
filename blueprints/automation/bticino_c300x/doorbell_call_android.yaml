@@ -144,6 +144,12 @@ variables:
   active_tag: "{{ 'c300x_android_ring_call_active_' ~ action_scope | lower }}"
   answer_action: "{{ 'C300X_ANDROID_RING_ANSWER_' ~ action_scope }}"
   hangup_action: "{{ 'C300X_ANDROID_RING_HANGUP_' ~ action_scope }}"
+  answer_dashboard_path: >-
+    {% set parts = dashboard_path.split('#', 1) %}
+    {% set base = parts[0] %}
+    {% set fragment = '#' ~ parts[1] if parts | length > 1 else '' %}
+    {% set launch_target = event_camera_entity or camera_entity %}
+    {{ base ~ ('&' if '?' in base else '?') ~ 'c300x_ring_answer=' ~ (launch_target | urlencode) ~ fragment }}
 
 condition:
   - condition: template
@@ -215,11 +221,6 @@ action:
               entry_id: "{{ entry_id }}"
           - service: !input notify_service
             data:
-              message: command_webview
-              data:
-                command: "{{ dashboard_path }}"
-          - service: !input notify_service
-            data:
               message: clear_notification
               data:
                 tag: "{{ ring_tag }}"
@@ -245,6 +246,11 @@ action:
                   - action: URI
                     title: "{{ open_title }}"
                     uri: "{{ dashboard_path }}"
+          - service: !input notify_service
+            data:
+              message: command_webview
+              data:
+                command: "{{ answer_dashboard_path }}"
           - wait_for_trigger:
               - platform: event
                 event_type: mobile_app_notification_action

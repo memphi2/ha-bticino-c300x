@@ -44,7 +44,8 @@
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC"
         }
       },
       "user_device_activations": {
@@ -108,7 +109,8 @@
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC"
         }
       },
       "reconfigure_device_activations": {
@@ -198,7 +200,8 @@
           "video_enabled": "Activer les medias du portier (sonnette, a la demande, Home Call)",
           "create_homeassistant_user": "Creer l'utilisateur media Home Assistant pour ces fonctions",
           "doorstation_audio_gain_db": "Gain audio direct platine de rue (dB)",
-          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)"
+          "ring_capture_audio_gain_db": "Gain audio capture sonnette (dB)",
+          "webrtc_ice_policy": "Filtre de candidats ICE WebRTC"
         }
       },
       "device_activations": {

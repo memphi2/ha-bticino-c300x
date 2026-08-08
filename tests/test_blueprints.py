@@ -195,6 +195,11 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
     assert data["variables"]["hangup_action"].startswith(
         "{{ 'C300X_ANDROID_RING_HANGUP_'"
     )
+    assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target = event_camera_entity or camera_entity" in data["variables"]["answer_dashboard_path"]
+    assert "'c300x_ring_answer='" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target | urlencode" in data["variables"]["answer_dashboard_path"]
+    assert "~ fragment" in data["variables"]["answer_dashboard_path"]
     assert wake_action["service"] == "notify_service"
     assert wake_action["data"]["message"] == "command_screen_on"
     assert wake_action["data"]["data"]["command"] == "keep_screen_on"
@@ -237,12 +242,12 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
         "notify_service",
     ]
     assert answer_sequence[0]["data"] == {"entry_id": "{{ entry_id }}"}
-    assert answer_sequence[1]["data"]["message"] == "command_webview"
-    assert answer_sequence[1]["data"]["data"]["command"] == "{{ dashboard_path }}"
-    assert answer_sequence[2]["data"]["message"] == "clear_notification"
-    assert answer_sequence[2]["data"]["data"]["tag"] == "{{ ring_tag }}"
-    assert answer_sequence[3]["data"]["data"]["tag"] == "{{ active_tag }}"
-    assert answer_sequence[3]["data"]["data"]["importance"] == "low"
+    assert answer_sequence[1]["data"]["message"] == "clear_notification"
+    assert answer_sequence[1]["data"]["data"]["tag"] == "{{ ring_tag }}"
+    assert answer_sequence[2]["data"]["data"]["tag"] == "{{ active_tag }}"
+    assert answer_sequence[2]["data"]["data"]["importance"] == "low"
+    assert answer_sequence[3]["data"]["message"] == "command_webview"
+    assert answer_sequence[3]["data"]["data"]["command"] == "{{ answer_dashboard_path }}"
     assert answer_sequence[4]["wait_for_trigger"] == [
         {
             "platform": "event",
@@ -290,6 +295,11 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
     assert data["variables"]["hangup_action"].startswith(
         "{{ 'C300X_IOS_RING_HANGUP_'"
     )
+    assert "dashboard_path.split('#', 1)" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target = event_camera_entity or camera_entity" in data["variables"]["answer_dashboard_path"]
+    assert "'c300x_ring_answer='" in data["variables"]["answer_dashboard_path"]
+    assert "launch_target | urlencode" in data["variables"]["answer_dashboard_path"]
+    assert "~ fragment" in data["variables"]["answer_dashboard_path"]
     assert notify_data["push"]["sound"] == {
         "name": "{{ critical_sound }}",
         "critical": 1,
@@ -299,7 +309,7 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
     assert notify_data["actions"][0] == {
         "action": "{{ answer_action }}",
         "title": "{{ answer_title }}",
-        "uri": "{{ dashboard_path }}",
+        "uri": "{{ answer_dashboard_path }}",
         "activationMode": "foreground",
         "authenticationRequired": False,
     }

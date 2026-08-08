@@ -151,6 +151,7 @@ def test_agent_json_status_contracts_preserve_mapping_fields() -> None:
             "audio_active": False,
             "answer_requested": False,
             "answered": False,
+            "hangup_requested": True,
             "can_answer": True,
             "can_hangup": True,
             "media_owner": "ring",
@@ -161,6 +162,7 @@ def test_agent_json_status_contracts_preserve_mapping_fields() -> None:
             "active_threads": "1",
         }
     )
+    assert ring_status.hangup_requested is True
     home_status = normalize_home_call(
         {
             "available": True,

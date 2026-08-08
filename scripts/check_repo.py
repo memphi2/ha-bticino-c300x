@@ -54,6 +54,10 @@ TEXT_SUFFIXES = {
 
 def _version_minor_prefix(version: str) -> str:
     return version.rsplit(".", maxsplit=1)[0] + "."
+
+
+def _version_minor_label(version: str) -> str:
+    return version.rsplit(".", maxsplit=1)[0] + ".x"
 CODE_SUFFIXES = {
     ".c",
     ".h",
@@ -466,9 +470,17 @@ def check_release_metadata() -> list[str]:
             f"hacs.json must advertise Home Assistant {MIN_HOME_ASSISTANT_VERSION}"
         )
     support = (ROOT / "SUPPORT.md").read_text(encoding="utf-8")
+    min_ha_label = _version_minor_label(MIN_HOME_ASSISTANT_VERSION)
+    current_ha_label = _version_minor_label(CURRENT_HOME_ASSISTANT_VERSION)
+    if min_ha_label == current_ha_label:
+        validated_ha = f"Validated Home Assistant: `{min_ha_label}`"
+    else:
+        validated_ha = (
+            f"Validated Home Assistant: `{min_ha_label}` and `{current_ha_label}`"
+        )
     for expected in (
         f"Minimum Home Assistant: `{MIN_HOME_ASSISTANT_VERSION}`",
-        "Validated Home Assistant: `2026.5.x` and `2026.7.x`",
+        validated_ha,
         f"Python: `{PYTHON_VERSION}`",
         f"C300X firmware: `{VERSION_CONFIG['c300x_firmware']}`",
         "`native_agent/src`",
@@ -587,18 +599,19 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append(f"requirements-dev.in must pin {required_pin}")
     if "homeassistant==" in requirements_in:
         failures.append("requirements-dev.in must leave Home Assistant to the CI lock matrix")
-    expected_current_ha = f"homeassistant=={CURRENT_HOME_ASSISTANT_VERSION}"
-    expected_min_ha = f"homeassistant=={MIN_HOME_ASSISTANT_VERSION}"
-    if expected_current_ha not in current_lock.splitlines():
-        failures.append(f"requirements-dev.txt must pin {expected_current_ha}")
-    if expected_min_ha not in min_lock.splitlines():
-        failures.append(f"requirements-dev-min-ha.txt must pin {expected_min_ha}")
     for path, text in {
         "requirements-dev.txt": current_lock,
         "requirements-dev-min-ha.txt": min_lock,
     }.items():
         if required_pin not in text.splitlines():
             failures.append(f"{path} must pin {required_pin}")
+        if "homeassistant==" in text:
+            failures.append(f"{path} must leave Home Assistant to the CI matrix")
+        for transitive in ("aiohttp", "cryptography", "pillow", "PyJWT"):
+            if re.search(rf"^{re.escape(transitive)}==", text, re.MULTILINE | re.IGNORECASE):
+                failures.append(
+                    f"{path} must not pin Home Assistant transitive dependency {transitive}"
+                )
         if "aiortc==" in text:
             failures.append(f"{path} must not install aiortc")
 
@@ -641,7 +654,7 @@ def check_installer_dependency_pins() -> list[str]:
         failures.append("Dependabot must document the current validation lock it updates")
     if (
         'exclude-paths:\n      - "requirements-dev-min-ha.txt"' not in dependabot
-        or "minimum-HA lock" not in dependabot
+        or "minimum-HA validation lock" not in dependabot
     ):
         failures.append(
             "Dependabot must exclude the minimum-HA validation lock from automatic updates"
@@ -720,6 +733,10 @@ def check_hacs_metadata() -> list[str]:
         if workflow.count(f'python-version: "{PYTHON_VERSION}"') < 2:
             failures.append(
                 f"{workflow_name} must test minimum and current Home Assistant on Python {PYTHON_VERSION}"
+            )
+        if 'pip install "homeassistant==${{ matrix.homeassistant }}"' not in workflow:
+            failures.append(
+                f"{workflow_name} must install Home Assistant from the matrix before validation deps"
             )
         if "requirements-dev.txt" not in workflow or "requirements-dev-min-ha.txt" not in workflow:
             failures.append(f"{workflow_name} must install validation dependencies from lock files")

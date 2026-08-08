@@ -180,6 +180,7 @@ static int build_doorbell_event_video_json(
         "\"ring_audio_active\":%s,"
         "\"ring_answer_requested\":%s,"
         "\"ring_answered\":%s,"
+        "\"ring_hangup_requested\":%s,"
         "\"unanswered_ring_call\":%s,"
         "\"clients\":%d,"
         "\"max_clients\":%d,"
@@ -203,6 +204,7 @@ static int build_doorbell_event_video_json(
         status.ring_audio_active ? "true" : "false",
         status.ring_answer_requested ? "true" : "false",
         status.ring_answered ? "true" : "false",
+        status.ring_hangup_requested ? "true" : "false",
         unanswered_ring_call ? "true" : "false",
         status.clients,
         status.max_clients > 0 ? status.max_clients : 1,

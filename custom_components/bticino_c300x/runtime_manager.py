@@ -126,6 +126,7 @@ class C300XRuntimeManager:
         self.entry.async_on_unload(self.entry.add_update_listener(_async_update_listener))
         await async_setup_services(self.hass)
         await self.async_sync_platform_gate_state()
+        await self.async_sync_activation_state()
         await self.async_forward_platforms()
         self.async_schedule_startup_sync()
         return True
@@ -214,12 +215,18 @@ class C300XRuntimeManager:
             return
 
         api = self._api()
-        await _async_configure_device_activations(self.entry, api)
         await _async_configure_display_bridge(self.hass, self.entry, api)
         if not self._platform_gate_state_loaded:
             await self.async_sync_platform_gate_state()
         await _async_sync_device_user(self.hass, self.entry)
         await _async_refresh_self_test(self.entry)
+
+    async def async_sync_activation_state(self) -> None:
+        """Synchronize device activations before platform entity creation."""
+
+        if not self.connection_state.available:
+            return
+        await _async_configure_device_activations(self.entry, self._api())
 
     async def async_sync_platform_gate_state(self) -> None:
         """Synchronize read-only state needed before platform entity creation."""

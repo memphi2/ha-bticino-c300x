@@ -31,16 +31,19 @@ from .const import (
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
+    CONF_WEBRTC_ICE_POLICY,
     DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
+    DEFAULT_WEBRTC_ICE_POLICY,
     DEVICE_ACTIVATION_FLOW_ACTION_ADD,
     DEVICE_ACTIVATION_FLOW_ACTION_DONE,
     DEVICE_ACTIVATION_FLOW_ACTION_EDIT,
     DEVICE_ACTIVATION_FLOW_ACTION_REMOVE,
     DEVICE_ACTIVATION_MODE_AUTO,
     DEVICE_ACTIVATION_MODES,
+    WEBRTC_ICE_POLICIES,
 )
 from .device_activations import DEVICE_ACTIVATION_TYPES
 
@@ -187,6 +190,7 @@ def reconfigure_features_schema(
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
@@ -195,6 +199,7 @@ def reconfigure_features_schema(
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_webrtc_ice_policy=default_webrtc_ice_policy,
     )
 
 
@@ -331,12 +336,37 @@ def _activation_item_required(
     )
 
 
+_WEBRTC_ICE_POLICY_LABELS = {
+    "all": "All candidates (no filtering)",
+    "drop_link_local": "Drop link-local only (fe80::/169.254.x.x)",
+    "prefer_ipv4_ula": "Prefer IPv4 + IPv6 ULA (drop global/SLAAC + link-local)",
+    "ipv4_only": "IPv4 only (drop all IPv6)",
+}
+
+
+def webrtc_ice_policy_selector() -> Any:
+    """Return the WebRTC ICE candidate filter policy selector."""
+
+    if selector is None:
+        return vol.In(WEBRTC_ICE_POLICIES)
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                {"value": policy, "label": _WEBRTC_ICE_POLICY_LABELS.get(policy, policy)}
+                for policy in WEBRTC_ICE_POLICIES
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
 def _media_feature_schema(
     *,
     default_video_enabled: bool,
     default_create_homeassistant_user: bool,
     default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
+    default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
 ) -> vol.Schema:
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
@@ -360,4 +390,10 @@ def _media_feature_schema(
                 default=default_ring_capture_audio_gain_db,
             )
         ] = audio_gain_db_selector()
+        fields[
+            vol.Optional(
+                CONF_WEBRTC_ICE_POLICY,
+                default=default_webrtc_ice_policy,
+            )
+        ] = webrtc_ice_policy_selector()
     return vol.Schema(fields)

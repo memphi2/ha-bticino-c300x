@@ -52,6 +52,9 @@ if "homeassistant.components.camera" not in sys.modules:
                 "translation_placeholders",
             )
 
+    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
+        pass
+
     camera.Camera = Camera
     camera.CameraEntityFeature = types.SimpleNamespace(STREAM=1)
     camera.WebRTCAnswer = lambda sdp: {"type": "answer", "sdp": sdp}
@@ -67,7 +70,7 @@ if "homeassistant.components.camera" not in sys.modules:
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
     config_validation.config_entry_only_config_schema = lambda _domain: dict
-    exceptions.HomeAssistantError = Exception
+    exceptions.HomeAssistantError = HomeAssistantError
     exceptions.ServiceValidationError = ServiceValidationError
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
@@ -1004,6 +1007,154 @@ def test_doorbell_camera_buffers_provider_ice_candidate_before_offer(
 
     assert provider.candidates == [("session-1", candidate)]
     assert camera._presession_webrtc_candidates == {}
+
+
+def _ice_candidate_address(message: Any) -> str | None:
+    candidate = getattr(message, "candidate", None)
+    line = getattr(candidate, "candidate", None)
+    if not isinstance(line, str):
+        return None
+    parts = line.split()
+    return parts[4] if len(parts) > 4 else None
+
+
+def test_ice_policy_drops_outbound_ipv6_global_candidate_from_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _CandidateEmittingProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            send_message({"type": "answer", "sdp": "v=0\r\n"})
+            for line in (
+                "candidate:1 1 udp 1 192.0.2.5 9 typ host",
+                "candidate:2 1 udp 1 2003:abcd::1 9 typ host",
+                "candidate:3 1 udp 9 2003:abcd::1 9 typ relay raddr 1.2.3.4 rport 9",
+            ):
+                send_message(SimpleNamespace(candidate=SimpleNamespace(candidate=line)))
+
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        options={"webrtc_ice_policy": "prefer_ipv4_ula"},
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    _install_fake_webrtc_provider(monkeypatch, _CandidateEmittingProvider())
+    _stub_rtsp_ready(camera)
+
+    forwarded: list[Any] = []
+
+    async def _run() -> None:
+        await camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-1",
+            forwarded.append,
+        )
+
+    asyncio.run(_run())
+
+    # Answer + IPv4 host + IPv6 relay reach the browser; IPv6 global host dropped.
+    assert [_ice_candidate_address(m) for m in forwarded] == [
+        None,
+        "192.0.2.5",
+        "2003:abcd::1",
+    ]
+
+
+def test_ice_policy_drops_candidates_embedded_in_provider_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AnswerCandidateProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            send_message(
+                {
+                    "type": "answer",
+                    "answer": (
+                        "v=0\r\n"
+                        "a=candidate:1 1 udp 1 192.0.2.5 9 typ host\r\n"
+                        "a=candidate:2 1 udp 1 2003:abcd::1 9 typ host\r\n"
+                        "a=candidate:3 1 udp 9 2003:abcd::1 9 typ relay raddr 1.2.3.4 rport 9\r\n"
+                    ),
+                }
+            )
+
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        options={"webrtc_ice_policy": "prefer_ipv4_ula"},
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    _install_fake_webrtc_provider(monkeypatch, _AnswerCandidateProvider())
+    _stub_rtsp_ready(camera)
+
+    forwarded: list[Any] = []
+
+    async def _run() -> None:
+        await camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-1",
+            forwarded.append,
+        )
+
+    asyncio.run(_run())
+
+    answer = _webrtc_message_value(forwarded[0], "answer")
+    assert "192.0.2.5" in answer
+    assert "typ relay" in answer
+    assert "2003:abcd::1 9 typ host" not in answer
+
+
+def test_ice_policy_all_forwards_every_outbound_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _CandidateEmittingProvider(_FakeWebRTCProvider):
+        async def async_handle_async_webrtc_offer(
+            self,
+            camera: C300XDoorbellCamera,
+            offer_sdp: str,
+            session_id: str,
+            send_message: Any,
+        ) -> None:
+            send_message({"type": "answer", "sdp": "v=0\r\n"})
+            send_message(
+                SimpleNamespace(
+                    candidate=SimpleNamespace(
+                        candidate="candidate:2 1 udp 1 2003:abcd::1 9 typ host"
+                    )
+                )
+            )
+
+    entry = _FakeEntry(
+        data={"agent_host": "127.0.0.1", "video_port": 6554},
+        options={"webrtc_ice_policy": "all"},
+    )
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()
+    _install_fake_webrtc_provider(monkeypatch, _CandidateEmittingProvider())
+    _stub_rtsp_ready(camera)
+
+    forwarded: list[Any] = []
+
+    async def _run() -> None:
+        await camera.async_handle_async_webrtc_offer(
+            "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
+            "session-1",
+            forwarded.append,
+        )
+
+    asyncio.run(_run())
+
+    assert [_ice_candidate_address(m) for m in forwarded] == [None, "2003:abcd::1"]
 
 
 def test_doorbell_camera_closing_provider_sessions_controls_media_stop(
@@ -3065,6 +3216,8 @@ def test_metrics_heartbeat_skips_reconcile_while_one_is_in_flight() -> None:
     assert scheduled == []  # no pile-up while a reconcile is already running
 
     camera._reconcile_in_flight = False
+    camera._handle_system_metrics_changed("entry-1")
+    assert len(scheduled) == 1
     camera._handle_system_metrics_changed("entry-1")
     assert len(scheduled) == 1
 

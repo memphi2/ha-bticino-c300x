@@ -10,10 +10,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import json_io as json_io_module
 from custom_components.bticino_c300x import ring_ai as ring_ai_module
+from custom_components.bticino_c300x import ring_capture as ring_capture_module
 from custom_components.bticino_c300x.json_io import async_write_json_file
 from custom_components.bticino_c300x.ring_ai import (
     DEFAULT_RING_AI_RESULT_PATH,
@@ -33,6 +33,9 @@ from custom_components.bticino_c300x.ring_ai import (
     _safe_mtime,
     async_run_wyoming_ring_analysis,
 )
+
+ring_ai_module.HomeAssistantError = ring_capture_module.HomeAssistantError
+HomeAssistantError = ring_capture_module.HomeAssistantError
 
 
 class _FakeConfig:

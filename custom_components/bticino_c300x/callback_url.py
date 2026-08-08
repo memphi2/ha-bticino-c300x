@@ -42,21 +42,30 @@ async def async_generate_agent_callback_url(
     """
 
     from homeassistant.components import webhook
+    from homeassistant.helpers.network import NoURLAvailableError
+
+    callback_base_url = str(entry_config_value(entry, CONF_CALLBACK_BASE_URL, "") or "")
+    callback_path = webhook.async_generate_path(webhook_id)
+    if callback_base_url.strip():
+        callback_url = apply_callback_base_path(callback_path, callback_base_url)
+        return await async_rewrite_link_local_callback_url(hass, entry, callback_url)
 
     try:
-        callback_url = webhook.async_generate_url(
-            hass,
-            webhook_id,
-            allow_external=False,
-            allow_internal=True,
-            prefer_external=False,
-        )
-    except TypeError:
-        callback_url = webhook.async_generate_url(hass, webhook_id)
-    callback_url = apply_callback_base_url(
-        callback_url,
-        str(entry_config_value(entry, CONF_CALLBACK_BASE_URL, "") or ""),
-    )
+        try:
+            callback_url = webhook.async_generate_url(
+                hass,
+                webhook_id,
+                allow_external=False,
+                allow_internal=True,
+                prefer_external=False,
+            )
+        except TypeError:
+            callback_url = webhook.async_generate_url(hass, webhook_id)
+    except NoURLAvailableError:
+        callback_base_url = await async_suggest_callback_base_url(hass, entry)
+        if not callback_base_url:
+            raise
+        callback_url = apply_callback_base_path(callback_path, callback_base_url)
     return await async_rewrite_link_local_callback_url(hass, entry, callback_url)
 
 
@@ -141,6 +150,15 @@ def apply_callback_base_url(callback_url: str, callback_base_url: str) -> str:
     if not base_url:
         return callback_url
     callback = urlsplit(callback_url)
+    base = urlsplit(base_url)
+    return urlunsplit((base.scheme, base.netloc, callback.path, callback.query, ""))
+
+
+def apply_callback_base_path(callback_path: str, callback_base_url: str) -> str:
+    """Return a callback URL using a generated webhook path and base endpoint."""
+
+    base_url = normalize_callback_base_url(callback_base_url)
+    callback = urlsplit(callback_path)
     base = urlsplit(base_url)
     return urlunsplit((base.scheme, base.netloc, callback.path, callback.query, ""))
 

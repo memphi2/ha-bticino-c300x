@@ -5857,6 +5857,9 @@ void c300x_media_bridge_status(const struct c300x_video *video, struct c300x_vid
         status->ring_audio_active = g_bridge.ring_audio_active ? 1 : 0;
         status->ring_answer_requested = g_bridge.ring_answer_requested ? 1 : 0;
         status->ring_answered = g_bridge.ring_answered ? 1 : 0;
+        status->ring_hangup_requested = (
+            g_bridge.ring_call_stop || g_bridge.ring_send_bye
+        ) ? 1 : 0;
         status->home_call_running = g_bridge.home_call_started ? 1 : 0;
         status->home_call_active = g_bridge.home_call_active ? 1 : 0;
         status->home_call_answered = g_bridge.home_call_answered ? 1 : 0;

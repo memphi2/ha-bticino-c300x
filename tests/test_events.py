@@ -29,6 +29,7 @@ helpers_dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
 helpers_event = types.ModuleType("homeassistant.helpers.event")
 helpers_entity = types.ModuleType("homeassistant.helpers.entity")
 helpers_entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
+helpers_network = types.ModuleType("homeassistant.helpers.network")
 helpers_config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 core = types.ModuleType("homeassistant.core")
 
@@ -46,6 +47,10 @@ class DeviceInfo(dict):  # pragma: no cover - import-time stub only
 
 
 class Entity:  # pragma: no cover - import-time stub only
+    pass
+
+
+class NoURLAvailableError(Exception):  # pragma: no cover - import-time stub only
     pass
 
 
@@ -107,7 +112,12 @@ def _webhook_url(_: HomeAssistant, webhook_id: str, **kwargs: Any) -> str:
     return f"http://localhost:8123/webhook/{webhook_id}"
 
 
+def _webhook_path(webhook_id: str) -> str:
+    return f"/webhook/{webhook_id}"
+
+
 webhook.async_generate_url = _webhook_url
+webhook.async_generate_path = _webhook_path
 helpers_dispatcher.async_dispatcher_send = fake_dispatcher.async_dispatcher_send
 helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
 helpers_event.async_call_later = fake_scheduler.async_call_later
@@ -115,6 +125,7 @@ helpers_entity.DeviceInfo = DeviceInfo
 helpers_entity.Entity = Entity
 helpers_entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
 helpers_entity_registry.async_get = lambda hass: getattr(hass, "entity_registry", None)
+helpers_network.NoURLAvailableError = NoURLAvailableError
 helpers_config_validation.config_entry_only_config_schema = lambda _domain: dict
 
 components.webhook = webhook
@@ -122,6 +133,7 @@ helpers.dispatcher = helpers_dispatcher
 helpers.event = helpers_event
 helpers.entity = helpers_entity
 helpers.entity_registry = helpers_entity_registry
+helpers.network = helpers_network
 helpers.config_validation = helpers_config_validation
 core.HomeAssistant = HomeAssistant
 core.CALLBACK_TYPE = type(_ScheduledCall(0, lambda *args, **kwargs: None))
@@ -133,15 +145,19 @@ sys.modules["homeassistant.helpers.dispatcher"] = helpers_dispatcher
 sys.modules["homeassistant.helpers.event"] = helpers_event
 sys.modules["homeassistant.helpers.entity"] = helpers_entity
 sys.modules["homeassistant.helpers.entity_registry"] = helpers_entity_registry
+sys.modules["homeassistant.helpers.network"] = helpers_network
 sys.modules["homeassistant.helpers.config_validation"] = helpers_config_validation
 sys.modules["homeassistant.core"] = core
 
 
 @pytest.fixture(autouse=True)
 def restore_webhook_stub() -> None:
+    homeassistant.components = components
     components.webhook = webhook
+    sys.modules["homeassistant.components"] = components
     sys.modules["homeassistant.components.webhook"] = webhook
     webhook.async_generate_url = _webhook_url
+    webhook.async_generate_path = _webhook_path
 
 from custom_components.bticino_c300x.events import (  # noqa: E402,I001
     _filter_events_for_active_entities,

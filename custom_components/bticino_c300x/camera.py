@@ -219,7 +219,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     """Camera that exposes the agent media bridge through native WebRTC."""
 
     _attr_icon = "mdi:cctv"
-    _attr_frontend_stream_type = "web_rtc"
     _attr_should_poll = False
     _attr_supported_features = CameraEntityFeature.STREAM
     _attr_translation_key = "doorbell_camera"

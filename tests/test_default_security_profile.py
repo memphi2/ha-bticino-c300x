@@ -124,7 +124,6 @@ def test_video_default_is_webrtc_on_demand_with_persistent_rtsp_listener() -> No
         "Camera that exposes the agent media bridge through native WebRTC"
         in camera_text
     )
-    assert "_attr_frontend_stream_type = \"web_rtc\"" in camera_text
     assert "async_handle_async_webrtc_offer" in camera_text
     assert "async_activate_doorbell_video" in rtsp_orchestrator_text
     assert "audio=audio" in rtsp_orchestrator_text

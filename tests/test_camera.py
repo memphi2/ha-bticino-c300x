@@ -354,7 +354,9 @@ def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> N
 
 
 def test_doorbell_camera_advertises_native_webrtc_frontend_stream() -> None:
-    assert C300XDoorbellCamera._attr_frontend_stream_type == "web_rtc"
+    # HA derives native WebRTC capability from an overridden async offer handler
+    # (the removed _attr_frontend_stream_type attribute no longer exists in HA).
+    assert "async_handle_async_webrtc_offer" in C300XDoorbellCamera.__dict__
 
 
 def test_doorbell_camera_advertises_stream_feature_for_ha_frontend() -> None:
@@ -369,7 +371,7 @@ def test_doorbell_camera_does_not_use_background_stream_for_stills() -> None:
 
 def test_doorbell_camera_exposes_stream_source_without_changing_native_webrtc_type() -> None:
     assert "stream_source" in C300XDoorbellCamera.__dict__
-    assert C300XDoorbellCamera._attr_frontend_stream_type == "web_rtc"
+    assert "async_handle_async_webrtc_offer" in C300XDoorbellCamera.__dict__
 
 
 def test_doorbell_camera_suppresses_entity_picture_for_icon_display() -> None:

@@ -2,6 +2,16 @@
 
 ## v1.9.1 - Unreleased
 
+### Changed
+
+- Default the WebRTC ICE candidate filter to `prefer_ipv4_ula` instead of `all`.
+  Rotating global/SLAAC IPv6 and link-local candidates often won ICE and then
+  stalled, making the video start noticeably slower; the new default drops those
+  while keeping IPv4 and stable local ULA IPv6 (and never the TURN relay), so
+  streams start faster without breaking IPv6-local setups. Existing entries that
+  already stored a policy keep their choice; set it back to `all` to restore the
+  previous behaviour.
+
 ### Fixed
 
 - Bump the packaged native-agent version to `1.9.1` after the v1.9.0 release

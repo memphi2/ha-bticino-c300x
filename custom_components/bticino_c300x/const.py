@@ -70,7 +70,11 @@ WEBRTC_ICE_POLICIES = (
     WEBRTC_ICE_POLICY_PREFER_IPV4_ULA,
     WEBRTC_ICE_POLICY_IPV4_ONLY,
 )
-DEFAULT_WEBRTC_ICE_POLICY = WEBRTC_ICE_POLICY_ALL
+# Default drops the rotating global/SLAAC IPv6 and link-local candidates that
+# tend to win ICE and then stall (freezing the stream a few seconds after
+# start), while keeping IPv4 and stable local ULA IPv6 so IPv6-local setups
+# still connect. TURN relay is never dropped, so cloud fallback survives.
+DEFAULT_WEBRTC_ICE_POLICY = WEBRTC_ICE_POLICY_PREFER_IPV4_ULA
 DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME = "friendly_name"
 DASHBOARD_ENTITY_NAME_DISPLAY_ENTITY_ID = "entity_id"
 DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM = "custom"

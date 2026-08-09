@@ -330,7 +330,7 @@ def test_current_feature_options_reads_and_normalizes_webrtc_ice_policy() -> Non
 
 def test_reconfigure_features_schema_threads_webrtc_ice_policy_default() -> None:
     # The reconfigure error re-display must preserve the chosen policy rather
-    # than silently resetting it to the "all" default (see config_flow.py).
+    # than silently resetting it to the default (see config_flow.py).
     schema = _reconfigure_features_schema(
         True, default_webrtc_ice_policy="prefer_ipv4_ula"
     )
@@ -348,7 +348,8 @@ def test_options_features_schema_threads_webrtc_ice_policy_default() -> None:
     assert schema({})[CONF_WEBRTC_ICE_POLICY] == "prefer_ipv4_ula"
 
 
-def test_setup_features_schema_defaults_webrtc_ice_policy_to_all() -> None:
+def test_setup_features_schema_defaults_webrtc_ice_policy_to_prefer_ipv4_ula() -> None:
+    assert DEFAULT_WEBRTC_ICE_POLICY == "prefer_ipv4_ula"
     assert (
         _setup_features_schema(True)({})[CONF_WEBRTC_ICE_POLICY]
         == DEFAULT_WEBRTC_ICE_POLICY

@@ -263,6 +263,7 @@ async def async_status(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> d
             or bool(dashboard_entities)
             or configured_weather_entity_id(entry) is not None
         ),
+        "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
         "device_ui_enabled": device_ui_enabled,
         "actions": sorted(actions.keys()) if device_ui_enabled else [],
     }

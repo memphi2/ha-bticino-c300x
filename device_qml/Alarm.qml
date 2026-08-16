@@ -12,6 +12,7 @@ Page {
     headerLabel: uiText("alarm") + trsl.empty
     onVisibleChanged: {
         if (visible) {
+            refreshAlarmStatus(false)
             startStatusWatch()
         } else {
             stopStatusWatch()
@@ -36,6 +37,8 @@ Page {
     property string commandFeedbackColor: "#c7d0d9"
     property string activeFeedbackCommand: ""
     property variant alarmPageItem: null
+    property bool preventReturnToHomepage: true
+    property real lastStatusRefreshMs: 0
 
     Timer {
         id: modeFeedbackTimer
@@ -47,13 +50,14 @@ Page {
     function aboutToShow() {
         activeFeedbackCommand = ""
         clearCommandFeedback()
-        Api.status(status, page, alarmState, activeSince)
+        refreshAlarmStatus(false)
         startStatusWatch()
     }
 
     function handleScreenOff() {
         stopStatusWatch()
-        return true
+        lastStatusRefreshMs = 0
+        return preventReturnToHomepage
     }
 
     function startStatusWatch() {
@@ -64,11 +68,20 @@ Page {
         Api.stopEventWatch()
     }
 
+    function refreshAlarmStatus(force) {
+        var now = Date.now()
+        if (!force && now - lastStatusRefreshMs < 500) {
+            return
+        }
+        lastStatusRefreshMs = now
+        Api.status(status, page, alarmState, activeSince)
+    }
+
     function handleStatusEvent(event) {
         if (event && (event.topic === "alarm" || event.topic === "display_bridge.state")) {
             activeFeedbackCommand = ""
             clearCommandFeedback()
-            Api.status(status, page, alarmState, activeSince)
+            refreshAlarmStatus(true)
         }
     }
 

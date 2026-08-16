@@ -13,6 +13,9 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         if (pageItem.clearCommandFeedback) {
             pageItem.clearCommandFeedback()
         }
+        if (pageItem.preventReturnToHomepage !== undefined) {
+            pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
+        }
         statusItem.text = uiText(pageItem, "ha_connected")
         statusItem.color = "#58d68d"
         if (data.alarm && data.alarm.state) {

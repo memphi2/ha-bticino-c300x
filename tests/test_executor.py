@@ -938,6 +938,20 @@ def test_dashboard_payload_uses_entry_data_for_prevent_return() -> None:
     assert result["preventReturnToHomepage"] is False
 
 
+def test_status_payload_uses_entry_data_for_prevent_return() -> None:
+    hass = FakeHass()
+    entry = FakeEntry(
+        data={
+            CONF_DEVICE_UI_ENABLED: True,
+            CONF_DASHBOARD_PREVENT_RETURN: False,
+        },
+    )
+
+    result = run(async_status(hass, entry))
+
+    assert result["preventReturnToHomepage"] is False
+
+
 def test_configured_dashboard_entities_respect_empty_option_overrides() -> None:
     entry = FakeEntry(
         data={

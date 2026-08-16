@@ -28,6 +28,37 @@ def test_alarm_qml_contains_alarmo_card_feedback_hooks() -> None:
     assert 'event.topic === "alarm"' in alarm_qml
 
 
+def test_alarm_qml_uses_configured_return_to_home_and_refreshes_on_resume() -> None:
+    alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
+    dashboard_js = (ROOT / "device_qml" / "js/c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+    screen_off_body = alarm_qml[
+        alarm_qml.index("function handleScreenOff") :
+        alarm_qml.index("function startStatusWatch")
+    ]
+    visible_body = alarm_qml[
+        alarm_qml.index("onVisibleChanged: {") :
+        alarm_qml.index("property string uiLanguage")
+    ]
+    refresh_body = alarm_qml[
+        alarm_qml.index("function refreshAlarmStatus") :
+        alarm_qml.index("function handleStatusEvent")
+    ]
+
+    assert "property bool preventReturnToHomepage" in alarm_qml
+    assert (
+        "pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true"
+        in dashboard_js
+    )
+    assert "refreshAlarmStatus(false)" in visible_body
+    assert "stopStatusWatch()" in screen_off_body
+    assert "lastStatusRefreshMs = 0" in screen_off_body
+    assert "return preventReturnToHomepage" in screen_off_body
+    assert "Date.now()" in refresh_body
+    assert "Api.status(status, page, alarmState, activeSince)" in refresh_body
+
+
 def test_alarm_qml_simulates_alarmo_card_behaviour(tmp_path: Path) -> None:
     node = shutil.which("node")
     if node is None:
@@ -141,6 +172,7 @@ function createPage() {{
       commandFeedback: "",
       commandFeedbackColor: "#c7d0d9",
       activeFeedbackCommand: "",
+      preventReturnToHomepage: true,
       feedbackTimerRestarts: 0,
       refreshSoonCalls: 0,
     uiText(key) {{

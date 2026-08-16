@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.1 - Unreleased
+## v1.9.1 - 2026-08-16
 
 ### Changed
 
@@ -14,11 +14,20 @@
 
 ### Fixed
 
-- Bump the packaged native-agent version to `1.9.1` after the v1.9.0 release
+- Refresh the native Alarmo display page when it becomes visible again and use
+  the same configured "keep page open" option as the Home Assistant dashboard
+  page when the C300X display turns off.
+- Bump the packaged native-agent version to `1.9.0` after the v1.9.0 release
   changed the agent binary while still reporting `1.8.3`, so Home Assistant can
   reliably detect whether the restarted process is actually the updated agent.
 - Add a release gate that rejects native-agent or device-bundle changes unless
   `native_agent/VERSION` is changed in the same release.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Update the native C300X device agent from Home Assistant so it reports
+  `1.9.0`; active display patches should be refreshed by the agent update path.
 
 ## v1.9.0 - 2026-08-08
 

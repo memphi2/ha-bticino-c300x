@@ -90,6 +90,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _async_network_diagnostics,
     _capability_diagnostics,
     _connection_diagnostics,
+    _device_user_diagnostics,
     _entity_domain_counts,
     _event_state_diagnostics,
     _host_private_address,
@@ -100,6 +101,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _safe_status_dict,
     _safe_system_metrics,
     _same_lan_prefix_guess,
+    _self_test_diagnostics,
     _sequence_count,
     async_get_config_entry_diagnostics,
 )
@@ -213,6 +215,26 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
             "raw": {"token": "private-token"},
         },
         agent_diagnostics_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
+        device_user_status={
+            "available": True,
+            "supported": True,
+            "domain_present": True,
+            "homeassistant_user_present": False,
+            "media_identity_available": False,
+            "account_label": "Private Home Label",
+        },
+        device_user_status_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
+        self_test_status={
+            "ok": False,
+            "checks": {
+                "homeassistant_user": {
+                    "ok": False,
+                    "reason": "media_identity_missing",
+                    "details": {"users_file": "/home/bticino/cfg/private-users"},
+                }
+            },
+        },
+        self_test_status_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
         media_timeline=C300XMediaTimeline(),
     )
     runtime_data.media_timeline.record(
@@ -281,6 +303,16 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         "type": "ClientConnectorError",
         "message": "<url> failed",
     }
+    # A self-test failure is the reason people are asked for diagnostics, so the
+    # report has to name the failed check and which identity half is missing.
+    assert diagnostics["runtime"]["self_test"]["ok"] is False
+    assert diagnostics["runtime"]["self_test"]["checks"]["homeassistant_user"] == {
+        "ok": False,
+        "reason": "media_identity_missing",
+    }
+    assert diagnostics["runtime"]["media_user_bootstrapped_once"] is False
+    assert diagnostics["runtime"]["device_user"]["domain_present"] is True
+    assert diagnostics["runtime"]["device_user"]["homeassistant_user_present"] is False
     assert diagnostics["runtime"]["connection"]["event_subscription"] == {
         "id_configured": True,
         "event_count": 3,
@@ -713,7 +745,77 @@ def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
     assert "nested" not in writes
 
 
+def test_diagnostics_report_media_user_and_self_test_failure_reasons() -> None:
+    """A failed self-test is only actionable with its per-check reason codes,
+    and the media-user flags say which half of the identity is missing."""
+
+    runtime = SimpleNamespace(
+        device_user_status={
+            "available": True,
+            "supported": True,
+            "domain_present": True,
+            "homeassistant_user_present": False,
+            "media_identity_available": False,
+            "routes_consistent": True,
+            "device_routing_applied": False,
+            "device_routing_state": "missing",
+            "device_routing_error": "RuntimeError: /home/bticino/cfg/private.conf",
+            "account_label": "Private Home Label",
+            "raw": {"aor": "sip:private@device"},
+        },
+        device_user_status_updated_at=datetime(2026, 8, 20, 7, 27, tzinfo=UTC),
+        self_test_status={
+            "ok": False,
+            "agent_version": "1.9.0",
+            "api_version": "1",
+            "firmware_family": "1.7.19",
+            "checks": {
+                "homeassistant_user": {
+                    "ok": False,
+                    "reason": "media_identity_missing",
+                    "details": {"users_file": "/home/bticino/cfg/private-users"},
+                },
+                "firewall": {"ok": True, "reason": "media_ports_open"},
+            },
+        },
+        self_test_status_updated_at=datetime(2026, 8, 20, 7, 27, tzinfo=UTC),
+    )
+
+    device_user = _device_user_diagnostics(runtime)
+    assert device_user is not None
+    assert device_user["domain_present"] is True
+    assert device_user["homeassistant_user_present"] is False
+    assert device_user["media_identity_available"] is False
+    assert device_user["device_routing_state"] == "missing"
+    # Label, AOR and raw device paths never reach the report.
+    assert "account_label" not in device_user
+    assert "raw" not in device_user
+    assert "Private Home Label" not in json.dumps(device_user)
+    assert "private.conf" not in json.dumps(device_user)
+
+    self_test = _self_test_diagnostics(runtime)
+    assert self_test is not None
+    assert self_test["ok"] is False
+    assert self_test["checks"]["homeassistant_user"] == {
+        "ok": False,
+        "reason": "media_identity_missing",
+    }
+    assert self_test["checks"]["firewall"] == {"ok": True, "reason": "media_ports_open"}
+    # Per-check details carry device paths and stay out of the report.
+    assert "private-users" not in json.dumps(self_test)
+
+
 def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
+    assert _device_user_diagnostics(None) is None
+    assert _device_user_diagnostics(SimpleNamespace(device_user_status={})) is None
+    assert _device_user_diagnostics(SimpleNamespace(device_user_status=[])) is None
+    assert _self_test_diagnostics(None) is None
+    assert _self_test_diagnostics(SimpleNamespace(self_test_status={})) is None
+    assert _self_test_diagnostics(SimpleNamespace(self_test_status=[])) is None
+    assert (
+        _self_test_diagnostics(SimpleNamespace(self_test_status={"ok": True}))["checks"]
+        is None
+    )
     assert _agent_info_diagnostics(None) is None
     assert _agent_info_diagnostics(SimpleNamespace(agent_info=[])) is None
     assert _connection_diagnostics(None) is None
@@ -781,7 +883,10 @@ def test_diagnostics_value_helpers_redact_and_normalize_values() -> None:
     assert _host_private_address(private_a) is True
     assert _host_private_address("example.invalid") is None
     assert _same_lan_prefix_guess(None, None) is None
-    assert _same_lan_prefix_guess(
-        ipaddress.ip_address(private_a),
-        ipaddress.ip_address(private_b),
-    ) is True
+    assert (
+        _same_lan_prefix_guess(
+            ipaddress.ip_address(private_a),
+            ipaddress.ip_address(private_b),
+        )
+        is True
+    )

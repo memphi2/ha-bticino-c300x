@@ -75,6 +75,36 @@ test("ring preview is answerable but not stoppable from passive browsers", () =>
   );
 });
 
+test("on-demand streams stay stoppable from a card without local media", () => {
+  // Leaving the page (or opening the card on a second device) tears down the
+  // local stream while the agent keeps streaming. The stop control has to
+  // survive that, otherwise the session can never be ended from the UI.
+  const cameraEntity = entity({
+    mediaState: "on_demand_active",
+    primaryAction: "stop_stream",
+  });
+  assert.equal(
+    c300xDoorstationAction({
+      cameraEntity,
+      active: false,
+      doorbellAnswered: false,
+      previewStarting: false,
+      ringPreviewActive: false,
+    }),
+    "hang_up",
+  );
+  assert.equal(
+    c300xDoorstationAction({
+      cameraEntity,
+      active: true,
+      doorbellAnswered: false,
+      previewStarting: false,
+      ringPreviewActive: false,
+    }),
+    "hang_up",
+  );
+});
+
 test("answered ring calls expose hangup only to the answering card", () => {
   const cameraEntity = entity({
     mediaState: "ring_active",

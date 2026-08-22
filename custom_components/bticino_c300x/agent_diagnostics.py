@@ -52,6 +52,107 @@ _UI_EVENT_DIAGNOSTIC_KEYS = (
 )
 
 
+def publish_agent_media_facts(
+    hass: HomeAssistant | None,
+    entry: BticinoC300XConfigEntry,
+    bridge: Mapping[str, Any] | None,
+) -> Mapping[str, Any] | None:
+    """Publish the camera's live media view for diagnostics consumers.
+
+    The agent pushes ``agent.diagnostics_changed`` only from writes, and its
+    payload carries write counters only -- nothing ever refreshes the media
+    half of the stored diagnostics snapshot when a call starts or ends. The
+    camera already keeps an event- and status-fed bridge view, so mirroring it
+    here keeps the diagnostics sensor honest without a single extra request to
+    the device.
+    """
+
+    runtime_data = getattr(entry, "runtime_data", None)
+    if runtime_data is None or not isinstance(bridge, Mapping):
+        return None
+    facts = _media_facts_from_bridge(bridge)
+    # Stamp on every observation, not only on change: the timestamp says when
+    # this view was last confirmed, and a call that stays active must not age
+    # out behind an unrelated snapshot refresh.
+    runtime_data.agent_media_facts_updated_at = datetime.now(UTC)
+    if facts == runtime_data.agent_media_facts:
+        return facts
+    runtime_data.agent_media_facts = facts
+    if isinstance(hass, HomeAssistant):
+        # Consumers read the facts on demand, so the signal is only the
+        # re-render trigger: a camera that is not wired into hass yet (entity
+        # construction, initial status apply) just stores them.
+        async_dispatcher_send(hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, entry.entry_id)
+    return facts
+
+
+def _media_facts_from_bridge(bridge: Mapping[str, Any]) -> dict[str, Any]:
+    """Return diagnostics-shaped media facts, every key always answered.
+
+    media_owner is the authority, not the presence of a key. The camera's
+    bridge view is cumulative -- push events merge into it and the closed-event
+    reset clears only some keys -- so a value left over from an earlier status
+    would otherwise be republished as live and latch the sensor. The agent
+    derives the owner from exactly these flags and only ever names one, so
+    scoping each flag to its owner cannot report a finished call as running.
+    """
+
+    owner = bridge.get("media_owner")
+    owner_name = owner if isinstance(owner, str) else None
+    idle = owner_name in (None, "", "idle")
+    agent_owned = owner_name == "agent"
+    ring_owned = owner_name == "ring"
+    home_owned = owner_name == "home_call"
+
+    def owned_flag(bridge_key: str, owned: bool, *, unstated: bool = False) -> bool:
+        """Return a flag only its owner may set, preferring the reported value.
+
+        Push-event bridges carry fewer keys than the status endpoint, so an
+        absent key is unknown, not false. `unstated` says what the owner alone
+        proves: it must never claim more than the payload does.
+        """
+
+        if not owned:
+            return False
+        if bridge_key in bridge:
+            return bool(bridge[bridge_key])
+        return unstated
+
+    return {
+        # Not part of how the agent derives the owner, so it is reported as
+        # given -- the camera clears it together with the rest of the window.
+        "video_media_starting": bool(bridge.get("media_starting")),
+        "video_call_active": owned_flag("call_active", agent_owned),
+        # Owner "agent" is bridge media OR an on-demand call, so media-active is
+        # the part it proves on its own.
+        "video_bridge_media_active": owned_flag(
+            "media_active", agent_owned, unstated=True
+        ),
+        "video_bridge_stop_in_progress": bool(bridge.get("stop_in_progress")),
+        "video_external_media_active": (
+            not idle
+            and not agent_owned
+            and not ring_owned
+            and not home_owned
+            and bool(bridge.get("external_media_active"))
+        ),
+        "ring_call_active": owned_flag("ring_call_active", ring_owned, unstated=True),
+        "ring_media_active": ring_owned and bool(bridge.get("ring_media_active")),
+        # Owner "home_call" is set while starting too, so an unstated home call
+        # is reported as starting rather than as an established call.
+        "home_call_running": owned_flag(
+            "home_call_running",
+            home_owned,
+            unstated="home_call_active" not in bridge,
+        ),
+        "home_call_active": owned_flag("home_call_active", home_owned),
+        "video_clients": (
+            int(bridge["clients"]) if isinstance(bridge.get("clients"), int) else 0
+        ),
+        "video_media_owner": owner_name,
+    }
+
+
 async def async_refresh_agent_diagnostics(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,

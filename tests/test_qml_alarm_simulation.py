@@ -705,3 +705,19 @@ assertFiveModesWrapLikeCardControls();
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_alarm_qml_delayed_refresh_goes_through_the_guarded_helper() -> None:
+    """The post-command timer used to call Api.status directly, so it neither
+    updated nor honoured lastStatusRefreshMs and could duplicate a fetch an
+    event refresh had just done."""
+
+    alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
+    timer_body = alarm_qml[
+        alarm_qml.index("id: delayedStatusRefresh") :
+    ].split("}", 1)[0]
+
+    assert "refreshAlarmStatus(true)" in timer_body
+    assert "Api.status(" not in timer_body
+    # The helper stays the only place that talks to the status endpoint.
+    assert alarm_qml.count("Api.status(") == 1

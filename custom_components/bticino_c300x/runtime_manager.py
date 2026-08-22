@@ -566,7 +566,7 @@ async def _async_sync_device_user(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
-    """Bootstrap once, then refresh the Flexisip user status read-only."""
+    """Create or repair the Flexisip user, then refresh its status read-only."""
 
     if not _entry_video_enabled(entry):
         return
@@ -575,7 +575,16 @@ async def _async_sync_device_user(
         return
     try:
         status = await entry.runtime_data.api.async_device_user_status()
-        if _device_user_bootstrap_allowed(entry, status):
+        if _device_user_setup_allowed(entry, status):
+            if _entry_config_value(
+                entry,
+                CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
+                False,
+            ):
+                _LOGGER.info(
+                    "C300X Home Assistant media user is missing on the device; "
+                    "recreating it"
+                )
             status = await entry.runtime_data.api.async_ensure_homeassistant_user(
                 account_label=homeassistant_account_label(hass),
             )
@@ -594,26 +603,35 @@ async def _async_sync_device_user(
         )
 
 
-def _device_user_bootstrap_allowed(
+def _device_user_setup_allowed(
     entry: BticinoC300XConfigEntry,
     status: dict[str, Any],
 ) -> bool:
-    """Return true when startup may perform the one-time media-user bootstrap."""
+    """Return true when startup may write the media-user setup to the device.
 
-    return (
-        bool(_entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, False))
-        and not bool(
-            _entry_config_value(entry, CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, False)
-        )
-        and device_user_bootstrap_needed(status)
-    )
+    The agent's own status is the gate: it reports a hard-missing user or
+    routing, so a healthy device is never written to. This deliberately does
+    not consider whether a bootstrap succeeded once before -- a device can lose
+    the user again (firmware update, factory reset, overwritten route files),
+    and treating the first success as final left those installs with a repair
+    hint that nothing could clear. Startup sync runs once per entry setup, so
+    the worst case stays one write attempt per Home Assistant start or reload.
+    """
+
+    return bool(
+        _entry_config_value(entry, CONF_CREATE_HOMEASSISTANT_USER, False)
+    ) and device_user_bootstrap_needed(status)
 
 
 def _mark_homeassistant_media_user_bootstrapped(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
-    """Persist that startup must no longer auto-write media-user files."""
+    """Record that the media-user setup has been completed successfully once.
+
+    No longer a latch against further writes -- it is kept as reported state so
+    diagnostics can tell "never set up" apart from "set up and later lost".
+    """
 
     if _entry_config_value(entry, CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED, False):
         return

@@ -25,6 +25,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from propcache.api import cached_property
 
+from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
@@ -1655,6 +1656,11 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             **self._bridge_status,
             "media_owner": "idle",
             "media_active": False,
+            # Transient start/stop flags belong to the window that just closed,
+            # like the home-call path already clears them. Leaving them behind
+            # in this cumulative view republishes them as live state.
+            "media_starting": False,
+            "stop_in_progress": False,
             "external_media_active": False,
             "ring_call_active": False,
             "ring_media_active": False,
@@ -1740,6 +1746,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     def _refresh_derived_media_state(self) -> None:
         self._last_media_decision = self._derive_media_decision()
         self._last_media_state = self._last_media_decision.state
+        publish_agent_media_facts(
+            getattr(self, "hass", None), self._entry, self._bridge_status
+        )
 
     def _derive_media_decision(
         self,

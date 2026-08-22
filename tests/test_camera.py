@@ -237,6 +237,7 @@ class _FakeRuntimeData:
     prepare_doorbell_video_stop: Any = None
     prepare_home_call_stop: Any = None
     media_timeline: Any = field(default_factory=C300XMediaTimeline)
+    agent_media_facts: dict[str, Any] = field(default_factory=dict)
 
 
 def _webrtc_message_value(message: Any, key: str) -> Any:
@@ -1643,6 +1644,64 @@ def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:
     assert camera._last_media_state is MediaState.IDLE
     assert camera._last_media_decision.primary_action == "start_stream"
     assert camera.extra_state_attributes["media_primary_action"] == "start_stream"
+
+
+def test_doorbell_camera_publishes_live_media_facts_for_diagnostics() -> None:
+    """The agent pushes diagnostics only on writes, so nothing refreshes the
+    media half of that snapshot when a call ends and the agent-diagnostics
+    sensor latches the finished call. The camera's live bridge view -- the same
+    one the card renders -- is mirrored to runtime_data to keep it honest."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._bridge_status = {
+        "media_owner": "agent",
+        "call_active": True,
+        "media_active": True,
+        "clients": 1,
+    }
+
+    camera._refresh_derived_media_state()
+
+    assert entry.runtime_data.agent_media_facts["video_call_active"] is True
+    assert entry.runtime_data.agent_media_facts["video_clients"] == 1
+
+    camera._clear_video_window()
+
+    assert entry.runtime_data.agent_media_facts["video_call_active"] is False
+    assert entry.runtime_data.agent_media_facts["video_bridge_media_active"] is False
+    assert entry.runtime_data.agent_media_facts["video_media_owner"] == "idle"
+    assert entry.runtime_data.agent_media_facts["video_clients"] == 0
+
+
+def test_doorbell_camera_publishes_ring_media_facts_from_event_bridge() -> None:
+    """Push-event bridges carry fewer keys than the status endpoint; the owner
+    has to fill the gaps so an omitted key cannot keep a finished call alive."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._apply_event_media_facts(
+        {
+            "media_owner": "ring",
+            "bridge": {
+                "media_owner": "ring",
+                "ring_call_active": True,
+                "ring_media_active": True,
+                "clients": 1,
+            },
+        }
+    )
+
+    camera._refresh_derived_media_state()
+
+    facts = entry.runtime_data.agent_media_facts
+    assert facts["ring_call_active"] is True
+    assert facts["ring_media_active"] is True
+    # Not carried by the event payload: inferred from the owner, never latched.
+    assert facts["video_call_active"] is False
+    assert facts["home_call_active"] is False
 
 
 def test_doorbell_camera_closed_event_clears_stale_ring_facts() -> None:
@@ -3898,3 +3957,91 @@ async def _rtsp_options_server(
     writer.close()
     with suppress(Exception):
         await writer.wait_closed()
+
+
+def test_doorbell_camera_media_facts_do_not_latch_a_finished_stop() -> None:
+    """The camera's bridge view is cumulative and the closed-event reset clears
+    only some keys, so a stop_in_progress captured by an earlier status would
+    survive into an idle system and latch the sensor at "media stopping" -- the
+    same latch this whole path exists to remove."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._bridge_status = {
+        "media_owner": "agent",
+        "call_active": True,
+        "media_active": True,
+        "stop_in_progress": True,
+        "media_starting": True,
+        "clients": 1,
+    }
+    camera._refresh_derived_media_state()
+    assert entry.runtime_data.agent_media_facts["video_bridge_stop_in_progress"] is True
+
+    camera._clear_video_window()
+
+    facts = entry.runtime_data.agent_media_facts
+    assert facts["video_media_owner"] == "idle"
+    assert facts["video_bridge_stop_in_progress"] is False
+    assert facts["video_media_starting"] is False
+    assert facts["video_call_active"] is False
+
+
+def test_doorbell_camera_media_facts_scope_flags_to_the_reported_owner() -> None:
+    """A ring arriving during on-demand media flips the owner while the merged
+    bridge view still carries the old on-demand flags; only the owner's own
+    flags may be reported."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._bridge_status = {
+        "media_owner": "agent",
+        "call_active": True,
+        "media_active": True,
+        "clients": 1,
+    }
+    camera._refresh_derived_media_state()
+
+    camera._apply_event_media_facts(
+        {"bridge": {"media_owner": "ring", "ring_call_active": True}}
+    )
+    camera._refresh_derived_media_state()
+
+    facts = entry.runtime_data.agent_media_facts
+    assert facts["ring_call_active"] is True
+    assert facts["video_call_active"] is False
+    assert facts["video_bridge_media_active"] is False
+
+
+def test_doorbell_camera_media_facts_report_a_starting_stream() -> None:
+    """media_starting is not part of how the agent derives the owner, so it can
+    be true while the owner still reads idle. Gating it on the owner made the
+    "media starting" state unreachable through the live path."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._bridge_status = {"media_owner": "idle", "media_starting": True}
+
+    camera._refresh_derived_media_state()
+
+    assert entry.runtime_data.agent_media_facts["video_media_starting"] is True
+
+
+def test_doorbell_camera_media_facts_do_not_invent_an_active_home_call() -> None:
+    """Push-event bridges never carry the home-call keys, while the owner is
+    already "home_call" for a call that is only starting. Reporting it as
+    active claims more than the payload does."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    camera.hass = SimpleNamespace()  # type: ignore[assignment]
+    camera._bridge_status = {"media_owner": "home_call"}
+
+    camera._refresh_derived_media_state()
+
+    facts = entry.runtime_data.agent_media_facts
+    assert facts["home_call_active"] is False
+    assert facts["home_call_running"] is True

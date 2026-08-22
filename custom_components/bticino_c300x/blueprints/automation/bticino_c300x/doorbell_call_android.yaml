@@ -207,6 +207,15 @@ action:
         event_type: mobile_app_notification_action
         event_data:
           action: "{{ hangup_action }}"
+      # Someone let the visitor in -- from the phone, the C300X itself or any
+      # other lock control. The entry_id filter keeps a second C300X from
+      # silencing this one.
+      - id: door_unlock
+        platform: event
+        event_type: bticino_c300x_agent_event_received
+        event_data:
+          event_key: door_unlock_started
+          entry_id: "{{ entry_id }}"
     timeout: "{{ notification_timeout_seconds | int(60) }}"
     continue_on_timeout: true
   - choose:
@@ -286,6 +295,10 @@ action:
               message: clear_notification
               data:
                 tag: "{{ ring_tag }}"
+    # Ring timeout, or the door was opened before anyone reacted: clear the
+    # alert. On a door unlock the Ring Call itself is deliberately left alone --
+    # opening the door does not decide whether someone still wants to talk to
+    # the visitor.
     default:
       - service: !input notify_service
         data:

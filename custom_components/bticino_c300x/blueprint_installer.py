@@ -25,6 +25,51 @@ _OBSOLETE_BLUEPRINT_FILES = frozenset(
         "doorbell_call_notification.yaml",
     }
 )
+# Content this integration shipped before the managed-blueprint manifest existed
+# (1.8.0). Without it those installs look customized forever -- there is no
+# manifest entry to compare against -- so they would never receive a blueprint
+# fix again. A file matching one of these digests is a pristine older copy and
+# is safe to adopt and update; anything else stays untouched.
+#
+# This is closed history: releases from 1.8.0 on are manifest-tracked, so this
+# table is never extended.
+_LEGACY_SHIPPED_DIGESTS: dict[str, frozenset[str]] = {
+    "doorbell_call_android.yaml": frozenset(
+        {
+            "52e0b0fab947d3f4ef1201eaa6996d2931629c75d630b2a00072c209c8898b2d",
+            "5e2bb503130d46bbf63e059281a67eaed796cdd9c812680c264d8e2c7f56f1df",
+        }
+    ),
+    "doorbell_call_ios.yaml": frozenset(
+        {
+            "11a0b0e059928e163601353601f909e36a2daba15bade4fab92f6076ac12a2fa",
+            "5acb36c64c4e8fcd97eb7a8fd6fb00838aa20509884f510c0ad53a912ce727b4",
+        }
+    ),
+    "doorbell_notification.yaml": frozenset(
+        {
+            "758ec8b5c0aadddc4b8b1e1eb76f2cb8481dcd01b5ec03244222899ed34bb171",
+            "e2dae019eb1f51f0d5fc0a9cc7c5735b9f6b7c8c093d31007185afedf4c55469",
+        }
+    ),
+    "ring_capture.yaml": frozenset(
+        {
+            "8499064c5f83514056c6d7f2bb14199c19f93a8d7cb3742c4798561158c1baed",
+            "e4d2ed865bea20d71d23c8041aa90b15206aaceed30c5abb26323f5f49e33db8",
+        }
+    ),
+    "ring_capture_wyoming.yaml": frozenset(
+        {
+            "2301bb63c7f29bb21ee1626de14ccaff7c4d697700a9e431429f50c32fd39563",
+            "332241bf093f0ead1ca4b4e83c51f873bc9e21e92e87168dbc3ae787e3a2d8d4",
+        }
+    ),
+    "strict_phrase_decision.yaml": frozenset(
+        {
+            "e4269c91a5cb7fbaa1038b4a31b9a77948d817988dc100a46be606f3c8ad07d9",
+        }
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +131,10 @@ def install_bundled_blueprints(target_dir: Path) -> BlueprintInstallResult:
                     manifest[source.name] = source_hash
                     manifest_changed = True
                 continue
-            if managed_hash != target_hash:
+            if managed_hash != target_hash and not (
+                managed_hash is None
+                and _is_legacy_shipped(source.name, target_hash)
+            ):
                 _LOGGER.debug(
                     "Preserving customized C300X automation blueprint: %s",
                     target,
@@ -128,6 +176,18 @@ def _content_hash(content: bytes) -> str:
     """Return the stable content hash used by the managed-blueprint manifest."""
 
     return sha256(content).hexdigest()
+
+
+def _is_legacy_shipped(filename: str, target_hash: str) -> bool:
+    """Return true for an untouched copy from before the manifest existed.
+
+    Only meaningful without a manifest entry. With one, a file matching old
+    shipped content is a deliberate downgrade -- restoring a previous blueprint
+    is the usual workaround when a new one breaks a setup -- and overwriting it
+    would break exactly the guarantee the manifest exists to provide.
+    """
+
+    return target_hash in _LEGACY_SHIPPED_DIGESTS.get(filename, frozenset())
 
 
 def _load_manifest(target_dir: Path) -> dict[str, str]:

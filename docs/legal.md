@@ -14,8 +14,9 @@ applications, protocols, trademarks, or third-party projects.
 
 ## Trademark notice
 
-BTicino, Classe 300X, Legrand, Home Assistant, HACS, Nabu Casa, OpenAI, Codex
-and other referenced names are trademarks or names of their respective owners.
+BTicino, Classe 300X, Legrand, Home Assistant, HACS, Nabu Casa, OpenAI, Codex,
+Anthropic, Claude and other referenced names are trademarks or names of their
+respective owners.
 They are used only for compatibility, attribution, and descriptive reference.
 
 This project is not affiliated with, endorsed by, sponsored by, or certified by

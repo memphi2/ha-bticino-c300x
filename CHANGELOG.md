@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.9.2 - 2026-08-22
+
+### Fixed
+
+- Recreate the Home Assistant media user when the device has lost it. The setup
+  ran only once per config entry, so a device that lost the user later -- for
+  example through a firmware update or a factory reset -- kept a repair hint
+  that nothing could clear. A device that is already set up is still never
+  written to, and opting out of the media-user creation still opts out.
+- Stop the phone ringing when the door is opened. The Android and iOS Ring Call
+  blueprints previously kept alerting until Answer, Hang up or the notification
+  timeout, even though the visitor had already been let in. The Ring Call itself
+  is left running.
+- Keep on-demand streams stoppable from every card. Leaving the page (or opening
+  the card on a second device) left a running stream that could no longer be
+  stopped from the UI, because the stop control required a stream in that very
+  browser. A passive ring preview stays non-stoppable.
+- Update bundled blueprints that were installed before the managed-blueprint
+  manifest existed (1.8.0). Those files looked customized and stopped receiving
+  blueprint fixes; an untouched copy of previously shipped content is now
+  refreshed, while genuinely edited blueprints are still preserved.
+- Keep the (default-disabled) device-agent diagnostics sensor in sync with the
+  media state. The agent pushes diagnostics only when it writes something, so
+  the sensor kept whatever the last full refresh had seen: after a doorbell ring
+  it stayed on "Doorbell call active" long after the call ended, and after a
+  reload it stayed on "Idle" even while a call was running. It now follows the
+  camera's live bridge view, without any additional request to the device.
+- Say which half of the C300X media identity is missing. A Home Assistant media
+  user that had simply never been created was reported as "no usable C300X media
+  identity is configured", which points at the device instead of at the setup
+  action; that wording is now reserved for a device without a SIP domain.
+- Answer rejected RTSP pulls with `503` instead of closing the connection
+  without a response. A busy or lost client slot reached go2rtc as a bare
+  `error=EOF` with no explanation; the reason is now visible in the client log
+  and in the agent's `last_rtsp_reject_reason` diagnostics field.
+
+### Changed
+
+- Report the Home Assistant media-user status and the device-agent self-test
+  result (per-check verdict and reason code) in the integration diagnostics
+  download, so a failed self-test can be diagnosed from the attached file.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- Hard-reload all open Home Assistant browser dashboards after updating so the
+  bundled frontend modules are refreshed from the installed integration
+  version.
+- Update the native C300X device agent from Home Assistant to `1.9.2`.
+- Bundled blueprints are refreshed automatically on the next Home Assistant
+  start. Blueprints you edited yourself are still preserved, so re-apply your
+  changes if you customized the Ring Call blueprints.
+
 ## v1.9.1 - 2026-08-16
 
 ### Changed

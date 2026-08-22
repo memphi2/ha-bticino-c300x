@@ -1214,3 +1214,38 @@ def test_native_agent_doorbell_stop_does_not_match_home_call_resources() -> None
     assert "g_bridge.client_fd >= 0" not in stop_body
     assert "g_bridge.home_call_sip_fd" not in stop_body
     assert "g_bridge.home_call_audio_rtp_fd" not in stop_body
+
+
+def test_native_agent_rtsp_answers_instead_of_closing_on_missing_client_slot() -> None:
+    """A rejected pull used to be a bare socket close, which reaches go2rtc as
+    "error=EOF" with no reason -- the symptom in issue #44. Every slot-missing
+    path has to answer, and record why, so the cause is visible in diagnostics."""
+
+    media_bridge = _read_media_bridge()
+    client_body = media_bridge[
+        media_bridge.index("static void handle_rtsp_client") :
+        media_bridge.index("static void *rtsp_client_thread")
+    ]
+
+    slot_missing_blocks = [
+        client_body[start : client_body.index("}", start)]
+        for start in (
+            match.start()
+            for match in re.finditer(r"if \(slot == NULL\) \{", client_body)
+        )
+    ]
+
+    assert len(slot_missing_blocks) == 3
+    for block in slot_missing_blocks:
+        assert "send_rtsp_response(fd, 503, cseq, NULL, NULL);" in block
+
+    # Each path records its own reason. A rejected registration never reaches
+    # this loop (453 + close before the first request), so reaching DESCRIBE
+    # without a slot means the slot was lost afterwards and nothing else has
+    # recorded a reason for it.
+    assert (
+        'rtsp_note_describe_reject(&g_bridge, "describe_client_slot_lost");'
+        in client_body
+    )
+    assert 'rtsp_note_reject_reason(&g_bridge, "setup_client_slot_lost");' in client_body
+    assert 'rtsp_note_play_failure(&g_bridge, "play_client_slot_lost");' in client_body

@@ -239,6 +239,12 @@ class BticinoC300XRuntimeData:
         default_factory=C300XOperationDiagnostics
     )
     agent_diagnostics: Mapping[str, Any] = field(default_factory=dict)
+    # Live media facts kept in sync with the camera's bridge view. The agent
+    # only pushes agent.diagnostics_changed on writes, so the media half of
+    # agent_diagnostics would otherwise stay at whatever the last full refresh
+    # saw and latch a finished call.
+    agent_media_facts: Mapping[str, Any] = field(default_factory=dict)
+    agent_media_facts_updated_at: datetime | None = None
     agent_diagnostics_updated_at: datetime | None = None
     agent_diagnostics_updated_by: str | None = None
     agent_diagnostics_change_reason: str | None = None

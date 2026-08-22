@@ -205,6 +205,28 @@ def test_native_agent_device_user_status_reports_read_availability() -> None:
     assert "status->status_available = 0;" in read_status
 
 
+def test_native_agent_self_test_names_the_missing_media_identity_half() -> None:
+    """media_identity_available is domain AND user. Testing it first made the
+    dedicated "user missing" reason unreachable, so a user that was simply
+    never created was reported as a missing media identity."""
+
+    text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(encoding="utf-8")
+    block = text.split("if (!c300x_device_user_read_status(&user_status))", maxsplit=1)[
+        1
+    ].split("if (user_status.status_available)", maxsplit=1)[0]
+
+    domain_index = block.index("!user_status.domain_present")
+    user_index = block.index("!user_status.homeassistant_user_present")
+    identity_index = block.index('user_reason = "media_identity_missing";')
+    missing_index = block.index('user_reason = "homeassistant_user_missing";')
+
+    # Both halves are reachable, and the domain decides which one is reported.
+    assert domain_index < user_index
+    assert domain_index < identity_index < missing_index
+    assert "!user_status.media_identity_available" not in block
+    assert 'user_reason = "homeassistant_user_ok";' in block
+
+
 def test_native_agent_self_test_marks_unavailable_device_user_failed() -> None:
     text = (ROOT / "native_agent" / "src" / "self_test.c").read_text(
         encoding="utf-8"

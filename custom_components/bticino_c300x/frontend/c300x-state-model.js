@@ -202,7 +202,11 @@ export function c300xStateMachineDoorstationAction(
     return passiveRingCall || passiveRingPreview ? "busy" : "hang_up";
   }
   if (action === "stop_stream") {
-    return active && !passiveRingPreview ? "hang_up" : "busy";
+    // On-demand media is agent-owned (the state machine only reports
+    // stop_stream for owner "agent"), so any client may stop it. Requiring a
+    // local stream here left a session nobody could end: close the page or
+    // open the card on a second device and the only control was "busy".
+    return passiveRingPreview ? "busy" : "hang_up";
   }
   if (action === "start_stream") {
     return active ? (passiveRingPreview ? "busy" : "hang_up") : "stream";

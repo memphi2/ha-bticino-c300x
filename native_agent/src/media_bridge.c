@@ -458,6 +458,20 @@ static void rtsp_note_request(media_bridge_t *bridge, const char *method) {
     pthread_mutex_unlock(&bridge->mutex);
 }
 
+/* Record why a request was turned away without touching a request counter --
+ * used where an existing counter already covers the event, so the reason still
+ * reaches diagnostics instead of the client just seeing a closed socket. */
+static void rtsp_note_reject_reason(media_bridge_t *bridge, const char *reason) {
+    pthread_mutex_lock(&bridge->mutex);
+    snprintf(
+        bridge->last_rtsp_reject_reason,
+        sizeof(bridge->last_rtsp_reject_reason),
+        "%s",
+        reason
+    );
+    pthread_mutex_unlock(&bridge->mutex);
+}
+
 static void rtsp_note_describe_reject(media_bridge_t *bridge, const char *reason) {
     pthread_mutex_lock(&bridge->mutex);
     bridge->rtsp_rejected_describes++;
@@ -6147,6 +6161,13 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             }
             if (slot == NULL) {
                 pthread_mutex_unlock(&g_bridge.mutex);
+                /* The slot was released after this connection registered --
+                 * a rejected registration never reaches this loop, it is
+                 * answered with 453 and closed before the first request.
+                 * Answer instead of closing: a bare close reaches the puller as
+                 * an unexplained EOF, which is the worst possible diagnostic. */
+                rtsp_note_describe_reject(&g_bridge, "describe_client_slot_lost");
+                send_rtsp_response(fd, 503, cseq, NULL, NULL);
                 break;
             }
             if (allow_shared_path) {
@@ -6280,6 +6301,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             );
             if (slot == NULL) {
                 pthread_mutex_unlock(&g_bridge.mutex);
+                rtsp_note_reject_reason(&g_bridge, "setup_client_slot_lost");
+                send_rtsp_response(fd, 503, cseq, NULL, NULL);
                 break;
             }
             slot->transport_tcp = tcp;
@@ -6344,6 +6367,8 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
             }
             pthread_mutex_unlock(&g_bridge.mutex);
             if (slot == NULL) {
+                rtsp_note_play_failure(&g_bridge, "play_client_slot_lost");
+                send_rtsp_response(fd, 503, cseq, NULL, NULL);
                 break;
             }
             bool home_call_session = request_home_call_media_if_active(&g_bridge, rtsp_audio_enabled);

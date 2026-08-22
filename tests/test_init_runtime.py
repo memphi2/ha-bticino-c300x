@@ -747,7 +747,11 @@ def test_sync_device_user_bootstraps_missing_media_user_once() -> None:
     ]
 
 
-def test_sync_device_user_does_not_rebootstrap_missing_media_user() -> None:
+def test_sync_device_user_recreates_a_media_user_lost_after_bootstrap() -> None:
+    """A device can lose the user again -- firmware update, factory reset,
+    overwritten route files. Treating the first success as final left those
+    installs with a repair hint that nothing could clear."""
+
     entry = _entry(
         data={CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True},
         options={
@@ -765,8 +769,65 @@ def test_sync_device_user_does_not_rebootstrap_missing_media_user() -> None:
 
     asyncio.run(integration._async_sync_device_user(hass, entry))
 
+    assert entry.runtime_data.api.ensure_labels == ["Home Assistant HA Test"]
+    assert entry.runtime_data.device_user_status["homeassistant_user_present"] is True
+    # Already recorded, so nothing to persist again.
+    assert updates == []
+
+
+def test_sync_device_user_leaves_a_healthy_device_alone() -> None:
+    """The agent status is the gate, so a device that is already set up is
+    never written to -- however often setup runs."""
+
+    entry = _entry(
+        data={CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True},
+        options={
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: True,
+        },
+    )
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=_DeviceUserApi(
+            {
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+                "device_routing_applied": True,
+            }
+        ),
+        device_user_status={},
+        device_user_status_updated_at=None,
+    )
+    hass, updates = _hass_with_config_updates()
+
+    asyncio.run(integration._async_sync_device_user(hass, entry))
+
     assert entry.runtime_data.api.ensure_labels == []
-    assert entry.runtime_data.device_user_status == {"homeassistant_user_present": False}
+    assert updates == []
+
+
+def test_sync_device_user_respects_the_disabled_create_option() -> None:
+    """Opting out still means opting out, even when the device is missing it."""
+
+    entry = _entry(
+        data={CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED: True},
+        options={
+            CONF_VIDEO_ENABLED: True,
+            CONF_CREATE_HOMEASSISTANT_USER: False,
+        },
+    )
+    entry.runtime_data = SimpleNamespace(
+        capabilities={"device_user": {"supported": True}},
+        api=_DeviceUserApi({"homeassistant_user_present": False}),
+        device_user_status={},
+        device_user_status_updated_at=None,
+    )
+    hass, updates = _hass_with_config_updates()
+
+    asyncio.run(integration._async_sync_device_user(hass, entry))
+
+    assert entry.runtime_data.api.ensure_labels == []
     assert updates == []
 
 

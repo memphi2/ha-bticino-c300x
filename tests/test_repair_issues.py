@@ -565,6 +565,39 @@ def test_agent_startup_link_ok_clears_repair_issue() -> None:
     )
 
 
+def test_missing_media_user_repair_issue_names_the_user_not_the_identity() -> None:
+    """The agent can now separate "no domain" from "user never created"; the
+    repair text has to explain the new reason instead of falling back to the
+    unknown-problem wording."""
+
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "homeassistant_user": {
+                        "ok": False,
+                        "reason": "homeassistant_user_missing",
+                    },
+                },
+            }
+        )
+    )
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[
+        repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+    ]
+    reasons = issue["translation_placeholders"]["reasons"]
+    assert "dedicated Home Assistant media user has not been created yet" in reasons
+    assert "unknown setup problem" not in reasons
+    assert (
+        "Home Assistant media-user setup"
+        in issue["translation_placeholders"]["actions"]
+    )
+
+
 def test_failed_self_test_creates_non_fixable_repair_issue() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(

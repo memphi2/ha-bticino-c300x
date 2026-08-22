@@ -142,7 +142,8 @@ code and not integration runtime requirements.
 ## Third-Party References
 
 The repository references BTicino, Legrand, Home Assistant, HACS, Nabu Casa,
-OpenAI, Codex, SlyOldFox and `c300x-controller` for compatibility,
+OpenAI, Codex, Anthropic, Claude, SlyOldFox and `c300x-controller` for
+compatibility,
 attribution, legal hygiene, historical release notes, or tests.
 
 The SlyOldFox / `c300x-controller` attribution is present in `NOTICE`,

@@ -6,6 +6,7 @@ import asyncio
 import sys
 import types
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 dispatcher_signals: list[tuple[str, str]] = []
@@ -129,6 +130,7 @@ if "homeassistant.components.sensor" not in sys.modules:
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import agent_diagnostics
+from custom_components.bticino_c300x._api_normalize import normalize_agent_diagnostics
 from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
@@ -370,6 +372,8 @@ class _FakeRuntimeData:
     memos_updated_at: Any = None
     memos_refresh_task: asyncio.Task[Any] | None = None
     agent_diagnostics: dict[str, Any] = field(default_factory=dict)
+    agent_media_facts: dict[str, Any] = field(default_factory=dict)
+    agent_media_facts_updated_at: Any = None
     agent_diagnostics_updated_at: Any = None
     agent_diagnostics_updated_by: str | None = None
     agent_diagnostics_change_reason: str | None = None
@@ -1020,6 +1024,95 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
     )
 
     assert historical_ui_event_entity.native_value == "idle"
+
+
+def _diagnostics_entry_with_stale_call(**runtime_kwargs: Any) -> _FakeEntry:
+    return _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_call_active": True,
+                "video_bridge_media_active": True,
+                "video_clients": 1,
+            },
+            **runtime_kwargs,
+        )
+    )
+
+
+def test_agent_diagnostics_sensor_clears_finished_call_from_live_media_facts() -> None:
+    """A finished call must not latch: the snapshot is only refetched rarely."""
+
+    entry = _diagnostics_entry_with_stale_call(
+        agent_media_facts={
+            "video_media_starting": False,
+            "video_call_active": False,
+            "video_bridge_media_active": False,
+            "video_bridge_stop_in_progress": False,
+            "video_external_media_active": False,
+            "ring_call_active": False,
+            "ring_media_active": False,
+            "home_call_running": False,
+            "home_call_active": False,
+            "video_clients": 0,
+            "video_media_owner": "idle",
+        },
+    )
+
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "idle"
+    assert entity.extra_state_attributes["video_call_active"] is False
+    assert entity.extra_state_attributes["video_clients"] == 0
+
+
+def test_agent_diagnostics_sensor_reports_call_started_after_stale_idle_snapshot() -> (
+    None
+):
+    """The reverse latch: a call started after the last snapshot must show up."""
+
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_call_active": False,
+                "video_clients": 0,
+            },
+            agent_media_facts={
+                "video_media_starting": False,
+                "video_call_active": True,
+                "video_bridge_media_active": True,
+                "video_bridge_stop_in_progress": False,
+                "video_external_media_active": False,
+                "ring_call_active": False,
+                "ring_media_active": False,
+                "home_call_running": False,
+                "home_call_active": False,
+                "video_clients": 1,
+                "video_media_owner": "agent",
+            },
+        )
+    )
+
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "doorbell_call_active"
+
+
+def test_agent_diagnostics_sensor_keeps_snapshot_without_live_media_facts() -> None:
+    """Without a camera feeding facts the snapshot stays the only source."""
+
+    entity = C300XAgentDiagnosticsSensor(  # type: ignore[arg-type]
+        _diagnostics_entry_with_stale_call()
+    )
+
+    assert entity.native_value == "doorbell_call_active"
 
 
 def test_agent_diagnostics_sensor_options_include_display_event_watchdog() -> None:
@@ -2366,3 +2459,99 @@ def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:
         assert entry.runtime_data.memos["memos"][0]["text"] == "local memo"
 
     asyncio.run(_run())
+
+
+def test_agent_diagnostics_sensor_prefers_a_newer_snapshot_over_stale_facts() -> None:
+    """The camera does not poll and ignores agent restarts, so its live view can
+    itself go stale. A newer authoritative refresh has to win, otherwise the
+    media half becomes uncorrectable."""
+
+    entry = _diagnostics_entry_with_stale_call(
+        agent_media_facts={
+            "video_call_active": True,
+            "video_bridge_media_active": True,
+            "video_clients": 1,
+            "video_media_owner": "agent",
+        },
+        agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+    )
+    entry.runtime_data.agent_diagnostics = {
+        "agent_init_script_present": True,
+        "agent_init_link_ok": True,
+        "subscription_count": 1,
+        "home_assistant_connected_this_run": True,
+        "video_call_active": False,
+        "video_clients": 0,
+    }
+    entry.runtime_data.agent_diagnostics_updated_at = datetime(
+        2026, 8, 22, 10, 5, tzinfo=UTC
+    )
+
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "idle"
+
+
+def test_agent_diagnostics_sensor_prefers_newer_facts_over_an_older_snapshot() -> None:
+    """The common case is unchanged: facts published after the last refresh
+    still correct a snapshot that predates the call."""
+
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics={
+                "agent_init_script_present": True,
+                "agent_init_link_ok": True,
+                "subscription_count": 1,
+                "home_assistant_connected_this_run": True,
+                "video_call_active": False,
+                "video_clients": 0,
+            },
+            agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+            agent_media_facts={
+                "video_call_active": True,
+                "video_bridge_media_active": True,
+                "video_clients": 1,
+                "video_media_owner": "agent",
+            },
+            agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
+        )
+    )
+
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "doorbell_call_active"
+
+
+def test_agent_diagnostics_sensor_ignores_a_write_only_push_for_media() -> None:
+    """The agent pushes diagnostics from writes only, and that payload replaces
+    the whole snapshot: every media field normalizes to None while the
+    timestamp is refreshed. It is newer without knowing anything about media,
+    so it must not win the tiebreak and report an active call as idle."""
+
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(
+            agent_diagnostics=normalize_agent_diagnostics(
+                {
+                    "agent_write_count": 3,
+                    "last_write_class": "qml_patch",
+                    "last_write_reason": "apply",
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                }
+            ),
+            agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
+            agent_media_facts={
+                "video_call_active": True,
+                "video_bridge_media_active": True,
+                "video_clients": 1,
+                "video_media_owner": "agent",
+            },
+            agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+        )
+    )
+
+    entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
+
+    assert entity.native_value == "doorbell_call_active"

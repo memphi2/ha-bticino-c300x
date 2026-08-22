@@ -31,6 +31,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DEVICE_ACTIVATIONS,
     CONF_EVENT_WEBHOOK_ID,
+    CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
@@ -105,6 +106,27 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
 _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS = (
     "agent_diagnostics_updated_by",
     "agent_diagnostics_change_reason",
+)
+_DEVICE_USER_DIAGNOSTIC_KEYS = (
+    "available",
+    "supported",
+    "domain_present",
+    "homeassistant_user_present",
+    "accounts_homeassistant_present",
+    "route_int_homeassistant_present",
+    "route_ext_homeassistant_present",
+    "route_conf_homeassistant_present",
+    "route_conf_is_symlink",
+    "writable_files_present",
+    "media_identity_available",
+    "routes_consistent",
+    "device_routing_supported",
+    "device_routing_applied",
+    "device_routing_state",
+    "device_routing_backup_present",
+    "media_user_label_available",
+    "media_user_label_applied",
+    "media_user_label_state",
 )
 
 
@@ -185,6 +207,18 @@ async def async_get_config_entry_diagnostics(
             "qml_patch_check": _operation_diagnostics(
                 getattr(runtime, "qml_patch_diagnostics", None)
             ),
+            "device_user": _device_user_diagnostics(runtime),
+            # Entry-side fact, not device state: it separates "never set up"
+            # from "set up once and later lost", which the device status alone
+            # cannot answer.
+            "media_user_bootstrapped_once": bool(
+                entry_config_value(
+                    entry,
+                    CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED,
+                    False,
+                )
+            ),
+            "self_test": _self_test_diagnostics(runtime),
             "activations": _safe_activation_diagnostics(runtime),
         },
         "agent_write_diagnostics": _agent_write_diagnostics(entry),
@@ -560,6 +594,62 @@ def _media_timeline_diagnostics(runtime: Any | None) -> list[dict[str, Any]] | N
     if not isinstance(result, list):
         return None
     return result
+
+
+def _device_user_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
+    """Return the non-sensitive Home Assistant media-user setup status.
+
+    Mirrors the normalizer's safe key set: presence flags and stable state
+    codes only. The device-side SIP realm, AOR and account label stay out, and
+    listing the keys explicitly keeps a future field from leaking in silently.
+    """
+
+    if runtime is None:
+        return None
+    status = getattr(runtime, "device_user_status", None)
+    if not isinstance(status, Mapping) or not status:
+        return None
+    data: dict[str, Any] = {
+        key: status.get(key) for key in _DEVICE_USER_DIAGNOSTIC_KEYS
+    }
+    data["device_routing_error"] = _safe_error_summary(status.get("device_routing_error"))
+    data["error"] = _safe_error_summary(status.get("error"))
+    data["updated_at"] = _isoformat(
+        getattr(runtime, "device_user_status_updated_at", None)
+    )
+    return data
+
+
+def _self_test_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
+    """Return the self-test verdict with every check's reason code.
+
+    A failed self-test is the one issue class where the reason code *is* the
+    diagnosis, so keep all checks -- but only verdict and reason code, never
+    the per-check details, which carry device paths and file state.
+    """
+
+    if runtime is None:
+        return None
+    status = getattr(runtime, "self_test_status", None)
+    if not isinstance(status, Mapping) or not status:
+        return None
+    checks = status.get("checks")
+    return {
+        "ok": status.get("ok"),
+        "agent_version": status.get("agent_version"),
+        "api_version": status.get("api_version"),
+        "firmware_family": status.get("firmware_family"),
+        "updated_at": _isoformat(getattr(runtime, "self_test_status_updated_at", None)),
+        "checks": {
+            str(name): {
+                "ok": check.get("ok") if isinstance(check, Mapping) else None,
+                "reason": check.get("reason") if isinstance(check, Mapping) else None,
+            }
+            for name, check in sorted(checks.items())
+        }
+        if isinstance(checks, Mapping)
+        else None,
+    }
 
 
 def _cache_diagnostics(runtime: Any | None) -> dict[str, Any] | None:

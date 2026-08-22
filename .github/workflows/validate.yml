@@ -26,6 +26,13 @@ jobs:
     name: validate (${{ matrix.name }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history with tags: the managed-blueprint digest table is
+          # verified against real release content, and the native-agent version
+          # gate compares against the previous release tag. On the default
+          # shallow checkout both silently degrade -- the gate finds no tag and
+          # passes without checking anything.
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}

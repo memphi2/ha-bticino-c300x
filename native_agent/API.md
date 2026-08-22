@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.0`
+- Current packaged agent version: `1.9.2`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -222,7 +222,7 @@ Side effects: none.
 Response:
 
 ```json
-{"ok": true, "agent": "native-c", "version": "1.9.0"}
+{"ok": true, "agent": "native-c", "version": "1.9.2"}
 ```
 
 ### `GET /api/v1/capabilities`
@@ -298,7 +298,7 @@ Response shape:
 ```json
 {
   "api_version": "1.1",
-  "agent_version": "1.9.0",
+  "agent_version": "1.9.2",
   "firmware_family": "1.7.x",
   "ok": true,
   "checks": {
@@ -956,7 +956,7 @@ Reads staged update state.
 ```json
 {
   "bundle_hash": "sha256:...",
-  "agent_version": "1.9.0"
+  "agent_version": "1.9.2"
 }
 ```
 
@@ -1170,6 +1170,7 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.9.2 | 1.1 | 1.7.x | Names the missing half of the media identity in the self-test and answers rejected RTSP pulls instead of closing the connection unexplained. |
 | 1.9.0 | 1.1 | 1.7.x | Adds the v1.9.0 native media and update-path fixes while reporting the matching packaged agent version. |
 | 1.8.3 | 1.1 | 1.7.x | Keeps on-demand BT-AV takeover from closing the device media window during startup. |
 | 1.8.1 | 1.1 | 1.7.x | Adds experimental native audio-codec maintenance actions and keeps parked RTSP clients from consuming live capacity. |

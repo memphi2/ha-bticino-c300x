@@ -871,7 +871,7 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
     expected_mappings = {
         'if (action === "answer_ring")': 'return "answer";',
         'if (action === "hangup")': 'return passiveRingCall || passiveRingPreview ? "busy" : "hang_up";',
-        'if (action === "stop_stream")': 'return active && !passiveRingPreview ? "hang_up" : "busy";',
+        'if (action === "stop_stream")': 'return passiveRingPreview ? "busy" : "hang_up";',
         'if (action === "start_stream")': 'return active ? (passiveRingPreview ? "busy" : "hang_up") : "stream";',
         'if (action === "wait")': 'return "busy";',
     }
@@ -884,7 +884,11 @@ def test_bundled_state_model_maps_media_actions_to_buttons() -> None:
     assert 'return "stream";' in state_source[action_start:action_end]
 
 
-def test_bundled_card_blocks_passive_on_demand_stop_button() -> None:
+def test_bundled_card_keeps_on_demand_stoppable_but_blocks_passive_ring_preview() -> None:
+    """On-demand media is agent-owned, so any card may stop it -- requiring a
+    local stream left sessions nobody could end. A passive ring preview stays
+    blocked: there the stop control would hang up someone else's call."""
+
     state_source = CARD_STATE_SOURCE.read_text(encoding="utf-8")
 
     stop_stream_block = state_source[
@@ -893,7 +897,8 @@ def test_bundled_card_blocks_passive_on_demand_stop_button() -> None:
         )
     ]
 
-    assert 'return active && !passiveRingPreview ? "hang_up" : "busy";' in stop_stream_block
+    assert 'return passiveRingPreview ? "busy" : "hang_up";' in stop_stream_block
+    assert "active" not in stop_stream_block.split("return", 1)[1]
     assert 'action === "busy"' in state_source
 
 

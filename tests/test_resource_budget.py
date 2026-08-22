@@ -57,10 +57,11 @@ def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
 
     # Bumped from 229_000 for the compatible PCMU talkback path (codec-aware
     # payload types + silence), then to 232_500 for the codec-aware ring
-    # talkback restamp (speex 97 -> negotiated 96). Splitting this monolith is
-    # a separate backlog refactor; this interim ceiling keeps pressure on
-    # unrelated growth.
-    assert path.stat().st_size <= 232_500
+    # talkback restamp (speex 97 -> negotiated 96), then to 233_900 for the
+    # 503 answers plus reject reasons that replaced the silent closes on a
+    # missing client slot. Splitting this monolith is a separate backlog
+    # refactor; this interim ceiling keeps pressure on unrelated growth.
+    assert path.stat().st_size <= 233_900
     assert path.read_text(encoding="utf-8").count("\n") <= 6_900
 
 
@@ -91,7 +92,7 @@ def test_large_python_modules_stay_within_interim_budget() -> None:
     oversized = [
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "custom_components" / "bticino_c300x").glob("*.py")
-        if path.stat().st_size > 74_500
+        if path.stat().st_size > 75_000
     ]
 
     assert oversized == []

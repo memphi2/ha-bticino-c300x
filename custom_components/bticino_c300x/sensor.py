@@ -412,7 +412,7 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
         """Return the summarized detailed diagnostics status."""
 
         return _agent_diagnostics_status(
-            self._entry.runtime_data.agent_diagnostics,
+            self._diagnostics_with_live_media(),
             connection_state=self._connection_state_value(),
             media_watchdog=getattr(
                 self._entry.runtime_data,
@@ -421,11 +421,37 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
             ),
         )
 
+    def _diagnostics_with_live_media(self) -> Mapping[str, Any]:
+        """Return the diagnostics snapshot with newer live media facts on top.
+
+        The snapshot is only refetched on setup, subscription renewal and agent
+        writes, so on its own it reports the media state of some unrelated
+        earlier moment -- a finished call stays "active", a running one stays
+        "idle". The camera's live view fixes that, but it must not win
+        unconditionally: the camera does not poll and ignores agent restarts, so
+        its view can itself go stale, and an authoritative refresh has to be
+        able to correct the media half. Newest source wins.
+        """
+
+        runtime_data = self._entry.runtime_data
+        diagnostics = runtime_data.agent_diagnostics
+        media_facts = getattr(runtime_data, "agent_media_facts", None)
+        if not diagnostics or not media_facts:
+            # Without a snapshot the entity still reports "diagnostics not
+            # loaded"; media facts refine a snapshot, they do not replace one.
+            return diagnostics
+        if _snapshot_answers_media(diagnostics) and _is_outdated(
+            getattr(runtime_data, "agent_media_facts_updated_at", None),
+            runtime_data.agent_diagnostics_updated_at,
+        ):
+            return diagnostics
+        return {**dict(diagnostics), **dict(media_facts)}
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed non-sensitive agent diagnostics."""
 
-        diagnostics = self._entry.runtime_data.agent_diagnostics
+        diagnostics = self._diagnostics_with_live_media()
         media_watchdog = getattr(self._entry.runtime_data, "agent_cpu_watchdog", None)
         status = self.native_value
         return {
@@ -562,6 +588,27 @@ class C300XMediaReadinessSensor(C300XConnectionDiagnosticSensor):
             return
         self._last_state_snapshot = snapshot
         self.async_write_ha_state()
+
+
+def _snapshot_answers_media(diagnostics: Mapping[str, Any]) -> bool:
+    """Return true when a diagnostics snapshot actually reports a media state.
+
+    The agent pushes agent.diagnostics_changed from writes only, with write
+    counters and nothing else, and that payload replaces the whole stored
+    snapshot -- every media field normalizes to None while the timestamp is
+    refreshed. Such a snapshot is newer without knowing anything about media,
+    so letting it win the tiebreak would report an active call as idle.
+    """
+
+    return any(diagnostics.get(key) is not None for key in _AGENT_VIDEO_DIAGNOSTIC_KEYS)
+
+
+def _is_outdated(value: datetime | None, other: datetime | None) -> bool:
+    """Return true when a timestamped source is older than the one to compare."""
+
+    if value is None:
+        return other is not None
+    return other is not None and other > value
 
 
 def _agent_diagnostics_status(

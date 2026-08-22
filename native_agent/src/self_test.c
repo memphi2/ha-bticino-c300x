@@ -290,16 +290,23 @@ int c300x_self_test_json(
             device_routing_ok = 0;
             user_reason = "device_user_status_unavailable";
             device_routing_reason = "not_checked_device_user_status_unavailable";
-        } else if (!user_status.media_identity_available) {
+        } else if (!user_status.domain_present) {
+            /* media_identity_available is domain AND user, so testing it first
+             * made "homeassistant_user_missing" unreachable and reported every
+             * not-yet-created user as a missing identity -- which reads like a
+             * device problem and sends people looking in the wrong place. Name
+             * the missing half: without a domain there is nothing to attach a
+             * user to, otherwise it is simply the user that has to be created. */
             user_ok = 0;
             user_reason = "media_identity_missing";
-        } else if (user_status.homeassistant_user_present && !user_status.routes_consistent) {
+        } else if (!user_status.homeassistant_user_present) {
+            user_ok = 0;
+            user_reason = "homeassistant_user_missing";
+        } else if (!user_status.routes_consistent) {
             user_ok = 0;
             user_reason = "homeassistant_routes_inconsistent";
-        } else if (user_status.homeassistant_user_present) {
-            user_reason = "homeassistant_user_ok";
         } else {
-            user_reason = "homeassistant_user_missing";
+            user_reason = "homeassistant_user_ok";
         }
 
         if (user_status.status_available) {

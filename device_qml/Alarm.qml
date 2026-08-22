@@ -407,7 +407,11 @@ Page {
         id: delayedStatusRefresh
         interval: 700
         repeat: false
-        onTriggered: Api.status(status, page, alarmState, activeSince)
+        // Forced: this fires after a command, so the new state must be
+        // fetched even if an event refresh just ran. Going through
+        // refreshAlarmStatus is what keeps lastStatusRefreshMs updated, so
+        // guarded callers dedupe against this fetch instead of ignoring it.
+        onTriggered: refreshAlarmStatus(true)
     }
 
     Column {

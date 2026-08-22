@@ -234,6 +234,15 @@ def test_android_ring_call_blueprint_opens_dashboard_from_notification() -> None
             "event_type": "mobile_app_notification_action",
             "event_data": {"action": "{{ hangup_action }}"},
         },
+        {
+            "id": "door_unlock",
+            "platform": "event",
+            "event_type": "bticino_c300x_agent_event_received",
+            "event_data": {
+                "event_key": "door_unlock_started",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
     ]
     assert services == ["notify_service", "notify_service"]
     assert answer_services[:3] == [
@@ -330,6 +339,15 @@ def test_ios_ring_call_blueprint_uses_unique_actions_and_event_entry_id() -> Non
             "event_type": "mobile_app_notification_action",
             "event_data": {"action": "{{ hangup_action }}"},
         },
+        {
+            "id": "door_unlock",
+            "platform": "event",
+            "event_type": "bticino_c300x_agent_event_received",
+            "event_data": {
+                "event_key": "door_unlock_started",
+                "entry_id": "{{ entry_id }}",
+            },
+        },
     ]
     assert answer_sequence[1] == {
         "service": "bticino_c300x.answer_doorbell_call",
@@ -402,3 +420,51 @@ def test_strict_phrase_blueprint_uses_existing_guardrail_service() -> None:
     assert action["data"]["result_path"] == "result_path"
     assert action["data"]["capture_path"] == "capture_path"
     assert action["data"]["unlock_on_match"] == "unlock_on_match"
+
+
+def test_ring_call_blueprints_stop_the_phone_ringing_when_the_door_opens() -> None:
+    """Letting the visitor in ends the reason to keep ringing. The ring wait has
+    to end on the door-unlock event; the timeout branch then clears the
+    notification -- without hanging up, which is a separate decision the
+    blueprint must not make."""
+
+    for filename, choose_index in (
+        ("doorbell_call_android.yaml", 3),
+        ("doorbell_call_ios.yaml", 2),
+    ):
+        data = _blueprint(filename)
+        wait_triggers = data["action"][choose_index - 1]["wait_for_trigger"]
+        door_triggers = [
+            trigger for trigger in wait_triggers if trigger.get("id") == "door_unlock"
+        ]
+        default_sequence = data["action"][choose_index]["default"]
+
+        assert door_triggers == [
+            {
+                "id": "door_unlock",
+                "platform": "event",
+                "event_type": "bticino_c300x_agent_event_received",
+                "event_data": {
+                    "event_key": "door_unlock_started",
+                    "entry_id": "{{ entry_id }}",
+                },
+            }
+        ], filename
+
+        # No branch matches the door-unlock trigger, so it lands here.
+        assert [step["service"] for step in default_sequence] == [
+            "notify_service"
+        ], filename
+        assert default_sequence[0]["data"]["message"] == "clear_notification"
+        assert default_sequence[0]["data"]["data"]["tag"] == "{{ ring_tag }}"
+
+        branch_conditions = [
+            branch["conditions"][0]["value_template"]
+            for branch in data["action"][choose_index]["choose"]
+        ]
+        assert not any("door_unlock" in condition for condition in branch_conditions), (
+            filename
+        )
+        # The Ring Call keeps running: opening the door does not decide whether
+        # someone still wants to talk to the visitor.
+        assert "hangup_doorbell_call" not in str(default_sequence), filename

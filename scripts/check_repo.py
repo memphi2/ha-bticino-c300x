@@ -832,6 +832,12 @@ def check_hacs_metadata() -> list[str]:
         )
     if "home-assistant/actions/hassfest@" not in validate_workflow:
         failures.append("validate workflow must run Hassfest")
+    if "fetch-depth: 0" not in validate_workflow:
+        failures.append(
+            "validate workflow must check out full history with tags: the "
+            "native-agent version gate and the managed-blueprint digest table "
+            "compare against release tags and pass vacuously without them"
+        )
     for path in (
         '"device_qml/**"',
         '"custom_components/bticino_c300x/device_agent/qml/**"',

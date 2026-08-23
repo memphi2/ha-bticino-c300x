@@ -38,12 +38,50 @@ from .const import (
     CONF_WEATHER_ENTITY_ID,
     CONF_WEBHOOK_ID,
     DEFAULT_AGENT_PORT,
+    DOMAIN,
+    MEDIA_USER_SETUP_ENTITY_KEY,
 )
 from .device_installer import installer_bundle_status
-from .entity import entry_config_value, entry_video_enabled
+from .entity import entry_config_value, entry_entity_unique_id, entry_video_enabled
 from .entry_types import BticinoC300XConfigEntry
 from .fingerprint import fnv1a64_fingerprint
+from .forwarding import forwarding_state_from_value
+from .media_readiness import media_readiness
 
+er: Any
+try:
+    from homeassistant.helpers import entity_registry as er
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
+    er = None
+
+# Bridge counters that only the video-status endpoint reports. They decide
+# whether a failing stream never reached the agent, was refused by it, or was
+# accepted while the device never delivered media -- the question issue #44
+# could not be answered from a diagnostics download.
+_VIDEO_BRIDGE_DIAGNOSTIC_KEYS = (
+    "media_owner",
+    "media_active",
+    "media_starting",
+    "stop_in_progress",
+    "call_active",
+    "clients",
+    "max_clients",
+    "rtsp_options_requests",
+    "rtsp_describe_requests",
+    "rtsp_setup_requests",
+    "rtsp_play_requests",
+    "rtsp_teardown_requests",
+    "rtsp_rejected_clients",
+    "rtsp_rejected_describes",
+    "rtsp_play_failures",
+    "last_rtsp_method",
+    "last_rtsp_reject_reason",
+    "bt_media_start_attempts",
+    "bt_media_stop_attempts",
+    "rtp_packets",
+    "last_rtp_at",
+    "last_media_started_at",
+)
 _SENSITIVE_KEY_PARTS = (
     "token",
     "secret",
@@ -92,6 +130,12 @@ _SAFE_AGENT_DIAGNOSTIC_KEYS = (
     "video_bridge_stop_in_progress",
     "video_bridge_open_fds",
     "video_bridge_active_threads",
+    # The agent reports these; dropping them cost the report the reason a
+    # media session did not start, and who owned it.
+    "video_media_owner",
+    "video_last_block_reason",
+    "video_external_media_active",
+    "video_external_owner",
     "ring_receiver_running",
     "ring_registered",
     "ring_call_active",
@@ -146,6 +190,7 @@ async def async_get_config_entry_diagnostics(
     runtime = getattr(entry, "runtime_data", None)
     network = await _async_network_diagnostics(hass, entry)
     bundle_status = await _async_installer_bundle_status(hass)
+    video_bridge = await _async_video_bridge_diagnostics(entry, runtime)
     return {
         "entry": _entry_diagnostics(entry),
         "configuration": {
@@ -219,6 +264,12 @@ async def async_get_config_entry_diagnostics(
                 )
             ),
             "self_test": _self_test_diagnostics(runtime),
+            "media_readiness": _media_readiness_diagnostics(entry, runtime),
+            "video_bridge": video_bridge,
+            "media_user_setup_entity": _media_user_setup_entity_diagnostics(
+                hass,
+                entry,
+            ),
             "activations": _safe_activation_diagnostics(runtime),
         },
         "agent_write_diagnostics": _agent_write_diagnostics(entry),
@@ -568,12 +619,10 @@ def _event_state_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "last_event_time": getattr(state, "last_event_time", None),
         "video_available": getattr(state, "video_available", None),
         "call_active": getattr(state, "call_active", None),
-        "smartphone_forwarding_known": getattr(
-            state,
-            "smartphone_forwarding_mode",
-            None,
-        )
-        is not None,
+        "smartphone_forwarding_known": _forwarding_mode(state) is not None,
+        # The mode itself, not just "known": it decides the readiness verdict,
+        # and without it that verdict can only be reconstructed by elimination.
+        "smartphone_forwarding_mode": _forwarding_mode(state),
         "ringer_known": getattr(state, "ringer_muted", None) is not None,
         "ringer_volume_known": getattr(state, "ringer_volume", None) is not None,
         "voicemail_total": getattr(state, "voicemail_total", None),
@@ -581,6 +630,109 @@ def _event_state_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
         "memos_total": getattr(state, "memos_total", None),
         "memos_unread": getattr(state, "memos_unread", None),
     }
+
+
+def _forwarding_mode(state: Any) -> str | None:
+    """Return the normalized forwarding state, or None when there is no reading."""
+
+    return forwarding_state_from_value(
+        getattr(state, "smartphone_forwarding_mode", None)
+    )
+
+
+async def _async_video_bridge_diagnostics(
+    entry: BticinoC300XConfigEntry,
+    runtime: Any | None,
+) -> dict[str, Any] | None:
+    """Return the bridge counters that only the video-status endpoint reports.
+
+    One extra request, on a download the user triggers deliberately. Without
+    it a stream that never starts looks identical in the report whether go2rtc
+    never got that far, the agent refused it, or the device accepted the
+    session and then sent nothing.
+    """
+
+    if runtime is None or not entry_video_enabled(entry):
+        return None
+    api = getattr(runtime, "api", None)
+    status_call = getattr(api, "async_doorbell_video_status", None)
+    if not callable(status_call):
+        return None
+    try:
+        status = await status_call()
+    except Exception as err:  # noqa: BLE001 - diagnostics must survive an offline agent
+        return {"error": type(err).__name__}
+    bridge = status.get("bridge") if isinstance(status, Mapping) else None
+    if not isinstance(bridge, Mapping):
+        return None
+    result: dict[str, Any] = {
+        key: bridge.get(key) for key in _VIDEO_BRIDGE_DIAGNOSTIC_KEYS
+    }
+    # Presence, not text: a device error message is not redactable in general.
+    result["last_error_present"] = bool(bridge.get("last_error"))
+    return result
+
+
+def _media_readiness_diagnostics(
+    entry: BticinoC300XConfigEntry,
+    runtime: Any | None,
+) -> dict[str, Any] | None:
+    """Return the media-readiness summary the sensor publishes."""
+
+    if runtime is None:
+        return None
+    try:
+        # Already a safe summary, so it is reported as it is: an allowlist here
+        # would only make later additions vanish from the report silently.
+        return dict(media_readiness(entry))
+    except Exception as err:  # noqa: BLE001 - diagnostics must survive partial setup
+        # Type only: a failure message is not redactable in general, and this
+        # report gets attached to public issues.
+        return {"error": type(err).__name__}
+
+
+def _media_user_setup_entity_diagnostics(
+    hass: HomeAssistant,
+    entry: BticinoC300XConfigEntry,
+) -> dict[str, Any]:
+    """Describe how the media-user setup switch is registered.
+
+    Reported without the entity id, which carries the user's own device
+    naming. "Greyed out" in the UI can mean disabled, or a registry entry the
+    integration no longer provides -- these flags tell the two apart.
+    """
+
+    result: dict[str, Any] = {
+        "registry_available": False,
+        "registry_present": False,
+        "disabled_by": None,
+        "state_present": False,
+        "error": None,
+    }
+    if er is None:
+        return result
+    try:
+        registry = er.async_get(hass)
+        if registry is None or not hasattr(registry, "async_get_entity_id"):
+            return result
+        result["registry_available"] = True
+        entity_id = registry.async_get_entity_id(
+            "switch",
+            DOMAIN,
+            entry_entity_unique_id(entry, MEDIA_USER_SETUP_ENTITY_KEY),
+        )
+        if not isinstance(entity_id, str):
+            return result
+        result["registry_present"] = True
+        registry_entry = registry.async_get(entity_id)
+        disabled_by = getattr(registry_entry, "disabled_by", None)
+        if disabled_by is not None:
+            result["disabled_by"] = str(getattr(disabled_by, "value", disabled_by))
+        states = getattr(hass, "states", None)
+        result["state_present"] = states is not None and states.get(entity_id) is not None
+    except Exception as err:  # noqa: BLE001 - diagnostics must survive partial setup
+        result["error"] = type(err).__name__
+    return result
 
 
 def _media_timeline_diagnostics(runtime: Any | None) -> list[dict[str, Any]] | None:

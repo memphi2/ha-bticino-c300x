@@ -547,3 +547,30 @@ def test_audio_codec_select_marks_unavailable_on_api_error() -> None:
     asyncio.run(entity.async_update())
 
     assert entity.available is False
+
+
+def test_smartphone_forwarding_push_without_a_reading_keeps_the_known_state() -> None:
+    """The webhook preserves the last known mode when a push cannot be parsed
+    and then fires the bus event carrying mode=None. This callback runs
+    synchronously on that event and writes the same store, so treating the
+    resulting "unknown" as a value would undo the preservation one line later."""
+
+    entry = _FakeEntry()
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "blocked"
+    entity = C300XSmartphoneForwardingModeSelect(entry)  # type: ignore[arg-type]
+    entity.hass = "hass"  # type: ignore[assignment]
+    entity.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+
+    entity._handle_agent_event(
+        types.SimpleNamespace(
+            data={
+                "entry_id": entry.entry_id,
+                "event_key": "smartphone_forwarding_changed",
+                "mode": None,
+            }
+        )
+    )
+
+    # Displayed as unknown, but the shared store keeps the last real reading.
+    assert entity._state == "unknown"
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "blocked"

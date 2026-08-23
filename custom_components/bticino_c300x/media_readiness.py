@@ -6,10 +6,15 @@ from collections.abc import Mapping
 from typing import Any
 
 from .capabilities import capability_is_supported
-from .const import CONF_VIDEO_ENABLED, SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
+from .const import (
+    CONF_VIDEO_ENABLED,
+    SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
+    SMARTPHONE_FORWARDING_STATE_UNPROVISIONED,
+)
 from .device_user import device_user_ready
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .forwarding import forwarding_state_from_value
 from .media_setup import (
     media_readiness_action,
     self_test_failure_is_optional_ipv6_only,
@@ -68,10 +73,23 @@ def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     if isinstance(self_test, Mapping) and not self_test:
         warnings.append("self_test_not_loaded")
 
-    forwarding_state = getattr(runtime_data.event_state, "smartphone_forwarding_mode", None)
+    # Read defensively like every other runtime field here, and normalized:
+    # several writers feed this field, and a sentinel such as "unknown" means
+    # "no reading", not "not Home Assistant".
+    forwarding_state = forwarding_state_from_value(
+        getattr(getattr(runtime_data, "event_state", None), "smartphone_forwarding_mode", None)
+    )
     forwarding_homeassistant = forwarding_state == SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
     if ring_call_supported and forwarding_state is not None and not forwarding_homeassistant:
-        failed.append("forwarding_homeassistant")
+        # "unprovisioned" means the device has no smartphone pairing at all, so
+        # it is not a forwarding target chosen elsewhere and switching it to
+        # Home Assistant is not the answer. Reported as its own failure so the
+        # advice, and the repair, do not claim otherwise.
+        failed.append(
+            "forwarding_unprovisioned"
+            if forwarding_state == SMARTPHONE_FORWARDING_STATE_UNPROVISIONED
+            else "forwarding_homeassistant"
+        )
     elif ring_call_supported and forwarding_state is None:
         warnings.append("forwarding_unknown")
 

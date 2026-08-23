@@ -577,7 +577,10 @@ def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
     assert readiness["status"] == "blocked"
     assert readiness["forwarding_state"] == "unprovisioned"
     assert readiness["forwarding_homeassistant"] is False
-    assert "forwarding_homeassistant" in readiness["failed_checks"]
+    # Its own failure: the device has no smartphone pairing at all, so telling
+    # the user to switch forwarding to Home Assistant would be wrong advice.
+    assert readiness["failed_checks"] == ["forwarding_unprovisioned"]
+    assert readiness["recommended_action"] == "provision_smartphone_forwarding_on_device"
 
 
 def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
@@ -2555,3 +2558,28 @@ def test_agent_diagnostics_sensor_ignores_a_write_only_push_for_media() -> None:
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
 
     assert entity.native_value == "doorbell_call_active"
+
+
+def test_media_readiness_treats_the_unknown_sentinel_as_no_reading() -> None:
+    """"unknown" is the select's display sentinel for "no reading", not a real
+    non-Home-Assistant mode. Scoring it as one made the media-readiness sensor
+    report "blocked" on a device whose forwarding simply could not be read."""
+
+    def _readiness(mode: Any) -> dict[str, Any]:
+        entry = _FakeEntry(
+            runtime_data=_FakeRuntimeData(
+                capabilities={"doorbell_call": {"supported": True}},
+                event_state=types.SimpleNamespace(smartphone_forwarding_mode=mode),
+            )
+        )
+        return media_readiness(entry)  # type: ignore[arg-type]
+
+    unknown = _readiness("unknown")
+    assert unknown["status"] == "warning"
+    assert unknown["failed_checks"] == []
+    assert "forwarding_unknown" in unknown["warnings"]
+
+    # A real non-Home-Assistant mode still fails, which is the point of the check.
+    blocked = _readiness("blocked")
+    assert blocked["status"] == "blocked"
+    assert blocked["failed_checks"] == ["forwarding_homeassistant"]

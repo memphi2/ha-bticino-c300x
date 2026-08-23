@@ -88,6 +88,7 @@ from custom_components.bticino_c300x.diagnostics import (
     _agent_write_diagnostics,
     _async_installer_bundle_status,
     _async_network_diagnostics,
+    _async_video_bridge_diagnostics,
     _capability_diagnostics,
     _connection_diagnostics,
     _device_user_diagnostics,
@@ -95,6 +96,8 @@ from custom_components.bticino_c300x.diagnostics import (
     _event_state_diagnostics,
     _host_private_address,
     _isoformat,
+    _media_readiness_diagnostics,
+    _media_user_setup_entity_diagnostics,
     _redact_error_message,
     _route_diagnostics,
     _safe_error_summary,
@@ -890,3 +893,112 @@ def test_diagnostics_value_helpers_redact_and_normalize_values() -> None:
         )
         is True
     )
+
+
+def test_diagnostics_answer_why_media_setup_is_blocked() -> None:
+    """Issue #43 had to be diagnosed by elimination: the report said forwarding
+    was "known" without saying what it was, carried no readiness verdict, and
+    said nothing about the setup switch the reporter saw greyed out."""
+
+    runtime = SimpleNamespace(
+        capabilities={"doorbell_call": {"supported": True}},
+        connection_state=C300XConnectionState(),
+        self_test_status={},
+        device_user_status={},
+        agent_info={"version": "1.9.2"},
+        event_state=C300XEventState(smartphone_forwarding_mode="blocked"),
+    )
+    entry = _FakeEntry(data={CONF_VIDEO_ENABLED: True}, runtime_data=runtime)
+
+    event_state = _event_state_diagnostics(runtime)
+    readiness = _media_readiness_diagnostics(entry, runtime)  # type: ignore[arg-type]
+
+    assert event_state is not None
+    assert event_state["smartphone_forwarding_mode"] == "blocked"
+    assert readiness is not None
+    assert readiness["status"] == "blocked"
+    assert readiness["failed_checks"] == ["forwarding_homeassistant"]
+    assert readiness["forwarding_state"] == "blocked"
+
+
+def test_diagnostics_describe_the_setup_switch_without_its_entity_id() -> None:
+    """"Greyed out" can mean disabled or an orphaned registry entry. The flags
+    tell them apart; the entity id stays out, it carries device names."""
+
+    section = _media_user_setup_entity_diagnostics(
+        SimpleNamespace(),  # type: ignore[arg-type]
+        _FakeEntry(),  # type: ignore[arg-type]
+    )
+
+    assert set(section) == {
+        "registry_available",
+        "registry_present",
+        "disabled_by",
+        "state_present",
+        "error",
+    }
+
+
+def test_diagnostics_carry_the_bridge_counters_issue_44_needs() -> None:
+    """The counters that decide issue #44 live only in the video-status
+    endpoint: the reporter was asked for fields the download never contained,
+    so he supplied a report that could not answer the question."""
+
+    class _Api:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            self.calls += 1
+            return {
+                "bridge": {
+                    "media_owner": "idle",
+                    "clients": 0,
+                    "rtsp_describe_requests": 88,
+                    "rtsp_play_requests": 0,
+                    "rtsp_rejected_clients": 0,
+                    "last_rtsp_reject_reason": "",
+                    "bt_media_start_attempts": 0,
+                    "rtp_packets": 0,
+                    "last_error": "connect /dev/video0 failed",
+                }
+            }
+
+    api = _Api()
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=SimpleNamespace(api=api),
+    )
+
+    section = asyncio.run(
+        _async_video_bridge_diagnostics(entry, entry.runtime_data)  # type: ignore[arg-type]
+    )
+
+    assert api.calls == 1
+    assert section is not None
+    assert section["rtsp_describe_requests"] == 88
+    assert section["rtsp_play_requests"] == 0
+    assert section["rtp_packets"] == 0
+    assert section["bt_media_start_attempts"] == 0
+    # The error text stays out; only that there is one.
+    assert section["last_error_present"] is True
+    assert "/dev/video0" not in json.dumps(section)
+
+
+def test_diagnostics_survive_an_agent_that_cannot_be_reached() -> None:
+    """The download is what people fetch when the agent misbehaves."""
+
+    class _FailingApi:
+        async def async_doorbell_video_status(self) -> dict[str, Any]:
+            raise TimeoutError("agent unreachable")
+
+    entry = _FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=SimpleNamespace(api=_FailingApi()),
+    )
+
+    section = asyncio.run(
+        _async_video_bridge_diagnostics(entry, entry.runtime_data)  # type: ignore[arg-type]
+    )
+
+    assert section == {"error": "TimeoutError"}

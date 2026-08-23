@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 from custom_components.bticino_c300x import (
     _async_configure_device_activations,
@@ -12,6 +12,7 @@ from custom_components.bticino_c300x import (
 from custom_components.bticino_c300x.capabilities import (
     answering_machine_message_delete_supported,
     auth_config_supported,
+    entry_device_ui_configured,
     entry_device_ui_enabled,
     entry_device_ui_enabled_or_patch_active,
     event_label,
@@ -531,3 +532,26 @@ class _FakeActivationConfigApi:
     async def async_activations(self) -> dict[str, object]:
         self.calls.append(("activations",))
         return {"items": self.status.get("items", [])}
+
+
+class _RealisticEntry:
+    """A config entry shaped like Home Assistant's own.
+
+    ConfigEntry.__init__ wraps data and options in MappingProxyType, so a
+    dict check is False for every production entry while the plain-dict test
+    fakes used elsewhere hide that completely.
+    """
+
+    def __init__(self, **values: object) -> None:
+        self.data = MappingProxyType(dict(values))
+        self.options = MappingProxyType({})
+
+
+def test_device_ui_setting_is_readable_on_a_real_config_entry() -> None:
+    """Returning None here means "unknown", which makes the stale-entity
+    cleanup run on every setup and remove the GUI button registry entries."""
+
+    entry = _RealisticEntry(**{CONF_DEVICE_UI_ENABLED: True})
+
+    assert entry_device_ui_configured(entry) is True
+    assert entry_device_ui_enabled(entry) is True

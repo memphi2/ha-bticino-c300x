@@ -17,6 +17,7 @@ NON_DEVICE_USER_MEDIA_SETUP_CHECKS = frozenset(
         "rtsp",
         "talkback_rtp",
         "forwarding_homeassistant",
+        "forwarding_unprovisioned",
     }
 )
 OPTIONAL_IPV6_REASONS = frozenset(
@@ -219,6 +220,10 @@ def media_readiness_action(
         return "apply_firewall_or_update_device_agent"
     if "homeassistant_user" in failed or "device_routing" in failed:
         return "run_homeassistant_media_user_setup"
+    if "forwarding_unprovisioned" in failed:
+        # Nothing Home Assistant can set: the pairing has to be created on the
+        # device before a forwarding target exists.
+        return "provision_smartphone_forwarding_on_device"
     if "forwarding_homeassistant" in failed:
         return "set_forwarding_to_homeassistant"
     if "callback_url" in failed:

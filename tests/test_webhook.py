@@ -1530,3 +1530,27 @@ def test_agent_diagnostics_event_refreshes_cache_without_public_event() -> None:
     assert runtime_data.agent_diagnostics_updated_at is not None
     assert event_state.last_event is None
     assert hass.bus.events == []
+
+
+def test_unparseable_forwarding_push_does_not_announce_the_old_mode() -> None:
+    """The store deliberately keeps the last known mode when a push cannot be
+    parsed. The public event must not hand that old value to automations as if
+    it were the new one -- they trigger on "changed"."""
+
+    event_state = C300XEventState(smartphone_forwarding_mode="blocked")
+    context = webhook_module._AgentEventContext(
+        hass=SimpleNamespace(config=SimpleNamespace(language="en")),
+        entry=SimpleNamespace(entry_id="entry-1"),
+        event_state=event_state,
+        event_type="smartphone_forwarding_changed",
+        payload={},
+        data={},
+    )
+
+    webhook_module._apply_smartphone_forwarding_event(context)
+    event_data = webhook_module._event_data(context, "2026-08-23T00:00:00+00:00")
+
+    # Kept as best-known state ...
+    assert event_state.smartphone_forwarding_mode == "blocked"
+    # ... but not announced as a change.
+    assert event_data["mode"] is None

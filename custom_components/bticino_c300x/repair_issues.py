@@ -618,11 +618,14 @@ def _configured_alarm_entity_id(entry: BticinoC300XConfigEntry) -> str:
 
 
 def _entry_media_enabled(entry: BticinoC300XConfigEntry) -> bool:
+    # Mapping, not dict: a real ConfigEntry exposes data/options as
+    # MappingProxyType, so a dict check is False on every production entry --
+    # which silently disabled every Repair issue gated on this.
     options = getattr(entry, "options", {})
     data = getattr(entry, "data", {})
-    if isinstance(options, dict) and CONF_VIDEO_ENABLED in options:
+    if isinstance(options, Mapping) and CONF_VIDEO_ENABLED in options:
         return bool(options[CONF_VIDEO_ENABLED])
-    return bool(data.get(CONF_VIDEO_ENABLED)) if isinstance(data, dict) else False
+    return bool(data.get(CONF_VIDEO_ENABLED)) if isinstance(data, Mapping) else False
 
 
 def _entity_exists(hass: HomeAssistant, entity_id: str) -> bool:

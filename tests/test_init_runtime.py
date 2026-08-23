@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -37,6 +38,8 @@ from custom_components.bticino_c300x.data import (
     C300XConnectionState,
     C300XOperationDiagnostics,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _stub_homeassistant_http() -> None:
@@ -323,10 +326,12 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     assert integration.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
     assert entry.runtime_data.agent_update_state == {"available": False}
     assert calls == [
-        "remove-stale",
         "repair-sync",
         "services",
         "qml",
+        # After "qml": the cleanup asks whether the Display patch is active, and
+        # that status is only loaded by the platform-gate step.
+        "remove-stale",
         "activations",
         "media-view",
         "forward:binary_sensor,button,event,number,sensor,select,switch,camera",
@@ -1615,3 +1620,60 @@ class _RecoveringSetupApi:
         if self.calls == 1:
             raise integration.C300XAgentApiError("offline")
         return {"version": "1.2.0"}
+
+
+def test_setup_reads_the_patch_status_before_cleaning_up_gui_buttons() -> None:
+    """The cleanup asks whether the Display patch is active. _store_runtime_data
+    replaces runtime_data with a fresh object whose qml_patch_status is empty,
+    so running the cleanup before the platform-gate step answers "no patch" for
+    every entry -- and tears down exactly the buttons that step was meant to
+    protect, which the button platform then re-creates."""
+
+    source = (
+        ROOT / "custom_components" / "bticino_c300x" / "runtime_manager.py"
+    ).read_text(encoding="utf-8")
+    body = source[source.index("async def async_prepare") : source.index("async def async_validate_agent")]
+
+    assert body.index("async_sync_platform_gate_state()") < body.index(
+        "_async_remove_stale_gui_dependent_entities("
+    )
+    assert body.index("_async_remove_stale_gui_dependent_entities(") < body.index(
+        "async_forward_platforms()"
+    )
+
+
+def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch) -> None:  # noqa: ANN001
+    """The button platform creates these under entry_device_ui_enabled_or_patch_
+    active. Gating the cleanup on the strict predicate meant an entry predating
+    the device-UI option but running an active patch had its buttons removed
+    here and re-added moments later on every setup, discarding the user's own
+    entity id, name, area and hidden flags each time."""
+
+    import homeassistant.helpers.entity_registry as entity_registry
+
+    class FakeRegistry:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def async_get_entity_id(
+            self,
+            platform: str,
+            domain: str,
+            unique_id: str,
+        ) -> str | None:
+            return f"{platform}.delete_latest_text_memo"
+
+        def async_remove(self, entity_id: str) -> None:
+            self.removed.append(entity_id)
+
+    registry = FakeRegistry()
+    monkeypatch.setattr(entity_registry, "async_get", lambda _hass: registry)
+    hass = SimpleNamespace(states=SimpleNamespace(async_remove=lambda _entity_id: None))
+    # No explicit device-UI setting, but the QML patch is active: exactly the
+    # entry shape the lenient predicate exists for.
+    entry = _entry()
+    entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": True})
+
+    integration._async_remove_stale_gui_dependent_entities(hass, entry)
+
+    assert registry.removed == []

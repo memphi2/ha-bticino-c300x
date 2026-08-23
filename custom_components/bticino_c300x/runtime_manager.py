@@ -18,7 +18,7 @@ from .api import (
 )
 from .capabilities import (
     capability_is_supported,
-    entry_device_ui_enabled,
+    entry_device_ui_enabled_or_patch_active,
     maintenance_action_is_advertised,
 )
 from .const import (
@@ -117,7 +117,6 @@ class C300XRuntimeManager:
         await self.async_validate_agent()
         await self.async_register_callbacks()
         self._store_runtime_data()
-        _async_remove_stale_gui_dependent_entities(self.hass, self.entry)
 
         from .repair_issues import async_sync_entry_repair_issues
         from .services import async_setup_services
@@ -126,6 +125,12 @@ class C300XRuntimeManager:
         self.entry.async_on_unload(self.entry.add_update_listener(_async_update_listener))
         await async_setup_services(self.hass)
         await self.async_sync_platform_gate_state()
+        # After the gate state, never before: the cleanup asks whether the
+        # Display patch is active, and _store_runtime_data has just replaced
+        # runtime_data with a fresh object whose qml_patch_status is empty.
+        # Asking earlier answers "no patch" for every entry and tears down the
+        # very buttons the platform re-creates two lines further down.
+        _async_remove_stale_gui_dependent_entities(self.hass, self.entry)
         await self.async_sync_activation_state()
         await self.async_forward_platforms()
         self.async_schedule_startup_sync()
@@ -400,10 +405,19 @@ def _async_remove_stale_gui_dependent_entities(
 ) -> None:
     """Remove stale HA entities for C300X GUI functions that are currently gated."""
 
-    if entry_device_ui_enabled(entry):
+    # The same predicate the button platform creates them with. With the strict
+    # one, an entry that predates the device-UI option but has an active patch
+    # had its buttons removed here and re-added a moment later on every setup,
+    # discarding whatever the user had renamed, hidden or moved.
+    if entry_device_ui_enabled_or_patch_active(entry):
         return
 
     import homeassistant.helpers.entity_registry as er
+
+    # Local like the registry import above: pulling the entity layer in at
+    # module scope changes when Home Assistant's entity module is first
+    # imported, which is load-order sensitive.
+    from .entity import entry_entity_unique_id
 
     registry = er.async_get(hass)
     states = getattr(hass, "states", None)
@@ -411,7 +425,7 @@ def _async_remove_stale_gui_dependent_entities(
         entity_id = registry.async_get_entity_id(
             platform,
             DOMAIN,
-            f"{entry.entry_id}_{key}",
+            entry_entity_unique_id(entry, key),
         )
         if entity_id is None:
             continue

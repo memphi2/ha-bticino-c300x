@@ -4,6 +4,7 @@ import sys
 import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Any
 
 if "homeassistant.core" not in sys.modules:
@@ -121,6 +122,7 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     MEDIA_WATCHDOG_TIMEOUT_ISSUE,
     MISSING_ALARM_ENTITY_ISSUE,
     UNSUPPORTED_CALLBACK_URL_ISSUE,
+    _entry_media_enabled,
     async_clear_entry_repair_issues,
     async_create_media_watchdog_issue,
     async_delete_repair_issue,
@@ -740,7 +742,7 @@ def test_forwarding_failure_creates_fixable_media_setup_repair() -> None:
                 "doorbell_call": {"supported": True},
                 "smartphone_forwarding": {"supported": True},
             },
-            event_state=types.SimpleNamespace(smartphone_forwarding_mode="smartphone"),
+            event_state=types.SimpleNamespace(smartphone_forwarding_mode="enabled"),
             self_test_status={
                 "ok": True,
                 "checks": {
@@ -1446,3 +1448,74 @@ def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
         entry,
     )
     assert entry.data == {}
+
+
+class _RealisticEntry:
+    """A config entry shaped like Home Assistant's own.
+
+    ConfigEntry.__init__ wraps data and options in MappingProxyType, so a
+    dict check is False for every production entry while the plain-dict test
+    fakes used elsewhere hide that completely.
+    """
+
+    def __init__(self, **values: object) -> None:
+        self.data = MappingProxyType(dict(values))
+        self.options = MappingProxyType({})
+
+
+def test_media_gate_reads_a_real_config_entry() -> None:
+    """This gate fronts the media-setup, device-user and QML-hook Repair
+    issues: when it answers False they are deleted instead of raised, so the
+    whole class of media setup guidance never reaches a real install."""
+
+    entry = _RealisticEntry(**{CONF_VIDEO_ENABLED: True})
+
+    assert isinstance(entry.data, dict) is False
+    assert _entry_media_enabled(entry) is True  # type: ignore[arg-type]
+
+
+def test_media_gate_reads_options_of_a_real_config_entry() -> None:
+    entry = _RealisticEntry()
+    entry.options = MappingProxyType({CONF_VIDEO_ENABLED: True})
+
+    assert _entry_media_enabled(entry) is True  # type: ignore[arg-type]
+
+
+def test_unprovisioned_forwarding_is_not_offered_as_a_fixable_repair() -> None:
+    """The repair's fix sets forwarding to Home Assistant. On a device with no
+    smartphone pairing there is nothing to switch, so offering it as fixable
+    would promise a repair that cannot work."""
+
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(available=True),
+            capabilities={
+                "doorbell_call": {"supported": True},
+                "smartphone_forwarding": {"supported": True},
+            },
+            event_state=types.SimpleNamespace(
+                smartphone_forwarding_mode="unprovisioned"
+            ),
+            self_test_status={
+                "ok": True,
+                "checks": {
+                    name: {"ok": True}
+                    for name in (
+                        "capabilities",
+                        "firewall",
+                        "rtsp",
+                        "talkback_rtp",
+                        "homeassistant_user",
+                        "device_routing",
+                        "startup",
+                    )
+                },
+            },
+        ),
+    )
+
+    CREATED_ISSUES.clear()
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert CREATED_ISSUES == {}

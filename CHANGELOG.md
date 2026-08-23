@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.9.3 - 2026-08-23
+
+### Fixed
+
+- Stop reporting media readiness as blocked when the smartphone forwarding
+  state simply cannot be read. The select's internal "unknown" placeholder was
+  scored like a real non-Home-Assistant mode, so a device whose forwarding was
+  merely unreadable looked misconfigured.
+- Make the Repair issues for media setup, the Home Assistant media user and the
+  device QML hook appear at all. They were gated on a check that answered "video
+  disabled" for every real installation, so none of them could ever be raised.
+- Stop discarding the delete buttons' entity settings on every start. The same
+  faulty check made the stale-entity cleanup run each time, removing the
+  registry entries for the video-message and memo delete buttons -- including
+  any rename, area or hidden flag -- which the button platform then re-created.
+- Report an unprovisioned device as its own setup failure. A device with no
+  smartphone pairing was told to switch forwarding to Home Assistant, and the
+  repair offered to do it, although there is nothing to switch.
+- Keep a known forwarding state when a push cannot be parsed, and report the
+  pushed mode in the `smartphone_forwarding_changed` event instead of the
+  previously stored one, so automations are not handed a stale value as a
+  change.
+
+### Changed
+
+- Extend the diagnostics download so media problems can be answered from the
+  file: the media-readiness verdict including the forwarding state in plain
+  text, how the media-user setup switch is registered, the four agent fields
+  the report previously dropped (among them the reason a media session was
+  refused), and the video-bridge counters that show how far an RTSP attempt
+  got, whether the agent refused it, and whether any media arrived.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating.
+- The native C300X device agent is unchanged from `1.9.2`; no agent update is
+  required for this Home Assistant-only release.
+- If you keep the C300X display integration switched off in the integration
+  options while a Display patch is active, the three delete buttons are no
+  longer created. They were only present because the option could not be read;
+  enable the option to get them back.
+
 ## v1.9.2 - 2026-08-22
 
 ### Fixed

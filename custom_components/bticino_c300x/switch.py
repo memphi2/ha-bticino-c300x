@@ -24,6 +24,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_MAINTENANCE_TOKEN,
     EVENT_AGENT_EVENT_RECEIVED,
+    MEDIA_USER_SETUP_ENTITY_KEY,
     SIGNAL_AUTH_CONFIG_CHANGED,
     SIGNAL_MQTT_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
@@ -83,7 +84,7 @@ class C300XHomeAssistantMediaUserSetupSwitch(C300XEntity, SwitchEntity):
     _attr_translation_key = "homeassistant_media_user_setup"
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
-        super().__init__(entry, "homeassistant_media_user_setup")
+        super().__init__(entry, MEDIA_USER_SETUP_ENTITY_KEY)
         self._status: dict[str, Any] = {}
         self._attr_available = True
 

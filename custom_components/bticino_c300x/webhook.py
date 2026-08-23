@@ -400,9 +400,12 @@ def _apply_ringer_volume_event(context: _AgentEventContext) -> None:
 
 
 def _apply_smartphone_forwarding_event(context: _AgentEventContext) -> None:
-    context.event_state.smartphone_forwarding_mode = _optional_forwarding_mode(
-        context.data.get("mode")
-    )
+    mode = _optional_forwarding_mode(context.data.get("mode"))
+    if mode is None and context.event_state.smartphone_forwarding_mode is not None:
+        # A push we cannot parse carries no reading, so it must not overwrite a
+        # known state with "unknown".
+        return
+    context.event_state.smartphone_forwarding_mode = mode
 
 
 def _apply_voicemail_event_context(context: _AgentEventContext) -> None:
@@ -513,7 +516,11 @@ def _event_data(context: _AgentEventContext, event_at: str) -> dict[str, Any]:
     elif context.event_type == "ringer_volume_changed":
         event_data["volume"] = context.event_state.ringer_volume
     elif context.event_type == "smartphone_forwarding_changed":
-        event_data["mode"] = context.event_state.smartphone_forwarding_mode
+        # From the push, not from the store: the store deliberately keeps the
+        # last known mode when a push cannot be parsed, and an automation
+        # triggering on "changed" must not be handed that old value as if it
+        # were the new one.
+        event_data["mode"] = _optional_forwarding_mode(context.data.get("mode"))
     elif context.event_type == "answering_machine_messages_changed":
         event_data["voicemail"] = _voicemail_event_data(context.event_state)
     elif context.event_type == "memos_changed":

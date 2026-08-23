@@ -20,6 +20,16 @@ else:
     from homeassistant.helpers.entity import DeviceInfo
 
 
+def entry_entity_unique_id(entry: BticinoC300XConfigEntry, key: str) -> str:
+    """Return the unique id this integration gives an entity of one entry.
+
+    A registry lookup outside the entity layer needs the same formula, and a
+    diverging copy makes it report a registered entity as unregistered.
+    """
+
+    return f"{entry.entry_id}_{key}"
+
+
 class C300XEntity(Entity):
     """Base entity tied to one C300X config entry."""
 
@@ -27,7 +37,7 @@ class C300XEntity(Entity):
 
     def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_unique_id = entry_entity_unique_id(entry, key)
         self._attr_device_info = _device_info(entry)
         self._last_connection_state_available = _connection_state_available(entry)
 

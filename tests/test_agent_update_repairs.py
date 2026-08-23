@@ -1368,7 +1368,7 @@ def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
             },
         },
     )
-    runtime_data.event_state.smartphone_forwarding_mode = "smartphone"
+    runtime_data.event_state.smartphone_forwarding_mode = "enabled"
     entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
     flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
 

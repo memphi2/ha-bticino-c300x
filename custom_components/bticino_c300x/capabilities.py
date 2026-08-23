@@ -199,11 +199,14 @@ def entry_gui_function_patch_active(entry: Any) -> bool:
 def entry_device_ui_configured(entry: Any) -> bool | None:
     """Return the explicit HA device-UI setting or ``None`` when it is unknown."""
 
+    # Mapping, not dict: a real ConfigEntry exposes data/options as
+    # MappingProxyType, so a dict check answers "unknown" for every production
+    # entry -- which made the device-UI setting unreadable.
     options = getattr(entry, "options", {})
-    if isinstance(options, dict) and CONF_DEVICE_UI_ENABLED in options:
+    if isinstance(options, Mapping) and CONF_DEVICE_UI_ENABLED in options:
         return bool(options[CONF_DEVICE_UI_ENABLED])
     data = getattr(entry, "data", {})
-    if isinstance(data, dict) and CONF_DEVICE_UI_ENABLED in data:
+    if isinstance(data, Mapping) and CONF_DEVICE_UI_ENABLED in data:
         return bool(data[CONF_DEVICE_UI_ENABLED])
     return None
 

@@ -1,5 +1,7 @@
 # Changelog
 
+## v1.9.4 - Unreleased
+
 ## v1.9.3 - 2026-08-23
 
 ### Fixed

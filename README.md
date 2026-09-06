@@ -3,7 +3,7 @@
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
 [![Release](https://img.shields.io/badge/release-v1.9.4-0366d6?style=flat-square)](CHANGELOG.md)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
@@ -130,7 +130,7 @@ and hard-reload the browser if the card picker still shows old frontend state.
 ## Project Status
 
 - IoT class: `local_push`
-- HACS type: custom integration with `zip_release`
+- HACS: default repository, installed as a custom integration with `zip_release`
 - Quality target: Home Assistant Quality Scale Platinum track
 - License: Apache-2.0
 - Support scope: community project, not an official BTicino/Legrand or Home

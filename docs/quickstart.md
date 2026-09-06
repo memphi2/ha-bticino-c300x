@@ -24,18 +24,21 @@ SSH-enablement workflow asks for a firmware target, use `1.7.19`.
 
 ## 1. Install Through HACS
 
+This integration is part of the HACS default list, so no custom repository is
+needed.
+
 1. Open **HACS**.
-2. Go to **Integrations**.
-3. Open **Custom repositories**.
-4. Add:
+2. Search for **BTicino C300X**.
+3. Install it.
+4. Restart Home Assistant.
 
-   ```text
-   https://github.com/memphi2/ha-bticino-c300x
-   ```
+If the search finds nothing, add it as a custom repository instead — use this
+only when your HACS list is not up to date yet:
 
-5. Category: **Integration**.
-6. Install **BTicino C300X**.
-7. Restart Home Assistant.
+1. Open **HACS** and choose **Custom repositories** from the overflow menu.
+2. Add `https://github.com/memphi2/ha-bticino-c300x` with category
+   **Integration**.
+3. Install **BTicino C300X** and restart Home Assistant.
 
 ## 2. Add the Integration
 

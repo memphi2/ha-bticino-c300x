@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.4 - Unreleased
+## v1.9.4 - 2026-09-06
 
 ### Changed
 
@@ -17,6 +17,16 @@
 - The card's readiness chip only offers to open Repairs for `blocked` or
   `unavailable`; a forwarding warning is informative and no longer rendered as
   a button.
+- Installations can now find the integration directly in the HACS default
+  repository list; adding it as a custom repository remains a fallback while
+  the listing propagates.
+
+### Upgrade Notes
+
+- Restart Home Assistant and hard-reload dashboards after updating because the
+  bundled C300X card changed.
+- The packaged native C300X device agent remains at `1.9.2`; no agent update is
+  required for this Home Assistant/frontend-only release.
 
 ## v1.9.3 - 2026-08-23
 

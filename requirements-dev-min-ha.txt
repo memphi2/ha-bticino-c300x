@@ -9,3 +9,4 @@ PyTurboJPEG==2.4.0
 pytest==9.1.1
 pytest-cov==7.1.0
 ruff==0.15.20
+voluptuous-serialize==2.7.0

@@ -1,5 +1,7 @@
 # Changelog
 
+## v1.9.5 - Unreleased
+
 ## v1.9.4 - 2026-09-06
 
 ### Changed

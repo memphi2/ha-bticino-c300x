@@ -1,8 +1,8 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=4b151e8fc2c4e0fb";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=9bdbfdc3de6966e8";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=4b151e8fc2c4e0fb";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=9bdbfdc3de6966e8";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {

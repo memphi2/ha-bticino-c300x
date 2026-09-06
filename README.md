@@ -95,9 +95,9 @@ HACS -> add integration -> install/update agent -> Media readiness
 -> Fix now if needed -> add the C300X card
 ```
 
-Keep the first install boring: get **Media readiness** to `ready`, then add the
-bundled card. Blueprints, display pages and advanced maintenance can wait until
-the three media paths work.
+Keep the first install boring: get **Media readiness** to `ready` or only the
+understood Ring Call forwarding warning, then add the bundled card. Blueprints,
+display pages and advanced maintenance can wait until the three media paths work.
 
 After an update, run the C300X Lovelace card Repair if Home Assistant offers it
 and hard-reload the browser if the card picker still shows old frontend state.

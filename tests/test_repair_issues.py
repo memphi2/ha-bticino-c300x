@@ -733,7 +733,7 @@ def test_offline_media_readiness_creates_fixable_media_setup_repair() -> None:
     assert issue["translation_placeholders"]["fixable_checks"] == "agent_reachable"
 
 
-def test_forwarding_failure_creates_fixable_media_setup_repair() -> None:
+def test_forwarding_choice_does_not_create_media_setup_repair() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
@@ -760,11 +760,9 @@ def test_forwarding_failure_creates_fixable_media_setup_repair() -> None:
 
     async_sync_entry_repair_issues(FakeHass(), entry)
 
-    issue = CREATED_ISSUES[
-        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
-    ]
-    assert issue["is_fixable"] is True
-    assert issue["translation_placeholders"]["fixable_checks"] == "homeassistant"
+    issue_id = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
 
 
 def test_callback_readiness_failure_creates_callback_repair_issue() -> None:
@@ -1416,11 +1414,18 @@ def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
         ["capabilities", "rtsp"],
         {},
     ) == ["agent_update"]
+    assert media_setup_fixable_checks(
+        ["forwarding_homeassistant"],
+        {"smartphone_forwarding": {"supported": True}},
+    ) == []
     assert media_setup_has_only_device_user_failures(
         ["homeassistant_user", "device_routing"]
     )
     assert media_setup_has_non_device_user_failure(
         ["homeassistant_user", "firewall"]
+    )
+    assert not media_setup_has_non_device_user_failure(
+        ["homeassistant_user", "forwarding_homeassistant"]
     )
     assert repair_issues._entry_media_enabled(  # noqa: SLF001
         FakeEntry(
@@ -1482,9 +1487,7 @@ def test_media_gate_reads_options_of_a_real_config_entry() -> None:
 
 
 def test_unprovisioned_forwarding_is_not_offered_as_a_fixable_repair() -> None:
-    """The repair's fix sets forwarding to Home Assistant. On a device with no
-    smartphone pairing there is nothing to switch, so offering it as fixable
-    would promise a repair that cannot work."""
+    """A Ring Call routing limitation must not become a media Repair."""
 
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},

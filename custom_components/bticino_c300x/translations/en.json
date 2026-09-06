@@ -613,7 +613,7 @@
         "step": {
           "confirm": {
             "title": "Repair C300X media setup",
-            "description": "Home Assistant can run the matching repair for the failed media-readiness checks now. Depending on the failed checks, this can re-check agent reachability, refresh agent setup metadata, apply the IPv4 media firewall, repair the Home Assistant media-user/routing setup, or set Ring Call forwarding to Home Assistant. IPv6 is optional and is not changed by this repair.\n\nFailed checks: {failed_checks}\nFixable checks: {fixable_checks}\nRecommended action: {recommended_action}"
+            "description": "Home Assistant can run the matching repair for the failed media-readiness checks now. Depending on the failed checks, this can re-check agent reachability, refresh agent setup metadata, apply the IPv4 media firewall, or repair the Home Assistant media-user/routing setup. Ring Call forwarding is never changed by this repair. IPv6 is optional and is not changed by this repair.\n\nFailed checks: {failed_checks}\nFixable checks: {fixable_checks}\nRecommended action: {recommended_action}"
           }
         },
         "error": {

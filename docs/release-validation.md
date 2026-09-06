@@ -23,6 +23,7 @@ packaged C300X device agent work together on a real C300X.
 | Scenario | Expected result |
 | --- | --- |
 | On-demand Stream | Video starts, stops and can start again. |
+| On-demand with Smartphone forwarding | Video remains available, readiness shows only a Ring Call warning and no Repair is created. |
 | On-demand Talkback | Microphone works from a secure frontend. |
 | Ring Call Preview | Card shows preview only when real ring media is ready. |
 | Ring Call Answer | Preview transitions to answered call without losing media. |
@@ -41,12 +42,14 @@ Verify each repair path when possible:
 - agent update/capability mismatch,
 - firewall/talkback RTP,
 - Home Assistant media user/routing,
-- forwarding not set to Home Assistant,
 - callback URL unreachable,
 - display/event watchdog.
 
 Each issue should have a clear title, clear reason and a matching Repair flow
 when a safe fix exists.
+
+Also verify that Smartphone or Blocked forwarding produces only a non-blocking
+Ring Call warning and that the media Repair never changes forwarding.
 
 ## Display Pages
 

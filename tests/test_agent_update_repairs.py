@@ -208,11 +208,6 @@ class FakePatchApi:
         self.calls.append("device_user_status")
         return self.device_user_status
 
-    async def async_set_smartphone_forwarding_mode(self, mode: str) -> dict[str, Any]:
-        self.calls.append(f"set_forwarding:{mode}")
-        return {"mode": mode, "state": mode}
-
-
 class FakeUpdateVerifyApi:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -1314,6 +1309,7 @@ def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
             },
         },
     )
+    runtime_data.event_state.smartphone_forwarding_mode = "enabled"
     entry = FakeEntry(runtime_data=runtime_data, options={"video_enabled": True})
     flow = MediaSetupRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
 
@@ -1345,9 +1341,10 @@ def test_media_setup_repair_runs_confirmed_fixable_actions() -> None:
     ]
     assert entry.runtime_data.device_user_status == api.device_user_status
     assert entry.runtime_data.self_test_status == api.self_test_status
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
 
 
-def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
+def test_media_setup_repair_does_not_change_forwarding() -> None:
     api = FakePatchApi()
     runtime_data = FakeRuntimeData(
         api,
@@ -1378,14 +1375,10 @@ def test_media_setup_repair_sets_forwarding_to_homeassistant() -> None:
 
     assert result == {
         "type": "create_entry",
-        "data": {"repaired": ["forwarding_homeassistant"]},
+        "data": {"repaired": []},
     }
-    assert api.calls == [
-        "set_forwarding:homeassistant",
-        "self_test",
-        "device_user_status",
-    ]
-    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "homeassistant"
+    assert api.calls == []
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
 
 
 def test_media_setup_repair_noops_when_media_is_ready() -> None:

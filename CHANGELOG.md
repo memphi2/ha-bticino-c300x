@@ -2,6 +2,22 @@
 
 ## v1.9.4 - Unreleased
 
+### Changed
+
+- Accept Ring Call forwarding on Smartphone as a deliberate operating mode
+  (#48). Forwarding only selects which target receives incoming Ring Calls; it
+  never gated on-demand video, its talkback or Home Call. Media readiness now
+  reports a non-blocking warning instead of `blocked`, no media-setup Repair is
+  raised for it, and the warning explains that answering Ring Calls in Home
+  Assistant requires Home Assistant forwarding.
+- The media-setup Repair never changes Ring Call forwarding anymore. It used to
+  switch the device to Home Assistant as part of an unrelated "Fix now", which
+  silently took incoming calls away from the Door Entry app. The Forwarding
+  select remains the only, deliberate switch.
+- The card's readiness chip only offers to open Repairs for `blocked` or
+  `unavailable`; a forwarding warning is informative and no longer rendered as
+  a button.
+
 ## v1.9.3 - 2026-08-23
 
 ### Fixed

@@ -895,7 +895,7 @@ def test_diagnostics_value_helpers_redact_and_normalize_values() -> None:
     )
 
 
-def test_diagnostics_answer_why_media_setup_is_blocked() -> None:
+def test_diagnostics_separate_ring_forwarding_from_media_setup() -> None:
     """Issue #43 had to be diagnosed by elimination: the report said forwarding
     was "known" without saying what it was, carried no readiness verdict, and
     said nothing about the setup switch the reporter saw greyed out."""
@@ -916,8 +916,9 @@ def test_diagnostics_answer_why_media_setup_is_blocked() -> None:
     assert event_state is not None
     assert event_state["smartphone_forwarding_mode"] == "blocked"
     assert readiness is not None
-    assert readiness["status"] == "blocked"
-    assert readiness["failed_checks"] == ["forwarding_homeassistant"]
+    assert readiness["status"] == "warning"
+    assert readiness["failed_checks"] == []
+    assert "forwarding_homeassistant" in readiness["warnings"]
     assert readiness["forwarding_state"] == "blocked"
 
 

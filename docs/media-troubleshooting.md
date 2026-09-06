@@ -3,15 +3,15 @@
 Start here when the card, camera, Ring Call, Home Call or talkback does not
 behave as expected.
 
-First check the `Media readiness` diagnostic entity. If it is not `ready`, run
-the shown Repair before changing card YAML or automations.
+First check the `Media readiness` diagnostic entity. Run a shown Repair for
+`blocked` or `unavailable`; review a `warning` without assuming media is broken.
 
 ## On-demand Stream Shows No Picture
 
 Check:
 
 1. Doorbell camera/video is enabled in the integration options.
-2. `Media readiness` is `ready`.
+2. `Media readiness` is `ready` or has only a Ring Call forwarding warning.
 3. No Ring Call capture or other viewer is already using the media path.
 4. The browser can reach the same local C300X/HA network path.
 5. The card has the C300X camera entity selected.
@@ -31,8 +31,9 @@ Check:
 1. The **Forwarding** select is set to **Home Assistant**.
 2. The Home Assistant media-user setup is ready.
 3. The doorbell was rung after changing forwarding mode.
-4. `Media readiness` has no `forwarding_homeassistant`, `homeassistant_user` or
-   `device_routing` failure.
+4. `Media readiness` has no `homeassistant_user` or `device_routing` failure.
+   The `forwarding_homeassistant` warning specifically explains why Ring Call
+   is not answerable from Home Assistant.
 
 In **Smartphone** mode, use the phone route. In **Blocked** mode, Home Assistant
 can still receive a ring event but cannot answer the call.

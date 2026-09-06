@@ -50,7 +50,6 @@ from .const import (
     SIGNAL_AGENT_INFO_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
     SIGNAL_QML_PATCH_CHANGED,
-    SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
 )
 from .device_installer import (
     C300XDeviceInstallRequest,
@@ -218,15 +217,6 @@ async def _async_repair_media_setup(hass: HomeAssistant, entry: Any) -> list[str
         )
         entry.runtime_data.device_user_status = status
         repaired.append("homeassistant_user")
-    if "forwarding_homeassistant" in failed_checks:
-        status = await entry.runtime_data.api.async_set_smartphone_forwarding_mode(
-            SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
-        )
-        entry.runtime_data.event_state.smartphone_forwarding_mode = status.get(
-            "state",
-            SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT,
-        )
-        repaired.append("forwarding_homeassistant")
     if repaired:
         with suppress(C300XAgentApiError):
             entry.runtime_data.self_test_status = await entry.runtime_data.api.async_self_test()

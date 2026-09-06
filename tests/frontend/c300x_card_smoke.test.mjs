@@ -45,6 +45,10 @@ function installFakeDom() {
     setAttribute(name, value) {
       this.attributes.set(name, value);
     }
+
+    removeAttribute(name) {
+      this.attributes.delete(name);
+    }
   }
 
   class FakeShadowRoot extends FakeElement {
@@ -188,6 +192,51 @@ test("doorbell card custom element renders with fake Home Assistant state", asyn
   assert.equal(card.shadowRoot.querySelector(".row-action").disabled, false);
   assert.equal(globalThis.window.customCards.length, 1);
   assert.equal(globalThis.window.customCards[0].type, "c300x-doorbell-call-card");
+});
+
+test("readiness warnings do not open Repairs while blockers do", async () => {
+  const registry = installFakeDom();
+  const paths = [];
+  globalThis.history = {
+    pushState(_state, _title, path) {
+      paths.push(path);
+    },
+  };
+
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?readiness-action-test");
+
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({
+    type: "custom:c300x-doorbell-call-card",
+    entity: "camera.bticino_c300x_doorbell_camera",
+  });
+  const hass = fakeHass();
+  const readiness = hass.states["sensor.bticino_c300x_media_readiness"];
+  readiness.state = "warning";
+  readiness.attributes = {
+    failed_checks: [],
+    forwarding_homeassistant: false,
+    warnings: ["forwarding_homeassistant"],
+  };
+  card.hass = hass;
+
+  const readinessElement = card.shadowRoot.querySelector(".readiness");
+  assert.equal(
+    card.shadowRoot.querySelector(".readiness-text").textContent,
+    "Ring Call requires Home Assistant forwarding",
+  );
+  assert.equal(readinessElement.attributes.has("role"), false);
+  readinessElement.dispatch("click");
+  assert.deepEqual(paths, []);
+
+  readiness.state = "blocked";
+  readiness.attributes.failed_checks = ["firewall"];
+  card.hass = hass;
+  assert.equal(card.shadowRoot.querySelector(".readiness-text").textContent, "Media blocked");
+  assert.equal(readinessElement.attributes.get("role"), "button");
+  readinessElement.dispatch("click");
+  assert.deepEqual(paths, ["/config/repairs"]);
 });
 
 test("card derives the PCMU browser gain from HA state, zero for speex", async () => {

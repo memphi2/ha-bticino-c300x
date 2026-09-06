@@ -7,6 +7,8 @@ import {
   c300xDoorstationStatusKey,
   c300xHomeCallStatusKey,
   c300xIsExternalDoorstationMedia,
+  c300xMediaReadinessHasRepair,
+  c300xMediaReadinessLabelKey,
 } from "../../custom_components/bticino_c300x/frontend/c300x-state-model.js";
 import {
   c300xRingLifecycleActive,
@@ -41,6 +43,45 @@ test("doorstation starts an idle stream", () => {
     "stream",
   );
   assert.equal(c300xDoorstationStatusKey(entity(), "stream", false), "idle");
+});
+
+test("forwarding warning is informative and has no repair action", () => {
+  const readiness = {
+    state: "warning",
+    attributes: {
+      forwarding_homeassistant: false,
+      warnings: ["forwarding_homeassistant"],
+      failed_checks: [],
+    },
+  };
+
+  assert.equal(
+    c300xMediaReadinessLabelKey(readiness, readiness.state),
+    "media_forwarding_required",
+  );
+  assert.equal(c300xMediaReadinessHasRepair(readiness), false);
+  assert.equal(
+    c300xMediaReadinessLabelKey(
+      { state: "warning", attributes: { warnings: ["forwarding_unknown"] } },
+      "warning",
+    ),
+    "media_warning",
+  );
+  const blocked = {
+    state: "blocked",
+    attributes: {
+      forwarding_homeassistant: false,
+      warnings: ["forwarding_homeassistant"],
+      failed_checks: ["firewall"],
+    },
+  };
+  assert.equal(
+    c300xMediaReadinessLabelKey(blocked, blocked.state),
+    "media_blocked",
+  );
+  assert.equal(c300xMediaReadinessHasRepair(blocked), true);
+  assert.equal(c300xMediaReadinessHasRepair({ state: "blocked" }), true);
+  assert.equal(c300xMediaReadinessHasRepair({ state: "unavailable" }), true);
 });
 
 test("ring preview is answerable but not stoppable from passive browsers", () => {

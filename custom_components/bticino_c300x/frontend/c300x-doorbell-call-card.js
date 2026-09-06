@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=4b151e8fc2c4e0fb";
+} from "./c300x-translations.js?v=9bdbfdc3de6966e8";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -14,21 +14,23 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=4b151e8fc2c4e0fb";
+} from "./c300x-entity-resolver.js?v=9bdbfdc3de6966e8";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=4b151e8fc2c4e0fb";
-import { C300XCardActions } from "./c300x-card-actions.js?v=4b151e8fc2c4e0fb";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=4b151e8fc2c4e0fb";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=4b151e8fc2c4e0fb";
+} from "./c300x-card-editor.js?v=9bdbfdc3de6966e8";
+import { C300XCardActions } from "./c300x-card-actions.js?v=9bdbfdc3de6966e8";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=9bdbfdc3de6966e8";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=9bdbfdc3de6966e8";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
+  c300xMediaReadinessHasRepair,
+  c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=4b151e8fc2c4e0fb";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=4b151e8fc2c4e0fb";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=4b151e8fc2c4e0fb";
+} from "./c300x-state-model.js?v=9bdbfdc3de6966e8";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=9bdbfdc3de6966e8";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=9bdbfdc3de6966e8";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -248,7 +250,11 @@ class C300XDoorbellCallCard extends HTMLElement {
 
     this._actionButtonEl.addEventListener("click", () => this._actions.handlePrimaryAction());
     this._homeActionButtonEl.addEventListener("click", () => this._actions.handleHomeCallAction());
-    this._readinessEl.addEventListener("click", () => this._openRepairs());
+    this._readinessEl.addEventListener("click", () => {
+      if (c300xMediaReadinessHasRepair(this._mediaReadinessEntity())) {
+        this._openRepairs();
+      }
+    });
     this._micButtonEl.addEventListener("click", (event) => {
       event.stopPropagation();
       this._toggleMicMuted();
@@ -292,6 +298,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       notice: this._notice || "",
       readinessFailedChecks: readinessAttributes.failed_checks || [],
       readinessForwardingHomeassistant: readinessAttributes.forwarding_homeassistant,
+      readinessWarnings: readinessAttributes.warnings || [],
       readinessReason: readinessAttributes.reason || "",
       readinessState: readiness?.state || "",
       ringAnswerLaunchMarker: this._ringAnswerLaunchMarker(),
@@ -1059,10 +1066,18 @@ class C300XDoorbellCallCard extends HTMLElement {
     for (const value of ["ready", "warning", "blocked", "unavailable", "unknown"]) {
       this._readinessEl.classList.toggle(value, normalized === value);
     }
+    const hasRepair = c300xMediaReadinessHasRepair(entity);
+    this._readinessEl.classList.toggle("actionable", hasRepair);
     this._readinessTextEl.textContent = this._readinessLabel(entity, normalized);
-    this._readinessEl.title = this._label("open_repairs");
-    this._readinessEl.setAttribute("role", "button");
-    this._readinessEl.setAttribute("aria-label", this._label("open_repairs"));
+    if (hasRepair) {
+      this._readinessEl.title = this._label("open_repairs");
+      this._readinessEl.setAttribute("role", "button");
+      this._readinessEl.setAttribute("aria-label", this._label("open_repairs"));
+    } else {
+      this._readinessEl.removeAttribute("title");
+      this._readinessEl.removeAttribute("role");
+      this._readinessEl.removeAttribute("aria-label");
+    }
     this._readinessIconEl.setAttribute(
       "icon",
       normalized === "ready"
@@ -1142,18 +1157,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _readinessLabel(entity, normalized) {
-    const attributes = entity?.attributes || {};
-    const failedChecks = Array.isArray(attributes.failed_checks)
-      ? attributes.failed_checks
-      : [];
-    if (
-      normalized === "blocked"
-      && attributes.forwarding_homeassistant === false
-      && failedChecks.includes("forwarding_homeassistant")
-    ) {
-      return this._label("media_forwarding_required");
-    }
-    return this._label(`media_${normalized}`);
+    return this._label(c300xMediaReadinessLabelKey(entity, normalized));
   }
 
   _openRepairs() {

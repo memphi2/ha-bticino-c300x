@@ -50,6 +50,23 @@ export function c300xIsHomeCallRinging(cameraEntity) {
   );
 }
 
+export function c300xMediaReadinessLabelKey(entity, normalizedState) {
+  const attributes = entity?.attributes || {};
+  const warnings = Array.isArray(attributes.warnings) ? attributes.warnings : [];
+  if (
+    normalizedState === "warning"
+    && attributes.forwarding_homeassistant === false
+    && warnings.includes("forwarding_homeassistant")
+  ) {
+    return "media_forwarding_required";
+  }
+  return `media_${normalizedState}`;
+}
+
+export function c300xMediaReadinessHasRepair(entity) {
+  return entity?.state === "blocked" || entity?.state === "unavailable";
+}
+
 export function c300xCardViewModel({
   cameraEntity,
   homeCallMode,

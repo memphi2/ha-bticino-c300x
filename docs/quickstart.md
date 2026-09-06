@@ -6,8 +6,8 @@ with YAML, manual card configuration or advanced display pages.
 Goal:
 
 ```text
-HACS install -> add integration -> install/update agent -> Media readiness ready
--> add the C300X card
+HACS install -> add integration -> install/update agent
+-> Media readiness ready or understood warning -> add the C300X card
 ```
 
 ## Before You Start
@@ -82,7 +82,9 @@ Feature choices can be changed later from the integration options.
 After setup, open the `Media readiness` diagnostic sensor.
 
 - **ready**: continue with the Lovelace card.
-- **warning**: basic media can work, but review the listed warnings.
+- **warning**: basic media can work. Smartphone forwarding intentionally warns
+  that Ring Calls are not answerable from Home Assistant; it does not block
+  on-demand media.
 - **blocked** or **unavailable**: open the Repair issue and press **Fix now**.
 
 Do not debug the card before this entity is `ready` or shows only warnings you
@@ -92,7 +94,7 @@ Details: [Media readiness](media-readiness.md)
 
 ## 6. Add the Lovelace Card
 
-After Media Readiness is ready:
+After Media Readiness is ready or shows only understood warnings:
 
 1. Open the dashboard where you want the C300X card.
 2. Add a card.

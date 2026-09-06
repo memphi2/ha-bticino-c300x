@@ -6,8 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .capabilities import capability_is_supported, maintenance_action_is_advertised
-from .const import SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
+from .capabilities import maintenance_action_is_advertised
 
 DEVICE_USER_MEDIA_SETUP_CHECKS = frozenset({"homeassistant_user", "device_routing"})
 NON_DEVICE_USER_MEDIA_SETUP_CHECKS = frozenset(
@@ -16,8 +15,6 @@ NON_DEVICE_USER_MEDIA_SETUP_CHECKS = frozenset(
         "firewall",
         "rtsp",
         "talkback_rtp",
-        "forwarding_homeassistant",
-        "forwarding_unprovisioned",
     }
 )
 OPTIONAL_IPV6_REASONS = frozenset(
@@ -195,11 +192,6 @@ def media_setup_fixable_checks(
         "device_user_ensure",
     ):
         fixable.append("homeassistant_user")
-    if "forwarding_homeassistant" in checks and capability_is_supported(
-        capabilities,
-        "smartphone_forwarding",
-    ):
-        fixable.append(SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT)
     return fixable
 
 
@@ -220,14 +212,12 @@ def media_readiness_action(
         return "apply_firewall_or_update_device_agent"
     if "homeassistant_user" in failed or "device_routing" in failed:
         return "run_homeassistant_media_user_setup"
-    if "forwarding_unprovisioned" in failed:
-        # Nothing Home Assistant can set: the pairing has to be created on the
-        # device before a forwarding target exists.
-        return "provision_smartphone_forwarding_on_device"
-    if "forwarding_homeassistant" in failed:
-        return "set_forwarding_to_homeassistant"
     if "callback_url" in failed:
         return "configure_reachable_callback_url"
     if "self_test_not_loaded" in warnings:
         return "refresh_or_reload_integration"
+    if "forwarding_unprovisioned" in warnings:
+        return "ring_call_requires_forwarding_provisioning"
+    if "forwarding_homeassistant" in warnings:
+        return "ring_call_requires_homeassistant_forwarding"
     return "check_media_readiness_details"

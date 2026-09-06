@@ -143,6 +143,7 @@ def _stub_rtsp_ready(
 class _FakeEventState:
     video_stream_path: str | None = None
     video_available: bool = False
+    smartphone_forwarding_mode: str | None = None
     last_event_data: dict[str, Any] = field(default_factory=dict)
 
 
@@ -1759,8 +1760,9 @@ def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -
     assert entry.runtime_data.api.activate_calls == []
 
 
-def test_doorbell_camera_stream_source_warms_video_once() -> None:
+def test_doorbell_camera_stream_source_works_with_smartphone_forwarding() -> None:
     entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+    entry.runtime_data.event_state.smartphone_forwarding_mode = "enabled"
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     _stub_rtsp_ready(camera)
 
@@ -1771,6 +1773,7 @@ def test_doorbell_camera_stream_source_warms_video_once() -> None:
 
     assert source == "rtsp://127.0.0.1:6554/doorbell"
     assert entry.runtime_data.api.activate_calls == [True]
+    assert entry.runtime_data.event_state.smartphone_forwarding_mode == "enabled"
 
 
 def test_doorbell_camera_audio_stream_source_uses_audio_video_path() -> None:

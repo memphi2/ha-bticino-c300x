@@ -524,7 +524,8 @@ def test_bundled_card_has_central_auto_mode_and_readiness_link() -> None:
     assert 'this._config?.show_media_readiness !== false' in source
     assert 'show_media_readiness: this._config.show_media_readiness !== false' in editor_source
     assert 'delete nextConfig.show_media_readiness' in editor_source
-    assert "media_forwarding_required" in source
+    assert "c300xMediaReadinessLabelKey" in source
+    assert "media_forwarding_required" in CARD_STATE_SOURCE.read_text(encoding="utf-8")
     assert "media_ready" in translations_source
     assert 'show_media_readiness: "Show media readiness line"' in translations_source
     assert "media_forwarding_required" in translations_source

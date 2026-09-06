@@ -212,6 +212,9 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           color: var(--secondary-text-color);
           font-size: 12px;
           line-height: 16px;
+          cursor: default;
+        }
+        .readiness.actionable {
           cursor: pointer;
         }
         .readiness.hidden {

@@ -522,7 +522,7 @@ def test_media_readiness_fallback_ignores_display_label_status() -> None:
     assert readiness["media_user_ok"] is True
 
 
-def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> None:
+def test_media_readiness_warns_when_ring_forwarding_is_not_homeassistant() -> None:
     entry = _FakeEntry(
         options={"video_enabled": True},
         runtime_data=_FakeRuntimeData(
@@ -541,14 +541,20 @@ def test_media_readiness_blocks_when_ring_forwarding_is_not_homeassistant() -> N
             },
         ),
     )
-    entry.runtime_data.event_state.smartphone_forwarding_mode = "blocked"
+    for forwarding_mode in ("enabled", "blocked"):
+        entry.runtime_data.event_state.smartphone_forwarding_mode = forwarding_mode
 
-    readiness = media_readiness(entry)  # type: ignore[arg-type]
+        readiness = media_readiness(entry)  # type: ignore[arg-type]
 
-    assert readiness["status"] == "blocked"
-    assert readiness["forwarding_homeassistant"] is False
-    assert "forwarding_homeassistant" in readiness["failed_checks"]
-    assert readiness["recommended_action"] == "set_forwarding_to_homeassistant"
+        assert readiness["status"] == "warning"
+        assert readiness["forwarding_homeassistant"] is False
+        assert readiness["forwarding_state"] == forwarding_mode
+        assert readiness["failed_checks"] == []
+        assert "forwarding_homeassistant" in readiness["warnings"]
+        assert (
+            readiness["recommended_action"]
+            == "ring_call_requires_homeassistant_forwarding"
+        )
 
 
 def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
@@ -574,13 +580,15 @@ def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
 
     readiness = media_readiness(entry)  # type: ignore[arg-type]
 
-    assert readiness["status"] == "blocked"
+    assert readiness["status"] == "warning"
     assert readiness["forwarding_state"] == "unprovisioned"
     assert readiness["forwarding_homeassistant"] is False
-    # Its own failure: the device has no smartphone pairing at all, so telling
-    # the user to switch forwarding to Home Assistant would be wrong advice.
-    assert readiness["failed_checks"] == ["forwarding_unprovisioned"]
-    assert readiness["recommended_action"] == "provision_smartphone_forwarding_on_device"
+    assert readiness["failed_checks"] == []
+    assert "forwarding_unprovisioned" in readiness["warnings"]
+    assert (
+        readiness["recommended_action"]
+        == "ring_call_requires_forwarding_provisioning"
+    )
 
 
 def test_media_readiness_sensor_refreshes_on_forwarding_event() -> None:
@@ -2579,7 +2587,8 @@ def test_media_readiness_treats_the_unknown_sentinel_as_no_reading() -> None:
     assert unknown["failed_checks"] == []
     assert "forwarding_unknown" in unknown["warnings"]
 
-    # A real non-Home-Assistant mode still fails, which is the point of the check.
+    # A real non-Home-Assistant mode is a Ring Call warning, not a media failure.
     blocked = _readiness("blocked")
-    assert blocked["status"] == "blocked"
-    assert blocked["failed_checks"] == ["forwarding_homeassistant"]
+    assert blocked["status"] == "warning"
+    assert blocked["failed_checks"] == []
+    assert "forwarding_homeassistant" in blocked["warnings"]

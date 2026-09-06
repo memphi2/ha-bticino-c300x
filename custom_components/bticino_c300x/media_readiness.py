@@ -81,11 +81,10 @@ def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     )
     forwarding_homeassistant = forwarding_state == SMARTPHONE_FORWARDING_MODE_HOME_ASSISTANT
     if ring_call_supported and forwarding_state is not None and not forwarding_homeassistant:
-        # "unprovisioned" means the device has no smartphone pairing at all, so
-        # it is not a forwarding target chosen elsewhere and switching it to
-        # Home Assistant is not the answer. Reported as its own failure so the
-        # advice, and the repair, do not claim otherwise.
-        failed.append(
+        # Forwarding selects the incoming Ring Call target. It does not gate
+        # on-demand video, Home Call, or talkback, and may intentionally remain
+        # on Smartphone so the Door Entry app keeps receiving calls.
+        warnings.append(
             "forwarding_unprovisioned"
             if forwarding_state == SMARTPHONE_FORWARDING_STATE_UNPROVISIONED
             else "forwarding_homeassistant"

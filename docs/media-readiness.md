@@ -3,8 +3,9 @@
 `Media readiness` is the first diagnostic entity to check when camera, Ring
 Call, Home Call or talkback does not work.
 
-It aggregates the device-agent connection, self-test, media user, forwarding and
-callback state into one status.
+It aggregates the device-agent connection, self-test, media user and callback
+state into one status. Forwarding is reported separately because it selects the
+incoming Ring Call target but does not gate on-demand media.
 
 ## Status Values
 
@@ -22,7 +23,7 @@ callback state into one status.
 | `agent_reachable` | Home Assistant can reach the native C300X agent. |
 | `agent_version_ok` | Agent version metadata is available and usable. |
 | `media_user_ok` | The Home Assistant media user and routing are ready. |
-| `forwarding_homeassistant` | Ring Call forwarding is set to Home Assistant. |
+| `forwarding_homeassistant` | Ring Call forwarding is set to Home Assistant. `false` does not block on-demand media. |
 | `rtsp_ok` | RTSP/media infrastructure is ready according to the agent self-test. |
 | `talkback_rtp_ok` | Talkback RTP infrastructure is ready according to the agent self-test. |
 | `callback_url_ok` | The C300X can use the configured Home Assistant callback URL. |
@@ -44,9 +45,19 @@ callback state into one status.
 | `talkback_rtp` | Talkback RTP port is not open or not reported ready. | Apply the firewall Repair. IPv6 is optional. |
 | `homeassistant_user` | Dedicated media user is missing. | Run Home Assistant media-user setup. |
 | `device_routing` | Local media-user route files are incomplete. | Run Home Assistant media-user setup. |
-| `forwarding_homeassistant` | Forwarding is Smartphone or Blocked while Ring Call is expected. | Set Forwarding to Home Assistant. |
 | `callback_url` | The callback URL uses HTTPS, `.local`, loopback, link-local or an unreachable host. | Configure a reachable local HTTP callback base URL. |
 | `startup` | Device-agent startup link is missing. | Run the device-agent update/repair flow. |
+
+## Ring Call Forwarding Warnings
+
+`forwarding_homeassistant` and `forwarding_unprovisioned` are non-blocking
+warnings. On-demand video and its talkback, as well as Home Call, remain
+available when their own prerequisites pass. Keep **Forwarding** set to
+**Smartphone** when the Door Entry app should receive calls. Select **Home
+Assistant** explicitly only when Ring Calls should instead be answerable from
+Home Assistant.
+
+Forwarding is never changed by a media Repair.
 
 ## Fix Now
 
@@ -59,7 +70,6 @@ The guided Repair can:
 - refresh agent setup metadata,
 - apply the IPv4 media firewall,
 - repair the Home Assistant media-user/routing setup,
-- set Ring Call forwarding to Home Assistant,
 - guide you to set a reachable callback URL.
 
 Repairs are explicit. They do not run just because Home Assistant starts.

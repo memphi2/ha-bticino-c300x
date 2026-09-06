@@ -11,7 +11,21 @@ import check_repo  # noqa: E402
 
 
 def test_repository_has_no_private_hosts_or_token_literals() -> None:
-    assert check_repo.check_secret_patterns() == []
+    assert check_repo.check_forbidden_text_patterns() == []
+
+
+def test_forbidden_text_findings_do_not_echo_matched_value(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    matched_value = "do-not-log-this-value"
+    test_file = tmp_path / "config.yaml"
+    test_file.write_text("pass" + f"word: '{matched_value}'\n", encoding="utf-8")
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+
+    findings = check_repo.check_forbidden_text_patterns()
+
+    assert findings == [
+        "possible secret/internal value (password_assignment) in config.yaml"
+    ]
+    assert matched_value not in findings[0]
 
 
 def test_repository_security_and_privacy_docs_cover_required_topics() -> None:

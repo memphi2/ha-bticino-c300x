@@ -212,7 +212,7 @@ def main() -> int:
     failures.extend(check_tracked_runtime_artifacts())
     failures.extend(check_json_files())
     failures.extend(check_native_agent_example_config())
-    failures.extend(check_secret_patterns())
+    failures.extend(check_forbidden_text_patterns())
     failures.extend(check_legal_hygiene())
     failures.extend(check_current_audit_snapshot())
     failures.extend(check_release_metadata())
@@ -341,17 +341,19 @@ def check_native_agent_example_config() -> list[str]:
     return failures
 
 
-def check_secret_patterns() -> list[str]:
+def check_forbidden_text_patterns() -> list[str]:
+    """Report only the rule and path for prohibited repository content."""
+
     failures: list[str] = []
     for path in ROOT.rglob("*"):
         if is_ignored(path) or not path.is_file() or path.suffix not in TEXT_SUFFIXES:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        text_for_secret_scan = text
+        scan_text = text
         for public_url in PUBLIC_REPOSITORY_URLS:
-            text_for_secret_scan = text_for_secret_scan.replace(public_url, "")
+            scan_text = scan_text.replace(public_url, "")
         for name, pattern in DENY_PATTERNS.items():
-            if pattern.search(text_for_secret_scan):
+            if pattern.search(scan_text):
                 failures.append(f"possible secret/internal value ({name}) in {relative(path)}")
     return failures
 

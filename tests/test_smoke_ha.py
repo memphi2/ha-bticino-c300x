@@ -73,7 +73,7 @@ def test_smoke_ha_runtime_check_accepts_current_minor(monkeypatch: Any) -> None:
     smoke_ha = _load_smoke_ha()
 
     assert smoke_ha.check_runtime(
-        _RuntimeClient(ha_version="2026.8.99", python_version="3.14.4"),
+        _RuntimeClient(ha_version="2026.9.99", python_version="3.14.4"),
         "entry-1",
     ) == []
 
@@ -88,7 +88,7 @@ def test_smoke_ha_runtime_check_rejects_unconfigured_minor(monkeypatch: Any) -> 
         "entry-1",
     )
 
-    assert failures == ["HA version 2026.7.9 does not match 2026.5.*, 2026.8.*"]
+    assert failures == ["HA version 2026.7.9 does not match 2026.5.*, 2026.9.*"]
 
 
 def test_smoke_ha_does_not_require_optional_ssh_maintenance_entity() -> None:

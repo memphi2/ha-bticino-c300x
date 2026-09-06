@@ -289,8 +289,8 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["lts_evidence"] == {
         "release": "v1.6.2",
         "min_homeassistant": "2026.5.0",
-        "current_homeassistant": "2026.8.1",
-        "validated_homeassistant": ["2026.5.0", "2026.8.1"],
+        "current_homeassistant": "2026.9.0",
+        "validated_homeassistant": ["2026.5.0", "2026.9.0"],
         "python": "3.14",
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,

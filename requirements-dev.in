@@ -2,11 +2,11 @@
 # matrix version separately. Dependabot updates requirements-dev.txt;
 # requirements-dev-min-ha.txt is curated manually for the minimum matrix.
 # Home Assistant itself is locked per CI matrix.
-av==18.0.0
-mypy==2.1.0
-numpy==2.5.1
+av==18.1.0
+mypy==2.3.1
+numpy==2.5.2
 paramiko==3.5.1
-PyTurboJPEG==2.4.0
+PyTurboJPEG==2.5.0
 pytest==9.1.1
 pytest-cov==7.1.0
-ruff==0.15.20
+ruff==0.16.5

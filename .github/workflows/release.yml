@@ -35,7 +35,7 @@ jobs:
             requirements-lock: requirements-dev-min-ha.txt
           - name: current-ha
             python-version: "3.14"
-            homeassistant: "2026.8.1"
+            homeassistant: "2026.9.0"
             requirements-lock: requirements-dev.txt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

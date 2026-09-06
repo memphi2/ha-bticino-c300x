@@ -44,8 +44,8 @@ body:
     id: home_assistant_version
     attributes:
       label: Home Assistant version
-      description: "Example: 2026.8.1"
-      placeholder: "2026.8.1"
+      description: "Example: 2026.9.0"
+      placeholder: "2026.9.0"
     validations:
       required: true
 

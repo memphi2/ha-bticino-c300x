@@ -2,6 +2,18 @@
 
 ## v1.9.5 - Unreleased
 
+### Fixed
+
+- Report a missing device-side C300X SIP user instead of showing media readiness
+  as `ready`. The identity check accepted a domain fallback (another user line,
+  the registration file, or `flexisip.conf`) as proof, so a device whose own
+  `c300x` SIP user was gone still looked provisioned while every on-demand start
+  failed with `ondemand_sip_setup_failed`. The self-test now reports
+  `device_sip_user_missing` as its own failure, readiness reflects it, and the
+  guidance points at re-registering the device through the BTicino app rather
+  than offering a Home Assistant repair that cannot recreate a device-side,
+  certificate-provisioned user.
+
 ## v1.9.4 - 2026-09-06
 
 ### Changed

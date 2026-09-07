@@ -45,6 +45,10 @@ SELF_TEST_REASON_TEXT = {
     "homeassistant_user_missing": (
         "the dedicated Home Assistant media user has not been created yet"
     ),
+    "device_sip_user_missing": (
+        "the device's own C300X SIP user is missing, so on-demand video cannot "
+        "start until the device is registered once through the BTicino app"
+    ),
     "homeassistant_routes_inconsistent": (
         "the Home Assistant media-user route files are inconsistent"
     ),
@@ -102,6 +106,12 @@ def self_test_repair_action(check_name: str, reason: str) -> str | None:
             "device agent if RTSP is not running."
         )
     if check_name == "homeassistant_user":
+        if reason == "device_sip_user_missing":
+            return (
+                "Register the C300X once through the official BTicino app so the "
+                "device re-provisions its own SIP user and certificates. Home "
+                "Assistant cannot create this device-side user."
+            )
         return "Open the integration options and run the Home Assistant media-user setup."
     if check_name == "device_routing":
         return "Open the integration options and run the Home Assistant media-user setup again."
@@ -210,6 +220,9 @@ def media_readiness_action(
         return "update_or_reconfigure_device_agent"
     if "firewall" in failed or "talkback_rtp" in failed or "rtsp" in failed:
         return "apply_firewall_or_update_device_agent"
+    if "device_sip_user" in failed:
+        # Device-side provisioning; nothing Home Assistant can set.
+        return "register_device_on_bticino_app"
     if "homeassistant_user" in failed or "device_routing" in failed:
         return "run_homeassistant_media_user_setup"
     if "callback_url" in failed:

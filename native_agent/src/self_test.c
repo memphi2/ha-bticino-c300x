@@ -302,6 +302,17 @@ int c300x_self_test_json(
         } else if (!user_status.homeassistant_user_present) {
             user_ok = 0;
             user_reason = "homeassistant_user_missing";
+        } else if (!user_status.device_user_present) {
+            /* The device's own "c300x" SIP user is what on-demand targets
+             * (c300x@domain). domain_present can be satisfied by a fallback
+             * (another user line, the registration file, flexisip.conf), so a
+             * missing c300x user slips past media_identity as "ready" while every
+             * on-demand start fails with ondemand_sip_setup_failed. This user is
+             * device-side provisioning (created with certs after the unit is
+             * registered once via the BTicino app), so HA cannot repair it -- but
+             * it must be reported, not hidden behind a green readiness. */
+            user_ok = 0;
+            user_reason = "device_sip_user_missing";
         } else if (!user_status.routes_consistent) {
             user_ok = 0;
             user_reason = "homeassistant_routes_inconsistent";

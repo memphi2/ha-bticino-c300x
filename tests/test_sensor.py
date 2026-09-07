@@ -557,6 +557,41 @@ def test_media_readiness_warns_when_ring_forwarding_is_not_homeassistant() -> No
         )
 
 
+def test_media_readiness_blocks_when_device_sip_user_missing() -> None:
+    # The device's own c300x SIP user is gone (device_sip_user_missing). On-demand
+    # video is broken, so readiness must not stay "ready". It is reported as its
+    # own failed check -- not as the HA media-user check, which would offer a
+    # "Fix now" that cannot recreate a device-side, portal-provisioned user.
+    entry = _FakeEntry(
+        options={"video_enabled": True},
+        runtime_data=_FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            self_test_status={
+                "ok": False,
+                "checks": {
+                    "capabilities": {"ok": True},
+                    "firewall": {"ok": True},
+                    "rtsp": {"ok": True},
+                    "talkback_rtp": {"ok": True},
+                    "homeassistant_user": {
+                        "ok": False,
+                        "reason": "device_sip_user_missing",
+                    },
+                    "device_routing": {"ok": True},
+                    "startup": {"ok": True},
+                },
+            },
+        ),
+    )
+
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
+
+    assert readiness["status"] == "blocked"
+    assert "device_sip_user" in readiness["failed_checks"]
+    assert "homeassistant_user" not in readiness["failed_checks"]
+    assert readiness["recommended_action"] == "register_device_on_bticino_app"
+
+
 def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:
     entry = _FakeEntry(
         options={"video_enabled": True},

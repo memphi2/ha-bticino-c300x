@@ -3,5 +3,7 @@
 
 const char *c300x_smartphone_mode_from_code(int code);
 int c300x_smartphone_code_from_reply(const char *reply, int *code);
+const char *c300x_smartphone_mode_from_reply(const char *reply);
+const char *c300x_smartphone_command_from_mode(const char *mode);
 
 #endif

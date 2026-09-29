@@ -495,6 +495,18 @@ Request fields:
 
 Allowed modes are normalized by Home Assistant before the request.
 
+The agent writes the requested mode and performs a fresh `*#8**37##` readback.
+Only a valid write response (ACK or forwarding status) followed by the requested
+readback mode returns success. `raw` contains the write response; `mode_raw`
+contains the readback. The confirmed mode updates the agent's cached forwarding
+state and Ring Call receiver eligibility, including when it differs from the
+request.
+
+If the readback differs, the endpoint returns `409 Conflict` with
+`error: "smartphone_forwarding_not_applied"`, `requested_mode`, and the actual
+`mode`. A rejected or invalid write response, an invalid readback, or a transport
+failure returns `502 Bad Gateway`. An ACK alone never confirms a mode change.
+
 ### `GET /api/v1/ringer`
 
 Authentication: normal API token.

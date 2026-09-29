@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Confirm forwarding changes with a device readback before reporting success.
+  Failed or rejected changes no longer appear as Home Assistant forwarding;
+  the Ring Call receiver follows the confirmed device mode.
 - Report a missing device-side C300X SIP user instead of showing media readiness
   as `ready`. The identity check accepted a domain fallback (another user line,
   the registration file, or `flexisip.conf`) as proof, so a device whose own

@@ -7696,16 +7696,6 @@ static void handle_system_metrics(int client_fd, const struct agent_runtime *run
     send_json(client_fd, 200, "OK", body);
 }
 
-static const char *smartphone_mode_from_reply(const char *reply)
-{
-    int code;
-
-    if (c300x_smartphone_code_from_reply(reply, &code)) {
-        return c300x_smartphone_mode_from_code(code);
-    }
-    return NULL;
-}
-
 static int ringer_muted_from_reply(const char *reply, int *muted)
 {
     if (strcmp(reply, "*#8**33*0##") == 0 || strcmp(reply, "*#8**#33*0##") == 0) {
@@ -8135,7 +8125,7 @@ static void handle_smartphone_get(
         return;
     }
     c300x_json_string(reply, reply_json, sizeof(reply_json));
-    mode = smartphone_mode_from_reply(reply);
+    mode = c300x_smartphone_mode_from_reply(reply);
     if (mode == NULL) {
         snprintf(body, sizeof(body), "{\"ok\":true,\"mode\":null,\"status\":\"unknown\",\"raw\":%s}\n", reply_json);
     } else {
@@ -8156,12 +8146,18 @@ static void handle_smartphone_post(
 )
 {
     char mode[32];
-    char command[64];
+    const char *command;
     char reply[C300X_MAX_FRAME_LEN];
+    char readback_reply[C300X_MAX_FRAME_LEN];
     char error[C300X_MAX_ERROR_LEN];
     const char *readback;
-    char body[2048];
+    const char *failure = NULL;
+    char body[2 * C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 512];
     char reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char readback_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
+    char mode_json[32];
+    char failure_json[64];
+    int status = 200;
     int enabled;
     int readback_code;
 
@@ -8169,34 +8165,52 @@ static void handle_smartphone_post(
     if (mode[0] == '\0' && c300x_json_bool_field(request->body, "enabled", &enabled)) {
         snprintf(mode, sizeof(mode), "%s", enabled ? "enabled" : "blocked");
     }
-    if (strcmp(mode, "enabled") == 0) {
-        snprintf(command, sizeof(command), "*#8**#37*0##");
-    } else if (strcmp(mode, "homeassistant") == 0) {
-        snprintf(command, sizeof(command), "*#8**#37*1##");
-    } else if (strcmp(mode, "blocked") == 0) {
-        snprintf(command, sizeof(command), "*#8**#37*2##");
-    } else {
+    command = c300x_smartphone_command_from_mode(mode);
+    if (command == NULL) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_smartphone_forwarding_mode\"}\n");
         return;
     }
-    if (!c300x_openwebnet_send(config, command, reply, sizeof(reply), error, sizeof(error))) {
+    if (!c300x_openwebnet_write_readback(
+        config, command, 0, "*#8**37##",
+        reply, sizeof(reply),
+        readback_reply, sizeof(readback_reply),
+        error, sizeof(error)
+    )) {
         send_device_error(client_fd, error);
         return;
     }
-    readback = smartphone_mode_from_reply(reply);
-    if (c300x_smartphone_code_from_reply(reply, &readback_code)) {
+    readback = c300x_smartphone_mode_from_reply(readback_reply);
+    if (c300x_smartphone_code_from_reply(readback_reply, &readback_code)) {
         remember_smartphone_forwarding_mode(runtime, readback_code);
         sync_ring_receiver_for_forwarding(runtime);
     }
     c300x_json_string(reply, reply_json, sizeof(reply_json));
+    c300x_json_string(readback_reply, readback_json, sizeof(readback_json));
+    if (
+        strcmp(reply, "*#*1##") != 0
+        && c300x_smartphone_mode_from_reply(reply) == NULL
+    ) {
+        failure = "smartphone_forwarding_write_failed";
+        status = 502;
+    } else if (readback == NULL) {
+        failure = "smartphone_forwarding_readback_failed";
+        status = 502;
+    } else if (strcmp(readback, mode) != 0) {
+        failure = "smartphone_forwarding_not_applied";
+        status = 409;
+    }
     snprintf(
         body,
         sizeof(body),
-        "{\"ok\":true,\"mode\":\"%s\",\"raw\":%s}\n",
-        readback != NULL ? readback : mode,
-        reply_json
+        "{\"ok\":%s,\"error\":%s,\"requested_mode\":\"%s\",\"mode\":%s,\"raw\":%s,\"mode_raw\":%s}\n",
+        failure == NULL ? "true" : "false",
+        c300x_json_string_or_null(failure, failure_json, sizeof(failure_json)),
+        mode,
+        c300x_json_string_or_null(readback, mode_json, sizeof(mode_json)),
+        reply_json,
+        readback_json
     );
-    send_json(client_fd, 200, "OK", body);
+    send_json(client_fd, status, status == 200 ? "OK" : status == 409 ? "Conflict" : "Bad Gateway", body);
 }
 
 static void handle_ringer_get(

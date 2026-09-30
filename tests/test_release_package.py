@@ -8,6 +8,13 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+import yaml
+from spdx_tools.spdx.parser.parse_anything import parse_file
+from spdx_tools.spdx.validation.document_validator import (
+    validate_full_spdx_document,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "build_hacs_release.py"
 STAGE_SCRIPT = ROOT / "scripts" / "stage_device_agent_bundle.py"
@@ -213,6 +220,50 @@ def test_release_tag_checker_matches_current_metadata() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("workflow_ref", "workflow_commit", "checkout_commit", "error_count"),
+    [
+        ("refs/tags/v1.9.5", "a" * 40, "a" * 40, 0),
+        ("refs/heads/main", "a" * 40, "a" * 40, 1),
+        ("refs/tags/v1.9.4", "a" * 40, "a" * 40, 1),
+        ("refs/tags/v1.9.5", "b" * 40, "a" * 40, 1),
+        ("refs/tags/v1.9.5", "", "a" * 40, 1),
+        ("", "", "", 2),
+    ],
+)
+def test_release_attestation_requires_matching_workflow_context(
+    workflow_ref: str, workflow_commit: str, checkout_commit: str, error_count: int
+) -> None:
+    checker = _load_release_tag_checker()
+    assert len(checker.validate_attestation_context(
+        "v1.9.5",
+        workflow_ref=workflow_ref,
+        workflow_commit=workflow_commit,
+        checkout_commit=checkout_commit,
+    )) == error_count
+
+
+def test_release_workflow_validates_both_attestations_before_publication() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    steps = workflow["jobs"]["publish"]["steps"]
+    by_name = {step.get("name"): step for step in steps}
+    resolve = by_name["Resolve release tag"]
+    verify = by_name["Verify generated attestations"]
+    assert "--attestation-context" in resolve["run"]
+    assert verify["env"]["RELEASE_REF"] == "${{ steps.release-tag.outputs.ref }}"
+    assert verify["env"]["RELEASE_COMMIT"] == "${{ steps.release-tag.outputs.commit }}"
+    assert verify["run"].count('gh attestation verify "$RELEASE_ZIP"') == 2
+    assert verify["run"].count('--source-ref "$RELEASE_REF"') == 2
+    assert verify["run"].count('--source-digest "$RELEASE_COMMIT"') == 2
+    assert "https://spdx.dev/Document/v2.3" in verify["run"]
+    for name in ("Generate artifact attestation", "Generate SBOM attestation"):
+        assert f"steps.{by_name[name]['id']}.outputs.bundle-path" in verify["run"]
+        assert steps.index(by_name[name]) < steps.index(verify)
+    assert steps.index(resolve) < steps.index(verify)
+    assert steps.index(by_name["Validate SPDX SBOM"]) < steps.index(verify)
+    assert steps.index(verify) < steps.index(by_name["Publish GitHub Release assets"])
+
+
 def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() -> None:
     checker = _load_repo_checker()
 
@@ -311,10 +362,41 @@ def test_release_assets_are_reproducible_for_same_zip(
 
     sbom = json.loads((first / "sbom.spdx.json").read_text(encoding="utf-8"))
     assert sbom["spdxVersion"] == "SPDX-2.3"
+    assert "#" not in sbom["documentNamespace"]
     assert {file["fileName"] for file in sbom["files"]} == {
         "device_agent/bundle.json",
         "manifest.json",
     }
+    assert all(
+        {checksum["algorithm"] for checksum in file["checksums"]}
+        == {"SHA1", "SHA256"}
+        for file in sbom["files"]
+    )
+    package = sbom["packages"][0]
+    assert package["packageFileName"] == "ha-bticino-c300x.zip"
+    assert package["downloadLocation"].endswith(
+        "/releases/download/v1.6.2/ha-bticino-c300x.zip"
+    )
+    with zipfile.ZipFile(zip_path) as archive:
+        file_sha1s = []
+        for entry in sbom["files"]:
+            data = archive.read(entry["fileName"])
+            sha1 = hashlib.sha1(data, usedforsecurity=False).hexdigest()
+            file_sha1s.append(sha1)
+            assert entry["checksums"] == [
+                {"algorithm": "SHA1", "checksumValue": sha1},
+                {"algorithm": "SHA256", "checksumValue": hashlib.sha256(data).hexdigest()},
+            ]
+    assert package["checksums"] == [
+        {"algorithm": "SHA1", "checksumValue": hashlib.sha1(zip_path.read_bytes(), usedforsecurity=False).hexdigest()},
+        {"algorithm": "SHA256", "checksumValue": hashlib.sha256(zip_path.read_bytes()).hexdigest()},
+    ]
+    assert package["packageVerificationCode"]["packageVerificationCodeValue"] == hashlib.sha1(
+        "".join(sorted(file_sha1s)).encode("ascii"), usedforsecurity=False
+    ).hexdigest()
+    assert validate_full_spdx_document(
+        parse_file(str(first / "sbom.spdx.json"))
+    ) == []
 
 
 def test_release_metadata_records_reused_native_agent(tmp_path: Path) -> None:

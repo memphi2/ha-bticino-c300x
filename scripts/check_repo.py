@@ -37,6 +37,7 @@ CURRENT_HOME_ASSISTANT_VERSION = VERSION_CONFIG["current_homeassistant"]
 PYTHON_VERSION = VERSION_CONFIG["python"]
 CURRENT_RELEASE_VERSION = VERSION_CONFIG["integration_version"]
 REQUIRED_PARAMIKO_VERSION = "3.5.1"
+REQUIRED_SPDX_TOOLS_VERSION = "0.8.5"
 NATIVE_AGENT_VERSION_PATH = "native_agent/VERSION"
 NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "native_agent/src",
@@ -662,6 +663,7 @@ def check_installer_dependency_pins() -> list[str]:
 
     failures: list[str] = []
     required_pin = f"paramiko=={REQUIRED_PARAMIKO_VERSION}"
+    required_spdx_pin = f"spdx-tools=={REQUIRED_SPDX_TOOLS_VERSION}"
     manifest = json.loads(
         (ROOT / "custom_components" / "bticino_c300x" / "manifest.json").read_text(
             encoding="utf-8"
@@ -681,6 +683,8 @@ def check_installer_dependency_pins() -> list[str]:
     min_lock = (ROOT / "requirements-dev-min-ha.txt").read_text(encoding="utf-8")
     if required_pin not in requirements_in.splitlines():
         failures.append(f"requirements-dev.in must pin {required_pin}")
+    if required_spdx_pin not in requirements_in.splitlines():
+        failures.append(f"requirements-dev.in must pin {required_spdx_pin}")
     if "homeassistant==" in requirements_in:
         failures.append("requirements-dev.in must leave Home Assistant to the CI lock matrix")
     for path, text in {
@@ -689,6 +693,8 @@ def check_installer_dependency_pins() -> list[str]:
     }.items():
         if required_pin not in text.splitlines():
             failures.append(f"{path} must pin {required_pin}")
+        if required_spdx_pin not in text.splitlines():
+            failures.append(f"{path} must pin {required_spdx_pin}")
         if "homeassistant==" in text:
             failures.append(f"{path} must leave Home Assistant to the CI matrix")
         for transitive in ("aiohttp", "cryptography", "pillow", "PyJWT"):
@@ -858,6 +864,7 @@ def check_hacs_metadata() -> list[str]:
     required_release_tokens = {
         "push:\n    tags:": "release workflow must run from immutable release tags",
         "scripts/check_release_tag.py": "release workflow must validate tag metadata",
+        "--attestation-context": "release workflow must bind the signer to the release checkout",
         "scripts/build_hacs_release.py": "release workflow must build the HACS zip asset",
         "Resolve reusable native agent": "release workflow must resolve reusable native-agent assets",
         "Native agent/bundle inputs changed": "release workflow must block agent reuse when bundle inputs changed",
@@ -870,7 +877,10 @@ def check_hacs_metadata() -> list[str]:
         ".release/build-metadata.json": "release workflow must attach build metadata",
         ".release/sbom.spdx.json": "release workflow must attach an SPDX SBOM",
         "sha256sum -c SHA256SUMS": "release workflow must verify release checksums",
+        "pyspdxtools -i": "release workflow must validate the SPDX SBOM",
         "actions/attest@": "release workflow must generate GitHub artifact attestations",
+        "gh attestation verify": "release workflow must verify generated attestations",
+        "https://spdx.dev/Document/v2.3": "release workflow must verify the SPDX attestation",
         "gh release create": "release workflow must publish GitHub Release assets",
         "gh release upload": "release workflow must update existing GitHub Release assets",
     }

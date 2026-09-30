@@ -17,6 +17,15 @@
   than offering a Home Assistant repair that cannot recreate a device-side,
   certificate-provisioned user.
 
+### Security
+
+- Generate specification-valid SPDX 2.3 release SBOMs with the required file
+  SHA-1 identifiers, SHA-256 checksums and package verification code, and
+  validate them with the official SPDX tools before publication. SHA-1 is used
+  only for SPDX compatibility; SHA-256 remains the release integrity checksum.
+- Verify both SLSA provenance and SPDX SBOM Sigstore bundles against the release
+  workflow, tag ref and commit before publishing release assets.
+
 ## v1.9.4 - 2026-09-06
 
 ### Changed

@@ -85,8 +85,15 @@ Each release must publish deterministic release artifacts:
 - HACS zip,
 - `SHA256SUMS`,
 - `build-metadata.json`,
-- SPDX SBOM,
-- GitHub artifact attestation.
+- SPDX 2.3 SBOM validated by the official SPDX tools,
+- SLSA provenance and SPDX SBOM attestations verified against the release
+  workflow, tag ref and commit before publication.
+
+Manual Release runs must also execute from the release tag (`--ref vX.Y.Z`),
+not from `main` with a different tag input. Publication rejects a signing
+workflow ref or commit that differs from the checked-out release. This keeps
+the signed identity aligned with the actual release sources using the
+[GitHub attestation verification checks](https://cli.github.com/manual/gh_attestation_verify).
 
 `build-metadata.json` records the supported Home Assistant range, Python
 version, C300X firmware target, native-agent version, agent reuse status and the
@@ -95,6 +102,17 @@ validated release jobs. For fresh native-agent builds it also records
 availability, content hashes for the relevant ARMHF sysroot libraries and a
 combined fingerprint. Treat that file as the release evidence for why the asset
 was considered LTS-compatible at build time.
+
+After downloading a release, verify both signed claims with a current GitHub
+CLI:
+
+```bash
+gh attestation verify ha-bticino-c300x.zip \
+  --repo <owner>/ha-bticino-c300x
+gh attestation verify ha-bticino-c300x.zip \
+  --repo <owner>/ha-bticino-c300x \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
 
 Agent binary reuse is allowed only if none of these paths changed:
 

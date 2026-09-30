@@ -29,6 +29,7 @@ DEFAULT_REPOSITORY = "unknown"
 class ZipEntry:
     name: str
     size: int
+    sha1: str
     sha256: str
 
 
@@ -100,6 +101,7 @@ def write_release_assets(
         raise ReleaseAssetError(f"release zip does not exist: {zip_path}")
 
     zip_entries = _zip_entries(zip_path)
+    zip_sha1 = _sha1_file(zip_path)
     zip_sha256 = _sha256_file(zip_path)
     integration_version = _integration_version()
     native_agent_version = _native_agent_version()
@@ -127,6 +129,8 @@ def write_release_assets(
         repository=repository,
         package_name=DEFAULT_PACKAGE_NAME,
         version=integration_version,
+        zip_filename=zip_path.name,
+        zip_sha1=zip_sha1,
         zip_sha256=zip_sha256,
         zip_entries=zip_entries,
         created=created,
@@ -239,6 +243,8 @@ def _spdx_document(
     repository: str,
     package_name: str,
     version: str,
+    zip_filename: str,
+    zip_sha1: str,
     zip_sha256: str,
     zip_entries: list[ZipEntry],
     created: str,
@@ -253,6 +259,10 @@ def _spdx_document(
                 "SPDXID": file_id,
                 "fileName": entry.name,
                 "checksums": [
+                    {
+                        "algorithm": "SHA1",
+                        "checksumValue": entry.sha1,
+                    },
                     {
                         "algorithm": "SHA256",
                         "checksumValue": entry.sha256,
@@ -276,7 +286,7 @@ def _spdx_document(
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": f"{package_name}-{tag}",
         "documentNamespace": (
-            f"https://github.com/{repository}/releases/tag/{tag}#spdx-{zip_sha256}"
+            f"https://github.com/{repository}/releases/tag/{tag}/sbom/{zip_sha256}"
         ),
         "creationInfo": {
             "created": created,
@@ -288,9 +298,23 @@ def _spdx_document(
                 "SPDXID": package_id,
                 "name": package_name,
                 "versionInfo": version,
-                "downloadLocation": "NOASSERTION",
+                "packageFileName": zip_filename,
+                "downloadLocation": (
+                    f"https://github.com/{repository}/releases/download/{tag}/{zip_filename}"
+                ),
+                "homepage": f"https://github.com/{repository}",
+                "primaryPackagePurpose": "APPLICATION",
                 "filesAnalyzed": True,
+                "packageVerificationCode": {
+                    "packageVerificationCodeValue": _spdx_package_verification_code(
+                        zip_entries
+                    )
+                },
                 "checksums": [
+                    {
+                        "algorithm": "SHA1",
+                        "checksumValue": zip_sha1,
+                    },
                     {
                         "algorithm": "SHA256",
                         "checksumValue": zip_sha256,
@@ -318,6 +342,7 @@ def _zip_entries(zip_path: Path) -> list[ZipEntry]:
                     ZipEntry(
                         name=info.filename,
                         size=len(data),
+                        sha1=hashlib.sha1(data, usedforsecurity=False).hexdigest(),
                         sha256=hashlib.sha256(data).hexdigest(),
                     )
                 )
@@ -403,6 +428,25 @@ def _sha256_file(path: Path) -> str:
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha1_file(path: Path) -> str:
+    """Return the SHA-1 value required by the SPDX 2.3 file model."""
+
+    digest = hashlib.sha1(usedforsecurity=False)
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _spdx_package_verification_code(entries: list[ZipEntry]) -> str:
+    """Calculate the SPDX 2.3 package verification code from file SHA-1 values."""
+
+    digest = hashlib.sha1(usedforsecurity=False)
+    for checksum in sorted(entry.sha1 for entry in entries):
+        digest.update(checksum.encode("ascii"))
     return digest.hexdigest()
 
 

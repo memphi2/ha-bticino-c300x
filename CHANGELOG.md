@@ -1,21 +1,15 @@
 # Changelog
 
-## v1.9.5 - Unreleased
+## v1.9.5 - 2026-09-30
 
 ### Fixed
 
 - Confirm forwarding changes with a device readback before reporting success.
   Failed or rejected changes no longer appear as Home Assistant forwarding;
   the Ring Call receiver follows the confirmed device mode.
-- Report a missing device-side C300X SIP user instead of showing media readiness
-  as `ready`. The identity check accepted a domain fallback (another user line,
-  the registration file, or `flexisip.conf`) as proof, so a device whose own
-  `c300x` SIP user was gone still looked provisioned while every on-demand start
-  failed with `ondemand_sip_setup_failed`. The self-test now reports
-  `device_sip_user_missing` as its own failure, readiness reflects it, and the
-  guidance points at re-registering the device through the BTicino app rather
-  than offering a Home Assistant repair that cannot recreate a device-side,
-  certificate-provisioned user.
+- Report a missing device-side C300X SIP user in media readiness and self-test.
+  The guidance points to device provisioning through the BTicino app instead
+  of offering a Home Assistant repair for a device-owned identity.
 
 ### Security
 
@@ -25,6 +19,17 @@
   only for SPDX compatibility; SHA-256 remains the release integrity checksum.
 - Verify both SLSA provenance and SPDX SBOM Sigstore bundles against the release
   workflow, tag ref and commit before publishing release assets.
+
+### Maintenance
+
+- Update CodeQL Action to 4.38.0 and the pinned Hassfest action.
+
+### Upgrade Notes
+
+- Restart Home Assistant after updating the integration.
+- This release includes a newly built ARMHF C300X device agent `1.9.5`.
+  Update the device agent from Home Assistant to receive the forwarding and
+  device identity fixes.
 
 ## v1.9.4 - 2026-09-06
 

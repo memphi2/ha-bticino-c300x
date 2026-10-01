@@ -4,10 +4,10 @@
 # Home Assistant itself is locked per CI matrix.
 av==18.1.0
 mypy==2.3.1
-numpy==2.5.2
+numpy==2.5.3
 paramiko==3.5.1
 PyTurboJPEG==2.5.0
 pytest==9.1.1
 pytest-cov==7.1.0
-ruff==0.16.5
+ruff==0.16.9
 voluptuous-serialize==2.7.0

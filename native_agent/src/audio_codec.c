@@ -6,6 +6,8 @@
 
 #include "audio_codec.h"
 
+#include "media_teardown_patch.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -548,6 +550,36 @@ static int transform_file(
     return 1;
 }
 
+static int ensure_coupled_teardown_patch(char *error, size_t error_len) {
+    struct c300x_media_teardown_status teardown;
+    char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
+    char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
+
+    if (c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
+        return 1;
+    }
+    snprintf(
+        detail,
+        sizeof(detail),
+        "teardown_patch_required:%s",
+        teardown_error[0] != '\0' ? teardown_error : "unavailable"
+    );
+    set_err(error, error_len, detail);
+    return 0;
+}
+
+int c300x_audio_codec_ensure_coupled_patch(void) {
+    struct c300x_audio_codec_status status;
+
+    if (!c300x_audio_codec_read_status(&status) || !status.supported) {
+        return 1;
+    }
+    if (strcmp(status.state, "pcmu") != 0) {
+        return 1;
+    }
+    return ensure_coupled_teardown_patch(NULL, 0);
+}
+
 int c300x_audio_codec_apply(
     struct c300x_audio_codec_status *status,
     char *error,
@@ -569,7 +601,24 @@ int c300x_audio_codec_apply(
         return 0;
     }
     if (strcmp(status->state, "pcmu") == 0) {
-        return 1; /* idempotent */
+        return ensure_coupled_teardown_patch(error, error_len);
+    }
+    {
+        struct c300x_media_teardown_status teardown;
+
+        (void)c300x_media_teardown_read_status(&teardown);
+        if (strcmp(teardown.state, "stock") != 0 && strcmp(teardown.state, "patched") != 0) {
+            char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
+
+            snprintf(
+                detail,
+                sizeof(detail),
+                "teardown_patch_required:%s",
+                teardown.state[0] != '\0' ? teardown.state : "unavailable"
+            );
+            set_err(error, error_len, detail);
+            return 0;
+        }
     }
     if (!join_backup("stack_open.xml", sb, sizeof(sb))
         || !join_backup("linphone.conf", lb, sizeof(lb))) {
@@ -598,6 +647,32 @@ int c300x_audio_codec_apply(
         free(stack_out);
         free(lin_out);
         (void)remount("ro");
+        return 0;
+    }
+    {
+        struct c300x_media_teardown_status teardown;
+        char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
+
+        if (!c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
+            char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
+
+            snprintf(
+                detail,
+                sizeof(detail),
+                "teardown_patch_required:%s",
+                teardown_error[0] != '\0' ? teardown_error : "unavailable"
+            );
+            free(stack_out);
+            free(lin_out);
+            (void)remount("ro");
+            set_err(error, error_len, detail);
+            return 0;
+        }
+    }
+    if (!remount("rw")) {
+        free(stack_out);
+        free(lin_out);
+        set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
     if (!overwrite_file(stack_open_path(), stack_out, stack_len)

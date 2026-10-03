@@ -100,8 +100,16 @@ def test_python_and_agent_patch_tables_match() -> None:
             )
 
     assert patcher.STOCK_SHA256 in source
-    assert "original_mode = (mode_t)(original_stat.st_mode & 07777);" in source
-    assert "backup_mode = (mode_t)(backup_stat.st_mode & 07777);" in source
+    assert (
+        "c300x_patch_file_mode(target_path, &original_mode, &original_uid, &original_gid)"
+        in source
+    )
+    assert "fchown(fd, original_uid, original_gid)" in source
+    assert "c300x_patch_file_mode(backup_path, &backup_mode, NULL, NULL)" in source
+    io_source = (ROOT / "native_agent" / "src" / "device_patch_io.c").read_text(
+        encoding="utf-8"
+    )
+    assert "*mode = (mode_t)(st.st_mode & 07777);" in io_source
     assert "remount_root_ro_or_error(error, error_len)" in source
     assert 'set_error(error, error_len, "remount_ro_failed");' in source
 

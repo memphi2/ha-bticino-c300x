@@ -36,6 +36,8 @@ struct c300x_audio_codec_status {
  * always matches the device — no separate config value that could drift. */
 int c300x_audio_codec_device_is_pcmu(void);
 
+int c300x_audio_codec_ensure_coupled_patch(void);
+
 int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status);
 int c300x_audio_codec_reboot_required(
     const struct c300x_audio_codec_status *status,

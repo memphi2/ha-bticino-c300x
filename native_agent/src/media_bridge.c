@@ -6620,6 +6620,8 @@ bool c300x_media_bridge_start(const struct c300x_config *config, struct c300x_vi
     bool ok;
     pthread_t server_thread;
 
+    (void)c300x_audio_codec_ensure_coupled_patch();
+
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.running) {
         pthread_mutex_unlock(&g_bridge.mutex);

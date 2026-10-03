@@ -119,6 +119,8 @@ def main() -> int:
     assert_audio_codec_patch_roundtrip(binary)
     assert_audio_codec_partial_state_detection(binary)
     assert_audio_codec_apply_rejects_unpatchable_target(binary)
+    assert_audio_codec_apply_backfills_teardown_patch(binary)
+    assert_media_bridge_start_backfills_teardown_patch(binary)
 
     with (
         managed_tcp_server(OpenWebNetServer()) as openwebnet,
@@ -302,6 +304,15 @@ def assert_graceful_shutdown_signal_is_handled(binary: Path) -> None:
             raise AssertionError("video destroy must stop all media subsystems")
 
 
+def write_teardown_fixture(path: Path, *, patched: bool = True) -> None:
+    blob = bytearray(0xE000)
+    if patched:
+        value = bytes((0x40, 0x0D, 0x03, 0x00))
+        blob[0x5EE0:0x5EE4] = value
+        blob[0xDD0C:0xDD10] = value
+    path.write_bytes(bytes(blob))
+
+
 def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
     """Native speex<->PCMU patch: lock-step apply, idempotency, byte-identical restore.
 
@@ -328,6 +339,8 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
         linphone = temp / "linphone.conf"
         stack.write_text(stock_stack, encoding="utf-8")
         linphone.write_text(stock_linphone, encoding="utf-8")
+        teardown_target = temp / "teardown-target"
+        write_teardown_fixture(teardown_target)
         environment = os.environ.copy()
         environment.update(
             {
@@ -335,6 +348,9 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
                 "C300X_AUDIO_LINPHONE_CONF": str(linphone),
                 "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
                 "C300X_AUDIO_NO_REMOUNT": "1",
+                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
+                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
+                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
             }
         )
 
@@ -351,6 +367,28 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
         code, status = run("status")
         if code != 0 or status.get("state") != "speex":
             raise AssertionError(f"audio codec status should be speex: {status!r}")
+
+        blocked_environment = environment.copy()
+        blocked_environment["C300X_MEDIA_TEARDOWN_TARGET"] = str(temp / "absent-target")
+        blocked = subprocess.run(
+            [str(binary), "--audio-codec", "apply"],
+            env=blocked_environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        blocked_payload = json.loads(blocked.stdout)
+        if blocked.returncode == 0 or blocked_payload.get("ok") is not False:
+            raise AssertionError(
+                f"codec apply must refuse without the teardown patch: {blocked_payload!r}"
+            )
+        if not str(blocked_payload.get("error", "")).startswith("teardown_patch_required"):
+            raise AssertionError(
+                f"refusal must name the teardown precondition: {blocked_payload!r}"
+            )
+        if "<enable_speex>1</enable_speex>" not in stack.read_text(encoding="utf-8"):
+            raise AssertionError("refused codec apply must leave the codec files untouched")
+
         code, applied = run("apply")
         if code != 0 or applied.get("state") != "pcmu":
             raise AssertionError(f"audio codec apply should reach pcmu: {applied!r}")
@@ -432,6 +470,82 @@ def assert_audio_codec_partial_state_detection(binary: Path) -> None:
             raise AssertionError(f"inconsistent codec flags must read partial: {status!r}")
 
 
+def assert_audio_codec_apply_backfills_teardown_patch(binary: Path) -> None:
+    pcmu_stack = (
+        "<bt_av_media>\n"
+        "<enable_speex>0</enable_speex>\n"
+        "<audio_compression>1</audio_compression>\n"
+        "</bt_av_media>\n"
+    )
+    pcmu_linphone = (
+        "[sound]\nrtp_io=1\nrtp_ptnum=0\nrtp_map=PCMU/8000/1\n"
+        "udp_gst_shrd_port=4000\n\n"
+        "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=1\n\n"
+        "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=0\n"
+    )
+    with tempfile.TemporaryDirectory(prefix="c300x-codec-backfill-") as temp_dir:
+        temp = Path(temp_dir)
+        stack = temp / "stack_open.xml"
+        linphone = temp / "linphone.conf"
+        stack.write_text(pcmu_stack, encoding="utf-8")
+        linphone.write_text(pcmu_linphone, encoding="utf-8")
+        teardown_target = temp / "teardown-target"
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "C300X_AUDIO_STACK_OPEN": str(stack),
+                "C300X_AUDIO_LINPHONE_CONF": str(linphone),
+                "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
+                "C300X_AUDIO_NO_REMOUNT": "1",
+                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
+                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
+                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
+            }
+        )
+
+        def apply() -> tuple[int, dict[str, Any]]:
+            result = subprocess.run(
+                [str(binary), "--audio-codec", "apply"],
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return result.returncode, json.loads(result.stdout)
+
+        write_teardown_fixture(teardown_target)
+        code, payload = apply()
+        if code != 0 or payload.get("ok") is not True or payload.get("changed") is not False:
+            raise AssertionError(
+                f"apply on an already-PCMU device must succeed unchanged: {payload!r}"
+            )
+
+        blob = bytearray(0xE000)
+        blob[0x5EE0:0x5EE4] = bytes((0x11, 0x11, 0x11, 0x11))
+        teardown_target.write_bytes(bytes(blob))
+        code, payload = apply()
+        if code == 0 or payload.get("ok") is not False:
+            raise AssertionError(
+                f"an already-PCMU device without the teardown patch must report it: {payload!r}"
+            )
+        if not str(payload.get("error", "")).startswith("teardown_patch_required"):
+            raise AssertionError(f"refusal must name the precondition: {payload!r}")
+        if stack.read_text(encoding="utf-8") != pcmu_stack:
+            raise AssertionError("backfill check must not alter the codec files")
+
+
+def assert_media_bridge_start_backfills_teardown_patch(binary: Path) -> None:
+    source = binary.parents[2] / "src" / "media_bridge.c"
+    if not source.exists():
+        return
+    content = source.read_text(encoding="utf-8")
+    if "c300x_audio_codec_ensure_coupled_patch()" not in content:
+        raise AssertionError(
+            "media bridge start must backfill the coupled teardown patch so a device "
+            "already switched to the device codec still receives it"
+        )
+
+
 def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
     """Apply must not report success unless the resulting config is fully PCMU."""
 
@@ -451,6 +565,8 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
         linphone = temp / "linphone.conf"
         stack.write_text(unpatchable_stack, encoding="utf-8")
         linphone.write_text(stock_linphone, encoding="utf-8")
+        teardown_target = temp / "teardown-target"
+        write_teardown_fixture(teardown_target)
         environment = os.environ.copy()
         environment.update(
             {
@@ -458,6 +574,9 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
                 "C300X_AUDIO_LINPHONE_CONF": str(linphone),
                 "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
                 "C300X_AUDIO_NO_REMOUNT": "1",
+                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
+                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
+                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
             }
         )
         result = subprocess.run(
@@ -738,6 +857,13 @@ def run_smoke(
         environment["C300X_AUDIO_LINPHONE_CONF"] = str(audio_linphone)
         environment["C300X_AUDIO_BACKUP_DIR"] = str(audio_backup_dir)
         environment["C300X_AUDIO_NO_REMOUNT"] = "1"
+        teardown_target = Path(temp_dir) / "media-teardown-target"
+        write_teardown_fixture(teardown_target)
+        environment["C300X_MEDIA_TEARDOWN_TARGET"] = str(teardown_target)
+        environment["C300X_MEDIA_TEARDOWN_BACKUP_DIR"] = str(
+            Path(temp_dir) / "media-teardown-backup"
+        )
+        environment["C300X_DEVICE_PATCH_NO_REMOUNT"] = "1"
         process = subprocess.Popen(
             [str(binary), "--config", str(config_path)],
             env=environment,

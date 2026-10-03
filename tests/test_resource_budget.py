@@ -86,6 +86,26 @@ def test_native_agent_media_sip_module_stays_small() -> None:
     assert header.read_text(encoding="utf-8").count("\n") <= 80
 
 
+def test_native_agent_device_patch_io_module_stays_small() -> None:
+    source = ROOT / "native_agent" / "src" / "device_patch_io.c"
+    header = ROOT / "native_agent" / "src" / "device_patch_io.h"
+
+    assert source.stat().st_size <= 9_000
+    assert source.read_text(encoding="utf-8").count("\n") <= 260
+    assert header.stat().st_size <= 3_000
+    assert header.read_text(encoding="utf-8").count("\n") <= 90
+
+
+def test_native_agent_media_teardown_patch_module_stays_small() -> None:
+    source = ROOT / "native_agent" / "src" / "media_teardown_patch.c"
+    header = ROOT / "native_agent" / "src" / "media_teardown_patch.h"
+
+    assert source.stat().st_size <= 16_000
+    assert source.read_text(encoding="utf-8").count("\n") <= 400
+    assert header.stat().st_size <= 3_000
+    assert header.read_text(encoding="utf-8").count("\n") <= 80
+
+
 def test_large_python_modules_stay_within_interim_budget() -> None:
     """Catch accidental HA-side module bloat before it reaches a release."""
 

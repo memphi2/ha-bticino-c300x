@@ -2,6 +2,11 @@
 
 ## v1.9.6 - Unreleased
 
+### Fixed
+
+- Keep CPU readings consistent between HTTP and push updates, recover missing
+  updates after reconnect, and mark expired measurements unavailable.
+
 ### Added
 
 - Prepare the device-side uncompressed audio (PCMU) codec switch by shipping the

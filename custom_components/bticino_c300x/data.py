@@ -13,6 +13,7 @@ from .callback_target import (
 )
 from .media_timeline import C300XMediaTimeline
 from .media_watchdog import AgentCpuWatchdog
+from .system_metrics import SystemMetricsCache
 
 
 @dataclass(slots=True)
@@ -215,6 +216,7 @@ class BticinoC300XRuntimeData:
     prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
     system_metrics: dict[str, Any] = field(default_factory=dict)
     system_metrics_updated_at: datetime | None = None
+    system_metrics_cache: SystemMetricsCache = field(default_factory=SystemMetricsCache)
     agent_cpu_watchdog: AgentCpuWatchdog = field(default_factory=AgentCpuWatchdog)
     agent_cpu_watchdog_task: Any | None = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)

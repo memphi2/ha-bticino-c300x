@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from asyncio import Task
+from asyncio import Task, current_task
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
@@ -51,7 +51,6 @@ from .doorbell_state import (
     raw_doorbell_state_value,
 )
 from .entity import C300XEntity
-from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_readiness import MEDIA_READINESS_STATUS_OPTIONS, media_readiness
@@ -61,6 +60,12 @@ from .message_refresh import (
     async_memos,
 )
 from .stored_items import MEMO_ITEMS, VIDEO_MESSAGE_ITEMS, StoredItemsSpec
+from .system_metrics import async_system_metrics as _async_system_metrics
+from .system_metrics import (
+    invalidate_system_metrics,
+    metrics_are_fresh,
+    metrics_cache,
+)
 from .value_parsing import (
     freeze_state_value as _freeze_state_value,
 )
@@ -69,7 +74,6 @@ from .video_messages import (
 )
 
 PARALLEL_UPDATES = 1
-_METRICS_CACHE_SECONDS = 10
 _DOORBELL_CLOSED_STATES = frozenset({DOORBELL_STATE_IDLE})
 _PERCENT = "%"
 _DOORBELL_EVENT_STATES = {
@@ -827,12 +831,14 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
     def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
         super().__init__(entry, key)
         self._recovery_refresh_task: Task[None] | None = None
+        self._recovery_generation: int | None = None
         self._last_state_snapshot: _EntityStateSnapshot | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to pushed metric events and one-shot recovery refreshes."""
 
         await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_recovery_refresh)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -849,6 +855,12 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
         )
         self._schedule_recovery_refresh_if_needed(force=True)
 
+    @callback
+    def _cancel_recovery_refresh(self) -> None:
+        if self._recovery_refresh_task is not None:
+            self._recovery_refresh_task.cancel()
+            self._recovery_refresh_task = None
+
     async def async_update(self) -> None:
         """Refresh cached system metrics from the device agent."""
 
@@ -856,6 +868,7 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
         try:
             await _async_system_metrics(
                 self._entry,
+                hass=getattr(self, "hass", None),
                 force_refresh=needs_refresh,
                 required_key=self._metric_key if needs_refresh else None,
             )
@@ -868,10 +881,17 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
     def _metrics(self) -> dict[str, Any]:
         return self._entry.runtime_data.system_metrics
 
+    @property
+    def available(self) -> bool:
+        return super().available and metrics_are_fresh(self._entry)
+
     @callback
     def _handle_connection_state_changed(self, entry_id: str) -> None:
         if entry_id != self._entry.entry_id:
             return
+        if self._entry.runtime_data.connection_state.connection_state != "connected":
+            invalidate_system_metrics(self._entry)
+            self._cancel_recovery_refresh()
         self._schedule_recovery_refresh_if_needed()
         self._async_write_ha_state_if_changed()
 
@@ -891,8 +911,12 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
             return
         if not force and not self._needs_recovery_refresh():
             return
+        generation = metrics_cache(self._entry).generation
         if self._recovery_refresh_task and not self._recovery_refresh_task.done():
-            return
+            if self._recovery_generation == generation:
+                return
+            self._cancel_recovery_refresh()
+        self._recovery_generation = generation
         self._recovery_refresh_task = self.hass.async_create_task(
             self._async_recovery_refresh()
         )
@@ -901,7 +925,8 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
         try:
             await self.async_update()
         finally:
-            self._recovery_refresh_task = None
+            if self._recovery_refresh_task is current_task():
+                self._recovery_refresh_task = None
         self._async_write_ha_state_if_changed()
 
     def _async_write_ha_state_if_changed(self) -> None:
@@ -912,6 +937,8 @@ class C300XSystemMetricSensor(C300XEntity, SensorEntity):
         self.async_write_ha_state()
 
     def _needs_recovery_refresh(self) -> bool:
+        if not metrics_are_fresh(self._entry):
+            return True
         if not getattr(self, "_attr_available", True):
             return True
         if not bool(self._entry.runtime_data.system_metrics):
@@ -1207,60 +1234,6 @@ class C300XVoiceMemosSensor(C300XStoredItemsSensor):
                 entry_id=self._entry.entry_id,
             ),
         }
-
-
-async def _async_system_metrics(
-    entry: BticinoC300XConfigEntry,
-    *,
-    force_refresh: bool = False,
-    required_key: str | None = None,
-) -> dict[str, Any]:
-    """Return cached device-agent system metrics."""
-
-    now = datetime.now(UTC)
-    if cached := _fresh_system_metrics_cache(
-        entry,
-        now=now,
-        force_refresh=force_refresh,
-        required_key=required_key,
-    ):
-        return cached
-
-    async with entry_lock(entry.entry_id, "system_metrics"):
-        now = datetime.now(UTC)
-        if cached := _fresh_system_metrics_cache(
-            entry,
-            now=now,
-            force_refresh=force_refresh,
-            required_key=required_key,
-        ):
-            return cached
-        metrics = cast(dict[str, Any], await entry.runtime_data.api.async_system_metrics())
-        entry.runtime_data.system_metrics = metrics
-        entry.runtime_data.system_metrics_updated_at = datetime.now(UTC)
-        return metrics
-
-
-def _fresh_system_metrics_cache(
-    entry: BticinoC300XConfigEntry,
-    *,
-    now: datetime,
-    force_refresh: bool,
-    required_key: str | None,
-) -> dict[str, Any] | None:
-    """Return fresh cached metrics when they satisfy the current request."""
-
-    metrics = entry.runtime_data.system_metrics
-    updated_at = entry.runtime_data.system_metrics_updated_at
-    if (
-        not metrics
-        or updated_at is None
-        or (now - updated_at).total_seconds() >= _METRICS_CACHE_SECONDS
-    ):
-        return None
-    if force_refresh and (required_key is None or metrics.get(required_key) is None):
-        return None
-    return metrics
 
 
 def _system_metrics_capability(entry: BticinoC300XConfigEntry) -> dict[str, Any]:

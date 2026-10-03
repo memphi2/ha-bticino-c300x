@@ -471,6 +471,8 @@ def cleanup_entry_runtime_resources(
 
     runtime_data = runtime_data or getattr(entry, "runtime_data", None)
     if runtime_data is not None:
+        if getattr(runtime_data, "system_metrics_cache", None) is not None:
+            runtime_data.system_metrics_cache.cancel()
         if runtime_data.unregister_event_registration:
             runtime_data.unregister_event_registration()
         if runtime_data.unregister_display_bridge_updates:

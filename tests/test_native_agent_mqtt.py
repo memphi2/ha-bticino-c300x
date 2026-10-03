@@ -106,7 +106,7 @@ def test_native_mqtt_default_config_is_disabled_with_legacy_topics() -> None:
 
 def test_native_mqtt_events_do_not_depend_on_ha_webhook_subscriptions() -> None:
     http = _read("native_agent/src/http.c")
-    start = http.rindex("static void dispatch_event_internal")
+    start = http.rindex("static int dispatch_event_internal")
     dispatch = http[start : http.index("static int has_matching_subscription", start)]
 
     assert dispatch.index("c300x_mqtt_publish_event") < dispatch.index(

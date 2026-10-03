@@ -6,6 +6,37 @@
 #include <string.h>
 #include <unistd.h>
 
+long long c300x_system_metrics_monotonic_ms(void)
+{
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+    return (long long)now.tv_sec * 1000LL + now.tv_nsec / 1000000LL;
+}
+
+int c300x_system_metrics_instance_id(char *output, size_t output_len)
+{
+    unsigned char bytes[16];
+    FILE *file;
+    if (output_len < sizeof(bytes) * 2 + 1) {
+        return 0;
+    }
+    file = fopen("/dev/urandom", "rb");
+    if (file == NULL) {
+        return 0;
+    }
+    size_t count = fread(bytes, 1, sizeof(bytes), file);
+    fclose(file);
+    if (count != sizeof(bytes)) {
+        return 0;
+    }
+    for (size_t index = 0; index < sizeof(bytes); index++) {
+        snprintf(output + index * 2, 3, "%02x", bytes[index]);
+    }
+    return 1;
+}
+
 static double read_temperature_c(const char **source)
 {
     const char *paths[] = {
@@ -170,6 +201,14 @@ int c300x_system_metrics_read_sample(
     FILE *load_file;
 
     memset(sample, 0, sizeof(*sample));
+    sample->sampled_monotonic_ms = c300x_system_metrics_monotonic_ms();
+    sample->sample_sequence = previous != NULL ? previous->sample_sequence + 1 : 1;
+    if (previous != NULL) {
+        c300x_copy_string(sample->instance_id, sizeof(sample->instance_id), previous->instance_id);
+        sample->sample_interval_ms = sample->sampled_monotonic_ms - previous->sampled_monotonic_ms;
+        sample->sample_interval_seconds = previous->sample_interval_seconds;
+        sample->heartbeat_seconds = previous->heartbeat_seconds;
+    }
     load_file = fopen("/proc/loadavg", "r");
     if (load_file != NULL) {
         if (fscanf(load_file, "%lf %lf %lf", &loads[0], &loads[1], &loads[2]) != 3) {
@@ -235,6 +274,10 @@ int c300x_system_metrics_json(
     char memory_json[1024];
     char temperature_json[2048];
     size_t used = 0;
+    long long sample_age_ms = c300x_system_metrics_monotonic_ms() - sample->sampled_monotonic_ms;
+    if (sample_age_ms < 0) {
+        sample_age_ms = 0;
+    }
 
     if (sample->has_cpu_usage) {
         snprintf(cpu_usage_json, sizeof(cpu_usage_json), "%.1f", sample->cpu_usage_percent);
@@ -277,8 +320,14 @@ int c300x_system_metrics_json(
         body,
         body_len,
         &used,
-        "%s\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,%s,%s}",
+        "%s\"instance_id\":\"%s\",\"sample_sequence\":%llu,\"sample_age_ms\":%lld,\"sample_interval_ms\":%lld,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"cpu_count\":%ld,\"cpu_usage_percent\":%s,\"load_1m\":%.2f,\"load_5m\":%.2f,\"load_15m\":%.2f,\"load_1m_percent\":%.1f,\"load_5m_percent\":%.1f,\"load_15m_percent\":%.1f,%s,%s}",
         prefix,
+        sample->instance_id,
+        sample->sample_sequence,
+        sample_age_ms,
+        sample->sample_interval_ms,
+        sample->sample_interval_seconds,
+        sample->heartbeat_seconds,
         sample->cpu_count,
         cpu_usage_json,
         sample->load_1m,

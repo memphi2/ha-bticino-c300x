@@ -8,6 +8,12 @@
 struct c300x_video;
 
 struct system_metrics_sample {
+    char instance_id[33];
+    unsigned long long sample_sequence;
+    long long sampled_monotonic_ms;
+    long long sample_interval_ms;
+    int sample_interval_seconds;
+    int heartbeat_seconds;
     long cpu_count;
     unsigned long long cpu_total_jiffies;
     unsigned long long cpu_idle_jiffies;

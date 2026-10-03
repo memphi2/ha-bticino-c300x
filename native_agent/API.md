@@ -278,9 +278,29 @@ Authentication: normal API token.
 
 Side effects: none.
 
-Returns low-frequency system metrics. The agent also pushes metrics events when
-thresholds or heartbeat intervals are reached, so Home Assistant does not need
-periodic polling for normal operation.
+Returns the latest completed system-metrics snapshot, also used by
+`system.metrics_changed` events. Reading this endpoint never takes a new CPU
+sample or changes the sampling schedule. CPU usage is `null` until two counter
+readings are available. If monitoring is disabled, the endpoint returns HTTP 503
+with `error: "system_metrics_inactive"`.
+
+Agent 1.9.6 adds snapshot metadata to both HTTP and event payloads:
+
+- `instance_id`: random 32-character hexadecimal identifier for this agent run.
+- `sample_sequence`: increasing integer, starting at 1 within each instance.
+- `sample_age_ms`: monotonic age of the sample when the payload is serialized.
+- `sample_interval_ms`: actual interval between counter readings; 0 initially.
+- `sample_interval_seconds`: configured sampling cadence, normally 30 seconds.
+- `heartbeat_seconds`: configured maximum interval between successful pushes
+  when values are unchanged, normally 600 seconds.
+
+CPU changes at the displayed precision (one decimal place) trigger a push at the
+next regular sample. Other metrics retain their configured thresholds. Failed
+deliveries remain pending until a subsequent regular sample is acknowledged;
+only the newest snapshot is sent. Home Assistant rejects out-of-order snapshots
+and expires the cache after the heartbeat plus two sample intervals. No periodic
+Home Assistant polling is required. Older agents without metadata remain
+supported, but cannot provide sample-level ordering or sample age.
 
 ## Self-Test
 

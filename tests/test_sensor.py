@@ -1634,6 +1634,7 @@ def test_system_metric_sensor_recovers_when_metrics_missing() -> None:
 def test_system_metric_sensor_skips_refresh_when_metrics_cached() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
+            system_metrics_updated_at=datetime.now(UTC),
             system_metrics={
                 "cpu_usage_percent": 8.0,
                 "load_1m": 0.77,
@@ -1665,6 +1666,7 @@ def test_system_metric_sensor_skips_refresh_when_metrics_cached() -> None:
 def test_system_metric_sensor_uses_pushed_metrics_without_api_call() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
+            system_metrics_updated_at=datetime.now(UTC),
             system_metrics={
                 "cpu_usage_percent": 3.0,
                 "load_1m": 0.12,

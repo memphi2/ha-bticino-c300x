@@ -29,6 +29,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 from .event_types import HA_EVENT_TYPES
 from .fingerprint import fnv1a64_fingerprint
+from .system_metrics import invalidate_system_metrics
 
 _LOGGER = logging.getLogger(__name__)
 _REGISTRATION_RETRY_SECONDS = 30
@@ -72,6 +73,8 @@ def async_request_agent_event_registration(
     connection_state = getattr(runtime, "connection_state", None)
     if api is None or not isinstance(capabilities, dict) or connection_state is None:
         return False
+    if hasattr(runtime, "system_metrics"):
+        invalidate_system_metrics(entry)
 
     unregister = getattr(runtime, "unregister_event_registration", None)
     if callable(unregister):
@@ -174,6 +177,8 @@ class _AgentEventRegistration:
         return True
 
     async def _register_once(self) -> None:
+        runtime = getattr(self._entry, "runtime_data", None)
+        prior_metrics = getattr(runtime, "system_metrics", None)
         base_url = await async_generate_agent_callback_url(
             self._hass,
             self._entry,
@@ -208,6 +213,13 @@ class _AgentEventRegistration:
             base_url,
             datetime.now(UTC),
         )
+        if (
+            registration_created
+            and runtime is not None
+            and prior_metrics is not None
+            and runtime.system_metrics is prior_metrics
+        ):
+            invalidate_system_metrics(self._entry)
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._send_connection_state_changed()
@@ -229,6 +241,8 @@ class _AgentEventRegistration:
             )
 
     def _handle_registration_failure(self, err: Exception) -> None:
+        if hasattr(getattr(self._entry, "runtime_data", None), "system_metrics"):
+            invalidate_system_metrics(self._entry)
         error = compact_error_text(err)
         _LOGGER.warning("C300X event registration failed: %s", error)
         self._connection_state.mark_event_subscription_failure(datetime.now(UTC), error)

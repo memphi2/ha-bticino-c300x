@@ -365,6 +365,7 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     )
     entry = _entry(data={})
     entry.runtime_data = SimpleNamespace(
+        system_metrics_cache=SimpleNamespace(cancel=lambda: cancelled.append("metrics")),
         unregister_event_registration=lambda: callbacks.append("registration"),
         unregister_display_bridge_updates=lambda: callbacks.append("display"),
         unregister_event_webhook=lambda: callbacks.append("event-webhook"),
@@ -384,7 +385,7 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
 
     assert cleared == [entry.entry_id]
     assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
-    assert cancelled == ["memos", "messages"]
+    assert cancelled == ["metrics", "memos", "messages"]
     assert entry.runtime_data.memos_refresh_task is None
     assert entry.runtime_data.answering_machine_messages_refresh_task is None
     assert not any(key[0] == entry.entry_id for key in entry_locks._locks)

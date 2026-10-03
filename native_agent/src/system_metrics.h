@@ -5,6 +5,8 @@
 
 #include "system_metrics_watchdog.h"
 
+long long c300x_system_metrics_monotonic_ms(void);
+int c300x_system_metrics_instance_id(char *output, size_t output_len);
 int c300x_system_metrics_read_sample(
     struct system_metrics_sample *sample,
     const struct system_metrics_sample *previous

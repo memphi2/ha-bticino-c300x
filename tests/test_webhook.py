@@ -1407,6 +1407,33 @@ def test_system_metrics_event_updates_cache_without_public_event() -> None:
     assert hass.bus.events == []
 
 
+def test_system_metrics_webhook_rejects_invalid_metadata_and_ignores_old_samples() -> None:
+    hass = _FakeHass()
+    event_state = C300XEventState()
+    runtime = SimpleNamespace(event_state=event_state, system_metrics={}, system_metrics_updated_at=None)
+    entry = SimpleNamespace(
+        entry_id="entry-1", title="C300X", data={CONF_EVENT_WEBHOOK_TOKEN: "event-token"},
+        options={}, runtime_data=runtime,
+    )
+    metrics = {
+        "instance_id": "a" * 32, "sample_sequence": 2,
+        "sample_age_ms": 0, "sample_interval_ms": 30000,
+        "sample_interval_seconds": 30, "heartbeat_seconds": 600,
+        "cpu_usage_percent": 1.0,
+    }
+    for payload, status in (
+        (metrics, 200),
+        ({**metrics, "sample_sequence": 1, "cpu_usage_percent": 20.0}, 200),
+        ({**metrics, "sample_age_ms": -1}, 400),
+    ):
+        request = _FakeRequest("event-token", {
+            "type": "system.metrics_changed", "data": {"system_metrics": payload},
+        })
+        response = asyncio.run(_async_handle_agent_event(hass, entry, event_state, request))
+        assert response.status == status
+        assert runtime.system_metrics["cpu_usage_percent"] == 1.0
+
+
 def test_system_metrics_event_runtime_watchdog_stops_home_call(
     monkeypatch,
 ) -> None:  # noqa: ANN001

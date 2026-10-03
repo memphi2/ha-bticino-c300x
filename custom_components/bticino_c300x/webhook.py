@@ -40,7 +40,6 @@ from .const import (
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
     SIGNAL_MEMOS_CHANGED,
-    SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .data import C300XEventState
@@ -60,6 +59,7 @@ from .executor import (
 from .forwarding import forwarding_state_from_value
 from .http_body import read_capped_body
 from .media_watchdog import handle_runtime_cpu_metrics_changed
+from .system_metrics import apply_system_metrics, metrics_are_fresh
 from .value_parsing import (
     DEFAULT_FALSE_VALUES,
     DEFAULT_TRUE_VALUES,
@@ -301,7 +301,8 @@ async def _async_handle_agent_event(
     data = optional_mapping(payload.get("data"))
     snapshot = _is_snapshot_payload(payload)
     if event_type == "system_metrics_changed":
-        _apply_system_metrics_event(hass, entry, data)
+        if not _apply_system_metrics_event(hass, entry, data):
+            return _json_error("invalid_system_metrics", status=400)
         return web.json_response({"ok": True})
     if event_type == "agent_diagnostics_changed":
         if apply_agent_diagnostics_event(hass, entry, data) is None:
@@ -614,20 +615,20 @@ def _apply_system_metrics_event(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     data: dict[str, Any],
-) -> None:
+) -> bool:
     metrics = (
         data.get("system_metrics")
         if isinstance(data.get("system_metrics"), dict)
         else data
     )
     try:
-        entry.runtime_data.system_metrics = normalize_system_metrics(metrics)
+        normalized = normalize_system_metrics(metrics)
     except C300XAgentApiResponseError:
         _LOGGER.debug("Ignoring invalid C300X system metrics event payload")
-        return
-    entry.runtime_data.system_metrics_updated_at = dt_util.utcnow()
-    handle_runtime_cpu_metrics_changed(hass, entry)
-    async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
+        return False
+    if apply_system_metrics(entry, normalized, hass=hass) and metrics_are_fresh(entry):
+        handle_runtime_cpu_metrics_changed(hass, entry)
+    return True
 
 
 def _doorbell_event_data(

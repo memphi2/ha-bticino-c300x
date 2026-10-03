@@ -142,10 +142,15 @@ removes the native-agent init files, agent directory, and agent-owned backups.
 SSH is started before and after the cleanup and is deliberately not removed. If
 a restore step fails, the script stops before deleting the backups.
 
-System metrics are sampled by the agent, not polled by Home Assistant. The
-default config emits a push event when values change from the last HA push by
-the configured threshold, plus a 600 second heartbeat. CPU/load use
-percentage-point thresholds; temperature uses percent change.
+System metrics are sampled by the agent every 30 seconds by default, not polled
+by Home Assistant. HTTP and push use the same completed sample. CPU changes at
+one-decimal-place precision trigger a push; load and memory retain the configured
+percentage-point threshold, and temperature uses percent change. A 600 second
+heartbeat covers unchanged values. Only successful deliveries advance the push
+baseline; a failed delivery leaves the latest state pending for the next sample.
+Snapshot instance/sequence metadata prevents older responses overwriting newer
+values in Home Assistant. Missing updates expire the sensor after the heartbeat
+plus two sample intervals; reconnect refreshes are one-shot and shared.
 
 ## Agent updates
 

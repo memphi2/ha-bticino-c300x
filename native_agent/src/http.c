@@ -18,6 +18,7 @@
 #include "smartphone_forwarding.h"
 #include "string_util.h"
 #include "system_metrics.h"
+#include "system_metrics_monitor.h"
 #include "self_test.h"
 #include "time_util.h"
 #include "ui_homeassistant.h"
@@ -96,15 +97,6 @@
 #define C300X_RINGER_VOLUME_OPENWEBNET_MAX 100
 #define C300X_RINGER_VOLUME_OPENWEBNET_STEP 10
 #define C300X_RINGER_VOLUME_SETTLE_MS 1000
-#define SYSTEM_METRICS_CPU_WATCHDOG(runtime, sample, now) \
-    c300x_system_metrics_cpu_watchdog_apply( \
-        (runtime)->video, \
-        (sample)->has_cpu_usage, \
-        (sample)->cpu_usage_percent, \
-        (now), \
-        &(runtime)->system_metrics_high_cpu_since, \
-        &(runtime)->system_metrics_cpu_watchdog_tripped_at \
-    )
 enum listener_kind {
     LISTENER_API = 1,
     LISTENER_UI = 2
@@ -231,16 +223,7 @@ struct agent_runtime {
     struct voicemail_runtime voice_memos;
     unsigned long long memos_last_signature;
     struct c300x_ui_events ui_events;
-    /* Sampling uses the previous sample for CPU jiffies; dispatch thresholds
-     * compare against the last sample actually delivered to Home Assistant. */
-    struct system_metrics_sample system_metrics_last;
-    struct system_metrics_sample system_metrics_last_dispatched;
-    int system_metrics_initialized;
-    int system_metrics_dispatched_initialized;
-    time_t system_metrics_next_sample_at;
-    time_t system_metrics_last_dispatched_at;
-    time_t system_metrics_high_cpu_since;
-    time_t system_metrics_cpu_watchdog_tripped_at;
+    struct c300x_system_metrics_monitor metrics;
     int smartphone_forwarding_mode_known;
     int smartphone_forwarding_mode_code;
     int ringer_muted_known;
@@ -381,7 +364,7 @@ static void handle_mqtt_post(
     struct agent_runtime *runtime,
     const struct request *request
 );
-static void dispatch_event(
+static int dispatch_event(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *event_type,
@@ -411,16 +394,12 @@ static int constant_time_equal(const char *left, size_t left_len, const char *ri
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
+static int send_all_bytes(int fd, const char *payload, size_t payload_len);
 static int timeout_until_ms(time_t now, time_t due);
 static int min_timeout_ms(int current, int candidate);
 static void system_metrics_dispatch_now(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
-    time_t now
-);
-static void system_metrics_mark_dispatched(
-    struct agent_runtime *runtime,
-    const struct system_metrics_sample *sample,
     time_t now
 );
 static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime);
@@ -3121,11 +3100,32 @@ static int post_callback(
         subscription->token[0] != '\0' ? subscription->token : "",
         subscription->token[0] != '\0' ? "\r\n" : ""
     );
-    if (send(fd, header, strlen(header), MSG_NOSIGNAL) > 0
-        && send(fd, event_json, strlen(event_json), MSG_NOSIGNAL) > 0
-        && recv(fd, response, sizeof(response) - 1, 0) > 0) {
-        response[sizeof(response) - 1] = '\0';
-        ok = strncmp(response, "HTTP/1.1 2", 10) == 0 || strncmp(response, "HTTP/1.0 2", 10) == 0;
+    if (send_all_bytes(fd, header, strlen(header))
+        && send_all_bytes(fd, event_json, strlen(event_json))) {
+        size_t used = 0;
+        long long deadline = c300x_system_metrics_monotonic_ms() + config->callback_timeout_ms;
+        while (used + 1 < sizeof(response)) {
+            long long remaining = deadline - c300x_system_metrics_monotonic_ms();
+            if (remaining <= 0) {
+                break;
+            }
+            set_socket_timeout(fd, (int)remaining);
+            ssize_t received = recv(fd, response + used, sizeof(response) - used - 1, 0);
+            if (received < 0 && errno == EINTR) {
+                continue;
+            }
+            if (received <= 0) {
+                break;
+            }
+            used += (size_t)received;
+            response[used] = '\0';
+            if (strchr(response, '\n') != NULL) {
+                ok = (strncmp(response, "HTTP/1.1 2", 10) == 0 || strncmp(response, "HTTP/1.0 2", 10) == 0)
+                    && strchr(response, '\n') - response >= 13 && isdigit((unsigned char)response[10])
+                    && isdigit((unsigned char)response[11]) && response[12] == ' ';
+                break;
+            }
+        }
     }
     close(fd);
     return ok;
@@ -5454,7 +5454,7 @@ static void handle_subscription_delete(
     send_json(client_fd, 404, "Not Found", "{\"ok\":false}\n");
 }
 
-static void dispatch_event_internal(
+static int dispatch_event_internal(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *event_type,
@@ -5469,12 +5469,13 @@ static void dispatch_event_internal(
     char event_json[8192];
     char event_type_json[C300X_JSON_QUOTED_LEN(64)];
     int written;
+    int delivered = 1;
 
     if (
         runtime->video != NULL
         && !c300x_video_should_dispatch_event(runtime->video, event_type)
     ) {
-        return;
+        return 0;
     }
     if (update_video_state && runtime->video != NULL) {
         c300x_video_note_event(runtime->video, event_type, ttl_seconds);
@@ -5502,11 +5503,11 @@ static void dispatch_event_internal(
         merged_json
     );
     if (written < 0 || (size_t)written >= sizeof(event_json)) {
-        return;
+        return 0;
     }
     c300x_mqtt_publish_event(&runtime->mqtt, config, event_type, event_json, merged_json);
     if (!has_matching_subscription(runtime, event_type)) {
-        return;
+        return 0;
     }
     c300x_recent_events_record(&runtime->recent_events, event_json);
     if (!runtime_network_online(runtime, time(NULL))) {
@@ -5518,7 +5519,7 @@ static void dispatch_event_internal(
             subscription->last_ok = 0;
             snprintf(subscription->last_event_type, sizeof(subscription->last_event_type), "%s", event_type);
         }
-        return;
+        return 0;
     }
     for (int index = 0; index < runtime->subscription_count; index++) {
         struct subscription *subscription = &runtime->subscriptions[index];
@@ -5528,18 +5529,21 @@ static void dispatch_event_internal(
         subscription->last_ok = post_callback(config, subscription, event_json);
         if (subscription->last_ok) {
             mark_home_assistant_callback_seen(runtime, time(NULL));
+            utc_now(subscription->last_delivered_at, sizeof(subscription->last_delivered_at));
+        } else {
+            delivered = 0;
         }
         snprintf(subscription->last_event_type, sizeof(subscription->last_event_type), "%s", event_type);
-        utc_now(subscription->last_delivered_at, sizeof(subscription->last_delivered_at));
     }
     if (strcmp(event_type, "system.metrics_changed") != 0) {
         if (event_requests_metrics_refresh(event_type)) {
             system_metrics_dispatch_now(config, runtime, time(NULL));
         }
     }
+    return delivered;
 }
 
-static void dispatch_event(
+static int dispatch_event(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *event_type,
@@ -5547,7 +5551,7 @@ static void dispatch_event(
     int ttl_seconds
 )
 {
-    dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0, 1);
+    return dispatch_event_internal(config, runtime, event_type, data_json, ttl_seconds, 0, 1);
 }
 
 static void dispatch_event_snapshot(
@@ -5769,63 +5773,28 @@ static int runtime_network_online(struct agent_runtime *runtime, time_t now)
     return runtime->network_online;
 }
 
-static void system_metrics_init(
-    const struct c300x_config *config,
-    struct agent_runtime *runtime
-)
-{
-    time_t now = time(NULL);
-    if (!system_metrics_monitor_active(config)) {
-        runtime->system_metrics_next_sample_at = now + config->system_metrics_heartbeat_seconds;
-        return;
-    }
-    c300x_system_metrics_read_sample(&runtime->system_metrics_last, NULL);
-    runtime->system_metrics_initialized = 1;
-    runtime->system_metrics_dispatched_initialized = 0;
-    runtime->system_metrics_last_dispatched_at = 0;
-    runtime->system_metrics_next_sample_at = now + config->system_metrics_sample_interval_seconds;
-}
-
-static void system_metrics_mark_dispatched(
-    struct agent_runtime *runtime,
-    const struct system_metrics_sample *sample,
-    time_t now
-)
-{
-    runtime->system_metrics_last_dispatched = *sample;
-    runtime->system_metrics_dispatched_initialized = 1;
-    runtime->system_metrics_last_dispatched_at = now;
-}
-
 static void system_metrics_dispatch_now(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     time_t now
 )
 {
-    struct system_metrics_sample sample;
     char metrics_json[2048];
     char data[2300];
 
-    if (!system_metrics_watch_active(config, runtime)) {
+    if (!system_metrics_watch_active(config, runtime) || !runtime->metrics.initialized) {
         return;
     }
-    c300x_system_metrics_read_sample(
-        &sample,
-        runtime->system_metrics_initialized ? &runtime->system_metrics_last : NULL
-    );
-    runtime->system_metrics_last = sample;
-    runtime->system_metrics_initialized = 1;
-    runtime->system_metrics_next_sample_at = now + config->system_metrics_sample_interval_seconds;
-    SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
-    if (!c300x_system_metrics_json(&sample, 0, metrics_json, sizeof(metrics_json))) {
+    if (!c300x_system_metrics_json(&runtime->metrics.last, 0, metrics_json, sizeof(metrics_json))) {
         return;
     }
     if (snprintf(data, sizeof(data), "{\"system_metrics\":%s}", metrics_json) >= (int)sizeof(data)) {
         return;
     }
-    system_metrics_mark_dispatched(runtime, &sample, now);
-    dispatch_event(config, runtime, "system.metrics_changed", data, 30);
+    runtime->metrics.delivery_pending = 1;
+    if (dispatch_event(config, runtime, "system.metrics_changed", data, 30)) {
+        c300x_system_metrics_monitor_delivered(&runtime->metrics, now);
+    }
 }
 
 static void system_metrics_dispatch_if_due(
@@ -5834,53 +5803,9 @@ static void system_metrics_dispatch_if_due(
     time_t now
 )
 {
-    struct system_metrics_sample sample;
-    char metrics_json[2048];
-    char data[2300];
-    int heartbeat_due;
-    int changed;
-
-    if (!system_metrics_monitor_active(config)) {
-        runtime->system_metrics_next_sample_at = now + config->system_metrics_heartbeat_seconds;
-        return;
+    if (c300x_system_metrics_monitor_tick(config, &runtime->metrics, runtime->video, now)) {
+        system_metrics_dispatch_now(config, runtime, now);
     }
-    if (runtime->system_metrics_next_sample_at > now) {
-        return;
-    }
-    runtime->system_metrics_next_sample_at = now + config->system_metrics_sample_interval_seconds;
-    c300x_system_metrics_read_sample(&sample, runtime->system_metrics_initialized ? &runtime->system_metrics_last : NULL);
-    if (!runtime->system_metrics_initialized) {
-        runtime->system_metrics_last = sample;
-        runtime->system_metrics_initialized = 1;
-        SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
-        return;
-    }
-
-    runtime->system_metrics_last = sample;
-    SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now);
-    if (!has_matching_subscription(runtime, "system.metrics_changed")) {
-        return;
-    }
-    heartbeat_due = runtime->system_metrics_last_dispatched_at <= 0
-        || now - runtime->system_metrics_last_dispatched_at >= config->system_metrics_heartbeat_seconds;
-    changed = !runtime->system_metrics_dispatched_initialized
-        || c300x_system_metrics_changed(
-            config,
-            &runtime->system_metrics_last_dispatched,
-            &sample
-        )
-        || (sample.has_cpu_usage && sample.cpu_usage_percent >= 90.0);
-    if (!heartbeat_due && !changed) {
-        return;
-    }
-    if (!c300x_system_metrics_json(&sample, 0, metrics_json, sizeof(metrics_json))) {
-        return;
-    }
-    if (snprintf(data, sizeof(data), "{\"system_metrics\":%s}", metrics_json) >= (int)sizeof(data)) {
-        return;
-    }
-    system_metrics_mark_dispatched(runtime, &sample, now);
-    dispatch_event(config, runtime, "system.metrics_changed", data, 30);
 }
 
 static int parse_openwebnet_address_event(
@@ -7681,14 +7606,13 @@ static void handle_home_call_stop(int client_fd, struct agent_runtime *runtime)
 
 static void handle_system_metrics(int client_fd, const struct agent_runtime *runtime)
 {
-    struct system_metrics_sample sample;
     char body[4096];
 
-    c300x_system_metrics_read_sample(
-        &sample,
-        runtime != NULL && runtime->system_metrics_initialized ? &runtime->system_metrics_last : NULL
-    );
-    if (!c300x_system_metrics_json(&sample, 1, body, sizeof(body))) {
+    if (runtime == NULL || !runtime->metrics.initialized) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"system_metrics_inactive\"}\n");
+        return;
+    }
+    if (!c300x_system_metrics_json(&runtime->metrics.last, 1, body, sizeof(body))) {
         send_response_too_large(client_fd);
         return;
     }
@@ -12400,7 +12324,11 @@ int c300x_run(struct c300x_config *config)
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
-    system_metrics_init(config, runtime);
+    if (!c300x_system_metrics_monitor_init(config, &runtime->metrics)) {
+        fprintf(stderr, "fatal: system_metrics_instance_id_failed\n");
+        result = 2;
+        goto cleanup;
+    }
     listeners[listener_count].fd = make_listener(config->listen_host, config->api_port);
     listeners[listener_count].kind = LISTENER_API;
     if (listeners[listener_count].fd < 0) {
@@ -12567,7 +12495,7 @@ int c300x_run(struct c300x_config *config)
         if (system_metrics_monitor_active(config)) {
             poll_timeout_ms = min_timeout_ms(
                 poll_timeout_ms,
-                timeout_until_ms(now, runtime->system_metrics_next_sample_at)
+                c300x_system_metrics_monitor_timeout_ms(&runtime->metrics)
             );
         }
         poll_timeout_ms = min_timeout_ms(

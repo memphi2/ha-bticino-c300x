@@ -17,18 +17,9 @@ def _c300x_run_loop_body(text: str) -> str:
 
 
 def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-
-    assert "struct system_metrics_sample system_metrics_last_dispatched;" in text
-    assert "int system_metrics_dispatched_initialized;" in text
-    assert (
-        "c300x_system_metrics_changed(\n"
-        "            config,\n"
-        "            &runtime->system_metrics_last_dispatched,\n"
-        "            &sample\n"
-        "        )"
-        in text
-    )
+    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
+    assert "monitor->last_delivered = monitor->last;" in text
+    assert "c300x_system_metrics_changed(config, &monitor->last_delivered, &sample)" in text
     watchdog = (
         ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
     ).read_text(encoding="utf-8")
@@ -54,21 +45,12 @@ def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
 
 def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    dispatch_body = text.split("static void system_metrics_dispatch_if_due", maxsplit=1)[
-        1
-    ].split("static int map_openwebnet_event", maxsplit=1)[0]
-
-    assert (
-        "if (!system_metrics_monitor_active(config)) {\n"
-        "        runtime->system_metrics_next_sample_at = now + "
-        "config->system_metrics_heartbeat_seconds;\n"
-        "        return;\n"
-        "    }\n"
-        in dispatch_body
-    )
-    assert dispatch_body.index("c300x_system_metrics_json(&sample") < (
-        dispatch_body.index("system_metrics_mark_dispatched(runtime, &sample, now)")
-    )
+    immediate = text.rsplit("static void system_metrics_dispatch_now", maxsplit=1)[1].split(
+        "static void system_metrics_dispatch_if_due", maxsplit=1
+    )[0]
+    assert 'if (dispatch_event(config, runtime, "system.metrics_changed", data, 30)) {' in immediate
+    assert immediate.index("if (dispatch_event(") < immediate.index("c300x_system_metrics_monitor_delivered(")
+    assert "runtime->metrics.delivery_pending = 1;" in immediate
 
 
 def test_native_agent_metrics_monitor_wakes_without_subscribers_for_safety() -> None:
@@ -90,23 +72,10 @@ def test_native_agent_metrics_dispatch_loop_runs_internal_monitor() -> None:
 
 
 def test_native_agent_metrics_push_high_cpu_samples_for_watchdog() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    dispatch_body = text.split("static void system_metrics_dispatch_if_due", maxsplit=1)[
-        1
-    ].split("static int map_openwebnet_event", maxsplit=1)[0]
-
-    assert "|| (sample.has_cpu_usage && sample.cpu_usage_percent >= 90.0)" in dispatch_body
-    assert (
-        "if (!has_matching_subscription(runtime, \"system.metrics_changed\")) {\n"
-        "        return;\n"
-        "    }"
-        in dispatch_body
-    )
-    assert dispatch_body.index(
-        "SYSTEM_METRICS_CPU_WATCHDOG(runtime, &sample, now)"
-    ) < dispatch_body.index(
-        "if (!has_matching_subscription(runtime, \"system.metrics_changed\"))"
-    )
+    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
+    assert "|| (sample.has_cpu_usage && sample.cpu_usage_percent >= 90.0)" in text
+    assert text.index("c300x_system_metrics_cpu_watchdog_apply(") < text.index("return !monitor->delivered_initialized")
+    assert "subscription" not in text
 
 
 def test_native_agent_metrics_cpu_watchdog_stops_owned_media_only() -> None:
@@ -141,18 +110,19 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
         in post_body
     )
     assert dispatch_now_body.index("system_metrics_watch_active") < (
-        dispatch_now_body.index("c300x_system_metrics_read_sample")
+        dispatch_now_body.index("c300x_system_metrics_json")
     )
+    assert "c300x_system_metrics_read_sample" not in dispatch_now_body
 
 
 def test_native_agent_metrics_initializes_internal_monitor_without_subscribers() -> None:
-    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
-    init_body = text.split("static void system_metrics_init", maxsplit=1)[1].split(
-        "static void system_metrics_mark_dispatched",
+    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
+    init_body = text.split("int c300x_system_metrics_monitor_init", maxsplit=1)[1].split(
+        "int c300x_system_metrics_monitor_timeout_ms",
         maxsplit=1,
     )[0]
 
-    assert init_body.index("system_metrics_monitor_active") < init_body.index(
+    assert init_body.index("!config->system_metrics_enabled") < init_body.index(
         "c300x_system_metrics_read_sample"
     )
 

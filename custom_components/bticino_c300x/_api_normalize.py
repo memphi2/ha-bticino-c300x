@@ -202,7 +202,7 @@ def normalize_system_metrics(data: Any) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise C300XAgentApiResponseError("system metrics returned non-object JSON")
-    return {
+    result = {
         "cpu_count": _optional_int(data.get("cpu_count")),
         "cpu_usage_percent": _optional_float(data.get("cpu_usage_percent")),
         "load_1m": _optional_float(data.get("load_1m")),
@@ -219,6 +219,34 @@ def normalize_system_metrics(data: Any) -> dict[str, Any]:
         "temperature_source": data.get("temperature_source"),
         "raw": data,
     }
+    metadata_keys = (
+        "sample_sequence",
+        "sample_age_ms",
+        "sample_interval_ms",
+        "sample_interval_seconds",
+        "heartbeat_seconds",
+    )
+    if "instance_id" in data or any(key in data for key in metadata_keys):
+        instance = data.get("instance_id")
+        if (
+            not isinstance(instance, str)
+            or len(instance) != 32
+            or any(char not in "0123456789abcdef" for char in instance)
+        ):
+            raise C300XAgentApiResponseError("system metrics invalid instance_id")
+        result["instance_id"] = instance
+        for key in metadata_keys:
+            value = data.get(key)
+            if type(value) is not int or value < 0:
+                raise C300XAgentApiResponseError(f"system metrics invalid {key}")
+            result[key] = value
+        if (
+            result["sample_sequence"] < 1
+            or result["sample_interval_seconds"] < 5
+            or result["heartbeat_seconds"] < result["sample_interval_seconds"]
+        ):
+            raise C300XAgentApiResponseError("system metrics invalid sample timing")
+    return result
 
 
 def normalize_agent_diagnostics(data: Any) -> AgentDiagnosticsStatus:

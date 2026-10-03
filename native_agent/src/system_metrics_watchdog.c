@@ -1,5 +1,8 @@
 #include "system_metrics_watchdog.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "video_rtsp.h"
 
 #define C300X_SYSTEM_METRICS_CPU_WATCHDOG_PERCENT 90.0
@@ -42,15 +45,15 @@ int c300x_system_metrics_changed(
     const struct system_metrics_sample *current
 )
 {
+    char previous_cpu[32];
+    char current_cpu[32];
+    snprintf(previous_cpu, sizeof(previous_cpu), "%.1f", previous->cpu_usage_percent);
+    snprintf(current_cpu, sizeof(current_cpu), "%.1f", current->cpu_usage_percent);
     if (
         previous->has_cpu_usage != current->has_cpu_usage
         || (
             current->has_cpu_usage
-            && metric_changed_points(
-                previous->cpu_usage_percent,
-                current->cpu_usage_percent,
-                config->system_metrics_change_percent
-            )
+            && strcmp(previous_cpu, current_cpu) != 0
         )
     ) {
         return 1;

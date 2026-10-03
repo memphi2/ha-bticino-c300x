@@ -1124,8 +1124,8 @@ def test_native_agent_doorbell_events_include_device_media_state() -> None:
         event_payload.index("void c300x_event_payload_build_data_json") + 2000
     ]
     dispatch_body = http[
-        http.index("static void dispatch_event_internal") :
-        http.index("static void dispatch_event(", http.index("static void dispatch_event_internal"))
+        http.index("static int dispatch_event_internal") :
+        http.index("static int dispatch_event(", http.index("static int dispatch_event_internal"))
     ]
     dedupe_body = video[
         video.index("int c300x_video_should_dispatch_event") :

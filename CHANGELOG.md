@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.5 - 2026-09-30
+## v1.9.5 - 2026-10-03
 
 ### Fixed
 
@@ -23,6 +23,7 @@
 ### Maintenance
 
 - Update CodeQL Action to 4.38.0 and the pinned Hassfest action.
+- Update validation dependencies to NumPy 2.5.3 and Ruff 0.16.9.
 
 ### Upgrade Notes
 

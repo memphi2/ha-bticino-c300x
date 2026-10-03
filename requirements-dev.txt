@@ -3,11 +3,11 @@
 # by Home Assistant instead of this repository's dev lock.
 av==18.1.0
 mypy==2.3.1
-numpy==2.5.2
+numpy==2.5.3
 paramiko==3.5.1
 PyTurboJPEG==2.5.0
 pytest==9.1.1
 pytest-cov==7.1.0
-ruff==0.16.5
+ruff==0.16.9
 spdx-tools==0.8.5
 voluptuous-serialize==2.7.0

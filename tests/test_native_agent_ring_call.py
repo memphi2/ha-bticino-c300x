@@ -1108,7 +1108,8 @@ def test_native_agent_exposes_explicit_doorbell_call_api_without_new_sip_path() 
         assert path in router_body
     assert '\\"capture_supported\\":false' in http
     assert '\\"capture_not_supported\\"' in http
-    assert '\\"doorbell_call\\":{\\"supported\\":%s,\\"answer\\":true,\\"hangup\\":true,\\"status\\":true,\\"capture\\":false}' in http
+    capabilities = (ROOT / "native_agent" / "src" / "capabilities.c").read_text(encoding="utf-8")
+    assert '\\"doorbell_call\\":{\\"supported\\":%s,\\"answer\\":true,\\"hangup\\":true,\\"status\\":true,\\"capture\\":false}' in capabilities
 
 
 def test_native_agent_doorbell_events_include_device_media_state() -> None:

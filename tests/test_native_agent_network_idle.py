@@ -72,9 +72,10 @@ def test_mdns_advertises_home_assistant_zeroconf_shape() -> None:
     )
     capabilities_body = _function_body(http_text, "static void", "api_capabilities")
     assert "c300x_mdns_device_id(device_id, sizeof(device_id))" in capabilities_body
+    capabilities_json = (ROOT / "native_agent" / "src" / "capabilities.c").read_text(encoding="utf-8")
     assert (
         '\\"device\\":{\\"id\\":\\"%s\\",\\"model\\":\\"%s\\",\\"firmware\\":\\"%s\\"}'
-        in capabilities_body
+        in capabilities_json
     )
     assert '"id=%s"' in build_body
     assert '"name=%s"' in build_body

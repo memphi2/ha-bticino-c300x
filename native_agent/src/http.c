@@ -2,6 +2,7 @@
 #include "activation_discovery.h"
 #include "agent_update_paths.h"
 #include "c300x_agent.h"
+#include "capabilities.h"
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
@@ -3526,6 +3527,7 @@ static void device_user_status_body(
         "\"status_available\":%s,"
         "\"supported\":%s,"
         "\"domain_present\":%s,"
+        "\"device_user_present\":%s,"
         "\"homeassistant_user_present\":%s,"
         "\"accounts_homeassistant_present\":%s,"
         "\"route_int_homeassistant_present\":%s,"
@@ -3550,6 +3552,7 @@ static void device_user_status_body(
         status->status_available ? "true" : "false",
         status->supported ? "true" : "false",
         status->domain_present ? "true" : "false",
+        status->device_user_present ? "true" : "false",
         status->homeassistant_user_present ? "true" : "false",
         status->accounts_homeassistant_present ? "true" : "false",
         status->route_int_homeassistant_present ? "true" : "false",
@@ -3739,7 +3742,7 @@ static void handle_audio_codec_status(
 )
 {
     struct c300x_audio_codec_status status;
-    char body[320];
+    char body[512];
 
     if (!maintenance_authorized(config, request)) {
         send_maintenance_unauthorized(client_fd);
@@ -6733,158 +6736,38 @@ static void api_capabilities(
 )
 {
     char *body = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
-    char video_path[C300X_MAX_PATH_JSON_LEN];
-    char audio_path[C300X_MAX_PATH_JSON_LEN];
-    char recorder_path[C300X_MAX_PATH_JSON_LEN];
     char device_id[64];
-    char device_id_json[128];
-    char device_model[128];
     char firmware_value[C300X_MAX_VERSION_LEN];
-    char device_firmware[384];
-    char stair_address[128];
-    char lock_id[128];
-    char lock_name[384];
     char bundle_hash[C300X_AGENT_BUNDLE_HASH_LEN];
-    char bundle_hash_json[C300X_JSON_QUOTED_LEN(C300X_AGENT_BUNDLE_HASH_LEN)];
     char bundle_agent_version[C300X_MAX_VERSION_LEN];
     char bundle_api_version[16];
-    int maintenance_supported = maintenance_auth_available(config);
-    int activations_count = activation_total_count(config, runtime);
-    int written;
+    struct c300x_video_status video_status = {0};
 
     if (body == NULL) {
         return;
     }
-
     c300x_mdns_device_id(device_id, sizeof(device_id));
     (void)read_agent_bundle_metadata(
-        config,
-        bundle_hash,
-        sizeof(bundle_hash),
-        bundle_agent_version,
-        sizeof(bundle_agent_version),
-        bundle_api_version,
-        sizeof(bundle_api_version)
+        config, bundle_hash, sizeof(bundle_hash),
+        bundle_agent_version, sizeof(bundle_agent_version),
+        bundle_api_version, sizeof(bundle_api_version)
     );
-    c300x_json_escape_string(device_id, device_id_json, sizeof(device_id_json));
-    c300x_json_escape_string(config->video_rtsp_video_path, video_path, sizeof(video_path));
-    c300x_json_escape_string(config->video_rtsp_path, audio_path, sizeof(audio_path));
-    c300x_json_escape_string(config->video_rtsp_recorder_path, recorder_path, sizeof(recorder_path));
-    c300x_json_escape_string(config->device_model, device_model, sizeof(device_model));
     resolve_device_firmware(config, firmware_value, sizeof(firmware_value));
-    c300x_json_escape_string(firmware_value, device_firmware, sizeof(device_firmware));
-    c300x_json_escape_string(config->stair_light_default_address, stair_address, sizeof(stair_address));
-    c300x_json_escape_string(config->lock_id, lock_id, sizeof(lock_id));
-    c300x_json_escape_string(config->lock_name, lock_name, sizeof(lock_name));
-    c300x_json_string(bundle_hash, bundle_hash_json, sizeof(bundle_hash_json));
-    written = snprintf(
-        body,
-        C300X_LARGE_RESPONSE_SIZE,
-        "{"
-        "\"api_version\":\"1\","
-        "\"agent\":{\"implementation\":\"native-c\",\"version\":\"%s\",\"api_version\":\"1\",\"bundle_hash\":%s,\"self_update_supported\":%s},"
-        "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
-        "\"capabilities\":{"
-        "\"doorbell_events\":true,"
-        "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
-        "\"doorbell_call\":{\"supported\":%s,\"answer\":true,\"hangup\":true,\"status\":true,\"capture\":false},"
-        "\"home_call\":{\"supported\":%s,\"audio_codec\":\"%s\",\"rtp_proxy_supported\":true,\"max_duration_seconds\":%d},"
-        "\"stair_light\":{\"supported\":true,\"default_address\":\"%s\"},"
-        "\"locks\":{\"supported\":true,\"default_id\":\"%s\",\"locks\":[{\"id\":\"%s\",\"name\":\"%s\"}]},"
-        "\"activations\":{\"supported\":%s,\"count\":%d},"
-        "\"call_events\":false,"
-        "\"ringer\":{\"supported\":true,\"mute\":true,\"volume\":true,\"min_volume\":%d,\"max_volume\":%d,\"step\":%d},"
-        "\"smartphone_forwarding\":{\"supported\":true,\"modes\":[\"enabled\",\"homeassistant\",\"blocked\"]},"
-        "\"answering_machine\":{\"supported\":true,\"status\":true,\"greeting_message\":true,\"messages\":{\"supported\":%s,\"source\":\"local_files\",\"watch\":%s,\"media\":%s,\"delete\":%s}},"
-        "\"memos\":{\"supported\":%s,\"text\":true,\"voice\":true,\"media\":%s,\"source\":\"local_files\",\"watch\":%s,\"delete\":%s,\"write_text\":%s},"
-        "\"system_metrics\":{\"supported\":%s,\"cpu\":true,\"load\":true,\"memory\":true,\"temperature\":true,\"watch\":%s,\"sample_interval_seconds\":%d,\"heartbeat_seconds\":%d,\"change_percent\":%d},"
-        "\"mqtt\":{\"supported\":true,\"enabled\":%s,\"configured\":%s},"
-        "\"diagnostics\":{\"supported\":true,\"writes\":true,\"runtime\":true},"
-        "\"device_user\":{\"supported\":true},"
-        "\"auth\":{\"supported\":true,\"configurable\":true,\"no_auth\":%s,\"api_token_configured\":%s,\"maintenance_token_configured\":%s},"
-        "\"maintenance\":{\"supported\":%s,\"ssh_start\":%s,\"ssh_stop\":%s,\"ssh_status\":%s,\"reboot\":%s,\"agent_remove\":%s,\"agent_restart\":%s,\"agent_update\":%s,\"config_normalize\":%s,\"device_user_status\":%s,\"device_user_ensure\":%s,\"mqtt_status\":%s,\"mqtt_config\":%s,\"legacy_mqtt_status\":%s,\"legacy_mqtt_config\":%s,\"legacy_mqtt_migrate\":%s,\"gui_reload\":%s,\"firewall_status\":%s,\"firewall_apply\":%s,\"firewall_restore\":%s,\"ipv6_firewall_status\":%s,\"ipv6_firewall_apply\":%s,\"ipv6_firewall_restore\":%s,\"qml_status\":%s,\"qml_patch\":%s,\"qml_core_patch\":%s,\"qml_core_restore\":%s,\"qml_restore\":%s,\"audio_codec_status\":%s,\"audio_codec_apply\":%s,\"audio_codec_restore\":%s},"
-        "\"display_bridge\":{\"supported\":true,\"configurable\":true,\"configured\":%s}"
-        "}"
-        "}\n",
-        C300X_NATIVE_AGENT_VERSION,
-        bundle_hash_json,
-        maintenance_supported ? "true" : "false",
-        device_id_json,
-        device_model,
-        device_firmware,
-        config->video_enabled ? "true" : "false",
-        video_path,
-        audio_path,
-        recorder_path,
-        C300X_RTSP_AUDIO_CODEC,
-        C300X_TALKBACK_CODEC,
-        C300X_TALKBACK_RTP_PAYLOAD_TYPE,
-        config->video_enabled ? "true" : "false",
-        config->video_enabled ? "true" : "false",
-        C300X_RTSP_AUDIO_CODEC,
-        C300X_HOME_CALL_MAX_DURATION_SECONDS,
-        stair_address,
-        lock_id,
-        lock_id,
-        lock_name,
-        (config->activations_enabled && activations_count > 0) ? "true" : "false",
-        activations_count,
-        C300X_RINGER_VOLUME_ACTIVE_MIN,
-        C300X_RINGER_VOLUME_MAX,
-        C300X_RINGER_VOLUME_STEP,
-        config->answering_machine_messages_enabled ? "true" : "false",
-        (config->answering_machine_messages_enabled && config->answering_machine_messages_watch) ? "true" : "false",
-        config->answering_machine_messages_enabled ? "true" : "false",
-        config->answering_machine_messages_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        (config->memos_enabled && config->memos_watch) ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        config->memos_enabled ? "true" : "false",
-        config->system_metrics_enabled ? "true" : "false",
-        (config->system_metrics_enabled && config->system_metrics_watch) ? "true" : "false",
-        config->system_metrics_sample_interval_seconds,
-        config->system_metrics_heartbeat_seconds,
-        config->system_metrics_change_percent,
-        config->mqtt_enabled ? "true" : "false",
-        config->mqtt_host[0] != '\0' ? "true" : "false",
-        config->api_no_auth ? "true" : "false",
-        config->api_token[0] != '\0' ? "true" : "false",
-        config->maintenance_admin_token[0] != '\0' ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_ssh_start_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_reboot_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_agent_remove_enabled) ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        (maintenance_supported && config->maintenance_gui_reload_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_ipv6_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_ipv6_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_ipv6_firewall_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        (maintenance_supported && config->maintenance_qml_patch_enabled) ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        maintenance_supported ? "true" : "false",
-        config->display_bridge_enabled ? "true" : "false"
-    );
-    if (written < 0 || written >= C300X_LARGE_RESPONSE_SIZE) {
+    if (runtime != NULL && runtime->video != NULL) {
+        c300x_video_status(runtime->video, &video_status);
+    }
+    const struct c300x_capabilities_context context = {
+        .device_id = device_id,
+        .device_firmware = firmware_value,
+        .bundle_hash = bundle_hash,
+        .maintenance_supported = maintenance_auth_available(config),
+        .activations_count = activation_total_count(config, runtime),
+        .device_codec_pcmu = video_status.device_codec_pcmu,
+        .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
+        .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
+        .ringer_volume_step = C300X_RINGER_VOLUME_STEP,
+    };
+    if (!c300x_capabilities_json(config, &context, body, C300X_LARGE_RESPONSE_SIZE)) {
         send_response_too_large(client_fd);
         free(body);
         return;

@@ -21,12 +21,17 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    # Bumped from 433_000 for the maintenance audio-codec endpoints (+ persist
-    # of media.audioCodec on apply/restore). Splitting this monolith is a
-    # separate backlog refactor; this interim ceiling keeps pressure on
-    # unrelated growth.
-    assert path.stat().st_size <= 440_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_720
+    # Ratchet down after extracting metrics monitoring and capabilities JSON.
+    assert path.stat().st_size <= 430_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 12_540
+
+
+def test_native_agent_capabilities_module_stays_small() -> None:
+    source = ROOT / "native_agent" / "src" / "capabilities.c"
+    header = ROOT / "native_agent" / "src" / "capabilities.h"
+    assert source.stat().st_size <= 11_000
+    assert source.read_text(encoding="utf-8").count("\n") <= 200
+    assert header.stat().st_size <= 1_500
 
 
 def test_native_agent_event_payload_module_stays_small() -> None:
@@ -104,6 +109,13 @@ def test_native_agent_media_teardown_patch_module_stays_small() -> None:
     assert source.read_text(encoding="utf-8").count("\n") <= 400
     assert header.stat().st_size <= 3_000
     assert header.read_text(encoding="utf-8").count("\n") <= 80
+
+
+def test_native_agent_media_teardown_runtime_module_stays_small() -> None:
+    source = ROOT / "native_agent" / "src" / "media_teardown_runtime.c"
+
+    assert source.stat().st_size <= 5_000
+    assert source.read_text(encoding="utf-8").count("\n") <= 150
 
 
 def test_large_python_modules_stay_within_interim_budget() -> None:

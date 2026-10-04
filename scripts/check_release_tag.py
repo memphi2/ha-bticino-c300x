@@ -14,6 +14,7 @@ from manifest_version import read_integration_version
 
 ROOT = Path(__file__).resolve().parents[1]
 TAG_RE = re.compile(r"v(?P<version>\d+\.\d+\.\d+)")
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def main() -> int:
@@ -61,16 +62,42 @@ def validate_release_tag(tag: str, root: Path = ROOT) -> list[str]:
         )
 
     changelog = root / "CHANGELOG.md"
-    if tag not in changelog.read_text(encoding="utf-8"):
+    changelog_text = changelog.read_text(encoding="utf-8")
+    if tag not in changelog_text:
         failures.append(f"CHANGELOG.md must contain a {tag} section")
+    else:
+        heading = _changelog_heading(changelog_text, tag)
+        if heading is None:
+            failures.append(f"CHANGELOG.md must head the {tag} section with '## {tag} - <date>'")
+        elif not DATE_RE.fullmatch(heading):
+            failures.append(
+                f"CHANGELOG.md {tag} section must be dated, got {heading!r} -- "
+                "a released tag cannot carry an unreleased section"
+            )
 
     release_note = root / ".github" / "release-notes" / f"{tag}.md"
     if not release_note.exists():
         failures.append(f"missing release notes file: {release_note.relative_to(root)}")
-    elif tag not in release_note.read_text(encoding="utf-8"):
-        failures.append(f"{release_note.relative_to(root)} must mention {tag}")
+    else:
+        note_text = release_note.read_text(encoding="utf-8")
+        if tag not in note_text:
+            failures.append(f"{release_note.relative_to(root)} must mention {tag}")
+        if not any(DATE_RE.fullmatch(line[3:].strip()) for line in note_text.splitlines() if line.startswith("## ")):
+            failures.append(
+                f"{release_note.relative_to(root)} must carry a dated '## <date>' section"
+            )
 
     return failures
+
+
+def _changelog_heading(text: str, tag: str) -> str | None:
+    """Return what follows '## <tag> - ' in the changelog, if that heading exists."""
+
+    prefix = f"## {tag} - "
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return None
 
 
 def validate_attestation_context(

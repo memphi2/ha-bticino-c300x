@@ -263,6 +263,27 @@ int main(void)
             unlink(second_comm);
             rmdir(second_pid);
 
+            /* Restoring speex leaves the patched daemon in place, so the patch
+             * state has to be read from the file in every codec mode. Deriving
+             * it inside the PCMU branch reported "not installed" for a device
+             * whose running daemon was still patched. */
+            const char *stack_speex = "<enable_speex>1</enable_speex>\n";
+            const char *linphone_speex = "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
+                "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"
+                "[audio_codec_1]\nmime=speex\nrate=8000\nenabled=1\n";
+            write_blob(stack, (const unsigned char *)stack_speex, strlen(stack_speex));
+            write_blob(linphone, (const unsigned char *)linphone_speex, strlen(linphone_speex));
+            c300x_audio_codec_read_status(&codec);
+            check(strcmp(codec.state, "speex") == 0, "speex config reads back as speex");
+            check(codec.teardown_patch_installed,
+                  "speex still reports the installed drain patch");
+            check(codec.teardown_patch_active,
+                  "speex still reports the running patched daemon");
+            check(!c300x_audio_codec_reboot_required(&codec, "speex"),
+                  "a patched daemon under speex needs no reboot");
+            write_blob(stack, (const unsigned char *)stack_pcmu, strlen(stack_pcmu));
+            write_blob(linphone, (const unsigned char *)linphone_pcmu, strlen(linphone_pcmu));
+
             patched_data = read_blob(target, &patched_len);
             check(patched_data != NULL && patched_len == stock_len,
                   "patched file keeps its size");

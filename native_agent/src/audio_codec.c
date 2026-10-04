@@ -437,13 +437,18 @@ int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status) {
     stack_pcmu = stack_open_has("<enable_speex>0</enable_speex>");
     stack_speex = stack_open_has("<enable_speex>1</enable_speex>");
     read_linphone_facts(&lin_pcmu, &lin_speex);
-    if (stack_pcmu && lin_pcmu) {
+    /* The drain patch is a property of the daemon on disk, not of the codec
+     * selection: restoring speex deliberately leaves the patch in place. Read it
+     * in every mode so the reported state cannot contradict the device. */
+    {
         struct c300x_media_teardown_status teardown;
-        snprintf(status->state, sizeof(status->state), "pcmu");
         status->teardown_patch_installed = c300x_media_teardown_read_status(&teardown)
             && teardown.patched;
         status->teardown_patch_active = status->teardown_patch_installed
             && c300x_media_teardown_is_active();
+    }
+    if (stack_pcmu && lin_pcmu) {
+        snprintf(status->state, sizeof(status->state), "pcmu");
     } else if (stack_speex && lin_speex) {
         snprintf(status->state, sizeof(status->state), "speex");
     } else {

@@ -14,6 +14,19 @@
 - Refuse PCMU media startup when its required teardown patch cannot be installed
   or is not loaded by the running media daemon. Keep the activation requirement
   visible after an agent restart, including devices already configured for PCMU.
+- Roll the firmware teardown patch back before the agent removal deletes its
+  backups. Removal used to drop the original copy while leaving the patched
+  media daemon in place, so the device kept a modified binary with no way back.
+  The codec is restored first so PCMU is never left without its drain patch, and
+  a failed rollback keeps the agent files and backups untouched.
+- Publish a confirmed forwarding change exactly once. The readback wrote the
+  acknowledged state straight into the duplicate cache, which then swallowed the
+  device's own notification, so automations never saw the change at all. Present
+  since 1.9.5.
+- Evaluate the CPU watchdog on the sample that trips it. Subscribers were
+  notified before the watchdog had seen the new reading, so a session was only
+  closed on the following sample; discarded or stale readings no longer reach the
+  watchdog either.
 
 ### Added
 

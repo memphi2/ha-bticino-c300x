@@ -197,8 +197,9 @@ def test_remove_agent_script_restores_before_deleting_agent_files() -> None:
     assert sequence.index("restore_file_or_remove_block \"$IPTABLES\"") < sequence.index(
         "remove_startup"
     )
-    assert sequence.index("remove_startup") < sequence.index("stop_agent")
-    assert sequence.index("stop_agent") < sequence.index(
+    assert sequence.index("stop_agent") < sequence.index("restore_media_patches")
+    assert sequence.index("restore_media_patches") < sequence.index("remove_startup")
+    assert sequence.index("remove_startup") < sequence.index(
         'rm -rf "$AGENT_DIR" "$BACKUP_ROOT"'
     )
     assert sequence.index('rm -rf "$AGENT_DIR" "$BACKUP_ROOT"') < sequence.rindex(

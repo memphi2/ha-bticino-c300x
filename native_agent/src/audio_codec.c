@@ -778,3 +778,28 @@ int c300x_audio_codec_restore(
     status->changed = 1;
     return 1;
 }
+
+int c300x_audio_codec_remove_patches(char *error, size_t error_len)
+{
+    struct c300x_media_teardown_status teardown;
+    struct c300x_audio_codec_status codec;
+    char sb[C300X_MAX_PATH_LEN];
+    char lb[C300X_MAX_PATH_LEN];
+    int restore_teardown;
+
+    (void)c300x_media_teardown_read_status(&teardown);
+    restore_teardown = teardown.patched || teardown.backup_present;
+    if (!join_backup("stack_open.xml", sb, sizeof(sb))
+        || !join_backup("linphone.conf", lb, sizeof(lb))) {
+        set_err(error, error_len, "backup_path_failed");
+        return 0;
+    }
+    if (!restore_teardown && access(sb, F_OK) != 0 && access(lb, F_OK) != 0) {
+        return 1; /* No managed media changes on this device. */
+    }
+    /* Never remove the drain protection while the device is configured for PCMU. */
+    if (!c300x_audio_codec_restore(&codec, error, error_len)) {
+        return 0;
+    }
+    return !restore_teardown || c300x_media_teardown_restore(&teardown, error, error_len);
+}

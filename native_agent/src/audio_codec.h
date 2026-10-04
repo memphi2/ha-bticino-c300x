@@ -39,6 +39,7 @@ struct c300x_audio_codec_status {
 int c300x_audio_codec_device_is_pcmu(void);
 
 int c300x_audio_codec_ensure_coupled_patch(char *error, size_t error_len);
+int c300x_audio_codec_remove_patches(char *error, size_t error_len);
 
 int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status);
 int c300x_audio_codec_reboot_required(

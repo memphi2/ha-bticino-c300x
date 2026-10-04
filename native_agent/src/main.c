@@ -10,7 +10,7 @@ static void print_usage(const char *program)
     fprintf(
         stderr,
         "Usage: %s [--config PATH] [--check-config] [--diagnose-startup]"
-        " [--audio-codec status|apply|restore] [--version]\n",
+        " [--audio-codec status|apply|restore] [--restore-media-patches] [--version]\n",
         program
     );
 }
@@ -137,6 +137,7 @@ int main(int argc, char **argv)
     const char *config_path = "config.json";
     int check_config = 0;
     int diagnose_startup = 0;
+    int restore_media_patches = 0;
     const char *audio_codec_action = NULL;
     struct c300x_config config;
     char error[256] = {0};
@@ -156,6 +157,8 @@ int main(int argc, char **argv)
                 return 2;
             }
             audio_codec_action = argv[++index];
+        } else if (strcmp(argv[index], "--restore-media-patches") == 0) {
+            restore_media_patches = 1;
         } else if (strcmp(argv[index], "--check-config") == 0) {
             check_config = 1;
         } else if (strcmp(argv[index], "--diagnose-startup") == 0) {
@@ -168,6 +171,14 @@ int main(int argc, char **argv)
             print_usage(argv[0]);
             return 2;
         }
+    }
+
+    if (restore_media_patches) {
+        if (!c300x_audio_codec_remove_patches(error, sizeof(error))) {
+            fprintf(stderr, "Failed to restore media patches: %s\n", error);
+            return 1;
+        }
+        return 0;
     }
 
     if (audio_codec_action != NULL) {

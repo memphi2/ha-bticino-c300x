@@ -8,6 +8,8 @@ INIT_SCRIPT="${C300X_INIT_SCRIPT:-/etc/init.d/c300x-native-agent}"
 INIT_LINK="${C300X_INIT_LINK:-/etc/rc5.d/S40c300x-native-agent}"
 IPTABLES="${C300X_IPTABLES:-/etc/network/if-pre-up.d/iptables}"
 IPTABLES6="${C300X_IPTABLES6:-/etc/network/if-pre-up.d/iptables6}"
+SSH_INIT="${C300X_SSH_INIT:-/etc/init.d/dropbear}"
+REBOOT="${C300X_REBOOT:-/sbin/reboot}"
 IPTABLES_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables"
 IPTABLES6_BACKUP="$BACKUP_ROOT/original/etc/network/if-pre-up.d/iptables6"
 TMP_SELF="/tmp/c300x-remove-agent.$$"
@@ -24,7 +26,7 @@ if [ "${1:-}" = "remove" ]; then
 fi
 
 start_ssh() {
-    /etc/init.d/dropbear start >/dev/null 2>&1 || true
+    "$SSH_INIT" start >/dev/null 2>&1 || true
 }
 
 remount_root_rw() {
@@ -106,8 +108,17 @@ stop_agent() {
     pidof c300x-agent-native >/dev/null 2>&1 && killall c300x-agent-native >/dev/null 2>&1 || true
 }
 
+restore_media_patches() {
+    if ! C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
+        C300X_MEDIA_TEARDOWN_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
+        "$AGENT_DIR/c300x-agent-native" --restore-media-patches; then
+        printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
+        exit 1
+    fi
+}
+
 schedule_reboot() {
-    /sbin/reboot >/dev/null 2>&1 &
+    "$REBOOT" >/dev/null 2>&1 &
 }
 
 start_ssh
@@ -120,8 +131,9 @@ if ! restore_file_or_remove_block "$IPTABLES" "$IPTABLES_BACKUP" "# c300x-native
     printf 'Failed to restore IPv4 firewall patch; keeping agent files and backups in place\n' >&2
     exit 1
 fi
-remove_startup
 stop_agent
+restore_media_patches
+remove_startup
 rm -rf "$AGENT_DIR" "$BACKUP_ROOT"
 start_ssh
 rm -f "$TMP_SELF"

@@ -489,7 +489,8 @@ void c300x_audio_codec_status_body(
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
         "\"backup_present\":%s,\"teardown_patch_installed\":%s,"
-        "\"teardown_patch_active\":%s,\"reboot_required\":%s}\n",
+        "\"teardown_patch_active\":%s,\"root_writable\":%s,"
+        "\"reboot_required\":%s}\n",
         status->supported ? "true" : "false",
         running,
         status->state,
@@ -497,6 +498,7 @@ void c300x_audio_codec_status_body(
         status->backup_present ? "true" : "false",
         status->teardown_patch_installed ? "true" : "false",
         status->teardown_patch_active ? "true" : "false",
+        status->remount_ro_failed ? "true" : "false",
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false"
     );
 }
@@ -516,7 +518,8 @@ void c300x_audio_codec_action_body(
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
         "\"backup_present\":%s,\"changed\":%s,\"reboot_required\":%s,"
-        "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,\"rebooting\":%s}\n",
+        "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,"
+        "\"root_writable\":%s,\"rebooting\":%s}\n",
         status->supported ? "true" : "false",
         running,
         status->state,
@@ -526,6 +529,7 @@ void c300x_audio_codec_action_body(
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false",
         status->teardown_patch_installed ? "true" : "false",
         status->teardown_patch_active ? "true" : "false",
+        status->remount_ro_failed ? "true" : "false",
         rebooting ? "true" : "false"
     );
 }
@@ -626,6 +630,7 @@ int c300x_audio_codec_apply(
     char *lin_out = NULL;
     size_t stack_len = 0;
     size_t lin_len = 0;
+    int ro_failed;
 
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
@@ -710,10 +715,10 @@ int c300x_audio_codec_apply(
     }
     free(stack_out);
     free(lin_out);
-    if (!remount("ro")) {
-        set_err(error, error_len, "remount_ro_failed");
-        return 0;
-    }
+    /* The device files are already written. A busy root cannot undo that, and
+     * the boot after this switch mounts read-only again, so report the failed
+     * remount instead of failing an operation that succeeded. */
+    ro_failed = !remount("ro");
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
         return 0;
@@ -722,6 +727,7 @@ int c300x_audio_codec_apply(
         set_err(error, error_len, "target_state_mismatch");
         return 0;
     }
+    status->remount_ro_failed = ro_failed;
     status->changed = 1;
     return 1;
 }
@@ -733,6 +739,7 @@ int c300x_audio_codec_restore(
 ) {
     char sb[C300X_MAX_PATH_LEN];
     char lb[C300X_MAX_PATH_LEN];
+    int ro_failed;
 
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
@@ -768,10 +775,7 @@ int c300x_audio_codec_restore(
         set_err(error, error_len, "restore_failed");
         return 0;
     }
-    if (!remount("ro")) {
-        set_err(error, error_len, "remount_ro_failed");
-        return 0;
-    }
+    ro_failed = !remount("ro");
     if (!c300x_audio_codec_read_status(status)) {
         set_err(error, error_len, "status_failed");
         return 0;
@@ -780,6 +784,7 @@ int c300x_audio_codec_restore(
         set_err(error, error_len, "target_state_mismatch");
         return 0;
     }
+    status->remount_ro_failed = ro_failed;
     status->changed = 1;
     return 1;
 }

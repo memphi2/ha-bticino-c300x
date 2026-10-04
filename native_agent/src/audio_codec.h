@@ -28,6 +28,7 @@ struct c300x_audio_codec_status {
     int changed;          /* last apply/restore actually wrote device files */
     int teardown_patch_installed;
     int teardown_patch_active;
+    int remount_ro_failed; /* write succeeded, root stayed writable */
     char state[C300X_AUDIO_CODEC_STATE_LEN]; /* "speex" | "pcmu" | "partial" */
     char error[C300X_MAX_ERROR_LEN];
 };

@@ -281,6 +281,39 @@ int main(void)
                   "speex still reports the running patched daemon");
             check(!c300x_audio_codec_reboot_required(&codec, "speex"),
                   "a patched daemon under speex needs no reboot");
+
+            /* "mount point is busy" on the closing read-only remount must not
+             * turn a completed switch into a failure: the write already
+             * happened, and HA would otherwise show the old codec. */
+            char stub_dir[512];
+            char stub[512];
+            char path_value[1024];
+            const char *old_path = getenv("PATH");
+            const char *stub_body = "#!/bin/sh\ncase \"$*\" in *remount,ro*) exit 1;; esac\nexit 0\n";
+
+            snprintf(stub_dir, sizeof(stub_dir), "%s/mountstub", tmp);
+            mkdir(stub_dir, 0755);
+            snprintf(stub, sizeof(stub), "%s/mount", stub_dir);
+            write_blob(stub, (const unsigned char *)stub_body, strlen(stub_body));
+            snprintf(path_value, sizeof(path_value), "%s:%s", stub_dir,
+                     old_path != NULL ? old_path : "/usr/bin:/bin");
+            setenv("PATH", path_value, 1);
+            unsetenv("C300X_AUDIO_NO_REMOUNT");
+            check(c300x_audio_codec_apply(&codec, error, sizeof(error)) == 1,
+                  "a failed closing remount still reports the applied switch");
+            check(codec.changed, "the applied switch is reported as a write");
+            check(codec.remount_ro_failed,
+                  "the unclosed read-only remount is reported, not swallowed");
+            check(strcmp(codec.state, "pcmu") == 0, "the switch reached pcmu");
+            setenv("C300X_AUDIO_NO_REMOUNT", "1", 1);
+            if (old_path != NULL) {
+                setenv("PATH", old_path, 1);
+            } else {
+                unsetenv("PATH");
+            }
+            unlink(stub);
+            rmdir(stub_dir);
+
             write_blob(stack, (const unsigned char *)stack_pcmu, strlen(stack_pcmu));
             write_blob(linphone, (const unsigned char *)linphone_pcmu, strlen(linphone_pcmu));
 

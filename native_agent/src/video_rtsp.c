@@ -77,13 +77,6 @@ static void utc_now(char *out, size_t out_len)
     strftime(out, out_len, "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
 }
 
-static void set_last_error(struct c300x_video *video, const char *message)
-{
-    pthread_mutex_lock(&video->mutex);
-    snprintf(video->last_error, sizeof(video->last_error), "%s", message != NULL ? message : "error");
-    pthread_mutex_unlock(&video->mutex);
-}
-
 static int external_media_active_locked(struct c300x_video *video)
 {
     long long now;
@@ -140,18 +133,25 @@ static int c300x_video_ensure_running(struct c300x_video *video)
     }
 
     pthread_mutex_lock(&video->mutex);
-    if (video->running || video->media_starting) {
+    if (video->running) {
         pthread_mutex_unlock(&video->mutex);
         return 1;
     }
+    if (video->media_starting) {
+        pthread_mutex_unlock(&video->mutex);
+        return 0;
+    }
     video->media_starting = 1;
+    video->last_error[0] = '\0';
     pthread_mutex_unlock(&video->mutex);
 
     if (!c300x_media_bridge_start(video->config, video)) {
         pthread_mutex_lock(&video->mutex);
         video->media_starting = 0;
+        if (video->last_error[0] == '\0') {
+            c300x_copy_string(video->last_error, sizeof(video->last_error), "media_bridge_start_failed");
+        }
         pthread_mutex_unlock(&video->mutex);
-        set_last_error(video, "media_bridge_start_failed");
         return 0;
     }
 
@@ -259,7 +259,7 @@ void c300x_video_set_ring_receiver_enabled(struct c300x_video *video, int enable
     if (video == NULL) {
         return;
     }
-    if (enabled) {
+    if (enabled && c300x_video_ensure_running(video)) {
         (void)c300x_media_ring_receiver_start(video->config, video);
     } else {
         c300x_media_ring_receiver_stop(video);
@@ -336,7 +336,7 @@ void c300x_video_set_doorstation_audio_gain_tenths(
 
 int c300x_video_home_call_start(struct c300x_video *video, int duration_seconds)
 {
-    if (video == NULL || !video->enabled) {
+    if (!c300x_video_ensure_running(video)) {
         return 0;
     }
     pthread_mutex_lock(&video->mutex);

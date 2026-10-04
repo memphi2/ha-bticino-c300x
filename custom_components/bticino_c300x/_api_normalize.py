@@ -343,6 +343,7 @@ def normalize_device_user_status(data: Any) -> dict[str, Any]:
         "available": available,
         "supported": _optional_bool(data.get("supported")) is True,
         "domain_present": status_bool("domain_present"),
+        "device_user_present": status_bool("device_user_present"),
         "homeassistant_user_present": status_bool("homeassistant_user_present"),
         "accounts_homeassistant_present": status_bool(
             "accounts_homeassistant_present"
@@ -386,6 +387,7 @@ _SAFE_DEVICE_USER_RAW_KEYS = frozenset(
         "status_available",
         "supported",
         "domain_present",
+        "device_user_present",
         "homeassistant_user_present",
         "accounts_homeassistant_present",
         "route_int_homeassistant_present",

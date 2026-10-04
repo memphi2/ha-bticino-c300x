@@ -88,6 +88,7 @@ sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import repair_issues  # noqa: E402
 from custom_components.bticino_c300x.agent_update import AgentUpdateState  # noqa: E402
+from custom_components.bticino_c300x.api import normalize_self_test  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
@@ -632,6 +633,51 @@ def test_failed_self_test_creates_non_fixable_repair_issue() -> None:
     assert "ipv4_media_ports_missing" not in issue["translation_placeholders"]["reasons"]
     assert "C300X Firewall switch" in issue["translation_placeholders"]["actions"]
     assert "IPv4 media and talkback ports" in issue["translation_placeholders"]["actions"]
+
+
+def test_195_false_device_sip_user_repair_is_removed_without_hiding_bad_routes() -> None:
+    payload = {
+        "ok": False,
+        "checks": {
+            "homeassistant_user": {
+                "ok": False,
+                "reason": "device_sip_user_missing",
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+            },
+            "device_routing": {"ok": True},
+        },
+    }
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            capabilities={"doorbell_video": {"supported": True}},
+            connection_state=types.SimpleNamespace(available=True),
+            self_test_status=normalize_self_test(payload),
+        ),
+    )
+    issue_id = repair_issue_id(DEVICE_AGENT_SELF_TEST_FAILED_ISSUE, entry.entry_id)
+    CREATED_ISSUES[issue_id] = {"translation_key": DEVICE_AGENT_SELF_TEST_FAILED_ISSUE}
+
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    assert issue_id in DELETED_ISSUES
+    assert issue_id not in CREATED_ISSUES
+    assert repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
+    assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
+
+    payload["checks"]["homeassistant_user"]["routes_consistent"] = False
+    entry.runtime_data.self_test_status = normalize_self_test(payload)
+    async_sync_entry_repair_issues(FakeHass(), entry)
+
+    issue = CREATED_ISSUES[issue_id]
+    assert "route files are inconsistent" in issue["translation_placeholders"]["reasons"]
+    assert "Home Assistant media-user setup" in issue["translation_placeholders"]["actions"]
+    readiness = repair_issues.media_readiness(entry)
+    assert readiness["status"] == "blocked"
+    assert "homeassistant_user" in readiness["failed_checks"]
+    assert "BTicino app" not in str(issue)
 
 
 def test_failed_self_test_talkback_points_to_ipv4_firewall_switch() -> None:

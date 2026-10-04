@@ -146,6 +146,7 @@ def test_native_agent_device_user_status_does_not_expose_sip_identity() -> None:
     )[0]
 
     assert '"\\"domain_present\\":%s,"' in body
+    assert '"\\"device_user_present\\":%s,"' in body
     assert '"\\"media_identity_available\\":%s,"' in body
     assert '"\\"from_aor\\"' not in body
     assert '"\\"to_aor\\"' not in body

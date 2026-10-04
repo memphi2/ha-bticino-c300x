@@ -155,6 +155,7 @@ _DEVICE_USER_DIAGNOSTIC_KEYS = (
     "available",
     "supported",
     "domain_present",
+    "device_user_present",
     "homeassistant_user_present",
     "accounts_homeassistant_present",
     "route_int_homeassistant_present",

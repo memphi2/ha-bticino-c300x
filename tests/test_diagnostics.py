@@ -223,6 +223,7 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
             "supported": True,
             "domain_present": True,
             "homeassistant_user_present": False,
+            "device_user_present": False,
             "media_identity_available": False,
             "account_label": "Private Home Label",
         },
@@ -762,6 +763,7 @@ def test_diagnostics_report_media_user_and_self_test_failure_reasons() -> None:
             "routes_consistent": True,
             "device_routing_applied": False,
             "device_routing_state": "missing",
+            "device_user_present": False,
             "device_routing_error": "RuntimeError: /home/bticino/cfg/private.conf",
             "account_label": "Private Home Label",
             "raw": {"aor": "sip:private@device"},
@@ -788,6 +790,7 @@ def test_diagnostics_report_media_user_and_self_test_failure_reasons() -> None:
     assert device_user is not None
     assert device_user["domain_present"] is True
     assert device_user["homeassistant_user_present"] is False
+    assert device_user["device_user_present"] is False
     assert device_user["media_identity_available"] is False
     assert device_user["device_routing_state"] == "missing"
     # Label, AOR and raw device paths never reach the report.

@@ -313,7 +313,6 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
         if (
             bool(status.get("reboot_required"))
             and configured_state in ("speex", "pcmu")
-            and configured_state != self._state
         ):
             self._pending_option = str(configured_state)
             self._seen_reboot_gap = False

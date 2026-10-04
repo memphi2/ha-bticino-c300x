@@ -68,14 +68,6 @@ def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
             reason = self_test_check_reason(checks, name)
             if self_test_failure_is_optional_ipv6_only(name, reason, checks):
                 warnings.append(f"{name}:optional_ipv6")
-            elif name == "homeassistant_user" and reason == "device_sip_user_missing":
-                # The device's own c300x SIP user is gone. On-demand video is
-                # broken, but Home Assistant cannot create it (it is provisioned
-                # device-side with certificates after the unit is registered via
-                # the BTicino app). Report it as its own failed check so it does
-                # not masquerade as the HA media-user check and offer a "Fix now"
-                # that cannot help.
-                failed.append("device_sip_user")
             else:
                 failed.append(name)
     if isinstance(self_test, Mapping) and not self_test:

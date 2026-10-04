@@ -302,17 +302,6 @@ int c300x_self_test_json(
         } else if (!user_status.homeassistant_user_present) {
             user_ok = 0;
             user_reason = "homeassistant_user_missing";
-        } else if (!user_status.device_user_present) {
-            /* The device's own "c300x" SIP user is what on-demand targets
-             * (c300x@domain). domain_present can be satisfied by a fallback
-             * (another user line, the registration file, flexisip.conf), so a
-             * missing c300x user slips past media_identity as "ready" while every
-             * on-demand start fails with ondemand_sip_setup_failed. This user is
-             * device-side provisioning (created with certs after the unit is
-             * registered once via the BTicino app), so HA cannot repair it -- but
-             * it must be reported, not hidden behind a green readiness. */
-            user_ok = 0;
-            user_reason = "device_sip_user_missing";
         } else if (!user_status.routes_consistent) {
             user_ok = 0;
             user_reason = "homeassistant_routes_inconsistent";
@@ -361,6 +350,7 @@ int c300x_self_test_json(
         "\"clients\":%d,\"max_clients\":%d},"
         "\"talkback_rtp\":{\"ok\":%s,\"reason\":\"%s\",\"port\":%u},"
         "\"homeassistant_user\":{\"ok\":%s,\"reason\":\"%s\",\"supported\":%s,\"media_identity_available\":%s,"
+        "\"device_user_present\":%s,"
         "\"homeassistant_user_present\":%s,\"routes_consistent\":%s,\"error\":%s},"
         "\"device_routing\":{\"ok\":%s,\"reason\":\"%s\",\"routing_supported\":%s,\"routing_applied\":%s,"
         "\"routing_state\":%s,\"routing_error\":%s},"
@@ -405,6 +395,7 @@ int c300x_self_test_json(
         user_reason,
         bool_json(user_status.supported),
         bool_json(user_status.media_identity_available),
+        bool_json(user_status.device_user_present),
         bool_json(user_status.homeassistant_user_present),
         bool_json(user_status.routes_consistent),
         user_error_json,

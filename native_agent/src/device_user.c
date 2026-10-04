@@ -1130,11 +1130,8 @@ static int read_status_from_buffers(
         sizeof(ha_aor),
         &status->homeassistant_user_present
     );
-    /* device_domain is non-empty here only when a real "c300x" user line exists
-     * (parse_users_file). Capture that BEFORE the domain fallbacks below can fill
-     * device_domain from another user line or the registration/config files --
-     * otherwise a device whose own c300x SIP user is gone still looks provisioned
-     * and on-demand (which targets c300x@domain) fails while readiness says ready. */
+    /* Record the literal database entry before domain fallback. Its absence
+     * alone does not establish whether the SIP destination is reachable. */
     status->device_user_present = device_domain[0] != '\0';
     status->domain_present = device_domain[0] != '\0'
         || first_users_file_domain(users->data, device_domain, sizeof(device_domain))

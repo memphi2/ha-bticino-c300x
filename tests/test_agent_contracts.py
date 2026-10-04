@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import pytest
+
 from custom_components.bticino_c300x.agent_contracts import (
     AgentDiagnosticsStatus,
     AuthConfigStatus,
@@ -279,3 +281,58 @@ def test_self_test_contract_preserves_unknown_check_state() -> None:
         == "device_user_status_unavailable"
     )
     assert status.checks["device_routing"].ok is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "reason"),
+    [
+        ("routes_consistent", True, "homeassistant_user_ok"),
+        ("routes_consistent", False, "homeassistant_routes_inconsistent"),
+        ("homeassistant_user_present", False, "homeassistant_user_missing"),
+        ("media_identity_available", False, "media_identity_missing"),
+        ("routes_consistent", None, "device_user_status_unavailable"),
+        ("homeassistant_user_present", "true", "device_user_status_unavailable"),
+    ],
+)
+def test_self_test_195_device_user_check_uses_reported_setup_facts(
+    field: str, value: object, reason: str
+) -> None:
+    raw_check = {
+        "ok": False,
+        "reason": "device_sip_user_missing",
+        "homeassistant_user_present": True,
+        "media_identity_available": True,
+        "routes_consistent": True,
+        field: value,
+    }
+    payload = {"ok": False, "checks": {"homeassistant_user": raw_check}}
+
+    status = normalize_self_test(payload)
+
+    assert status.checks["homeassistant_user"].reason == reason
+    assert status.checks["homeassistant_user"].ok is (reason == "homeassistant_user_ok")
+    assert status.ok is (reason == "homeassistant_user_ok")
+    assert status.raw == payload
+    assert status.checks["homeassistant_user"].raw == raw_check
+    assert raw_check["ok"] is False
+    assert raw_check["reason"] == "device_sip_user_missing"
+
+
+def test_self_test_195_device_user_correction_keeps_other_failures() -> None:
+    status = normalize_self_test({
+        "ok": False,
+        "checks": {
+            "homeassistant_user": {
+                "ok": False,
+                "reason": "device_sip_user_missing",
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+            },
+            "device_routing": {"ok": False, "reason": "device_routing_missing"},
+        },
+    })
+
+    assert status.checks["homeassistant_user"].ok is True
+    assert status.checks["device_routing"].ok is False
+    assert status.ok is False

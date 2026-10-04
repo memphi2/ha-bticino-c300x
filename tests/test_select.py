@@ -531,6 +531,31 @@ def test_audio_codec_select_partial_state_has_no_option() -> None:
     assert entity.current_option is None
 
 
+def test_audio_codec_select_retains_same_codec_patch_activation_pending() -> None:
+    entry = _audio_codec_entry()
+    entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]
+    status = {
+        "state": "pcmu",
+        "running_state": "pcmu",
+        "configured_state": "pcmu",
+        "reboot_required": True,
+        "teardown_patch_installed": True,
+        "teardown_patch_active": False,
+    }
+
+    entity._apply_status(status)
+    entity._apply_status(status)
+
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] == "pcmu"
+    assert entry.runtime_data.event_state.audio_codec == "pcmu"
+
+    entity._apply_status({**status, "reboot_required": False, "teardown_patch_active": True})
+
+    assert entity.current_option == "pcmu"
+    assert entity.extra_state_attributes["pending_option"] is None
+
+
 def test_audio_codec_select_unknown_option_is_ignored() -> None:
     entry = _audio_codec_entry()
     entity = C300XAudioCodecSelect(entry)  # type: ignore[arg-type]

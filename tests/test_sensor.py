@@ -130,7 +130,10 @@ if "homeassistant.components.sensor" not in sys.modules:
     sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import agent_diagnostics
-from custom_components.bticino_c300x._api_normalize import normalize_agent_diagnostics
+from custom_components.bticino_c300x._api_normalize import (
+    normalize_agent_diagnostics,
+    normalize_self_test,
+)
 from custom_components.bticino_c300x.api_errors import C300XAgentApiError
 from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
@@ -557,16 +560,15 @@ def test_media_readiness_warns_when_ring_forwarding_is_not_homeassistant() -> No
         )
 
 
-def test_media_readiness_blocks_when_device_sip_user_missing() -> None:
-    # The device's own c300x SIP user is gone (device_sip_user_missing). On-demand
-    # video is broken, so readiness must not stay "ready". It is reported as its
-    # own failed check -- not as the HA media-user check, which would offer a
-    # "Fix now" that cannot recreate a device-side, portal-provisioned user.
+def test_media_readiness_accepts_195_without_literal_device_sip_user() -> None:
+    connection = _FakeConnectionState()
+    connection.event_subscription_last_success_at = "2026-10-04T10:00:00Z"
     entry = _FakeEntry(
         options={"video_enabled": True},
         runtime_data=_FakeRuntimeData(
+            connection_state=connection,
             capabilities={"doorbell_video": {"supported": True}},
-            self_test_status={
+            self_test_status=normalize_self_test({
                 "ok": False,
                 "checks": {
                     "capabilities": {"ok": True},
@@ -576,20 +578,44 @@ def test_media_readiness_blocks_when_device_sip_user_missing() -> None:
                     "homeassistant_user": {
                         "ok": False,
                         "reason": "device_sip_user_missing",
+                        "homeassistant_user_present": True,
+                        "media_identity_available": True,
+                        "routes_consistent": True,
                     },
                     "device_routing": {"ok": True},
                     "startup": {"ok": True},
                 },
-            },
+            }),
         ),
     )
 
     readiness = media_readiness(entry)  # type: ignore[arg-type]
 
-    assert readiness["status"] == "blocked"
-    assert "device_sip_user" in readiness["failed_checks"]
-    assert "homeassistant_user" not in readiness["failed_checks"]
-    assert readiness["recommended_action"] == "register_device_on_bticino_app"
+    assert readiness["status"] == "ready"
+    assert readiness["failed_checks"] == []
+    assert readiness["warnings"] == []
+    assert readiness["media_user_ok"] is True
+    assert readiness["self_test_ok"] is True
+    assert readiness["recommended_action"] == "no_action_needed"
+
+    entry.runtime_data.self_test_status = normalize_self_test({
+        "ok": True,
+        "checks": {
+            "homeassistant_user": {
+                "ok": True,
+                "reason": "homeassistant_user_ok",
+                "device_user_present": False,
+                "homeassistant_user_present": True,
+                "media_identity_available": True,
+                "routes_consistent": True,
+            },
+            "device_routing": {"ok": True},
+        },
+    })
+    readiness = media_readiness(entry)  # type: ignore[arg-type]
+    assert readiness["status"] == "ready"
+    assert readiness["media_user_ok"] is True
+    assert readiness["warnings"] == []
 
 
 def test_media_readiness_reports_unprovisioned_forwarding_state() -> None:

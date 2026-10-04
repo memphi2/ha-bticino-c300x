@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socketserver
 import subprocess
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -12,11 +13,15 @@ import pytest
 
 from native_agent.test.smoke import (
     TOKEN,
+    CallbackServer,
     api_get,
     api_post,
+    callback_url,
     free_tcp_port,
+    free_udp_port,
     managed_tcp_server,
     read_frame,
+    send_udp_event,
     wait_for_health,
 )
 
@@ -60,6 +65,7 @@ class ForwardingDevice(socketserver.ThreadingTCPServer):
         self.applied_mode: int | None = 1
         self.write_reply = "*#*1##"
         self.readback_reply: str | None = None
+        self.udp_port = free_udp_port()
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +91,10 @@ def forwarding_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def forwarding_agent(
     forwarding_binary: Path, tmp_path: Path
 ) -> Iterator[tuple[ForwardingDevice, int]]:
-    with managed_tcp_server(ForwardingDevice()) as device:
+    with (
+        managed_tcp_server(ForwardingDevice()) as device,
+        managed_tcp_server(CallbackServer()) as callback,
+    ):
         api_port = free_tcp_port()
         ui_port = free_tcp_port()
         config = {
@@ -98,7 +107,7 @@ def forwarding_agent(
             },
             "maintenance": {"enabled": False},
             "activations": {"enabled": False, "autoDiscover": False},
-            "events": {"udp": {"enabled": False}},
+            "events": {"udp": {"enabled": True, "port": device.udp_port}},
             "answeringMachine": {"messages": {"enabled": False}},
             "memos": {"enabled": False},
             "systemMetrics": {"enabled": False},
@@ -119,8 +128,18 @@ def forwarding_agent(
             try:
                 wait_for_health(api_port)
                 assert api_get(api_port, FORWARDING_PATH)["mode"] == "enabled"
+                api_post(
+                    api_port, "/api/v1/events/subscriptions",
+                    {
+                        "callback_url": callback_url(callback),
+                        "token": "event-token",
+                        "events": ["smartphone_forwarding.changed"],
+                    },
+                    expected_status=201,
+                )
                 device.frames.clear()
                 yield device, api_port
+                assert [item["body"] for item in callback.requests] == _forwarding_events(api_port)
             finally:
                 process.terminate()
                 try:
@@ -169,6 +188,38 @@ def test_forwarding_success_requires_fresh_readback(
     assert response["mode_raw"] == f"*#8**37*{code}##"
     assert device.frames == [f"*#8**#37*{code}##", "*#8**37##"]
     assert api_get(port, "/api/v1/state")["state"]["smartphone_forwarding"] == mode
+    events = _forwarding_events(port)
+    assert [event["data"]["mode"] for event in events] == (
+        [] if mode == "enabled" else [mode]
+    )
+
+
+def _forwarding_events(port: int) -> list[dict]:
+    return [
+        event
+        for event in api_get(port, "/api/v1/events/recent")["events"]
+        if event["type"] == "smartphone_forwarding.changed"
+    ]
+
+
+def test_confirmed_forwarding_publishes_once_then_suppresses_device_duplicate(
+    forwarding_agent: tuple[ForwardingDevice, int],
+) -> None:
+    device, port = forwarding_agent
+    api_post(port, FORWARDING_PATH, {"mode": "homeassistant"})
+    assert [event["data"]["mode"] for event in _forwarding_events(port)] == [
+        "homeassistant"
+    ]
+    send_udp_event(device.udp_port, "*#8**37*1##")
+    # A second, different notification confirms the UDP queue was consumed.
+    send_udp_event(device.udp_port, "*#8**37*2##")
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        events = _forwarding_events(port)
+        if len(events) >= 2:
+            break
+        time.sleep(0.01)
+    assert [event["data"]["mode"] for event in events] == ["homeassistant", "blocked"]
 
 
 @pytest.mark.parametrize("write_reply", ["*#*1##", "*#8**37*1##"])
@@ -198,6 +249,7 @@ def test_forwarding_mismatch_updates_cache_without_claiming_success(
     assert (
         api_get(port, "/api/v1/state")["state"]["smartphone_forwarding"] == actual_mode
     )
+    assert [event["data"]["mode"] for event in _forwarding_events(port)] == [actual_mode]
 
 
 @pytest.mark.parametrize(

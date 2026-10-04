@@ -7966,7 +7966,6 @@ static void handle_smartphone_post(
     char failure_json[64];
     int status = 200;
     int enabled;
-    int readback_code;
 
     c300x_json_string_field(request->body, "mode", mode, sizeof(mode));
     if (mode[0] == '\0' && c300x_json_bool_field(request->body, "enabled", &enabled)) {
@@ -7987,9 +7986,13 @@ static void handle_smartphone_post(
         return;
     }
     readback = c300x_smartphone_mode_from_reply(readback_reply);
-    if (c300x_smartphone_code_from_reply(readback_reply, &readback_code)) {
-        remember_smartphone_forwarding_mode(runtime, readback_code);
-        sync_ring_receiver_for_forwarding(runtime);
+    if (readback != NULL) {
+        char type[64];
+        char data[768];
+
+        if (map_openwebnet_event(runtime, readback_reply, type, sizeof(type), data, sizeof(data))) {
+            dispatch_event(config, runtime, type, data, 0);
+        }
     }
     c300x_json_string(reply, reply_json, sizeof(reply_json));
     c300x_json_string(readback_reply, readback_json, sizeof(readback_json));

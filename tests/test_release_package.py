@@ -213,8 +213,26 @@ def test_release_tag_checker_matches_current_metadata() -> None:
     version = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))[
         "integration_version"
     ]
+    tag = f"v{version}"
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    heading = checker._changelog_heading(changelog, tag)
 
-    assert checker.validate_release_tag(f"v{version}") == []
+    failures = checker.validate_release_tag(tag)
+    if heading is not None and checker.DATE_RE.fullmatch(heading):
+        assert failures == []
+    else:
+        # While a version is being prepared its sections are still undated, and
+        # the date gate is expected to reject the tag. Every other release
+        # metadata site must already be consistent.
+        assert sorted(failures) == sorted(
+            [
+                f"CHANGELOG.md {tag} section must be dated, got {heading!r} -- "
+                "a released tag cannot carry an unreleased section",
+                f".github/release-notes/{tag}.md must carry a dated "
+                "'## <date>' section",
+            ]
+        )
+
     assert checker.validate_release_tag(version) == [
         f"release tag must use vX.Y.Z format, got {version!r}"
     ]

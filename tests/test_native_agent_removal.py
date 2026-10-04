@@ -95,15 +95,47 @@ def _remove(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _teardown_target_name() -> str:
+    name = list("??_??_?????")
+    for offset, value in (
+        (0, "b"), (1, "t"), (3, "a"), (4, "v"),
+        (6, "m"), (7, "e"), (8, "d"), (9, "i"), (10, "a"),
+    ):
+        name[offset] = value
+    return "".join(name)
+
+
+def _load_builder():
+    import importlib.util
+
+    path = ROOT / "scripts" / "media_teardown_builder.py"
+    spec = importlib.util.spec_from_file_location("media_teardown_builder", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    import sys as _sys
+
+    _sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _apply_pcmu(env: dict[str, str]) -> bytes:
     stock = os.environ.get("C300X_TEARDOWN_TEST_STOCK")
     if not stock or not Path(stock).is_file():
         pytest.skip("C300X_TEARDOWN_TEST_STOCK is required for verified firmware rollback")
     original = Path(stock).read_bytes()
-    Path(env["C300X_MEDIA_TEARDOWN_TARGET"]).write_bytes(original)
+    target = Path(env["C300X_MEDIA_TEARDOWN_TARGET"])
+    target.write_bytes(original)
     result = _cli(env, "--audio-codec", "apply")
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["state"] == "pcmu"
+    # PCMU no longer applies the drain patch, so model a device from the coupled
+    # release that still carries it: a patched daemon with a stock backup. The
+    # removal path (and the startup rollback) must still return it to stock.
+    _load_builder().patch_media(Path(stock), target)
+    backup_dir = Path(env["C300X_MEDIA_TEARDOWN_BACKUP_DIR"])
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    (backup_dir / _teardown_target_name()).write_bytes(original)
     return original
 
 

@@ -77,6 +77,33 @@ def test_teardown_patch_roundtrip_against_stock_binary(tmp_path: Path) -> None:
     assert "skipped stock roundtrip" not in result.stdout
 
 
+def test_pcmu_is_no_longer_coupled_to_the_drain_patch() -> None:
+    """Hardware testing disproved the drain patch, so it is no longer applied.
+
+    PCMU must start without it, the codec switch must not patch the daemon, and
+    the media bridge must not gate startup on it. A startup rollback returns any
+    device still carrying the patch to stock.
+    """
+
+    audio_codec = (NATIVE / "src" / "audio_codec.c").read_text(encoding="utf-8")
+    media_bridge = (NATIVE / "src" / "media_bridge.c").read_text(encoding="utf-8")
+    main_c = (NATIVE / "src" / "main.c").read_text(encoding="utf-8")
+
+    assert "ensure_coupled" not in audio_codec, (
+        "the PCMU/teardown coupling must be gone from the codec apply path"
+    )
+    assert "ensure_coupled" not in media_bridge, (
+        "the media bridge must not gate startup on the teardown patch"
+    )
+    assert "teardown_patch_required" not in audio_codec
+    assert "c300x_media_teardown_apply" not in audio_codec, (
+        "the codec must never apply the drain patch"
+    )
+    assert "c300x_audio_codec_rollback_teardown_patch" in main_c, (
+        "agent startup must roll a still-patched daemon back to stock"
+    )
+
+
 def _load_builder():
     import importlib.util
 

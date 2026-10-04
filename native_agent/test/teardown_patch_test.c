@@ -80,27 +80,6 @@ static void put_patched_drains(unsigned char *buffer)
     memcpy(buffer + DRAIN_1, patched, sizeof(patched));
 }
 
-static void check_media_blocked(const char *expected_error)
-{
-    struct c300x_config config = {0};
-    struct c300x_video_status status;
-    char error[128];
-    config.video_enabled = 1;
-    struct c300x_video *video = c300x_video_create(&config, error, sizeof(error));
-    check(video != NULL, "blocked video still exposes status");
-    check(!c300x_video_activate(video, 1), "on-demand activation refuses unsafe PCMU");
-    c300x_video_set_ring_receiver_enabled(video, 1);
-    check(!c300x_video_home_call_start(video, 30), "home call cannot bypass the guard");
-    c300x_video_status(video, &status);
-    check(!status.running && !status.bridge_running && !status.ring_receiver_running,
-          "refused bridge creates no media listeners");
-    check(!status.bridge_active_threads && !status.bridge_open_fds,
-          "refused bridge creates no media threads or sockets");
-    check(strncmp(status.last_error, expected_error, strlen(expected_error)) == 0,
-          "status preserves the specific guard error");
-    c300x_video_destroy(video);
-}
-
 int main(void)
 {
     char target[512];
@@ -122,8 +101,6 @@ int main(void)
     struct c300x_media_teardown_status status;
     char error[128];
     unsigned char *buffer;
-    struct stat before;
-    struct stat after;
     struct c300x_audio_codec_status codec;
 
     if (tmp == NULL || tmp[0] == '\0') {
@@ -167,7 +144,6 @@ int main(void)
     check(strcmp(status.state, "missing") == 0, "missing target state");
     check(c300x_media_teardown_apply(&status, error, sizeof(error)) == 0,
           "apply refuses a missing target");
-    check_media_blocked("teardown_patch_required:");
 
     buffer = calloc(1, TARGET_SIZE);
     if (buffer == NULL) {
@@ -190,7 +166,6 @@ int main(void)
           "valid stock words cannot authorize an unknown complete binary");
     check(!status.supported, "unknown binary is unsupported");
     check(access(backup, F_OK) != 0, "refused binary produces no backup");
-    check_media_blocked("teardown_patch_required:");
     put_patched_drains(buffer);
     write_blob(target, buffer, TARGET_SIZE);
     check(!c300x_media_teardown_apply(&status, error, sizeof(error)),
@@ -219,41 +194,45 @@ int main(void)
             write_blob(target, stock, stock_len);
             check(!c300x_media_teardown_apply(&status, error, sizeof(error)),
                   "apply refuses a corrupt existing backup");
-            check_media_blocked("teardown_patch_required:unsupported_backup_identity");
             unlink(backup);
-            mkdir(temporary_target, 0755);
-            check_media_blocked("teardown_patch_required:write_failed");
-            rmdir(temporary_target);
             /* Hard link models /proc/PID/exe retaining the old inode after rename. */
             check(link(target, exe) == 0, "retain the loaded original inode");
             check(c300x_media_teardown_read_status(&status) == 1, "stock status readable");
             check(strcmp(status.state, "stock") == 0, "stock target detected");
+
+            /* PCMU no longer applies the drain patch: switching the codec leaves
+             * the daemon exactly as it was. */
             check(c300x_audio_codec_apply(&codec, error, sizeof(error)) == 1,
-                  "already-PCMU apply backfills a stock target");
-            check(codec.changed, "backfill reports its actual write");
-            check(c300x_audio_codec_reboot_required(&codec, "pcmu"),
-                  "unchanged codec still requires patch activation");
+                  "codec apply on a PCMU device succeeds without touching the daemon");
+            check(!codec.changed, "codec apply makes no device-file change on PCMU");
             c300x_media_teardown_read_status(&status);
-            check(status.patched == 1, "stock target becomes patched");
-            check_media_blocked("teardown_patch_activation_required");
-            check(stat(target, &before) == 0, "stat before idempotent apply");
-            check(c300x_audio_codec_apply(&codec, error, sizeof(error)) == 1 && !codec.changed,
-                  "reapply performs no write");
-            check(c300x_audio_codec_reboot_required(&codec, "pcmu"),
-                  "idempotence does not erase pending activation");
-            check(stat(target, &after) == 0 && before.st_ino == after.st_ino
-                      && before.st_mtime == after.st_mtime,
-                  "idempotent apply retains the target inode and mtime");
-            c300x_audio_codec_read_status(&codec);
-            check(c300x_audio_codec_reboot_required(&codec, "pcmu"),
-                  "fresh status reconstructs pending activation without a marker");
+            check(strcmp(status.state, "stock") == 0, "codec apply leaves the daemon stock");
+            check(status.patched == 0, "codec apply does not patch the daemon");
+
+            /* Rolling back an unpatched daemon is a no-op. */
+            check(c300x_audio_codec_rollback_teardown_patch(error, sizeof(error)) == 1,
+                  "rollback is a no-op on a stock daemon");
+            c300x_media_teardown_read_status(&status);
+            check(strcmp(status.state, "stock") == 0, "no-op rollback leaves the daemon stock");
+
+            /* Patch the daemon directly (the state a device from the coupled
+             * release carries) and prove the startup rollback restores stock. */
+            check(c300x_media_teardown_apply(&status, error, sizeof(error)) == 1,
+                  "the raw patcher still produces a patched daemon to roll back");
+            c300x_media_teardown_read_status(&status);
+            check(status.patched == 1, "the daemon is patched before rollback");
             unlink(exe);
-            check(link(target, exe) == 0, "simulate daemon restart on patched inode");
-            check(c300x_audio_codec_ensure_coupled_patch(error, sizeof(error)),
-                  "verified running patched executable releases PCMU");
-            c300x_audio_codec_read_status(&codec);
-            check(!c300x_audio_codec_reboot_required(&codec, "pcmu"),
-                  "verified activation clears pending reboot");
+            check(link(target, exe) == 0, "the patched inode is the loaded one");
+            check(c300x_audio_codec_rollback_teardown_patch(error, sizeof(error)) == 1,
+                  "rollback restores a patched daemon");
+            restored = read_blob(target, &restored_len);
+            check(restored != NULL && restored_len == stock_len
+                      && memcmp(restored, stock, stock_len) == 0,
+                  "rollback is byte-identical to stock");
+            free(restored);
+            c300x_media_teardown_read_status(&status);
+            check(status.patched == 0, "the daemon is stock after rollback");
+
             mkdir(second_pid, 0755);
             write_blob(second_comm, (const unsigned char *)basename, strlen(basename));
             write_blob(second_exe, stock, stock_len);
@@ -263,10 +242,15 @@ int main(void)
             unlink(second_comm);
             rmdir(second_pid);
 
-            /* Restoring speex leaves the patched daemon in place, so the patch
-             * state has to be read from the file in every codec mode. Deriving
-             * it inside the PCMU branch reported "not installed" for a device
-             * whose running daemon was still patched. */
+            /* Restore the patched state for the status and diff checks below. */
+            check(c300x_media_teardown_apply(&status, error, sizeof(error)) == 1,
+                  "re-patch the daemon for the remaining status checks");
+            unlink(exe);
+            check(link(target, exe) == 0, "relink the patched inode");
+
+            /* The patch state is a property of the file, so it must read back in
+             * every codec mode. Deriving it inside the PCMU branch reported "not
+             * installed" for a device whose running daemon was still patched. */
             const char *stack_speex = "<enable_speex>1</enable_speex>\n";
             const char *linphone_speex = "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
                 "[audio_codec_0]\nmime=PCMU\nrate=8000\nenabled=0\n"

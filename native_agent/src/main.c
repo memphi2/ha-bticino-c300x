@@ -201,5 +201,13 @@ int main(int argc, char **argv)
     }
 
     (void)signal(SIGPIPE, SIG_IGN);
+
+    /* Return any device still carrying the disproved drain patch to the stock
+     * daemon on startup. Best-effort: a device that cannot be rolled back must
+     * still run every other feature, so this never blocks start. */
+    if (!c300x_audio_codec_rollback_teardown_patch(error, sizeof(error))) {
+        fprintf(stderr, "warning: teardown_patch_rollback_failed: %s\n", error);
+    }
+
     return c300x_run(&config);
 }

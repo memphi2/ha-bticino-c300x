@@ -39,7 +39,10 @@ struct c300x_audio_codec_status {
  * always matches the device — no separate config value that could drift. */
 int c300x_audio_codec_device_is_pcmu(void);
 
-int c300x_audio_codec_ensure_coupled_patch(char *error, size_t error_len);
+/* Return a device still carrying the disproved drain patch to the stock daemon.
+ * Transitional: once the patched test devices are back on stock this goes away
+ * together with the rest of the patch. */
+int c300x_audio_codec_rollback_teardown_patch(char *error, size_t error_len);
 int c300x_audio_codec_remove_patches(char *error, size_t error_len);
 
 int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status);

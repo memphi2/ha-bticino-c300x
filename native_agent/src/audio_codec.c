@@ -571,52 +571,18 @@ static int transform_file(
     return 1;
 }
 
-static void set_teardown_required_error(
-    char *error, size_t error_len, const char *reason
-) {
-    char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
-
-    snprintf(
-        detail,
-        sizeof(detail),
-        "teardown_patch_required:%s",
-        reason != NULL && reason[0] != '\0' ? reason : "unavailable"
-    );
-    set_err(error, error_len, detail);
-}
-
-static int ensure_coupled_teardown_patch(
-    struct c300x_audio_codec_status *status, char *error, size_t error_len
-) {
+int c300x_audio_codec_rollback_teardown_patch(char *error, size_t error_len) {
     struct c300x_media_teardown_status teardown;
-    char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
 
-    if (c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
-        (void)c300x_audio_codec_read_status(status);
-        status->changed = teardown.changed;
+    /* The drain patch was coupled to PCMU on the theory that it prevented the
+     * device's teardown reboots. Hardware testing disproved that, so the patch
+     * is no longer applied and any device still carrying it is returned to the
+     * stock daemon. Removing the patch without this would leave the test devices
+     * patched with no way back through the agent. */
+    if (!c300x_media_teardown_read_status(&teardown) || !teardown.patched) {
         return 1;
     }
-    set_teardown_required_error(error, error_len, teardown_error);
-    return 0;
-}
-
-int c300x_audio_codec_ensure_coupled_patch(char *error, size_t error_len) {
-    struct c300x_audio_codec_status status;
-
-    if (!c300x_audio_codec_read_status(&status) || !status.supported) {
-        return 1;
-    }
-    if (strcmp(status.state, "pcmu") != 0) {
-        return 1;
-    }
-    if (!ensure_coupled_teardown_patch(&status, error, error_len)) {
-        return 0;
-    }
-    if (!status.teardown_patch_active) {
-        set_err(error, error_len, "teardown_patch_activation_required");
-        return 0;
-    }
-    return 1;
+    return c300x_media_teardown_restore(&teardown, error, error_len);
 }
 
 int c300x_audio_codec_apply(
@@ -641,16 +607,7 @@ int c300x_audio_codec_apply(
         return 0;
     }
     if (strcmp(status->state, "pcmu") == 0) {
-        return ensure_coupled_teardown_patch(status, error, error_len);
-    }
-    {
-        struct c300x_media_teardown_status teardown;
-
-        (void)c300x_media_teardown_read_status(&teardown);
-        if (strcmp(teardown.state, "stock") != 0 && strcmp(teardown.state, "patched") != 0) {
-            set_teardown_required_error(error, error_len, teardown.state);
-            return 0;
-        }
+        return 1; /* idempotent */
     }
     if (!join_backup("stack_open.xml", sb, sizeof(sb))
         || !join_backup("linphone.conf", lb, sizeof(lb))) {
@@ -679,24 +636,6 @@ int c300x_audio_codec_apply(
         free(stack_out);
         free(lin_out);
         (void)remount("ro");
-        return 0;
-    }
-    {
-        struct c300x_media_teardown_status teardown;
-        char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
-
-        if (!c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
-            free(stack_out);
-            free(lin_out);
-            (void)remount("ro");
-            set_teardown_required_error(error, error_len, teardown_error);
-            return 0;
-        }
-    }
-    if (!remount("rw")) {
-        free(stack_out);
-        free(lin_out);
-        set_err(error, error_len, "remount_rw_failed");
         return 0;
     }
     if (!overwrite_file(stack_open_path(), stack_out, stack_len)

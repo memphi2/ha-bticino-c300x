@@ -14,7 +14,7 @@ int c300x_system_metrics_monitor_init(
     }
     c300x_system_metrics_read_sample(&monitor->last, NULL);
     if (!c300x_system_metrics_instance_id(monitor->last.instance_id, sizeof(monitor->last.instance_id))) {
-        return 0;
+        return 1;
     }
     monitor->last.sample_interval_seconds = config->system_metrics_sample_interval_seconds;
     monitor->last.heartbeat_seconds = config->system_metrics_heartbeat_seconds;

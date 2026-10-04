@@ -8,6 +8,9 @@
 static unsigned long long test_busy = 1000;
 static unsigned long long test_idle = 99000;
 static long long test_now_ms = 100000;
+static unsigned test_proc_reads;
+static unsigned test_temperature_reads;
+static unsigned test_random_reads;
 
 static int metrics_clock_gettime(clockid_t clock_id, struct timespec *now)
 {
@@ -19,22 +22,29 @@ static int metrics_clock_gettime(clockid_t clock_id, struct timespec *now)
 
 static FILE *metrics_fopen(const char *path, const char *mode)
 {
+    assert(strcmp(mode, "r") == 0 || strcmp(mode, "rb") == 0);
     static char cpu[256];
     static char load[] = "0.01 0.01 0.01 1/100 100\n";
     static char memory[] = "MemTotal: 100000 kB\nMemAvailable: 80000 kB\n";
     if (strcmp(path, "/proc/stat") == 0) {
+        test_proc_reads++;
         snprintf(cpu, sizeof(cpu), "cpu %llu 0 0 %llu 0 0 0 0\n", test_busy, test_idle);
         return fmemopen(cpu, strlen(cpu), "r");
     }
     if (strcmp(path, "/proc/loadavg") == 0) {
+        test_proc_reads++;
         return fmemopen(load, strlen(load), "r");
     }
     if (strcmp(path, "/proc/meminfo") == 0) {
+        test_proc_reads++;
         return fmemopen(memory, strlen(memory), "r");
     }
     if (strncmp(path, "/sys/", 5) == 0) {
+        test_temperature_reads++;
         return NULL;
     }
+    assert(strcmp(path, "/dev/urandom") == 0);
+    test_random_reads++;
     return fopen(path, mode);
 }
 
@@ -70,6 +80,7 @@ static void check_http_snapshot(struct c300x_config *config, struct agent_runtim
     baseline(config, runtime, now, 1.0);
     test_busy += 2;
     test_idle += 8;
+    unsigned reads_before = test_proc_reads + test_temperature_reads + test_random_reads;
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     handle_system_metrics(pair[0], runtime);
     close(pair[0]);
@@ -79,6 +90,7 @@ static void check_http_snapshot(struct c300x_config *config, struct agent_runtim
     close(pair[1]);
     assert(strstr(response, "\"cpu_usage_percent\":1.0") != NULL);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 1.0);
+    assert(test_proc_reads + test_temperature_reads + test_random_reads == reads_before);
 }
 
 static void check_failed_push(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
@@ -251,6 +263,51 @@ static void check_heartbeat_and_watchdog(struct c300x_config *config, struct age
     c300x_recent_events_clear(&runtime->recent_events);
 }
 
+static void check_hourly_budget(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
+{
+    for (int scenario = 0; scenario < 4; scenario++) {
+        baseline(config, runtime, now, 1.0);
+        runtime->subscription_count = scenario == 3 ? 0 : 1;
+        unsigned proc_before = test_proc_reads;
+        unsigned temperature_before = test_temperature_reads;
+        unsigned random_before = test_random_reads;
+        unsigned dispatches = 0;
+        size_t payload_bytes = 0;
+        for (int second = 1; second <= 3600; second++) {
+            test_now_ms += 1000;
+            if (second % 30 == 0) {
+                unsigned busy = scenario == 1 && second % 60 == 0 ? 33 : 30;
+                test_busy += busy;
+                test_idle += 3000 - busy;
+            }
+            if (scenario == 3) {
+                system_metrics_dispatch_if_due(config, runtime, now + second);
+            } else if (c300x_system_metrics_monitor_tick(config, &runtime->metrics, NULL, now + second)) {
+                assert(second % 30 == 0);
+                char json[2048];
+                assert(c300x_system_metrics_json(&runtime->metrics.last, 0, json, sizeof(json)));
+                payload_bytes += strlen(json);
+                dispatches++;
+                if (scenario == 2) {
+                    runtime->metrics.delivery_pending = 1;
+                } else {
+                    c300x_system_metrics_monitor_delivered(&runtime->metrics, now + second);
+                }
+            }
+            assert(c300x_system_metrics_monitor_timeout_ms(&runtime->metrics) > 0);
+        }
+        assert(runtime->metrics.last.sample_sequence == 121);
+        assert(test_proc_reads - proc_before == 360);
+        assert(test_temperature_reads - temperature_before == 240);
+        assert(test_random_reads == random_before);
+        assert(c300x_recent_events_count(&runtime->recent_events) == 0);
+        /* Failed heartbeats recur only on regular samples, not every loop tick. */
+        assert(dispatches == (scenario == 0 ? 6u : scenario == 1 ? 119u : scenario == 2 ? 101u : 0u));
+        printf("metrics audit scenario=%d samples=120 dispatches=%u metric_json_bytes=%zu\n",
+            scenario, dispatches, payload_bytes);
+    }
+}
+
 int main(void)
 {
     struct c300x_config config;
@@ -265,6 +322,7 @@ int main(void)
     check_sampling_and_clock(&config, runtime, now);
     check_initial_and_precision(&config, runtime);
     check_heartbeat_and_watchdog(&config, runtime, now);
+    check_hourly_budget(&config, runtime, now);
     free(runtime);
     return 0;
 }

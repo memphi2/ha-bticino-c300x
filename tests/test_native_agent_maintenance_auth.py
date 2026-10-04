@@ -1,8 +1,29 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_every_agent_initiated_reboot_starts_ssh_first() -> None:
+    """Any reboot the agent triggers must leave a way back into the device.
+
+    The codec switch reboots on its own, and it used to skip the dropbear start
+    that the explicit reboot and remove endpoints perform, so switching the audio
+    codec locked a reporter out of SSH.
+    """
+
+    text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
+    offsets = [match.start() for match in re.finditer(r'"/sbin/reboot"', text)]
+
+    assert offsets, "no reboot call found in http.c"
+    for offset in offsets:
+        window = text[max(0, offset - 600) : offset]
+        assert '"/etc/init.d/dropbear", "start"' in window, (
+            "an agent-initiated reboot must start SSH first so the device stays "
+            f"reachable; the reboot call at offset {offset} does not"
+        )
 
 
 def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:

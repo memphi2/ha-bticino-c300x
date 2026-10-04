@@ -3821,6 +3821,12 @@ static void handle_audio_codec_action(
 
         (void)c300x_json_bool_field(request->body, "reboot", &reboot_requested);
         if (reboot_required && reboot_requested && config->maintenance_reboot_enabled) {
+            /* Bring SSH up first, exactly like the explicit reboot and remove
+             * endpoints: this reboot is agent-initiated too, and a codec switch
+             * is when the user is most likely to need a way back in. */
+            if (config->maintenance_ssh_start_enabled) {
+                (void)run_detached_command("/etc/init.d/dropbear", "start", 0);
+            }
             rebooting = run_detached_command(
                 "/sbin/reboot",
                 NULL,

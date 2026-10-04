@@ -141,7 +141,11 @@ int c300x_patch_copy_file_exact(const char *source, const char *target, mode_t m
         unlink(tmp_path);
         return 0;
     }
-    (void)fsync(fd);
+    if (fflush(out) != 0 || fsync(fd) != 0) {
+        fclose(out);
+        unlink(tmp_path);
+        return 0;
+    }
     if (fclose(out) != 0) {
         unlink(tmp_path);
         return 0;

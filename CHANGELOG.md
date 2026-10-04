@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.6 - Unreleased
+## v1.9.6 - 2026-10-04
 
 ### Fixed
 

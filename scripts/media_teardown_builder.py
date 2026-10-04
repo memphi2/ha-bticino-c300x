@@ -9,6 +9,9 @@ from pathlib import Path
 
 STOCK_RANGE_SHA256 = "ebcdb6c80e93af3a75a7ea485ab65763ab7f2bf7a6e4ed1623640f0d6a2b050f"
 PATCHED_RANGE_SHA256 = "347e4e96ea7158b26c991f7d6b9cd4ead625dc82ab2296c9dc277cbcdb164f8f"
+STOCK_SHA256 = "97b61ad80e67c1b3ea494956568645b93c7fe3ef359f77af9c7e2ad6dff1bf9e"
+PATCHED_SHA256 = "45f776fee4bb4b5fd020f19e961c48754fe3513ea6c70266a817a03639fb014a"
+TARGET_SIZE = 186932
 
 PATCHED_DRAIN = b"\x40\x0d\x03"
 
@@ -64,8 +67,14 @@ def _verify_range(data: bytes, patch: Patch, expected_sha256: str) -> bool:
 
 
 def patch_media(source: Path, target: Path) -> str:
+    if source.resolve() == target.resolve() or (
+        target.exists() and source.samefile(target)
+    ):
+        raise PatchError("Source and target must be different files")
     data = bytearray(source.read_bytes())
     original = bytes(data)
+    if len(data) != TARGET_SIZE or sha256(data) != STOCK_SHA256:
+        raise PatchError("Patch precondition failed: unsupported target identity")
 
     for patch in PATCHES:
         if not _verify_range(data, patch, patch.expected_range_sha256):
@@ -87,6 +96,8 @@ def patch_media(source: Path, target: Path) -> str:
     expected_changed = sum(len(write.data) for patch in PATCHES for write in patch.writes)
     if changed > expected_changed:
         raise PatchError(f"Patch changed {changed} bytes, expected at most {expected_changed}")
+    if sha256(data) != PATCHED_SHA256:
+        raise PatchError("Patched file identity mismatch")
 
     target.write_bytes(bytes(data))
     shutil.copymode(source, target)

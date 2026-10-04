@@ -26,6 +26,8 @@ struct c300x_audio_codec_status {
     int supported;        /* both target files exist */
     int backup_present;   /* both originals are backed up */
     int changed;          /* last apply/restore actually wrote device files */
+    int teardown_patch_installed;
+    int teardown_patch_active;
     char state[C300X_AUDIO_CODEC_STATE_LEN]; /* "speex" | "pcmu" | "partial" */
     char error[C300X_MAX_ERROR_LEN];
 };
@@ -36,7 +38,7 @@ struct c300x_audio_codec_status {
  * always matches the device — no separate config value that could drift. */
 int c300x_audio_codec_device_is_pcmu(void);
 
-int c300x_audio_codec_ensure_coupled_patch(void);
+int c300x_audio_codec_ensure_coupled_patch(char *error, size_t error_len);
 
 int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status);
 int c300x_audio_codec_reboot_required(

@@ -4,6 +4,7 @@
 
 #include "c300x_agent.h"
 #include "device_patch_io.h"
+#include "sha256.h"
 #include "string_util.h"
 
 #include <errno.h>
@@ -67,7 +68,7 @@ static void set_status_err(struct c300x_media_teardown_status *status, const cha
     }
 }
 
-static int target_file_name(char *buffer, size_t buffer_len)
+int c300x_media_teardown_target_name(char *buffer, size_t buffer_len)
 {
     static const struct {
         size_t offset;
@@ -96,7 +97,7 @@ static int target_path(char *buffer, size_t buffer_len)
         c300x_copy_string(buffer, buffer_len, override);
         return 1;
     }
-    if (!target_file_name(name, sizeof(name))) {
+    if (!c300x_media_teardown_target_name(name, sizeof(name))) {
         return 0;
     }
     return snprintf(buffer, buffer_len, "%s/%s", C300X_MEDIA_TEARDOWN_TARGET_DIR, name)
@@ -111,7 +112,7 @@ static int backup_path(char *buffer, size_t buffer_len)
         : C300X_MEDIA_TEARDOWN_BACKUP_DIR;
     char name[sizeof(C300X_MEDIA_TEARDOWN_TARGET_MASK)];
 
-    if (!target_file_name(name, sizeof(name))) {
+    if (!c300x_media_teardown_target_name(name, sizeof(name))) {
         return 0;
     }
     return snprintf(buffer, buffer_len, "%s/%s", directory, name) < (int)buffer_len;
@@ -119,6 +120,13 @@ static int backup_path(char *buffer, size_t buffer_len)
 
 static int all_ranges_match(const unsigned char *data, size_t len, int patched)
 {
+    char digest[65];
+    if (len != C300X_MEDIA_TEARDOWN_SIZE
+        || !c300x_sha256_bytes_hex(data, len, digest, sizeof(digest))
+        || strcmp(digest, patched ? C300X_MEDIA_TEARDOWN_PATCHED_SHA256
+                                  : C300X_MEDIA_TEARDOWN_STOCK_SHA256) != 0) {
+        return 0;
+    }
     for (size_t index = 0; index < MEDIA_TEARDOWN_PATCH_COUNT; index++) {
         const struct c300x_patch_range *patch = &MEDIA_TEARDOWN_PATCHES[index];
         const char *expected = patched
@@ -153,22 +161,30 @@ int c300x_media_teardown_read_status(struct c300x_media_teardown_status *status)
         set_status_err(status, "target_missing");
         return 0;
     }
-    status->supported = 1;
     if (all_ranges_match(data, len, 1)) {
+        status->supported = 1;
         status->patched = 1;
         c300x_copy_string(status->state, sizeof(status->state), "patched");
         free(data);
         return 1;
     }
     if (all_ranges_match(data, len, 0)) {
+        status->supported = 1;
         c300x_copy_string(status->state, sizeof(status->state), "stock");
         free(data);
         return 1;
     }
     free(data);
     c300x_copy_string(status->state, sizeof(status->state), "unsupported");
-    set_status_err(status, "unsupported_target_ranges");
+    set_status_err(status, "unsupported_target_identity");
     return 1;
+}
+
+static int stock_file_matches(const char *path)
+{
+    char digest[65];
+    return c300x_sha256_file_hex(path, digest, sizeof(digest))
+        && strcmp(digest, C300X_MEDIA_TEARDOWN_STOCK_SHA256) == 0;
 }
 
 int c300x_media_teardown_apply(
@@ -196,7 +212,7 @@ int c300x_media_teardown_apply(
         return 1;
     }
     if (strcmp(status->state, "stock") != 0) {
-        set_err(error, error_len, "unsupported_target_ranges");
+        set_err(error, error_len, "unsupported_target_identity");
         return 0;
     }
     if (!target_path(target, sizeof(target)) || !backup_path(backup, sizeof(backup))) {
@@ -215,8 +231,17 @@ int c300x_media_teardown_apply(
         set_err(error, error_len, "backup_failed");
         return 0;
     }
+    if (!stock_file_matches(backup)) {
+        set_err(error, error_len, "unsupported_backup_identity");
+        return 0;
+    }
     if (!c300x_patch_read_file(target, &data, &len)) {
         set_err(error, error_len, "target_read_failed");
+        return 0;
+    }
+    if (!all_ranges_match(data, len, 0)) {
+        free(data);
+        set_err(error, error_len, "unsupported_target_identity");
         return 0;
     }
     for (size_t index = 0; index < MEDIA_TEARDOWN_PATCH_COUNT; index++) {
@@ -242,6 +267,11 @@ int c300x_media_teardown_apply(
             set_err(error, error_len, patch->name);
             return 0;
         }
+    }
+    if (!all_ranges_match(data, len, 1)) {
+        free(data);
+        set_err(error, error_len, "patched_identity_mismatch");
+        return 0;
     }
     if (!c300x_patch_remount_root("rw")) {
         free(data);
@@ -272,7 +302,13 @@ int c300x_media_teardown_apply(
         set_err(error, error_len, "target_replace_failed");
         return 0;
     }
-    (void)fsync(fd);
+    if (fflush(fp) != 0 || fsync(fd) != 0) {
+        fclose(fp);
+        unlink(tmp);
+        (void)c300x_patch_remount_root("ro");
+        set_err(error, error_len, "target_sync_failed");
+        return 0;
+    }
     if (fclose(fp) != 0 || rename(tmp, target) != 0) {
         unlink(tmp);
         (void)c300x_patch_remount_root("ro");
@@ -287,6 +323,7 @@ int c300x_media_teardown_apply(
         set_err(error, error_len, "patched_ranges_mismatch");
         return 0;
     }
+    status->changed = 1;
     return 1;
 }
 
@@ -308,6 +345,17 @@ int c300x_media_teardown_restore(
         set_err(error, error_len, "backup_missing");
         return 0;
     }
+    if (!stock_file_matches(backup)) {
+        set_err(error, error_len, "unsupported_backup_identity");
+        return 0;
+    }
+    if (!c300x_media_teardown_read_status(status) || !status->supported) {
+        set_err(error, error_len, "unsupported_target_identity");
+        return 0;
+    }
+    if (!status->patched) {
+        return 1;
+    }
     if (!c300x_patch_file_mode(backup, &backup_mode, NULL, NULL)) {
         set_err(error, error_len, "backup_stat_failed");
         return 0;
@@ -325,5 +373,10 @@ int c300x_media_teardown_restore(
         set_err(error, error_len, "remount_ro_failed");
         return 0;
     }
-    return c300x_media_teardown_read_status(status);
+    if (!c300x_media_teardown_read_status(status) || strcmp(status->state, "stock") != 0) {
+        set_err(error, error_len, "restored_identity_mismatch");
+        return 0;
+    }
+    status->changed = 1;
+    return 1;
 }

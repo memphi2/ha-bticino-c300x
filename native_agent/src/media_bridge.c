@@ -6619,8 +6619,12 @@ static void *rtsp_server_thread(void *arg) {
 bool c300x_media_bridge_start(const struct c300x_config *config, struct c300x_video *video) {
     bool ok;
     pthread_t server_thread;
+    char error[128];
 
-    (void)c300x_audio_codec_ensure_coupled_patch();
+    if (!c300x_audio_codec_ensure_coupled_patch(error, sizeof(error))) {
+        c300x_video_bridge_set_error(video, error);
+        return false;
+    }
 
     pthread_mutex_lock(&g_bridge.mutex);
     if (g_bridge.running) {

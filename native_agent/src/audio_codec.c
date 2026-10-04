@@ -438,7 +438,12 @@ int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status) {
     stack_speex = stack_open_has("<enable_speex>1</enable_speex>");
     read_linphone_facts(&lin_pcmu, &lin_speex);
     if (stack_pcmu && lin_pcmu) {
+        struct c300x_media_teardown_status teardown;
         snprintf(status->state, sizeof(status->state), "pcmu");
+        status->teardown_patch_installed = c300x_media_teardown_read_status(&teardown)
+            && teardown.patched;
+        status->teardown_patch_active = status->teardown_patch_installed
+            && c300x_media_teardown_is_active();
     } else if (stack_speex && lin_speex) {
         snprintf(status->state, sizeof(status->state), "speex");
     } else {
@@ -460,7 +465,9 @@ int c300x_audio_codec_reboot_required(
     const struct c300x_audio_codec_status *status,
     const char *running_state
 ) {
-    return strcmp(effective_running_state(status, running_state), status->state) != 0;
+    return strcmp(effective_running_state(status, running_state), status->state) != 0
+        || (strcmp(status->state, "pcmu") == 0 && status->teardown_patch_installed
+            && !status->teardown_patch_active);
 }
 
 void c300x_audio_codec_status_body(
@@ -476,12 +483,15 @@ void c300x_audio_codec_status_body(
         body_len,
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
-        "\"backup_present\":%s,\"reboot_required\":%s}\n",
+        "\"backup_present\":%s,\"teardown_patch_installed\":%s,"
+        "\"teardown_patch_active\":%s,\"reboot_required\":%s}\n",
         status->supported ? "true" : "false",
         running,
         status->state,
         running,
         status->backup_present ? "true" : "false",
+        status->teardown_patch_installed ? "true" : "false",
+        status->teardown_patch_active ? "true" : "false",
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false"
     );
 }
@@ -501,7 +511,7 @@ void c300x_audio_codec_action_body(
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
         "\"backup_present\":%s,\"changed\":%s,\"reboot_required\":%s,"
-        "\"rebooting\":%s}\n",
+        "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,\"rebooting\":%s}\n",
         status->supported ? "true" : "false",
         running,
         status->state,
@@ -509,6 +519,8 @@ void c300x_audio_codec_action_body(
         status->backup_present ? "true" : "false",
         status->changed ? "true" : "false",
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false",
+        status->teardown_patch_installed ? "true" : "false",
+        status->teardown_patch_active ? "true" : "false",
         rebooting ? "true" : "false"
     );
 }
@@ -550,12 +562,16 @@ static int transform_file(
     return 1;
 }
 
-static int ensure_coupled_teardown_patch(char *error, size_t error_len) {
+static int ensure_coupled_teardown_patch(
+    struct c300x_audio_codec_status *status, char *error, size_t error_len
+) {
     struct c300x_media_teardown_status teardown;
     char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
     char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
 
     if (c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
+        (void)c300x_audio_codec_read_status(status);
+        status->changed = teardown.changed;
         return 1;
     }
     snprintf(
@@ -568,7 +584,7 @@ static int ensure_coupled_teardown_patch(char *error, size_t error_len) {
     return 0;
 }
 
-int c300x_audio_codec_ensure_coupled_patch(void) {
+int c300x_audio_codec_ensure_coupled_patch(char *error, size_t error_len) {
     struct c300x_audio_codec_status status;
 
     if (!c300x_audio_codec_read_status(&status) || !status.supported) {
@@ -577,7 +593,14 @@ int c300x_audio_codec_ensure_coupled_patch(void) {
     if (strcmp(status.state, "pcmu") != 0) {
         return 1;
     }
-    return ensure_coupled_teardown_patch(NULL, 0);
+    if (!ensure_coupled_teardown_patch(&status, error, error_len)) {
+        return 0;
+    }
+    if (!status.teardown_patch_active) {
+        set_err(error, error_len, "teardown_patch_activation_required");
+        return 0;
+    }
+    return 1;
 }
 
 int c300x_audio_codec_apply(
@@ -601,7 +624,7 @@ int c300x_audio_codec_apply(
         return 0;
     }
     if (strcmp(status->state, "pcmu") == 0) {
-        return ensure_coupled_teardown_patch(error, error_len);
+        return ensure_coupled_teardown_patch(status, error, error_len);
     }
     {
         struct c300x_media_teardown_status teardown;

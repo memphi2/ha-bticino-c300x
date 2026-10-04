@@ -40,11 +40,15 @@ static int run_audio_codec_cli(const char *action)
     }
     if (ok) {
         printf(
-            "{\"ok\":true,\"state\":\"%s\",\"supported\":%s,\"backup_present\":%s,\"changed\":%s}\n",
+            "{\"ok\":true,\"state\":\"%s\",\"supported\":%s,\"backup_present\":%s,\"changed\":%s,"
+            "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,\"reboot_required\":%s}\n",
             status.state,
             json_bool(status.supported),
             json_bool(status.backup_present),
-            json_bool(status.changed)
+            json_bool(status.changed),
+            json_bool(status.teardown_patch_installed),
+            json_bool(status.teardown_patch_active),
+            json_bool(c300x_audio_codec_reboot_required(&status, NULL))
         );
         return 0;
     }

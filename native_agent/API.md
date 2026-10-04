@@ -1202,7 +1202,7 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.9.6 | 1.1 | 1.7.x | Couples the device audio-codec switch to the media teardown-drain patch and refuses the switch unless that patch is in place. |
+| 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |
 | 1.9.2 | 1.1 | 1.7.x | Names the missing half of the media identity in the self-test and answers rejected RTSP pulls instead of closing the connection unexplained. |
 | 1.9.0 | 1.1 | 1.7.x | Adds the v1.9.0 native media and update-path fixes while reporting the matching packaged agent version. |

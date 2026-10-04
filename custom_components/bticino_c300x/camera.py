@@ -192,9 +192,12 @@ async def _async_get_supported_webrtc_provider(
 ) -> Any:
     """Return HA's active WebRTC provider without starting C300X media."""
 
-    from homeassistant.components.camera.webrtc import (  # noqa: PLC0415
-        DATA_WEBRTC_PROVIDERS,
-    )
+    try:
+        from homeassistant.components.camera.webrtc import (  # noqa: PLC0415
+            DATA_WEBRTC_PROVIDERS,
+        )
+    except ImportError:
+        return None
 
     providers = hass.data.get(DATA_WEBRTC_PROVIDERS)
     if not providers or not stream_source:

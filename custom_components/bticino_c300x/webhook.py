@@ -40,6 +40,7 @@ from .const import (
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
     SIGNAL_MEMOS_CHANGED,
+    SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from .data import C300XEventState
@@ -626,8 +627,10 @@ def _apply_system_metrics_event(
     except C300XAgentApiResponseError:
         _LOGGER.debug("Ignoring invalid C300X system metrics event payload")
         return False
-    if apply_system_metrics(entry, normalized, hass=hass) and metrics_are_fresh(entry):
-        handle_runtime_cpu_metrics_changed(hass, entry)
+    if apply_system_metrics(entry, normalized, hass=hass, notify=False):
+        if metrics_are_fresh(entry):
+            handle_runtime_cpu_metrics_changed(hass, entry)
+        async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
     return True
 
 

@@ -92,6 +92,7 @@ def apply_system_metrics(
     metrics: dict[str, Any],
     *,
     hass: HomeAssistant | None = None,
+    notify: bool = True,
     request_generation: int | None = None,
     request_snapshot: dict[str, Any] | None = None,
 ) -> bool:
@@ -154,7 +155,8 @@ def apply_system_metrics(
             async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
 
         state.cancel_expiry = async_call_later(hass, max(0, expires_at - now), expire)
-        async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
+        if notify:
+            async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
     return True
 
 

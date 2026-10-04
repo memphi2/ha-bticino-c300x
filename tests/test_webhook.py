@@ -154,6 +154,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     HEADER_EVENT_TOKEN,
     HEADER_SHARED_SECRET,
     SIGNAL_MEMOS_CHANGED,
+    SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
 from custom_components.bticino_c300x.data import C300XEventState  # noqa: E402
@@ -1506,6 +1507,80 @@ def test_system_metrics_event_runtime_watchdog_stops_home_call(
     assert api.home_call_stop_calls == 1
     assert api.hangup_calls == 0
     assert api.stop_calls == 0
+
+
+def test_metrics_subscribers_see_current_watchdog_before_closing_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    async def run() -> None:
+        hass = _FakeHass()
+        runtime = SimpleNamespace(
+            api=None,
+            system_metrics={},
+            system_metrics_updated_at=None,
+            agent_cpu_watchdog=media_watchdog.AgentCpuWatchdog(
+                high_since=asyncio.get_running_loop().time() - 301,
+            ),
+            agent_cpu_watchdog_task=None,
+        )
+        entry = SimpleNamespace(entry_id="entry-1", runtime_data=runtime)
+        close_session = AsyncMock()
+        camera = SimpleNamespace(
+            _entry=entry,
+            hass=hass,
+            _webrtc_session_ids=lambda: ["session"],
+            _async_close_webrtc_session=close_session,
+            _async_write_ha_state_if_ready=lambda: None,
+        )
+        observed = []
+
+        def notify(_hass, signal, entry_id):
+            assert signal == SIGNAL_SYSTEM_METRICS_CHANGED
+            observed.append((
+                runtime.system_metrics["cpu_usage_percent"],
+                runtime.agent_cpu_watchdog.tripped,
+            ))
+            media_watchdog.handle_agent_cpu_metrics_changed(camera, entry_id)
+
+        # Cover both the cache's dispatcher and the webhook's dispatcher so a
+        # premature or duplicate notification also fails this test.
+        monkeypatch.setattr(webhook_module, "async_dispatcher_send", notify)
+        monkeypatch.setattr(
+            sys.modules["homeassistant.helpers.dispatcher"],
+            "async_dispatcher_send", notify,
+        )
+        monkeypatch.setattr(
+            sys.modules["homeassistant.helpers.event"],
+            "async_call_later", lambda *_args: lambda: None,
+        )
+        base = {
+            "instance_id": "a" * 32, "sample_sequence": 1,
+            "sample_age_ms": 0, "sample_interval_ms": 30000,
+            "sample_interval_seconds": 30, "heartbeat_seconds": 600,
+            "cpu_usage_percent": 95.0,
+        }
+        assert webhook_module._apply_system_metrics_event(hass, entry, base)
+        await asyncio.gather(*hass.tasks)
+        assert observed == [(95.0, True)]
+        assert close_session.await_count == 1
+
+        recovery = {**base, "sample_sequence": 2, "cpu_usage_percent": 1.0}
+        assert webhook_module._apply_system_metrics_event(hass, entry, recovery)
+        assert webhook_module._apply_system_metrics_event(hass, entry, base)
+        expired = {**base, "sample_sequence": 3, "sample_age_ms": 700000}
+        assert webhook_module._apply_system_metrics_event(hass, entry, expired)
+        assert not webhook_module._apply_system_metrics_event(
+            hass, entry, {**base, "sample_sequence": 4, "sample_age_ms": -1},
+        )
+        await asyncio.gather(*hass.tasks)
+        assert observed == [(95.0, True), (1.0, False), (95.0, False)]
+        assert close_session.await_count == 1
+        assert runtime.agent_cpu_watchdog.high_since is None
+        assert runtime.agent_cpu_watchdog.trigger_count == 1
+
+    asyncio.run(run())
 
 
 def test_agent_diagnostics_event_refreshes_cache_without_public_event() -> None:

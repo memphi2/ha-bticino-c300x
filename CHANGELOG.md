@@ -6,34 +6,36 @@
 
 - Keep CPU readings consistent between HTTP and push updates, recover missing
   updates after reconnect, and mark expired measurements unavailable.
+  Requires the native agent update to 1.9.6.
+- Report the running talkback codec and RTP payload type in agent capabilities.
+- Stop blocking working media when no literal `c300x` SIP database entry exists
+  (#56). Keep genuine HA-user and routing failures blocking, remove the false
+  app-registration Repair, and retain entry presence as a diagnostic flag.
+- Refuse PCMU media startup when its required teardown patch cannot be installed
+  or is not loaded by the running media daemon. Keep the activation requirement
+  visible after an agent restart, including devices already configured for PCMU.
 
 ### Added
 
-- Prepare the device-side uncompressed audio (PCMU) codec switch by shipping the
-  media teardown-drain patch it depends on. The device media daemon tears an
-  on-demand stream down with a fixed, too-short drain; with uncompressed audio
-  the video capture path then stays blocked, the daemon's watchdog heartbeat
-  stops and the device reboots seconds after the stream closes. The agent now
-  raises both drains in place -- size-preserving, verified per range by hash,
-  backed up before the first write and fully reversible.
-- Couple the codec switch to that patch. Applying the codec checks the patch
-  first and refuses outright if it cannot be established, so the codec can no
-  longer be enabled on its own and bring the reboots back. The check runs before
-  anything is written, and the patch itself is only applied once the codec
-  changes are known to succeed, so a failed switch never writes to the device
-  binary. Restoring the codec deliberately leaves the drain patch in place: a
-  longer drain is harmless for the compressed codec and has its own restore path.
-- Give a device that was already switched to the device codec the patch as well.
-  The codec apply used to return early as "already applied" and would have left
-  such a device without the patch forever, so it is now backfilled both on agent
-  start and on a repeated apply -- idempotently: once in place, no further start
-  writes to the device or remounts the filesystem.
+- Couple the PCMU codec switch to a size-preserving media teardown-drain patch.
+  Both drain delays change from 25 to 200 ms. Complete source and patched files
+  are SHA-256 allowlisted; backups are verified before patching or restoration.
+  Unknown, modified, partially patched and truncated files are rejected.
+- Backfill the patch on already-PCMU devices at agent start or repeated apply.
+  Repeated checks do not rewrite an installed patch. Restoring the codec leaves
+  the drain patch in place, with a separate verified restore path.
+- The drain extension targets the observed on-demand PCMU teardown hang;
+  repeated physical-device teardown testing remains outstanding.
 
 ### Changed
 
 - Share the range-patch mechanics (atomic copy, remount handling, per-range hash
   verification) between the device binary patchers instead of duplicating them,
   so the two cannot drift apart.
+
+### Maintenance
+
+- Update CodeQL Action to 4.38.2 and the pinned Hassfest action.
 
 ## v1.9.5 - 2026-10-03
 

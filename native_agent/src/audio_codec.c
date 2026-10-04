@@ -562,25 +562,32 @@ static int transform_file(
     return 1;
 }
 
+static void set_teardown_required_error(
+    char *error, size_t error_len, const char *reason
+) {
+    char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
+
+    snprintf(
+        detail,
+        sizeof(detail),
+        "teardown_patch_required:%s",
+        reason != NULL && reason[0] != '\0' ? reason : "unavailable"
+    );
+    set_err(error, error_len, detail);
+}
+
 static int ensure_coupled_teardown_patch(
     struct c300x_audio_codec_status *status, char *error, size_t error_len
 ) {
     struct c300x_media_teardown_status teardown;
     char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
-    char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
 
     if (c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
         (void)c300x_audio_codec_read_status(status);
         status->changed = teardown.changed;
         return 1;
     }
-    snprintf(
-        detail,
-        sizeof(detail),
-        "teardown_patch_required:%s",
-        teardown_error[0] != '\0' ? teardown_error : "unavailable"
-    );
-    set_err(error, error_len, detail);
+    set_teardown_required_error(error, error_len, teardown_error);
     return 0;
 }
 
@@ -631,15 +638,7 @@ int c300x_audio_codec_apply(
 
         (void)c300x_media_teardown_read_status(&teardown);
         if (strcmp(teardown.state, "stock") != 0 && strcmp(teardown.state, "patched") != 0) {
-            char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
-
-            snprintf(
-                detail,
-                sizeof(detail),
-                "teardown_patch_required:%s",
-                teardown.state[0] != '\0' ? teardown.state : "unavailable"
-            );
-            set_err(error, error_len, detail);
+            set_teardown_required_error(error, error_len, teardown.state);
             return 0;
         }
     }
@@ -677,18 +676,10 @@ int c300x_audio_codec_apply(
         char teardown_error[C300X_MEDIA_TEARDOWN_ERROR_LEN] = "";
 
         if (!c300x_media_teardown_apply(&teardown, teardown_error, sizeof(teardown_error))) {
-            char detail[C300X_MEDIA_TEARDOWN_ERROR_LEN + 32];
-
-            snprintf(
-                detail,
-                sizeof(detail),
-                "teardown_patch_required:%s",
-                teardown_error[0] != '\0' ? teardown_error : "unavailable"
-            );
             free(stack_out);
             free(lin_out);
             (void)remount("ro");
-            set_err(error, error_len, detail);
+            set_teardown_required_error(error, error_len, teardown_error);
             return 0;
         }
     }

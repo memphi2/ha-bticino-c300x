@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.7 - Unreleased
+## v1.9.7 - 2026-10-05
 
 ### Removed
 

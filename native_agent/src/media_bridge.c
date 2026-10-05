@@ -56,6 +56,14 @@
 #define MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES (512 * 1024)
 #define MEDIA_VIDEO_RELAY_DRAIN_BURST 64
 #define MEDIA_RENEW_SECONDS 20
+/* After an on-demand session tears down, the device keeps unwinding its own
+ * monitor/lcdsink path for a while. Starting a new session into that window is
+ * what reboots a PCMU device (issue #55): the reporter measured a 1.5 s gap
+ * failing and a 10 s gap clean, and go2rtc reconnects right inside it. Hold a
+ * new start off until the device has settled. Measured from the agent's own
+ * teardown completion (already after the device stop was signalled), so this is
+ * shorter than the raw 10 s gap; refine against hardware. */
+#define ONDEMAND_TEARDOWN_SETTLE_MS 8000
 #define MEDIA_SIP_KEEPALIVE_SECONDS 10
 #define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
 #define MEDIA_INSTANCE_UUID_LEN 37
@@ -182,6 +190,7 @@ typedef struct {
     bool media_active;
     bool media_starting;
     bool stop_in_progress;
+    long long ondemand_teardown_done_ms;
     c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
@@ -258,6 +267,7 @@ typedef struct {
     char to_header[512];
     char contact_uri[512];
     char ondemand_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
+    char ondemand_sip_fail[32];
     char ring_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
     char home_call_instance_uuid[MEDIA_INSTANCE_UUID_LEN];
     char last_rtsp_method[16];
@@ -4078,6 +4088,9 @@ static bool send_sip_setup(media_bridge_t *bridge) {
 
     memset(answer_audio_key_raw, 0, sizeof(answer_audio_key_raw));
     memset(answer_video_key_raw, 0, sizeof(answer_video_key_raw));
+    /* Default failure reason; the IO and SIP-reject paths below refine it so
+     * ondemand_sip_setup_failed carries why (issue #55 diagnosis). */
+    snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "setup");
     (void)sip_domain_from_config(bridge->config, domain_hint, sizeof(domain_hint));
     if (
         !media_identity_from_flexisip(
@@ -4193,6 +4206,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         instance_uuid
     );
     if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) < 0) {
+        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "invite_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4203,6 +4217,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         return false;
     }
     if (c300x_media_sip_status_code(response) >= 300) {
+        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail),
+                 "invite_%d", c300x_media_sip_status_code(response));
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4316,6 +4332,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         sdp
     );
     if (send_all(fd, request, strlen(request)) <= 0) {
+        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "ack_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4337,6 +4354,13 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         }
     }
     if (status < 200 || status >= 300) {
+        if (status > 0) {
+            snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail),
+                     "answer_%d", status);
+        } else {
+            snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail),
+                     "answer_timeout");
+        }
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         secure_zero(answer_audio_key_raw, sizeof(answer_audio_key_raw));
@@ -5448,6 +5472,25 @@ static void stop_media_session(bool close_client, bool explicit_stop);
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&bridge->mutex);
+    /* Hold a new session off until the previous one has settled on the device
+     * (issue #55): starting into the device-side teardown reboots a PCMU unit.
+     * Only waits when a real teardown just happened; a stop, an explicit-stop
+     * guard, or another start winning the race ends the wait early. */
+    long long settle_deadline = bridge->ondemand_teardown_done_ms != 0
+        ? bridge->ondemand_teardown_done_ms + ONDEMAND_TEARDOWN_SETTLE_MS
+        : 0;
+    while (
+        !bridge->stop_in_progress
+        && !c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
+        && !bridge->media_active
+        && !bridge->media_starting
+        && c300x_monotonic_ms() < settle_deadline
+    ) {
+        struct timespec delay = {0, 100 * 1000 * 1000};
+        pthread_mutex_unlock(&bridge->mutex);
+        (void)nanosleep(&delay, NULL);
+        pthread_mutex_lock(&bridge->mutex);
+    }
     if (
         bridge->stop_in_progress
         || c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
@@ -5473,7 +5516,10 @@ static bool start_media_session(media_bridge_t *bridge) {
     c300x_video_bridge_media_starting(bridge->video);
 
     if (!send_sip_setup(bridge)) {
-        c300x_video_bridge_set_error(bridge->video, "ondemand_sip_setup_failed");
+        char sip_error[64];
+        snprintf(sip_error, sizeof(sip_error), "ondemand_sip_setup_failed:%s",
+                 bridge->ondemand_sip_fail);
+        c300x_video_bridge_set_error(bridge->video, sip_error);
         stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
@@ -5644,6 +5690,11 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
     g_bridge.talkback_stop = false;
     g_bridge.sip_monitor_started = false;
     g_bridge.ondemand_media_started = false;
+    if (send_media_stop) {
+        /* A real session just told the device to stop; the next start must wait
+         * out the device-side teardown. See ONDEMAND_TEARDOWN_SETTLE_MS. */
+        g_bridge.ondemand_teardown_done_ms = c300x_monotonic_ms();
+    }
     if (g_bridge.rtp_fd >= 0) {
         close(g_bridge.rtp_fd);
         g_bridge.rtp_fd = -1;

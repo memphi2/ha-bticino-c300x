@@ -6,8 +6,6 @@
 
 #include "audio_codec.h"
 
-#include "media_teardown_patch.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -437,16 +435,6 @@ int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status) {
     stack_pcmu = stack_open_has("<enable_speex>0</enable_speex>");
     stack_speex = stack_open_has("<enable_speex>1</enable_speex>");
     read_linphone_facts(&lin_pcmu, &lin_speex);
-    /* The drain patch is a property of the daemon on disk, not of the codec
-     * selection: restoring speex deliberately leaves the patch in place. Read it
-     * in every mode so the reported state cannot contradict the device. */
-    {
-        struct c300x_media_teardown_status teardown;
-        status->teardown_patch_installed = c300x_media_teardown_read_status(&teardown)
-            && teardown.patched;
-        status->teardown_patch_active = status->teardown_patch_installed
-            && c300x_media_teardown_is_active();
-    }
     if (stack_pcmu && lin_pcmu) {
         snprintf(status->state, sizeof(status->state), "pcmu");
     } else if (stack_speex && lin_speex) {
@@ -470,9 +458,7 @@ int c300x_audio_codec_reboot_required(
     const struct c300x_audio_codec_status *status,
     const char *running_state
 ) {
-    return strcmp(effective_running_state(status, running_state), status->state) != 0
-        || (strcmp(status->state, "pcmu") == 0 && status->teardown_patch_installed
-            && !status->teardown_patch_active);
+    return strcmp(effective_running_state(status, running_state), status->state) != 0;
 }
 
 void c300x_audio_codec_status_body(
@@ -488,16 +474,13 @@ void c300x_audio_codec_status_body(
         body_len,
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
-        "\"backup_present\":%s,\"teardown_patch_installed\":%s,"
-        "\"teardown_patch_active\":%s,\"root_writable\":%s,"
+        "\"backup_present\":%s,\"root_writable\":%s,"
         "\"reboot_required\":%s}\n",
         status->supported ? "true" : "false",
         running,
         status->state,
         running,
         status->backup_present ? "true" : "false",
-        status->teardown_patch_installed ? "true" : "false",
-        status->teardown_patch_active ? "true" : "false",
         status->remount_ro_failed ? "true" : "false",
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false"
     );
@@ -518,7 +501,6 @@ void c300x_audio_codec_action_body(
         "{\"ok\":true,\"supported\":%s,\"state\":\"%s\","
         "\"configured_state\":\"%s\",\"running_state\":\"%s\","
         "\"backup_present\":%s,\"changed\":%s,\"reboot_required\":%s,"
-        "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,"
         "\"root_writable\":%s,\"rebooting\":%s}\n",
         status->supported ? "true" : "false",
         running,
@@ -527,8 +509,6 @@ void c300x_audio_codec_action_body(
         status->backup_present ? "true" : "false",
         status->changed ? "true" : "false",
         c300x_audio_codec_reboot_required(status, running) ? "true" : "false",
-        status->teardown_patch_installed ? "true" : "false",
-        status->teardown_patch_active ? "true" : "false",
         status->remount_ro_failed ? "true" : "false",
         rebooting ? "true" : "false"
     );
@@ -569,20 +549,6 @@ static int transform_file(
     *out = buffer;
     *out_len = buffer_len;
     return 1;
-}
-
-int c300x_audio_codec_rollback_teardown_patch(char *error, size_t error_len) {
-    struct c300x_media_teardown_status teardown;
-
-    /* The drain patch was coupled to PCMU on the theory that it prevented the
-     * device's teardown reboots. Hardware testing disproved that, so the patch
-     * is no longer applied and any device still carrying it is returned to the
-     * stock daemon. Removing the patch without this would leave the test devices
-     * patched with no way back through the agent. */
-    if (!c300x_media_teardown_read_status(&teardown) || !teardown.patched) {
-        return 1;
-    }
-    return c300x_media_teardown_restore(&teardown, error, error_len);
 }
 
 int c300x_audio_codec_apply(
@@ -730,25 +696,17 @@ int c300x_audio_codec_restore(
 
 int c300x_audio_codec_remove_patches(char *error, size_t error_len)
 {
-    struct c300x_media_teardown_status teardown;
     struct c300x_audio_codec_status codec;
     char sb[C300X_MAX_PATH_LEN];
     char lb[C300X_MAX_PATH_LEN];
-    int restore_teardown;
 
-    (void)c300x_media_teardown_read_status(&teardown);
-    restore_teardown = teardown.patched || teardown.backup_present;
     if (!join_backup("stack_open.xml", sb, sizeof(sb))
         || !join_backup("linphone.conf", lb, sizeof(lb))) {
         set_err(error, error_len, "backup_path_failed");
         return 0;
     }
-    if (!restore_teardown && access(sb, F_OK) != 0 && access(lb, F_OK) != 0) {
-        return 1; /* No managed media changes on this device. */
+    if (access(sb, F_OK) != 0 && access(lb, F_OK) != 0) {
+        return 1; /* No managed codec changes on this device. */
     }
-    /* Never remove the drain protection while the device is configured for PCMU. */
-    if (!c300x_audio_codec_restore(&codec, error, error_len)) {
-        return 0;
-    }
-    return !restore_teardown || c300x_media_teardown_restore(&teardown, error, error_len);
+    return c300x_audio_codec_restore(&codec, error, error_len);
 }

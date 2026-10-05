@@ -119,8 +119,6 @@ def main() -> int:
     assert_audio_codec_patch_roundtrip(binary)
     assert_audio_codec_partial_state_detection(binary)
     assert_audio_codec_apply_rejects_unpatchable_target(binary)
-    assert_audio_codec_apply_backfills_teardown_patch(binary)
-    assert_media_bridge_start_backfills_teardown_patch(binary)
 
     with (
         managed_tcp_server(OpenWebNetServer()) as openwebnet,
@@ -304,22 +302,11 @@ def assert_graceful_shutdown_signal_is_handled(binary: Path) -> None:
             raise AssertionError("video destroy must stop all media subsystems")
 
 
-def write_teardown_fixture(path: Path, *, patched: bool = True) -> bool:
-    stock = os.environ.get("C300X_TEARDOWN_TEST_STOCK")
-    blob = bytearray(Path(stock).read_bytes()) if stock else bytearray(0xE000)
-    if patched and stock:
-        value = bytes((0x40, 0x0D, 0x03, 0x00))
-        blob[0x5EE0:0x5EE4] = value
-        blob[0xDD0C:0xDD10] = value
-    path.write_bytes(bytes(blob))
-    return bool(stock)
-
-
 def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
-    """Native speex<->PCMU patch: lock-step apply, idempotency, byte-identical restore.
+    """Native speex<->PCMU codec switch: lock-step apply, idempotency, byte-identical restore.
 
-    Config files are synthetic. Positive binary checks require a local stock
-    copy; without it, refusal is tested. No mount is attempted in either case.
+    Config files are synthetic; no mount is attempted. The codec switch rewrites
+    only stack_open.xml and linphone.conf.
     """
 
     stock_stack = (
@@ -341,8 +328,6 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
         linphone = temp / "linphone.conf"
         stack.write_text(stock_stack, encoding="utf-8")
         linphone.write_text(stock_linphone, encoding="utf-8")
-        teardown_target = temp / "teardown-target"
-        has_stock = write_teardown_fixture(teardown_target)
         environment = os.environ.copy()
         environment.update(
             {
@@ -350,10 +335,6 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
                 "C300X_AUDIO_LINPHONE_CONF": str(linphone),
                 "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
                 "C300X_AUDIO_NO_REMOUNT": "1",
-                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
-                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
-                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
-                "C300X_MEDIA_TEARDOWN_PROC_ROOT": str(temp / "absent-proc"),
             }
         )
 
@@ -371,35 +352,7 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
         if code != 0 or status.get("state") != "speex":
             raise AssertionError(f"audio codec status should be speex: {status!r}")
 
-        blocked_environment = environment.copy()
-        blocked_environment["C300X_MEDIA_TEARDOWN_TARGET"] = str(temp / "absent-target")
-        blocked = subprocess.run(
-            [str(binary), "--audio-codec", "apply"],
-            env=blocked_environment,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        blocked_payload = json.loads(blocked.stdout)
-        if blocked.returncode == 0 or blocked_payload.get("ok") is not False:
-            raise AssertionError(
-                f"codec apply must refuse without the teardown patch: {blocked_payload!r}"
-            )
-        if not str(blocked_payload.get("error", "")).startswith("teardown_patch_required"):
-            raise AssertionError(
-                f"refusal must name the teardown precondition: {blocked_payload!r}"
-            )
-        if "<enable_speex>1</enable_speex>" not in stack.read_text(encoding="utf-8"):
-            raise AssertionError("refused codec apply must leave the codec files untouched")
-
         code, applied = run("apply")
-        if not has_stock:
-            if code == 0 or not applied.get("error", "").startswith("teardown_patch_required"):
-                raise AssertionError(f"unknown binary must block apply: {applied!r}")
-            if stack.read_text() != stock_stack or linphone.read_text() != stock_linphone:
-                raise AssertionError("refused apply must leave both codec files unchanged")
-            sys.stdout.write("skipped positive codec roundtrip (C300X_TEARDOWN_TEST_STOCK unset)\n")
-            return
         if code != 0 or applied.get("state") != "pcmu":
             raise AssertionError(f"audio codec apply should reach pcmu: {applied!r}")
         if applied.get("changed") is not True:
@@ -480,90 +433,6 @@ def assert_audio_codec_partial_state_detection(binary: Path) -> None:
             raise AssertionError(f"inconsistent codec flags must read partial: {status!r}")
 
 
-def assert_audio_codec_apply_backfills_teardown_patch(binary: Path) -> None:
-    pcmu_stack = (
-        "<bt_av_media>\n"
-        "<enable_speex>0</enable_speex>\n"
-        "<audio_compression>1</audio_compression>\n"
-        "</bt_av_media>\n"
-    )
-    pcmu_linphone = (
-        "[sound]\nrtp_io=1\nrtp_ptnum=0\nrtp_map=PCMU/8000/1\n"
-        "udp_gst_shrd_port=4000\n\n"
-        "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=1\n\n"
-        "[audio_codec_1]\nmime=speex\nrate=8000\nchannels=1\nenabled=0\n"
-    )
-    with tempfile.TemporaryDirectory(prefix="c300x-codec-backfill-") as temp_dir:
-        temp = Path(temp_dir)
-        stack = temp / "stack_open.xml"
-        linphone = temp / "linphone.conf"
-        stack.write_text(pcmu_stack, encoding="utf-8")
-        linphone.write_text(pcmu_linphone, encoding="utf-8")
-        teardown_target = temp / "teardown-target"
-        environment = os.environ.copy()
-        environment.update(
-            {
-                "C300X_AUDIO_STACK_OPEN": str(stack),
-                "C300X_AUDIO_LINPHONE_CONF": str(linphone),
-                "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
-                "C300X_AUDIO_NO_REMOUNT": "1",
-                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
-                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
-                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
-            }
-        )
-
-        def apply() -> tuple[int, dict[str, Any]]:
-            result = subprocess.run(
-                [str(binary), "--audio-codec", "apply"],
-                env=environment,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            return result.returncode, json.loads(result.stdout)
-
-        environment["C300X_MEDIA_TEARDOWN_PROC_ROOT"] = str(temp / "absent-proc")
-        has_stock = write_teardown_fixture(teardown_target, patched=False)
-        code, payload = apply()
-        if has_stock:
-            if code != 0 or payload.get("changed") is not True:
-                raise AssertionError(f"backfill must report its write: {payload!r}")
-            assert_json_field(payload, "reboot_required", True)
-            assert_json_field(payload, "teardown_patch_active", False)
-            code, payload = apply()
-            if code != 0 or payload.get("changed") is not False:
-                raise AssertionError(f"reapply must not write: {payload!r}")
-            assert_json_field(payload, "reboot_required", True)
-        elif code == 0:
-            raise AssertionError("synthetic binary must not authorize a backfill")
-
-        blob = bytearray(0xE000)
-        blob[0x5EE0:0x5EE4] = bytes((0x11, 0x11, 0x11, 0x11))
-        teardown_target.write_bytes(bytes(blob))
-        code, payload = apply()
-        if code == 0 or payload.get("ok") is not False:
-            raise AssertionError(
-                f"an already-PCMU device without the teardown patch must report it: {payload!r}"
-            )
-        if not str(payload.get("error", "")).startswith("teardown_patch_required"):
-            raise AssertionError(f"refusal must name the precondition: {payload!r}")
-        if stack.read_text(encoding="utf-8") != pcmu_stack:
-            raise AssertionError("backfill check must not alter the codec files")
-
-
-def assert_media_bridge_start_backfills_teardown_patch(binary: Path) -> None:
-    source = binary.parents[2] / "src" / "media_bridge.c"
-    if not source.exists():
-        return
-    content = source.read_text(encoding="utf-8")
-    if "if (!c300x_audio_codec_ensure_coupled_patch(error, sizeof(error)))" not in content:
-        raise AssertionError(
-            "media bridge start must backfill the coupled teardown patch so a device "
-            "already switched to the device codec still receives it"
-        )
-
-
 def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
     """Apply must not report success unless the resulting config is fully PCMU."""
 
@@ -583,8 +452,6 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
         linphone = temp / "linphone.conf"
         stack.write_text(unpatchable_stack, encoding="utf-8")
         linphone.write_text(stock_linphone, encoding="utf-8")
-        teardown_target = temp / "teardown-target"
-        has_stock = write_teardown_fixture(teardown_target)
         environment = os.environ.copy()
         environment.update(
             {
@@ -592,9 +459,6 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
                 "C300X_AUDIO_LINPHONE_CONF": str(linphone),
                 "C300X_AUDIO_BACKUP_DIR": str(temp / "backup"),
                 "C300X_AUDIO_NO_REMOUNT": "1",
-                "C300X_MEDIA_TEARDOWN_TARGET": str(teardown_target),
-                "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(temp / "teardown-backup"),
-                "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
             }
         )
         result = subprocess.run(
@@ -606,8 +470,7 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
         )
         if result.returncode == 0:
             raise AssertionError(f"unpatchable apply must fail: {result.stdout!r}")
-        expected_error = "transform_failed" if has_stock else "teardown_patch_required:unsupported"
-        if json.loads(result.stdout).get("error") != expected_error:
+        if json.loads(result.stdout).get("error") != "transform_failed":
             raise AssertionError(
                 f"unpatchable apply failed with the wrong error: {result.stdout!r}"
             )
@@ -876,14 +739,6 @@ def run_smoke(
         environment["C300X_AUDIO_LINPHONE_CONF"] = str(audio_linphone)
         environment["C300X_AUDIO_BACKUP_DIR"] = str(audio_backup_dir)
         environment["C300X_AUDIO_NO_REMOUNT"] = "1"
-        teardown_target = Path(temp_dir) / "media-teardown-target"
-        has_stock_teardown = write_teardown_fixture(teardown_target)
-        environment["C300X_MEDIA_TEARDOWN_TARGET"] = str(teardown_target)
-        environment["C300X_MEDIA_TEARDOWN_BACKUP_DIR"] = str(
-            Path(temp_dir) / "media-teardown-backup"
-        )
-        environment["C300X_DEVICE_PATCH_NO_REMOUNT"] = "1"
-        environment["C300X_MEDIA_TEARDOWN_PROC_ROOT"] = str(Path(temp_dir) / "absent-proc")
         process = subprocess.Popen(
             [str(binary), "--config", str(config_path)],
             env=environment,
@@ -1386,85 +1241,72 @@ def run_smoke(
                 "error",
                 "maintenance_confirmation_required",
             )
-            if has_stock_teardown:
-                audio_applied = maintenance_post(
-                    api_port,
-                    "/api/v1/maintenance/audio-codec/actions/apply",
-                    {"confirm": "apply_audio_codec_patch"},
-                )
-                expected_agent_writes += 1
-                assert_json_field(audio_applied, "state", "speex")
-                assert_json_field(audio_applied, "configured_state", "pcmu")
-                assert_json_field(audio_applied, "running_state", "speex")
-                assert_json_field(audio_applied, "changed", True)
-                assert_json_field(audio_applied, "backup_present", True)
-                # reboot is disabled in the smoke config, so the action reports it is
-                # required but must not actually reboot the test host.
-                assert_json_field(audio_applied, "reboot_required", True)
-                assert_json_field(audio_applied, "rebooting", False)
-                if "<enable_speex>0</enable_speex>" not in audio_stack_open.read_text(
-                    encoding="utf-8"
-                ):
-                    raise AssertionError("audio-codec apply did not patch stack_open.xml")
-                diagnostics = api_get(api_port, "/api/v1/diagnostics")
-                assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-                assert_json_field(diagnostics, "last_write_class", "audio_codec")
-                assert_json_field(diagnostics, "last_write_reason", "apply")
-                audio_reapplied = maintenance_post(
-                    api_port,
-                    "/api/v1/maintenance/audio-codec/actions/apply",
-                    {"confirm": "apply_audio_codec_patch"},
-                )
-                assert_json_field(audio_reapplied, "state", "speex")
-                assert_json_field(audio_reapplied, "configured_state", "pcmu")
-                assert_json_field(audio_reapplied, "running_state", "speex")
-                assert_json_field(audio_reapplied, "changed", False)
-                assert_json_field(audio_reapplied, "reboot_required", True)
-                diagnostics = api_get(api_port, "/api/v1/diagnostics")
-                assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-                audio_restored = maintenance_post(
-                    api_port,
-                    "/api/v1/maintenance/audio-codec/actions/restore",
-                    {"confirm": "restore_audio_codec_patch"},
-                )
-                expected_agent_writes += 1
-                assert_json_field(audio_restored, "state", "speex")
-                assert_json_field(audio_restored, "configured_state", "speex")
-                assert_json_field(audio_restored, "running_state", "speex")
-                assert_json_field(audio_restored, "changed", True)
-                assert_json_field(audio_restored, "rebooting", False)
-                if "<enable_speex>1</enable_speex>" not in audio_stack_open.read_text(
-                    encoding="utf-8"
-                ):
-                    raise AssertionError("audio-codec restore did not restore stack_open.xml")
-                diagnostics = api_get(api_port, "/api/v1/diagnostics")
-                assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-                assert_json_field(diagnostics, "last_write_class", "audio_codec")
-                assert_json_field(diagnostics, "last_write_reason", "restore")
-                audio_rerestored = maintenance_post(
-                    api_port,
-                    "/api/v1/maintenance/audio-codec/actions/restore",
-                    {"confirm": "restore_audio_codec_patch"},
-                )
-                assert_json_field(audio_rerestored, "state", "speex")
-                assert_json_field(audio_rerestored, "configured_state", "speex")
-                assert_json_field(audio_rerestored, "running_state", "speex")
-                assert_json_field(audio_rerestored, "changed", False)
-                assert_json_field(audio_rerestored, "reboot_required", False)
-                diagnostics = api_get(api_port, "/api/v1/diagnostics")
-                assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
-            else:
-                refused = api_request(
-                    api_port,
-                    "POST",
-                    "/api/v1/maintenance/audio-codec/actions/apply",
-                    {"confirm": "apply_audio_codec_patch"},
-                    maintenance=True,
-                    expected_status=500,
-                )
-                assert_json_field(refused, "error", "audio_codec_apply_failed")
-                diagnostics = api_get(api_port, "/api/v1/diagnostics")
-                assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            audio_applied = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/apply",
+                {"confirm": "apply_audio_codec_patch"},
+            )
+            expected_agent_writes += 1
+            assert_json_field(audio_applied, "state", "speex")
+            assert_json_field(audio_applied, "configured_state", "pcmu")
+            assert_json_field(audio_applied, "running_state", "speex")
+            assert_json_field(audio_applied, "changed", True)
+            assert_json_field(audio_applied, "backup_present", True)
+            # reboot is disabled in the smoke config, so the action reports it is
+            # required but must not actually reboot the test host.
+            assert_json_field(audio_applied, "reboot_required", True)
+            assert_json_field(audio_applied, "rebooting", False)
+            if "<enable_speex>0</enable_speex>" not in audio_stack_open.read_text(
+                encoding="utf-8"
+            ):
+                raise AssertionError("audio-codec apply did not patch stack_open.xml")
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_write_class", "audio_codec")
+            assert_json_field(diagnostics, "last_write_reason", "apply")
+            audio_reapplied = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/apply",
+                {"confirm": "apply_audio_codec_patch"},
+            )
+            assert_json_field(audio_reapplied, "state", "speex")
+            assert_json_field(audio_reapplied, "configured_state", "pcmu")
+            assert_json_field(audio_reapplied, "running_state", "speex")
+            assert_json_field(audio_reapplied, "changed", False)
+            assert_json_field(audio_reapplied, "reboot_required", True)
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            audio_restored = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/restore",
+                {"confirm": "restore_audio_codec_patch"},
+            )
+            expected_agent_writes += 1
+            assert_json_field(audio_restored, "state", "speex")
+            assert_json_field(audio_restored, "configured_state", "speex")
+            assert_json_field(audio_restored, "running_state", "speex")
+            assert_json_field(audio_restored, "changed", True)
+            assert_json_field(audio_restored, "rebooting", False)
+            if "<enable_speex>1</enable_speex>" not in audio_stack_open.read_text(
+                encoding="utf-8"
+            ):
+                raise AssertionError("audio-codec restore did not restore stack_open.xml")
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
+            assert_json_field(diagnostics, "last_write_class", "audio_codec")
+            assert_json_field(diagnostics, "last_write_reason", "restore")
+            audio_rerestored = maintenance_post(
+                api_port,
+                "/api/v1/maintenance/audio-codec/actions/restore",
+                {"confirm": "restore_audio_codec_patch"},
+            )
+            assert_json_field(audio_rerestored, "state", "speex")
+            assert_json_field(audio_rerestored, "configured_state", "speex")
+            assert_json_field(audio_rerestored, "running_state", "speex")
+            assert_json_field(audio_rerestored, "changed", False)
+            assert_json_field(audio_rerestored, "reboot_required", False)
+            diagnostics = api_get(api_port, "/api/v1/diagnostics")
+            assert_json_field(diagnostics, "agent_write_count", expected_agent_writes)
             assert_json_field(
                 maintenance_post(
                     api_port,

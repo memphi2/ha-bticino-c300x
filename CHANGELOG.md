@@ -2,18 +2,14 @@
 
 ## v1.9.7 - Unreleased
 
-### Changed
+### Removed
 
-- Decouple the PCMU audio codec from the firmware teardown drain patch. Hardware
-  testing showed the patch does not stop the device from rebooting on an
-  overlapping on-demand teardown, so it is no longer applied, and PCMU no longer
-  depends on it. A device still carrying the patch is returned to the stock media
-  daemon automatically on the next agent start.
+- Remove the firmware teardown drain patch entirely. Hardware testing showed it
+  did not stop the device from rebooting on an overlapping on-demand teardown, so
+  the audio codec no longer applies it and PCMU no longer depends on it.
 
 ### Fixed
 
-- Report the drain patch state in every codec mode, so a device whose daemon is
-  still patched is no longer reported as unpatched after switching back to speex.
 - Keep a completed codec switch successful when the closing read-only remount
   reports the root filesystem busy; the switch had already been written.
 - Start SSH before the audio codec switch reboots the device, matching the
@@ -22,8 +18,10 @@
 ### Upgrade note
 
 - If your device is on the `pcmu` audio codec, switch it back to `speex` before
-  updating. The agent returns the media daemon to stock on its own, but starting
-  from speex avoids a PCMU session on an unpatched daemon during the transition.
+  updating. 1.9.7 no longer touches the media daemon, so a device still carrying
+  the patch keeps it; the longer drain is harmless on speex. To return the daemon
+  to the stock binary, run `--restore-media-patches` on the 1.9.6 agent before
+  updating.
 
 ## v1.9.6 - 2026-10-04
 

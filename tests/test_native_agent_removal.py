@@ -45,8 +45,6 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
         "C300X_AGENT_DIR": str(agent),
         "C300X_BACKUP_ROOT": str(backups),
         "C300X_AUDIO_BACKUP_DIR": str(original),
-        "C300X_MEDIA_TEARDOWN_BACKUP_DIR": str(original / "home/bticino/bin"),
-        "C300X_MEDIA_TEARDOWN_PROC_ROOT": str(tmp_path / "absent-proc"),
         "C300X_AUDIO_NO_REMOUNT": "1",
         "C300X_DEVICE_PATCH_NO_REMOUNT": "1",
         "TEST_COMMAND_LOG": str(tmp_path / "commands.log"),
@@ -54,7 +52,6 @@ def device(tmp_path: Path, removal_binary: Path) -> dict[str, str]:
     files = {
         "C300X_AUDIO_STACK_OPEN": ("stack.xml", STACK),
         "C300X_AUDIO_LINPHONE_CONF": ("linphone.conf", LINPHONE),
-        "C300X_MEDIA_TEARDOWN_TARGET": ("media-target", "unmanaged firmware"),
         "C300X_INIT_SCRIPT": ("init", "agent startup"),
         "C300X_INIT_LINK": ("init-link", "agent startup link"),
         "C300X_IPTABLES": ("iptables", "original firewall\n"),
@@ -95,48 +92,13 @@ def _remove(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _teardown_target_name() -> str:
-    name = list("??_??_?????")
-    for offset, value in (
-        (0, "b"), (1, "t"), (3, "a"), (4, "v"),
-        (6, "m"), (7, "e"), (8, "d"), (9, "i"), (10, "a"),
-    ):
-        name[offset] = value
-    return "".join(name)
+def _set_pcmu_config(env: dict[str, str]) -> None:
+    """Switch the codec config to PCMU. The drain patch is gone, so this only
+    rewrites stack_open.xml and linphone.conf; the daemon is never touched."""
 
-
-def _load_builder():
-    import importlib.util
-
-    path = ROOT / "scripts" / "media_teardown_builder.py"
-    spec = importlib.util.spec_from_file_location("media_teardown_builder", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    import sys as _sys
-
-    _sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _apply_pcmu(env: dict[str, str]) -> bytes:
-    stock = os.environ.get("C300X_TEARDOWN_TEST_STOCK")
-    if not stock or not Path(stock).is_file():
-        pytest.skip("C300X_TEARDOWN_TEST_STOCK is required for verified firmware rollback")
-    original = Path(stock).read_bytes()
-    target = Path(env["C300X_MEDIA_TEARDOWN_TARGET"])
-    target.write_bytes(original)
     result = _cli(env, "--audio-codec", "apply")
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["state"] == "pcmu"
-    # PCMU no longer applies the drain patch, so model a device from the coupled
-    # release that still carries it: a patched daemon with a stock backup. The
-    # removal path (and the startup rollback) must still return it to stock.
-    _load_builder().patch_media(Path(stock), target)
-    backup_dir = Path(env["C300X_MEDIA_TEARDOWN_BACKUP_DIR"])
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    (backup_dir / _teardown_target_name()).write_bytes(original)
-    return original
 
 
 def _assert_kept(env: dict[str, str], result: subprocess.CompletedProcess[str]) -> None:
@@ -157,67 +119,31 @@ def _assert_removed(env: dict[str, str], result: subprocess.CompletedProcess[str
         time.sleep(0.01)
 
 
-def test_uninstall_leaves_unmanaged_firmware_untouched(device: dict[str, str]) -> None:
+def test_uninstall_leaves_an_unconfigured_device_untouched(device: dict[str, str]) -> None:
     result = _remove(device)
     _assert_removed(device, result)
-    assert Path(device["C300X_MEDIA_TEARDOWN_TARGET"]).read_text() == "unmanaged firmware"
     assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
 
 
-def test_uninstall_keeps_unknown_firmware_and_its_backup(device: dict[str, str]) -> None:
-    backup = Path(device["C300X_MEDIA_TEARDOWN_BACKUP_DIR"])
-    backup.mkdir(parents=True)
-    saved = backup / "bt_av_media"
-    saved.write_bytes(b"unknown original")
-    _assert_kept(device, _remove(device))
-    assert saved.read_bytes() == b"unknown original"
-    assert Path(device["C300X_MEDIA_TEARDOWN_TARGET"]).read_text() == "unmanaged firmware"
-
-
-def test_restore_cli_restores_coupled_patches_idempotently(device: dict[str, str]) -> None:
-    stock = _apply_pcmu(device)
+def test_restore_cli_restores_the_codec_config_idempotently(device: dict[str, str]) -> None:
+    _set_pcmu_config(device)
     for _ in range(2):
         result = _cli(device, "--restore-media-patches")
         assert result.returncode == 0, result.stderr
-        assert Path(device["C300X_MEDIA_TEARDOWN_TARGET"]).read_bytes() == stock
         assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
         assert Path(device["C300X_AUDIO_LINPHONE_CONF"]).read_text() == LINPHONE
     assert Path(device["C300X_BACKUP_ROOT"]).exists()
 
 
-def test_uninstall_restores_both_codec_and_firmware_before_cleanup(device: dict[str, str]) -> None:
-    stock = _apply_pcmu(device)
+def test_uninstall_restores_the_codec_config_before_cleanup(device: dict[str, str]) -> None:
+    _set_pcmu_config(device)
     _assert_removed(device, _remove(device))
-    assert Path(device["C300X_MEDIA_TEARDOWN_TARGET"]).read_bytes() == stock
     assert Path(device["C300X_AUDIO_STACK_OPEN"]).read_text() == STACK
     assert Path(device["C300X_AUDIO_LINPHONE_CONF"]).read_text() == LINPHONE
 
 
-@pytest.mark.parametrize("failure", ["missing", "corrupt", "unknown_target", "write_failure"])
-def test_uninstall_preserves_files_when_firmware_restore_fails(
-    device: dict[str, str], failure: str,
-) -> None:
-    _apply_pcmu(device)
-    backup = next(Path(device["C300X_MEDIA_TEARDOWN_BACKUP_DIR"]).iterdir())
-    target = Path(device["C300X_MEDIA_TEARDOWN_TARGET"])
-    if failure == "missing":
-        backup.unlink()
-    elif failure == "corrupt":
-        backup.write_bytes(b"corrupt")
-    elif failure == "unknown_target":
-        target.write_bytes(b"different firmware")
-    else:
-        Path(str(target) + ".tmp").mkdir()
-    before = target.read_bytes()
-    _assert_kept(device, _remove(device))
-    assert target.read_bytes() == before
-
-
-def test_uninstall_keeps_drain_patch_if_codec_restore_fails(device: dict[str, str]) -> None:
-    _apply_pcmu(device)
-    target = Path(device["C300X_MEDIA_TEARDOWN_TARGET"])
-    patched = target.read_bytes()
+def test_uninstall_keeps_files_if_codec_restore_fails(device: dict[str, str]) -> None:
+    _set_pcmu_config(device)
     (Path(device["C300X_AUDIO_BACKUP_DIR"]) / "linphone.conf").unlink()
     _assert_kept(device, _remove(device))
-    assert target.read_bytes() == patched
     assert "<enable_speex>0</enable_speex>" in Path(device["C300X_AUDIO_STACK_OPEN"]).read_text()

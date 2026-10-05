@@ -26,8 +26,6 @@ struct c300x_audio_codec_status {
     int supported;        /* both target files exist */
     int backup_present;   /* both originals are backed up */
     int changed;          /* last apply/restore actually wrote device files */
-    int teardown_patch_installed;
-    int teardown_patch_active;
     int remount_ro_failed; /* write succeeded, root stayed writable */
     char state[C300X_AUDIO_CODEC_STATE_LEN]; /* "speex" | "pcmu" | "partial" */
     char error[C300X_MAX_ERROR_LEN];
@@ -35,14 +33,10 @@ struct c300x_audio_codec_status {
 
 /* Runtime codec mode, derived from the device itself (stack_open.xml
  * enable_speex) rather than agent config: 1 = the device emits PCMU, 0 = speex.
- * bt_av_media reads the same flag at boot, so an agent that reads it at startup
- * always matches the device — no separate config value that could drift. */
+ * the media daemon reads the same flag at boot, so an agent that reads it at
+ * startup always matches the device — no separate config value that could drift. */
 int c300x_audio_codec_device_is_pcmu(void);
 
-/* Return a device still carrying the disproved drain patch to the stock daemon.
- * Transitional: once the patched test devices are back on stock this goes away
- * together with the rest of the patch. */
-int c300x_audio_codec_rollback_teardown_patch(char *error, size_t error_len);
 int c300x_audio_codec_remove_patches(char *error, size_t error_len);
 
 int c300x_audio_codec_read_status(struct c300x_audio_codec_status *status);

@@ -41,13 +41,12 @@ static int run_audio_codec_cli(const char *action)
     if (ok) {
         printf(
             "{\"ok\":true,\"state\":\"%s\",\"supported\":%s,\"backup_present\":%s,\"changed\":%s,"
-            "\"teardown_patch_installed\":%s,\"teardown_patch_active\":%s,\"reboot_required\":%s}\n",
+            "\"root_writable\":%s,\"reboot_required\":%s}\n",
             status.state,
             json_bool(status.supported),
             json_bool(status.backup_present),
             json_bool(status.changed),
-            json_bool(status.teardown_patch_installed),
-            json_bool(status.teardown_patch_active),
+            json_bool(status.remount_ro_failed),
             json_bool(c300x_audio_codec_reboot_required(&status, NULL))
         );
         return 0;
@@ -201,13 +200,5 @@ int main(int argc, char **argv)
     }
 
     (void)signal(SIGPIPE, SIG_IGN);
-
-    /* Return any device still carrying the disproved drain patch to the stock
-     * daemon on startup. Best-effort: a device that cannot be rolled back must
-     * still run every other feature, so this never blocks start. */
-    if (!c300x_audio_codec_rollback_teardown_patch(error, sizeof(error))) {
-        fprintf(stderr, "warning: teardown_patch_rollback_failed: %s\n", error);
-    }
-
     return c300x_run(&config);
 }

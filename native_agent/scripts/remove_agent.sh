@@ -110,7 +110,6 @@ stop_agent() {
 
 restore_media_patches() {
     if ! C300X_AUDIO_BACKUP_DIR="$BACKUP_ROOT/original" \
-        C300X_MEDIA_TEARDOWN_BACKUP_DIR="$BACKUP_ROOT/original/home/bticino/bin" \
         "$AGENT_DIR/c300x-agent-native" --restore-media-patches; then
         printf 'Failed to restore media patches; keeping agent files and backups in place\n' >&2
         exit 1

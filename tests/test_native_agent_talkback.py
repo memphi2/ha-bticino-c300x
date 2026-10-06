@@ -445,3 +445,25 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in ondemand_media_body
     assert "send_rtcp_receiver_report(" not in media_bridge
     assert "send_rtcp_pli(" not in media_bridge
+
+
+def test_native_agent_bt_av_stop_removes_only_owned_udp_clients() -> None:
+    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+        encoding="utf-8"
+    )
+    header = (ROOT / "native_agent" / "src" / "media_bt_av.h").read_text(
+        encoding="utf-8"
+    )
+    media_bridge = _read_media_bridge()
+
+    stop_body = media_bt_av[
+        media_bt_av.index("void c300x_media_bt_av_stop") :
+        media_bt_av.index("bool c300x_media_bt_av_takeover")
+    ]
+
+    assert "void c300x_media_bt_av_stop(const struct c300x_config *config);" in header
+    assert '"*7*0*##"' not in stop_body
+    assert stop_body.count('"*7*301#127#0#0#1#%d#') == 2
+    assert "audio_rtp_port(config)" in stop_body
+    assert "video_rtp_port(config)" in stop_body
+    assert "c300x_media_bt_av_stop(g_bridge.config);" in media_bridge

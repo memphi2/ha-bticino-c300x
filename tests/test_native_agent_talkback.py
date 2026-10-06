@@ -350,7 +350,11 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "connect_sip_socket(bridge->config)" in setup_body
     assert '"Via: SIP/2.0/%s %s:%u' in setup_body
     assert '"s=Talk\\r\\n"' in setup_body
-    assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
+    assert 'const bool use_pcmu = bridge_audio_codec_is_pcmu(bridge);' in setup_body
+    assert '? "0 100"' in setup_body
+    assert ': "96 97 98 0 8 101 99 100"' in setup_body
+    assert '"a=rtpmap:0 PCMU/8000\\\\r\\\\n"' in setup_body
+    assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=nortpproxy:yes\\r\\n"' in setup_body
     assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body

@@ -125,9 +125,31 @@ bool c300x_media_bt_av_start(const struct c300x_config *config) {
     return true;
 }
 
-void c300x_media_bt_av_stop(void) {
+void c300x_media_bt_av_stop(const struct c300x_config *config) {
+    if (config == NULL) {
+        return;
+    }
+
+    char command[128];
     char reply[128] = {0};
-    (void)send_bt_av_media_command("*7*0*##", reply, sizeof(reply));
+    int quality = config->video_av_high_resolution ? 0 : 1;
+
+    snprintf(
+        command,
+        sizeof(command),
+        "*7*301#127#0#0#1#%d#2*##",
+        audio_rtp_port(config)
+    );
+    (void)send_bt_av_media_command(command, reply, sizeof(reply));
+
+    snprintf(
+        command,
+        sizeof(command),
+        "*7*301#127#0#0#1#%d#%d*##",
+        video_rtp_port(config),
+        quality
+    );
+    (void)send_bt_av_media_command(command, reply, sizeof(reply));
 }
 
 bool c300x_media_bt_av_takeover(const struct c300x_config *config) {

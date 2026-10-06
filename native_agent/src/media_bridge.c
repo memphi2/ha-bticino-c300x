@@ -5679,7 +5679,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
         close(sip_fd);
     }
     if (send_media_stop) {
-        c300x_media_bt_av_stop();
+        c300x_media_bt_av_stop(g_bridge.config);
     }
 
     pthread_mutex_lock(&g_bridge.mutex);

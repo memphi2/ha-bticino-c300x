@@ -249,7 +249,8 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert "ring_forwarding_allows_registration" not in setup_body
     assert "ring_forwarding_allows_registration" not in start_body
     assert "bridge_instance_uuid(bridge, bridge->ondemand_instance_uuid" in setup_body
-    assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
+    assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
+    assert '? "0 100"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=rtpmap:96 AV1/90000\\r\\n"' in setup_body
     assert setup_body.count('"a=crypto:1 AEAD_AES_128_GCM inline:%s\\r\\n"') >= 2

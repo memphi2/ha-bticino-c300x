@@ -4229,6 +4229,23 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         return false;
     }
 
+    const bool use_pcmu = bridge_audio_codec_is_pcmu(bridge);
+    const char *audio_formats = use_pcmu
+        ? "0 100"
+        : "96 97 98 0 8 101 99 100";
+    const char *audio_codec_attributes = use_pcmu
+        ? "a=rtpmap:0 PCMU/8000\\r\\n"
+          "a=rtpmap:100 telephone-event/8000\\r\\n"
+        : "a=rtpmap:96 opus/48000/2\\r\\n"
+          "a=fmtp:96 useinbandfec=1\\r\\n"
+          "a=rtpmap:97 speex/16000\\r\\n"
+          "a=fmtp:97 vbr=on\\r\\n"
+          "a=rtpmap:98 speex/8000\\r\\n"
+          "a=fmtp:98 vbr=on\\r\\n"
+          "a=rtpmap:101 telephone-event/48000\\r\\n"
+          "a=rtpmap:99 telephone-event/16000\\r\\n"
+          "a=rtpmap:100 telephone-event/8000\\r\\n";
+
     char sdp[4096];
     snprintf(
         sdp,
@@ -4242,16 +4259,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         "a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r\n"
         "a=DEVADDR:%d\r\n"
         "a=nortpproxy:yes\r\n"
-        "m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\r\n"
-        "a=rtpmap:96 opus/48000/2\r\n"
-        "a=fmtp:96 useinbandfec=1\r\n"
-        "a=rtpmap:97 speex/16000\r\n"
-        "a=fmtp:97 vbr=on\r\n"
-        "a=rtpmap:98 speex/8000\r\n"
-        "a=fmtp:98 vbr=on\r\n"
-        "a=rtpmap:101 telephone-event/48000\r\n"
-        "a=rtpmap:99 telephone-event/16000\r\n"
-        "a=rtpmap:100 telephone-event/8000\r\n"
+        "m=audio %d RTP/SAVP %s\r\n"
+        "%s"
         "a=crypto:1 AEAD_AES_128_GCM inline:%s\r\n"
         "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\r\n"
         "a=crypto:3 AEAD_AES_256_GCM inline:%s\r\n"
@@ -4270,6 +4279,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         local_ip,
         doorbell_devaddr(bridge->config),
         MEDIA_AUDIO_RTP_PORT,
+        audio_formats,
+        audio_codec_attributes,
         audio_crypto_aead128,
         audio_key,
         audio_crypto_aead256,

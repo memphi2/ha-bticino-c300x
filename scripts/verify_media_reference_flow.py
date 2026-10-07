@@ -617,11 +617,32 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
     offer = _fixture("on_demand")["offer"]
     checks = _collect_media_code_checks(
         setup_body,
-        offer,
+        {"video": offer["video"]},
         prefix="code.on_demand.offer",
     )
     checks.extend(
         [
+            Check(
+                "code.on_demand.offer.audio.codec_switch",
+                "const bool use_pcmu = bridge_audio_codec_is_pcmu(bridge);" in setup_body,
+            ),
+            Check(
+                "code.on_demand.offer.audio.dynamic_media_line",
+                '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body,
+            ),
+            Check(
+                "code.on_demand.offer.audio.pcmu_only_speech",
+                '? "0 100"' in setup_body
+                and '"a=rtpmap:0 PCMU/8000\\\\r\\\\n"' in setup_body
+                and '"a=rtpmap:100 telephone-event/8000\\\\r\\\\n"' in setup_body,
+            ),
+            Check(
+                "code.on_demand.offer.audio.legacy_non_pcmu_offer",
+                ': "96 97 98 0 8 101 99 100"' in setup_body
+                and '"a=rtpmap:96 opus/48000/2\\\\r\\\\n"' in setup_body
+                and '"a=rtpmap:97 speex/16000\\\\r\\\\n"' in setup_body
+                and '"a=rtpmap:98 speex/8000\\\\r\\\\n"' in setup_body,
+            ),
             Check("code.on_demand.recvonly", '"a=recvonly\\r\\n"' in setup_body),
             Check(
                 "code.on_demand.instance_uuid_scope",
@@ -637,10 +658,6 @@ def _collect_on_demand_code_checks(media_bridge: str, root: Path) -> list[Check]
             Check("code.on_demand.stop_action", "/api/v1/video/doorbell/actions/stop" in api),
             Check("code.on_demand.rtsp_teardown", 'strcmp(method, "TEARDOWN") == 0' in rtsp_body),
             Check("code.on_demand.teardown_stops_last_client", "remaining_clients == 0" in rtsp_body),
-            Check(
-                "code.on_demand.no_static_pcmu_rtpmap",
-                '"a=rtpmap:0 PCMU/8000\\r\\n"' not in setup_body,
-            ),
             Check(
                 "code.on_demand.no_static_pcma_rtpmap",
                 '"a=rtpmap:8 PCMA/8000\\r\\n"' not in setup_body,

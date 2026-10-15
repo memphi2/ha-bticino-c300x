@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.9.8 - 2026-10-15
+
+### Added
+
+- Add verified HTTPS callbacks for agent events and the display bridge, using
+  the device libcurl and CA bundle.
+- Preserve HTTPS hostnames and report transport support in Home Assistant
+  diagnostics and Repairs. HTTP remains available.
+
+### Validation
+
+- ARMHF build, firmware ABI and stack checks passed; 282 targeted tests passed.
+- Physical-device HTTPS delivery and nine local TLS-server tests remain unverified.
+- Update the bundled device agent to `1.9.8-https.1` after updating the integration.
+
 ## v1.9.7 - 2026-10-05
 
 ### Removed

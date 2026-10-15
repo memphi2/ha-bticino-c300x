@@ -6,6 +6,7 @@
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
+#include "https_client.h"
 #include "json_util.h"
 #include "local_action_events.h"
 #include "device_routing.h"
@@ -146,6 +147,8 @@ struct subscription {
     char last_event_type[64];
     char last_delivered_at[40];
     int last_ok;
+    long last_http_status;
+    const char *last_error;
 };
 struct voicemail_message {
     char id[C300X_MAX_VOICEMAIL_ID_LEN];
@@ -1031,6 +1034,23 @@ static int forward_to_homeassistant(
         sizeof(path)
     )) {
         return 0;
+    }
+
+    if (strncmp(webhook_url, "https://", 8) == 0) {
+        long status;
+        const char *error;
+        ok = c300x_https_post(
+            webhook_url, "X-Bticino-C300X-Secret", shared_secret, body,
+            response, response_len, config->home_assistant_request_timeout_ms,
+            &status, &error
+        );
+        if (ok) {
+            if (response_len > 0 && response[0] == '\0') {
+                snprintf(response, response_len, "{}\n");
+            }
+            mark_home_assistant_callback_seen(runtime, time(NULL));
+        }
+        return ok;
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -3041,7 +3061,7 @@ static void subscription_token_fingerprint(
 
 static int post_callback(
     const struct c300x_config *config,
-    const struct subscription *subscription,
+    struct subscription *subscription,
     const char *event_json
 )
 {
@@ -3057,8 +3077,17 @@ static int post_callback(
     char response[64];
     int ok = 0;
 
+    subscription->last_http_status = 0;
+    subscription->last_error = NULL;
     if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         return 0;
+    }
+    if (strncmp(subscription->callback_url, "https://", 8) == 0) {
+        return c300x_https_post(
+            subscription->callback_url, C300X_EVENT_TOKEN_HEADER, subscription->token,
+            event_json, NULL, 0, config->callback_timeout_ms,
+            &subscription->last_http_status, &subscription->last_error
+        );
     }
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
@@ -3188,10 +3217,12 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
             body,
             sizeof(body),
             &used,
-            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s}}",
+            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s,\"http_status\":%ld,\"error\":\"%s\"}}",
             subscription->last_ok ? "true" : "false",
             last_event_type,
-            last_delivered_at
+            last_delivered_at,
+            subscription->last_http_status,
+            subscription->last_error != NULL ? subscription->last_error : ""
         )) {
             send_response_too_large(client_fd);
             return;
@@ -3268,8 +3299,13 @@ static void handle_subscriptions_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"callback_url_required\"}\n");
         return;
     }
-    if (strncmp(subscription.callback_url, "http://", 7) != 0) {
+    char host[256], port[16], path[256];
+    if (!parse_http_url(subscription.callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_callback_url\"}\n");
+        return;
+    }
+    if (strncmp(subscription.callback_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (subscription.event_count == 0) {
@@ -3392,9 +3428,12 @@ static void handle_display_bridge_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"shared_secret_required\"}\n");
         return;
     }
-    if (strncmp(webhook_url, "http://", 7) != 0
-        || !parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
+    if (!parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_webhook_url\"}\n");
+        return;
+    }
+    if (strncmp(webhook_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (
@@ -6769,6 +6808,7 @@ static void api_capabilities(
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
+        .https_callbacks = c300x_https_available(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
         .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
         .ringer_volume_step = C300X_RINGER_VOLUME_STEP,

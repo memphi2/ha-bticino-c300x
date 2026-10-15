@@ -2,6 +2,8 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -37,14 +39,25 @@ int parse_http_url(
     const char *path_start;
     const char *colon;
     const char *bracket_end;
+    int https = strncmp(url, "https://", 8) == 0;
 
-    if (strncmp(url, "http://", 7) != 0) {
+    if (!https && strncmp(url, "http://", 7) != 0) {
         return 0;
     }
-    host_start = url + 7;
+    for (ptr = url; *ptr; ptr++) {
+        if (iscntrl((unsigned char)*ptr) || isspace((unsigned char)*ptr) || *ptr == '#') {
+            return 0;
+        }
+    }
+    host_start = url + (https ? 8 : 7);
     path_start = strchr(host_start, '/');
     if (path_start == NULL) {
         path_start = url + strlen(url);
+    }
+    if (memchr(host_start, '@', (size_t)(path_start - host_start)) != NULL
+        || memchr(host_start, '?', (size_t)(path_start - host_start)) != NULL
+        || strlen(path_start) >= path_len) {
+        return 0;
     }
     colon = NULL;
     if (*host_start == '[') {
@@ -81,11 +94,25 @@ int parse_http_url(
         }
         memcpy(port, colon + 1, len);
         port[len] = '\0';
+        for (ptr = port; *ptr; ptr++) {
+            if (!isdigit((unsigned char)*ptr)) {
+                return 0;
+            }
+        }
+        char *port_end;
+        unsigned long port_number = strtoul(port, &port_end, 10);
+        if (*port_end != '\0' || port_number == 0 || port_number > 65535) {
+            return 0;
+        }
     } else {
-        snprintf(port, port_len, "80");
+        if (snprintf(port, port_len, "%s", https ? "443" : "80") >= (int)port_len) {
+            return 0;
+        }
     }
     if (*path_start == '\0') {
-        snprintf(path, path_len, "/");
+        if (snprintf(path, path_len, "/") >= (int)path_len) {
+            return 0;
+        }
     } else {
         snprintf(path, path_len, "%s", path_start);
     }

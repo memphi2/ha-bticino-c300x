@@ -11,7 +11,7 @@
           "callback_base_url": "Callback base URL override (optional)"
         },
         "data_description": {
-          "callback_base_url": "Leave empty for normal setups. Use only when Home Assistant generates a callback URL the C300X cannot reach, for example with an HTTPS frontend/reverse proxy, homeassistant.local, or link-local IPv6. Must be local HTTP, e.g. http://HA_LOCAL_IP:8123."
+          "callback_base_url": "Leave empty for automatic setup. Otherwise enter a Home Assistant HTTP or HTTPS base URL reachable from the C300X. HTTPS requires an updated agent with https_callbacks support and a trusted certificate matching the hostname. Do not use .local, loopback or link-local addresses."
         }
       },
       "agent_missing": {
@@ -99,7 +99,7 @@
           "rotate_shared_secret": "Rotate shared secret"
         },
         "data_description": {
-          "callback_base_url": "Leave empty for normal setups. Use only when Home Assistant generates a callback URL the C300X cannot reach, for example with an HTTPS frontend/reverse proxy, homeassistant.local, or link-local IPv6. Must be local HTTP, e.g. http://HA_LOCAL_IP:8123."
+          "callback_base_url": "Leave empty for automatic setup. Otherwise enter a Home Assistant HTTP or HTTPS base URL reachable from the C300X. HTTPS requires an updated agent with https_callbacks support and a trusted certificate matching the hostname. Do not use .local, loopback or link-local addresses."
         }
       },
       "reconfigure_features": {
@@ -163,7 +163,7 @@
       "device_install_verify_failed": "The installer finished, but the native agent did not answer with the generated token.",
       "invalid_agent_port": "Enter a valid device agent port.",
       "invalid_agent_host": "Enter the device agent host.",
-      "invalid_callback_base_url": "Enter a local HTTP Home Assistant callback URL reachable from the C300X, or leave it empty.",
+      "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty.",
       "invalid_device_host": "Enter the C300X address.",
       "installer_dependency_missing": "The optional Python SSH dependency could not be installed or loaded. Check Home Assistant package installation and try again.",
       "invalid_ssh_password": "Enter the C300X SSH password.",
@@ -190,7 +190,7 @@
           "callback_base_url": "Callback base URL override (optional)"
         },
         "data_description": {
-          "callback_base_url": "Leave empty for normal setups. Use only when Home Assistant generates a callback URL the C300X cannot reach, for example with an HTTPS frontend/reverse proxy, homeassistant.local, or link-local IPv6. Must be local HTTP, e.g. http://HA_LOCAL_IP:8123."
+          "callback_base_url": "Leave empty for automatic setup. Otherwise enter a Home Assistant HTTP or HTTPS base URL reachable from the C300X. HTTPS requires an updated agent with https_callbacks support and a trusted certificate matching the hostname. Do not use .local, loopback or link-local addresses."
         }
       },
       "features": {
@@ -248,7 +248,7 @@
       "invalid_action_map": "The action allowlist JSON is invalid.",
       "invalid_actions": "The action allowlist JSON is invalid.",
       "invalid_agent_host": "Enter the device agent host.",
-      "invalid_callback_base_url": "Enter a local HTTP Home Assistant callback URL reachable from the C300X, or leave it empty.",
+      "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty.",
       "invalid_alarm_entity": "Select an alarm control panel entity or leave the field empty.",
       "invalid_alarm_page_entity": "Select a supported dashboard entity for the alarm page or leave the field empty.",
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
@@ -656,14 +656,14 @@
         "step": {
           "configure": {
             "title": "Configure local callback URL",
-            "description": "Enter a local HTTP Home Assistant base URL that the C300X can reach directly. Use this only when Home Assistant generated an unreachable callback URL, for example HTTPS, homeassistant.local, loopback, or link-local IPv6.\n\nSuggested value: {suggested_callback_base_url}",
+            "description": "Enter a Home Assistant HTTP or HTTPS base URL reachable from the C300X. For HTTPS, update the device agent to a version advertising https_callbacks and use a hostname matching a trusted certificate. Check DNS, device time and certificate trust if delivery fails.\n\nSuggested value: {suggested_callback_base_url}",
             "data": {
-              "callback_base_url": "Local HTTP callback base URL"
+              "callback_base_url": "Callback base URL (HTTP or HTTPS)"
             }
           }
         },
         "error": {
-          "invalid_callback_base_url": "Enter a local HTTP URL reachable from the C300X, for example http://HA_LOCAL_IP:8123."
+          "invalid_callback_base_url": "Enter a reachable Home Assistant HTTP or HTTPS base URL, or leave it empty."
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."

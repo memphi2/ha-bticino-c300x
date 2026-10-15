@@ -61,7 +61,7 @@ jobs:
       - name: Install native agent toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev pkg-config
       - name: Validation gates
         run: python scripts/check_validate.py
 
@@ -250,7 +250,7 @@ jobs:
       - name: Install ARMHF toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev pkg-config
       - name: Release validation gates
         run: python scripts/check_repo.py
       - name: Resolve reusable native agent
@@ -377,7 +377,7 @@ jobs:
           test -s "$RELEASE_SBOM"
           (cd .release && sha256sum -c SHA256SUMS)
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ha-bticino-c300x-release
           path: |

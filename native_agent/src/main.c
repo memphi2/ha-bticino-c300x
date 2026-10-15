@@ -1,5 +1,6 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "https_client.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -199,6 +200,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* Older device libcurl/OpenSSL versions must initialize before workers. */
+    (void)c300x_https_available();
     (void)signal(SIGPIPE, SIG_IGN);
     return c300x_run(&config);
 }

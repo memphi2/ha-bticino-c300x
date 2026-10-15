@@ -10,7 +10,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from .action import ActionValidationError, validate_action_map
 from .agent_update import agent_update_repair_placeholders
-from .callback_target import callback_target_is_clean_local_http
+from .callback_target import callback_target_is_supported
 from .capabilities import capability_is_supported, maintenance_action_is_advertised
 from .const import (
     CONF_ACTIONS,
@@ -574,7 +574,12 @@ def _callback_problem(entry: BticinoC300XConfigEntry) -> dict[str, str] | None:
             continue
         scheme = getattr(holder, scheme_attr, None)
         host_type = getattr(holder, host_type_attr, None)
-        clean = callback_target_is_clean_local_http(scheme, host_type)
+        capabilities = getattr(runtime_data, "capabilities", {})
+        clean = callback_target_is_supported(
+            scheme, host_type,
+            https_supported=isinstance(capabilities, Mapping)
+            and capabilities.get("https_callbacks") is True,
+        )
         if clean is False:
             return {
                 "source": source,

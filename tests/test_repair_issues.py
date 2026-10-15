@@ -848,6 +848,23 @@ def test_callback_readiness_failure_creates_callback_repair_issue() -> None:
     assert issue["translation_placeholders"]["scheme"] == "https"
 
 
+def test_https_callback_repair_requires_compatible_agent() -> None:
+    entry = FakeEntry(
+        runtime_data=FakeRuntimeData(
+            connection_state=types.SimpleNamespace(
+                available=True,
+                event_subscription_callback_scheme="https",
+                event_subscription_callback_host_type="hostname",
+            ),
+            capabilities={"https_callbacks": True},
+        ),
+    )
+    assert repair_issues._callback_problem(entry) is None
+    for supported in (False, None):
+        entry.runtime_data.capabilities["https_callbacks"] = supported
+        assert repair_issues._callback_problem(entry) is not None
+
+
 def test_single_media_user_failure_creates_only_device_user_repair() -> None:
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},

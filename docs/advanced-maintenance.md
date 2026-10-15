@@ -106,7 +106,9 @@ changed.
 
 ## Callback URL
 
-Callbacks must use a local HTTP URL that the C300X can reach directly.
+Callbacks must use an HTTP or HTTPS URL that the C300X can reach directly.
+HTTPS requires an updated agent advertising `https_callbacks` and a trusted
+certificate matching the URL hostname. Check the device clock and DNS as well.
 
 Avoid:
 
@@ -117,11 +119,12 @@ Avoid:
 - public or remote-only URLs.
 
 If Home Assistant generates an unsuitable URL, set **Local Home Assistant
-callback base URL** in setup/options. Use only the local HTTP base URL, for
+callback base URL** in setup/options. Enter the HTTP or HTTPS base URL, for
 example:
 
 ```text
 http://192.0.2.10:8123
+https://ha.example.com:8123
 ```
 
 Home Assistant keeps the generated webhook path and token.

@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v1.9.7-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.9.8-0366d6?style=flat-square)](CHANGELOG.md)
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://www.hacs.xyz/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -20,6 +20,8 @@ forwarding controls, messages and optional display pages.
 ## What You Get
 
 - Doorbell ring events and local camera viewing.
+- HTTPS callback delivery for event subscriptions and display updates when the
+  device agent supports verified HTTPS.
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.

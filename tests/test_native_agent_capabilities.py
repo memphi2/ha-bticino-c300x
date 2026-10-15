@@ -31,6 +31,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             "id": "synthetic-id", "model": "C300X", "firmware": '1.7.19"test',
         }
         assert document["agent"]["self_update_supported"] is maintenance
+        assert caps["https_callbacks"] is maintenance
         assert set(caps["maintenance"].values()) == {maintenance}
         assert caps["doorbell_video"] == {
             "supported": True, "stream_path": '/doorbell"video',

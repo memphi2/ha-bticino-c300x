@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .callback_target import callback_target_is_supported
 from .capabilities import capability_is_supported
 from .const import (
     CONF_VIDEO_ENABLED,
@@ -92,7 +93,11 @@ def media_readiness(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     elif ring_call_supported and forwarding_state is None:
         warnings.append("forwarding_unknown")
 
-    callback_url_ok = event_callback_ready(connection_state)
+    callback_url_ok = event_callback_ready(
+        connection_state,
+        https_supported=isinstance(capabilities, Mapping)
+        and capabilities.get("https_callbacks") is True,
+    )
     if callback_url_ok is False:
         failed.append("callback_url")
     elif callback_url_ok is None:
@@ -170,7 +175,9 @@ def media_user_ready(
     return device_user_ready(device_user_status)
 
 
-def event_callback_ready(connection_state: Any) -> bool | None:
+def event_callback_ready(
+    connection_state: Any, *, https_supported: bool = False
+) -> bool | None:
     """Return whether the agent callback target is known-good."""
 
     if getattr(connection_state, "event_subscription_last_success_at", None) is not None:
@@ -181,9 +188,6 @@ def event_callback_ready(connection_state: Any) -> bool | None:
     host_type = getattr(connection_state, "event_subscription_callback_host_type", None)
     if scheme is None and host_type is None:
         return None
-    return scheme == "http" and host_type not in {
-        "loopback",
-        "link_local",
-        "mdns",
-        "unknown",
-    }
+    return callback_target_is_supported(
+        scheme, host_type, https_supported=https_supported
+    )

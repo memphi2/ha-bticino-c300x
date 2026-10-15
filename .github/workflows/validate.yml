@@ -52,7 +52,7 @@ jobs:
       - name: Install native agent toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+          sudo apt-get install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libcurl4-openssl-dev pkg-config
       - name: Validation gates
         run: python scripts/check_validate.py
 

@@ -79,22 +79,28 @@ Key sections:
 - `video`: optional local media doorstation media support
 - `displayBridge`: optional dashboard proxy for QML
 
-Callback URLs for event subscriptions and the display bridge must use a local
-Home Assistant HTTP URL with a stable local IPv4 address or stable ULA/global
-IPv6 address. Do not use `homeassistant.local`, other `.local` names, or
+Callback URLs for event subscriptions and the display bridge support HTTP and
+HTTPS. Use a Home Assistant endpoint reachable from the C300X. For HTTPS, keep
+the hostname matching the server certificate; it is never replaced with a source
+IP address. Do not use `homeassistant.local`, other `.local` names, or
 link-local addresses for callbacks or media routing; those names can resolve to
 different paths for Home Assistant, the C300X, browsers and HA Cloud.
 
 The Home Assistant integration can override only the callback base URL sent to
 the agent. This is a Home Assistant-side setting; the agent still receives the
-normal generated webhook path and shared secret. The override must be plain
-local HTTP and must not use `.local`, loopback or link-local addresses.
+normal generated webhook path and shared secret. The override accepts HTTP or
+HTTPS and must not use `.local`, loopback or link-local addresses.
 
-The native agent intentionally has no TLS client stack; HTTPS termination
-belongs on the Home Assistant side or a local reverse proxy. The same applies
-to the agent API: Home Assistant may connect through HTTPS if a local reverse
-proxy terminates TLS, but the shipped native binary itself stays plain HTTP to
-avoid TLS library dependencies and idle CPU/memory cost on the C300X.
+The agent advertises `https_callbacks` when the device provides a compatible
+`libcurl.so.4` (7.34 or newer, HTTPS and asynchronous DNS support). HTTPS uses
+TLS 1.2 or newer and verifies both the certificate chain and hostname using
+`/etc/ssl/certs/ca-certificates.crt`. The device clock must be correct. Redirects
+and environment proxies are disabled; HTTPS errors never trigger an HTTP retry.
+An older agent, missing library or unsupported curl build requires an agent or
+device-library update before HTTPS can work. HTTP remains available independently.
+
+The agent's own API listener still serves plain local HTTP. A local reverse proxy
+is needed if Home Assistant must connect to that listener through HTTPS.
 
 ## API contract
 

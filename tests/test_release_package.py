@@ -511,6 +511,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert "device_agent/scripts/qml_patch.sh" in paths
     assert "device_agent/scripts/remove_agent.sh" in paths
     assert "device_agent/scripts/bootstrap_firewall.sh" in paths
+    assert "device_agent/qml/C300XRingerControl.qml" in paths
     assert not any(path.startswith("device_agent/patches/") for path in paths)
     for path in RESERVED_DEVICE_PATCH_PATHS:
         assert path not in paths
@@ -522,6 +523,7 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
     assert modes["device_agent/scripts/bootstrap_firewall.sh"] == "700"
     assert modes["device_agent/qml/Alarm.qml"] == "644"
     assert modes["device_agent/qml/HomeAssistant.qml"] == "644"
+    assert modes["device_agent/qml/C300XRingerControl.qml"] == "644"
     assert modes["device_agent/qml/js/c300x_ha.js"] == "644"
     assert modes["device_agent/qml/js/c300x_i18n.js"] == "644"
     assert modes["device_agent/qml/js/c300x_memos.js"] == "644"

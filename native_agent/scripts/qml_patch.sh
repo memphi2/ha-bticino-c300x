@@ -12,7 +12,7 @@ GUI_WRAPPER="${C300X_QML_GUI_WRAPPER:-/home/bticino/bin/BtClass_qws}"
 GUI_RELOAD_DELAY_SECONDS="${C300X_QML_GUI_RELOAD_DELAY_SECONDS:-2}"
 DYNAMIC_HOME_PAGE="${C300X_QML_DYNAMIC_HOME_PAGE:-0}"
 STAGING_DIR="${C300X_QML_STAGING_DIR:-${TMPDIR:-/tmp}/c300x-qml-patch.$$}"
-CORE_PATCH_FILES="EventManager.qml"
+CORE_PATCH_FILES="C300XRingerControl.qml EventManager.qml"
 MEDIA_USER_LABEL_FILES="Components/Settings/CallBlockPopup.qml"
 FEATURE_PATCH_FILES="MainApp.qml HomePage.qml MemoPage.qml Alarm.qml HomeAssistant.qml js/c300x_ha.js js/c300x_i18n.js js/c300x_memos.js"
 PATCH_FILES="$FEATURE_PATCH_FILES $CORE_PATCH_FILES"
@@ -135,14 +135,18 @@ home_page_feature_patch_present() {
 
 core_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
-        && file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
+        && file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        && cmp -s "$SOURCE_DIR/C300XRingerControl.qml" "$GUI_DIR/C300XRingerControl.qml" \
         && core_call_end_hooks_present
 }
 
 core_partial_patch_present() {
     file_contains "$GUI_DIR/EventManager.qml" 'function c300xNotifyMediaClosed()' \
         || file_contains "$GUI_DIR/EventManager.qml" '/ui/media-closed' \
-        || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()'
+        || file_contains "$GUI_DIR/EventManager.qml" 'c300xNotifyMediaClosed()' \
+        || file_contains "$GUI_DIR/EventManager.qml" 'C300XRingerControl {}' \
+        || [ -f "$GUI_DIR/C300XRingerControl.qml" ]
 }
 
 media_user_label_present() {
@@ -732,9 +736,11 @@ patch_event_manager() {
             print ""
             print "    function c300xNotifyMediaClosed() {"
             print "        var request = new XMLHttpRequest()"
-            print "        request.open(\"GET\", \"http://127.0.0.1:8092/ui/media-closed\", true)"
+            print "        request.open(\"GET\", \"http://127.0.0.1:8090/ui/media-closed\", true)"
             print "        request.send()"
             print "    }"
+            print ""
+            print "    C300XRingerControl {}"
             next
         }
         $0 == "        onCallEnded: {" {
@@ -748,7 +754,8 @@ patch_event_manager() {
         "$temp_file" \
         "EventManager.qml" \
         'function c300xNotifyMediaClosed()' \
-        'request.open("GET", "http://127.0.0.1:8092/ui/media-closed", true)' \
+        'C300XRingerControl {}' \
+        'request.open("GET", "http://127.0.0.1:8090/ui/media-closed", true)' \
         'c300xNotifyMediaClosed()' \
         'onCallEnded:'
     mv "$temp_file" "$event_manager"
@@ -796,6 +803,7 @@ generate_core_patch_stage() {
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
     patch_event_manager
+    copy_generated_file "C300XRingerControl.qml"
     unset PATCH_OUTPUT_DIR
 }
 
@@ -821,6 +829,7 @@ generate_full_patch_stage() {
     PATCH_OUTPUT_DIR="$STAGING_DIR"
     export PATCH_OUTPUT_DIR
     patch_event_manager
+    copy_generated_file "C300XRingerControl.qml"
     patch_home_page
     patch_memo_page
     copy_generated_file "Alarm.qml"
@@ -1048,6 +1057,7 @@ restore_changed_count() {
 }
 
 restore_core_changed_count() {
+    changed=0
     restore_original="$BACKUP_DIR/EventManager.qml"
     restore_dest="$GUI_DIR/EventManager.qml"
     if [ ! -e "$restore_original" ]; then
@@ -1059,15 +1069,17 @@ restore_core_changed_count() {
         return 0
     fi
     if [ ! -f "$restore_dest" ] || ! cmp -s "$restore_original" "$restore_dest"; then
-        printf '1\n'
-    else
-        printf '0\n'
+        changed=$((changed + 1))
     fi
+    if [ -e "$GUI_DIR/C300XRingerControl.qml" ]; then
+        changed=$((changed + 1))
+    fi
+    printf '%s\n' "$changed"
 }
 
 is_generated_patch_file() {
     case "$1" in
-        Alarm.qml|HomeAssistant.qml|js/c300x_ha.js|js/c300x_i18n.js|js/c300x_memos.js)
+        Alarm.qml|HomeAssistant.qml|C300XRingerControl.qml|js/c300x_ha.js|js/c300x_i18n.js|js/c300x_memos.js)
             return 0
             ;;
         *)
@@ -1122,6 +1134,7 @@ restore_media_user_label_files() {
 
 restore_core_patch_files() {
     restore_file "EventManager.qml"
+    restore_file "C300XRingerControl.qml"
 }
 
 restore_all_changed_count() {

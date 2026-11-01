@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.7`
+- Current packaged agent version: `1.9.8`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -557,7 +557,19 @@ Request fields:
 {"volume": 5}
 ```
 
-`muted` sends `*#8**#33*0##` or `*#8**#33*1##`. `volume` accepts the C300X UI
+`muted` first asks the core QML hook to enable/disable `AudioState.RingtoneMute`,
+just like the device button. The API response waits for the matching GUI
+acknowledgment and device readback. Only the GUI sends the mute/unmute device
+command; the agent never overrides its audio-state priorities with a raw write.
+A differing readback returns `409 ringer_not_applied`, and an undecodable
+readback returns `502 ringer_readback_failed`. An ACK alone is not a confirmed value.
+The core QML hook must be updated and loaded; the optional display bridge
+pages are not required. A missing GUI returns `503 ringer_gui_unavailable`,
+a concurrent command `409 ringer_gui_busy`, and a missing acknowledgment
+`504 ringer_gui_timeout` after five seconds. Failed/mismatching GUI
+acknowledgments never fall back to an unsynchronized device write.
+
+`volume` accepts the C300X UI
 range `0..10` and translates it to the OpenWebNet `41` tens code before sending
 `*#8**#41*<code>##`. A volume write is only reported as successful after a
 fresh `*#8**41##` readback returns the requested value. If the write ACKs but
@@ -1189,6 +1201,7 @@ requires display bridge support where applicable.
 | `GET` | `/ui/events/status` | Long-poll state for QML event bridge. |
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
+| `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -1198,10 +1211,22 @@ requires display bridge support where applicable.
 UI endpoints use the local display bridge and shared secret configured through
 the API listener. They must not expose configured token values.
 
+The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
+It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
+is allowed. One connection waits indefinitely without periodic device reads.
+An authorized API ringer request returns `{ok, id, muted, expires}` to that
+connection; `id` is a fresh 128-bit random command identifier and `expires` a
+Unix-millisecond deadline. The GUI applies unexpired commands and reconnects
+with `?completed=<id>&muted=0|1`, confirming its actual saved state. Stale,
+incorrect and missing confirmations cannot complete another command. The API
+request has a monotonic five-second deadline. Diagnostics expose
+`ringer_gui_ready` and `ringer_command_pending`, but never command identifiers.
+
 ## Compatibility Matrix
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.9.8 | 1.1 | 1.7.x | GUI-confirmed ringer mute/unmute and corrected core call-end notification port. Requires the matching core QML hook and a GUI reload. Device validation is pending. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
 | 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |

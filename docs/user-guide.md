@@ -38,6 +38,10 @@ Most users only need:
   answerable from Home Assistant.
 - Use **Ringer mute** and **Ringer volume** for ringtone behavior. Volume uses
   the C300X `0..10` scale; `0` is mute.
+- From agent 1.9.8, mute/unmute also updates the display's saved mute state.
+  Update the agent and its core QML hook together and reload the device GUI.
+  A missing or unresponsive GUI returns an error instead of changing only the
+  LED/device value. The optional Home Assistant display pages are not required.
 - Start troubleshooting with **Media readiness** before editing card YAML.
 
 ## Feature Areas

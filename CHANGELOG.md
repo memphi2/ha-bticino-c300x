@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Raise the minimum supported Home Assistant version to `2026.7.0` to address
+  the three reported HA security advisories. Align HACS, documentation, CI and
+  release metadata with this baseline. Update HA before installing the next
+  release; HA 2026.5 and 2026.6 are no longer supported by that release.
 - Group routine Actions and Python tool updates quarterly, with one open PR per
   area. Keep security-update PRs independent and put both HA validation targets
   in Dependabot-readable manifests used directly by CI. Replace text-based

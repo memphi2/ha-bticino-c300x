@@ -1,5 +1,5 @@
 {
-  "min_homeassistant": "2026.5.0",
+  "min_homeassistant": "2026.7.0",
   "current_homeassistant": "2026.9.0",
   "python": "3.14",
   "c300x_firmware": "1.7.x",

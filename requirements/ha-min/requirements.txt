@@ -1,2 +1,2 @@
 # Minimum Home Assistant validation target; normal compatibility bumps are manual.
-homeassistant==2026.5.0
+homeassistant==2026.7.0

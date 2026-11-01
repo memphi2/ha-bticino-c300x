@@ -1251,7 +1251,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
-| 1.9.8 | 1.1 | 1.7.x | GUI-confirmed ringer mute/unmute and corrected core call-end notification port; requires the matching core QML hook and a GUI reload. Removes the ineffective on-demand teardown settle window, limits cleanup to owned BT-AV clients, aligns PCMU negotiation and bounds SIP/TCP framing. Physical-device validation is pending; the PCMU reboot remains unresolved. |
+| 1.9.8 | 1.1 | 1.7.x | GUI-confirmed ringer mute/unmute and corrected core call-end notification port; requires the matching core QML hook and a GUI reload. Adds opt-in verified HTTPS callbacks. Removes the ineffective on-demand teardown settle window, limits cleanup to owned BT-AV clients, aligns PCMU negotiation and bounds SIP/TCP framing. Physical-device validation is pending; the PCMU reboot remains unresolved. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
 | 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |

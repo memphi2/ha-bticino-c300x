@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.8 - Unreleased
+## v1.9.8 - 2026-11-01
 
 ### Fixed
 
@@ -29,8 +29,8 @@
   aligned with each HA version, with real form, service and websocket tests.
 - Raise the minimum supported Home Assistant version to `2026.7.0` to address
   the three reported HA security advisories. Align HACS, documentation, CI and
-  release metadata with this baseline. Update HA before installing the next
-  release; HA 2026.5 and 2026.6 are no longer supported by that release.
+  release metadata with this baseline. Update HA before installing this
+  release; HA 2026.5 and 2026.6 are no longer supported.
 - Group routine Actions and Python tool updates quarterly, with one open PR per
   area. Keep security-update PRs independent and put both HA validation targets
   in Dependabot-readable manifests used directly by CI. Replace text-based
@@ -51,6 +51,15 @@
   a bounded deadline and reject incomplete or invalid frames.
 - PCMU device reboots in #55 remain unresolved. The cleanup and SDP changes
   require device validation and are not a confirmed reboot fix.
+
+### Upgrade notes
+
+- Includes a freshly built native agent `1.9.8`. Update the device agent and
+  core QML hook together, then reload the device GUI to activate the ringer
+  synchronization and corrected call-end notification. Updating only the HA
+  integration is not sufficient.
+- Physical-device validation of the new ringer path and exact HTTPS opt-in
+  implementation remains pending. Issues #55 and #65 remain open.
 
 ## v1.9.7 - 2026-10-05
 

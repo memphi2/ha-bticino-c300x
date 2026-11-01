@@ -6,9 +6,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
-
 from .const import DOMAIN
+from .schema_compat import vol
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant

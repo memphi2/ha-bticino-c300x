@@ -9,12 +9,9 @@ import time
 from collections.abc import Mapping, MutableMapping
 from contextlib import suppress
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
-from homeassistant.components.camera import (
-    Camera,
-    CameraEntityFeature,
-)
+from homeassistant.components.camera import Camera
 from homeassistant.components.stream import (
     CONF_RTSP_TRANSPORT,
     CONF_USE_WALLCLOCK_AS_TIMESTAMPS,
@@ -27,6 +24,7 @@ from propcache.api import cached_property
 
 from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
+from .camera_media.ha_compat import CameraEntityFeature, WebRTCError, WebRTCSendMessage
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
 )
@@ -101,11 +99,6 @@ from .value_parsing import optional_mapping, optional_string
 from .video import (
     doorbell_camera_unique_id,
 )
-
-if TYPE_CHECKING:
-    from homeassistant.components.camera.webrtc import WebRTCError, WebRTCSendMessage
-else:
-    from homeassistant.components.camera import WebRTCError, WebRTCSendMessage
 
 _CameraStateSnapshot = tuple[Any, Any, Any]
 PARALLEL_UPDATES = 0

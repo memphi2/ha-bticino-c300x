@@ -6,8 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
-
 from .activation_address import normalize_stair_light_part
 from .config_schemas import (
     device_activation_item_schema,
@@ -39,6 +37,7 @@ from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
 )
+from .schema_compat import vol
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigFlowResult as FlowResult

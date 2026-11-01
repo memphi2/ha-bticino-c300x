@@ -10,11 +10,13 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
 if "homeassistant.components.camera" not in sys.modules:
     homeassistant = types.ModuleType("homeassistant")
     components = types.ModuleType("homeassistant.components")
     camera = types.ModuleType("homeassistant.components.camera")
+    camera_const = types.ModuleType("homeassistant.components.camera.const")
     stream = types.ModuleType("homeassistant.components.stream")
     config_entries = types.ModuleType("homeassistant.config_entries")
     const = types.ModuleType("homeassistant.const")
@@ -57,6 +59,7 @@ if "homeassistant.components.camera" not in sys.modules:
 
     camera.Camera = Camera
     camera.CameraEntityFeature = types.SimpleNamespace(STREAM=1)
+    camera_const.CameraEntityFeature = camera.CameraEntityFeature
     camera.WebRTCAnswer = lambda sdp: {"type": "answer", "sdp": sdp}
     camera.WebRTCError = lambda code, message: {
         "type": "error",
@@ -67,6 +70,8 @@ if "homeassistant.components.camera" not in sys.modules:
     config_entries.ConfigEntry = ConfigEntry
     core.CALLBACK_TYPE = object
     const.ATTR_ENTITY_ID = "entity_id"
+    const.MAJOR_VERSION = MAJOR_VERSION
+    const.MINOR_VERSION = MINOR_VERSION
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
     config_validation.config_entry_only_config_schema = lambda _domain: dict
@@ -89,6 +94,7 @@ if "homeassistant.components.camera" not in sys.modules:
     sys.modules.setdefault("homeassistant", homeassistant)
     sys.modules["homeassistant.components"] = components
     sys.modules["homeassistant.components.camera"] = camera
+    sys.modules["homeassistant.components.camera.const"] = camera_const
     sys.modules["homeassistant.components.stream"] = stream
     sys.modules["homeassistant.config_entries"] = config_entries
     sys.modules["homeassistant.const"] = const

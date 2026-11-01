@@ -6,7 +6,6 @@ import asyncio
 from contextlib import suppress
 from typing import Any, cast
 
-import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -76,6 +75,7 @@ from .repair_issues import (
     UNSUPPORTED_CALLBACK_URL_ISSUE,
     repair_issue_id,
 )
+from .schema_compat import vol
 
 _AGENT_UPDATE_RESTART_SETTLE_SECONDS = 1.0
 

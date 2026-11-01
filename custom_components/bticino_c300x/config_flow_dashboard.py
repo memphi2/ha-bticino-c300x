@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
@@ -57,6 +55,7 @@ from .dashboard_entities import (
     normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
 )
+from .schema_compat import vol
 
 DASHBOARD_PREVENT_RETURN_DEFAULT = False
 DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT = True

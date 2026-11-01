@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from .config_audio import audio_gain_db_or_default
 from .config_flow_dashboard import (
     DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT as _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
@@ -67,6 +65,7 @@ from .const import (
 )
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
+from .schema_compat import vol
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
 

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from .const import (
     DEFAULT_STAIR_LIGHT_N,
     DEFAULT_STAIR_LIGHT_P,
 )
+from .schema_compat import vol
 
 
 def normalize_stair_light_part(value: Any, *, default: str) -> str:

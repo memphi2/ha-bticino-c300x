@@ -7,9 +7,8 @@ from functools import partial
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
-
 from ..const import MAX_HOME_CALL_DURATION_SECONDS
+from ..schema_compat import vol
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant

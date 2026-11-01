@@ -10,6 +10,9 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from homeassistant.components.camera import const as camera_const
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+
 STRICT_TARGETS = (
     "custom_components/bticino_c300x/__init__.py",
     "custom_components/bticino_c300x/action.py",
@@ -28,6 +31,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/callback_target.py",
     "custom_components/bticino_c300x/camera.py",
     "custom_components/bticino_c300x/camera_media/__init__.py",
+    "custom_components/bticino_c300x/camera_media/ha_compat.py",
     "custom_components/bticino_c300x/camera_media/home_call_ws.py",
     "custom_components/bticino_c300x/config_schemas.py",
     "custom_components/bticino_c300x/config_audio.py",
@@ -96,6 +100,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/select.py",
     "custom_components/bticino_c300x/sensor.py",
     "custom_components/bticino_c300x/service_schema.py",
+    "custom_components/bticino_c300x/schema_compat.py",
     "custom_components/bticino_c300x/services.py",
     "custom_components/bticino_c300x/switch.py",
     "custom_components/bticino_c300x/use_cases/__init__.py",
@@ -139,6 +144,18 @@ STRICT_TARGETS = (
 
 
 def main() -> int:
+    # Mypy cannot infer package-version conditionals. Select the real HA engine
+    # explicitly, preserving concrete Schema/Invalid types on both matrix legs.
+    schema_branch = (
+        "--always-true"
+        if (MAJOR_VERSION, MINOR_VERSION) >= (2026, 9)
+        else "--always-false"
+    )
+    camera_branch = (
+        "--always-true"
+        if hasattr(camera_const, "CameraEntityFeature")
+        else "--always-false"
+    )
     return subprocess.run(
         [
             sys.executable,
@@ -147,6 +164,10 @@ def main() -> int:
             "--strict",
             "--ignore-missing-imports",
             "--follow-imports=silent",
+            schema_branch,
+            "HA_USES_PROBATIO",
+            camera_branch,
+            "HA_CAMERA_FEATURE_IN_CONST",
             *STRICT_TARGETS,
         ],
         check=False,

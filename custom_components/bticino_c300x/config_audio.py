@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
+from .schema_compat import vol
 
 AUDIO_GAIN_DB_MIN = -20.0
 AUDIO_GAIN_DB_MAX = 20.0

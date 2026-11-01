@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from .api import C300XAgentApiResponseError, normalize_text_memo_text
 from .const import MAX_HOME_CALL_DURATION_SECONDS
+from .schema_compat import vol
 from .validation_patterns import ACTIVATION_ID_RE, LOCK_ID_RE, STAIR_LIGHT_ADDRESS_RE
 
 ATTR_ACTION_ID = "action_id"

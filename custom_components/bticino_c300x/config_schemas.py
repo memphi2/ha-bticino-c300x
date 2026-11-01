@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from .activation_address import (
     normalize_stair_light_part,
 )
@@ -46,6 +44,7 @@ from .const import (
     WEBRTC_ICE_POLICIES,
 )
 from .device_activations import DEVICE_ACTIVATION_TYPES
+from .schema_compat import vol
 
 selector: Any
 try:

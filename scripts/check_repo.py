@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from check_dependency_updates import check_dependency_updates
 from check_reporting import report_failures
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -128,6 +129,7 @@ REQUIRED_PATHS = [
     "docs/quality-scale.md",
     "docs/user-guide.md",
     "scripts/check_quality_scale.py",
+    "scripts/check_dependency_updates.py",
     "scripts/check_coverage.py",
     "scripts/check_frontend_lts.py",
     "scripts/check_ha_deprecations.py",
@@ -140,9 +142,10 @@ REQUIRED_PATHS = [
     "scripts/verify_media_reference_flow.py",
     "scripts/write_release_assets.py",
     "scripts/smoke_ha.py",
-    "requirements-dev.in",
     "requirements-dev.txt",
     "requirements-dev-min-ha.txt",
+    "requirements/ha-min/requirements.txt",
+    "requirements/ha-current/requirements.txt",
     "hacs.json",
     "native_agent/Makefile",
     "native_agent/VERSION",
@@ -222,6 +225,7 @@ def main() -> int:
     failures.extend(check_config_entry_typing())
     failures.extend(check_smoke_ha_versions())
     failures.extend(check_installer_dependency_pins())
+    failures.extend(check_dependency_updates(ROOT))
     failures.extend(check_hacs_metadata())
     failures.extend(check_frontend_lts())
     failures.extend(check_frontend_bundle_hash())
@@ -678,15 +682,8 @@ def check_installer_dependency_pins() -> list[str]:
             "manifest.json must not require aiortc; media uses Home Assistant's WebRTC provider"
         )
 
-    requirements_in = (ROOT / "requirements-dev.in").read_text(encoding="utf-8")
     current_lock = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
     min_lock = (ROOT / "requirements-dev-min-ha.txt").read_text(encoding="utf-8")
-    if required_pin not in requirements_in.splitlines():
-        failures.append(f"requirements-dev.in must pin {required_pin}")
-    if required_spdx_pin not in requirements_in.splitlines():
-        failures.append(f"requirements-dev.in must pin {required_spdx_pin}")
-    if "homeassistant==" in requirements_in:
-        failures.append("requirements-dev.in must leave Home Assistant to the CI lock matrix")
     for path, text in {
         "requirements-dev.txt": current_lock,
         "requirements-dev-min-ha.txt": min_lock,
@@ -696,7 +693,7 @@ def check_installer_dependency_pins() -> list[str]:
         if required_spdx_pin not in text.splitlines():
             failures.append(f"{path} must pin {required_spdx_pin}")
         if "homeassistant==" in text:
-            failures.append(f"{path} must leave Home Assistant to the CI matrix")
+            failures.append(f"{path} must leave Home Assistant to its separate CI manifest")
         for transitive in ("aiohttp", "cryptography", "pillow", "PyJWT"):
             if re.search(rf"^{re.escape(transitive)}==", text, re.MULTILINE | re.IGNORECASE):
                 failures.append(
@@ -725,39 +722,6 @@ def check_installer_dependency_pins() -> list[str]:
             "sensor.py must not import Home Assistant PERCENTAGE; HA 2026.7 deprecates it as a unit"
         )
 
-    dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
-    if (
-        "python-patch-minor:" not in dependabot
-        or 'update-types:\n          - "minor"\n          - "patch"' not in dependabot
-    ):
-        failures.append("Dependabot must group only Python minor/patch updates")
-    if 'interval: "monthly"' not in dependabot:
-        failures.append("Dependabot must check Python dependencies monthly for LTS stability")
-    if (
-        'dependency-name: "*"' not in dependabot
-        or "version-update:semver-major" not in dependabot
-    ):
-        failures.append("Dependabot must leave Python major updates to manual compatibility work")
-    if "Home Assistant compatibility is bumped manually" not in dependabot:
-        failures.append("Dependabot must document manual Home Assistant compatibility bumps")
-    if "requirements-dev.txt" not in dependabot:
-        failures.append("Dependabot must document the current validation lock it updates")
-    if (
-        'exclude-paths:\n      - "requirements-dev-min-ha.txt"' not in dependabot
-        or "minimum-HA validation lock" not in dependabot
-    ):
-        failures.append(
-            "Dependabot must exclude the minimum-HA validation lock from automatic updates"
-        )
-    if 'dependency-name: "paramiko"' not in dependabot or '">=4"' not in dependabot:
-        failures.append("Dependabot must ignore Paramiko >=4 for C300X SSH compatibility")
-    if (
-        'dependency-name: "homeassistant"' not in dependabot
-        or '">=0"' not in dependabot
-    ):
-        failures.append(
-            "Dependabot must leave Home Assistant dev pins to manual matrix bumps"
-        )
     return failures
 
 
@@ -812,24 +776,6 @@ def check_hacs_metadata() -> list[str]:
         release_workflow_path: release_workflow,
     }.items():
         workflow_name = workflow_path.name
-        if MIN_HOME_ASSISTANT_VERSION not in workflow:
-            failures.append(
-                f"{workflow_name} must test minimum Home Assistant {MIN_HOME_ASSISTANT_VERSION}"
-            )
-        if CURRENT_HOME_ASSISTANT_VERSION not in workflow:
-            failures.append(
-                f"{workflow_name} must test current Home Assistant {CURRENT_HOME_ASSISTANT_VERSION}"
-            )
-        if workflow.count(f'python-version: "{PYTHON_VERSION}"') < 2:
-            failures.append(
-                f"{workflow_name} must test minimum and current Home Assistant on Python {PYTHON_VERSION}"
-            )
-        if 'pip install "homeassistant==${{ matrix.homeassistant }}"' not in workflow:
-            failures.append(
-                f"{workflow_name} must install Home Assistant from the matrix before validation deps"
-            )
-        if "requirements-dev.txt" not in workflow or "requirements-dev-min-ha.txt" not in workflow:
-            failures.append(f"{workflow_name} must install validation dependencies from lock files")
         if "pip install --upgrade -r" in workflow:
             failures.append(f"{workflow_name} must not use moving validation requirements")
     if "hacs/action@" not in validate_workflow or "category: integration" not in validate_workflow:
@@ -1027,11 +973,6 @@ def check_github_automation() -> list[str]:
                     f"{relative(path)} action use must pin a full commit SHA instead of {spec}"
                 )
 
-    dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
-    if "package-ecosystem: \"github-actions\"" not in dependabot:
-        failures.append("Dependabot must monitor GitHub Actions")
-    if "package-ecosystem: \"pip\"" not in dependabot:
-        failures.append("Dependabot must monitor Python dependencies")
     return failures
 
 

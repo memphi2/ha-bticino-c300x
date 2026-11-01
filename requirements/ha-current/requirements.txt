@@ -1,0 +1,2 @@
+# Home Assistant validation target; normal compatibility bumps are manual.
+homeassistant==2026.9.0

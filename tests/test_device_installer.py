@@ -1388,7 +1388,6 @@ def test_installer_dependency_processing_uses_homeassistant_requirements(
 
 def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:
     requirement_files = (
-        ROOT / "requirements-dev.in",
         ROOT / "requirements-dev.txt",
         ROOT / "requirements-dev-min-ha.txt",
     )

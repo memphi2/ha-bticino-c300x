@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Group routine Actions and Python tool updates quarterly, with one open PR per
+  area. Keep security-update PRs independent and put both HA validation targets
+  in Dependabot-readable manifests used directly by CI. Replace text-based
+  dependency checks with parsed configuration checks and remove the unused
+  pip-compile input that caused transitive pin churn.
+
 ## v1.9.7 - 2026-10-05
 
 ### Removed

@@ -49,6 +49,10 @@ int c300x_capabilities_json(
         "\"device\":{\"id\":\"%s\",\"model\":\"%s\",\"firmware\":\"%s\"},"
         "\"capabilities\":{"
         "\"doorbell_events\":true,"
+        "\"https_callbacks\":%s,"
+        "\"https_callbacks_configurable\":true,"
+        "\"https_callbacks_enabled\":%s,"
+        "\"https_callbacks_configured\":%s,"
         "\"doorbell_video\":{\"supported\":%s,\"stream_path\":\"%s\",\"audio_stream_path\":\"%s\",\"recorder_stream_path\":\"%s\",\"audio_codec\":\"%s\",\"talkback_supported\":true,\"talkback_codec\":\"%s\",\"talkback_payload_type\":%d},"
         "\"doorbell_call\":{\"supported\":%s,\"answer\":true,\"hangup\":true,\"status\":true,\"capture\":false},"
         "\"home_call\":{\"supported\":%s,\"audio_codec\":\"%s\",\"rtp_proxy_supported\":true,\"max_duration_seconds\":%d},"
@@ -75,6 +79,9 @@ int c300x_capabilities_json(
         device_id_json,
         device_model,
         device_firmware,
+        context->https_callbacks ? "true" : "false",
+        context->https_callbacks_enabled ? "true" : "false",
+        config->https_callbacks_enabled ? "true" : "false",
         config->video_enabled ? "true" : "false",
         video_path,
         audio_path,

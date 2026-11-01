@@ -13,6 +13,14 @@
   explicitly when GUI confirmation is unavailable. Device validation of the
   new control path is still pending.
 
+### Added
+
+- Optional verified HTTPS for event and display callbacks through an explicit
+  HTTPS callback base URL override. Requires an updated agent. HTTP keeps its
+  existing transport without TLS initialization. Changing HTTP/HTTPS modes
+  restarts only the agent, deferred while media is active. HTTPS adds TLS work
+  on the device; certificate errors never fall back to HTTP.
+
 ### Changed
 
 - Validate against Home Assistant `2026.10.0`, keeping the `2026.7.0` minimum.

@@ -394,6 +394,30 @@ Validation:
 - `callback_url` is required.
 - `events` must contain at least one event.
 - Unsupported callback URLs are rejected with `unsupported_callback_url`.
+- HTTP and HTTPS are accepted. HTTPS requires `capabilities.https_callbacks`;
+  otherwise registration returns `https_unavailable`. TLS verifies the server's
+  certificate chain and hostname with the device CA bundle. Redirects are not
+  followed, proxies from the environment are ignored, and no HTTP fallback occurs.
+- Subscription `last_delivery` includes `http_status` (0 if unavailable) and
+  `error` (empty on success). HTTPS failures use fixed identifiers such as
+  `https_certificate_invalid`, `https_timeout` or `https_http_status`; they never
+  include the callback URL or token. These added fields describe HTTPS delivery;
+  HTTP keeps the existing `ok` result.
+
+HTTPS is disabled by default. `https_callbacks_configurable` advertises support
+for the opt-in setting without loading libcurl. `https_callbacks_configured`
+reports the persisted desired mode; `https_callbacks_enabled` reports the mode at
+process startup, and `https_callbacks` reports initialized transport availability.
+These capability reads never initialize TLS.
+
+An authenticated `POST /api/v1/maintenance/auth` with
+`{"httpsCallbacksEnabled": true}` persists `callbacks.httpsEnabled` only when
+changed. TLS initialization occurs before workers start, so a mode change needs
+an agent restart. HA derives this setting exclusively from an explicit HTTPS
+callback base URL override. To defer a restart during active media, send
+`{"confirm":"restart_agent","only_if_idle":true}` to the existing agent restart
+endpoint. It returns `409 media_session_active` instead of stopping the session.
+Switching back to HTTP requires the same restart to release the TLS library state.
 
 ### `DELETE /api/v1/events/subscriptions/{id}`
 
@@ -435,7 +459,8 @@ Request fields:
 ```
 
 When `enabled=true`, both `webhook_url` and `shared_secret` are required.
-Unsupported callback URLs are rejected.
+Unsupported callback URLs are rejected. HTTPS uses the same transport and
+certificate checks as event subscriptions and requires `https_callbacks`.
 
 ### `POST /api/v1/display-bridge/events`
 

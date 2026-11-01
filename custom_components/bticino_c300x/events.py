@@ -15,6 +15,7 @@ from homeassistant.helpers.event import async_call_later
 
 from .agent_diagnostics import async_refresh_agent_diagnostics
 from .api import C300XAgentApi
+from .callback_transport import CallbackTransport
 from .callback_url import async_generate_agent_callback_url
 from .capabilities import EVENT_ENTITY_EXCLUDED_TYPES, events_for_capabilities
 from .const import (
@@ -127,6 +128,7 @@ class _AgentEventRegistration:
         self._entry = entry
         self._api = api
         self._capabilities = capabilities
+        self._callback_transport = CallbackTransport(entry, api, capabilities)
         self._connection_state = connection_state
         self._on_runtime_registration_created = on_runtime_registration_created
         self._subscription_id: str | None = None
@@ -196,6 +198,7 @@ class _AgentEventRegistration:
             len(registration_events),
             datetime.now(UTC),
         )
+        transport_changed = await self._callback_transport.async_prepare(base_url)
         if registration_events:
             self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
@@ -223,7 +226,7 @@ class _AgentEventRegistration:
         self._connection_state.mark_connected()
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._send_connection_state_changed()
-        if registration_created:
+        if registration_created or transport_changed:
             await self._handle_runtime_registration_created()
         await async_refresh_agent_diagnostics(self._hass, self._entry)
 

@@ -6,6 +6,8 @@
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
+#include "http_callback.h"
+#include "https_client.h"
 #include "json_util.h"
 #include "local_action_events.h"
 #include "device_routing.h"
@@ -55,7 +57,6 @@
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 24
 #define C300X_MAX_URL_LEN 512
-#define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
 #define C300X_MAX_VOICEMAIL_DATE_LEN 64
@@ -140,6 +141,8 @@ struct subscription {
     char last_event_type[64];
     char last_delivered_at[40];
     int last_ok;
+    long last_http_status;
+    const char *last_error;
 };
 struct voicemail_message {
     char id[C300X_MAX_VOICEMAIL_ID_LEN];
@@ -492,6 +495,7 @@ static void handle_gui_reload(
 static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
+    const struct agent_runtime *runtime,
     const struct request *request
 );
 static void handle_remove_agent(
@@ -1022,6 +1026,23 @@ static int forward_to_homeassistant(
         sizeof(path)
     )) {
         return 0;
+    }
+
+    if (strncmp(webhook_url, "https://", 8) == 0) {
+        long status;
+        const char *error;
+        ok = c300x_https_post(
+            webhook_url, "X-Bticino-C300X-Secret", shared_secret, body,
+            response, response_len, config->home_assistant_request_timeout_ms,
+            &status, &error
+        );
+        if (ok) {
+            if (response_len > 0 && response[0] == '\0') {
+                snprintf(response, response_len, "{}\n");
+            }
+            mark_home_assistant_callback_seen(runtime, time(NULL));
+        }
+        return ok;
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -3032,95 +3053,26 @@ static void subscription_token_fingerprint(
 
 static int post_callback(
     const struct c300x_config *config,
-    const struct subscription *subscription,
+    struct subscription *subscription,
     const char *event_json
 )
 {
-    char host[256];
-    char host_header[288];
-    char port[16];
-    char path[256];
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *item;
-    int fd = -1;
-    char header[1024];
-    char response[64];
-    int ok = 0;
-
-    if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
-        return 0;
-    }
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = AF_UNSPEC;
-    if (getaddrinfo(host, port, &hints, &result) != 0) {
-        return 0;
-    }
-    http_host_header_value(host, port, host_header, sizeof(host_header));
-    for (item = result; item != NULL; item = item->ai_next) {
-        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
-        if (fd < 0) {
-            continue;
+    subscription->last_http_status = 0;
+    subscription->last_error = NULL;
+    if (strncmp(subscription->callback_url, "https://", 8) == 0) {
+        char host[256], port[16], path[256];
+        if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
+            return 0;
         }
-        set_fd_cloexec(fd);
-        set_socket_timeout(fd, config->callback_timeout_ms);
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
-            break;
-        }
-        close(fd);
-        fd = -1;
+        return c300x_https_post(
+            subscription->callback_url, C300X_EVENT_TOKEN_HEADER, subscription->token,
+            event_json, NULL, 0, config->callback_timeout_ms,
+            &subscription->last_http_status, &subscription->last_error
+        );
     }
-    freeaddrinfo(result);
-    if (fd < 0) {
-        return 0;
-    }
-    snprintf(
-        header,
-        sizeof(header),
-        "POST %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
-        "%s%s%s"
-        "Connection: close\r\n"
-        "\r\n",
-        path,
-        host_header,
-        strlen(event_json),
-        subscription->token[0] != '\0' ? C300X_EVENT_TOKEN_HEADER ": " : "",
-        subscription->token[0] != '\0' ? subscription->token : "",
-        subscription->token[0] != '\0' ? "\r\n" : ""
+    return c300x_http_post_callback(
+        subscription->callback_url, subscription->token, event_json, config->callback_timeout_ms
     );
-    if (send_all_bytes(fd, header, strlen(header))
-        && send_all_bytes(fd, event_json, strlen(event_json))) {
-        size_t used = 0;
-        long long deadline = c300x_system_metrics_monotonic_ms() + config->callback_timeout_ms;
-        while (used + 1 < sizeof(response)) {
-            long long remaining = deadline - c300x_system_metrics_monotonic_ms();
-            if (remaining <= 0) {
-                break;
-            }
-            set_socket_timeout(fd, (int)remaining);
-            ssize_t received = recv(fd, response + used, sizeof(response) - used - 1, 0);
-            if (received < 0 && errno == EINTR) {
-                continue;
-            }
-            if (received <= 0) {
-                break;
-            }
-            used += (size_t)received;
-            response[used] = '\0';
-            if (strchr(response, '\n') != NULL) {
-                ok = (strncmp(response, "HTTP/1.1 2", 10) == 0 || strncmp(response, "HTTP/1.0 2", 10) == 0)
-                    && strchr(response, '\n') - response >= 13 && isdigit((unsigned char)response[10])
-                    && isdigit((unsigned char)response[11]) && response[12] == ' ';
-                break;
-            }
-        }
-    }
-    close(fd);
-    return ok;
 }
 
 static void handle_subscriptions_get(int client_fd, const struct agent_runtime *runtime)
@@ -3179,10 +3131,12 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
             body,
             sizeof(body),
             &used,
-            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s}}",
+            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s,\"http_status\":%ld,\"error\":\"%s\"}}",
             subscription->last_ok ? "true" : "false",
             last_event_type,
-            last_delivered_at
+            last_delivered_at,
+            subscription->last_http_status,
+            subscription->last_error != NULL ? subscription->last_error : ""
         )) {
             send_response_too_large(client_fd);
             return;
@@ -3259,8 +3213,13 @@ static void handle_subscriptions_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"callback_url_required\"}\n");
         return;
     }
-    if (strncmp(subscription.callback_url, "http://", 7) != 0) {
+    char host[256], port[16], path[256];
+    if (!parse_http_url(subscription.callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_callback_url\"}\n");
+        return;
+    }
+    if (strncmp(subscription.callback_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (subscription.event_count == 0) {
@@ -3383,9 +3342,12 @@ static void handle_display_bridge_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"shared_secret_required\"}\n");
         return;
     }
-    if (strncmp(webhook_url, "http://", 7) != 0
-        || !parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
+    if (!parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_webhook_url\"}\n");
+        return;
+    }
+    if (strncmp(webhook_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (
@@ -4108,6 +4070,7 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         "\"noAuth\":%s,"
         "\"no_auth\":%s,"
         "\"restart_required\":%s,"
+        "\"https_callbacks_configured\":%s,"
         "\"api_token_configured\":%s,"
         "\"api_token_fingerprint\":%s,"
         "\"maintenance_token_configured\":%s,"
@@ -4135,7 +4098,8 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         "}\n",
         config->api_no_auth ? "true" : "false",
         config->api_no_auth ? "true" : "false",
-        config->restart_required ? "true" : "false",
+        (config->restart_required || c300x_https_enabled() != config->https_callbacks_enabled) ? "true" : "false",
+        config->https_callbacks_enabled ? "true" : "false",
         config->api_token[0] != '\0' ? "true" : "false",
         api_token_fingerprint_json,
         config->maintenance_admin_token[0] != '\0' ? "true" : "false",
@@ -4235,6 +4199,7 @@ static void copy_live_auth_config(
     live->maintenance_firewall_enabled = updated->maintenance_firewall_enabled;
     live->maintenance_ipv6_firewall_enabled = updated->maintenance_ipv6_firewall_enabled;
     live->mdns_enabled = updated->mdns_enabled;
+    live->https_callbacks_enabled = updated->https_callbacks_enabled;
     snprintf(live->stair_light_default_address, sizeof(live->stair_light_default_address), "%s", updated->stair_light_default_address);
     live->restart_required = live->restart_required || restart_required;
 }
@@ -4349,6 +4314,9 @@ static void handle_auth_config_post(
     }
     if (c300x_json_bool_field(request->body, "eventsEnabled", &value) || c300x_json_bool_field(request->body, "events_enabled", &value)) {
         updated->events_enabled = value;
+    }
+    if (c300x_json_bool_field(request->body, "httpsCallbacksEnabled", &value)) {
+        updated->https_callbacks_enabled = value;
     }
     if (c300x_json_bool_field(request->body, "memosEnabled", &value) || c300x_json_bool_field(request->body, "memos_enabled", &value)) {
         updated->memos_enabled = value;
@@ -6747,6 +6715,8 @@ static void api_capabilities(
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
+        .https_callbacks = c300x_https_available(),
+        .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
         .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
         .ringer_volume_step = C300X_RINGER_VOLUME_STEP,
@@ -10587,6 +10557,7 @@ static void handle_remove_agent(
 static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
+    const struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -10601,6 +10572,21 @@ static void handle_restart_agent(
     if (!confirm_matches(request, "restart_agent")) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
+    }
+    int only_if_idle = 0;
+    (void)c300x_json_bool_field(request->body, "only_if_idle", &only_if_idle);
+    if (only_if_idle) {
+        struct c300x_video_status status;
+        c300x_video_status(runtime->video, &status);
+        if (status.call_active || status.clients || status.media_starting
+            || status.bridge_media_active || status.bridge_stop_in_progress
+            || status.external_media_active || status.ring_call_active
+            || status.ring_media_active || status.ring_audio_active
+            || status.home_call_active || status.home_call_running
+            || status.ring_answer_requested || status.talkback_running) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"media_session_active\"}\n");
+            return;
+        }
     }
     if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
@@ -11605,7 +11591,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/agent/actions/restart") == 0) {
-        handle_restart_agent(client_fd, config, request);
+        handle_restart_agent(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/maintenance/update/status") == 0) {

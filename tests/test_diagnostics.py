@@ -323,6 +323,7 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         "callback_scheme": "http",
         "callback_host_type": "ipv4",
         "callback_is_clean_local_http": True,
+        "callback_is_supported": True,
         "last_attempt_at": "2026-06-02T00:00:00+00:00",
         "last_success_at": "2026-06-02T00:00:00+00:00",
         "last_failure_at": None,
@@ -1006,3 +1007,17 @@ def test_diagnostics_survive_an_agent_that_cannot_be_reached() -> None:
     )
 
     assert section == {"error": "TimeoutError"}
+
+
+def test_https_callback_diagnostics_use_agent_capability() -> None:
+    from custom_components.bticino_c300x.diagnostics import _connection_diagnostics
+
+    state = SimpleNamespace(
+        event_subscription_callback_scheme="https",
+        event_subscription_callback_host_type="hostname",
+    )
+    for supported in (True, False, None):
+        runtime = SimpleNamespace(connection_state=state, capabilities={"https_callbacks": supported})
+        result = _connection_diagnostics(runtime)["event_subscription"]
+        assert result["callback_is_supported"] is (supported is True)
+        assert result["callback_is_clean_local_http"] is False

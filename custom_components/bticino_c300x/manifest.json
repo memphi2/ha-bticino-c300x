@@ -1,11 +1,11 @@
 {
   "domain": "bticino_c300x",
   "name": "BTicino C300X",
-  "categories": ["security_safety.doorbells_intercoms"],
   "after_dependencies": [
     "http",
     "media_source"
   ],
+  "categories": ["security_safety.doorbells_intercoms"],
   "codeowners": [],
   "config_flow": true,
   "dependencies": [

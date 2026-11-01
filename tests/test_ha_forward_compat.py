@@ -40,6 +40,9 @@ def test_listener_does_not_combine_with_flow_reload_helpers() -> None:
 
 def test_marketplace_metadata_and_package_assets() -> None:
     manifest = json.loads((COMPONENT / "manifest.json").read_text())
+    keys = list(manifest)
+    assert keys[:2] == ["domain", "name"]
+    assert keys[2:] == sorted(keys[2:])
     assert manifest["categories"] == ["security_safety.doorbells_intercoms"]
     assert manifest["domain"] == "bticino_c300x"
     for name in ("brand/icon.png", "brand/logo.png", "translations/en.json"):

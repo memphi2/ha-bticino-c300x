@@ -7,6 +7,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SMOKE_HA_PATH = ROOT / "scripts" / "smoke_ha.py"
 PROJECT_VERSIONS_PATH = ROOT / "project-versions.json"
@@ -67,28 +69,36 @@ def test_smoke_ha_defaults_follow_project_versions(monkeypatch: Any) -> None:
     assert (versions["python"] + ".",) == smoke_ha.EXPECTED_PYTHON_PREFIXES
 
 
-def test_smoke_ha_runtime_check_accepts_current_minor(monkeypatch: Any) -> None:
+@pytest.mark.parametrize("version_key", ["min_homeassistant", "current_homeassistant"])
+def test_smoke_ha_runtime_check_accepts_supported_minor(
+    monkeypatch: Any, version_key: str
+) -> None:
     monkeypatch.delenv("HA_EXPECTED_VERSION_PREFIXES", raising=False)
     monkeypatch.delenv("HA_EXPECTED_PYTHON_PREFIXES", raising=False)
     smoke_ha = _load_smoke_ha()
+    versions = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))
+    ha_version = versions[version_key].rsplit(".", maxsplit=1)[0] + ".99"
 
     assert smoke_ha.check_runtime(
-        _RuntimeClient(ha_version="2026.9.99", python_version="3.14.4"),
+        _RuntimeClient(ha_version=ha_version, python_version="3.14.4"),
         "entry-1",
     ) == []
 
 
-def test_smoke_ha_runtime_check_rejects_unconfigured_minor(monkeypatch: Any) -> None:
+@pytest.mark.parametrize("ha_version", ["2026.5.9", "2026.6.9"])
+def test_smoke_ha_runtime_check_rejects_unconfigured_minor(
+    monkeypatch: Any, ha_version: str
+) -> None:
     monkeypatch.delenv("HA_EXPECTED_VERSION_PREFIXES", raising=False)
     monkeypatch.delenv("HA_EXPECTED_PYTHON_PREFIXES", raising=False)
     smoke_ha = _load_smoke_ha()
 
     failures = smoke_ha.check_runtime(
-        _RuntimeClient(ha_version="2026.7.9", python_version="3.14.4"),
+        _RuntimeClient(ha_version=ha_version, python_version="3.14.4"),
         "entry-1",
     )
 
-    assert failures == ["HA version 2026.7.9 does not match 2026.5.*, 2026.9.*"]
+    assert failures == [f"HA version {ha_version} does not match 2026.7.*, 2026.9.*"]
 
 
 def test_smoke_ha_does_not_require_optional_ssh_maintenance_entity() -> None:

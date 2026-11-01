@@ -208,6 +208,16 @@ def test_release_workflow_accepts_verified_same_tag_assets() -> None:
     )
 
 
+@pytest.mark.parametrize("document", ["README.md", "docs/quickstart.md"])
+def test_installation_docs_match_supported_minimum(document: str) -> None:
+    versions = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))
+    minimum = versions["min_homeassistant"]
+
+    assert f"Home Assistant `{minimum}` or newer." in (
+        ROOT / document
+    ).read_text(encoding="utf-8")
+
+
 def test_release_tag_checker_matches_current_metadata() -> None:
     checker = _load_release_tag_checker()
     version = json.loads(PROJECT_VERSIONS_PATH.read_text(encoding="utf-8"))[
@@ -357,9 +367,9 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
         "release": "v1.6.2",
-        "min_homeassistant": "2026.5.0",
+        "min_homeassistant": "2026.7.0",
         "current_homeassistant": "2026.9.0",
-        "validated_homeassistant": ["2026.5.0", "2026.9.0"],
+        "validated_homeassistant": ["2026.7.0", "2026.9.0"],
         "python": "3.14",
         "firmware_target": "1.7.x",
         "native_agent_rebuilt": True,

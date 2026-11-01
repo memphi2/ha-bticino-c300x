@@ -62,6 +62,7 @@ static int connect_local_tcp(int port) {
 }
 
 static bool send_bt_av_media_command(const char *command, char *reply, size_t reply_len) {
+    reply[0] = '\0';
     int fd = connect_local_tcp(BT_AV_MEDIA_PORT);
     if (fd < 0) {
         return false;
@@ -125,9 +126,39 @@ bool c300x_media_bt_av_start(const struct c300x_config *config) {
     return true;
 }
 
-void c300x_media_bt_av_stop(void) {
+void c300x_media_bt_av_stop(const struct c300x_config *config) {
+    if (config == NULL) {
+        return;
+    }
+
+    char command[128];
     char reply[128] = {0};
-    (void)send_bt_av_media_command("*7*0*##", reply, sizeof(reply));
+    int quality = config->video_av_high_resolution ? 0 : 1;
+
+    snprintf(
+        command,
+        sizeof(command),
+        "*7*301#127#0#0#1#%d#2*##",
+        audio_rtp_port(config)
+    );
+    /* Detach our own clients. A NACK can also mean SIP BYE already removed the
+       pipeline; neither an ACK nor a NACK establishes device teardown health. */
+    if (!send_bt_av_media_command(command, reply, sizeof(reply))) {
+        fprintf(stderr, "bt-av: audio client removal not acknowledged (port %d, %s)\n",
+                audio_rtp_port(config), strstr(reply, "*#*0##") != NULL ? "NACK" : "no ACK");
+    }
+
+    snprintf(
+        command,
+        sizeof(command),
+        "*7*301#127#0#0#1#%d#%d*##",
+        video_rtp_port(config),
+        quality
+    );
+    if (!send_bt_av_media_command(command, reply, sizeof(reply))) {
+        fprintf(stderr, "bt-av: video client removal not acknowledged (port %d, %s)\n",
+                video_rtp_port(config), strstr(reply, "*#*0##") != NULL ? "NACK" : "no ACK");
+    }
 }
 
 bool c300x_media_bt_av_takeover(const struct c300x_config *config) {

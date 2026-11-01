@@ -98,7 +98,7 @@ def callback_target_is_clean_local_http(
     scheme: str | None,
     host_type: str | None,
 ) -> bool | None:
-    """Return whether a callback target can be used by the native C agent."""
+    """Classify the legacy HTTP transport independently of agent capabilities."""
 
     if scheme is None and host_type is None:
         return None
@@ -109,3 +109,16 @@ def callback_host_needs_rewrite(host: str | None) -> bool:
     """Return whether HA should rewrite this callback host for the C300X."""
 
     return callback_host_type(host) in CALLBACK_REWRITE_HOST_TYPES
+
+
+def callback_target_is_supported(
+    scheme: str | None,
+    host_type: str | None,
+    *,
+    https_supported: bool,
+) -> bool | None:
+    """Check a callback endpoint against the installed agent's transports."""
+
+    if scheme == "https" and https_supported:
+        return host_type not in UNREACHABLE_CALLBACK_HOST_TYPES
+    return callback_target_is_clean_local_http(scheme, host_type)

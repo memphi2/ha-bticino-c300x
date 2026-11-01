@@ -79,22 +79,46 @@ Key sections:
 - `video`: optional local media doorstation media support
 - `displayBridge`: optional dashboard proxy for QML
 
-Callback URLs for event subscriptions and the display bridge must use a local
-Home Assistant HTTP URL with a stable local IPv4 address or stable ULA/global
-IPv6 address. Do not use `homeassistant.local`, other `.local` names, or
+Callback URLs for event subscriptions and the display bridge support HTTP and
+HTTPS. Use a Home Assistant endpoint reachable from the C300X. For HTTPS, keep
+the hostname matching the server certificate; it is never replaced with a source
+IP address. Do not use `homeassistant.local`, other `.local` names, or
 link-local addresses for callbacks or media routing; those names can resolve to
 different paths for Home Assistant, the C300X, browsers and HA Cloud.
 
 The Home Assistant integration can override only the callback base URL sent to
 the agent. This is a Home Assistant-side setting; the agent still receives the
-normal generated webhook path and shared secret. The override must be plain
-local HTTP and must not use `.local`, loopback or link-local addresses.
+normal generated webhook path and shared secret. The override accepts HTTP or
+HTTPS and must not use `.local`, loopback or link-local addresses.
 
-The native agent intentionally has no TLS client stack; HTTPS termination
-belongs on the Home Assistant side or a local reverse proxy. The same applies
-to the agent API: Home Assistant may connect through HTTPS if a local reverse
-proxy terminates TLS, but the shipped native binary itself stays plain HTTP to
-avoid TLS library dependencies and idle CPU/memory cost on the C300X.
+HTTPS is opt-in: enter an explicit `https://` callback base URL in the integration
+options to enable it for both event subscriptions and the display bridge. Leaving
+the override empty does not enable TLS, even if HA advertises an HTTPS URL. Use
+an `http://` override when HA has an HTTPS frontend but is reachable over HTTP
+on the local network. The HTTP transport does not load or initialize libcurl/TLS.
+
+HA derives the agent's internal `callbacks.httpsEnabled` setting from the override;
+there is no second user-facing switch. Changing between HTTP and HTTPS persists
+the setting once and restarts only the agent, not the device or its GUI. Active
+calls, streams and media teardown defer that restart using the existing callback
+registration retry. Returning to HTTP also restarts the agent to release TLS state.
+Unchanged settings do not cause repeated config writes or restarts.
+
+With HTTPS enabled, the agent advertises `https_callbacks` when the device provides a compatible
+`libcurl.so.4` (7.34 or newer, HTTPS and asynchronous DNS support). HTTPS uses
+TLS 1.2 or newer and verifies both the certificate chain and hostname using
+`/etc/ssl/certs/ca-certificates.crt`. The device clock must be correct. Redirects
+and environment proxies are disabled; HTTPS errors never trigger an HTTP retry.
+An older agent, missing library or unsupported curl build requires an agent or
+device-library update before HTTPS can work. HTTP remains available independently.
+
+HTTPS adds encryption and certificate verification work on the device. Connections
+are not pooled in this implementation. A successful HTTPS delivery does not imply
+that device CPU and memory overhead have been measured. HTTP-only installations
+do not initialize these libraries or add background transport checks.
+
+The agent's own API listener still serves plain local HTTP. A local reverse proxy
+is needed if Home Assistant must connect to that listener through HTTPS.
 
 ## API contract
 

@@ -45,7 +45,7 @@ incoming Ring Call target but does not gate on-demand media.
 | `talkback_rtp` | Talkback RTP port is not open or not reported ready. | Apply the firewall Repair. IPv6 is optional. |
 | `homeassistant_user` | Dedicated media user is missing. | Run Home Assistant media-user setup. |
 | `device_routing` | Local media-user route files are incomplete. | Run Home Assistant media-user setup. |
-| `callback_url` | The callback URL uses HTTPS, `.local`, loopback, link-local or an unreachable host. | Configure a reachable local HTTP callback base URL. |
+| `callback_url` | The callback URL is unreachable, uses an unsuitable address, or HTTPS is not supported by the installed agent. | Configure a reachable HTTP or HTTPS base URL. HTTPS requires an updated agent with `https_callbacks` and a trusted certificate matching the hostname. |
 | `startup` | Device-agent startup link is missing. | Run the device-agent update/repair flow. |
 
 ## Ring Call Forwarding Warnings

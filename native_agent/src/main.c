@@ -1,5 +1,6 @@
 #include "c300x_agent.h"
 #include "audio_codec.h"
+#include "https_client.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -199,6 +200,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* The device libcurl must initialize before workers, and only on opt-in. */
+    c300x_https_init(config.https_callbacks_enabled);
     (void)signal(SIGPIPE, SIG_IGN);
     return c300x_run(&config);
 }

@@ -177,7 +177,7 @@ def test_normalize_callback_base_url_accepts_missing_port() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        "https://192.0.2.10:8123",
+        "ftp://192.0.2.10:8123",
         "http://homeassistant.local:8123",
         "http://127.0.0.1:8123",
         "http://0.0.0.0:8123",
@@ -205,6 +205,26 @@ def test_apply_callback_base_url_preserves_generated_webhook_path() -> None:
         )
         == "http://192.0.2.10:8123/api/webhook/display-hook?x=1"
     )
+
+
+def test_https_callback_preserves_scheme_name_and_port() -> None:
+    assert normalize_callback_base_url(" HTTPS://ha.example.org:8123/ ") == (
+        "https://ha.example.org:8123"
+    )
+    assert apply_callback_base_path(
+        "/api/webhook/event-hook", "https://ha.example.org:8123"
+    ) == "https://ha.example.org:8123/api/webhook/event-hook"
+
+
+def test_https_callback_never_rewrites_certificate_hostname(monkeypatch) -> None:
+    monkeypatch.setattr(
+        callback_url_module, "_select_non_link_local_source_ip",
+        lambda *_args: pytest.fail("HTTPS certificate identity must be preserved"),
+    )
+    url = "https://homeassistant.local:8123/api/webhook/event-hook"
+    assert asyncio.run(async_rewrite_link_local_callback_url(
+        _FakeHass(), _FakeEntry(), url,
+    )) == url
 
 
 def test_apply_callback_base_path_preserves_generated_webhook_path() -> None:

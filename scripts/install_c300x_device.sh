@@ -93,6 +93,7 @@ ssh_cmd "mkdir -p '$REMOTE_DIR/qml/js'"
 scp_cmd \
     "$ROOT_DIR/device_qml/Alarm.qml" \
     "$ROOT_DIR/device_qml/HomeAssistant.qml" \
+    "$ROOT_DIR/device_qml/C300XRingerControl.qml" \
     "$REMOTE:$REMOTE_DIR/qml/"
 
 scp_cmd \

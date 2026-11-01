@@ -12,10 +12,12 @@ int c300x_pthread_create(
 );
 int c300x_pthread_join(pthread_t thread, void **retval);
 int c300x_pthread_detach(pthread_t thread);
+int c300x_pthread_once(pthread_once_t *once, void (*init)(void));
 
 #define pthread_create c300x_pthread_create
 #define pthread_join c300x_pthread_join
 #define pthread_detach c300x_pthread_detach
+#define pthread_once c300x_pthread_once
 #endif
 
 #endif

@@ -425,13 +425,27 @@ class _ApiMaintenanceMixin(_C300XApiCore):
         )
         return _ok_response(data)
 
-    async def async_restart_agent(self) -> dict[str, Any]:
-        """Restart the native device agent through the maintenance API."""
+    async def async_configure_callback_https(self, enabled: bool) -> AuthConfigStatus:
+        """Persist the callback transport opt-in without initializing TLS live."""
 
         data = await self._request_json(
             "POST",
+            "/api/v1/maintenance/auth",
+            json_data={"httpsCallbacksEnabled": enabled},
+            extra_headers=self._maintenance_headers(),
+        )
+        return normalize_auth_config_status(data)
+
+    async def async_restart_agent(self, *, only_if_idle: bool = False) -> dict[str, Any]:
+        """Restart the native device agent through the maintenance API."""
+
+        payload: dict[str, Any] = {"confirm": "restart_agent"}
+        if only_if_idle:
+            payload["only_if_idle"] = True
+        data = await self._request_json(
+            "POST",
             "/api/v1/maintenance/agent/actions/restart",
-            json_data={"confirm": "restart_agent"},
+            json_data=payload,
             extra_headers=self._maintenance_headers(),
         )
         return _ok_response(data)

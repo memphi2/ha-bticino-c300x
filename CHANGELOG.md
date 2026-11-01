@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## v1.9.8 - 2026-11-01
+
+### Fixed
+
+- Send the core GUI's call-end notification to the agent's default UI port
+  (8090). Detect and repair older hooks targeting 8092 when reapplying the
+  core QML patch; reload the device GUI to activate the correction.
+- Synchronize ringer mute/unmute with the device GUI's saved audio state so
+  an unanswered call cannot restore an old mute setting (#65). Requires the
+  updated agent and core QML hook, including a GUI reload. Commands fail
+  explicitly when GUI confirmation is unavailable. Device validation of the
+  new control path is still pending.
+
+### Added
+
+- Optional verified HTTPS for event and display callbacks through an explicit
+  HTTPS callback base URL override. Requires an updated agent. HTTP keeps its
+  existing transport without TLS initialization. Changing HTTP/HTTPS modes
+  restarts only the agent, deferred while media is active. HTTPS adds TLS work
+  on the device; certificate errors never fall back to HTTP.
 
 ### Changed
 
@@ -10,13 +29,37 @@
   aligned with each HA version, with real form, service and websocket tests.
 - Raise the minimum supported Home Assistant version to `2026.7.0` to address
   the three reported HA security advisories. Align HACS, documentation, CI and
-  release metadata with this baseline. Update HA before installing the next
-  release; HA 2026.5 and 2026.6 are no longer supported by that release.
+  release metadata with this baseline. Update HA before installing this
+  release; HA 2026.5 and 2026.6 are no longer supported.
 - Group routine Actions and Python tool updates quarterly, with one open PR per
   area. Keep security-update PRs independent and put both HA validation targets
   in Dependabot-readable manifests used directly by CI. Replace text-based
   dependency checks with parsed configuration checks and remove the unused
   pip-compile input that caused transitive pin churn.
+- Remove the on-demand teardown settle window introduced in 1.9.7. Hardware
+  testing showed it did not prevent the PCMU reboot while delaying reconnects
+  by up to 8 seconds. SIP-setup failure reasons remain available.
+- Tear an on-demand session down by removing only the agent's own BT-AV UDP
+  clients instead of issuing a global pipeline stop. Log unacknowledged
+  removals, distinguishing a NACK from a missing ACK; a NACK can occur after
+  SIP BYE has already removed the pipeline.
+- Offer only PCMU in the on-demand SDP when the device codec is PCMU, instead of
+  a full multi-codec offer, so the negotiated codec matches the configured one
+  (#55).
+- Preserve separate SIP messages received together over TCP, including an INVITE
+  final response following `100 Trying`. Reassemble fragmented messages within
+  a bounded deadline and reject incomplete or invalid frames.
+- PCMU device reboots in #55 remain unresolved. The cleanup and SDP changes
+  require device validation and are not a confirmed reboot fix.
+
+### Upgrade notes
+
+- Includes a freshly built native agent `1.9.8`. Update the device agent and
+  core QML hook together, then reload the device GUI to activate the ringer
+  synchronization and corrected call-end notification. Updating only the HA
+  integration is not sufficient.
+- Physical-device validation of the new ringer path and exact HTTPS opt-in
+  implementation remains pending. Issues #55 and #65 remain open.
 
 ## v1.9.7 - 2026-10-05
 

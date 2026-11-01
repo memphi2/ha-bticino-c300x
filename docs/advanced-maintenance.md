@@ -106,7 +106,10 @@ changed.
 
 ## Callback URL
 
-Callbacks must use a local HTTP URL that the C300X can reach directly.
+Callbacks must use an HTTP or HTTPS URL that the C300X can reach directly.
+HTTPS must be explicitly selected in the callback base URL override. It requires
+an updated agent advertising `https_callbacks_configurable` and a trusted
+certificate matching the URL hostname. Check the device clock and DNS as well.
 
 Avoid:
 
@@ -117,14 +120,30 @@ Avoid:
 - public or remote-only URLs.
 
 If Home Assistant generates an unsuitable URL, set **Local Home Assistant
-callback base URL** in setup/options. Use only the local HTTP base URL, for
+callback base URL** in setup/options. Enter the HTTP or HTTPS base URL, for
 example:
 
 ```text
 http://192.0.2.10:8123
+https://ha.example.com:8123
 ```
 
 Home Assistant keeps the generated webhook path and token.
+
+An empty override keeps the existing behavior and does not opt in to HTTPS.
+An `http://` override keeps the device on its lightweight HTTP transport, including
+when the browser uses an HTTPS reverse proxy in front of HA. An `https://` override
+enables TLS for both event subscriptions and display callbacks and adds TLS work
+on the C300X. The hostname must match the server certificate; it is not replaced
+with an IP address.
+
+Changing HTTP/HTTPS modes writes the internal agent setting only when it changes
+and requires one agent restart. The device and GUI are not rebooted. The agent
+defers the restart while a call, stream or media teardown is active; HA retries
+using its existing callback registration mechanism. Switching back to HTTP and
+restarting releases the TLS libraries. Old agents continue to support HTTP;
+update the agent before selecting HTTPS. Certificate failures never fall back to
+unencrypted HTTP.
 
 ## Remove Agent
 

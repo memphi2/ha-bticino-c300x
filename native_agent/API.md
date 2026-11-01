@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.7`
+- Current packaged agent version: `1.9.8`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -394,6 +394,30 @@ Validation:
 - `callback_url` is required.
 - `events` must contain at least one event.
 - Unsupported callback URLs are rejected with `unsupported_callback_url`.
+- HTTP and HTTPS are accepted. HTTPS requires `capabilities.https_callbacks`;
+  otherwise registration returns `https_unavailable`. TLS verifies the server's
+  certificate chain and hostname with the device CA bundle. Redirects are not
+  followed, proxies from the environment are ignored, and no HTTP fallback occurs.
+- Subscription `last_delivery` includes `http_status` (0 if unavailable) and
+  `error` (empty on success). HTTPS failures use fixed identifiers such as
+  `https_certificate_invalid`, `https_timeout` or `https_http_status`; they never
+  include the callback URL or token. These added fields describe HTTPS delivery;
+  HTTP keeps the existing `ok` result.
+
+HTTPS is disabled by default. `https_callbacks_configurable` advertises support
+for the opt-in setting without loading libcurl. `https_callbacks_configured`
+reports the persisted desired mode; `https_callbacks_enabled` reports the mode at
+process startup, and `https_callbacks` reports initialized transport availability.
+These capability reads never initialize TLS.
+
+An authenticated `POST /api/v1/maintenance/auth` with
+`{"httpsCallbacksEnabled": true}` persists `callbacks.httpsEnabled` only when
+changed. TLS initialization occurs before workers start, so a mode change needs
+an agent restart. HA derives this setting exclusively from an explicit HTTPS
+callback base URL override. To defer a restart during active media, send
+`{"confirm":"restart_agent","only_if_idle":true}` to the existing agent restart
+endpoint. It returns `409 media_session_active` instead of stopping the session.
+Switching back to HTTP requires the same restart to release the TLS library state.
 
 ### `DELETE /api/v1/events/subscriptions/{id}`
 
@@ -435,7 +459,8 @@ Request fields:
 ```
 
 When `enabled=true`, both `webhook_url` and `shared_secret` are required.
-Unsupported callback URLs are rejected.
+Unsupported callback URLs are rejected. HTTPS uses the same transport and
+certificate checks as event subscriptions and requires `https_callbacks`.
 
 ### `POST /api/v1/display-bridge/events`
 
@@ -557,7 +582,19 @@ Request fields:
 {"volume": 5}
 ```
 
-`muted` sends `*#8**#33*0##` or `*#8**#33*1##`. `volume` accepts the C300X UI
+`muted` first asks the core QML hook to enable/disable `AudioState.RingtoneMute`,
+just like the device button. The API response waits for the matching GUI
+acknowledgment and device readback. Only the GUI sends the mute/unmute device
+command; the agent never overrides its audio-state priorities with a raw write.
+A differing readback returns `409 ringer_not_applied`, and an undecodable
+readback returns `502 ringer_readback_failed`. An ACK alone is not a confirmed value.
+The core QML hook must be updated and loaded; the optional display bridge
+pages are not required. A missing GUI returns `503 ringer_gui_unavailable`,
+a concurrent command `409 ringer_gui_busy`, and a missing acknowledgment
+`504 ringer_gui_timeout` after five seconds. Failed/mismatching GUI
+acknowledgments never fall back to an unsynchronized device write.
+
+`volume` accepts the C300X UI
 range `0..10` and translates it to the OpenWebNet `41` tens code before sending
 `*#8**#41*<code>##`. A volume write is only reported as successful after a
 fresh `*#8**41##` readback returns the requested value. If the write ACKs but
@@ -1189,6 +1226,7 @@ requires display bridge support where applicable.
 | `GET` | `/ui/events/status` | Long-poll state for QML event bridge. |
 | `GET` | `/ui/events/next` | Long-poll next QML event. |
 | `GET` | `/ui/media-closed` | Reports device media-close event. |
+| `GET` | `/ui/ringer/next` | Core GUI ringer command/acknowledgment channel. |
 | `GET` | `/ui/state` | Display bridge state. |
 | `GET` | `/ui/alarm/status` | Alarm status alias. |
 | `GET` | `/homeassistant` | Render Home Assistant dashboard payload for QML. |
@@ -1198,10 +1236,22 @@ requires display bridge support where applicable.
 UI endpoints use the local display bridge and shared secret configured through
 the API listener. They must not expose configured token values.
 
+The core `/ui/ringer/next` endpoint is independent of display-bridge registration.
+It accepts only loopback GETs with `X-C300X-GUI: ringer-v1`; no CORS preflight
+is allowed. One connection waits indefinitely without periodic device reads.
+An authorized API ringer request returns `{ok, id, muted, expires}` to that
+connection; `id` is a fresh 128-bit random command identifier and `expires` a
+Unix-millisecond deadline. The GUI applies unexpired commands and reconnects
+with `?completed=<id>&muted=0|1`, confirming its actual saved state. Stale,
+incorrect and missing confirmations cannot complete another command. The API
+request has a monotonic five-second deadline. Diagnostics expose
+`ringer_gui_ready` and `ringer_command_pending`, but never command identifiers.
+
 ## Compatibility Matrix
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.9.8 | 1.1 | 1.7.x | GUI-confirmed ringer mute/unmute and corrected core call-end notification port; requires the matching core QML hook and a GUI reload. Adds opt-in verified HTTPS callbacks. Removes the ineffective on-demand teardown settle window, limits cleanup to owned BT-AV clients, aligns PCMU negotiation and bounds SIP/TCP framing. Physical-device validation is pending; the PCMU reboot remains unresolved. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
 | 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |

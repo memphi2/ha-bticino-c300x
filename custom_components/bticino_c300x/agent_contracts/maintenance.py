@@ -22,6 +22,7 @@ class AuthConfigStatus(AgentContract):
     ipv6_firewall_enabled: bool | None
     activations_enabled: bool | None
     activations_auto_discover: bool | None
+    https_callbacks_configured: bool | None = None
 
 
 @dataclass(frozen=True, slots=True, eq=False)

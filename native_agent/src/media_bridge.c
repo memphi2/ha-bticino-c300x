@@ -9,6 +9,7 @@
 #include "media_rtsp_clients.h"
 #include "media_session_guard.h"
 #include "media_sip.h"
+#include "media_sip_io.h"
 #include "sha256.h"
 #include "string_util.h"
 #include "time_util.h"
@@ -56,14 +57,6 @@
 #define MEDIA_VIDEO_RTP_RECV_BUFFER_BYTES (512 * 1024)
 #define MEDIA_VIDEO_RELAY_DRAIN_BURST 64
 #define MEDIA_RENEW_SECONDS 20
-/* After an on-demand session tears down, the device keeps unwinding its own
- * monitor/lcdsink path for a while. Starting a new session into that window is
- * what reboots a PCMU device (issue #55): the reporter measured a 1.5 s gap
- * failing and a 10 s gap clean, and go2rtc reconnects right inside it. Hold a
- * new start off until the device has settled. Measured from the agent's own
- * teardown completion (already after the device stop was signalled), so this is
- * shorter than the raw 10 s gap; refine against hardware. */
-#define ONDEMAND_TEARDOWN_SETTLE_MS 8000
 #define MEDIA_SIP_KEEPALIVE_SECONDS 10
 #define MEDIA_SIP_USER_AGENT "VctLinphoneService/1.17.3"
 #define MEDIA_INSTANCE_UUID_LEN 37
@@ -190,7 +183,6 @@ typedef struct {
     bool media_active;
     bool media_starting;
     bool stop_in_progress;
-    long long ondemand_teardown_done_ms;
     c300x_media_session_guard_t ondemand_guard;
     int listen_fd;
     int client_fd;
@@ -1414,48 +1406,11 @@ static bool pop_talkback_payload_locked(
 }
 
 static int read_message(int fd, char *buffer, size_t buffer_size, int timeout_seconds) {
-    size_t used = 0;
-    buffer[0] = '\0';
-    while (used < buffer_size - 1) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(fd, &readfds);
-        struct timeval timeout = {timeout_seconds, 0};
-        int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
-        if (ready <= 0) {
-            return used > 0 ? (int)used : -1;
-        }
-        ssize_t n = recv(fd, buffer + used, buffer_size - used - 1, 0);
-        if (n <= 0) {
-            return used > 0 ? (int)used : -1;
-        }
-        used += (size_t)n;
-        buffer[used] = '\0';
-        char *header_end = strstr(buffer, "\r\n\r\n");
-        if (header_end != NULL) {
-            size_t header_len = (size_t)(header_end + 4 - buffer);
-            int body_len = c300x_media_sip_content_length(buffer);
-            if ((int)(used - header_len) >= body_len) {
-                return (int)used;
-            }
-        }
-    }
-    return (int)used;
+    return c300x_media_sip_read_message(fd, buffer, buffer_size, timeout_seconds * 1000);
 }
 
 static int read_message_poll(int fd, char *buffer, size_t buffer_size, int timeout_seconds) {
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(fd, &readfds);
-    struct timeval timeout = {timeout_seconds, 0};
-    int ready = select(fd + 1, &readfds, NULL, NULL, &timeout);
-    if (ready == 0) {
-        return 0;
-    }
-    if (ready < 0) {
-        return -1;
-    }
-    return read_message(fd, buffer, buffer_size, timeout_seconds);
+    return c300x_media_sip_poll_message(fd, buffer, buffer_size, timeout_seconds * 1000);
 }
 
 typedef enum {
@@ -2160,7 +2115,7 @@ static bool send_ring_registration(
     if (send_all(fd, request, (size_t)len) <= 0) {
         return false;
     }
-    if (read_message(fd, response, sizeof(response), 3) < 0) {
+    if (read_message(fd, response, sizeof(response), 3) <= 0) {
         return false;
     }
     return c300x_media_sip_status_code(response) >= 200 && c300x_media_sip_status_code(response) < 300;
@@ -2785,7 +2740,7 @@ static void ring_media_loop(
         int ready = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
         if (ready > 0) {
             if (FD_ISSET(sip_fd, &readfds)) {
-                int n = read_message(sip_fd, message, sizeof(message), 1);
+                int n = read_message_poll(sip_fd, message, sizeof(message), 1);
                 if (n < 0) {
                     break;
                 }
@@ -4205,7 +4160,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         transport,
         instance_uuid
     );
-    if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) < 0) {
+    if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) <= 0) {
         snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "invite_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
@@ -4229,6 +4184,23 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         return false;
     }
 
+    const bool use_pcmu = bridge_audio_codec_is_pcmu(bridge);
+    const char *audio_formats = use_pcmu
+        ? "0 100"
+        : "96 97 98 0 8 101 99 100";
+    const char *audio_codec_attributes = use_pcmu
+        ? "a=rtpmap:0 PCMU/8000\r\n"
+          "a=rtpmap:100 telephone-event/8000\r\n"
+        : "a=rtpmap:96 opus/48000/2\r\n"
+          "a=fmtp:96 useinbandfec=1\r\n"
+          "a=rtpmap:97 speex/16000\r\n"
+          "a=fmtp:97 vbr=on\r\n"
+          "a=rtpmap:98 speex/8000\r\n"
+          "a=fmtp:98 vbr=on\r\n"
+          "a=rtpmap:101 telephone-event/48000\r\n"
+          "a=rtpmap:99 telephone-event/16000\r\n"
+          "a=rtpmap:100 telephone-event/8000\r\n";
+
     char sdp[4096];
     snprintf(
         sdp,
@@ -4242,16 +4214,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         "a=rtcp-xr:rcvr-rtt=all:10000 stat-summary=loss,dup,jitt,TTL voip-metrics\r\n"
         "a=DEVADDR:%d\r\n"
         "a=nortpproxy:yes\r\n"
-        "m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\r\n"
-        "a=rtpmap:96 opus/48000/2\r\n"
-        "a=fmtp:96 useinbandfec=1\r\n"
-        "a=rtpmap:97 speex/16000\r\n"
-        "a=fmtp:97 vbr=on\r\n"
-        "a=rtpmap:98 speex/8000\r\n"
-        "a=fmtp:98 vbr=on\r\n"
-        "a=rtpmap:101 telephone-event/48000\r\n"
-        "a=rtpmap:99 telephone-event/16000\r\n"
-        "a=rtpmap:100 telephone-event/8000\r\n"
+        "m=audio %d RTP/SAVP %s\r\n"
+        "%s"
         "a=crypto:1 AEAD_AES_128_GCM inline:%s\r\n"
         "a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\r\n"
         "a=crypto:3 AEAD_AES_256_GCM inline:%s\r\n"
@@ -4270,6 +4234,8 @@ static bool send_sip_setup(media_bridge_t *bridge) {
         local_ip,
         doorbell_devaddr(bridge->config),
         MEDIA_AUDIO_RTP_PORT,
+        audio_formats,
+        audio_codec_attributes,
         audio_crypto_aead128,
         audio_key,
         audio_crypto_aead256,
@@ -4345,7 +4311,7 @@ static bool send_sip_setup(media_bridge_t *bridge) {
 
     int status = 0;
     for (int i = 0; i < 8; i++) {
-        if (read_message(fd, response, sizeof(response), 5) < 0) {
+        if (read_message(fd, response, sizeof(response), 5) <= 0) {
             break;
         }
         status = c300x_media_sip_status_code(response);
@@ -4754,7 +4720,7 @@ static bool send_home_call_register(
     if (send_all(fd, request, (size_t)len) <= 0) {
         return false;
     }
-    if (read_message(fd, response, sizeof(response), 3) < 0) {
+    if (read_message(fd, response, sizeof(response), 3) <= 0) {
         return false;
     }
     return c300x_media_sip_status_code(response) >= 200 && c300x_media_sip_status_code(response) < 300;
@@ -4880,7 +4846,10 @@ static void drain_home_call_stop_responses(
     }
     while (c300x_monotonic_ms() < deadline) {
         int n = read_message_poll(fd, message, sizeof(message), 1);
-        if (n <= 0) {
+        if (n < 0) {
+            break;
+        }
+        if (n == 0) {
             continue;
         }
         if (strncmp(message, "\r\n\r\n", 4) == 0) {
@@ -5150,7 +5119,7 @@ static void *home_call_thread_func(void *arg) {
         int ready = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
         if (ready > 0) {
             if (FD_ISSET(fd, &readfds)) {
-                int n = read_message(fd, message, sizeof(message), 1);
+                int n = read_message_poll(fd, message, sizeof(message), 1);
                 if (n < 0) {
                     break;
                 }
@@ -5472,25 +5441,6 @@ static void stop_media_session(bool close_client, bool explicit_stop);
 
 static bool start_media_session(media_bridge_t *bridge) {
     pthread_mutex_lock(&bridge->mutex);
-    /* Hold a new session off until the previous one has settled on the device
-     * (issue #55): starting into the device-side teardown reboots a PCMU unit.
-     * Only waits when a real teardown just happened; a stop, an explicit-stop
-     * guard, or another start winning the race ends the wait early. */
-    long long settle_deadline = bridge->ondemand_teardown_done_ms != 0
-        ? bridge->ondemand_teardown_done_ms + ONDEMAND_TEARDOWN_SETTLE_MS
-        : 0;
-    while (
-        !bridge->stop_in_progress
-        && !c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
-        && !bridge->media_active
-        && !bridge->media_starting
-        && c300x_monotonic_ms() < settle_deadline
-    ) {
-        struct timespec delay = {0, 100 * 1000 * 1000};
-        pthread_mutex_unlock(&bridge->mutex);
-        (void)nanosleep(&delay, NULL);
-        pthread_mutex_lock(&bridge->mutex);
-    }
     if (
         bridge->stop_in_progress
         || c300x_media_session_guard_blocks_start(&bridge->ondemand_guard)
@@ -5679,7 +5629,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
         close(sip_fd);
     }
     if (send_media_stop) {
-        c300x_media_bt_av_stop();
+        c300x_media_bt_av_stop(g_bridge.config);
     }
 
     pthread_mutex_lock(&g_bridge.mutex);
@@ -5690,11 +5640,6 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
     g_bridge.talkback_stop = false;
     g_bridge.sip_monitor_started = false;
     g_bridge.ondemand_media_started = false;
-    if (send_media_stop) {
-        /* A real session just told the device to stop; the next start must wait
-         * out the device-side teardown. See ONDEMAND_TEARDOWN_SETTLE_MS. */
-        g_bridge.ondemand_teardown_done_ms = c300x_monotonic_ms();
-    }
     if (g_bridge.rtp_fd >= 0) {
         close(g_bridge.rtp_fd);
         g_bridge.rtp_fd = -1;

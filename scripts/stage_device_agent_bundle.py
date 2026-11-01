@@ -111,6 +111,12 @@ def stage_bundle(
         component_dir / "device_agent/qml/HomeAssistant.qml",
     )
     qml_files.append(component_dir / "device_agent/qml/HomeAssistant.qml")
+    qml_files.append(
+        _copy(
+            ROOT / "device_qml" / "C300XRingerControl.qml",
+            component_dir / "device_agent/qml/C300XRingerControl.qml",
+        )
+    )
     for name in ("c300x_ha.js", "c300x_i18n.js", "c300x_memos.js"):
         qml_files.append(
             _copy(

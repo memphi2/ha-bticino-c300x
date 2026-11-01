@@ -10,10 +10,12 @@ extern int c300x_old_pthread_create(
 );
 extern int c300x_old_pthread_join(pthread_t thread, void **retval);
 extern int c300x_old_pthread_detach(pthread_t thread);
+extern int c300x_old_pthread_once(pthread_once_t *once, void (*init)(void));
 
 __asm__(".symver c300x_old_pthread_create,pthread_create@GLIBC_2.4");
 __asm__(".symver c300x_old_pthread_join,pthread_join@GLIBC_2.4");
 __asm__(".symver c300x_old_pthread_detach,pthread_detach@GLIBC_2.4");
+__asm__(".symver c300x_old_pthread_once,pthread_once@GLIBC_2.4");
 
 int c300x_pthread_create(
     pthread_t *thread,
@@ -33,6 +35,11 @@ int c300x_pthread_join(pthread_t thread, void **retval)
 int c300x_pthread_detach(pthread_t thread)
 {
     return c300x_old_pthread_detach(thread);
+}
+
+int c300x_pthread_once(pthread_once_t *once, void (*init)(void))
+{
+    return c300x_old_pthread_once(once, init);
 }
 
 #endif

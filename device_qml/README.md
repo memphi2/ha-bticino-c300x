@@ -8,6 +8,12 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
 
 - `Alarm.qml`: native page with alarm state, PIN input, and arm/disarm buttons.
 - `HomeAssistant.qml`: native dynamic Home Assistant board page backed by the local display bridge. It renders dashboard pages, badges, flow items, images, switches, and buttons without a refresh timer.
+- `C300XRingerControl.qml`: core, page-independent ringer command receiver.
+  Uses the same `AudioState` enable/disable calls as the stock mute button.
+  One loopback HTTP request waits for work without periodic polling; a timer
+  reconnects only after a connection/protocol failure. Commands and replies
+  stay in RAM, with no runtime file writes. Installed and removed with the
+  core `EventManager.qml` patch.
 - `js/c300x_ha.js`: local HTTP helper used by the QML page.
 - `js/c300x_memos.js`: loopback-only local memo/message metadata helper used by patched device memo pages.
 - The stock `HomePage.qml` and `MemoPage.qml` are not stored in this

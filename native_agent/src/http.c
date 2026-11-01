@@ -6,6 +6,8 @@
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
+#include "http_callback.h"
+#include "https_client.h"
 #include "json_util.h"
 #include "local_action_events.h"
 #include "device_routing.h"
@@ -15,6 +17,8 @@
 #include "mdns.h"
 #include "mqtt_bridge.h"
 #include "recent_events.h"
+#include "ringer_control.h"
+#include "ringer_protocol.h"
 #include "sha256.h"
 #include "smartphone_forwarding.h"
 #include "string_util.h"
@@ -53,14 +57,12 @@
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 24
 #define C300X_MAX_URL_LEN 512
-#define C300X_EVENT_TOKEN_HEADER "X-Bticino-C300X-Event-Token"
 #define C300X_MAX_VOICEMAIL_WATCHES (C300X_MAX_VOICEMAIL_MESSAGES + 1)
 #define C300X_MESSAGE_WATCH_MASK (IN_CREATE | IN_DELETE | IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF)
 #define C300X_MAX_VOICEMAIL_DATE_LEN 64
 #define C300X_MAX_VOICEMAIL_REASON_LEN 48
 #define C300X_MAX_MEMO_TEXT_JSON_LEN ((C300X_MAX_MEMO_TEXT_LEN * 6) + 1)
 #define C300X_MAX_PATH_JSON_LEN ((C300X_MAX_PATH_LEN * 6) + 1)
-#define C300X_JSON_QUOTED_LEN(value_len) (((value_len) * 6) + 3)
 #define C300X_DEVICE_USER_STATUS_BODY_LEN 8192
 #define C300X_TOKEN_FINGERPRINT_LEN 32
 #define C300X_ANSWERING_DIRECTORY_VIDEO_MESSAGE 0
@@ -91,13 +93,6 @@
 #define C300X_FLEXISIP_RESTART_MARKER "/tmp/flexisip_restarted"
 #define C300X_LARGE_RESPONSE_SIZE 32768
 #define C300X_FIRMWARE_INFO_XML "/home/bticino/sp/dbfiles_ws.xml"
-#define C300X_RINGER_VOLUME_MIN 0
-#define C300X_RINGER_VOLUME_ACTIVE_MIN 0
-#define C300X_RINGER_VOLUME_MAX 10
-#define C300X_RINGER_VOLUME_STEP 1
-#define C300X_RINGER_VOLUME_OPENWEBNET_MAX 100
-#define C300X_RINGER_VOLUME_OPENWEBNET_STEP 10
-#define C300X_RINGER_VOLUME_SETTLE_MS 1000
 enum listener_kind {
     LISTENER_API = 1,
     LISTENER_UI = 2
@@ -146,6 +141,8 @@ struct subscription {
     char last_event_type[64];
     char last_delivered_at[40];
     int last_ok;
+    long last_http_status;
+    const char *last_error;
 };
 struct voicemail_message {
     char id[C300X_MAX_VOICEMAIL_ID_LEN];
@@ -224,6 +221,7 @@ struct agent_runtime {
     struct voicemail_runtime voice_memos;
     unsigned long long memos_last_signature;
     struct c300x_ui_events ui_events;
+    struct c300x_ringer_control ringer_control;
     struct c300x_system_metrics_monitor metrics;
     int smartphone_forwarding_mode_known;
     int smartphone_forwarding_mode_code;
@@ -388,14 +386,10 @@ static int system_metrics_watch_active(
     const struct agent_runtime *runtime
 );
 static int system_metrics_monitor_active(const struct c300x_config *config);
-static int ringer_volume_from_reply(const char *reply, int *volume);
-static int ringer_volume_from_openwebnet_code(int code);
-static int ringer_volume_to_openwebnet_code(int volume);
 static int constant_time_equal(const char *left, size_t left_len, const char *right);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
-static int send_all_bytes(int fd, const char *payload, size_t payload_len);
 static int timeout_until_ms(time_t now, time_t due);
 static int min_timeout_ms(int current, int candidate);
 static void system_metrics_dispatch_now(
@@ -501,6 +495,7 @@ static void handle_gui_reload(
 static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
+    const struct agent_runtime *runtime,
     const struct request *request
 );
 static void handle_remove_agent(
@@ -1031,6 +1026,23 @@ static int forward_to_homeassistant(
         sizeof(path)
     )) {
         return 0;
+    }
+
+    if (strncmp(webhook_url, "https://", 8) == 0) {
+        long status;
+        const char *error;
+        ok = c300x_https_post(
+            webhook_url, "X-Bticino-C300X-Secret", shared_secret, body,
+            response, response_len, config->home_assistant_request_timeout_ms,
+            &status, &error
+        );
+        if (ok) {
+            if (response_len > 0 && response[0] == '\0') {
+                snprintf(response, response_len, "{}\n");
+            }
+            mark_home_assistant_callback_seen(runtime, time(NULL));
+        }
+        return ok;
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -3041,95 +3053,26 @@ static void subscription_token_fingerprint(
 
 static int post_callback(
     const struct c300x_config *config,
-    const struct subscription *subscription,
+    struct subscription *subscription,
     const char *event_json
 )
 {
-    char host[256];
-    char host_header[288];
-    char port[16];
-    char path[256];
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *item;
-    int fd = -1;
-    char header[1024];
-    char response[64];
-    int ok = 0;
-
-    if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
-        return 0;
-    }
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = AF_UNSPEC;
-    if (getaddrinfo(host, port, &hints, &result) != 0) {
-        return 0;
-    }
-    http_host_header_value(host, port, host_header, sizeof(host_header));
-    for (item = result; item != NULL; item = item->ai_next) {
-        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
-        if (fd < 0) {
-            continue;
+    subscription->last_http_status = 0;
+    subscription->last_error = NULL;
+    if (strncmp(subscription->callback_url, "https://", 8) == 0) {
+        char host[256], port[16], path[256];
+        if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
+            return 0;
         }
-        set_fd_cloexec(fd);
-        set_socket_timeout(fd, config->callback_timeout_ms);
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
-            break;
-        }
-        close(fd);
-        fd = -1;
+        return c300x_https_post(
+            subscription->callback_url, C300X_EVENT_TOKEN_HEADER, subscription->token,
+            event_json, NULL, 0, config->callback_timeout_ms,
+            &subscription->last_http_status, &subscription->last_error
+        );
     }
-    freeaddrinfo(result);
-    if (fd < 0) {
-        return 0;
-    }
-    snprintf(
-        header,
-        sizeof(header),
-        "POST %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
-        "%s%s%s"
-        "Connection: close\r\n"
-        "\r\n",
-        path,
-        host_header,
-        strlen(event_json),
-        subscription->token[0] != '\0' ? C300X_EVENT_TOKEN_HEADER ": " : "",
-        subscription->token[0] != '\0' ? subscription->token : "",
-        subscription->token[0] != '\0' ? "\r\n" : ""
+    return c300x_http_post_callback(
+        subscription->callback_url, subscription->token, event_json, config->callback_timeout_ms
     );
-    if (send_all_bytes(fd, header, strlen(header))
-        && send_all_bytes(fd, event_json, strlen(event_json))) {
-        size_t used = 0;
-        long long deadline = c300x_system_metrics_monotonic_ms() + config->callback_timeout_ms;
-        while (used + 1 < sizeof(response)) {
-            long long remaining = deadline - c300x_system_metrics_monotonic_ms();
-            if (remaining <= 0) {
-                break;
-            }
-            set_socket_timeout(fd, (int)remaining);
-            ssize_t received = recv(fd, response + used, sizeof(response) - used - 1, 0);
-            if (received < 0 && errno == EINTR) {
-                continue;
-            }
-            if (received <= 0) {
-                break;
-            }
-            used += (size_t)received;
-            response[used] = '\0';
-            if (strchr(response, '\n') != NULL) {
-                ok = (strncmp(response, "HTTP/1.1 2", 10) == 0 || strncmp(response, "HTTP/1.0 2", 10) == 0)
-                    && strchr(response, '\n') - response >= 13 && isdigit((unsigned char)response[10])
-                    && isdigit((unsigned char)response[11]) && response[12] == ' ';
-                break;
-            }
-        }
-    }
-    close(fd);
-    return ok;
 }
 
 static void handle_subscriptions_get(int client_fd, const struct agent_runtime *runtime)
@@ -3188,10 +3131,12 @@ static void handle_subscriptions_get(int client_fd, const struct agent_runtime *
             body,
             sizeof(body),
             &used,
-            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s}}",
+            "],\"last_delivery\":{\"ok\":%s,\"event_type\":%s,\"delivered_at\":%s,\"http_status\":%ld,\"error\":\"%s\"}}",
             subscription->last_ok ? "true" : "false",
             last_event_type,
-            last_delivered_at
+            last_delivered_at,
+            subscription->last_http_status,
+            subscription->last_error != NULL ? subscription->last_error : ""
         )) {
             send_response_too_large(client_fd);
             return;
@@ -3268,8 +3213,13 @@ static void handle_subscriptions_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"callback_url_required\"}\n");
         return;
     }
-    if (strncmp(subscription.callback_url, "http://", 7) != 0) {
+    char host[256], port[16], path[256];
+    if (!parse_http_url(subscription.callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_callback_url\"}\n");
+        return;
+    }
+    if (strncmp(subscription.callback_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (subscription.event_count == 0) {
@@ -3392,9 +3342,12 @@ static void handle_display_bridge_post(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"shared_secret_required\"}\n");
         return;
     }
-    if (strncmp(webhook_url, "http://", 7) != 0
-        || !parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
+    if (!parse_http_url(webhook_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_webhook_url\"}\n");
+        return;
+    }
+    if (strncmp(webhook_url, "https://", 8) == 0 && !c300x_https_available()) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"https_unavailable\"}\n");
         return;
     }
     if (
@@ -3910,6 +3863,8 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             "\"ui_event_waiters\":%d,"
             "\"ui_event_waiter_capacity\":%d,"
             "\"ui_event_waiter_overflows\":%lu,"
+            "\"ringer_gui_ready\":%s,"
+            "\"ringer_command_pending\":%s,"
             "\"video_running\":%s,"
             "\"video_rtsp_server_running\":%s,"
             "\"video_media_starting\":%s,"
@@ -3961,6 +3916,8 @@ static void handle_diagnostics_get(int client_fd, const struct agent_runtime *ru
             c300x_ui_events_waiter_count(&runtime->ui_events),
             C300X_UI_EVENT_MAX_WAITERS,
             runtime->ui_events.waiter_overflows,
+            runtime->ringer_control.gui_fd >= 0 ? "true" : "false",
+            runtime->ringer_control.client_fd >= 0 ? "true" : "false",
             video_media_running ? "true" : "false",
             video_status.running ? "true" : "false",
             video_status.media_starting ? "true" : "false",
@@ -4113,6 +4070,7 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         "\"noAuth\":%s,"
         "\"no_auth\":%s,"
         "\"restart_required\":%s,"
+        "\"https_callbacks_configured\":%s,"
         "\"api_token_configured\":%s,"
         "\"api_token_fingerprint\":%s,"
         "\"maintenance_token_configured\":%s,"
@@ -4140,7 +4098,8 @@ static void handle_auth_config_get(int client_fd, const struct c300x_config *con
         "}\n",
         config->api_no_auth ? "true" : "false",
         config->api_no_auth ? "true" : "false",
-        config->restart_required ? "true" : "false",
+        (config->restart_required || c300x_https_enabled() != config->https_callbacks_enabled) ? "true" : "false",
+        config->https_callbacks_enabled ? "true" : "false",
         config->api_token[0] != '\0' ? "true" : "false",
         api_token_fingerprint_json,
         config->maintenance_admin_token[0] != '\0' ? "true" : "false",
@@ -4240,6 +4199,7 @@ static void copy_live_auth_config(
     live->maintenance_firewall_enabled = updated->maintenance_firewall_enabled;
     live->maintenance_ipv6_firewall_enabled = updated->maintenance_ipv6_firewall_enabled;
     live->mdns_enabled = updated->mdns_enabled;
+    live->https_callbacks_enabled = updated->https_callbacks_enabled;
     snprintf(live->stair_light_default_address, sizeof(live->stair_light_default_address), "%s", updated->stair_light_default_address);
     live->restart_required = live->restart_required || restart_required;
 }
@@ -4354,6 +4314,9 @@ static void handle_auth_config_post(
     }
     if (c300x_json_bool_field(request->body, "eventsEnabled", &value) || c300x_json_bool_field(request->body, "events_enabled", &value)) {
         updated->events_enabled = value;
+    }
+    if (c300x_json_bool_field(request->body, "httpsCallbacksEnabled", &value)) {
+        updated->https_callbacks_enabled = value;
     }
     if (c300x_json_bool_field(request->body, "memosEnabled", &value) || c300x_json_bool_field(request->body, "memos_enabled", &value)) {
         updated->memos_enabled = value;
@@ -5665,23 +5628,6 @@ static int mqtt_command_is_valid(const char *command)
     return 1;
 }
 
-static int send_all_bytes(int fd, const char *payload, size_t payload_len)
-{
-    size_t sent = 0;
-
-    while (sent < payload_len) {
-        ssize_t written = send(fd, payload + sent, payload_len - sent, MSG_NOSIGNAL);
-        if (written < 0 && errno == EINTR) {
-            continue;
-        }
-        if (written <= 0) {
-            return 0;
-        }
-        sent += (size_t)written;
-    }
-    return 1;
-}
-
 static int send_mqtt_command_to_device(const struct c300x_config *config, const char *command)
 {
     char port_text[16];
@@ -6090,7 +6036,7 @@ static int map_openwebnet_event(
     }
     c300x_json_string(msg, raw_json, sizeof(raw_json));
 
-    if (ringer_volume_from_reply(msg, &code)) {
+    if (c300x_ringer_volume_from_reply(msg, &code)) {
         size_t used = 0;
         if (!note_ringer_volume_changed(runtime, code)) {
             return 0;
@@ -6769,6 +6715,8 @@ static void api_capabilities(
         .maintenance_supported = maintenance_auth_available(config),
         .activations_count = activation_total_count(config, runtime),
         .device_codec_pcmu = video_status.device_codec_pcmu,
+        .https_callbacks = c300x_https_available(),
+        .https_callbacks_enabled = c300x_https_enabled(),
         .ringer_min_volume = C300X_RINGER_VOLUME_ACTIVE_MIN,
         .ringer_max_volume = C300X_RINGER_VOLUME_MAX,
         .ringer_volume_step = C300X_RINGER_VOLUME_STEP,
@@ -7509,54 +7457,6 @@ static void handle_system_metrics(int client_fd, const struct agent_runtime *run
     send_json(client_fd, 200, "OK", body);
 }
 
-static int ringer_muted_from_reply(const char *reply, int *muted)
-{
-    if (strcmp(reply, "*#8**33*0##") == 0 || strcmp(reply, "*#8**#33*0##") == 0) {
-        *muted = 1;
-        return 1;
-    }
-    if (strcmp(reply, "*#8**33*1##") == 0 || strcmp(reply, "*#8**#33*1##") == 0) {
-        *muted = 0;
-        return 1;
-    }
-    return 0;
-}
-
-static int ringer_volume_from_reply(const char *reply, int *volume)
-{
-    int value;
-    int consumed = 0;
-
-    if (reply == NULL || volume == NULL) {
-        return 0;
-    }
-    if (
-        (
-            sscanf(reply, "*#8**41*%d##%n", &value, &consumed) == 1
-            || sscanf(reply, "*#8**#41*%d##%n", &value, &consumed) == 1
-        )
-        && consumed > 0
-        && reply[consumed] == '\0'
-        && value >= C300X_RINGER_VOLUME_MIN
-        && value <= C300X_RINGER_VOLUME_OPENWEBNET_MAX
-        && value % C300X_RINGER_VOLUME_OPENWEBNET_STEP == 0
-    ) {
-        *volume = ringer_volume_from_openwebnet_code(value);
-        return 1;
-    }
-    return 0;
-}
-
-static int ringer_volume_from_openwebnet_code(int code)
-{
-    return code / C300X_RINGER_VOLUME_OPENWEBNET_STEP;
-}
-
-static int ringer_volume_to_openwebnet_code(int volume)
-{
-    return volume * C300X_RINGER_VOLUME_OPENWEBNET_STEP;
-}
-
 static int answering_enabled_from_reply(const char *reply, int fallback, int *enabled, int *greeting)
 {
     const char *prefix = "*#8**40*";
@@ -8035,63 +7935,19 @@ static void handle_ringer_get(
     struct agent_runtime *runtime
 )
 {
-    char muted_reply[C300X_MAX_FRAME_LEN];
-    char volume_reply[C300X_MAX_FRAME_LEN];
-    char error[C300X_MAX_ERROR_LEN];
     char body[2048];
-    char muted_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
-    char volume_reply_json[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN)];
-    char muted_json[8];
-    char volume_json[16];
-    char muted_status_part[32];
-    char volume_status_part[40];
-    char volume_raw_part[C300X_JSON_QUOTED_LEN(C300X_MAX_FRAME_LEN) + 32];
-    int muted;
-    int volume;
-
-    muted_status_part[0] = '\0';
-    volume_status_part[0] = '\0';
-    volume_raw_part[0] = '\0';
-
-    if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
+    char error[C300X_MAX_ERROR_LEN];
+    int muted, volume;
+    if (!c300x_ringer_read_json(config, body, sizeof(body), &muted, &volume, error, sizeof(error))) {
         send_device_error(client_fd, error);
         return;
     }
-    c300x_json_string(muted_reply, muted_reply_json, sizeof(muted_reply_json));
-    if (ringer_muted_from_reply(muted_reply, &muted)) {
+    if (muted >= 0) {
         remember_ringer_muted(runtime, muted);
-        snprintf(muted_json, sizeof(muted_json), "%s", muted ? "true" : "false");
-    } else {
-        snprintf(muted_json, sizeof(muted_json), "null");
-        snprintf(muted_status_part, sizeof(muted_status_part), ",\"status\":\"unknown\"");
     }
-
-    if (c300x_openwebnet_send(config, "*#8**41##", volume_reply, sizeof(volume_reply), error, sizeof(error))) {
-        c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
-        snprintf(volume_raw_part, sizeof(volume_raw_part), ",\"volume_raw\":%s", volume_reply_json);
-        if (ringer_volume_from_reply(volume_reply, &volume)) {
-            remember_ringer_volume(runtime, volume);
-            snprintf(volume_json, sizeof(volume_json), "%d", volume);
-        } else {
-            snprintf(volume_json, sizeof(volume_json), "null");
-            snprintf(volume_status_part, sizeof(volume_status_part), ",\"volume_status\":\"unknown\"");
-        }
-    } else {
-        snprintf(volume_json, sizeof(volume_json), "null");
-        snprintf(volume_status_part, sizeof(volume_status_part), ",\"volume_status\":\"unknown\"");
+    if (volume >= 0) {
+        remember_ringer_volume(runtime, volume);
     }
-
-    snprintf(
-        body,
-        sizeof(body),
-        "{\"ok\":true,\"muted\":%s,\"volume\":%s%s%s,\"raw\":%s%s}\n",
-        muted_json,
-        volume_json,
-        muted_status_part,
-        volume_status_part,
-        muted_reply_json,
-        volume_raw_part
-    );
     send_json(client_fd, 200, "OK", body);
 }
 
@@ -8099,7 +7955,8 @@ static void handle_ringer_post(
     int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
-    const struct request *request
+    const char *request_body,
+    int gui_confirmed
 )
 {
     char muted_reply[C300X_MAX_FRAME_LEN];
@@ -8114,7 +7971,7 @@ static void handle_ringer_post(
     int muted;
     int enabled;
     int has_muted;
-    int volume;
+    int volume = 0;
     int has_volume;
     int muted_readback = 0;
     int volume_readback = 0;
@@ -8123,14 +7980,14 @@ static void handle_ringer_post(
     volume_reply_json[0] = '\0';
     volume_readback_reply_json[0] = '\0';
 
-    has_muted = c300x_json_bool_field(request->body, "muted", &muted);
+    has_muted = c300x_json_bool_field(request_body, "muted", &muted);
     if (!has_muted) {
-        if (c300x_json_bool_field(request->body, "enabled", &enabled)) {
+        if (c300x_json_bool_field(request_body, "enabled", &enabled)) {
             muted = !enabled;
             has_muted = 1;
         }
     }
-    has_volume = c300x_json_int_field(request->body, "volume", &volume);
+    has_volume = c300x_json_int_field(request_body, "volume", &volume);
     if (!has_muted && !has_volume) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
         return;
@@ -8141,20 +7998,35 @@ static void handle_ringer_post(
     }
 
     if (has_muted) {
-        snprintf(command, sizeof(command), "%s", muted ? "*#8**#33*0##" : "*#8**#33*1##");
-        if (!c300x_openwebnet_send(config, command, muted_reply, sizeof(muted_reply), error, sizeof(error))) {
+        if (!gui_confirmed) {
+            struct c300x_ringer_command pending = {muted, has_volume, volume};
+            c300x_ringer_control_request(&runtime->ringer_control, client_fd, &pending);
+            return;
+        }
+        if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
             send_device_error(client_fd, error);
             return;
         }
-        if (!ringer_muted_from_reply(muted_reply, &muted_readback)) {
-            muted_readback = muted;
+        /* Never override the GUI's audio-state priorities with a raw write. */
+        if (!c300x_ringer_muted_from_reply(muted_reply, &muted_readback)) {
+            send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"ringer_readback_failed\"}\n");
+            return;
         }
-        remember_ringer_muted(runtime, muted_readback);
+        if (muted_readback != muted) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_not_applied\"}\n");
+            return;
+        }
+        if (note_ringer_muted_changed(runtime, muted_readback)) {
+            char event_data[96];
+            snprintf(event_data, sizeof(event_data), "{\"muted\":%s,\"source\":\"gui_command\"}",
+                     muted_readback ? "true" : "false");
+            dispatch_event(config, runtime, muted_readback ? "ringer.muted" : "ringer.unmuted", event_data, 0);
+        }
         c300x_json_string(muted_reply, muted_reply_json, sizeof(muted_reply_json));
     }
 
     if (has_volume) {
-        snprintf(command, sizeof(command), "*#8**#41*%d##", ringer_volume_to_openwebnet_code(volume));
+        snprintf(command, sizeof(command), "*#8**#41*%d##", c300x_ringer_volume_to_openwebnet_code(volume));
         if (!c300x_openwebnet_write_readback(
             config,
             command,
@@ -8172,7 +8044,7 @@ static void handle_ringer_post(
         }
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         c300x_json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
-        if (!ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
+        if (!c300x_ringer_volume_from_reply(volume_readback_reply, &volume_readback)) {
             snprintf(
                 body,
                 sizeof(body),
@@ -8229,6 +8101,47 @@ static void handle_ringer_post(
         );
     }
     send_json(client_fd, 200, "OK", body);
+}
+
+static void apply_gui_ringer_command(int client_fd, const struct c300x_ringer_command *command, void *ctx)
+{
+    struct agent_runtime *runtime = ctx;
+    char body[96];
+    if (command->has_volume) {
+        snprintf(body, sizeof(body), "{\"muted\":%s,\"volume\":%d}",
+                 command->muted ? "true" : "false", command->volume);
+    } else {
+        snprintf(body, sizeof(body), "{\"muted\":%s}", command->muted ? "true" : "false");
+    }
+    handle_ringer_post(client_fd, runtime->config, runtime, body, 1);
+}
+
+static int handle_ui_ringer_next(int client_fd, struct agent_runtime *runtime, const struct request *request)
+{
+    char header[32];
+    char completed[64];
+    char muted[16];
+    int muted_value = -1;
+    if (!client_is_loopback(client_fd)) {
+        send_loopback_required(client_fd);
+        return 1;
+    }
+    /* A custom header prevents browser cross-origin GETs from consuming commands. */
+    if (!header_value(request, "x-c300x-gui", header, sizeof(header)) || strcmp(header, "ringer-v1") != 0) {
+        send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ringer_gui_header_required\"}\n");
+        return 1;
+    }
+    query_param_value(request->query, "completed", completed, sizeof(completed));
+    query_param_value(request->query, "muted", muted, sizeof(muted));
+    if (strcmp(muted, "0") == 0 || strcmp(muted, "1") == 0) {
+        muted_value = muted[0] == '1';
+    }
+    if (completed[0] != '\0' && (strlen(completed) != 32 || muted_value < 0)) {
+        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_gui_ack\"}\n");
+        return 1;
+    }
+    return c300x_ringer_control_next(&runtime->ringer_control, client_fd, completed, muted_value,
+                                   apply_gui_ringer_command, runtime);
 }
 
 static void handle_answering_get(int client_fd, const struct c300x_config *config)
@@ -10644,6 +10557,7 @@ static void handle_remove_agent(
 static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
+    const struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -10658,6 +10572,21 @@ static void handle_restart_agent(
     if (!confirm_matches(request, "restart_agent")) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
+    }
+    int only_if_idle = 0;
+    (void)c300x_json_bool_field(request->body, "only_if_idle", &only_if_idle);
+    if (only_if_idle) {
+        struct c300x_video_status status;
+        c300x_video_status(runtime->video, &status);
+        if (status.call_active || status.clients || status.media_starting
+            || status.bridge_media_active || status.bridge_stop_in_progress
+            || status.external_media_active || status.ring_call_active
+            || status.ring_media_active || status.ring_audio_active
+            || status.home_call_active || status.home_call_running
+            || status.ring_answer_requested || status.talkback_running) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"media_session_active\"}\n");
+            return;
+        }
     }
     if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
         send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"maintenance_command_failed\"}\n");
@@ -11552,7 +11481,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/ringer") == 0) {
-        handle_ringer_post(client_fd, config, runtime, request);
+        handle_ringer_post(client_fd, config, runtime, request->body, 0);
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/answering-machine") == 0) {
@@ -11662,7 +11591,7 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/agent/actions/restart") == 0) {
-        handle_restart_agent(client_fd, config, request);
+        handle_restart_agent(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/maintenance/update/status") == 0) {
@@ -11921,6 +11850,10 @@ static int handle_ui_request(
         return handle_ui_events_next(client_fd, runtime, request);
     }
 
+    if (strcmp(request->path, "/ui/ringer/next") == 0) {
+        return handle_ui_ringer_next(client_fd, runtime, request);
+    }
+
     if (strcmp(request->path, "/ui/media-closed") == 0) {
         if (!client_is_loopback(client_fd)) {
             send_loopback_required(client_fd);
@@ -12162,6 +12095,7 @@ static void handle_client(
 
     if (kind == LISTENER_API) {
         handle_api_request(client_fd, config, runtime, &workspace->request);
+        close_client = runtime->ringer_control.client_fd != client_fd;
     } else {
         close_client = handle_ui_request(client_fd, config, runtime, &workspace->request);
     }
@@ -12185,7 +12119,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 3 + C300X_UI_EVENT_MAX_WAITERS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 3 + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -12212,6 +12146,7 @@ int c300x_run(struct c300x_config *config)
     runtime->start_monotonic_ms = c300x_monotonic_ms();
     init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
+    c300x_ringer_control_init(&runtime->ringer_control);
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
@@ -12289,6 +12224,7 @@ int c300x_run(struct c300x_config *config)
         int voice_memos_poll_index = -1;
         int ui_event_poll_index = -1, ui_event_poll_count = 0;
         int ui_event_poll_slots[C300X_UI_EVENT_MAX_WAITERS];
+        int ringer_poll_index, ringer_poll_count;
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         time_t now = time(NULL);
@@ -12374,6 +12310,10 @@ int c300x_run(struct c300x_config *config)
         } else {
             ui_event_poll_index = -1;
         }
+        ringer_poll_index = (int)poll_count;
+        ringer_poll_count = c300x_ringer_control_pollfds(&runtime->ringer_control, &poll_fds[poll_count]);
+        poll_count += (nfds_t)ringer_poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms, c300x_ringer_control_timeout_ms(&runtime->ringer_control));
         if (video != NULL && poll_count < (sizeof(poll_fds) / sizeof(poll_fds[0]))) {
             int max_video_fds = (int)((sizeof(poll_fds) / sizeof(poll_fds[0])) - poll_count);
             video_poll_index = (int)poll_count;
@@ -12415,6 +12355,9 @@ int c300x_run(struct c300x_config *config)
             runtime->poll_wakeups++;
             runtime_set_wake_reason(runtime, "event");
         }
+        /* Drain old descriptors before accept can reuse one of their numbers. */
+        c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
+        c300x_ringer_control_expire(&runtime->ringer_control);
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
                 runtime_set_wake_reason(runtime, listeners[index].kind == LISTENER_UI ? "ui" : "api");
@@ -12529,6 +12472,7 @@ cleanup:
         voicemail_close(&runtime->text_memos);
         voicemail_close(&runtime->voice_memos);
         c300x_ui_events_close_all(&runtime->ui_events, ui_event_send_json, NULL);
+        c300x_ringer_control_close(&runtime->ringer_control);
         c300x_recent_events_clear(&runtime->recent_events);
     }
     c300x_video_destroy(video);

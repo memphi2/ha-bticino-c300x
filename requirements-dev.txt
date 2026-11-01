@@ -2,14 +2,14 @@
 # CI combines this with requirements/ha-current/requirements.txt.
 # Home Assistant owns its transitive dependency pins.
 av==18.1.0
-mypy==2.3.1
-numpy==2.5.3
-packaging==26.2
+mypy==2.4.1
+numpy==2.5.4
+packaging==26.3
 paramiko==3.5.1
-PyTurboJPEG==2.5.0
+PyTurboJPEG==2.6.1
 PyYAML==6.0.3
-pytest==9.1.1
+pytest==9.2.0
 pytest-cov==7.1.0
-ruff==0.16.9
+ruff==0.17.3
 spdx-tools==0.8.5
 voluptuous-serialize==2.7.0

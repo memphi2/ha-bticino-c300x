@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.9.9 - 2026-11-02
+
+### Changed
+
+- Prepare Marketplace installation documentation and the doorbell/intercom
+  manifest category while retaining the HA 2026.7 minimum and HACS archive layout.
+- Construct DeviceInfo through its public constructor for forward compatibility
+  without relying on dictionary mutation.
+- Document upcoming API deadlines and LTS maintenance work.
+  The native agent remains 1.9.8; no device changes are required by this work.
+- Keep regular validation on HA 2026.7 and 2026.10.
+- Do not load the unused AnyIO pytest plugin, avoiding its deprecated
+  CallSpec2 import without suppressing warnings or changing HA dependencies.
+
 ## v1.9.8 - 2026-11-01
 
 ### Fixed

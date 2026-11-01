@@ -80,6 +80,9 @@ def _skip_path(path: Path) -> bool:
     if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
         return True
     relative = path.relative_to(ROOT)
+    # Documentation and negative regression fixtures may name obsolete APIs.
+    if path.suffix.lower() == ".md" or relative.parts[0] == "tests":
+        return True
     if any(part in IGNORED_PARTS for part in relative.parts):
         return True
     return _git_ignored(relative)

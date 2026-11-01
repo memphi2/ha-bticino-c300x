@@ -98,7 +98,7 @@ def test_smoke_ha_runtime_check_rejects_unconfigured_minor(
         "entry-1",
     )
 
-    assert failures == [f"HA version {ha_version} does not match 2026.7.*, 2026.9.*"]
+    assert failures == [f"HA version {ha_version} does not match 2026.7.*, 2026.10.*"]
 
 
 def test_smoke_ha_does_not_require_optional_ssh_maintenance_entity() -> None:

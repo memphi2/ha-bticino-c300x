@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
-import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
@@ -46,6 +45,7 @@ from .const import (
     SIGNAL_QML_PATCH_CHANGED,
 )
 from .exceptions import service_validation_error
+from .schema_compat import vol
 from .service_schema import (
     ATTR_ACTION_ID as _ATTR_ACTION_ID,
 )

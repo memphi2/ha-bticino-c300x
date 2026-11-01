@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import voluptuous as vol
-
 from .const import (
     ALARM_DOMAIN,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
@@ -14,6 +12,7 @@ from .const import (
     WEATHER_DOMAIN,
 )
 from .dashboard_entities import DASHBOARD_ENTITY_DOMAINS
+from .schema_compat import vol
 
 selector: Any
 try:

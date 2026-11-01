@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from contextlib import suppress
 from typing import Any, cast
 
-import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -19,6 +18,7 @@ from .const import (
 )
 from .frontend import async_setup_frontend
 from .repair_issues import FRONTEND_CARD_SETUP_HINT_ISSUE, repair_issue_id
+from .schema_compat import vol
 
 _DOORBELL_CALL_CARD_TYPE = "custom:c300x-doorbell-call-card"
 _DOORBELL_CAMERA_UNIQUE_ID_SUFFIX = "doorbell_camera"

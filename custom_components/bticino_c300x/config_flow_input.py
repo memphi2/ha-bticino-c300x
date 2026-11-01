@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
 from homeassistant.const import CONF_NAME
 
 from .action import ActionValidationError, parse_actions_json
@@ -81,6 +80,7 @@ from .device_activations import (
     DeviceActivationConfigError,
     normalize_device_activations,
 )
+from .schema_compat import vol
 from .validation_patterns import ENTITY_OBJECT_ID_RE
 
 _CREATE_HOMEASSISTANT_USER_DEFAULT = True

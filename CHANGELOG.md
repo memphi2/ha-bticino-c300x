@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Validate against Home Assistant `2026.10.0`, keeping the `2026.7.0` minimum.
+  Use Probatio explicitly on HA 2026.9+ and Voluptuous on older supported HA
+  versions. Keep schema validators, exception types and camera API imports
+  aligned with each HA version, with real form, service and websocket tests.
 - Raise the minimum supported Home Assistant version to `2026.7.0` to address
   the three reported HA security advisories. Align HACS, documentation, CI and
   release metadata with this baseline. Update HA before installing the next

@@ -5,6 +5,10 @@ local test harness, build scripts, and the example config.
 
 ## Build and Check
 
+Install the compiler, `pkg-config` and libcurl development headers first
+(`libcurl4-openssl-dev` on Debian/Ubuntu). The binary loads `libcurl.so.4`
+dynamically; it is not linked against the build host's TLS libraries.
+
 ```bash
 make -C native_agent
 make -C native_agent check

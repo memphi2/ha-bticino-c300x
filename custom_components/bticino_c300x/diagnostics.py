@@ -16,6 +16,7 @@ from .callback_target import (
     callback_address_type,
     callback_host_type,
     callback_target_is_clean_local_http,
+    callback_target_is_supported,
     clean_callback_host,
 )
 from .const import (
@@ -344,6 +345,7 @@ def _connection_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
     state = getattr(runtime, "connection_state", None)
     if state is None:
         return None
+    capabilities = getattr(runtime, "capabilities", {})
     return {
         "available": getattr(state, "available", None),
         "state": getattr(state, "connection_state", None),
@@ -372,6 +374,12 @@ def _connection_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
                 None,
             ),
             "callback_is_clean_local_http": _subscription_callback_is_clean(state),
+            "callback_is_supported": callback_target_is_supported(
+                getattr(state, "event_subscription_callback_scheme", None),
+                getattr(state, "event_subscription_callback_host_type", None),
+                https_supported=isinstance(capabilities, Mapping)
+                and capabilities.get("https_callbacks") is True,
+            ),
             "last_attempt_at": _isoformat(
                 getattr(state, "event_subscription_last_attempt_at", None)
             ),
@@ -438,7 +446,7 @@ async def _async_network_diagnostics(
             "callback_base_url_override": callback_override,
             "route": None,
             "same_lan_prefix_guess": None,
-            "subscription_callback_expected": "http_local_reachable",
+            "subscription_callback_expected": "http_or_https_reachable",
         }
     async_add_executor_job = getattr(hass, "async_add_executor_job", None)
     if callable(async_add_executor_job):
@@ -452,7 +460,7 @@ async def _async_network_diagnostics(
         "same_lan_prefix_guess": route.get("same_lan_prefix_guess")
         if isinstance(route, dict)
         else None,
-        "subscription_callback_expected": "http_local_reachable",
+        "subscription_callback_expected": "http_or_https_reachable",
     }
 
 

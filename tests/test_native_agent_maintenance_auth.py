@@ -190,7 +190,7 @@ def test_restart_agent_endpoint_is_maintenance_guarded_and_confirmed() -> None:
     assert "maintenance_authorized(config, request)" in body
     assert 'confirm_matches(request, "restart_agent")' in body
     assert 'run_detached_command(C300X_AGENT_INIT_SCRIPT, "restart", 500)' in body
-    assert "handle_restart_agent(client_fd, config, request)" in route_body
+    assert "handle_restart_agent(client_fd, config, runtime, request)" in route_body
 
 
 def test_remove_agent_script_restores_before_deleting_agent_files() -> None:

@@ -1468,7 +1468,8 @@ def test_remove_agent_sends_maintenance_token_and_confirmation() -> None:
     assert request["kwargs"]["json"] == {"confirm": "remove_agent"}
 
 
-def test_restart_agent_sends_maintenance_token_and_confirmation() -> None:
+@pytest.mark.parametrize("only_if_idle", [False, True])
+def test_restart_agent_sends_maintenance_token_and_confirmation(only_if_idle) -> None:
     session = _FakeSession('{"ok": true, "action": "restart_agent"}')
     api = C300XAgentApi(
         session,  # type: ignore[arg-type]
@@ -1477,7 +1478,7 @@ def test_restart_agent_sends_maintenance_token_and_confirmation() -> None:
         maintenance_token="maintenance-token",
     )
 
-    assert asyncio.run(api.async_restart_agent())["action"] == "restart_agent"
+    assert asyncio.run(api.async_restart_agent(only_if_idle=only_if_idle))["action"] == "restart_agent"
 
     request = session.requests[0]
     assert request["args"] == (
@@ -1488,7 +1489,32 @@ def test_restart_agent_sends_maintenance_token_and_confirmation() -> None:
         "Authorization": "Bearer agent-token",
         HEADER_MAINTENANCE_TOKEN: "maintenance-token",
     }
-    assert request["kwargs"]["json"] == {"confirm": "restart_agent"}
+    expected = {"confirm": "restart_agent"}
+    if only_if_idle:
+        expected["only_if_idle"] = True
+    assert request["kwargs"]["json"] == expected
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_callback_https_config_uses_authenticated_maintenance_api(enabled) -> None:
+    session = _FakeSession(
+        '{"ok":true,"https_callbacks_configured":'
+        + str(enabled).lower() + ',"restart_required":true}'
+    )
+    api = C300XAgentApi(
+        session, "http://agent.local:8080", "agent-token",
+        maintenance_token="maintenance-token",
+    )
+    status = asyncio.run(api.async_configure_callback_https(enabled))
+    assert status.https_callbacks_configured is enabled
+    assert status["https_callbacks_configured"] is enabled
+    assert status.restart_required
+    request = session.requests[0]
+    assert request["args"] == (
+        "POST", "http://agent.local:8080/api/v1/maintenance/auth",
+    )
+    assert request["kwargs"]["json"] == {"httpsCallbacksEnabled": enabled}
+    assert request["kwargs"]["headers"][HEADER_MAINTENANCE_TOKEN] == "maintenance-token"
 
 
 def test_qml_patch_status_uses_maintenance_endpoint() -> None:

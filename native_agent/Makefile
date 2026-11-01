@@ -2,6 +2,9 @@ CC ?= gcc
 PYTHON ?= python3
 ARMHF_CC ?= arm-linux-gnueabihf-gcc
 ARMHF_READELF ?= arm-linux-gnueabihf-readelf
+# Search curl headers after the target's standard headers when cross compiling.
+CURL_INCLUDE_DIR ?= $(shell pkg-config --variable=includedir libcurl 2>/dev/null)
+CURL_CPPFLAGS := $(if $(CURL_INCLUDE_DIR),-idirafter $(CURL_INCLUDE_DIR))
 AUTO_C300X_DEVICE_SYSROOT := $(firstword $(wildcard ../../c300x-fwpatch/work/rootfs-1.7.19))
 C300X_DEVICE_SYSROOT ?= $(AUTO_C300X_DEVICE_SYSROOT)
 AGENT_VERSION ?= $(shell tr -d '[:space:]' < VERSION)
@@ -55,10 +58,10 @@ $(ARMHF_TARGET): $(ARMHF_OBJECTS)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -o $@ $(ARMHF_OBJECTS) $(ARMHF_LDFLAGS)
 
 $(HOST_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(HOST_BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(CURL_CPPFLAGS) -c $< -o $@
 
 $(ARMHF_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(ARMHF_BUILD_DIR)
-	$(ARMHF_CC) $(ARMHF_CFLAGS) -c $< -o $@
+	$(ARMHF_CC) $(ARMHF_CFLAGS) $(CURL_CPPFLAGS) -c $< -o $@
 
 $(ARMHF_BUILD_DIR)/arm_start.o: src/arm_start.S | $(ARMHF_BUILD_DIR)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -c $< -o $@

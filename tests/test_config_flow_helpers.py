@@ -440,7 +440,7 @@ def test_connection_input_accepts_callback_base_url_override() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        "https://192.0.2.10:8123",
+        "ftp://192.0.2.10:8123",
         "http://homeassistant.local:8123",
         "http://127.0.0.1:8123",
         "http://[fe80::1]:8123",

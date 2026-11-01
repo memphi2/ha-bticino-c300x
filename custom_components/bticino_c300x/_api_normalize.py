@@ -444,6 +444,7 @@ def normalize_auth_config_status(data: Any) -> AuthConfigStatus:
         ipv6_firewall_enabled=_optional_bool(data.get("ipv6_firewall_enabled")),
         activations_enabled=_optional_bool(data.get("activations_enabled")),
         activations_auto_discover=_optional_bool(data.get("activations_auto_discover")),
+        https_callbacks_configured=_optional_bool(data.get("https_callbacks_configured")),
     )
 
 

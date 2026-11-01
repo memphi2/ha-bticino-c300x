@@ -1181,6 +1181,12 @@ int c300x_load_config(
             return 0;
         }
     }
+    if (nested_member(document, document_end, "callbacks", "httpsEnabled", &value)) {
+        if (!bool_value(value, document_end, &config->https_callbacks_enabled)) {
+            set_error(error, error_len, "callbacks.httpsEnabled must be a boolean");
+            return 0;
+        }
+    }
     if (nested_member(document, document_end, "events", "callbackTimeoutMs", &value)) {
         if (!int_value(value, document_end, &config->callback_timeout_ms)) {
             set_error(error, error_len, "events.callbackTimeoutMs must be positive");
@@ -1994,6 +2000,7 @@ int c300x_config_persisted_equal(
         && C300X_EQ_STR(events_group)
         && C300X_EQ_INT(events_port)
         && C300X_EQ_INT(callback_timeout_ms)
+        && C300X_EQ_INT(https_callbacks_enabled)
         && C300X_EQ_INT(mqtt_enabled)
         && C300X_EQ_STR(mqtt_host)
         && C300X_EQ_INT(mqtt_port)
@@ -2266,6 +2273,7 @@ static int save_config_internal(
     fprintf(file, "  \"mdns\": {\"enabled\": %s,\"name\": ", config->mdns_enabled ? "true" : "false");
     write_json_string(file, config->mdns_name);
     fprintf(file, "},\n");
+    fprintf(file, "  \"callbacks\": {\"httpsEnabled\": %s},\n", config->https_callbacks_enabled ? "true" : "false");
     fprintf(file, "  \"events\": {\n");
     fprintf(file, "    \"callbackTimeoutMs\": %d,\n", config->callback_timeout_ms);
     fprintf(file, "    \"udp\": {\"enabled\": %s,\"group\": ", config->events_enabled ? "true" : "false");

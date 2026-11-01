@@ -93,6 +93,7 @@ struct c300x_config {
     char events_group[C300X_MAX_HOST_LEN];
     uint16_t events_port;
     int callback_timeout_ms;
+    int https_callbacks_enabled;
     int mqtt_enabled;
     char mqtt_host[C300X_MAX_HOST_LEN];
     uint16_t mqtt_port;

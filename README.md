@@ -20,6 +20,9 @@ forwarding controls, messages and optional display pages.
 ## What You Get
 
 - Doorbell ring events and local camera viewing.
+- Optional verified HTTPS callbacks through the callback base URL override.
+  HTTP remains the default without TLS initialization on the C300X. See
+  [callback configuration](docs/advanced-maintenance.md#callback-url).
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from .callback_target import (
     callback_host_needs_rewrite,
     callback_host_type,
-    callback_target_is_clean_local_http,
+    callback_target_is_supported,
 )
 from .const import (
     CONF_AGENT_HOST,
@@ -104,10 +104,10 @@ async def async_suggest_callback_base_url(
 
 
 def normalize_callback_base_url(value: object) -> str:
-    """Validate and normalize a local HTTP callback base URL.
+    """Validate and normalize an HTTP(S) callback base URL.
 
-    Empty values disable the override. Non-empty values must be a plain HTTP
-    endpoint that the embedded native agent can call directly on the local LAN.
+    Empty values disable the override. HTTPS requires a compatible agent and
+    a certificate valid for the configured host.
     """
 
     text = str(value or "").strip().rstrip("/")
@@ -117,17 +117,19 @@ def normalize_callback_base_url(value: object) -> str:
     _valid_callback_port(parts)
     host_type = callback_host_type(parts.hostname)
     if (
-        parts.scheme.lower() != "http"
+        parts.scheme.lower() not in {"http", "https"}
         or not parts.hostname
         or parts.username
         or parts.password
         or parts.query
         or parts.fragment
         or parts.path not in {"", "/"}
-        or callback_target_is_clean_local_http(parts.scheme, host_type) is not True
+        or callback_target_is_supported(
+            parts.scheme, host_type, https_supported=True
+        ) is not True
     ):
-        raise ValueError("callback base URL must be a reachable local HTTP URL")
-    return urlunsplit(("http", parts.netloc, "", "", ""))
+        raise ValueError("callback base URL must be a reachable HTTP or HTTPS URL")
+    return urlunsplit((parts.scheme.lower(), parts.netloc, "", "", ""))
 
 
 def validated_callback_base_url(
@@ -171,6 +173,9 @@ async def async_rewrite_link_local_callback_url(
     """Replace mDNS/link-local callback hosts with a routable HA source address."""
 
     parts = urlsplit(callback_url)
+    # Replacing the hostname would change SNI and the certificate identity.
+    if parts.scheme.lower() == "https":
+        return callback_url
     if not callback_host_needs_rewrite(parts.hostname):
         return callback_url
 

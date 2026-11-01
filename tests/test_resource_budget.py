@@ -64,12 +64,14 @@ def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
     # payload types + silence), then to 232_500 for the codec-aware ring
     # talkback restamp (speex 97 -> negotiated 96), then to 233_900 for the
     # 503 answers plus reject reasons that replaced the silent closes on a
-    # missing client slot, then to 237_000 for the on-demand session
-    # serialization (settle window after a teardown) plus the SIP-setup failure
-    # reasons (#55). Splitting this monolith is a separate backlog refactor;
-    # this interim ceiling keeps pressure on unrelated growth.
-    assert path.stat().st_size <= 237_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 6_960
+    # missing client slot, then to 235_000 for the SIP-setup failure reasons
+    # (#55). (A teardown settle window briefly pushed this to 237_000 in 1.9.7;
+    # it was removed again in 1.9.8 — hardware showed it did not stop the
+    # reboot.) Then to 236_000 for the codec-aware on-demand SDP offer (PCMU-only
+    # in PCMU mode, #55/#58). Splitting this monolith is a separate backlog
+    # refactor; this interim ceiling keeps pressure on unrelated growth.
+    assert path.stat().st_size <= 236_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 6_940
 
 
 def test_native_agent_media_audio_module_stays_small() -> None:

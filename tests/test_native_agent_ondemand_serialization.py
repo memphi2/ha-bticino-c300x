@@ -32,35 +32,14 @@ def _function_body(source: str, signature: str) -> str:
     raise AssertionError(f"could not bound {signature!r}")
 
 
-def test_a_real_teardown_records_a_settle_timestamp() -> None:
-    """A session that signalled the device to stop must arm the settle window."""
+def test_teardown_settle_serialization_is_not_reintroduced() -> None:
+    """The 1.9.7 teardown settle-wait did not stop the PCMU reboot on hardware
+    (issue #55: even an isolated successful session was followed by a reboot)
+    while costing up to 8 s of reconnect
+    latency. It was removed in 1.9.8; do not bring it back without data."""
 
-    stop_body = _function_body(MEDIA_BRIDGE, "static void stop_media_session(")
-    assert "ondemand_teardown_done_ms = c300x_monotonic_ms()" in stop_body
-    # Only when a real session actually ran, not on a no-op stop.
-    assert "if (send_media_stop) {" in stop_body
-
-
-def test_start_waits_out_the_settle_window() -> None:
-    """A new on-demand start must hold off until the previous teardown settled,
-    and must drop out of the wait on stop, the explicit-stop guard, or another
-    start winning the race (issue #55)."""
-
-    start_body = _function_body(MEDIA_BRIDGE, "static bool start_media_session(")
-    assert "ONDEMAND_TEARDOWN_SETTLE_MS" in start_body
-    assert "ondemand_teardown_done_ms != 0" in start_body
-    assert "c300x_monotonic_ms() < settle_deadline" in start_body
-    for breakout in (
-        "!bridge->stop_in_progress",
-        "c300x_media_session_guard_blocks_start",
-        "!bridge->media_active",
-        "!bridge->media_starting",
-    ):
-        assert breakout in start_body, breakout
-
-
-def test_settle_window_is_a_named_constant() -> None:
-    assert "#define ONDEMAND_TEARDOWN_SETTLE_MS" in MEDIA_BRIDGE
+    assert "ONDEMAND_TEARDOWN_SETTLE_MS" not in MEDIA_BRIDGE
+    assert "ondemand_teardown_done_ms" not in MEDIA_BRIDGE
 
 
 def test_sip_setup_failure_carries_a_reason() -> None:

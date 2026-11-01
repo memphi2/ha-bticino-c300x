@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.7`
+- Current packaged agent version: `1.9.8`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -1202,6 +1202,7 @@ the API listener. They must not expose configured token values.
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.9.8 | 1.1 | 1.7.x | Removes the on-demand teardown settle window added in 1.9.7 (hardware testing showed it did not stop the PCMU reboot while adding reconnect latency). Keeps the SIP-setup failure reasons. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
 | 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |

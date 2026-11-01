@@ -1,11 +1,13 @@
-# Direct validation dependencies for the minimum Home Assistant matrix. CI
-# installs Home Assistant separately, so this file intentionally does not pin
-# Home Assistant transitive dependencies.
+# Direct validation dependencies for the minimum Home Assistant matrix.
+# CI combines this with requirements/ha-min/requirements.txt.
+# Home Assistant owns its transitive dependency pins.
 av==18.0.0
 mypy==2.1.0
 numpy==2.5.1
+packaging==26.3
 paramiko==3.5.1
 PyTurboJPEG==2.4.0
+PyYAML==6.0.3
 pytest==9.1.1
 pytest-cov==7.1.0
 ruff==0.15.20

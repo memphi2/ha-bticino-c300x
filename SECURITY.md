@@ -48,6 +48,42 @@ Security scanners may flag Paramiko for SHA-1/RSA-key handling
 network, use the installer only for rooted/SSH-enabled devices you control, and
 disable SSH again after bootstrap when your maintenance model allows it.
 
+## Dependency Update Coverage
+
+Normal GitHub Actions and Python tool updates are grouped quarterly, with at
+most one open version-update PR per ecosystem. Python major-version changes
+remain manual compatibility work. The groups explicitly apply only to version
+updates: security-update PRs do not wait for the quarterly schedule and use
+GitHub's separate security PR limit.
+
+The HA versions used in CI live in separate
+`requirements/ha-min/requirements.txt` and
+`requirements/ha-current/requirements.txt` manifests. Validate and Release
+install those exact manifests together with their corresponding direct tool
+pins. Neither HA target is excluded from its Dependabot entry. Routine HA
+version updates remain manual; `open-pull-requests-limit: 0` does not disable
+security-update PRs.
+
+Dependabot alerts and automatic security-update PRs must be enabled in the
+repository settings. A local configuration change cannot enable those settings.
+Alerts, security-update PRs and normal version-update schedules are distinct;
+an ignored update version does not suppress the advisory itself.
+
+The `paramiko >=4` ignore range remains a deliberate legacy SSH exception:
+a fix available only there needs manual security triage and device compatibility
+testing. The minimum-HA **tool** file is also maintained manually and excluded
+from automatic updates; that exception does not cover the minimum HA manifest.
+
+`requirements-dev.txt` and `requirements-dev-min-ha.txt` contain direct tools,
+not generated transitive lockfiles. Do not restore a matching `.in` file:
+Dependabot would treat the pair as pip-compile input/output and regenerate the
+transitive pins. `scripts/check_dependency_updates.py` checks parsed YAML,
+manifest contents and CI wiring, including forbidden coverage restrictions.
+Security PRs are not auto-merged; align `project-versions.json` and compatibility
+metadata with a changed HA pin and pass both validation targets before merging.
+
+See the [Dependabot configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+
 ## Accepted Local-Only Security Exceptions
 
 The following scanner findings are documented and intentionally suppressed in

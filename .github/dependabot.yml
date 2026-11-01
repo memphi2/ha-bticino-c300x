@@ -3,13 +3,13 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "quarterly"
       time: "05:00"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     groups:
       github-actions:
+        applies-to: "version-updates"
         patterns:
           - "*"
     commit-message:
@@ -17,18 +17,20 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/"
-    # Dependabot updates requirements-dev.txt. The minimum-HA validation lock is
-    # curated manually; Home Assistant transitive dependencies are installed from
-    # the selected Home Assistant matrix version instead of committed here.
+    # Direct tool pins only. The minimum-HA tool set is curated manually.
+    # HA targets have independent security-update entries below.
     exclude-paths:
       - "requirements-dev-min-ha.txt"
+      - "requirements/ha-current/**"
+      - "requirements/ha-min/**"
     schedule:
-      interval: "monthly"
+      interval: "quarterly"
       time: "05:30"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     groups:
       python-patch-minor:
+        applies-to: "version-updates"
         patterns:
           - "*"
         update-types:
@@ -41,16 +43,26 @@ updates:
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-      # Home Assistant compatibility is bumped manually after min/current CI matrix proof.
-      # Spelled as update-types, not versions: ">=0". A bare version range
-      # is applied on the security path too, which would hide an advisory
-      # against these pins; naming the version-update types keeps routine
-      # bumps out and leaves security updates free to open a pull request.
-      - dependency-name: "homeassistant"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+      # Legacy SSH compatibility exception; fixes available only in >=4 need
+      # manual security triage (see SECURITY.md). This does not suppress alerts.
       - dependency-name: "paramiko"
         versions:
           - ">=4"
+
+  # Zero disables routine version PRs, not security-update PRs.
+  # Keep targets separate so minimum/current pins are resolved independently.
+  - package-ecosystem: "pip"
+    directory: "/requirements/ha-min"
+    schedule:
+      interval: "quarterly"
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "pip"
+    directory: "/requirements/ha-current"
+    schedule:
+      interval: "quarterly"
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "deps"

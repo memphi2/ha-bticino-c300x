@@ -3,12 +3,12 @@
 # requirements-dev-min-ha.txt is curated manually for the minimum matrix.
 # Home Assistant itself is locked per CI matrix.
 av==18.1.0
-mypy==2.3.1
-numpy==2.5.3
+mypy==2.4.1
+numpy==2.5.4
 paramiko==3.5.1
-PyTurboJPEG==2.5.0
-pytest==9.1.1
+PyTurboJPEG==2.6.1
+pytest==9.2.0
 pytest-cov==7.1.0
-ruff==0.16.9
+ruff==0.17.3
 spdx-tools==0.8.5
 voluptuous-serialize==2.7.0

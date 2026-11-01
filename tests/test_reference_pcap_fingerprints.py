@@ -197,7 +197,12 @@ def test_reference_on_demand_fingerprint_matches_native_invite_offer() -> None:
     )
     offer = fingerprint["offer"]
 
-    _assert_media_line(setup_body, "audio", offer["audio"]["payloads"])
+    # PCMU mode narrows the audio offer to PCMU-only (#55/#58); the reference
+    # app's full offer is kept as the non-PCMU branch, so app parity still holds
+    # there. The audio m= line is therefore dynamic (payloads via %s).
+    assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
+    assert f': "{" ".join(offer["audio"]["payloads"])}"' in setup_body
+    assert '? "0 100"' in setup_body
     _assert_codecs(setup_body, offer["audio"]["codecs"])
     _assert_crypto_suites(setup_body, offer["audio"]["crypto_suites"])
     _assert_media_line(setup_body, "video", offer["video"]["payloads"])
@@ -209,7 +214,7 @@ def test_reference_on_demand_fingerprint_matches_native_invite_offer() -> None:
     )
 
 
-def test_on_demand_offer_does_not_reintroduce_static_pcmu_pcma_rtpmap() -> None:
+def test_on_demand_offer_keeps_app_parity_outside_pcmu_mode() -> None:
     fingerprint = _fingerprint("reference_on_demand.json")
     media_bridge = _read_media_bridge()
     setup_body = _section(
@@ -217,11 +222,19 @@ def test_on_demand_offer_does_not_reintroduce_static_pcmu_pcma_rtpmap() -> None:
         "static bool send_sip_setup",
         "static void send_sip_bye",
     )
+    # The captured offer carries 0 (PCMU) and 8 (PCMA) only as bare static
+    # payload numbers, without their own rtpmap. The non-PCMU branch of our offer
+    # keeps that parity; a PCMU rtpmap is allowed only in the PCMU-only branch
+    # (#58), and PCMA never gets one.
+    non_pcmu_attrs = _section(
+        setup_body, ': "a=rtpmap:96 opus/48000/2', ";"
+    )
 
     assert "known_code_differences" not in fingerprint
     assert "PCMU/8000" not in fingerprint["offer"]["audio"]["codecs"]
     assert "PCMA/8000" not in fingerprint["offer"]["audio"]["codecs"]
-    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' not in setup_body
+    assert "PCMU" not in non_pcmu_attrs
+    assert "PCMA" not in non_pcmu_attrs
     assert '"a=rtpmap:8 PCMA/8000\\r\\n"' not in setup_body
 
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.9.8 - Unreleased
 
 ### Fixed
 
@@ -28,6 +28,21 @@
   in Dependabot-readable manifests used directly by CI. Replace text-based
   dependency checks with parsed configuration checks and remove the unused
   pip-compile input that caused transitive pin churn.
+- Remove the on-demand teardown settle window introduced in 1.9.7. Hardware
+  testing showed it did not prevent the PCMU reboot while delaying reconnects
+  by up to 8 seconds. SIP-setup failure reasons remain available.
+- Tear an on-demand session down by removing only the agent's own BT-AV UDP
+  clients instead of issuing a global pipeline stop. Log unacknowledged
+  removals, distinguishing a NACK from a missing ACK; a NACK can occur after
+  SIP BYE has already removed the pipeline.
+- Offer only PCMU in the on-demand SDP when the device codec is PCMU, instead of
+  a full multi-codec offer, so the negotiated codec matches the configured one
+  (#55).
+- Preserve separate SIP messages received together over TCP, including an INVITE
+  final response following `100 Trying`. Reassemble fragmented messages within
+  a bounded deadline and reject incomplete or invalid frames.
+- PCMU device reboots in #55 remain unresolved. The cleanup and SDP changes
+  require device validation and are not a confirmed reboot fix.
 
 ## v1.9.7 - 2026-10-05
 

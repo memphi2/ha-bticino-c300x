@@ -350,7 +350,11 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "connect_sip_socket(bridge->config)" in setup_body
     assert '"Via: SIP/2.0/%s %s:%u' in setup_body
     assert '"s=Talk\\r\\n"' in setup_body
-    assert '"m=audio %d RTP/SAVP 96 97 98 0 8 101 99 100\\r\\n"' in setup_body
+    assert 'const bool use_pcmu = bridge_audio_codec_is_pcmu(bridge);' in setup_body
+    assert '? "0 100"' in setup_body
+    assert ': "96 97 98 0 8 101 99 100"' in setup_body
+    assert '"a=rtpmap:0 PCMU/8000\\r\\n"' in setup_body
+    assert '"m=audio %d RTP/SAVP %s\\r\\n"' in setup_body
     assert '"m=video %d RTP/SAVP 96 97 98 99\\r\\n"' in setup_body
     assert '"a=nortpproxy:yes\\r\\n"' in setup_body
     assert '"User-Agent: " MEDIA_SIP_USER_AGENT "\\r\\n"' in setup_body
@@ -363,7 +367,6 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw" in setup_body
     assert "c300x_media_bt_av_takeover(bridge->config)" in media_bridge
     assert "c300x_media_bt_av_start(bridge->config)" in media_bridge
-    assert 'send_bt_av_media_command("*7*0*##", reply, sizeof(reply))' in media_bt_av
     assert '"*7*300#127#0#0#1#%d#%d*##"' in media_bt_av
     assert "BT_AV_TAKEOVER_SETTLE_MS" in media_bt_av
     takeover_body = media_bt_av[
@@ -445,3 +448,27 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "send_srtcp_pli(video_rtcp_fd, target_video_port + 1, srtp.video" in ondemand_media_body
     assert "send_rtcp_receiver_report(" not in media_bridge
     assert "send_rtcp_pli(" not in media_bridge
+
+
+def test_native_agent_bt_av_stop_removes_only_owned_udp_clients() -> None:
+    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+        encoding="utf-8"
+    )
+    header = (ROOT / "native_agent" / "src" / "media_bt_av.h").read_text(
+        encoding="utf-8"
+    )
+    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+        encoding="utf-8"
+    )
+
+    stop_body = media_bt_av[
+        media_bt_av.index("void c300x_media_bt_av_stop") :
+        media_bt_av.index("bool c300x_media_bt_av_takeover")
+    ]
+
+    assert "void c300x_media_bt_av_stop(const struct c300x_config *config);" in header
+    assert '"*7*0*##"' not in stop_body
+    assert stop_body.count('"*7*301#127#0#0#1#%d#') == 2
+    assert "audio_rtp_port(config)" in stop_body
+    assert "video_rtp_port(config)" in stop_body
+    assert "c300x_media_bt_av_stop(g_bridge.config);" in media_bridge

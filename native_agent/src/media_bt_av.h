@@ -7,6 +7,6 @@ struct c300x_config;
 
 bool c300x_media_bt_av_start(const struct c300x_config *config);
 bool c300x_media_bt_av_takeover(const struct c300x_config *config);
-void c300x_media_bt_av_stop(void);
+void c300x_media_bt_av_stop(const struct c300x_config *config);
 
 #endif

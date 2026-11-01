@@ -268,6 +268,10 @@ def _resolve_bundle(remote_dir: str) -> _ResolvedBundle:
     bundle_manifest = _optional_existing(COMPONENT_DIR / "device_agent" / "bundle.json")
 
     qml_sources = {
+        "qml/C300XRingerControl.qml": _first_existing(
+            COMPONENT_DIR / "device_agent" / "qml" / "C300XRingerControl.qml",
+            REPO_ROOT / "device_qml" / "C300XRingerControl.qml",
+        ),
         "qml/Alarm.qml": _first_existing(
             COMPONENT_DIR / "device_agent" / "qml" / "Alarm.qml",
             REPO_ROOT / "device_qml" / "Alarm.qml",

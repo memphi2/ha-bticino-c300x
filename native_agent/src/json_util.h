@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#define C300X_JSON_QUOTED_LEN(value_len) (((value_len) * 6) + 3)
+
 size_t c300x_json_escape_string(const char *value, char *out, size_t out_len);
 const char *c300x_json_string(const char *value, char *out, size_t out_len);
 const char *c300x_json_string_or_null(const char *value, char *out, size_t out_len);

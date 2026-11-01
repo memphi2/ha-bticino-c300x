@@ -2,10 +2,28 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+
+int send_all_bytes(int fd, const char *payload, size_t payload_len)
+{
+    size_t sent = 0;
+
+    while (sent < payload_len) {
+        ssize_t written = send(fd, payload + sent, payload_len - sent, MSG_NOSIGNAL);
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written <= 0) {
+            return 0;
+        }
+        sent += (size_t)written;
+    }
+    return 1;
+}
 
 static int hex_digit_value(char ch)
 {

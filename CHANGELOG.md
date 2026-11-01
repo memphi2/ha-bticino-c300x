@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- Send the core GUI's call-end notification to the agent's default UI port
+  (8090). Detect and repair older hooks targeting 8092 when reapplying the
+  core QML patch; reload the device GUI to activate the correction.
+- Synchronize ringer mute/unmute with the device GUI's saved audio state so
+  an unanswered call cannot restore an old mute setting (#65). Requires the
+  updated agent and core QML hook, including a GUI reload. Commands fail
+  explicitly when GUI confirmation is unavailable. Device validation of the
+  new control path is still pending.
+
 ### Changed
 
 - Validate against Home Assistant `2026.10.0`, keeping the `2026.7.0` minimum.

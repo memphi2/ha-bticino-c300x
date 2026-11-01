@@ -34,6 +34,7 @@ void percent_decode_query_value(
 int query_param_value(const char *query, const char *key, char *out, size_t out_len);
 int validate_action_id(const char *value);
 void set_socket_timeout(int fd, int timeout_ms);
+int send_all_bytes(int fd, const char *payload, size_t payload_len);
 void set_fd_nonblocking(int fd);
 void set_fd_cloexec(int fd);
 void allow_socket_reuse(int fd);

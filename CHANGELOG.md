@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Cancel in-flight timer-driven event registrations when unloading the
+  integration, preventing late callbacks into a removed runtime.
 - Send a complete 20 ms PCMU silence frame when the microphone is inactive,
   matching the RTP timestamp increment. Speex silence is unchanged. This
   corrects undersized agent packets. Repeated on-device PCMU on-demand tests

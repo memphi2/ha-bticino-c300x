@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.11 - Unreleased
+## v2.0.0 - Unreleased
 
 ### Fixed
 
@@ -19,6 +19,13 @@
   one collector across integration entries.
 - Reuse stored-media downloads and conversions through a bounded, short-lived
   RAM cache. Add byte-range playback and explicit download/conversion limits.
+- Use one runtime watchdog for recovery commands, avoiding duplicate GUI reloads.
+- Reject late message refresh results after an integration reload and complete
+  entry cleanup even when releasing one resource fails.
+- Cancel and await camera background tasks during removal, finish interrupted
+  session cleanup, and dispose of old card sessions before reconfiguration.
+- Run QML maintenance and GUI reload jobs with bounded execution outside the
+  agent's event loop, keeping event processing responsive during maintenance.
 
 ### Changed
 
@@ -30,12 +37,17 @@
   backups are not deleted.
 - Include direct external runtime dependencies in the release SBOM and clarify
   provenance, callback authentication, privacy, and accepted legacy SSH risks.
+- Reuse the short-lived message cache for media browsing and resolution.
+- Separate runtime resource ownership and display operations, and expand real
+  Home Assistant lifecycle, browser, transport, and security validation.
 
 ### Upgrade
 
-- Update the native agent to 1.9.11 to apply the PCMU correction and agent
+- Update the native agent to 2.0.0 to apply the PCMU correction and agent
   transport improvements; updating only the integration is insufficient.
   No firmware patch is required.
+- Home Assistant 2026.7 remains the minimum supported version; validation also
+  covers Home Assistant 2026.10. Keep existing integration entries when updating.
 
 ## v1.9.10 - 2026-11-02
 

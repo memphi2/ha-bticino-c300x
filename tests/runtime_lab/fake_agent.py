@@ -66,7 +66,7 @@ class FakeAgent:
             return web.json_response(
                 {
                     "api_version": "1",
-                    "agent": {"version": "1.9.11", "implementation": "native-c"},
+                    "agent": {"version": "2.0.0", "implementation": "native-c"},
                     "device": {"model": "C300X", "firmware": "synthetic"},
                     "capabilities": {
                         "doorbell_events": True,

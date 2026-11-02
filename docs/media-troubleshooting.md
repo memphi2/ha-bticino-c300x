@@ -24,8 +24,8 @@ pages, reload the integration once and re-check `Media readiness`.
 
 ## Device Reboots After PCMU On-demand Video
 
-Native agent **1.9.11** corrects the undersized PCMU silence packets associated
-with [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55). When the
+Native agent **2.0.0** includes the correction for undersized PCMU silence packets
+associated with [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55). When the
 microphone is inactive, the agent sends a complete 20 ms frame instead of one
 byte. Speex is unchanged; this fix does not patch firmware or add teardown delays.
 
@@ -35,9 +35,9 @@ of observation after each stop. The issue is closed following this validation;
 the reporter's exact cold-boot, short-gap and multi-unit setup has not yet been
 retested with the corrected agent.
 
-The fix is currently in the unreleased 1.9.11 build. Once available, follow the
+The fix is included in the upcoming 2.0.0 release. Once available, follow the
 [update instructions](advanced-maintenance.md#updates) and verify that the
-**native agent**, not just the integration, is version 1.9.11 or newer.
+**native agent**, not just the integration, is version 2.0.0 or newer.
 Updating only Home Assistant files does not apply the correction.
 
 Until the corrected agent is installed, use **Speex (stock)** in the **Audio

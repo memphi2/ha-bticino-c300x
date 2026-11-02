@@ -2,7 +2,8 @@
 
 ## Supported Release Line
 
-- `1.9.x`: active
+- `2.0.x`: current development and next release line
+- `1.9.x`: latest published release line, until 2.0.0 is released
 
 ## Compatibility Baseline
 

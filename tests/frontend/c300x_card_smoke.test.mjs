@@ -460,6 +460,87 @@ test("doorbell card updates from direct camera state events without page reload"
   assert.equal(subscriptions[0].active, false);
 });
 
+test("reconfiguration disposes media, timers and subscriptions before replacing resources", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?reconfigure-cleanup");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = fakeHass();
+  const cleaned = [];
+  card._webrtc.close = () => cleaned.push("peer");
+  card._transitionWebrtc = { close: () => cleaned.push("transition") };
+  card._micStream = { getTracks: () => [{ stop: () => cleaned.push("mic") }] };
+  card._unsubscribeStateEvents = () => cleaned.push("subscription");
+  card._ringbackTone.stop = () => cleaned.push("tone");
+  card._showTemporaryNotice("old notice");
+  const timer = card._noticeTimer;
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", name: "Updated" });
+  assert.deepEqual(new Set(cleaned), new Set(["peer", "transition", "mic", "subscription", "tone"]));
+  assert.equal(timer._destroyed, true);
+  assert.equal(card._micStream, null);
+  card.disconnectedCallback();
+  card.disconnectedCallback();
+});
+
+test("reconfiguration rejects an old subscription resolving after the new one", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-subscription");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  const pending = [];
+  const removed = [];
+  const hass = fakeHass({ connection: {
+    subscribeEvents: () => new Promise((resolve) => pending.push(resolve)),
+  } });
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = hass;
+  card.setConfig({ ...card._config, name: "Updated" });
+  card.hass = hass;
+  assert.equal(pending.length, 2);
+  pending[1](() => removed.push("new"));
+  await Promise.resolve();
+  pending[0](() => removed.push("old"));
+  await Promise.resolve();
+  assert.deepEqual(removed, ["old"]);
+  card.disconnectedCallback();
+  assert.deepEqual(removed, ["old", "new"]);
+});
+
+test("microphone permission resolving after disposal cannot restart media", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-microphone");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  try {
+    for (const reconfigure of [false, true]) {
+      let release;
+      let stops = 0;
+      let starts = 0;
+      Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
+        mediaDevices: { getUserMedia: () => new Promise((resolve) => { release = resolve; }) },
+      } });
+      const card = new Card();
+      card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+      card.hass = fakeHass();
+      card._webrtc.start = async () => { starts++; };
+      const starting = card._startTalkback();
+      if (reconfigure) card.setConfig({ ...card._config, name: "Updated" });
+      else card.disconnectedCallback();
+      card._webrtc.start = async () => { starts++; };
+      release({ getTracks: () => [{ stop: () => { stops++; } }], getAudioTracks: () => [] });
+      assert.equal(await starting, false);
+      assert.equal(starts, 0);
+      assert.equal(stops, 1);
+      assert.equal(card._micStream, null);
+      card.disconnectedCallback();
+    }
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor);
+    else delete globalThis.navigator;
+  }
+});
+
 test("doorbell answer transition promotes when the cloud session receives video", async () => {
   const registry = installFakeDom();
 

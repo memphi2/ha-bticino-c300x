@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=46e9e213d1cdd1bc";
+} from "./c300x-translations.js?v=6459accc08c815c8";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,23 +15,23 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=46e9e213d1cdd1bc";
+} from "./c300x-entity-resolver.js?v=6459accc08c815c8";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=46e9e213d1cdd1bc";
-import { C300XCardActions } from "./c300x-card-actions.js?v=46e9e213d1cdd1bc";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=46e9e213d1cdd1bc";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=46e9e213d1cdd1bc";
+} from "./c300x-card-editor.js?v=6459accc08c815c8";
+import { C300XCardActions } from "./c300x-card-actions.js?v=6459accc08c815c8";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=6459accc08c815c8";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=6459accc08c815c8";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=46e9e213d1cdd1bc";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=46e9e213d1cdd1bc";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=46e9e213d1cdd1bc";
+} from "./c300x-state-model.js?v=6459accc08c815c8";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=6459accc08c815c8";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=6459accc08c815c8";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -101,8 +101,8 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._cancelScheduledUpdate();
-    this._releaseRingAnswerLaunchClaim?.();
+    this._disposeResources();
+    this._disposed = false;
     this._config = {
       ...C300X_DEFAULT_CONFIG,
       ...config,
@@ -118,7 +118,6 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._cameraEntityState = null;
     this._stateSubscriptionConnection = null;
     this._stateSubscriptionEntityId = "";
-    this._stateSubscriptionToken = 0;
     this._unsubscribeStateEvents = null;
     this._updateFrame = null;
     this._lastRenderSignature = null;
@@ -133,6 +132,12 @@ class C300XDoorbellCallCard extends HTMLElement {
       getVolume: () => this._config?.ringback_volume,
     });
     this._ensureRendered();
+    if (this._hass) {
+      this._syncCameraEntityFromHass();
+      this._ensureStateSubscription();
+      this._ensureLocationChangeListener();
+      this._scheduleUpdate();
+    }
   }
 
   _createWebrtcClient({ onClosed, onTrack } = {}) {
@@ -212,17 +217,28 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   connectedCallback() {
+    this._disposed = false;
     this._ensureLocationChangeListener();
+    if (this._config && this._hass) {
+      this._ensureStateSubscription();
+      this._scheduleUpdate();
+    }
   }
 
   disconnectedCallback() {
+    this._disposeResources();
+  }
+
+  _disposeResources() {
+    this._disposed = true;
+    this._resourceGeneration = (this._resourceGeneration || 0) + 1;
     this._cancelScheduledUpdate();
     this._clearStateSubscription();
     this._clearLocationChangeListener();
     this._releaseRingAnswerLaunchClaim();
     this._clearNoticeTimer();
     this._stopRingbackTone();
-    this._closePeer(false);
+    this._closePeer(false, { updateState: false });
   }
 
   getCardSize() {
@@ -336,6 +352,9 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _scheduleUpdate() {
+    if (this._disposed) {
+      return;
+    }
     if (this._updateFrame !== null && this._updateFrame !== undefined) {
       return;
     }
@@ -359,7 +378,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _ensureLocationChangeListener() {
-    if (this._locationChangeHandler || typeof globalThis.addEventListener !== "function") {
+    if (this._disposed || this._locationChangeHandler || typeof globalThis.addEventListener !== "function") {
       return;
     }
     this._locationChangeHandler = () => this._scheduleUpdate();
@@ -391,7 +410,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _updateState() {
-    if (!this.shadowRoot || !this._config) {
+    if (this._disposed || !this.shadowRoot || !this._config) {
       return;
     }
 
@@ -500,9 +519,10 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _startTalkback({ microphone = true, receiveAudio = true, homeCall = false } = {}) {
-    if (this._webrtc.running || this._transitionWebrtc) {
+    if (this._disposed || this._webrtc.running || this._transitionWebrtc) {
       return false;
     }
+    const generation = this._resourceGeneration;
     this._error = "";
     this._clearNotice();
 
@@ -512,6 +532,9 @@ class C300XDoorbellCallCard extends HTMLElement {
       } else {
         this._micStream = null;
       }
+      if (generation !== this._resourceGeneration) {
+        return false;
+      }
 
       const mediaElement = homeCall || this._isHomeCallMode() ? this._audioEl : this._videoEl;
       await this._webrtc.start({
@@ -519,8 +542,11 @@ class C300XDoorbellCallCard extends HTMLElement {
         receiveAudio,
         mediaElement,
       });
-      return true;
+      return generation === this._resourceGeneration;
     } catch (err) {
+      if (generation !== this._resourceGeneration) {
+        return false;
+      }
       if (err?.message === "HA WebRTC offer cancelled") {
         this._closePeer(true);
         return false;
@@ -530,12 +556,18 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._closePeer(false);
       return false;
     } finally {
-      this._updateState();
+      if (generation === this._resourceGeneration) {
+        this._updateState();
+      }
     }
   }
 
   async _startAnsweredDoorbellStream() {
+    const generation = this._resourceGeneration;
     await this._prepareMicrophone();
+    if (generation !== this._resourceGeneration) {
+      return;
+    }
     await this._replaceDoorbellWebrtcStream({
       microphoneStream: this._micStream,
       receiveAudio: true,
@@ -683,6 +715,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   async _prepareMicrophone() {
+    const generation = this._resourceGeneration;
     const mediaDevices = globalThis.navigator?.mediaDevices;
     const getUserMedia = mediaDevices?.getUserMedia;
     if (typeof getUserMedia !== "function") {
@@ -690,7 +723,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       return;
     }
     try {
-      this._micStream = await getUserMedia.call(mediaDevices, {
+      const stream = await getUserMedia.call(mediaDevices, {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -698,8 +731,16 @@ class C300XDoorbellCallCard extends HTMLElement {
         },
         video: false,
       });
+      if (generation !== this._resourceGeneration) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      this._micStream = stream;
       this._applyMicMuted();
     } catch (err) {
+      if (generation !== this._resourceGeneration) {
+        return;
+      }
       console.warn("C300X microphone unavailable; starting receive-only stream", err);
       this._showTemporaryNotice(this._label("microphone_stream_only"));
     }
@@ -710,7 +751,7 @@ class C300XDoorbellCallCard extends HTMLElement {
       this._transitionWebrtc.close();
       this._transitionWebrtc = null;
     }
-    this._webrtc.close();
+    this._webrtc?.close();
 
     if (this._micStream) {
       for (const track of this._micStream.getTracks()) {
@@ -720,7 +761,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._micStream = null;
     this._micMuted = false;
 
-    this._lifecycle.clearPeer(clearStatus);
+    this._lifecycle?.clearPeer(clearStatus);
     if (this._videoEl && !options.keepMediaElement) {
       this._videoEl.srcObject = null;
     }
@@ -734,7 +775,9 @@ class C300XDoorbellCallCard extends HTMLElement {
     if (clearStatus) {
       this._error = "";
     }
-    this._updateState();
+    if (options.updateState !== false) {
+      this._updateState();
+    }
   }
 
   _hasMicrophoneTrack() {
@@ -811,6 +854,9 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _ensureStateSubscription() {
+    if (this._disposed) {
+      return;
+    }
     const entityId = this._resolvedCameraEntityId();
     const connection = this._hass?.connection;
     const subscribeEvents = connection?.subscribeEvents;
@@ -861,7 +907,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._unsubscribeStateEvents = null;
     this._stateSubscriptionConnection = null;
     this._stateSubscriptionEntityId = "";
-    this._stateSubscriptionToken += 1;
+    this._stateSubscriptionToken = (this._stateSubscriptionToken || 0) + 1;
     if (typeof unsubscribe === "function") {
       unsubscribe();
     }

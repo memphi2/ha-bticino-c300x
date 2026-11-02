@@ -129,12 +129,22 @@ try {
   await page.waitForFunction(() => lab.card._videoEl.readyState >= 2);
   await page.evaluate(() => {
     lab.oldTracks = [...lab.card._micStream.getTracks(), ...lab.card._webrtc.remoteStream.getTracks()];
+    lab.card.setConfig({ ...lab.card._config, name: "Reconfigured door" });
+    lab.card.hass = { ...lab.hass };
+  });
+  await page.waitForFunction(() => lab.peers.size === 0 && lab.listeners.size === 1);
+  assert.equal(await page.evaluate(() => lab.oldTracks.every((track) => track.readyState === "ended")), true);
+  assert.equal(await page.evaluate(() => lab.card._videoEl.srcObject), null);
+  await click(".row-action");
+  await page.waitForFunction(() => lab.card._videoEl.readyState >= 2);
+  await page.evaluate(() => {
+    lab.oldTracks = [...lab.card._micStream.getTracks(), ...lab.card._webrtc.remoteStream.getTracks()];
     lab.card.remove();
   });
   await page.waitForFunction(() => lab.peers.size === 0 && lab.listeners.size === 0);
   assert.equal(await page.evaluate(() => lab.oldTracks.every((track) => track.readyState === "ended")), true);
   assert.deepEqual(errors, []);
-  console.log("Browser smoke passed: 12 layouts, actions, 2 RTC cycles, microphone and detach cleanup");
+  console.log("Browser smoke passed: 12 layouts, actions, RTC cycles, microphone, reconfigure and detach cleanup");
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

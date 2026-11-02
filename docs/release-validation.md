@@ -28,6 +28,12 @@ listeners, file descriptors, traced Python memory and resident memory. It reject
 retained old API clients and growth beyond the explicit limits in `soak.py`.
 All traffic is synthetic loopback traffic; this is not a device-load measurement.
 
+`python tests/runtime_lab/run.py --scenario recorder` uses real SQLite Recorder
+storage. Forty identical metrics/diagnostic pushes must add zero history rows;
+three changed CPU readings must add exactly three. Memo text must remain visible
+live but absent from recorded attributes, as must volatile diagnostic counters.
+This checks write amplification and attribute privacy, not long-term retention.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

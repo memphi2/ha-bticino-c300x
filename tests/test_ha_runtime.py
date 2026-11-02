@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.parametrize("scenario", ["lifecycle", "soak"])
+@pytest.mark.parametrize("scenario", ["lifecycle", "soak", "recorder"])
 def test_real_home_assistant_runtime(scenario):
     result = subprocess.run(
         [sys.executable, "tests/runtime_lab/run.py", "--scenario", scenario],
@@ -17,3 +17,4 @@ def test_real_home_assistant_runtime(scenario):
         timeout=90,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "Detected code that" not in result.stderr, result.stderr

@@ -38,8 +38,9 @@ class LoopbackResolver(ThreadedResolver):
 class RuntimeLab:
     """Exercise actual config entries, entity platforms, services and webhooks."""
 
-    def __init__(self, config_dir: Path) -> None:
+    def __init__(self, config_dir: Path, *, recorder=False) -> None:
         self.config_dir = config_dir
+        self.recorder_enabled = recorder
         self.stack = AsyncExitStack()
         self.agent = FakeAgent()
         self.loop_errors = []
@@ -96,6 +97,21 @@ class RuntimeLab:
             )
             assert await async_setup_component(hass, "homeassistant", {})
             assert await async_setup_component(hass, "webhook", {})
+            if self.recorder_enabled:
+                from homeassistant.helpers.recorder import async_initialize_recorder
+
+                async_initialize_recorder(hass)
+                assert await async_setup_component(
+                    hass,
+                    "recorder",
+                    {
+                        "recorder": {
+                            "db_url": f"sqlite:///{self.config_dir / 'recorder.db'}",
+                            "auto_purge": False,
+                            "commit_interval": 0,
+                        }
+                    },
+                )
             for platform in BASE_PLATFORMS:
                 assert await async_setup_component(hass, platform, {})
             self.server = TestServer(hass.http.app, host="127.0.0.1")
@@ -132,13 +148,19 @@ class RuntimeLab:
             raise
 
     async def __aexit__(self, *_):
-        if hasattr(self, "entry"):
-            await self.hass.config_entries.async_unload(self.entry.entry_id)
-        await self.hass.async_stop()
-        await self.stack.aclose()
+        try:
+            if hasattr(self, "entry") and self.hass.config_entries.async_get_entry(
+                self.entry.entry_id
+            ):
+                await self.hass.config_entries.async_unload(self.entry.entry_id)
+        finally:
+            try:
+                await self.hass.async_stop()
+            finally:
+                await self.stack.aclose()
         assert not self.loop_errors, self.loop_errors
 
-    async def add_entry(self):
+    async def add_entry(self, *, enabled_sensors=()):
         self.entry = config_entries.ConfigEntry(
             version=1,
             minor_version=2,
@@ -148,6 +170,9 @@ class RuntimeLab:
             unique_id="synthetic-device",
             discovery_keys=MappingProxyType({}),
             subentries_data=None,
+            disabled_by=config_entries.ConfigEntryDisabler.USER
+            if enabled_sensors
+            else None,
             options={},
             data={
                 const.CONF_AGENT_HOST: "127.0.0.1",
@@ -162,6 +187,19 @@ class RuntimeLab:
             },
         )
         await self.hass.config_entries.async_add(self.entry)
+        for key in enabled_sensors:
+            er.async_get(self.hass).async_get_or_create(
+                "sensor",
+                const.DOMAIN,
+                f"{self.entry.entry_id}_{key}",
+                config_entry=self.entry,
+                suggested_object_id=f"synthetic_{key}",
+                disabled_by=None,
+            )
+        if enabled_sensors:
+            await self.hass.config_entries.async_set_disabled_by(
+                self.entry.entry_id, None
+            )
         await self.settle()
         assert self.entry.state is config_entries.ConfigEntryState.LOADED, (
             self.entry.state

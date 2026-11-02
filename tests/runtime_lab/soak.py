@@ -66,9 +66,9 @@ async def run(root: Path, cycles: int):
                     )
                 )
                 for _ in range(4):
-                    assert (await lab.push("system.metrics_changed", lab.agent.metrics()))[
-                        0
-                    ] == 200
+                    assert (
+                        await lab.push("system.metrics_changed", lab.agent.metrics())
+                    )[0] == 200
                 assert await lab.hass.config_entries.async_unload(entry.entry_id)
                 await lab.settle()
                 gc.collect()

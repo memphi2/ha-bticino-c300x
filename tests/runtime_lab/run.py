@@ -77,7 +77,7 @@ async def lifecycle(root: Path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--scenario", choices=("lifecycle", "soak"), default="lifecycle"
+        "--scenario", choices=("lifecycle", "soak", "recorder"), default="lifecycle"
     )
     parser.add_argument("--cycles", type=int, default=3)
     args = parser.parse_args()
@@ -89,5 +89,9 @@ if __name__ == "__main__":
             from soak import run
 
             print(json.dumps(asyncio.run(run(root, args.cycles))))  # noqa: T201
+        elif args.scenario == "recorder":
+            from recorder_probe import run
+
+            print(json.dumps(asyncio.run(run(root))))  # noqa: T201
         else:
             asyncio.run(lifecycle(root))

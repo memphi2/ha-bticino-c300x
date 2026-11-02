@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from homeassistant.helpers import selector
+from homeassistant.helpers.selector import SelectOptionDict
+
 from .const import (
     ALARM_DOMAIN,
     DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
@@ -13,14 +16,6 @@ from .const import (
 )
 from .dashboard_entities import DASHBOARD_ENTITY_DOMAINS
 from .schema_compat import vol
-
-selector: Any
-try:
-    from homeassistant.helpers import selector as ha_selector
-
-    selector = ha_selector
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
-    selector = None
 
 
 def optional_suggested(key: str, suggested_value: Any) -> vol.Optional:
@@ -40,20 +35,14 @@ def actions_json(actions: Any) -> str:
 
 
 def alarm_entity_selector() -> Any:
-    """Return the HA alarm entity selector with a test-friendly fallback."""
-
-    if selector is None:
-        return str
+    """Return the HA alarm entity selector."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=ALARM_DOMAIN),
     )
 
 
 def weather_entity_selector() -> Any:
-    """Return the HA weather entity selector with a test-friendly fallback."""
-
-    if selector is None:
-        return str
+    """Return the HA weather entity selector."""
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=WEATHER_DOMAIN),
     )
@@ -62,8 +51,6 @@ def weather_entity_selector() -> Any:
 def dashboard_entity_selector() -> Any:
     """Return a multi-entity selector for the simple C300X dashboard."""
 
-    if selector is None:
-        return list
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain=list(DASHBOARD_ENTITY_DOMAINS),
@@ -75,8 +62,6 @@ def dashboard_entity_selector() -> Any:
 def alarm_page_entity_selector() -> Any:
     """Return a single-entity selector for the alarm page quick tile."""
 
-    if selector is None:
-        return str
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=list(DASHBOARD_ENTITY_DOMAINS)),
     )
@@ -85,23 +70,12 @@ def alarm_page_entity_selector() -> Any:
 def dashboard_entity_name_display_selector() -> Any:
     """Return the selector for one dashboard entity title."""
 
-    if selector is None:
-        return str
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[
-                {
-                    "value": DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
-                    "label": "Home Assistant name",
-                },
-                {
-                    "value": "entity_id",
-                    "label": "Entity ID",
-                },
-                {
-                    "value": DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM,
-                    "label": "Custom name",
-                },
+                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME, label="Home Assistant name"),
+                SelectOptionDict(value="entity_id", label="Entity ID"),
+                SelectOptionDict(value=DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM, label="Custom name"),
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
@@ -111,24 +85,20 @@ def dashboard_entity_name_display_selector() -> Any:
 def dashboard_entity_custom_name_selector() -> Any:
     """Return the text selector for one custom dashboard entity title."""
 
-    if selector is None:
-        return str
     return selector.TextSelector(selector.TextSelectorConfig())
 
 
 def dashboard_entity_secondary_info_selector() -> Any:
     """Return the selector for one dashboard entity secondary text."""
 
-    if selector is None:
-        return str
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[
-                {"value": "state", "label": "State"},
-                {"value": "entity_id", "label": "Entity ID"},
-                {"value": "last_changed", "label": "Last changed"},
-                {"value": "last_updated", "label": "Last updated"},
-                {"value": "none", "label": "None"},
+                SelectOptionDict(value="state", label="State"),
+                SelectOptionDict(value="entity_id", label="Entity ID"),
+                SelectOptionDict(value="last_changed", label="Last changed"),
+                SelectOptionDict(value="last_updated", label="Last updated"),
+                SelectOptionDict(value="none", label="None"),
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
@@ -138,8 +108,6 @@ def dashboard_entity_secondary_info_selector() -> Any:
 def password_selector() -> Any:
     """Return a password field without storing the submitted secret."""
 
-    if selector is None:
-        return str
     return selector.TextSelector(
         selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD),
     )
@@ -148,6 +116,4 @@ def password_selector() -> Any:
 def actions_json_field() -> Any:
     """Return the HA multiline text selector for action JSON."""
 
-    if selector is None:
-        return str
     return selector.TextSelector(selector.TextSelectorConfig(multiline=True))

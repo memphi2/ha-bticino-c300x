@@ -4,6 +4,7 @@ import sys
 
 import homeassistant.const  # noqa: F401
 import homeassistant.exceptions  # noqa: F401
+import homeassistant.helpers.selector  # noqa: F401
 import pytest
 
 _HA_EXCEPTIONS = homeassistant.exceptions

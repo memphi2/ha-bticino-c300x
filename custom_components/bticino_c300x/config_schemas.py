@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.helpers import selector
+from homeassistant.helpers.selector import SelectOptionDict
+
 from .activation_address import (
     normalize_stair_light_part,
 )
-from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN, audio_gain_db
+from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .const import (
     CONF_AGENT_HOST,
@@ -43,16 +46,7 @@ from .const import (
     DEVICE_ACTIVATION_MODES,
     WEBRTC_ICE_POLICIES,
 )
-from .device_activations import DEVICE_ACTIVATION_TYPES
 from .schema_compat import vol
-
-selector: Any
-try:
-    from homeassistant.helpers import selector as ha_selector
-
-    selector = ha_selector
-except (ImportError, ModuleNotFoundError):  # pragma: no cover - local test stubs
-    selector = None
 
 CREATE_HOMEASSISTANT_USER_DEFAULT = True
 _ACTIVATION_ITEM_EXAMPLES = {
@@ -215,10 +209,7 @@ def stair_light_n(value: Any) -> str:
 
 
 def audio_gain_db_selector() -> Any:
-    """Return a bounded audio gain selector with a test-friendly fallback."""
-
-    if selector is None:
-        return audio_gain_db
+    """Return a bounded HA audio gain selector."""
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=AUDIO_GAIN_DB_MIN,
@@ -232,18 +223,16 @@ def audio_gain_db_selector() -> Any:
 
 def _device_activation_action_selector(*, has_items: bool) -> Any:
     options = [
-        {"value": DEVICE_ACTIVATION_FLOW_ACTION_DONE, "label": "Done"},
-        {"value": DEVICE_ACTIVATION_FLOW_ACTION_ADD, "label": "Add"},
+        SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_DONE, label="Done"),
+        SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_ADD, label="Add"),
     ]
     if has_items:
         options.extend(
             [
-                {"value": DEVICE_ACTIVATION_FLOW_ACTION_EDIT, "label": "Edit"},
-                {"value": DEVICE_ACTIVATION_FLOW_ACTION_REMOVE, "label": "Remove"},
+                SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_EDIT, label="Edit"),
+                SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_REMOVE, label="Remove"),
             ]
         )
-    if selector is None:
-        return vol.In(tuple(option["value"] for option in options))
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=options,
@@ -254,15 +243,10 @@ def _device_activation_action_selector(*, has_items: bool) -> Any:
 
 def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
     options = [
-        {
-            "value": str(item.get("id") or ""),
-            "label": f"{item.get('name') or item.get('id')} ({item.get('id')})",
-        }
+        SelectOptionDict(value=str(item.get("id") or ""), label=f"{item.get('name') or item.get('id')} ({item.get('id')})")
         for item in items
         if item.get("id")
     ]
-    if selector is None:
-        return vol.In(tuple(option["value"] for option in options))
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=options,
@@ -272,17 +256,12 @@ def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
 
 
 def _device_activation_type_selector() -> Any:
-    supported_types = tuple(
-        item for item in DEVICE_ACTIVATION_TYPES if item in {"lock", "light", "stair_light"}
-    )
-    if selector is None:
-        return vol.In(supported_types)
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[
-                {"value": "lock", "label": "Door lock"},
-                {"value": "light", "label": "Light"},
-                {"value": "stair_light", "label": "Stair light"},
+                SelectOptionDict(value="lock", label="Door lock"),
+                SelectOptionDict(value="light", label="Light"),
+                SelectOptionDict(value="stair_light", label="Stair light"),
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
@@ -297,13 +276,11 @@ def _device_activation_mode_default(value: Any) -> str:
 
 
 def _device_activation_mode_selector() -> Any:
-    if selector is None:
-        return vol.In(DEVICE_ACTIVATION_MODES)
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[
-                {"value": "automatic", "label": "Automatic"},
-                {"value": "manual", "label": "Manual"},
+                SelectOptionDict(value="automatic", label="Automatic"),
+                SelectOptionDict(value="manual", label="Manual"),
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
@@ -346,12 +323,10 @@ _WEBRTC_ICE_POLICY_LABELS = {
 def webrtc_ice_policy_selector() -> Any:
     """Return the WebRTC ICE candidate filter policy selector."""
 
-    if selector is None:
-        return vol.In(WEBRTC_ICE_POLICIES)
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=[
-                {"value": policy, "label": _WEBRTC_ICE_POLICY_LABELS.get(policy, policy)}
+                SelectOptionDict(value=policy, label=_WEBRTC_ICE_POLICY_LABELS.get(policy, policy))
                 for policy in WEBRTC_ICE_POLICIES
             ],
             mode=selector.SelectSelectorMode.DROPDOWN,

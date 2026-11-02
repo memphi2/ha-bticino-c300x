@@ -72,7 +72,7 @@ helpers.entity = entity
 helpers.selector = None
 sys.modules.pop("homeassistant.helpers.selector", None)
 
-import custom_components.bticino_c300x.executor as executor_module  # noqa: E402
+import custom_components.bticino_c300x.dashboard as dashboard_module  # noqa: E402
 from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
     dashboard_entity_display_overrides_from_fields,
 )
@@ -96,19 +96,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
-from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
-    _cached_weather_forecast,
-    _weather_forecast,
-    _weather_forecast_cache,
-    _weather_forecast_temperature,
-    _weather_forecast_time_label,
-    dashboard_weather_payload,
-)
-from custom_components.bticino_c300x.executor import (  # noqa: E402
+from custom_components.bticino_c300x.dashboard import (  # noqa: E402
     _button_secondary_label,
     _dashboard_choice_payload,
-    _dashboard_first_attribute,
-    _dashboard_float,
     _dashboard_image_source,
     _dashboard_int,
     _dashboard_slider_payload,
@@ -124,17 +114,31 @@ from custom_components.bticino_c300x.executor import (  # noqa: E402
     _raw_state_color,
     _state_time_label,
     async_dashboard_payload,
-    async_execute_action,
-    async_execute_alarm_command,
-    async_execute_dashboard_action,
     async_status,
-    async_trigger_stair_light,
-    async_unlock_door,
+)
+from custom_components.bticino_c300x.dashboard_config import (  # noqa: E402
+    _dashboard_first_attribute,
+    _dashboard_float,
     configured_actions,
     configured_alarm_entity_id,
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_weather_entity_id,
+)
+from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
+    _cached_weather_forecast,
+    _weather_forecast,
+    _weather_forecast_cache,
+    _weather_forecast_temperature,
+    _weather_forecast_time_label,
+    dashboard_weather_payload,
+)
+from custom_components.bticino_c300x.executor import (  # noqa: E402
+    async_execute_action,
+    async_execute_alarm_command,
+    async_execute_dashboard_action,
+    async_trigger_stair_light,
+    async_unlock_door,
 )
 
 
@@ -2213,7 +2217,7 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
     async def fail_status(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise AssertionError("dashboard payload should not build full display status")
 
-    monkeypatch.setattr(executor_module, "async_status", fail_status)
+    monkeypatch.setattr(dashboard_module, "async_status", fail_status)
     hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
     )

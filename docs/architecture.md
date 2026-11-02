@@ -24,6 +24,11 @@ Responsibilities:
 - Bundled Lovelace card registration and resource refresh.
 - Home Assistant WebRTC provider/go2rtc media delegation.
 
+Display requests use `dashboard.py` to assemble read-only payloads. User commands
+go through `executor.py`, also used by the existing service use cases. Both use
+`dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
+readiness and code policy; neither shared module imports the command executor.
+
 ### Native device agent
 
 Path: `native_agent/`

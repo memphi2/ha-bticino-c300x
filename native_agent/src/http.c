@@ -6415,10 +6415,11 @@ static void send_response(
         extra_headers != NULL ? extra_headers : ""
     );
 
-    if (header_len > 0) {
-        (void)send(client_fd, header, (size_t)header_len, MSG_NOSIGNAL);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)
+        || !send_all_bytes(client_fd, header, (size_t)header_len)) {
+        return;
     }
-    (void)send(client_fd, body, body_len, MSG_NOSIGNAL);
+    (void)send_all_bytes(client_fd, body, body_len);
 }
 
 static void send_json(int client_fd, int status, const char *reason, const char *body)
@@ -6468,12 +6469,14 @@ static void send_file_response(
         (long long)file_size,
         cache_control != NULL ? cache_control : "no-store"
     );
-    if (header_len > 0) {
-        (void)send(client_fd, header, (size_t)header_len, MSG_NOSIGNAL);
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header)
+        || !send_all_bytes(client_fd, header, (size_t)header_len)) {
+        fclose(file);
+        return;
     }
     for (;;) {
         size_t read_len = fread(buffer, 1, sizeof(buffer), file);
-        if (read_len > 0 && send(client_fd, buffer, read_len, MSG_NOSIGNAL) < 0) {
+        if (read_len > 0 && !send_all_bytes(client_fd, (const char *)buffer, read_len)) {
             break;
         }
         if (read_len < sizeof(buffer)) {

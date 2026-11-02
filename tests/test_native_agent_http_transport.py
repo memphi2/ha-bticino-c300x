@@ -5,10 +5,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_native_http_request_deadline(tmp_path: Path) -> None:
+@pytest.mark.parametrize("harness", ["http_request_test.c", "http_file_test.c"])
+def test_native_http_transport(tmp_path: Path, harness: str) -> None:
     binary = tmp_path / "http-request-test"
     subprocess.run(
         [
@@ -23,7 +26,7 @@ def test_native_http_request_deadline(tmp_path: Path) -> None:
             "-pthread",
             "-o",
             str(binary),
-            str(ROOT / "native_agent/test/http_request_test.c"),
+            str(ROOT / "native_agent/test" / harness),
             str(ROOT / "native_agent/src/system_metrics.c"),
         ],
         check=True,

@@ -2241,6 +2241,8 @@ def test_text_memos_sensor_flags_truncated_latest_text() -> None:
     entity = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
 
     assert entity.extra_state_attributes["latest_text"] == "x" * 300
+    assert "latest_text" in entity._unrecorded_attributes
+    assert "newest_at" not in entity._unrecorded_attributes
     assert entity.extra_state_attributes["text_truncated"] is True
 
 

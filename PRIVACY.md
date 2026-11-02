@@ -23,6 +23,16 @@ Home Assistant may store:
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
+The live text-memo sensor can expose the latest memo text to authorized Home
+Assistant clients. Its `latest_text` attribute is excluded from new Recorder
+history entries. This does not remove text already recorded by older versions,
+copied by automations, exported in logs, or retained in backups.
+
+Deleting a message or memo on the C300X does not delete Home Assistant history,
+exports, optional local ring recordings, or backups. Manage those copies through
+Home Assistant's Recorder retention settings and your backup policy. No automatic
+history purge or backup deletion is performed by this integration.
+
 ## Data Stored on the Device
 
 The native agent may store:

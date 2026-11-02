@@ -1199,6 +1199,7 @@ class C300XTextMemosSensor(C300XStoredItemsSensor):
     _attr_translation_key = "text_memos"
     _items_spec = MEMO_ITEMS
     _memo_kind = "text"
+    _unrecorded_attributes = frozenset({"latest_text"})
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "text_memos")

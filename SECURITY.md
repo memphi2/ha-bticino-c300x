@@ -37,11 +37,12 @@ do not echo token values back.
 
 ## Legacy SSH Installer Dependency
 
-The Home Assistant package pins `paramiko==3.5.1` for the optional first-install
-and fallback repair path because the C300X SSH server needs legacy SSH
-compatibility. Normal C300X agent operation does not use Paramiko after the
-native agent is installed; it communicates through the local token-protected
-agent API.
+The optional first-install and fallback repair path pins `paramiko==3.5.1`
+because the C300X SSH server needs legacy SSH compatibility. The installer asks
+Home Assistant to install this dependency on demand; it is neither a mandatory
+manifest requirement nor a bundled Python package. Normal C300X agent operation
+does not use Paramiko after the native agent is installed; it communicates
+through the local token-protected agent API.
 
 Security scanners may flag Paramiko for SHA-1/RSA-key handling
 (`CVE-2026-44405`). Keep SSH and the native-agent installer on a trusted local
@@ -101,6 +102,22 @@ source:
 These exceptions do not apply to internet-exposed deployments. Do not expose
 SSH, MQTT, native-agent HTTP, RTSP, WebRTC, or Home Assistant callback surfaces
 outside the trusted local network.
+
+Reassess the SSH exception when changing the installer, its dependency pin, or
+device compatibility, and whenever a relevant advisory appears. A newer library
+must pass the legacy-device interoperability checks before replacing the pin.
+An accepted exception is not evidence that a dependency has no vulnerabilities;
+the release SBOM records the optional installer dependency separately.
+
+## Availability Limits
+
+Incoming HTTP requests have bounded buffers, a total receive deadline and a
+bounded pending-client pool. Event delivery has one worker and a bounded queue;
+overflow and failed delivery are not reported as successful callbacks. Home
+Assistant media downloads, conversions and cache retention have explicit limits.
+These controls reduce resource-exhaustion risk but do not replace authentication,
+network isolation, or timely dependency review. They add no persistent packet
+capture or additional device polling.
 
 ## Maintenance Surface
 

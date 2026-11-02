@@ -85,6 +85,28 @@ depend on enabled options and installed agent capabilities.
   </tr>
 </table>
 
+## Installation
+
+### Home Assistant Marketplace
+
+[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
+
+On Home Assistant `2026.11+`:
+
+1. Open the button above, or go to **Settings > Marketplace**.
+2. Find **BTicino C300X**, install it and confirm the community-integration notice.
+3. Follow any restart request, then add **BTicino C300X** under
+   **Settings > Devices & services**.
+
+### HACS
+
+On Home Assistant `2026.7-2026.10`, find **BTicino C300X** in HACS, download it
+and restart Home Assistant. Then add the integration under
+**Settings > Devices & services**. No custom repository is needed.
+
+Both installation methods use the same repository and release archive. Existing
+configuration entries and bundled cards remain unchanged when moving to Marketplace.
+
 ## 5-Minute Setup
 
 Start with the guided setup document:
@@ -101,11 +123,6 @@ Marketplace / HACS -> add integration -> install/update agent -> Media readiness
 Keep the first install boring: get **Media readiness** to `ready` or only the
 understood Ring Call forwarding warning, then add the bundled card. Blueprints,
 display pages and advanced maintenance can wait until the three media paths work.
-
-On HA 2026.11+, install from **Settings > Marketplace**. On HA 2026.7-2026.10,
-use HACS. Both use the same repository and release archive; no domain migration
-or separate card repository is needed. See the [compatibility audit](docs/ha-2026.11-audit.md)
-for preview-test status and upcoming API deadlines.
 
 After an update, run the C300X Lovelace card Repair if Home Assistant offers it
 and hard-reload the browser if the card picker still shows old frontend state.

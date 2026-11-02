@@ -14,6 +14,21 @@ def test_repository_has_no_private_hosts_or_token_literals() -> None:
     assert check_repo.check_forbidden_text_patterns() == []
 
 
+def test_marketplace_link_exception_does_not_allow_other_owner_text(
+    tmp_path, monkeypatch,
+) -> None:  # noqa: ANN001
+    readme = tmp_path / "README.md"
+    readme.write_text(check_repo.PUBLIC_REPOSITORY_URLS[-1], encoding="utf-8")
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    assert check_repo.check_forbidden_text_patterns() == []
+
+    with readme.open("a", encoding="utf-8") as stream:
+        stream.write("\nowner: " + "mem" + "phi2\n")
+    assert check_repo.check_forbidden_text_patterns() == [
+        "possible secret/internal value (personal_owner) in README.md"
+    ]
+
+
 def test_forbidden_text_findings_do_not_echo_matched_value(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     matched_value = "do-not-log-this-value"
     test_file = tmp_path / "config.yaml"

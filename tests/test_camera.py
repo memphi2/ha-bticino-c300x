@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import pytest
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+from homeassistant.exceptions import HomeAssistantError
 
 if "homeassistant.components.camera" not in sys.modules:
     homeassistant = types.ModuleType("homeassistant")
@@ -21,7 +22,6 @@ if "homeassistant.components.camera" not in sys.modules:
     config_entries = types.ModuleType("homeassistant.config_entries")
     const = types.ModuleType("homeassistant.const")
     core = types.ModuleType("homeassistant.core")
-    exceptions = types.ModuleType("homeassistant.exceptions")
     entity_platform = types.ModuleType("homeassistant.helpers.entity_platform")
     helpers = types.ModuleType("homeassistant.helpers")
     config_validation = types.ModuleType("homeassistant.helpers.config_validation")
@@ -45,18 +45,6 @@ if "homeassistant.components.camera" not in sys.modules:
     class DeviceInfo(dict):  # pragma: no cover - import-time stub only
         pass
 
-    class ServiceValidationError(Exception):  # pragma: no cover - import-time stub only
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args)
-            self.translation_key = kwargs.get("translation_key")
-            self.translation_domain = kwargs.get("translation_domain")
-            self.translation_placeholders = kwargs.get(
-                "translation_placeholders",
-            )
-
-    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-        pass
-
     camera.Camera = Camera
     camera.CameraEntityFeature = types.SimpleNamespace(STREAM=1)
     camera_const.CameraEntityFeature = camera.CameraEntityFeature
@@ -75,8 +63,6 @@ if "homeassistant.components.camera" not in sys.modules:
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
     config_validation.config_entry_only_config_schema = lambda _domain: dict
-    exceptions.HomeAssistantError = HomeAssistantError
-    exceptions.ServiceValidationError = ServiceValidationError
     entity.Entity = Entity
     entity.DeviceInfo = DeviceInfo
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
@@ -99,7 +85,6 @@ if "homeassistant.components.camera" not in sys.modules:
     sys.modules["homeassistant.config_entries"] = config_entries
     sys.modules["homeassistant.const"] = const
     sys.modules["homeassistant.core"] = core
-    sys.modules["homeassistant.exceptions"] = exceptions
     sys.modules["homeassistant.helpers"] = helpers
     sys.modules["homeassistant.helpers.config_validation"] = config_validation
     sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
@@ -112,8 +97,6 @@ try:
     from homeassistant.components.camera import _async_get_image as ha_async_get_image
 except ImportError:  # pragma: no cover - only used by the lightweight stub fallback
     ha_async_get_image = None
-
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.bticino_c300x import camera as camera_module
 from custom_components.bticino_c300x import media_watchdog

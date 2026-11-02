@@ -132,3 +132,12 @@ explicit user actions:
 - No runtime Node.js dependency on device.
 - Mutating APIs use POST and explicit auth.
 - Show only capabilities the agent actually reports.
+
+## Test Boundaries
+
+Dashboard/executor and runtime-manager unit tests use the installed Home Assistant
+modules and test-scoped replacements for external operations. Isolated test runs
+check module identities before and after execution. Legacy entity tests still contain
+module stubs, but all tests share the real Home Assistant exception types;
+fixtures verify that these remain unchanged. Full HA lifecycle, Recorder and
+media-contract scenarios run in separate processes under `tests/runtime_lab/`.

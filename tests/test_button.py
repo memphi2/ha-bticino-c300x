@@ -28,10 +28,6 @@ if "homeassistant.components.button" not in sys.modules:
         "homeassistant.core",
         types.ModuleType("homeassistant.core"),
     )
-    exceptions = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -74,14 +70,6 @@ if "homeassistant.components.button" not in sys.modules:
     class HomeAssistant:  # pragma: no cover - import-time stub only
         pass
 
-    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-        pass
-
-    class ServiceValidationError(HomeAssistantError):  # pragma: no cover - import-time stub only
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args)
-            self.translation_key = kwargs.get("translation_key")
-
     button.ButtonEntity = ButtonEntity
     config_entries.ConfigEntry = ConfigEntry
     const.ATTR_ENTITY_ID = "entity_id"
@@ -89,16 +77,6 @@ if "homeassistant.components.button" not in sys.modules:
     core.Event = Event
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
-    exceptions.HomeAssistantError = getattr(
-        exceptions,
-        "HomeAssistantError",
-        HomeAssistantError,
-    )
-    exceptions.ServiceValidationError = getattr(
-        exceptions,
-        "ServiceValidationError",
-        ServiceValidationError,
-    )
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None

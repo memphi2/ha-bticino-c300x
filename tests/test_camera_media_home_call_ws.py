@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 import voluptuous as vol
+from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.bticino_c300x.camera_media import home_call_ws
 from custom_components.bticino_c300x.camera_media.home_call_ws import (
     async_register_home_call_ws,
     parse_home_call_candidate,
@@ -210,7 +210,7 @@ class _FakeHomeCallCamera:
     ) -> None:
         self.offers.append((offer, session_id, duration_seconds))
         if self.fail_offer:
-            raise home_call_ws.HomeAssistantError("offer failed")  # type: ignore[attr-defined]
+            raise HomeAssistantError("offer failed")
         send_message({"type": "answer", "sdp": "v=0"})
 
     async def async_on_webrtc_candidate(
@@ -255,10 +255,6 @@ def _install_home_call_ws_stubs(
         "homeassistant.core",
         types.ModuleType("homeassistant.core"),
     )
-    exceptions_module = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -272,9 +268,6 @@ def _install_home_call_ws_stubs(
         types.ModuleType("homeassistant.util"),
     )
     ulid_module = types.ModuleType("homeassistant.util.ulid")
-
-    class HomeAssistantError(Exception):
-        pass
 
     class WebRTCError:
         def __init__(self, code: str, message: str) -> None:
@@ -309,9 +302,8 @@ def _install_home_call_ws_stubs(
     camera_module.WebRTCError = WebRTCError
     camera_helper.get_camera_from_entity_id = lambda _hass, _entity_id: camera
     camera_webrtc.WebRTCSession = WebRTCSession
-    core_module.callback = lambda func: func
-    exceptions_module.HomeAssistantError = HomeAssistantError
-    config_validation.entity_id = str
+    monkeypatch.setattr(core_module, "callback", lambda func: func, raising=False)
+    monkeypatch.setattr(config_validation, "entity_id", str, raising=False)
     ulid_module.ulid = lambda: "01TEST"
 
     monkeypatch.setattr(components, "websocket_api", websocket_api, raising=False)
@@ -323,5 +315,4 @@ def _install_home_call_ws_stubs(
     monkeypatch.setitem(sys.modules, "homeassistant.components.camera.helper", camera_helper)
     monkeypatch.setitem(sys.modules, "homeassistant.components.camera.webrtc", camera_webrtc)
     monkeypatch.setitem(sys.modules, "homeassistant.util.ulid", ulid_module)
-    monkeypatch.setattr(home_call_ws, "HomeAssistantError", HomeAssistantError, raising=False)
     return registered

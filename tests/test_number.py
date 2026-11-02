@@ -35,10 +35,6 @@ core = sys.modules.setdefault(
     "homeassistant.core",
     types.ModuleType("homeassistant.core"),
 )
-exceptions = sys.modules.setdefault(
-    "homeassistant.exceptions",
-    types.ModuleType("homeassistant.exceptions"),
-)
 helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
@@ -78,10 +74,6 @@ class ServiceCall:  # pragma: no cover - import-time stub only
     pass
 
 
-class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
 class Entity:  # pragma: no cover - import-time stub only
     pass
 
@@ -95,7 +87,6 @@ config_entries.ConfigEntry = ConfigEntry
 core.HomeAssistant = HomeAssistant
 core.ServiceCall = ServiceCall
 core.callback = lambda func: func
-exceptions.HomeAssistantError = HomeAssistantError
 config_validation.config_entry_only_config_schema = lambda _domain: dict
 dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
 entity.Entity = Entity

@@ -31,10 +31,6 @@ if "homeassistant.components.switch" not in sys.modules:
         "homeassistant.const",
         types.ModuleType("homeassistant.const"),
     )
-    exceptions = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -72,15 +68,11 @@ if "homeassistant.components.switch" not in sys.modules:
     class EntityCategory:  # pragma: no cover - import-time stub only
         CONFIG = "config"
 
-    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-        pass
-
     switch.SwitchEntity = SwitchEntity
     config_entries.ConfigEntry = ConfigEntry
     const.EntityCategory = EntityCategory
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
-    exceptions.HomeAssistantError = HomeAssistantError
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None

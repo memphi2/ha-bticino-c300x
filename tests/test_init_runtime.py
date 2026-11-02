@@ -44,92 +44,6 @@ from custom_components.bticino_c300x.data import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _stub_homeassistant_http() -> None:
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    if not hasattr(core, "ServiceCall"):
-        core.ServiceCall = type("ServiceCall", (), {})
-    const = sys.modules.setdefault(
-        "homeassistant.const",
-        types.ModuleType("homeassistant.const"),
-    )
-    if not hasattr(const, "ATTR_ENTITY_ID"):
-        const.ATTR_ENTITY_ID = "entity_id"
-    dispatcher = sys.modules.setdefault(
-        "homeassistant.helpers.dispatcher",
-        types.ModuleType("homeassistant.helpers.dispatcher"),
-    )
-    if not hasattr(dispatcher, "async_dispatcher_send"):
-        dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-    if not hasattr(dispatcher, "async_dispatcher_connect"):
-        dispatcher.async_dispatcher_connect = lambda *_args, **_kwargs: lambda: None
-    exceptions = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
-    if not hasattr(exceptions, "HomeAssistantError"):
-
-        class HomeAssistantError(Exception):  # pragma: no cover - test stub only
-            pass
-
-        exceptions.HomeAssistantError = HomeAssistantError
-    if not hasattr(exceptions, "ServiceValidationError"):
-
-        class ServiceValidationError(  # pragma: no cover - test stub only
-            exceptions.HomeAssistantError
-        ):
-            pass
-
-        exceptions.ServiceValidationError = ServiceValidationError
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    network = sys.modules.setdefault(
-        "homeassistant.helpers.network",
-        types.ModuleType("homeassistant.helpers.network"),
-    )
-    if not hasattr(network, "NoURLAvailableError"):
-
-        class NoURLAvailableError(Exception):  # pragma: no cover - test stub only
-            pass
-
-        network.NoURLAvailableError = NoURLAvailableError
-    helpers.network = network
-
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    http = sys.modules.setdefault(
-        "homeassistant.components.http",
-        types.ModuleType("homeassistant.components.http"),
-    )
-
-    if not hasattr(http, "HomeAssistantView"):
-
-        class HomeAssistantView:  # pragma: no cover - import-time stub only
-            pass
-
-        http.HomeAssistantView = HomeAssistantView
-
-    components.http = http
-
-    webhook = sys.modules.setdefault(
-        "homeassistant.components.webhook",
-        types.ModuleType("homeassistant.components.webhook"),
-    )
-    if not hasattr(webhook, "async_register"):
-        webhook.async_register = lambda *_args, **_kwargs: None
-    if not hasattr(webhook, "async_unregister"):
-        webhook.async_unregister = lambda *_args, **_kwargs: None
-    if not hasattr(webhook, "async_generate_path"):
-        webhook.async_generate_path = lambda webhook_id: f"/api/webhook/{webhook_id}"
-    components.webhook = webhook
-
-
 def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     updates: list[dict[str, Any]] = []
     entry = SimpleNamespace(
@@ -235,12 +149,13 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
-    _stub_homeassistant_http()
-    aiohttp_client = sys.modules.setdefault(
-        "homeassistant.helpers.aiohttp_client",
-        types.ModuleType("homeassistant.helpers.aiohttp_client"),
+    from homeassistant.helpers import aiohttp_client, dispatcher
+
+    monkeypatch.setattr(aiohttp_client, "async_get_clientsession", lambda _hass: "session")
+    signals = []
+    monkeypatch.setattr(
+        dispatcher, "async_dispatcher_send", lambda *args: signals.append(args)
     )
-    aiohttp_client.async_get_clientsession = lambda _hass: "session"
 
     import custom_components.bticino_c300x.agent_update as agent_update
     import custom_components.bticino_c300x.capabilities as capabilities
@@ -343,7 +258,14 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         ),
     )
 
-    assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
+    async def setup():
+        assert await integration.async_setup_entry(hass, entry) is True
+        task = entry.runtime_data.resources.startup_sync_task
+        assert task is not None
+        await task
+
+    asyncio.run(setup())
+    assert len(signals) == 1
 
     assert entry.runtime_data.agent_info["version"] == "1.2.0"
     assert integration.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
@@ -366,7 +288,6 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:
-    _stub_homeassistant_http()
     hass = SimpleNamespace(data={})
     entry = _entry(data={})
 
@@ -1530,7 +1451,11 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {entry.entry_id: entry.runtime_data}
 
 
-def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
+def test_startup_sync_stale_task_does_not_clear_new_runtime_task(monkeypatch) -> None:
+    from homeassistant.helpers import dispatcher
+
+    from custom_components.bticino_c300x import repair_issues
+
     async def _run() -> None:
         started = asyncio.Event()
         release = asyncio.Event()
@@ -1547,15 +1472,8 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
         def _dispatch(*args: Any) -> None:
             dispatches.append(args)
 
-        _stub_homeassistant_http()
-        dispatcher_module = sys.modules["homeassistant.helpers.dispatcher"]
-        previous_dispatch = dispatcher_module.async_dispatcher_send
-        dispatcher_module.async_dispatcher_send = _dispatch
-        repair_module_name = "custom_components.bticino_c300x.repair_issues"
-        previous_repair_module = sys.modules.get(repair_module_name)
-        repair_module = types.ModuleType("custom_components.bticino_c300x.repair_issues")
-        repair_module.async_sync_entry_repair_issues = _repair
-        sys.modules[repair_module_name] = repair_module
+        monkeypatch.setattr(dispatcher, "async_dispatcher_send", _dispatch)
+        monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", _repair)
 
         old_runtime = SimpleNamespace(
             resources=C300XRuntimeResources(startup_sync_task=None)
@@ -1565,26 +1483,19 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
         entry.runtime_data = old_runtime
         hass = SimpleNamespace(async_create_task=asyncio.create_task)
         manager = runtime_manager.C300XRuntimeManager(hass, entry)
-        original_sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
-        runtime_manager.C300XRuntimeManager.async_sync_device_state = _sync_device_state
-        try:
-            manager.async_schedule_startup_sync()
-            old_task = old_runtime.resources.startup_sync_task
-            assert old_task is not None
-            await started.wait()
+        monkeypatch.setattr(
+            runtime_manager.C300XRuntimeManager, "async_sync_device_state", _sync_device_state
+        )
+        manager.async_schedule_startup_sync()
+        old_task = old_runtime.resources.startup_sync_task
+        assert old_task is not None
+        await started.wait()
 
-            entry.runtime_data = SimpleNamespace(
-                resources=C300XRuntimeResources(startup_sync_task=new_task)
-            )
-            release.set()
-            await old_task
-        finally:
-            runtime_manager.C300XRuntimeManager.async_sync_device_state = original_sync
-            dispatcher_module.async_dispatcher_send = previous_dispatch
-            if previous_repair_module is None:
-                sys.modules.pop(repair_module_name, None)
-            else:
-                sys.modules[repair_module_name] = previous_repair_module
+        entry.runtime_data = SimpleNamespace(
+            resources=C300XRuntimeResources(startup_sync_task=new_task)
+        )
+        release.set()
+        await old_task
 
         assert old_runtime.resources.startup_sync_task is None
         assert entry.runtime_data.resources.startup_sync_task is new_task

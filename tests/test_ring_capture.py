@@ -18,10 +18,6 @@ homeassistant = sys.modules.setdefault(
     types.ModuleType("homeassistant"),
 )
 homeassistant.__path__ = []
-exceptions = sys.modules.setdefault(
-    "homeassistant.exceptions",
-    types.ModuleType("homeassistant.exceptions"),
-)
 helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
@@ -34,10 +30,6 @@ core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassist
 config_validation = types.ModuleType("homeassistant.helpers.config_validation")
 
 
-class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
 class _ConfigEntry:  # pragma: no cover - import-time stub only
     pass
 
@@ -46,14 +38,8 @@ class _HomeAssistant:  # pragma: no cover - import-time stub only
     pass
 
 
-exceptions.HomeAssistantError = getattr(
-    exceptions,
-    "HomeAssistantError",
-    _HomeAssistantError,
-)
 config_entries.ConfigEntry = getattr(config_entries, "ConfigEntry", _ConfigEntry)
 core.HomeAssistant = getattr(core, "HomeAssistant", _HomeAssistant)
-homeassistant.exceptions = exceptions
 homeassistant.config_entries = config_entries
 homeassistant.core = core
 config_validation.config_entry_only_config_schema = lambda _domain: dict

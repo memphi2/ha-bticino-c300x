@@ -70,10 +70,22 @@ void c300x_ringer_control_expire(struct c300x_ringer_control *control)
 }
 
 int c300x_ringer_control_next(
-    struct c300x_ringer_control *control, int fd, const char *completed, int muted,
+    struct c300x_ringer_control *control, int fd, const char *query,
     c300x_ringer_apply_fn apply, void *ctx
 )
 {
+    char completed[64];
+    char muted_text[16];
+    int muted = -1;
+    query_param_value(query, "completed", completed, sizeof(completed));
+    query_param_value(query, "muted", muted_text, sizeof(muted_text));
+    if (strcmp(muted_text, "0") == 0 || strcmp(muted_text, "1") == 0) {
+        muted = muted_text[0] == '1';
+    }
+    if (completed[0] != '\0' && (strlen(completed) != 32 || muted < 0)) {
+        c300x_http_send_json(fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_gui_ack\"}\n");
+        return 1;
+    }
     c300x_ringer_control_expire(control);
     if (completed[0] != '\0') {
         if (control->client_fd < 0 || control->gui_confirmed

@@ -262,15 +262,21 @@ def test_matching_event_still_requires_confirmed_device_readback(lab: Lab) -> No
     assert [event["type"] for event in events] == ["ringer.muted"]
 
 
-@pytest.mark.parametrize("bad_ack", ["missing", "malformed", "wrong_id"])
+@pytest.mark.parametrize("bad_ack", ["missing", "malformed", "wrong_id", "missing_muted", "invalid_muted", "long_id"])
 def test_invalid_ack_cannot_complete_pending_command(lab: Lab, bad_ack: str) -> None:
     gui = lab.next()
     post = lab.post({"muted": True})
     command = response(gui)
-    query = {"missing": "", "malformed": "?completed=x&muted=1",
-             "wrong_id": "?completed=" + "0" * 32 + "&muted=1"}[bad_ack]
+    query = {
+        "missing": "",
+        "malformed": "?completed=x&muted=1",
+        "wrong_id": "?completed=" + "0" * 32 + "&muted=1",
+        "missing_muted": f"?completed={command['id']}",
+        "invalid_muted": f"?completed={command['id']}&muted=true",
+        "long_id": f"?completed={command['id']}extra&muted=1",
+    }[bad_ack]
     conn = lab.request(lab.ui_port, GUI_PATH + query, headers={"X-C300X-GUI": "ringer-v1"})
-    response(conn, 400 if bad_ack == "malformed" else 409)
+    response(conn, 409 if bad_ack in {"missing", "wrong_id"} else 400)
     assert lab.device.frames == []
     lab.device.muted = True
     lab.next(command["id"], True)

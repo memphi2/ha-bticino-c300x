@@ -8130,9 +8130,6 @@ static int apply_gui_ringer_command(int client_fd, const struct c300x_ringer_com
 static int handle_ui_ringer_next(int client_fd, struct agent_runtime *runtime, const struct request *request)
 {
     char header[32];
-    char completed[64];
-    char muted[16];
-    int muted_value = -1;
     if (!client_is_loopback(client_fd)) {
         send_loopback_required(client_fd);
         return 1;
@@ -8142,16 +8139,7 @@ static int handle_ui_ringer_next(int client_fd, struct agent_runtime *runtime, c
         send_json(client_fd, 403, "Forbidden", "{\"ok\":false,\"error\":\"ringer_gui_header_required\"}\n");
         return 1;
     }
-    query_param_value(request->query, "completed", completed, sizeof(completed));
-    query_param_value(request->query, "muted", muted, sizeof(muted));
-    if (strcmp(muted, "0") == 0 || strcmp(muted, "1") == 0) {
-        muted_value = muted[0] == '1';
-    }
-    if (completed[0] != '\0' && (strlen(completed) != 32 || muted_value < 0)) {
-        send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_gui_ack\"}\n");
-        return 1;
-    }
-    return c300x_ringer_control_next(&runtime->ringer_control, client_fd, completed, muted_value,
+    return c300x_ringer_control_next(&runtime->ringer_control, client_fd, request->query,
                                    apply_gui_ringer_command, runtime);
 }
 

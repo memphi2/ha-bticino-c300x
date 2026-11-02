@@ -25,9 +25,9 @@ struct c300x_ringer_control {
 typedef int (*c300x_ringer_apply_fn)(int fd, const struct c300x_ringer_command *command, void *ctx);
 
 void c300x_ringer_control_init(struct c300x_ringer_control *control);
-/* Return zero when the connection is retained by the control channel. */
+/* Parse a GUI query after caller authorization; zero retains the connection. */
 int c300x_ringer_control_next(
-    struct c300x_ringer_control *control, int fd, const char *completed, int muted,
+    struct c300x_ringer_control *control, int fd, const char *query,
     c300x_ringer_apply_fn apply, void *ctx
 );
 void c300x_ringer_control_request(

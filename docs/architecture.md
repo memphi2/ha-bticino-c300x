@@ -55,6 +55,13 @@ Responsibilities:
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
 
+QML status/patch scripts and GUI reload run as a single bounded child-process
+job in `command_job.c`. The main poll loop continues serving events and requests;
+it never waits synchronously for these scripts. Jobs have a 10-second deadline,
+bounded output and no extra wakeups while idle. Concurrent maintenance writes
+are rejected as busy. A disconnected client does not restart or duplicate its
+job. Other legacy maintenance operations are not yet asynchronous.
+
 ### Device QML UI
 
 Path: `device_qml/`

@@ -4,6 +4,7 @@
 #include "c300x_agent.h"
 #include "capabilities.h"
 #include "callback_queue.h"
+#include "command_job.h"
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
@@ -217,6 +218,11 @@ struct agent_runtime {
     struct c300x_ui_events ui_events;
     struct c300x_http_clients http_clients;
     struct c300x_ringer_control ringer_control;
+    struct c300x_command_job maintenance_job;
+    int maintenance_client_fd;
+    int maintenance_gui_reload;
+    int maintenance_records_write;
+    char maintenance_action[16];
     struct c300x_system_metrics_monitor metrics;
     int smartphone_forwarding_mode_known;
     int smartphone_forwarding_mode_code;
@@ -309,24 +315,6 @@ static void handle_device_user_restore(
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const struct request *request
-);
-static int run_command_capture(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code
-);
-static int run_command_capture_with_env(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code,
-    const char *env_name,
-    const char *env_value
 );
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
@@ -437,6 +425,7 @@ static int find_memo_audio(
 static void handle_qml_patch_status(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 );
 static void handle_qml_patch_action(
@@ -478,6 +467,7 @@ static void handle_audio_codec_action(
 static void handle_gui_reload(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 );
 static int apply_gui_ringer_command(
@@ -3431,7 +3421,7 @@ static void device_user_status_body(
     if (
         config != NULL
         && access(config->maintenance_qml_patch_script, X_OK) == 0
-        && run_command_capture(
+        && c300x_command_capture(
             config->maintenance_qml_patch_script,
             "status",
             qml_output,
@@ -3574,7 +3564,7 @@ static void handle_device_user_ensure(
 
         if (
             access(config->maintenance_qml_patch_script, X_OK) != 0
-            || !run_command_capture(
+            || !c300x_command_capture(
                 config->maintenance_qml_patch_script,
                 "media-user-label-apply",
                 body,
@@ -3621,7 +3611,7 @@ static void handle_device_user_restore(
     }
     if (
         access(config->maintenance_qml_patch_script, X_OK) == 0
-        && !run_command_capture(
+        && !c300x_command_capture(
             config->maintenance_qml_patch_script,
             "media-user-label-restore",
             body,
@@ -8672,148 +8662,6 @@ static void close_extra_fds_for_exec(void)
     }
 }
 
-static int run_command_capture(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code
-)
-{
-    return run_command_capture_with_env(
-        program,
-        argument,
-        out,
-        out_len,
-        timeout_ms,
-        exit_code,
-        NULL,
-        NULL
-    );
-}
-
-static int run_command_capture_with_env(
-    const char *program,
-    const char *argument,
-    char *out,
-    size_t out_len,
-    int timeout_ms,
-    int *exit_code,
-    const char *env_name,
-    const char *env_value
-)
-{
-    const int interval_ms = 50;
-    int pipe_fd[2];
-    int status = 0;
-    int waited_ms = 0;
-    int child_done = 0;
-    size_t used = 0;
-    pid_t pid;
-
-    if (out_len > 0) {
-        out[0] = '\0';
-    }
-    if (exit_code != NULL) {
-        *exit_code = -1;
-    }
-    if (program == NULL || program[0] == '\0' || access(program, X_OK) != 0) {
-        return 0;
-    }
-    if (pipe(pipe_fd) != 0) {
-        return 0;
-    }
-    pid = fork();
-    if (pid < 0) {
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return 0;
-    }
-    if (pid == 0) {
-        int null_fd;
-        close(pipe_fd[0]);
-        (void)dup2(pipe_fd[1], STDOUT_FILENO);
-        null_fd = open("/dev/null", O_WRONLY);
-        if (null_fd >= 0) {
-            (void)dup2(null_fd, STDERR_FILENO);
-            close(null_fd);
-        }
-        close(pipe_fd[1]);
-        if (env_name != NULL && env_value != NULL) {
-            (void)setenv(env_name, env_value, 1);
-        }
-        execl(program, program, argument, (char *)NULL);
-        _exit(127);
-    }
-    close(pipe_fd[1]);
-    set_fd_nonblocking(pipe_fd[0]);
-
-    while (!child_done) {
-        for (;;) {
-            char discard[256];
-            size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-            ssize_t read_size = read(
-                pipe_fd[0],
-                capacity > 0 ? out + used : discard,
-                capacity > 0 ? capacity : sizeof(discard)
-            );
-            if (read_size > 0) {
-                if (capacity > 0) {
-                    used += (size_t)read_size;
-                }
-                continue;
-            }
-            if (read_size < 0 && errno == EINTR) {
-                continue;
-            }
-            break;
-        }
-        if (waitpid(pid, &status, WNOHANG) == pid) {
-            child_done = 1;
-            break;
-        }
-        if (waited_ms >= timeout_ms) {
-            (void)kill(pid, SIGKILL);
-            (void)waitpid(pid, &status, 0);
-            close(pipe_fd[0]);
-            if (out_len > 0) {
-                out[used < out_len ? used : out_len - 1] = '\0';
-            }
-            return 0;
-        }
-        sleep_ms(interval_ms);
-        waited_ms += interval_ms;
-    }
-    for (;;) {
-        char discard[256];
-        size_t capacity = out_len > used + 1 ? out_len - used - 1 : 0;
-        ssize_t read_size = read(
-            pipe_fd[0],
-            capacity > 0 ? out + used : discard,
-            capacity > 0 ? capacity : sizeof(discard)
-        );
-        if (read_size > 0) {
-            if (capacity > 0) {
-                used += (size_t)read_size;
-            }
-            continue;
-        }
-        if (read_size < 0 && errno == EINTR) {
-            continue;
-        }
-        break;
-    }
-    close(pipe_fd[0]);
-    if (out_len > 0) {
-        out[used < out_len ? used : out_len - 1] = '\0';
-    }
-    if (exit_code != NULL && WIFEXITED(status)) {
-        *exit_code = WEXITSTATUS(status);
-    }
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
 static int ssh_service_running(void)
 {
     int status = system("pidof dropbear >/dev/null 2>&1");
@@ -10024,46 +9872,66 @@ static void handle_firewall_action(
     send_firewall_status_body(client_fd, config, "ipv4", state, exists, changed_files);
 }
 
-static void send_qml_patch_script_response(
+static void start_maintenance_job(
     int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
     const char *action,
     int records_write,
-    int dynamic_homepage
+    int dynamic_homepage,
+    int gui_reload
 )
 {
-    char output[4096];
-    char *start;
+    const char *program = gui_reload ? config->maintenance_gui_reload_script : config->maintenance_qml_patch_script;
+    if (runtime->maintenance_job.pid > 0 || runtime->maintenance_client_fd >= 0) {
+        send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"maintenance_busy\"}\n");
+        return;
+    }
+    if (access(program, X_OK) != 0) {
+        send_json(
+            client_fd,
+            502,
+            "Bad Gateway",
+            gui_reload ? "{\"ok\":false,\"error\":\"reload_script_missing\"}\n"
+                : "{\"ok\":false,\"available\":false,\"state\":\"script_missing\"}\n"
+        );
+        return;
+    }
+    if (!c300x_command_job_start(&runtime->maintenance_job, program, action, dynamic_homepage, 10000)) {
+        send_json(
+            client_fd,
+            502,
+            "Bad Gateway",
+            gui_reload ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
+                : "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n"
+        );
+        return;
+    }
+    runtime->maintenance_client_fd = client_fd;
+    runtime->maintenance_gui_reload = gui_reload;
+    runtime->maintenance_records_write = records_write;
+    snprintf(runtime->maintenance_action, sizeof(runtime->maintenance_action), "%s", action);
+}
 
-    if (access(config->maintenance_qml_patch_script, X_OK) != 0) {
-        send_json(
-            client_fd,
-            502,
-            "Bad Gateway",
-            "{\"ok\":false,\"available\":false,\"state\":\"script_missing\"}\n"
-        );
+static void finish_maintenance_job(struct agent_runtime *runtime)
+{
+    int client_fd = runtime->maintenance_client_fd;
+    int gui_reload = runtime->maintenance_gui_reload;
+    const char *start = trim_ascii(runtime->maintenance_job.output);
+    if (client_fd < 0 || !runtime->maintenance_job.complete) {
         return;
     }
-    if (!run_command_capture_with_env(
-        config->maintenance_qml_patch_script,
-        action,
-        output,
-        sizeof(output),
-        10000,
-        NULL,
-        dynamic_homepage ? "C300X_QML_DYNAMIC_HOME_PAGE" : NULL,
-        dynamic_homepage ? "1" : NULL
-    )) {
-        send_json(
-            client_fd,
-            502,
-            "Bad Gateway",
-            "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n"
-        );
-        return;
+    runtime->maintenance_client_fd = -1;
+    if (runtime->maintenance_job.failed) {
+        send_json(client_fd, 502, "Bad Gateway", gui_reload
+            ? "{\"ok\":false,\"error\":\"reload_failed\"}\n"
+            : "{\"ok\":false,\"available\":false,\"state\":\"script_failed\"}\n");
+        goto done;
     }
-    start = (char *)trim_ascii(output);
+    if (gui_reload) {
+        send_json(client_fd, 200, "OK", start[0] == '{' ? start : "{\"ok\":true,\"action\":\"reload_gui\"}\n");
+        goto done;
+    }
     if (start[0] != '{') {
         send_json(
             client_fd,
@@ -10071,21 +9939,24 @@ static void send_qml_patch_script_response(
             "Bad Gateway",
             "{\"ok\":false,\"available\":false,\"state\":\"invalid_script_response\"}\n"
         );
-        return;
+        goto done;
     }
-    if (records_write) {
+    if (runtime->maintenance_records_write) {
         int changed_files = 1;
         (void)c300x_json_int_field(start, "changed_files", &changed_files);
         if (changed_files > 0) {
-            record_agent_write(config, runtime, "qml_patch", action);
+            record_agent_write(runtime->config, runtime, "qml_patch", runtime->maintenance_action);
         }
     }
     send_json(client_fd, 200, "OK", start);
+done:
+    close_agent_socket(client_fd);
 }
 
 static void handle_qml_patch_status(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 )
 {
@@ -10097,7 +9968,7 @@ static void handle_qml_patch_status(
         send_json(client_fd, 404, "Not Found", "{\"ok\":false,\"error\":\"maintenance_disabled\"}\n");
         return;
     }
-    send_qml_patch_script_response(client_fd, config, NULL, "status", 0, 0);
+    start_maintenance_job(client_fd, config, runtime, "status", 0, 0, 0);
 }
 
 static void handle_qml_patch_action(
@@ -10135,13 +10006,14 @@ static void handle_qml_patch_action(
                 &dynamic_homepage
             );
         }
-        send_qml_patch_script_response(
+        start_maintenance_job(
             client_fd,
             config,
             runtime,
             action,
             1,
-            dynamic_homepage
+            dynamic_homepage,
+            0
         );
     }
 }
@@ -10149,12 +10021,10 @@ static void handle_qml_patch_action(
 static void handle_gui_reload(
     int client_fd,
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     const struct request *request
 )
 {
-    char output[1024];
-    char *start;
-
     if (!maintenance_authorized(config, request)) {
         send_maintenance_unauthorized(client_fd);
         return;
@@ -10167,27 +10037,7 @@ static void handle_gui_reload(
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"maintenance_confirmation_required\"}\n");
         return;
     }
-    if (access(config->maintenance_gui_reload_script, X_OK) != 0) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"reload_script_missing\"}\n");
-        return;
-    }
-    if (!run_command_capture(
-        config->maintenance_gui_reload_script,
-        "reload",
-        output,
-        sizeof(output),
-        10000,
-        NULL
-    )) {
-        send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"reload_failed\"}\n");
-        return;
-    }
-    start = (char *)trim_ascii(output);
-    if (start[0] == '{') {
-        send_json(client_fd, 200, "OK", start);
-        return;
-    }
-    send_json(client_fd, 200, "OK", "{\"ok\":true,\"action\":\"reload_gui\"}\n");
+    start_maintenance_job(client_fd, config, runtime, "reload", 0, 0, 1);
 }
 
 static void handle_ssh_get(
@@ -11084,6 +10934,18 @@ static void handle_api_request(
         return;
     }
 
+    if (strcmp(request->method, "POST") == 0
+        && strncmp(request->path, "/api/v1/maintenance/", sizeof("/api/v1/maintenance/") - 1) == 0
+        && (runtime->maintenance_job.pid > 0 || runtime->maintenance_client_fd >= 0)) {
+        if (!api_request_authorized(config, request)) {
+            send_auth_required(client_fd);
+        } else if (!maintenance_authorized(config, request)) {
+            send_maintenance_unauthorized(client_fd);
+        } else {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"maintenance_busy\"}\n");
+        }
+        return;
+    }
     if (strcmp(request->path, "/api/v1/maintenance/auth") == 0) {
         if (strcmp(request->method, "GET") == 0) {
             if (!auth_config_read_authorized(config, request)) {
@@ -11159,6 +11021,11 @@ static void handle_api_request(
         return;
     }
     if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/device-user") == 0) {
+        /* This legacy read invokes the same QML script synchronously. */
+        if (runtime->maintenance_job.pid > 0 || runtime->maintenance_client_fd >= 0) {
+            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"maintenance_busy\"}\n");
+            return;
+        }
         handle_device_user_get(client_fd, config);
         return;
     }
@@ -11442,7 +11309,7 @@ static void handle_api_request(
         }
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/maintenance/gui/actions/reload") == 0) {
-        handle_gui_reload(client_fd, config, request);
+        handle_gui_reload(client_fd, config, runtime, request);
         return;
     }
     if (strcmp(request->path, "/api/v1/maintenance/firewall") == 0) {
@@ -11531,7 +11398,7 @@ static void handle_api_request(
     }
     if (strcmp(request->path, "/api/v1/maintenance/qml-patch") == 0) {
         if (strcmp(request->method, "GET") == 0) {
-            handle_qml_patch_status(client_fd, config, request);
+            handle_qml_patch_status(client_fd, config, runtime, request);
             return;
         }
     }
@@ -11856,7 +11723,8 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
 
     if (kind == LISTENER_API) {
         handle_api_request(client_fd, config, runtime, request);
-        close_client = runtime->ringer_control.client_fd != client_fd;
+        close_client = runtime->ringer_control.client_fd != client_fd
+            && runtime->maintenance_client_fd != client_fd;
     } else {
         close_client = handle_ui_request(client_fd, config, runtime, request);
     }
@@ -11880,7 +11748,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 3 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 3 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -11910,6 +11778,8 @@ int c300x_run(struct c300x_config *config)
     init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
     c300x_ringer_control_init(&runtime->ringer_control);
+    c300x_command_job_init(&runtime->maintenance_job);
+    runtime->maintenance_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
@@ -12010,6 +11880,8 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
         poll_count += C300X_HTTP_MAX_CLIENTS;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_command_job_prepare(&runtime->maintenance_job, &poll_fds[poll_count++]));
         callback_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
         c300x_mdns_open_if_needed(
@@ -12133,6 +12005,8 @@ int c300x_run(struct c300x_config *config)
             runtime_set_wake_reason(runtime, "event");
         }
         /* Drain old descriptors before accept can reuse one of their numbers. */
+        c300x_command_job_tick(&runtime->maintenance_job);
+        finish_maintenance_job(runtime);
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
         if (poll_fds[callback_poll_index].revents) {
@@ -12259,6 +12133,10 @@ cleanup:
         voicemail_close(&runtime->voice_memos);
         c300x_ui_events_close_all(&runtime->ui_events, ui_event_send_json, NULL);
         c300x_ringer_control_close(&runtime->ringer_control);
+        c300x_command_job_close(&runtime->maintenance_job);
+        if (runtime->maintenance_client_fd >= 0) {
+            close_agent_socket(runtime->maintenance_client_fd);
+        }
         c300x_recent_events_clear(&runtime->recent_events);
     }
     c300x_video_destroy(video);

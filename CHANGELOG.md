@@ -2,21 +2,12 @@
 
 ## v1.9.9 - 2026-11-02
 
-### Changed
-
-- Prepare Marketplace installation documentation and the doorbell/intercom
-  manifest category while retaining the HA 2026.7 minimum and HACS archive layout.
-- Construct DeviceInfo through its public constructor for forward compatibility
-  without relying on dictionary mutation.
-- Document upcoming API deadlines and LTS maintenance work.
-  The native agent remains 1.9.8; no device changes are required by this work.
-- Keep regular validation on HA 2026.7 and 2026.10.
-- Do not load the unused AnyIO pytest plugin, avoiding its deprecated
-  CallSpec2 import without suppressing warnings or changing HA dependencies.
-
-## v1.9.8 - 2026-11-01
+Includes all changes from the withdrawn v1.9.8 release.
 
 ### Fixed
+
+- Install all GUI components required for ringer mute/unmute with agent 1.9.9.
+  Agent self-updates use existing maintenance access without extra SSH credentials.
 
 - Send the core GUI's call-end notification to the agent's default UI port
   (8090). Detect and repair older hooks targeting 8092 when reapplying the
@@ -24,8 +15,8 @@
 - Synchronize ringer mute/unmute with the device GUI's saved audio state so
   an unanswered call cannot restore an old mute setting (#65). Requires the
   updated agent and core QML hook, including a GUI reload. Commands fail
-  explicitly when GUI confirmation is unavailable. Device validation of the
-  new control path is still pending.
+  explicitly when GUI confirmation is unavailable. Ringer operation is confirmed
+  on the test device.
 
 ### Added
 
@@ -33,10 +24,17 @@
   HTTPS callback base URL override. Requires an updated agent. HTTP keeps its
   existing transport without TLS initialization. Changing HTTP/HTTPS modes
   restarts only the agent, deferred while media is active. HTTPS adds TLS work
-  on the device; certificate errors never fall back to HTTP.
+  on the device; certificate errors never fall back to HTTP. HTTPS operation is
+  confirmed on the test device.
 
 ### Changed
 
+- Prepare Marketplace installation documentation and the doorbell/intercom
+  manifest category while retaining the HA 2026.7 minimum and HACS archive layout.
+- Construct DeviceInfo through its public constructor for forward compatibility
+  without relying on dictionary mutation. Document API deadlines and LTS work.
+- Do not load the unused AnyIO pytest plugin, avoiding its deprecated
+  CallSpec2 import without suppressing warnings or changing HA dependencies.
 - Validate against Home Assistant `2026.10.0`, keeping the `2026.7.0` minimum.
   Use Probatio explicitly on HA 2026.9+ and Voluptuous on older supported HA
   versions. Keep schema validators, exception types and camera API imports
@@ -68,12 +66,12 @@
 
 ### Upgrade notes
 
-- Includes a freshly built native agent `1.9.8`. Update the device agent and
+- Includes a freshly built native agent `1.9.9`. Update the device agent and
   core QML hook together, then reload the device GUI to activate the ringer
   synchronization and corrected call-end notification. Updating only the HA
   integration is not sufficient.
-- Physical-device validation of the new ringer path and exact HTTPS opt-in
-  implementation remains pending. Issues #55 and #65 remain open.
+- PCMU on-demand reboots (#55) remain unresolved; use `speex` to avoid the known
+  PCMU-specific failure. The media changes are not a confirmed reboot fix.
 
 ## v1.9.7 - 2026-10-05
 

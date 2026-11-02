@@ -389,18 +389,24 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
     assert entry.runtime_data.api.calls == []
 
 
-def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
+@pytest.mark.parametrize("bootstrap", [False, True])
+def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    entry.runtime_data.agent_update_state.payload_bootstrap_required = bootstrap
     hass = FakeHass(entry)
     flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
     calls: list[str] = []
 
     async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
         calls.append("apply_update")
-        return {"ok": True, "restart_scheduled": False}
+        return {
+            "ok": True, "restart_scheduled": False,
+            "runtime_changed": bootstrap and calls.count("apply_update") == 1,
+            "qml_patch_changed": bootstrap and calls.count("apply_update") == 2,
+        }
 
     async def verify_update(
         _hass: Any,
@@ -408,10 +414,16 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
         result: dict[str, Any],
     ) -> dict[str, Any]:
         calls.append(f"verify:{result['ok']}")
-        return {"version": "1.1.0", "capabilities": {}}
+        return {
+            "version": "1.1.0", "capabilities": {},
+            "agent": {"self_update_supported": True, "self_update_file_set_version": 2},
+        }
 
     async def restore_state(*_args: Any) -> None:
         calls.append("restore")
+        if bootstrap:
+            assert _args[2].runtime_changed
+            assert _args[2].qml_patch_changed
 
     async def migrate_mqtt(_api: Any) -> None:
         calls.append("migrate_mqtt")
@@ -427,6 +439,10 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
     monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
     monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
     monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    async def packaged_bundle(_hass: Any) -> dict[str, Any]:
+        return {"agent_version": "1.1.0", "update_file_set_version": 2}
+
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", packaged_bundle)
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
 
@@ -436,9 +452,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
     assert form["type"] == "form"
     assert form["step_id"] == "confirm"
     assert result == {"type": "create_entry", "data": {}}
-    assert calls == [
-        "apply_update",
-        "verify:True",
+    assert calls == ["apply_update", "verify:True"] * (2 if bootstrap else 1) + [
         "restore",
         "migrate_mqtt",
         "apply_setup",

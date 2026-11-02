@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -505,6 +506,28 @@ def test_staged_self_update_bundle_contains_agent_managed_files(
         (component_dir / "device_agent" / "bundle.json").read_text(encoding="utf-8")
     )
     paths = {entry["path"] for entry in bundle["files"]}
+    assert bundle["update_file_set_version"] == 2
+    probe = tmp_path / "update_paths.c"
+    probe.write_text(
+        '#include <stdio.h>\n#include "agent_update_paths.h"\n'
+        'int main(void) {\n'
+        'for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {\n'
+        'const struct c300x_agent_update_file *f = &C300X_AGENT_UPDATE_FILES[i];\n'
+        'if (!c300x_agent_update_file_path(f->path)) return 1;\n'
+        '(void)c300x_agent_update_patch_path(f->path);\n'
+        'printf("%s %o\\n", f->path, (unsigned)f->mode);\n'
+        '} return 0; }\n'
+    )
+    executable = tmp_path / "update-paths"
+    subprocess.run(
+        ["gcc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I",
+         str(ROOT / "native_agent/src"), str(probe), "-o", str(executable)],
+        check=True, capture_output=True, text=True,
+    )
+    result = subprocess.run([str(executable)], check=True, capture_output=True, text=True)
+    native_modes = dict(line.split() for line in result.stdout.splitlines())
+    for entry in bundle["files"]:
+        assert native_modes[entry["path"]] == entry["mode"]
     assert bundle["agent"] == "device_agent/armhf/c300x-agent-native"
     assert "device_agent/armhf/c300x-agent-native" in paths
     assert "device_agent/init/c300x-native-agent" in paths

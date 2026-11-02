@@ -434,6 +434,28 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 entry.runtime_data.api,
                 update_result,
             )
+            if getattr(update_state, "payload_bootstrap_required", False):
+                target_bundle = await async_load_packaged_bundle_metadata(self.hass)
+                if not target_bundle or compare_agent_bundle(
+                    setup_data, target_bundle
+                ).payload_bootstrap_required:
+                    raise RuntimeError("updated agent cannot install the target file set")
+                # The old updater installed the new executable, but not new payload paths.
+                # Complete exactly once through the now-running, verified new updater.
+                completion = await async_apply_packaged_agent_update(
+                    self.hass, entry.runtime_data.api
+                )
+                setup_data = await _async_verify_agent_after_update(
+                    self.hass, entry.runtime_data.api, completion
+                )
+                for flag in (
+                    "runtime_changed", "qml_patch_changed", "script_changed",
+                    "firewall_patch_changed", "ipv6_firewall_patch_changed",
+                    "config_schema_changed",
+                ):
+                    update_result[flag] = (
+                        update_result.get(flag) is True or completion.get(flag) is True
+                    )
             changes = _ExternalPatchChanges.from_update_result(update_result)
             if changes.config_schema_changed:
                 await entry.runtime_data.api.async_normalize_agent_config()
@@ -637,7 +659,8 @@ def _agent_setup_matches_bundle(
 ) -> bool:
     """Return true when the running agent reports the packaged bundle."""
 
-    return not compare_agent_bundle(setup_data, target_bundle).update_required
+    state = compare_agent_bundle(setup_data, target_bundle)
+    return not state.update_required and not state.payload_bootstrap_required
 
 
 async def _async_apply_repaired_agent_setup(

@@ -34,6 +34,7 @@ class AgentUpdateState:
     installed_bundle_hash: str | None = None
     available_bundle_hash: str | None = None
     self_update_supported: bool = False
+    payload_bootstrap_required: bool = False
     reason: str | None = None
 
     @property
@@ -111,6 +112,13 @@ def compare_agent_bundle(
     installed_version = str(setup_data.get("version") or agent.get("version") or "")
     installed_api_version = str(setup_data.get("api_version") or "")
     installed_bundle_hash = str(agent.get("bundle_hash") or "")
+    required_file_set = bundle.get("update_file_set_version", 1)
+    installed_file_set = agent.get("self_update_file_set_version", 1)
+    payload_supported = (
+        type(required_file_set) is int
+        and type(installed_file_set) is int
+        and 1 <= required_file_set <= installed_file_set
+    )
     self_update_supported = bool(agent.get("self_update_supported"))
     available_version = str(bundle.get("agent_version") or bundle.get("version") or "")
     available_api_version = str(bundle.get("api_version") or "")
@@ -124,6 +132,7 @@ def compare_agent_bundle(
         "installed_bundle_hash": installed_bundle_hash or None,
         "available_bundle_hash": available_bundle_hash or None,
         "self_update_supported": self_update_supported,
+        "payload_bootstrap_required": not payload_supported,
     }
     if not installed_version or not available_version:
         return AgentUpdateState(state=UPDATE_STATE_UNKNOWN, reason="version_missing", **common)

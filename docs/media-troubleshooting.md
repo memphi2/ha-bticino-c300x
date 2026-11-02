@@ -24,11 +24,27 @@ pages, reload the integration once and re-check `Media readiness`.
 
 ## Device Reboots After PCMU On-demand Video
 
-PCMU-specific reboots after ending an on-demand stream remain unresolved
-([issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55)). The current
-media cleanup changes are not a confirmed fix. Use **Speex (stock)** in the
-**Audio codec** select to avoid this known failure. Changing the device codec is
-an explicit maintenance operation that reboots the C300X.
+Native agent **1.9.11** corrects the undersized PCMU silence packets associated
+with [issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55). When the
+microphone is inactive, the agent sends a complete 20 ms frame instead of one
+byte. Speex is unchanged; this fix does not patch firmware or add teardown delays.
+
+Three on-device HA-card tests passed without a reboot or firmware-process
+restart, including normal 60-second session renewal and at least 180 seconds
+of observation after each stop. The issue is closed following this validation;
+the reporter's exact cold-boot, short-gap and multi-unit setup has not yet been
+retested with the corrected agent.
+
+The fix is currently in the unreleased 1.9.11 build. Once available, follow the
+[update instructions](advanced-maintenance.md#updates) and verify that the
+**native agent**, not just the integration, is version 1.9.11 or newer.
+Updating only Home Assistant files does not apply the correction.
+
+Until the corrected agent is installed, use **Speex (stock)** in the **Audio
+codec** select as the workaround. Changing the device codec is an explicit
+maintenance operation that reboots the C300X. If the reboot returns with the
+corrected agent, stop repeating the test, return to Speex and reopen issue #55
+with the versions, reproduction steps and sanitized diagnostics.
 
 ## Card Shows Stream Instead of Answer
 

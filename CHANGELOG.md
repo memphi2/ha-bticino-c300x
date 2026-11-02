@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.9.11 - Unreleased
+
+### Fixed
+
+- Send a complete 20 ms PCMU silence frame when the microphone is inactive,
+  matching the RTP timestamp increment. Speex silence is unchanged. This
+  corrects undersized agent packets. Repeated on-device PCMU on-demand tests
+  passed without a reboot.
+
+### Upgrade
+
+- Update the native agent to 1.9.11 to apply the PCMU correction; updating only
+  the integration is insufficient. No firmware patch is required.
+
 ## v1.9.10 - 2026-11-02
 
 ### Added

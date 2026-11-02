@@ -42,6 +42,12 @@ Keep existing integration entries when updating. The integration archive include
 the agent, its GUI components and the Lovelace card; no separate card repository
 is needed.
 
+The PCMU silence-frame correction in 1.9.11 requires **native agent 1.9.11 or
+newer**; an integration-only update is insufficient. This correction does not
+require a firmware patch or a GUI change. For availability, validation scope
+and the workaround for older agents, see
+[PCMU reboot troubleshooting](media-troubleshooting.md#device-reboots-after-pcmu-on-demand-video).
+
 ## Tokens
 
 Installer-based setup generates:

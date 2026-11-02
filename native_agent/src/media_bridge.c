@@ -3272,7 +3272,10 @@ static void send_media_audio_silence_payload_type(
     media_srtp_state_t *state,
     unsigned char payload_type
 ) {
-    unsigned char packet[64];
+    unsigned char packet[12 + MEDIA_AUDIO_TIMESTAMP_STEP + 32];
+    int payload_len = payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+        ? MEDIA_AUDIO_TIMESTAMP_STEP
+        : 1;
 
     if (state == NULL || !state->available) {
         return;
@@ -3283,10 +3286,10 @@ static void send_media_audio_silence_payload_type(
     store_be16(packet + 2, state->audio_seq);
     store_be32(packet + 4, state->audio_timestamp);
     store_be32(packet + 8, state->audio_ssrc);
-    packet[12] = payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
-        ? 0xFF
-        : MEDIA_AUDIO_SILENCE_PAYLOAD;
-    if (protect_and_send_srtp(state->audio, fd, port, packet, 13)) {
+    /* PCMU carries one byte per sample, including silence for the full 20 ms. */
+    memset(packet + 12, payload_type == RTSP_BACKCHANNEL_PCMU_PAYLOAD_TYPE
+        ? 0xFF : MEDIA_AUDIO_SILENCE_PAYLOAD, (size_t)payload_len);
+    if (protect_and_send_srtp(state->audio, fd, port, packet, 12 + payload_len)) {
         state->audio_seq++;
         state->audio_timestamp += MEDIA_AUDIO_TIMESTAMP_STEP;
     }

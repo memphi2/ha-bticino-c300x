@@ -23,6 +23,7 @@ packaged C300X device agent work together on a real C300X.
 | Scenario | Expected result |
 | --- | --- |
 | On-demand Stream | Video starts, stops and can start again. |
+| PCMU On-demand, microphone off | Repeated start/stop and normal 60-second session renewal preserve audio/video without a device reboot or firmware-process restart. |
 | On-demand with Smartphone forwarding | Video remains available, readiness shows only a Ring Call warning and no Repair is created. |
 | On-demand Talkback | Microphone works from a secure frontend. |
 | Ring Call Preview | Card shows preview only when real ring media is ready. |
@@ -33,6 +34,13 @@ packaged C300X device agent work together on a real C300X.
 | Ring capture while busy | Capture fails cleanly instead of stealing the live session. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
+
+For the PCMU reboot regression, verify the running agent version and active
+device codec first. Observe boot ID, uptime and the answering-machine/media
+processes for at least 180 seconds after each stop; a successful stream alone
+does not establish that the device remained healthy. Record cold-boot and
+short-gap tests separately rather than inferring them from long-idle runs.
+Keep raw captures and device identifiers private.
 
 ## Readiness and Repairs
 

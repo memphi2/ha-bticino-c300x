@@ -402,6 +402,26 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
     _attr_entity_registry_enabled_default = False
     _attr_options = list(_AGENT_DIAGNOSTICS_STATUS_OPTIONS)
     _attr_translation_key = "agent_diagnostics"
+    _unrecorded_attributes = frozenset(
+        {
+            "updated_at",
+            "updated_by",
+            "loop_iterations",
+            "poll_wakeups",
+            "poll_wakeups_per_loop",
+            "last_wake_reason",
+            "last_poll_timeout_ms",
+            "last_poll_count",
+            "accepted_clients",
+            "open_fd_count",
+            "recent_event_count",
+            "home_assistant_last_seen_at",
+            "ui_event_revision",
+            "ui_event_waiters",
+            "video_bridge_open_fds",
+            "video_bridge_active_threads",
+        }
+    )
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "agent_diagnostics")

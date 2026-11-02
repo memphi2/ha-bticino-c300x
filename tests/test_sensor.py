@@ -879,6 +879,8 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
     assert entity._attr_entity_registry_enabled_default is False
     assert entity._attr_device_class == "enum"
     assert entity.native_value == "doorbell_call_active"
+    assert {"updated_at", "loop_iterations", "poll_wakeups"} <= entity._unrecorded_attributes
+    assert not {"agent_write_count", "video_call_active", "media_watchdog_trigger_count"} & entity._unrecorded_attributes
     assert entity.extra_state_attributes == {
         "status_reason": "native_doorbell_call_active",
         "recommended_action": "use_doorstation_card_stop_when_finished",

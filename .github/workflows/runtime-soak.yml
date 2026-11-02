@@ -1,0 +1,23 @@
+name: Runtime Soak
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install test runtime
+        run: python -m pip install -r requirements/ha-current/requirements.txt -r requirements-dev.txt
+      - name: Exercise 30 bounded load/reconnect/unload cycles
+        run: python tests/runtime_lab/run.py --scenario soak --cycles 30

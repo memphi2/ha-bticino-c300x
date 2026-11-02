@@ -4,10 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
-def test_real_home_assistant_lifecycle():
+
+@pytest.mark.parametrize("scenario", ["lifecycle", "soak"])
+def test_real_home_assistant_runtime(scenario):
     result = subprocess.run(
-        [sys.executable, "tests/runtime_lab/run.py"],
+        [sys.executable, "tests/runtime_lab/run.py", "--scenario", scenario],
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,

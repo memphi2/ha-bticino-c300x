@@ -27,7 +27,7 @@ class FakeAgent:
         self.list_started = asyncio.Event()
         self.muted = False
         self.sequence = 0
-        self.instance = "synthetic-agent-instance"
+        self.instance = "0123456789abcdef0123456789abcdef"
         self.memo_text = "Synthetic private memo"
         app = web.Application()
         app.router.add_route("*", "/{path:.*}", self.handle)
@@ -49,6 +49,7 @@ class FakeAgent:
             "sample_sequence": self.sequence,
             "sample_age_ms": 0,
             "sample_interval_seconds": 30,
+            "sample_interval_ms": 30000,
             "heartbeat_seconds": 600,
             "cpu_usage_percent": 1.0,
             "memory_usage_percent": 20.0,
@@ -119,7 +120,7 @@ class FakeAgent:
                 }
             )
         if key == ("GET", "/api/v1/system/metrics"):
-            return web.json_response({"system_metrics": self.metrics()})
+            return web.json_response(self.metrics())
         if request.path == "/api/v1/ringer" and request.method in {"GET", "POST"}:
             self.muted = body.get("muted", self.muted)
             return web.json_response({"muted": self.muted, "volume": 5})

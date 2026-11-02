@@ -20,6 +20,14 @@ async exceptions fail the test. No device credentials are read.
 The browser frontend, go2rtc process and mDNS resolver are excluded from this
 fixture. These tests do not establish physical device or media stability.
 
+The same pytest wrapper runs three measured resource cycles after three warmup
+cycles. For the longer Linux-only probe, run
+`python tests/runtime_lab/run.py --scenario soak --cycles 30` (also scheduled
+weekly in CI). The JSON report includes request counts, tasks, timers, bus
+listeners, file descriptors, traced Python memory and resident memory. It rejects
+retained old API clients and growth beyond the explicit limits in `soak.py`.
+All traffic is synthetic loopback traffic; this is not a device-load measurement.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

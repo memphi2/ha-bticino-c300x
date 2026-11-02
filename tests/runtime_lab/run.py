@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -73,5 +75,19 @@ async def lifecycle(root: Path):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--scenario", choices=("lifecycle", "soak"), default="lifecycle"
+    )
+    parser.add_argument("--cycles", type=int, default=3)
+    args = parser.parse_args()
+    if not 1 <= args.cycles <= 100:
+        parser.error("cycles must be between 1 and 100")
     with tempfile.TemporaryDirectory(prefix="c300x-runtime-") as directory:
-        asyncio.run(lifecycle(Path(directory) / "ha"))
+        root = Path(directory) / "ha"
+        if args.scenario == "soak":
+            from soak import run
+
+            print(json.dumps(asyncio.run(run(root, args.cycles))))  # noqa: T201
+        else:
+            asyncio.run(lifecycle(root))

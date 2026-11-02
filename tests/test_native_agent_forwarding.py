@@ -22,6 +22,7 @@ from native_agent.test.smoke import (
     managed_tcp_server,
     read_frame,
     send_udp_event,
+    wait_for_callback_type,
     wait_for_health,
 )
 
@@ -139,7 +140,14 @@ def forwarding_agent(
                 )
                 device.frames.clear()
                 yield device, api_port
-                assert [item["body"] for item in callback.requests] == _forwarding_events(api_port)
+                events = _forwarding_events(api_port)
+                # History is recorded before the callback worker delivers it.
+                for index, event in enumerate(events):
+                    delivered = wait_for_callback_type(
+                        callback, "smartphone_forwarding.changed", index,
+                    )
+                    assert delivered["body"] == event
+                assert [item["body"] for item in callback.requests] == events
             finally:
                 process.terminate()
                 try:

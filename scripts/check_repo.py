@@ -84,6 +84,8 @@ PUBLIC_REPOSITORY_URL = "https://github.com/" + "mem" + "phi2/ha-bticino-c300x"
 PUBLIC_REPOSITORY_URLS = (
     PUBLIC_REPOSITORY_URL,
     f"{PUBLIC_REPOSITORY_URL}/issues",
+    "https://my.home-assistant.io/redirect/marketplace_repository/?owner="
+    + "mem" + "phi2&repository=ha-bticino-c300x&category=integration",
 )
 
 DENY_PATTERNS = {

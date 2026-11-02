@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.9.10 - Unreleased
+
+### Fixed
+
+- Keep the reconnect-grace timer and entity-registry refresh listener on the
+  Home Assistant event loop. A failed event registration could otherwise trigger
+  a Repairs thread-safety warning after 15 seconds.
+
+### Upgrade notes
+
+- Home Assistant integration fix only; the packaged native agent remains 1.9.9.
+  No device-agent update is required for this fix.
+
 ## v1.9.9 - 2026-11-02
 
 Includes all changes from the withdrawn v1.9.8 release.

@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 
@@ -284,6 +284,7 @@ class _AgentEventRegistration:
             self._register,
         )
 
+    @callback
     def _schedule_registry_refresh(self, event: Any = None) -> None:
         if self._stopped or self._registry_refresh_cancel is not None:
             return
@@ -580,6 +581,7 @@ def _schedule_unavailable_expiry(
     if connection_state.expire_unavailable is not None:
         return
 
+    @callback
     def _expire(now: Any = None) -> None:
         connection_state.expire_unavailable = None
         connection_state.mark_unavailable()

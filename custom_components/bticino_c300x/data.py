@@ -254,7 +254,7 @@ class BticinoC300XRuntimeData:
     # uptime dropping between two diagnostics samples means the process (and, on
     # this device, usually the whole unit) restarted. Session-scoped like
     # C300XConnectionState.reconnect_count.
-    device_reboot_count: int = 0
+    agent_restart_count: int = 0
     agent_uptime_seconds: int | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: Any | None = None

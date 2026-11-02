@@ -35,7 +35,7 @@ def _entry(*, api: _FakeApi | None = None, capabilities: dict[str, Any] | None =
             agent_diagnostics_updated_at=None,
             agent_diagnostics_updated_by=None,
             agent_diagnostics_change_reason=None,
-            device_reboot_count=0,
+            agent_restart_count=0,
             agent_uptime_seconds=None,
         ),
     )
@@ -70,7 +70,7 @@ def test_refresh_agent_diagnostics_stores_status_and_notifies(
     assert synced == ["entry-1"]
 
 
-def test_agent_diagnostics_counts_device_reboot_on_uptime_drop(monkeypatch) -> None:
+def test_uptime_drop_does_not_claim_a_device_or_agent_restart(monkeypatch) -> None:
     entry = _entry()
     monkeypatch.setattr(
         diagnostics_module,
@@ -86,25 +86,25 @@ def test_agent_diagnostics_counts_device_reboot_on_uptime_drop(monkeypatch) -> N
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 1, "uptime_seconds": 500}
     )
-    assert entry.runtime_data.device_reboot_count == 0
+    assert entry.runtime_data.agent_restart_count == 0
     assert entry.runtime_data.agent_uptime_seconds == 500
 
     # Uptime grows within the same process -> still no reboot.
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 2, "uptime_seconds": 800}
     )
-    assert entry.runtime_data.device_reboot_count == 0
+    assert entry.runtime_data.agent_restart_count == 0
 
-    # Uptime drops -> the agent (device) restarted.
+    # A lower uptime alone is not proof of a new agent process or device boot.
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 1, "uptime_seconds": 12}
     )
-    assert entry.runtime_data.device_reboot_count == 1
+    assert entry.runtime_data.agent_restart_count == 0
     assert entry.runtime_data.agent_uptime_seconds == 12
 
     # An agent that does not report uptime leaves the counter untouched.
     apply_agent_diagnostics_event("hass", entry, {"agent_write_count": 5})
-    assert entry.runtime_data.device_reboot_count == 1
+    assert entry.runtime_data.agent_restart_count == 0
     assert entry.runtime_data.agent_uptime_seconds == 12
 
 

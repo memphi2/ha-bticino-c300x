@@ -80,6 +80,11 @@ def test_ordering_and_agent_restart() -> None:
     assert entry.runtime_data.system_metrics["cpu_usage_percent"] is None
     assert apply_system_metrics(entry, snapshot(2, "b" * 32))
     assert not apply_system_metrics(entry, {"cpu_usage_percent": 20.0})
+    assert entry.runtime_data.agent_restart_count == 1
+    assert apply_system_metrics(entry, snapshot(1, "c" * 32))
+    assert entry.runtime_data.agent_restart_count == 2
+    assert not apply_system_metrics(entry, snapshot(3, "b" * 32))
+    assert entry.runtime_data.agent_restart_count == 2
 
 
 def test_http_generation_and_sequence_guards() -> None:

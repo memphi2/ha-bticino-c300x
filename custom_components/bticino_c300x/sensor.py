@@ -352,8 +352,8 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
-            "device_reboot_count": getattr(
-                self._entry.runtime_data, "device_reboot_count", 0
+            "agent_restart_count": getattr(
+                self._entry.runtime_data, "agent_restart_count", 0
             ),
             "agent_uptime_seconds": getattr(
                 self._entry.runtime_data, "agent_uptime_seconds", None

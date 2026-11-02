@@ -445,7 +445,7 @@ def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
         "last_reconnect_reason": None,
         "next_reconnect_delay_seconds": None,
         "reconnect_count": 0,
-        "device_reboot_count": 0,
+        "agent_restart_count": 0,
         "agent_uptime_seconds": None,
         "media_watchdog_trigger_count": 0,
     }

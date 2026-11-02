@@ -11,7 +11,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 
 from .api_errors import C300XAgentApiError
-from .const import SIGNAL_SYSTEM_METRICS_CHANGED
+from .const import SIGNAL_AGENT_INFO_CHANGED, SIGNAL_SYSTEM_METRICS_CHANGED
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -126,6 +126,9 @@ def apply_system_metrics(
         return False
     if old_instance and instance != old_instance:
         state.retired_instances.append(old_instance)
+    restarted = bool(old_instance and instance and instance != old_instance)
+    if restarted:
+        runtime.agent_restart_count = getattr(runtime, "agent_restart_count", 0) + 1
 
     now = monotonic()
     interval = metrics.get("sample_interval_seconds") or 30
@@ -155,6 +158,8 @@ def apply_system_metrics(
             async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
 
         state.cancel_expiry = async_call_later(hass, max(0, expires_at - now), expire)
+        if restarted:
+            async_dispatcher_send(hass, SIGNAL_AGENT_INFO_CHANGED, entry.entry_id)
         if notify:
             async_dispatcher_send(hass, SIGNAL_SYSTEM_METRICS_CHANGED, entry.entry_id)
     return True

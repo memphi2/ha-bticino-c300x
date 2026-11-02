@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from custom_components.bticino_c300x import message_refresh
 from custom_components.bticino_c300x.api import C300XAgentApiError
 from custom_components.bticino_c300x.const import (
@@ -18,6 +20,65 @@ from custom_components.bticino_c300x.message_refresh import (
     async_memos,
     schedule_memos_refresh,
 )
+
+
+@pytest.mark.parametrize("kind", ["memos", "answering_machine_messages"])
+@pytest.mark.parametrize("failure", [False, True])
+@pytest.mark.parametrize("unloaded", [False, True])
+def test_late_refresh_never_writes_or_notifies_replacement_runtime(
+    monkeypatch, kind, failure, unloaded,
+):
+    signals = []
+    monkeypatch.setattr(message_refresh, "async_dispatcher_send", lambda *args: signals.append(args))
+
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        api = _FakeApi()
+
+        async def fetch():
+            started.set()
+            await release.wait()
+            if failure:
+                raise C300XAgentApiError("old request failed")
+            return {"available": True, "total": 99}
+
+        setattr(api, f"async_{kind}", fetch)
+        entry = _entry(api)
+        original = entry.runtime_data
+        refresh = getattr(message_refresh, f"_async_refresh_{kind}_from_agent")
+        task = asyncio.create_task(refresh(SimpleNamespace(), entry))
+        await started.wait()
+        replacement = _entry(_FakeApi()).runtime_data
+        if unloaded:
+            del entry.runtime_data
+        else:
+            entry.runtime_data = replacement
+        release.set()
+        await task
+        assert getattr(replacement, kind)["total"] == (7 if kind == "memos" else 9)
+        assert getattr(original, kind)["total"] == (7 if kind == "memos" else 9)
+        assert getattr(replacement, f"{kind}_updated_at") is None
+        assert signals == []
+
+    asyncio.run(run())
+
+
+def test_queued_old_refresh_never_calls_agent_after_reload():
+    async def run():
+        entry = _entry(_FakeApi())
+        entry.entry_id = "queued-reload"
+        original = entry.runtime_data
+        lock = message_refresh._refresh_lock(entry, "memos")
+        await lock.acquire()
+        task = asyncio.create_task(async_memos(entry, force_refresh=True))
+        await asyncio.sleep(0)
+        entry.runtime_data = _entry(_FakeApi()).runtime_data
+        lock.release()
+        with pytest.raises(C300XAgentApiError, match="Config entry changed"):
+            await task
+        assert original.api.memo_reads == 0
+
+    asyncio.run(run())
 
 
 class _FakeApi:

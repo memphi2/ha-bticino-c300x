@@ -54,6 +54,8 @@
 #include <time.h>
 #include <unistd.h>
 #define REQUEST_BUFFER_SIZE 8192
+#define C300X_HTTP_REQUEST_TIMEOUT_MS 500
+#define C300X_HTTP_ACCEPT_BUDGET 8
 #define C300X_MAX_SUBSCRIPTIONS 4
 #define C300X_MAX_SUBSCRIPTION_EVENTS 24
 #define C300X_MAX_URL_LEN 512
@@ -6631,14 +6633,31 @@ static size_t content_length_from_buffer(const char *buffer, const char *header_
 static int receive_http_request(int client_fd, char *buffer, size_t buffer_len, int *too_large)
 {
     size_t used = 0;
+    long long deadline = c300x_system_metrics_monotonic_ms() + C300X_HTTP_REQUEST_TIMEOUT_MS;
 
     *too_large = 0;
     while (used + 1 < buffer_len) {
-        ssize_t received = recv(client_fd, buffer + used, buffer_len - used - 1, 0);
+        long long remaining = deadline - c300x_system_metrics_monotonic_ms();
+        struct pollfd ready = {.fd = client_fd, .events = POLLIN};
+        ssize_t received;
         char *header_end;
         size_t header_len;
         size_t content_len;
 
+        if (remaining <= 0) {
+            return 0;
+        }
+        int result = poll(&ready, 1, (int)remaining);
+        if (result < 0 && errno == EINTR) {
+            continue;
+        }
+        if (result <= 0) {
+            return 0;
+        }
+        received = recv(client_fd, buffer + used, buffer_len - used - 1, MSG_DONTWAIT);
+        if (received < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+            continue;
+        }
         if (received <= 0) {
             return used > 0 ? 1 : 0;
         }
@@ -12360,7 +12379,7 @@ int c300x_run(struct c300x_config *config)
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
                 runtime_set_wake_reason(runtime, listeners[index].kind == LISTENER_UI ? "ui" : "api");
-                for (;;) {
+                for (int accepted = 0; accepted < C300X_HTTP_ACCEPT_BUDGET; accepted++) {
                     int client_fd = accept(listeners[index].fd, NULL, NULL);
                     if (client_fd < 0) {
                         if (errno == EINTR) {

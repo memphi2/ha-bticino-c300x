@@ -293,6 +293,32 @@ def test_release_workflow_validates_both_attestations_before_publication() -> No
     assert steps.index(verify) < steps.index(by_name["Publish GitHub Release assets"])
 
 
+def test_release_requires_browser_checks_at_the_verified_commit() -> None:
+    release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    browser = yaml.safe_load((ROOT / ".github/workflows/browser.yml").read_text())
+    jobs = release["jobs"]
+    assert "browser" in jobs["publish"]["needs"]
+    gate = jobs["browser"]
+    assert gate["uses"] == "./.github/workflows/browser.yml"
+    assert gate["needs"] == "main-validation"
+    assert gate["with"]["ref"] == "${{ needs.main-validation.outputs.commit }}"
+    assert "if" not in gate
+    assert not gate.get("continue-on-error", False)
+    main = jobs["main-validation"]
+    assert main["outputs"]["commit"] == "${{ steps.verified-main.outputs.commit }}"
+    verify = next(step for step in main["steps"] if step.get("id") == "verified-main")
+    assert 'echo "commit=$tag_sha" >> "$GITHUB_OUTPUT"' in verify["run"]
+    # PyYAML's YAML 1.1 loader reads the workflow key "on" as True.
+    assert browser[True]["workflow_call"]["inputs"]["ref"]["required"] is True
+    browser_job = browser["jobs"]["browser"]
+    assert not browser_job.get("continue-on-error", False)
+    checkout = next(step for step in browser_job["steps"] if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "${{ inputs.ref || github.sha }}"
+    smoke = next(step for step in browser_job["steps"] if step.get("run") == "node tests/browser/smoke.mjs")
+    assert "if" not in smoke
+    assert not smoke.get("continue-on-error", False)
+
+
 def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() -> None:
     checker = _load_repo_checker()
 

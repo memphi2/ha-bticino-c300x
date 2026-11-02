@@ -155,11 +155,11 @@ class C300XStoredMediaSource(MediaSource):
 
 
 async def _async_messages_for_entry(entry: Any) -> dict[str, Any]:
-    return await async_answering_machine_messages(entry, force_refresh=True)
+    return await async_answering_machine_messages(entry, force_refresh=False)
 
 
 async def _async_memos_for_entry(entry: Any) -> dict[str, Any]:
-    return await async_memos(entry, force_refresh=True)
+    return await async_memos(entry, force_refresh=False)
 
 
 async def _async_ring_capture_items(hass: HomeAssistant) -> list[dict[str, Any]]:

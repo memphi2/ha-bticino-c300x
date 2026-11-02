@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -253,3 +253,38 @@ def test_scheduled_refresh_deduplicates_pending_task_and_clears_when_done(
 
     asyncio.run(_run())
     assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
+
+
+@pytest.mark.parametrize("kind", ["memos", "answering_machine_messages"])
+def test_media_reads_share_cache_but_expiry_and_changes_fetch_fresh_data(kind):
+    from custom_components.bticino_c300x import media_source
+
+    async def run():
+        class SlowApi(_FakeApi):
+            async def async_memos(self):
+                await asyncio.sleep(0)
+                return await super().async_memos()
+
+            async def async_answering_machine_messages(self):
+                await asyncio.sleep(0)
+                return await super().async_answering_machine_messages()
+
+        api = SlowApi()
+        entry = _entry(api)
+        entry.entry_id = f"media-cache-{kind}"
+        read = (media_source._async_memos_for_entry if kind == "memos"
+                else media_source._async_messages_for_entry)
+        count_attr = "memo_reads" if kind == "memos" else "video_message_reads"
+        await asyncio.gather(*(read(entry) for _ in range(3)))
+        assert getattr(api, count_attr) == 1
+        await read(entry)
+        assert getattr(api, count_attr) == 1
+        setattr(entry.runtime_data, f"{kind}_updated_at", datetime.now(UTC) - timedelta(seconds=11))
+        await read(entry)
+        assert getattr(api, count_attr) == 2
+        await getattr(message_refresh, f"async_{kind}")(entry, force_refresh=True)
+        assert getattr(api, count_attr) == 3
+        await read(entry)
+        assert getattr(api, count_attr) == 3
+
+    asyncio.run(run())

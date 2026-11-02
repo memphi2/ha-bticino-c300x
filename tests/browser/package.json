@@ -1,0 +1,8 @@
+{
+  "name": "c300x-browser-tests",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": { "test": "node smoke.mjs" },
+  "devDependencies": { "puppeteer-core": "25.16.0" }
+}

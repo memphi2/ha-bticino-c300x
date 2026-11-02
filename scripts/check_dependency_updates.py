@@ -65,6 +65,12 @@ def _check(root: Path) -> list[str]:
         return ["Dependabot updates must be a list of mappings"]
 
     expected = {
+        ("npm", "/tests/browser"): {
+            "open-pull-requests-limit": 1,
+            "groups": {"browser-test-tools": {
+                "applies-to": "version-updates", "patterns": ["*"],
+            }},
+        },
         ("github-actions", "/"): {
             "open-pull-requests-limit": 1,
             "groups": {
@@ -104,7 +110,7 @@ def _check(root: Path) -> list[str]:
     ]
     if sorted(actual_keys) != sorted(expected):
         return [
-            "Dependabot must monitor Actions, direct tools and both HA targets exactly once"
+            "Dependabot must monitor Actions, browser tools, direct Python tools and both HA targets exactly once"
         ]
     for update in updates:
         key = (update["package-ecosystem"], update["directory"])

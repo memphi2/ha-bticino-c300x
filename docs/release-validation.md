@@ -34,6 +34,21 @@ three changed CPU readings must add exactly three. Memo text must remain visible
 live but absent from recorded attributes, as must volatile diagnostic counters.
 This checks write amplification and attribute privacy, not long-term retention.
 
+## Browser Regression Tests
+
+Run `npm ci --prefix tests/browser --ignore-scripts` and
+`node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
+its executable path. CI runs this separately from Python tests.
+
+The actual card is rendered at 320, 390 and 1024 pixels in four languages.
+Tests check action bounds/labels, unavailable and pending buttons, door/light
+routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
+A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
+checks require decoded video. HA host elements and signaling are fixtures,
+microphone input is Chrome's fake device and no C300X is contacted. Screenshots
+are written to ignored `.artifacts/browser/`. These are not real-HA frontend or
+device interoperability tests.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

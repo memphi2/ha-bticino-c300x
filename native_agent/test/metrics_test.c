@@ -11,6 +11,7 @@ static long long test_now_ms = 100000;
 static unsigned test_proc_reads;
 static unsigned test_temperature_reads;
 static unsigned test_random_reads;
+static int test_random_unavailable;
 
 static int metrics_clock_gettime(clockid_t clock_id, struct timespec *now)
 {
@@ -45,6 +46,9 @@ static FILE *metrics_fopen(const char *path, const char *mode)
     }
     assert(strcmp(path, "/dev/urandom") == 0);
     test_random_reads++;
+    if (test_random_unavailable) {
+        return NULL;
+    }
     return fopen(path, mode);
 }
 
@@ -241,6 +245,8 @@ static void check_initial_and_precision(struct c300x_config *config, struct agen
 {
     memset(runtime, 0, sizeof(*runtime));
     assert(c300x_system_metrics_monitor_init(config, &runtime->metrics));
+    assert(runtime->subscription_count == 0);
+    assert(runtime->metrics.initialized);
     char first_instance[33];
     strcpy(first_instance, runtime->metrics.last.instance_id);
     assert(strlen(first_instance) == 32);
@@ -350,6 +356,64 @@ static void check_acknowledged_snapshot_is_not_replaced_by_newer_measurement(voi
     assert(monitor.last_delivered_at == 101);
 }
 
+static void check_event_ids_do_not_depend_on_recent_buffer_fill(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
+{
+    baseline(config, runtime, now, 1.0);
+    strcpy(runtime->subscriptions[0].events[0], "test.event");
+    char previous_id[128] = "";
+    for (int i = 0; i < C300X_RECENT_EVENTS_CAPACITY * 3; i++) {
+        dispatch_event(config, runtime, "test.event", "{}", 0);
+        int count = c300x_recent_events_count(&runtime->recent_events);
+        const char *event = c300x_recent_events_at(&runtime->recent_events, count - 1);
+        char id[128];
+        c300x_json_string_field(event, "event_id", id, sizeof(id));
+        assert(id[0] != '\0');
+        assert(strcmp(id, previous_id) != 0);
+        assert(strstr(id, runtime->metrics.last.instance_id) != NULL);
+        snprintf(previous_id, sizeof(previous_id), "%s", id);
+    }
+    c300x_recent_events_clear(&runtime->recent_events);
+    dispatch_event(config, runtime, "test.event", "{}", 0);
+    char id[128];
+    c300x_json_string_field(c300x_recent_events_at(&runtime->recent_events, 0), "event_id", id, sizeof(id));
+    assert(id[0] != '\0');
+    assert(strcmp(id, previous_id) != 0);
+    c300x_recent_events_clear(&runtime->recent_events);
+}
+
+static void check_identity_without_metrics(struct c300x_config *config, struct agent_runtime *runtime)
+{
+    struct c300x_config disabled = *config;
+    unsigned reads_before = test_proc_reads + test_temperature_reads;
+    char previous_id[128] = "";
+    for (int enabled = 0; enabled <= 1; enabled++) {
+        disabled.system_metrics_enabled = enabled;
+        disabled.system_metrics_watch = !enabled;
+        memset(runtime, 0, sizeof(*runtime));
+        runtime->config = &disabled;
+        runtime->subscription_count = 1;
+        runtime->subscriptions[0].event_count = 1;
+        strcpy(runtime->subscriptions[0].events[0], "test.event");
+        runtime->network_online = 1;
+        runtime->network_checked_at = time(NULL);
+        assert(c300x_system_metrics_monitor_init(&disabled, &runtime->metrics));
+        assert(!runtime->metrics.initialized);
+        assert(strlen(runtime->metrics.last.instance_id) == 32);
+        assert(c300x_system_metrics_monitor_timeout_ms(&runtime->metrics) == -1);
+        dispatch_event(&disabled, runtime, "test.event", "{}", 0);
+        char id[128];
+        c300x_json_string_field(c300x_recent_events_at(&runtime->recent_events, 0), "event_id", id, sizeof(id));
+        assert(id[0] != '\0');
+        assert(strcmp(id, previous_id) != 0);
+        snprintf(previous_id, sizeof(previous_id), "%s", id);
+        c300x_recent_events_clear(&runtime->recent_events);
+    }
+    assert(test_proc_reads + test_temperature_reads == reads_before);
+    test_random_unavailable = 1;
+    assert(!c300x_system_metrics_monitor_init(&disabled, &runtime->metrics));
+    test_random_unavailable = 0;
+}
+
 int main(void)
 {
     struct c300x_config config;
@@ -366,6 +430,8 @@ int main(void)
     check_initial_and_precision(&config, runtime);
     check_heartbeat_and_watchdog(&config, runtime, now);
     check_hourly_budget(&config, runtime, now);
+    check_event_ids_do_not_depend_on_recent_buffer_fill(&config, runtime, now);
+    check_identity_without_metrics(&config, runtime);
     free(runtime);
     return 0;
 }

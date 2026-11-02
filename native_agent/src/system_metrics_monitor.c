@@ -9,11 +9,15 @@ int c300x_system_metrics_monitor_init(
 )
 {
     memset(monitor, 0, sizeof(*monitor));
-    if (!config->system_metrics_enabled || !config->system_metrics_watch) {
-        return 1;
+    int active = config->system_metrics_enabled && config->system_metrics_watch;
+    if (active) {
+        c300x_system_metrics_read_sample(&monitor->last, NULL);
     }
-    c300x_system_metrics_read_sample(&monitor->last, NULL);
+    /* Event IDs also need a process identity when metric sampling is disabled. */
     if (!c300x_system_metrics_instance_id(monitor->last.instance_id, sizeof(monitor->last.instance_id))) {
+        return 0;
+    }
+    if (!active) {
         return 1;
     }
     monitor->last.sample_interval_seconds = config->system_metrics_sample_interval_seconds;

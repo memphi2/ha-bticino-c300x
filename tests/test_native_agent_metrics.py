@@ -105,18 +105,6 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
     assert "c300x_system_metrics_read_sample" not in dispatch_now_body
 
 
-def test_native_agent_metrics_initializes_internal_monitor_without_subscribers() -> None:
-    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
-    init_body = text.split("int c300x_system_metrics_monitor_init", maxsplit=1)[1].split(
-        "int c300x_system_metrics_monitor_timeout_ms",
-        maxsplit=1,
-    )[0]
-
-    assert init_body.index("!config->system_metrics_enabled") < init_body.index(
-        "c300x_system_metrics_read_sample"
-    )
-
-
 def test_native_agent_maintenance_requires_token_even_in_no_auth_mode() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     maintenance_body = text.rsplit(

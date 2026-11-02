@@ -208,6 +208,7 @@ struct agent_runtime {
     char qml_patch_last_action[32];
     char audio_codec_running_state[C300X_AUDIO_CODEC_STATE_LEN];
     struct c300x_recent_events recent_events;
+    unsigned long long event_sequence;
     struct c300x_video *video;
     struct voicemail_runtime voicemail;
     struct voicemail_runtime text_memos;
@@ -5451,9 +5452,9 @@ static int dispatch_event_internal(
     written = snprintf(
         event_json,
         sizeof(event_json),
-        "{\"event_id\":\"native-%ld-%d\",\"type\":%s,\"occurred_at\":\"%s\",\"ttl_seconds\":%d,\"snapshot\":%s,\"data\":%s}",
-        (long)time(NULL),
-        c300x_recent_events_count(&runtime->recent_events),
+        "{\"event_id\":\"native-%s-%llu\",\"type\":%s,\"occurred_at\":\"%s\",\"ttl_seconds\":%d,\"snapshot\":%s,\"data\":%s}",
+        runtime->metrics.last.instance_id,
+        ++runtime->event_sequence,
         event_type_json,
         occurred_at,
         ttl_seconds,

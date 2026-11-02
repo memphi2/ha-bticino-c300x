@@ -23,10 +23,6 @@ config_entries = sys.modules.setdefault(
 )
 const = sys.modules.setdefault("homeassistant.const", types.ModuleType("homeassistant.const"))
 core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-exceptions = sys.modules.setdefault(
-    "homeassistant.exceptions",
-    types.ModuleType("homeassistant.exceptions"),
-)
 helpers = sys.modules.setdefault(
     "homeassistant.helpers",
     types.ModuleType("homeassistant.helpers"),
@@ -44,16 +40,6 @@ class _MediaType:
 
 class _ServiceCall:  # pragma: no cover - import-time stub only
     data: dict[str, Any] = {}
-
-
-class _HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
-class _ServiceValidationError(_HomeAssistantError):  # pragma: no cover - import-time stub only
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args)
-        self.translation_key = kwargs.get("translation_key")
 
 
 class _Event:  # pragma: no cover - import-time stub only
@@ -78,8 +64,6 @@ core.Event = getattr(core, "Event", _Event)
 core.HomeAssistant = getattr(core, "HomeAssistant", object)
 core.ServiceCall = getattr(core, "ServiceCall", _ServiceCall)
 core.callback = getattr(core, "callback", lambda func: func)
-exceptions.ServiceValidationError = _ServiceValidationError
-exceptions.HomeAssistantError = _HomeAssistantError
 config_validation.string = str
 config_validation.entity_id = str
 config_validation.config_entry_only_config_schema = lambda _domain: None
@@ -104,9 +88,6 @@ sys.modules["homeassistant.helpers.config_validation"] = config_validation
 sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
 sys.modules["homeassistant.helpers.entity"] = entity
 
-from custom_components.bticino_c300x import (
-    ring_capture as ring_capture_module,  # noqa: E402
-)
 from custom_components.bticino_c300x import services as service_module  # noqa: E402
 from custom_components.bticino_c300x.action import ActionValidationError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
@@ -139,6 +120,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.exceptions import (  # noqa: E402
     service_validation_error,
 )
@@ -158,7 +140,6 @@ from custom_components.bticino_c300x.use_cases import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVICE_VALIDATION_ERROR = type(service_validation_error("test_error"))
-ring_capture_use_cases.HomeAssistantError = ring_capture_module.HomeAssistantError
 
 
 @dataclass
@@ -166,7 +147,7 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     api: Any = None
-    prepare_doorbell_video_stop: Any = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
     memos: dict[str, Any] = field(default_factory=dict)
@@ -1479,7 +1460,9 @@ def test_stop_doorbell_video_service_stops_agent_after_prepare_reaches_idle() ->
             _FakeRuntimeData(
                 capabilities={"doorbell_video": {"supported": True}},
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -1556,7 +1539,9 @@ def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> Non
             _FakeRuntimeData(
                 capabilities={"doorbell_call": {"supported": True}},
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -2187,7 +2172,9 @@ def test_capture_doorbell_call_service_uses_ring_hangup_prepare(
                     "doorbell_call": {"supported": True},
                 },
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -2257,7 +2244,9 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
                     "doorbell_call": {"supported": True},
                 },
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )

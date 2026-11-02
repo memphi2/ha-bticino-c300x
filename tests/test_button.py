@@ -28,10 +28,6 @@ if "homeassistant.components.button" not in sys.modules:
         "homeassistant.core",
         types.ModuleType("homeassistant.core"),
     )
-    exceptions = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
     helpers = sys.modules.setdefault(
         "homeassistant.helpers",
         types.ModuleType("homeassistant.helpers"),
@@ -74,14 +70,6 @@ if "homeassistant.components.button" not in sys.modules:
     class HomeAssistant:  # pragma: no cover - import-time stub only
         pass
 
-    class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-        pass
-
-    class ServiceValidationError(HomeAssistantError):  # pragma: no cover - import-time stub only
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args)
-            self.translation_key = kwargs.get("translation_key")
-
     button.ButtonEntity = ButtonEntity
     config_entries.ConfigEntry = ConfigEntry
     const.ATTR_ENTITY_ID = "entity_id"
@@ -89,16 +77,6 @@ if "homeassistant.components.button" not in sys.modules:
     core.Event = Event
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
-    exceptions.HomeAssistantError = getattr(
-        exceptions,
-        "HomeAssistantError",
-        HomeAssistantError,
-    )
-    exceptions.ServiceValidationError = getattr(
-        exceptions,
-        "ServiceValidationError",
-        ServiceValidationError,
-    )
     config_validation.config_entry_only_config_schema = lambda _domain: dict
     dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
     dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
@@ -159,6 +137,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_MAINTENANCE_TOKEN,
     CONF_VIDEO_ENABLED,
 )
+from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
     async_apply_qml_core_patch_and_confirm,
     async_apply_qml_patch_and_confirm,
@@ -474,13 +453,13 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     api: _FakeMemoApi | None = None
     connection_state: _FakeConnectionState = field(default_factory=_FakeConnectionState)
-    prepare_doorbell_video_stop: Any = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
-    answering_machine_messages_refresh_task: asyncio.Task[Any] | None = None
+
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: Any = None
-    memos_refresh_task: asyncio.Task[Any] | None = None
+
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: Any = None
     device_user_status: dict[str, Any] = field(default_factory=dict)
@@ -806,7 +785,9 @@ def test_stop_doorbell_video_button_is_created_for_video_capability() -> None:
             runtime_data=_FakeRuntimeData(
                 capabilities={"doorbell_video": {"supported": True}},
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
         )
         entities: list[Any] = []
@@ -1892,7 +1873,7 @@ def test_delete_latest_memo_button_refreshes_from_agent_event_without_sensor() -
                 data={"entry_id": entry.entry_id, "event_key": "memos_changed"}
             )
         )
-        task = entry.runtime_data.memos_refresh_task
+        task = entry.runtime_data.resources.memos_refresh_task
         assert task is not None
         await task
 
@@ -1937,7 +1918,7 @@ def test_delete_latest_video_button_refreshes_from_agent_event_without_sensor() 
                 }
             )
         )
-        task = entry.runtime_data.answering_machine_messages_refresh_task
+        task = entry.runtime_data.resources.answering_machine_messages_refresh_task
         assert task is not None
         await task
 
@@ -1969,7 +1950,7 @@ def test_delete_button_callbacks_ignore_other_entries_and_refresh_on_own_entry()
             data={"entry_id": "other-entry", "event_key": "memos_changed"}
         )
     )
-    assert entry.runtime_data.memos_refresh_task is None
+    assert entry.runtime_data.resources.memos_refresh_task is None
 
     entity._handle_items_changed(entry.entry_id)
     assert entity.wrote_state is True
@@ -2005,7 +1986,7 @@ def test_delete_video_button_callbacks_ignore_other_entries_and_refresh_on_own_e
             }
         )
     )
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert entry.runtime_data.resources.answering_machine_messages_refresh_task is None
 
     entity._handle_items_changed(entry.entry_id)
     assert entity.wrote_state is True

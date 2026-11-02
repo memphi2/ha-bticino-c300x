@@ -74,10 +74,10 @@ def publish_agent_media_facts(
     # Stamp on every observation, not only on change: the timestamp says when
     # this view was last confirmed, and a call that stays active must not age
     # out behind an unrelated snapshot refresh.
-    runtime_data.agent_media_facts_updated_at = datetime.now(UTC)
-    if facts == runtime_data.agent_media_facts:
+    runtime_data.diagnostics.agent_media_facts_updated_at = datetime.now(UTC)
+    if facts == runtime_data.diagnostics.agent_media_facts:
         return facts
-    runtime_data.agent_media_facts = facts
+    runtime_data.diagnostics.agent_media_facts = facts
     if isinstance(hass, HomeAssistant):
         # Consumers read the facts on demand, so the signal is only the
         # re-render trigger: a camera that is not wired into hass yet (entity
@@ -197,7 +197,7 @@ def apply_agent_diagnostics_event(
         diagnostics,
         updated_by="push_event",
         reason=_agent_diagnostics_change_reason(
-            runtime_data.agent_diagnostics,
+            runtime_data.diagnostics.agent_diagnostics,
             diagnostics,
         ),
         notify_if_unchanged=False,
@@ -217,14 +217,16 @@ def _store_agent_diagnostics(
     """Store diagnostics and dispatch only when the visible state should change."""
 
     runtime_data = entry.runtime_data
-    _update_device_reboot_count(runtime_data, diagnostics)
-    changed = diagnostics != runtime_data.agent_diagnostics
+    uptime = diagnostics.get("agent_uptime_seconds")
+    if isinstance(uptime, int):
+        runtime_data.diagnostics.agent_uptime_seconds = uptime
+    changed = diagnostics != runtime_data.diagnostics.agent_diagnostics
     if not changed and not notify_if_unchanged:
         return False
-    runtime_data.agent_diagnostics = diagnostics
-    runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
-    runtime_data.agent_diagnostics_updated_by = updated_by
-    runtime_data.agent_diagnostics_change_reason = (
+    runtime_data.diagnostics.agent_diagnostics = diagnostics
+    runtime_data.diagnostics.agent_diagnostics_updated_at = datetime.now(UTC)
+    runtime_data.diagnostics.agent_diagnostics_updated_by = updated_by
+    runtime_data.diagnostics.agent_diagnostics_change_reason = (
         reason if changed else f"{reason}_unchanged"
     )
     async_dispatcher_send(hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, entry.entry_id)
@@ -232,27 +234,6 @@ def _store_agent_diagnostics(
 
     async_sync_entry_repair_issues(hass, entry)
     return True
-
-
-def _update_device_reboot_count(
-    runtime_data: Any,
-    diagnostics: Mapping[str, Any],
-) -> None:
-    """Count a device/agent reboot when the reported agent uptime drops.
-
-    The agent reports a monotonic uptime; within one process it only grows, so a
-    new sample lower than the previous one means the agent restarted -- on this
-    device that is (almost always) a full reboot. Old agents that do not report
-    an uptime leave the value None and are simply skipped.
-    """
-
-    new_uptime = diagnostics.get("agent_uptime_seconds")
-    if not isinstance(new_uptime, int):
-        return
-    previous = runtime_data.agent_uptime_seconds
-    if isinstance(previous, int) and new_uptime < previous:
-        runtime_data.device_reboot_count += 1
-    runtime_data.agent_uptime_seconds = new_uptime
 
 
 def _agent_diagnostics_change_reason(

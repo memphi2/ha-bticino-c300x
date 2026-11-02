@@ -165,8 +165,8 @@ gio_copy_tree() {
         gio copy -T "$file" "$TARGET_URI/$rel"
     done < <(find "$INSTALL_SOURCE_DIR" -type f -print0)
 
-    if ! gio cat "$TARGET_URI/executor.py" | grep -F -q '_commands_with_alarmo_readiness'; then
-        printf 'Installed executor.py does not contain the expected Alarmo readiness code.\n' >&2
+    if ! gio cat "$TARGET_URI/alarm_state.py" | grep -F -q '_commands_with_alarmo_readiness'; then
+        printf 'Installed alarm_state.py does not contain the expected Alarmo readiness code.\n' >&2
         exit 1
     fi
 
@@ -214,8 +214,8 @@ direct_copy_tree() {
         find "$TARGET_DIR" -depth -type d -empty -not -path "$TARGET_DIR" -delete
     fi
 
-    if ! grep -F -q '_commands_with_alarmo_readiness' "$TARGET_DIR/executor.py"; then
-        printf 'Installed executor.py does not contain the expected Alarmo readiness code.\n' >&2
+    if ! grep -F -q '_commands_with_alarmo_readiness' "$TARGET_DIR/alarm_state.py"; then
+        printf 'Installed alarm_state.py does not contain the expected Alarmo readiness code.\n' >&2
         exit 1
     fi
 

@@ -12,6 +12,7 @@ import pytest
 import custom_components.bticino_c300x as integration
 import custom_components.bticino_c300x.entry_locks as entry_locks
 import custom_components.bticino_c300x.runtime_manager as runtime_manager
+from custom_components.bticino_c300x import api_errors
 from custom_components.bticino_c300x.const import (
     CONF_AGENT_HOST,
     CONF_AGENT_TOKEN,
@@ -37,95 +38,11 @@ from custom_components.bticino_c300x.data import (
     C300XCallbackDiagnostics,
     C300XConnectionState,
     C300XOperationDiagnostics,
+    C300XRuntimeDiagnostics,
+    C300XRuntimeResources,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _stub_homeassistant_http() -> None:
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    if not hasattr(core, "ServiceCall"):
-        core.ServiceCall = type("ServiceCall", (), {})
-    const = sys.modules.setdefault(
-        "homeassistant.const",
-        types.ModuleType("homeassistant.const"),
-    )
-    if not hasattr(const, "ATTR_ENTITY_ID"):
-        const.ATTR_ENTITY_ID = "entity_id"
-    dispatcher = sys.modules.setdefault(
-        "homeassistant.helpers.dispatcher",
-        types.ModuleType("homeassistant.helpers.dispatcher"),
-    )
-    if not hasattr(dispatcher, "async_dispatcher_send"):
-        dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-    if not hasattr(dispatcher, "async_dispatcher_connect"):
-        dispatcher.async_dispatcher_connect = lambda *_args, **_kwargs: lambda: None
-    exceptions = sys.modules.setdefault(
-        "homeassistant.exceptions",
-        types.ModuleType("homeassistant.exceptions"),
-    )
-    if not hasattr(exceptions, "HomeAssistantError"):
-
-        class HomeAssistantError(Exception):  # pragma: no cover - test stub only
-            pass
-
-        exceptions.HomeAssistantError = HomeAssistantError
-    if not hasattr(exceptions, "ServiceValidationError"):
-
-        class ServiceValidationError(  # pragma: no cover - test stub only
-            exceptions.HomeAssistantError
-        ):
-            pass
-
-        exceptions.ServiceValidationError = ServiceValidationError
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    network = sys.modules.setdefault(
-        "homeassistant.helpers.network",
-        types.ModuleType("homeassistant.helpers.network"),
-    )
-    if not hasattr(network, "NoURLAvailableError"):
-
-        class NoURLAvailableError(Exception):  # pragma: no cover - test stub only
-            pass
-
-        network.NoURLAvailableError = NoURLAvailableError
-    helpers.network = network
-
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    http = sys.modules.setdefault(
-        "homeassistant.components.http",
-        types.ModuleType("homeassistant.components.http"),
-    )
-
-    if not hasattr(http, "HomeAssistantView"):
-
-        class HomeAssistantView:  # pragma: no cover - import-time stub only
-            pass
-
-        http.HomeAssistantView = HomeAssistantView
-
-    components.http = http
-
-    webhook = sys.modules.setdefault(
-        "homeassistant.components.webhook",
-        types.ModuleType("homeassistant.components.webhook"),
-    )
-    if not hasattr(webhook, "async_register"):
-        webhook.async_register = lambda *_args, **_kwargs: None
-    if not hasattr(webhook, "async_unregister"):
-        webhook.async_unregister = lambda *_args, **_kwargs: None
-    if not hasattr(webhook, "async_generate_path"):
-        webhook.async_generate_path = lambda webhook_id: f"/api/webhook/{webhook_id}"
-    components.webhook = webhook
 
 
 def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -233,12 +150,13 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
-    _stub_homeassistant_http()
-    aiohttp_client = sys.modules.setdefault(
-        "homeassistant.helpers.aiohttp_client",
-        types.ModuleType("homeassistant.helpers.aiohttp_client"),
+    from homeassistant.helpers import aiohttp_client, dispatcher
+
+    monkeypatch.setattr(aiohttp_client, "async_get_clientsession", lambda _hass: "session")
+    signals = []
+    monkeypatch.setattr(
+        dispatcher, "async_dispatcher_send", lambda *args: signals.append(args)
     )
-    aiohttp_client.async_get_clientsession = lambda _hass: "session"
 
     import custom_components.bticino_c300x.agent_update as agent_update
     import custom_components.bticino_c300x.capabilities as capabilities
@@ -341,10 +259,17 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         ),
     )
 
-    assert asyncio.run(integration.async_setup_entry(hass, entry)) is True
+    async def setup():
+        assert await integration.async_setup_entry(hass, entry) is True
+        task = entry.runtime_data.resources.startup_sync_task
+        assert task is not None
+        await task
+
+    asyncio.run(setup())
+    assert len(signals) == 1
 
     assert entry.runtime_data.agent_info["version"] == "1.2.0"
-    assert integration.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
+    assert runtime_manager.CAMERA_PLATFORM in entry.runtime_data.loaded_platforms
     assert entry.runtime_data.agent_update_state == {"available": False}
     assert calls == [
         "repair-sync",
@@ -364,7 +289,6 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
 
 
 def test_setup_entry_rejects_missing_required_fields() -> None:
-    _stub_homeassistant_http()
     hass = SimpleNamespace(data={})
     entry = _entry(data={})
 
@@ -386,15 +310,23 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     )
     entry = _entry(data={})
     entry.runtime_data = SimpleNamespace(
-        system_metrics_cache=SimpleNamespace(cancel=lambda: cancelled.append("metrics")),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
-        connection_state=SimpleNamespace(expire_unavailable=lambda: callbacks.append("expire")),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        system_metrics_cache=SimpleNamespace(
+            cancel=lambda: cancelled.append("metrics")
+        ),
+        connection_state=SimpleNamespace(
+            expire_unavailable=lambda: callbacks.append("expire")
+        ),
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     entry_locks.entry_lock(entry.entry_id, "ring_capture")
@@ -405,10 +337,16 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     asyncio.run(integration.async_remove_entry(hass, entry))
 
     assert cleared == [entry.entry_id]
-    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert callbacks == [
+        "expire",
+        "registration",
+        "display",
+        "event-webhook",
+        "webhook",
+    ]
     assert cancelled == ["metrics", "memos", "messages"]
-    assert entry.runtime_data.memos_refresh_task is None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert entry.runtime_data.resources.memos_refresh_task is None
+    assert entry.runtime_data.resources.answering_machine_messages_refresh_task is None
     assert not any(key[0] == entry.entry_id for key in entry_locks._locks)
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
@@ -444,7 +382,7 @@ def test_setup_recovery_retries_until_agent_returns(
     connection_state = C300XConnectionState()
     api = _RecoveringSetupApi()
 
-    cancel = integration._async_start_setup_recovery(hass, entry, api, connection_state)
+    cancel = runtime_manager._async_start_setup_recovery(hass, entry, api, connection_state)
     asyncio.run(scheduled[0]())
     asyncio.run(scheduled[1]())
     cancel()
@@ -452,6 +390,88 @@ def test_setup_recovery_retries_until_agent_returns(
     assert sent == ["entry-1"]
     assert reloaded == ["entry-1"]
     assert cancelled == []
+
+
+@pytest.mark.parametrize("result", ["success", "failure", "cancelled"])
+def test_setup_recovery_cancel_stops_inflight_probe(
+    monkeypatch: pytest.MonkeyPatch, result: str
+) -> None:
+    scheduled = []
+    sent = []
+    reloaded = []
+    import homeassistant.helpers.dispatcher as dispatcher
+    import homeassistant.helpers.event as event_helper
+
+    def call_later(_hass, _delay, callback):
+        scheduled.append(callback)
+        return lambda: None
+
+    monkeypatch.setattr(event_helper, "async_call_later", call_later)
+    monkeypatch.setattr(dispatcher, "async_dispatcher_send", lambda *args: sent.append(args))
+
+    async def run():
+        started = asyncio.Event()
+        finish = asyncio.Event()
+        interrupted = []
+
+        async def validate():
+            started.set()
+            try:
+                await finish.wait()
+            except asyncio.CancelledError:
+                interrupted.append(True)
+                if result == "cancelled":
+                    raise
+            if result == "failure":
+                raise api_errors.C300XAgentApiError("offline")
+            return {}
+
+        async def reload(entry_id):
+            reloaded.append(entry_id)
+
+        hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=reload))
+        cancel = runtime_manager._async_start_setup_recovery(
+            hass, _entry(), SimpleNamespace(async_validate_setup=validate), C300XConnectionState()
+        )
+        task = asyncio.create_task(scheduled[0]())
+        await started.wait()
+        cancel()
+        finish.set()
+        await asyncio.gather(task, return_exceptions=True)
+        assert interrupted == [True]
+        assert reloaded == []
+        assert sent == []
+        assert len(scheduled) == 1
+
+    asyncio.run(run())
+
+
+def test_setup_recovery_does_not_cancel_its_own_successful_reload(monkeypatch):
+    scheduled = []
+    reloaded = []
+    import homeassistant.helpers.event as event_helper
+
+    def call_later(_hass, _delay, callback):
+        scheduled.append(callback)
+        return lambda: None
+
+    monkeypatch.setattr(event_helper, "async_call_later", call_later)
+
+    async def run():
+        async def reload(entry_id):
+            cancel()
+            await asyncio.sleep(0)
+            reloaded.append(entry_id)
+
+        hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=reload))
+        cancel = runtime_manager._async_start_setup_recovery(
+            hass, _entry(), SimpleNamespace(async_validate_setup=lambda: _async_value({})),
+            C300XConnectionState(),
+        )
+        await scheduled[0]()
+        assert reloaded == ["entry-1"]
+
+    asyncio.run(run())
 
 
 def test_setup_helpers_keep_existing_secrets_and_select_platforms() -> None:
@@ -465,13 +485,13 @@ def test_setup_helpers_keep_existing_secrets_and_select_platforms() -> None:
     video_entry = _entry(options={CONF_VIDEO_ENABLED: True})
     no_video_entry = _entry(options={CONF_VIDEO_ENABLED: False})
     capabilities = {"doorbell_video": {"supported": True}}
-    assert integration.CAMERA_PLATFORM in integration._entry_platforms(
+    assert runtime_manager.CAMERA_PLATFORM in runtime_manager._entry_platforms(
         video_entry, capabilities
     )
-    assert integration.CAMERA_PLATFORM not in integration._entry_platforms(
+    assert runtime_manager.CAMERA_PLATFORM not in runtime_manager._entry_platforms(
         no_video_entry, capabilities
     )
-    assert integration._offline_setup_data(RuntimeError("offline"))["offline_error"]
+    assert runtime_manager._offline_setup_data(RuntimeError("offline"))["offline_error"]
 
 
 def test_device_user_and_activation_config_helpers() -> None:
@@ -482,7 +502,7 @@ def test_device_user_and_activation_config_helpers() -> None:
         }
     )
 
-    assert integration._entry_activation_config(entry) == (
+    assert runtime_manager._entry_activation_config(entry) == (
         True,
         False,
         [
@@ -512,7 +532,7 @@ def test_configure_device_activations_updates_only_when_needed() -> None:
         }
     )
 
-    asyncio.run(integration._async_configure_device_activations(entry, api))
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
     assert api.configured == [
         (
@@ -548,7 +568,7 @@ def test_entry_activation_config_includes_additional_activation_items() -> None:
         }
     )
 
-    assert integration._entry_activation_config(entry) == (
+    assert runtime_manager._entry_activation_config(entry) == (
         True,
         False,
         [
@@ -594,7 +614,7 @@ def test_configure_device_activations_uses_p_n_address() -> None:
         ],
     )
 
-    asyncio.run(integration._async_configure_device_activations(entry, api))
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
     assert api.configured == []
 
@@ -623,7 +643,7 @@ def test_configure_device_activations_skips_unknown_manual_address() -> None:
         ],
     )
 
-    asyncio.run(integration._async_configure_device_activations(entry, api))
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
     assert api.configured == []
 
@@ -636,9 +656,9 @@ def test_configure_device_activations_ignores_agent_errors() -> None:
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "07",
         }
     )
-    api = _ActivationApi({}, error=integration.C300XAgentApiError)
+    api = _ActivationApi({}, error=api_errors.C300XAgentApiError)
 
-    asyncio.run(integration._async_configure_device_activations(entry, api))
+    asyncio.run(runtime_manager._async_configure_device_activations(entry, api))
 
     assert api.configured == []
 
@@ -660,18 +680,20 @@ def test_configure_display_bridge_registers_and_clears_callback(
         options={CONF_DEVICE_UI_ENABLED: True},
     )
     entry.runtime_data = SimpleNamespace(
-        display_bridge_diagnostics=C300XCallbackDiagnostics()
+        diagnostics=C300XRuntimeDiagnostics(
+            display_bridge_diagnostics=C300XCallbackDiagnostics()
+        )
     )
     api = _DisplayBridgeApi({"configured": False})
 
-    asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+    asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == [(True, "https://ha.local/webhook-id", "secret")]
-    assert entry.runtime_data.display_bridge_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
     entry.options[CONF_DEVICE_UI_ENABLED] = False
     api = _DisplayBridgeApi({"configured": True})
-    asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+    asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
     assert api.configured == [(False, "", "")]
 
 
@@ -700,16 +722,18 @@ def test_configure_display_bridge_skips_matching_registration(
         "secret",
     )
     entry.runtime_data = SimpleNamespace(
-        display_bridge_diagnostics=C300XCallbackDiagnostics()
+        diagnostics=C300XRuntimeDiagnostics(
+            display_bridge_diagnostics=C300XCallbackDiagnostics()
+        )
     )
     api = _DisplayBridgeApi(
         {"configured": True, "callback_hash": expected_hash}
     )
 
-    asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+    asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == []
-    assert entry.runtime_data.display_bridge_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -722,8 +746,8 @@ def test_configure_display_bridge_records_agent_failures(
 
     monkeypatch.setattr(callback_url, "async_generate_agent_callback_url", generate_callback_url)
     for error in (
-        integration.C300XAgentApiUnsupportedError("unsupported"),
-        integration.C300XAgentApiError("failed"),
+        api_errors.C300XAgentApiUnsupportedError("unsupported"),
+        api_errors.C300XAgentApiError("failed"),
     ):
         entry = _entry(
             data={
@@ -733,14 +757,19 @@ def test_configure_display_bridge_records_agent_failures(
             options={CONF_DEVICE_UI_ENABLED: True},
         )
         entry.runtime_data = SimpleNamespace(
-            display_bridge_diagnostics=C300XCallbackDiagnostics()
+            diagnostics=C300XRuntimeDiagnostics(
+                display_bridge_diagnostics=C300XCallbackDiagnostics()
+            )
         )
         api = _DisplayBridgeApi({}, error=error)
 
-        asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
+        asyncio.run(runtime_manager._async_configure_display_bridge("hass", entry, api))
 
         assert api.configured == []
-        assert entry.runtime_data.display_bridge_diagnostics.last_error is not None
+        assert (
+            entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error
+            is not None
+        )
 
 
 def test_sync_device_user_bootstraps_missing_media_user_once() -> None:
@@ -758,7 +787,7 @@ def test_sync_device_user_bootstraps_missing_media_user_once() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == ["Home Assistant HA Test"]
     assert entry.runtime_data.device_user_status == {
@@ -794,7 +823,7 @@ def test_sync_device_user_recreates_a_media_user_lost_after_bootstrap() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == ["Home Assistant HA Test"]
     assert entry.runtime_data.device_user_status["homeassistant_user_present"] is True
@@ -828,7 +857,7 @@ def test_sync_device_user_leaves_a_healthy_device_alone() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == []
     assert updates == []
@@ -852,7 +881,7 @@ def test_sync_device_user_respects_the_disabled_create_option() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == []
     assert updates == []
@@ -879,7 +908,7 @@ def test_sync_device_user_does_not_mark_failed_bootstrap() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert api.ensure_labels == ["Home Assistant HA Test"]
     assert entry.runtime_data.device_user_status == api._ensure_status
@@ -901,7 +930,7 @@ def test_sync_device_user_skips_when_disabled_or_unsupported() -> None:
         )
         hass, updates = _hass_with_config_updates()
 
-        asyncio.run(integration._async_sync_device_user(hass, entry))
+        asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
         assert entry.runtime_data.api.ensure_labels == []
         assert entry.runtime_data.device_user_status == {}
@@ -930,7 +959,7 @@ def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.api.ensure_labels == []
     assert entry.runtime_data.device_user_status == status
@@ -942,8 +971,8 @@ def test_sync_device_user_refreshes_existing_status_without_repair() -> None:
 
 def test_sync_device_user_ignores_agent_failures() -> None:
     for error in (
-        integration.C300XAgentApiUnsupportedError("unsupported"),
-        integration.C300XAgentApiError("failed"),
+        api_errors.C300XAgentApiUnsupportedError("unsupported"),
+        api_errors.C300XAgentApiError("failed"),
     ):
         entry = _entry(
             options={
@@ -959,7 +988,7 @@ def test_sync_device_user_ignores_agent_failures() -> None:
         )
         hass, updates = _hass_with_config_updates()
 
-        asyncio.run(integration._async_sync_device_user(hass, entry))
+        asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
         assert entry.runtime_data.device_user_status == {}
         assert updates == []
@@ -989,7 +1018,7 @@ def test_sync_device_user_does_not_repair_unavailable_status() -> None:
     )
     hass, updates = _hass_with_config_updates()
 
-    asyncio.run(integration._async_sync_device_user(hass, entry))
+    asyncio.run(runtime_manager._async_sync_device_user(hass, entry))
 
     assert entry.runtime_data.device_user_status == status
     assert entry.runtime_data.api.ensure_labels == []
@@ -1005,7 +1034,7 @@ def test_refresh_self_test_updates_or_clears_status() -> None:
             self_test_status_updated_at=None,
         )
 
-        await integration._async_refresh_self_test(entry)
+        await runtime_manager._async_refresh_self_test(entry)
 
         assert entry.runtime_data.self_test_status == {
             "ok": True,
@@ -1015,18 +1044,18 @@ def test_refresh_self_test_updates_or_clears_status() -> None:
 
         entry.runtime_data.api = _SelfTestApi(
             {},
-            error=integration.C300XAgentApiUnsupportedError("unsupported"),
+            error=api_errors.C300XAgentApiUnsupportedError("unsupported"),
         )
-        await integration._async_refresh_self_test(entry)
+        await runtime_manager._async_refresh_self_test(entry)
 
         assert entry.runtime_data.self_test_status == {}
         assert entry.runtime_data.self_test_status_updated_at is None
 
         entry.runtime_data.api = _SelfTestApi(
             {},
-            error=integration.C300XAgentApiError("failed"),
+            error=api_errors.C300XAgentApiError("failed"),
         )
-        await integration._async_refresh_self_test(entry)
+        await runtime_manager._async_refresh_self_test(entry)
 
         assert entry.runtime_data.self_test_status == {}
         assert entry.runtime_data.self_test_status_updated_at is None
@@ -1044,14 +1073,16 @@ def test_sync_device_ui_patch_refreshes_status(monkeypatch: pytest.MonkeyPatch) 
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         capabilities={"maintenance": {"supported": True, "qml_status": True}},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
 
-    asyncio.run(integration._async_sync_device_ui_patch(entry))
+    asyncio.run(runtime_manager._async_sync_device_ui_patch(entry))
 
     assert entry.runtime_data.qml_patch_status == {"applied": True}
-    assert entry.runtime_data.qml_patch_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.qml_patch_diagnostics.last_error is None
 
 
 def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
@@ -1060,29 +1091,33 @@ def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
     import custom_components.bticino_c300x.qml_patch as qml_patch
 
     async def refresh_qml_patch_status(_entry: Any) -> dict[str, bool]:
-        raise integration.C300XAgentApiError("failed")
+        raise api_errors.C300XAgentApiError("failed")
 
     monkeypatch.setattr(qml_patch, "async_refresh_qml_patch_status", refresh_qml_patch_status)
 
     unsupported_entry = _entry()
     unsupported_entry.runtime_data = SimpleNamespace(
         capabilities={},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={"old": True},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
-    asyncio.run(integration._async_sync_device_ui_patch(unsupported_entry))
+    asyncio.run(runtime_manager._async_sync_device_ui_patch(unsupported_entry))
     assert unsupported_entry.runtime_data.qml_patch_status == {}
 
     failed_entry = _entry()
     failed_entry.runtime_data = SimpleNamespace(
         capabilities={"maintenance": {"supported": True, "qml_status": True}},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={"old": True},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
-    asyncio.run(integration._async_sync_device_ui_patch(failed_entry))
+    asyncio.run(runtime_manager._async_sync_device_ui_patch(failed_entry))
     assert failed_entry.runtime_data.qml_patch_status == {"old": True}
     assert (
-        failed_entry.runtime_data.qml_patch_diagnostics.last_error
+        failed_entry.runtime_data.diagnostics.qml_patch_diagnostics.last_error
         == "C300XAgentApiError: failed"
     )
 
@@ -1139,7 +1174,7 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
         },
         bus=FakeBus(),
     )
-    unsubscribe = integration._async_track_display_bridge_updates(hass, entry)
+    unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
 
     assert callable(unsubscribe)
     assert listened_events == ["state_changed"]
@@ -1168,14 +1203,14 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
 
 def test_display_bridge_tracking_skips_when_disabled_or_unconfigured() -> None:
     assert (
-        integration._async_track_display_bridge_updates(
+        runtime_manager._async_track_display_bridge_updates(
             "hass",
             _entry(options={CONF_DEVICE_UI_ENABLED: False}),
         )
         is None
     )
     assert (
-        integration._async_track_display_bridge_updates(
+        runtime_manager._async_track_display_bridge_updates(
             "hass",
             _entry(options={CONF_DEVICE_UI_ENABLED: True}),
         )
@@ -1191,7 +1226,7 @@ def test_display_bridge_notify_skips_offline_entries() -> None:
     )
     hass = SimpleNamespace(add_job=lambda *args: jobs.append(args))
 
-    integration._async_schedule_display_bridge_notify(hass, entry)
+    runtime_manager._async_schedule_display_bridge_notify(hass, entry)
 
     assert jobs == []
 
@@ -1213,10 +1248,10 @@ def test_display_bridge_notify_requires_active_ui_waiter() -> None:
 
     entry = _entry()
     entry.runtime_data = SimpleNamespace(api=FakeApi(0))
-    asyncio.run(integration._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
 
     entry.runtime_data.api = FakeApi(1)
-    asyncio.run(integration._async_notify_display_bridge_alarm_if_listening(entry))
+    asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
 
     assert calls == ["diagnostics:0", "diagnostics:1", "event:alarm"]
 
@@ -1239,8 +1274,8 @@ def test_display_bridge_notify_coalesces_inflight_jobs() -> None:
     entry.runtime_data = runtime_data
     hass = SimpleNamespace(add_job=lambda *args: jobs.append(args))
 
-    integration._async_schedule_display_bridge_notify(hass, entry)
-    integration._async_schedule_display_bridge_notify(hass, entry)
+    runtime_manager._async_schedule_display_bridge_notify(hass, entry)
+    runtime_manager._async_schedule_display_bridge_notify(hass, entry)
 
     assert len(jobs) == 1
     assert runtime_data.display_bridge_alarm_notify_pending is True
@@ -1271,7 +1306,7 @@ def test_display_bridge_notify_ignores_stale_runtime() -> None:
     entry.runtime_data = SimpleNamespace(api=FakeApi())
 
     asyncio.run(
-        integration._async_notify_display_bridge_alarm_if_listening(
+        runtime_manager._async_notify_display_bridge_alarm_if_listening(
             entry,
             old_runtime,  # type: ignore[arg-type]
         )
@@ -1310,7 +1345,7 @@ def test_remove_stale_gui_entities_removes_registry_and_state(monkeypatch) -> No
     )
     entry = _entry(options={CONF_DEVICE_UI_ENABLED: False})
 
-    integration._async_remove_stale_gui_dependent_entities(hass, entry)
+    runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == ["button.delete_latest_text_memo"]
     assert state_removed == ["button.delete_latest_text_memo"]
@@ -1322,16 +1357,20 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         loaded_platforms=("sensor", "camera"),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
         connection_state=SimpleNamespace(
             expire_unavailable=lambda: callbacks.append("expire")
         ),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     hass = SimpleNamespace(
@@ -1351,10 +1390,16 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
 
     assert asyncio.run(integration.async_unload_entry(hass, entry)) is True
 
-    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert callbacks == [
+        "expire",
+        "registration",
+        "display",
+        "event-webhook",
+        "webhook",
+    ]
     assert cancelled == ["memos", "messages"]
-    assert entry.runtime_data.memos_refresh_task is None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert entry.runtime_data.resources.memos_refresh_task is None
+    assert entry.runtime_data.resources.answering_machine_messages_refresh_task is None
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
 
@@ -1364,16 +1409,20 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         loaded_platforms=("sensor", "camera"),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
         connection_state=SimpleNamespace(
             expire_unavailable=lambda: callbacks.append("expire")
         ),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     entry_locks.entry_lock(entry.entry_id, "message_refresh:memos")
@@ -1395,13 +1444,19 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
 
     assert callbacks == []
     assert cancelled == []
-    assert entry.runtime_data.memos_refresh_task is not None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is not None
+    assert entry.runtime_data.resources.memos_refresh_task is not None
+    assert (
+        entry.runtime_data.resources.answering_machine_messages_refresh_task is not None
+    )
     assert any(key[0] == entry.entry_id for key in entry_locks._locks)
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {entry.entry_id: entry.runtime_data}
 
 
-def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
+def test_startup_sync_stale_task_does_not_clear_new_runtime_task(monkeypatch) -> None:
+    from homeassistant.helpers import dispatcher
+
+    from custom_components.bticino_c300x import repair_issues
+
     async def _run() -> None:
         started = asyncio.Event()
         release = asyncio.Event()
@@ -1418,43 +1473,33 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
         def _dispatch(*args: Any) -> None:
             dispatches.append(args)
 
-        _stub_homeassistant_http()
-        dispatcher_module = sys.modules["homeassistant.helpers.dispatcher"]
-        previous_dispatch = dispatcher_module.async_dispatcher_send
-        dispatcher_module.async_dispatcher_send = _dispatch
-        repair_module_name = "custom_components.bticino_c300x.repair_issues"
-        previous_repair_module = sys.modules.get(repair_module_name)
-        repair_module = types.ModuleType("custom_components.bticino_c300x.repair_issues")
-        repair_module.async_sync_entry_repair_issues = _repair
-        sys.modules[repair_module_name] = repair_module
+        monkeypatch.setattr(dispatcher, "async_dispatcher_send", _dispatch)
+        monkeypatch.setattr(repair_issues, "async_sync_entry_repair_issues", _repair)
 
-        old_runtime = SimpleNamespace(startup_sync_task=None)
+        old_runtime = SimpleNamespace(
+            resources=C300XRuntimeResources(startup_sync_task=None)
+        )
         new_task = SimpleNamespace(cancel=lambda: None)
         entry = _entry()
         entry.runtime_data = old_runtime
         hass = SimpleNamespace(async_create_task=asyncio.create_task)
         manager = runtime_manager.C300XRuntimeManager(hass, entry)
-        original_sync = runtime_manager.C300XRuntimeManager.async_sync_device_state
-        runtime_manager.C300XRuntimeManager.async_sync_device_state = _sync_device_state
-        try:
-            manager.async_schedule_startup_sync()
-            old_task = old_runtime.startup_sync_task
-            assert old_task is not None
-            await started.wait()
+        monkeypatch.setattr(
+            runtime_manager.C300XRuntimeManager, "async_sync_device_state", _sync_device_state
+        )
+        manager.async_schedule_startup_sync()
+        old_task = old_runtime.resources.startup_sync_task
+        assert old_task is not None
+        await started.wait()
 
-            entry.runtime_data = SimpleNamespace(startup_sync_task=new_task)
-            release.set()
-            await old_task
-        finally:
-            runtime_manager.C300XRuntimeManager.async_sync_device_state = original_sync
-            dispatcher_module.async_dispatcher_send = previous_dispatch
-            if previous_repair_module is None:
-                sys.modules.pop(repair_module_name, None)
-            else:
-                sys.modules[repair_module_name] = previous_repair_module
+        entry.runtime_data = SimpleNamespace(
+            resources=C300XRuntimeResources(startup_sync_task=new_task)
+        )
+        release.set()
+        await old_task
 
-        assert old_runtime.startup_sync_task is None
-        assert entry.runtime_data.startup_sync_task is new_task
+        assert old_runtime.resources.startup_sync_task is None
+        assert entry.runtime_data.resources.startup_sync_task is new_task
         assert repairs == [entry.entry_id]
         assert dispatches
 
@@ -1640,7 +1685,7 @@ class _RecoveringSetupApi:
     async def async_validate_setup(self) -> dict[str, Any]:
         self.calls += 1
         if self.calls == 1:
-            raise integration.C300XAgentApiError("offline")
+            raise api_errors.C300XAgentApiError("offline")
         return {"version": "1.2.0"}
 
 
@@ -1696,6 +1741,6 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
     entry = _entry()
     entry.runtime_data = SimpleNamespace(qml_patch_status={"patched": True})
 
-    integration._async_remove_stale_gui_dependent_entities(hass, entry)
+    runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == []

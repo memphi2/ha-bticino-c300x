@@ -10,20 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _c300x_run_loop_body(text: str) -> str:
     run_body = text.rsplit("int c300x_run", maxsplit=1)[1]
-    return run_body.split("for (;;) {", maxsplit=1)[1].split(
-        "if (poll(poll_fds",
+    return run_body.split("while (!shutdown_requested) {", maxsplit=1)[1].split(
+        "int poll_result = poll(",
         maxsplit=1,
     )[0]
-
-
-def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
-    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
-    assert "monitor->last_delivered = monitor->last;" in text
-    assert "c300x_system_metrics_changed(config, &monitor->last_delivered, &sample)" in text
-    watchdog = (
-        ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
-    ).read_text(encoding="utf-8")
-    assert "metric_changed_points(" in watchdog
 
 
 def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
@@ -48,8 +38,8 @@ def test_native_agent_metrics_does_not_mark_unsent_samples_as_dispatched() -> No
     immediate = text.rsplit("static void system_metrics_dispatch_now", maxsplit=1)[1].split(
         "static void system_metrics_dispatch_if_due", maxsplit=1
     )[0]
-    assert 'if (dispatch_event(config, runtime, "system.metrics_changed", data, 30)) {' in immediate
-    assert immediate.index("if (dispatch_event(") < immediate.index("c300x_system_metrics_monitor_delivered(")
+    assert 'dispatch_event(config, runtime, "system.metrics_changed", data, 30);' in immediate
+    assert "c300x_system_metrics_monitor_delivered" not in immediate
     assert "runtime->metrics.delivery_pending = 1;" in immediate
 
 
@@ -113,18 +103,6 @@ def test_native_agent_metrics_snapshot_registration_is_subscriber_gated() -> Non
         dispatch_now_body.index("c300x_system_metrics_json")
     )
     assert "c300x_system_metrics_read_sample" not in dispatch_now_body
-
-
-def test_native_agent_metrics_initializes_internal_monitor_without_subscribers() -> None:
-    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
-    init_body = text.split("int c300x_system_metrics_monitor_init", maxsplit=1)[1].split(
-        "int c300x_system_metrics_monitor_timeout_ms",
-        maxsplit=1,
-    )[0]
-
-    assert init_body.index("!config->system_metrics_enabled") < init_body.index(
-        "c300x_system_metrics_read_sample"
-    )
 
 
 def test_native_agent_maintenance_requires_token_even_in_no_auth_mode() -> None:

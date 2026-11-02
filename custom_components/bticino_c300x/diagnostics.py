@@ -246,13 +246,17 @@ async def async_get_config_entry_diagnostics(
             "caches": _cache_diagnostics(runtime),
             "system_metrics": _safe_system_metrics(runtime),
             "display_bridge": _operation_diagnostics(
-                getattr(runtime, "display_bridge_diagnostics", None)
+                runtime.diagnostics.display_bridge_diagnostics
+                if runtime is not None
+                else None
             ),
             "qml_patch": _safe_status_dict(
                 getattr(runtime, "qml_patch_status", {}) if runtime is not None else {}
             ),
             "qml_patch_check": _operation_diagnostics(
-                getattr(runtime, "qml_patch_diagnostics", None)
+                runtime.diagnostics.qml_patch_diagnostics
+                if runtime is not None
+                else None
             ),
             "device_user": _device_user_diagnostics(runtime),
             # Entry-side fact, not device state: it separates "never set up"
@@ -294,13 +298,16 @@ def _agent_write_diagnostics(entry: BticinoC300XConfigEntry) -> dict[str, Any] |
 
     if not hasattr(entry, "runtime_data"):
         return None
-    diagnostics = getattr(entry.runtime_data, "agent_diagnostics", {})
+    diagnostic_state = (
+        entry.runtime_data.diagnostics if entry.runtime_data is not None else None
+    )
+    diagnostics = getattr(diagnostic_state, "agent_diagnostics", {})
     if not isinstance(diagnostics, Mapping):
         return None
     return {
         **{key: diagnostics.get(key) for key in _SAFE_AGENT_DIAGNOSTIC_KEYS},
         **{
-            key: getattr(entry.runtime_data, key, None)
+            key: getattr(diagnostic_state, key, None)
             for key in _SAFE_AGENT_DIAGNOSTIC_RUNTIME_KEYS
         },
     }
@@ -820,7 +827,7 @@ def _cache_diagnostics(runtime: Any | None) -> dict[str, Any] | None:
     memos = getattr(runtime, "memos", {})
     return {
         "agent_diagnostics_updated_at": _isoformat(
-            getattr(runtime, "agent_diagnostics_updated_at", None)
+            getattr(runtime.diagnostics, "agent_diagnostics_updated_at", None)
         ),
         "system_metrics_updated_at": _isoformat(
             getattr(runtime, "system_metrics_updated_at", None)

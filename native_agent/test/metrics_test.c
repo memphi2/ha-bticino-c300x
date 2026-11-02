@@ -11,6 +11,7 @@ static long long test_now_ms = 100000;
 static unsigned test_proc_reads;
 static unsigned test_temperature_reads;
 static unsigned test_random_reads;
+static int test_random_unavailable;
 
 static int metrics_clock_gettime(clockid_t clock_id, struct timespec *now)
 {
@@ -45,6 +46,9 @@ static FILE *metrics_fopen(const char *path, const char *mode)
     }
     assert(strcmp(path, "/dev/urandom") == 0);
     test_random_reads++;
+    if (test_random_unavailable) {
+        return NULL;
+    }
     return fopen(path, mode);
 }
 
@@ -96,13 +100,16 @@ static void check_http_snapshot(struct c300x_config *config, struct agent_runtim
 static void check_failed_push(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
 {
     baseline(config, runtime, now, 15.0);
-    /* Invalid callback fails deterministically without accessing a network. */
-    strcpy(runtime->subscriptions[0].callback_url, "invalid");
+    /* No queue is available: a local failure must not retain an old HTTP 200. */
+    runtime->subscriptions[0].last_ok = 1;
+    runtime->subscriptions[0].last_http_status = 200;
     test_busy += 30;
     test_idle += 2970;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 30);
     assert(runtime->subscriptions[0].last_ok == 0);
+    assert(runtime->subscriptions[0].last_http_status == 0);
+    assert(strcmp(runtime->subscriptions[0].last_error, "callback_queue_full") == 0);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
     assert(runtime->metrics.last_delivered_at == now);
     assert(c300x_recent_events_count(&runtime->recent_events) == 1);
@@ -147,22 +154,27 @@ static pid_t start_callback(struct agent_runtime *runtime, const char *status)
     return child;
 }
 
-static void finish_callback(pid_t child)
+static void finish_callback(pid_t child, struct agent_runtime *runtime, time_t now)
 {
     int status = 0;
     assert(waitpid(child, &status, 0) == child);
     assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    struct pollfd completed = {.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
+    assert(poll(&completed, 1, 2000) == 1);
+    apply_callback_results(runtime, now);
 }
 
 static void check_success_and_http_error(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
 {
     baseline(config, runtime, now, 15.0);
     pid_t child = start_callback(runtime, "1 503 Unavailable\r\nContent-Length: 0\r\n\r\n");
+    runtime->callbacks = c300x_callback_queue_create();
+    assert(runtime->callbacks != NULL);
     test_busy += 30;
     test_idle += 2970;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 30);
-    finish_callback(child);
+    finish_callback(child, runtime, now + 30);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
     assert(runtime->subscriptions[0].last_delivered_at[0] == '\0');
 
@@ -171,7 +183,8 @@ static void check_success_and_http_error(struct c300x_config *config, struct age
     test_idle += 2940;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 60);
-    finish_callback(child);
+    assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
+    finish_callback(child, runtime, now + 60);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 2.0);
     assert(runtime->metrics.last_delivered_at == now + 60);
     assert(runtime->metrics.delivery_pending == 0);
@@ -184,6 +197,19 @@ static void check_success_and_http_error(struct c300x_config *config, struct age
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 90);
     assert(c300x_recent_events_count(&runtime->recent_events) == count);
+
+    child = start_callback(runtime, "1 200 OK\r\nContent-Length: 2\r\n\r\n{}");
+    test_busy += 900;
+    test_idle += 2100;
+    test_now_ms += 30000;
+    system_metrics_dispatch_if_due(config, runtime, now + 120);
+    runtime->callback_generation++;
+    finish_callback(child, runtime, now + 120);
+    assert(runtime->metrics.last_delivered_at == now + 60);
+    assert(runtime->metrics.last_delivered.cpu_usage_percent == 2.0);
+    assert(runtime->metrics.delivery_pending);
+    c300x_callback_queue_close(runtime->callbacks);
+    runtime->callbacks = NULL;
     c300x_recent_events_clear(&runtime->recent_events);
 }
 
@@ -219,6 +245,8 @@ static void check_initial_and_precision(struct c300x_config *config, struct agen
 {
     memset(runtime, 0, sizeof(*runtime));
     assert(c300x_system_metrics_monitor_init(config, &runtime->metrics));
+    assert(runtime->subscription_count == 0);
+    assert(runtime->metrics.initialized);
     char first_instance[33];
     strcpy(first_instance, runtime->metrics.last.instance_id);
     assert(strlen(first_instance) == 32);
@@ -308,6 +336,84 @@ static void check_hourly_budget(struct c300x_config *config, struct agent_runtim
     }
 }
 
+static void check_acknowledged_snapshot_is_not_replaced_by_newer_measurement(void)
+{
+    struct c300x_system_metrics_monitor monitor = {0};
+    monitor.last.sample_sequence = 5;
+    monitor.last.cpu_usage_percent = 50;
+    struct system_metrics_sample sent = monitor.last;
+    sent.sample_sequence = 3;
+    sent.cpu_usage_percent = 10;
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &sent, 100);
+    assert(monitor.last_delivered.sample_sequence == 3);
+    assert(monitor.last_delivered.cpu_usage_percent == 10);
+    assert(monitor.delivery_pending);
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &monitor.last, 101);
+    assert(monitor.last_delivered.sample_sequence == 5);
+    assert(!monitor.delivery_pending);
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &sent, 102);
+    assert(monitor.last_delivered.sample_sequence == 5);
+    assert(monitor.last_delivered_at == 101);
+}
+
+static void check_event_ids_do_not_depend_on_recent_buffer_fill(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
+{
+    baseline(config, runtime, now, 1.0);
+    strcpy(runtime->subscriptions[0].events[0], "test.event");
+    char previous_id[128] = "";
+    for (int i = 0; i < C300X_RECENT_EVENTS_CAPACITY * 3; i++) {
+        dispatch_event(config, runtime, "test.event", "{}", 0);
+        int count = c300x_recent_events_count(&runtime->recent_events);
+        const char *event = c300x_recent_events_at(&runtime->recent_events, count - 1);
+        char id[128];
+        c300x_json_string_field(event, "event_id", id, sizeof(id));
+        assert(id[0] != '\0');
+        assert(strcmp(id, previous_id) != 0);
+        assert(strstr(id, runtime->metrics.last.instance_id) != NULL);
+        snprintf(previous_id, sizeof(previous_id), "%s", id);
+    }
+    c300x_recent_events_clear(&runtime->recent_events);
+    dispatch_event(config, runtime, "test.event", "{}", 0);
+    char id[128];
+    c300x_json_string_field(c300x_recent_events_at(&runtime->recent_events, 0), "event_id", id, sizeof(id));
+    assert(id[0] != '\0');
+    assert(strcmp(id, previous_id) != 0);
+    c300x_recent_events_clear(&runtime->recent_events);
+}
+
+static void check_identity_without_metrics(struct c300x_config *config, struct agent_runtime *runtime)
+{
+    struct c300x_config disabled = *config;
+    unsigned reads_before = test_proc_reads + test_temperature_reads;
+    char previous_id[128] = "";
+    for (int enabled = 0; enabled <= 1; enabled++) {
+        disabled.system_metrics_enabled = enabled;
+        disabled.system_metrics_watch = !enabled;
+        memset(runtime, 0, sizeof(*runtime));
+        runtime->config = &disabled;
+        runtime->subscription_count = 1;
+        runtime->subscriptions[0].event_count = 1;
+        strcpy(runtime->subscriptions[0].events[0], "test.event");
+        runtime->network_online = 1;
+        runtime->network_checked_at = time(NULL);
+        assert(c300x_system_metrics_monitor_init(&disabled, &runtime->metrics));
+        assert(!runtime->metrics.initialized);
+        assert(strlen(runtime->metrics.last.instance_id) == 32);
+        assert(c300x_system_metrics_monitor_timeout_ms(&runtime->metrics) == -1);
+        dispatch_event(&disabled, runtime, "test.event", "{}", 0);
+        char id[128];
+        c300x_json_string_field(c300x_recent_events_at(&runtime->recent_events, 0), "event_id", id, sizeof(id));
+        assert(id[0] != '\0');
+        assert(strcmp(id, previous_id) != 0);
+        snprintf(previous_id, sizeof(previous_id), "%s", id);
+        c300x_recent_events_clear(&runtime->recent_events);
+    }
+    assert(test_proc_reads + test_temperature_reads == reads_before);
+    test_random_unavailable = 1;
+    assert(!c300x_system_metrics_monitor_init(&disabled, &runtime->metrics));
+    test_random_unavailable = 0;
+}
+
 int main(void)
 {
     struct c300x_config config;
@@ -316,6 +422,7 @@ int main(void)
     c300x_default_config(&config);
     config.mqtt_enabled = 0;
     assert(runtime != NULL);
+    check_acknowledged_snapshot_is_not_replaced_by_newer_measurement();
     check_http_snapshot(&config, runtime, now);
     check_failed_push(&config, runtime, now);
     check_success_and_http_error(&config, runtime, now);
@@ -323,6 +430,8 @@ int main(void)
     check_initial_and_precision(&config, runtime);
     check_heartbeat_and_watchdog(&config, runtime, now);
     check_hourly_budget(&config, runtime, now);
+    check_event_ids_do_not_depend_on_recent_buffer_fill(&config, runtime, now);
+    check_identity_without_metrics(&config, runtime);
     free(runtime);
     return 0;
 }

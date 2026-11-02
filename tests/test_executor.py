@@ -1,82 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-if "homeassistant.config_entries" not in sys.modules:
-    homeassistant = types.ModuleType("homeassistant")
-    config_entries = types.ModuleType("homeassistant.config_entries")
-    core = types.ModuleType("homeassistant.core")
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    config_entries.ConfigEntry = ConfigEntry
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    sys.modules.setdefault("homeassistant", homeassistant)
-    sys.modules["homeassistant.config_entries"] = config_entries
-    sys.modules["homeassistant.core"] = core
-else:
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    if not hasattr(core, "callback"):
-        core.callback = lambda func: func
-
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = sys.modules.setdefault(
-    "homeassistant.helpers.config_validation",
-    types.ModuleType("homeassistant.helpers.config_validation"),
-)
-dispatcher = sys.modules.setdefault(
-    "homeassistant.helpers.dispatcher",
-    types.ModuleType("homeassistant.helpers.dispatcher"),
-)
-entity = sys.modules.setdefault(
-    "homeassistant.helpers.entity",
-    types.ModuleType("homeassistant.helpers.entity"),
-)
-if not hasattr(dispatcher, "async_dispatcher_connect"):
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-if not hasattr(config_validation, "config_entry_only_config_schema"):
-    config_validation.config_entry_only_config_schema = lambda *_args, **_kwargs: object()
-if not hasattr(config_validation, "ensure_list"):
-    config_validation.ensure_list = lambda value: value if isinstance(value, list) else [value]
-
-if not hasattr(entity, "Entity"):
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.entity = entity
-helpers.selector = None
-sys.modules.pop("homeassistant.helpers.selector", None)
-
-import custom_components.bticino_c300x.executor as executor_module  # noqa: E402
-from custom_components.bticino_c300x.config_flow_dashboard import (  # noqa: E402
+import custom_components.bticino_c300x.dashboard as dashboard_module
+from custom_components.bticino_c300x.config_flow_dashboard import (
     dashboard_entity_display_overrides_from_fields,
 )
-from custom_components.bticino_c300x.const import (  # noqa: E402
+from custom_components.bticino_c300x.const import (
     CONF_ACTIONS,
     CONF_ALARM_ENTITY_ID,
     CONF_ALARM_PAGE_ENTITY_ID,
@@ -96,19 +30,9 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
 )
-from custom_components.bticino_c300x.dashboard_weather import (  # noqa: E402
-    _cached_weather_forecast,
-    _weather_forecast,
-    _weather_forecast_cache,
-    _weather_forecast_temperature,
-    _weather_forecast_time_label,
-    dashboard_weather_payload,
-)
-from custom_components.bticino_c300x.executor import (  # noqa: E402
+from custom_components.bticino_c300x.dashboard import (
     _button_secondary_label,
     _dashboard_choice_payload,
-    _dashboard_first_attribute,
-    _dashboard_float,
     _dashboard_image_source,
     _dashboard_int,
     _dashboard_slider_payload,
@@ -124,17 +48,31 @@ from custom_components.bticino_c300x.executor import (  # noqa: E402
     _raw_state_color,
     _state_time_label,
     async_dashboard_payload,
-    async_execute_action,
-    async_execute_alarm_command,
-    async_execute_dashboard_action,
     async_status,
-    async_trigger_stair_light,
-    async_unlock_door,
+)
+from custom_components.bticino_c300x.dashboard_config import (
+    _dashboard_first_attribute,
+    _dashboard_float,
     configured_actions,
     configured_alarm_entity_id,
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_weather_entity_id,
+)
+from custom_components.bticino_c300x.dashboard_weather import (
+    _cached_weather_forecast,
+    _weather_forecast,
+    _weather_forecast_cache,
+    _weather_forecast_temperature,
+    _weather_forecast_time_label,
+    dashboard_weather_payload,
+)
+from custom_components.bticino_c300x.executor import (
+    async_execute_action,
+    async_execute_alarm_command,
+    async_execute_dashboard_action,
+    async_trigger_stair_light,
+    async_unlock_door,
 )
 
 
@@ -2213,7 +2151,7 @@ def test_async_dashboard_payload_does_not_build_full_status(monkeypatch: Any) ->
     async def fail_status(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise AssertionError("dashboard payload should not build full display status")
 
-    monkeypatch.setattr(executor_module, "async_status", fail_status)
+    monkeypatch.setattr(dashboard_module, "async_status", fail_status)
     hass = FakeHass(
         states=FakeStates({"alarm_control_panel.home": FakeState("disarmed")})
     )

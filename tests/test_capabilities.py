@@ -3,12 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import MappingProxyType, SimpleNamespace
 
-from custom_components.bticino_c300x import (
-    _async_configure_device_activations,
-    _entry_config_value,
-    _entry_platforms,
-    async_migrate_entry,
-)
+from custom_components.bticino_c300x import async_migrate_entry
 from custom_components.bticino_c300x.capabilities import (
     answering_machine_message_delete_supported,
     auth_config_supported,
@@ -40,6 +35,13 @@ from custom_components.bticino_c300x.const import (
     CONF_VIDEO_ENABLED,
     CONF_WEBHOOK_ID,
     DEVICE_ACTIVATION_MODE_MANUAL,
+)
+from custom_components.bticino_c300x.entry_config import (
+    entry_config_value as _entry_config_value,
+)
+from custom_components.bticino_c300x.runtime_manager import (
+    _async_configure_device_activations,
+    _entry_platforms,
 )
 
 

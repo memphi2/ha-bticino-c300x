@@ -5,8 +5,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
-import sys
-import types
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,84 +12,7 @@ from types import SimpleNamespace
 import pytest
 import voluptuous as vol
 import voluptuous_serialize
-
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-homeassistant.__path__ = []
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-const = sys.modules.setdefault("homeassistant.const", types.ModuleType("homeassistant.const"))
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-helpers.__path__ = []
-config_validation = sys.modules.setdefault(
-    "homeassistant.helpers.config_validation",
-    types.ModuleType("homeassistant.helpers.config_validation"),
-)
-dispatcher = sys.modules.setdefault(
-    "homeassistant.helpers.dispatcher",
-    types.ModuleType("homeassistant.helpers.dispatcher"),
-)
-event = sys.modules.setdefault(
-    "homeassistant.helpers.event",
-    types.ModuleType("homeassistant.helpers.event"),
-)
-
-
-class ConfigFlow:  # pragma: no cover - import-time stub only
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        del kwargs
-
-
-class OptionsFlow:  # pragma: no cover - import-time stub only
-    pass
-
-
-class ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-if not hasattr(config_entries, "ConfigFlow"):
-    config_entries.ConfigFlow = ConfigFlow
-if not hasattr(config_entries, "ConfigEntry"):
-    config_entries.ConfigEntry = ConfigEntry
-if not hasattr(config_entries, "OptionsFlow"):
-    config_entries.OptionsFlow = OptionsFlow
-if not hasattr(config_entries, "FlowResult"):
-    config_entries.FlowResult = dict
-const.CONF_NAME = "name"
-if not hasattr(core, "callback"):
-    core.callback = lambda func: func
-if not hasattr(core, "CALLBACK_TYPE"):
-    core.CALLBACK_TYPE = object
-if not hasattr(core, "HomeAssistant"):
-    core.HomeAssistant = HomeAssistant
-if not hasattr(config_validation, "config_entry_only_config_schema"):
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-if not hasattr(dispatcher, "async_dispatcher_send"):
-    dispatcher.async_dispatcher_send = lambda *_args, **_kwargs: None
-if not hasattr(event, "async_call_later"):
-    event.async_call_later = lambda *_args, **_kwargs: (lambda: None)
-homeassistant.config_entries = config_entries
-homeassistant.const = const
-homeassistant.core = core
-homeassistant.helpers = helpers
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.event = event
-helpers.selector = None
-sys.modules.pop("homeassistant.helpers.selector", None)
+from homeassistant.helpers import aiohttp_client
 
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XOptionsFlow,
@@ -196,11 +117,7 @@ def test_probe_agent_requires_event_subscription_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
-    aiohttp_client = sys.modules.setdefault(
-        "homeassistant.helpers.aiohttp_client",
-        types.ModuleType("homeassistant.helpers.aiohttp_client"),
-    )
-    aiohttp_client.async_get_clientsession = lambda _hass: object()
+    monkeypatch.setattr(aiohttp_client, "async_get_clientsession", lambda _hass: object())
 
     class FakeApi:
         def __init__(

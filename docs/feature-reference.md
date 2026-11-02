@@ -1,5 +1,17 @@
 # Feature Reference
 
+The agent status attribute `agent_restart_count` counts observed changes of the
+agent process instance since this integration entry was loaded. It does not
+count device reboots, and agents without instance metadata cannot contribute to
+it. This replaces the misleading `device_reboot_count` attribute; a lower uptime
+alone is not treated as restart evidence.
+
+Detailed agent diagnostics remain available live, but volatile debug attributes
+(loop counters, descriptor counts and observation timestamps) are excluded from
+Recorder history. Health states, CPU measurements, write counters and watchdog
+triggers retain their normal history behavior. Diagnostic entities remain
+disabled by default.
+
 This page is the compact reference for users and maintainers. It describes what
 the integration exposes, where to configure it, and which parts write to the
 C300X only after an explicit user action.

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
 
+from ..value_parsing import optional_mapping
 from .webrtc_session import short_session_id as _short_session_id
 
 _LOGGER = logging.getLogger("custom_components.bticino_c300x.camera")
@@ -296,3 +297,35 @@ class WebRTCDebugMixin:
             if value is None:
                 value = getattr(message, field, None)
         return str(value)[:160] if value is not None else None
+
+
+def agent_event_timeline_details(
+    data: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return safe media facts from one already-received agent event."""
+
+    details: dict[str, Any] = {}
+    for key in (
+        "video_available",
+        "video_window_available",
+        "external_media_active",
+    ):
+        if key in data:
+            details[key] = bool(data[key])
+    bridge = optional_mapping(data.get("bridge"))
+    if bridge:
+        for key in (
+            "clients",
+            "media_active",
+            "ring_call_active",
+            "ring_media_active",
+            "ring_audio_active",
+            "ring_answer_requested",
+            "ring_answered",
+            "ring_hangup_requested",
+            "home_call_running",
+            "home_call_active",
+        ):
+            if key in bridge:
+                details[f"bridge_{key}"] = bridge[key]
+    return details

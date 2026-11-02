@@ -249,7 +249,9 @@ def _sync_device_agent_update_issue(hass: HomeAssistant, entry: BticinoC300XConf
 
 def _sync_device_agent_startup_issue(hass: HomeAssistant, entry: BticinoC300XConfigEntry) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
-    diagnostics = getattr(runtime_data, "agent_diagnostics", None)
+    diagnostics = (
+        runtime_data.diagnostics.agent_diagnostics if runtime_data is not None else None
+    )
     if not isinstance(diagnostics, Mapping):
         async_delete_repair_issue(
             hass,
@@ -326,7 +328,9 @@ def _sync_device_agent_ui_event_watchdog_issue(
     entry: BticinoC300XConfigEntry,
 ) -> None:
     runtime_data = getattr(entry, "runtime_data", None)
-    diagnostics = getattr(runtime_data, "agent_diagnostics", None)
+    diagnostics = (
+        runtime_data.diagnostics.agent_diagnostics if runtime_data is not None else None
+    )
     if not isinstance(diagnostics, Mapping):
         async_delete_repair_issue(
             hass,
@@ -415,7 +419,11 @@ def _sync_device_core_qml_hook_issue(hass: HomeAssistant, entry: BticinoC300XCon
             "original",
             "partial",
         }
-    diagnostics = getattr(runtime_data, "qml_patch_diagnostics", None)
+    diagnostics = (
+        runtime_data.diagnostics.qml_patch_diagnostics
+        if runtime_data is not None
+        else None
+    )
     failed = bool(getattr(diagnostics, "last_error", None))
     if not missing and not failed:
         async_delete_repair_issue(
@@ -564,7 +572,7 @@ def _callback_problem(entry: BticinoC300XConfigEntry) -> dict[str, str] | None:
         ),
         (
             "display bridge",
-            getattr(runtime_data, "display_bridge_diagnostics", None),
+            getattr(runtime_data.diagnostics, "display_bridge_diagnostics", None),
             "callback_scheme",
             "callback_host_type",
         ),

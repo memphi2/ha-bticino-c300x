@@ -85,6 +85,54 @@ def test_video_message_view_exposes_playable_mp4_route() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("range_header", "body"),
+    [("bytes=2-4", b"234"), ("bytes=-3", b"789"), ("bytes=8-", b"89")],
+)
+def test_media_range_response(range_header, body):
+    from aiohttp.test_utils import make_mocked_request
+
+    response = media_module._media_response(
+        make_mocked_request("GET", "/", headers={"Range": range_header}),
+        b"0123456789",
+        "video/mp4",
+    )
+    assert response.status == 206
+    assert response.body == body
+    assert response.headers["Content-Range"].endswith("/10")
+
+
+@pytest.mark.parametrize(
+    "range_header", ["bytes=99-", "bytes=4-2", "bytes=0-1,3-4", "broken"]
+)
+def test_media_range_rejects_invalid_request(range_header):
+    from aiohttp.test_utils import make_mocked_request
+
+    with pytest.raises(web.HTTPRequestRangeNotSatisfiable):
+        media_module._media_response(
+            make_mocked_request("GET", "/", headers={"Range": range_header}),
+            b"0123456789",
+            "video/mp4",
+        )
+
+
+def test_video_cache_invalidates_when_message_inventory_changes():
+    async def run():
+        api = _FakeMediaApi(video=(b"video", "video/mp4"))
+        entry = _fake_entry(api)
+        hass = _fake_hass({"entry1": entry})
+        request = SimpleNamespace(app={"hass": hass}, path="/video")
+        view = C300XVideoMessageMediaView()
+        await view.get(request, "entry1", "message_1")
+        await view.get(request, "entry1", "message_1")
+        assert len(api.video_message_ids) == 1
+        entry.runtime_data.answering_machine_messages_updated_at = "new-inventory"
+        await view.get(request, "entry1", "message_1")
+        assert len(api.video_message_ids) == 2
+
+    asyncio.run(run())
+
+
 def test_video_message_transcode_decision_targets_non_browser_containers() -> None:
     assert _should_transcode_video_message("video/x-msvideo")
     assert _should_transcode_video_message("video/x-matroska; charset=binary")
@@ -216,7 +264,11 @@ def test_video_message_view_rejects_unknown_or_invalid_request(
 
 def test_video_message_view_maps_agent_errors_to_http_responses() -> None:
     request = SimpleNamespace(
-        app={"hass": _fake_hass({"entry1": _fake_entry(_FakeMediaApi(error="unsupported"))})},
+        app={
+            "hass": _fake_hass(
+                {"entry1": _fake_entry(_FakeMediaApi(error="unsupported"))}
+            )
+        },
         path=f"/api/{DOMAIN}/video-messages/entry1/message_1/video",
     )
 
@@ -229,7 +281,9 @@ def test_video_message_view_maps_agent_errors_to_http_responses() -> None:
             )
         )
 
-    request.app["hass"] = _fake_hass({"entry1": _fake_entry(_FakeMediaApi(error="api"))})
+    request.app["hass"] = _fake_hass(
+        {"entry1": _fake_entry(_FakeMediaApi(error="api"))}
+    )
     with pytest.raises(web.HTTPBadGateway):
         asyncio.run(
             C300XVideoMessageMediaView().get(  # type: ignore[arg-type]
@@ -277,7 +331,9 @@ def test_voice_memo_view_maps_invalid_and_agent_errors() -> None:
             )
         )
 
-    request.app["hass"] = _fake_hass({"entry1": _fake_entry(_FakeMediaApi(error="api"))})
+    request.app["hass"] = _fake_hass(
+        {"entry1": _fake_entry(_FakeMediaApi(error="api"))}
+    )
     with pytest.raises(web.HTTPBadGateway):
         asyncio.run(
             C300XVoiceMemoMediaView().get(  # type: ignore[arg-type]
@@ -377,7 +433,13 @@ def test_convert_video_message_to_mp4_muxes_video_and_audio(
     assert output.video.pix_fmt == "yuv420p"
     assert output.audio.layout == "mono"
     assert resampler_module.created == [("fltp", "mono", 44100)]
-    assert output.muxed == [b"video", b"audio", b"video-flush", b"audio", b"audio-flush"]
+    assert output.muxed == [
+        b"video",
+        b"audio",
+        b"video-flush",
+        b"audio",
+        b"audio-flush",
+    ]
 
 
 def test_convert_video_message_to_mp4_rejects_missing_video_stream(

@@ -95,20 +95,16 @@ def _optional_float(value: Any) -> float | None:
 def handle_agent_cpu_metrics_changed(camera: Any, entry_id: str) -> None:
     """Close local camera WebRTC sessions after the entry watchdog trips."""
 
-    if entry_id != camera._entry.entry_id:
+    if camera._background_tasks.closing or entry_id != camera._entry.entry_id:
         return
-    watchdog = getattr(camera._entry.runtime_data, "agent_cpu_watchdog", None)
+    watchdog = getattr(camera._runtime_data, "agent_cpu_watchdog", None)
     if not getattr(watchdog, "tripped", False):
         return
     watchdog = cast(AgentCpuWatchdog, watchdog)
     camera._agent_cpu_watchdog = watchdog
     if camera._webrtc_session_ids():
-        camera.hass.async_create_task(
-            async_handle_agent_cpu_watchdog(
-                camera,
-                watchdog.last_reason or "agent_cpu_high",
-                duration_seconds=int(AGENT_CPU_WATCHDOG_SECONDS),
-            )
+        camera._background_tasks.create(
+            camera.hass, async_handle_agent_cpu_watchdog(camera), key="watchdog"
         )
     camera._async_write_ha_state_if_ready()
 
@@ -136,7 +132,7 @@ def handle_runtime_cpu_metrics_changed(hass: Any, entry: Any) -> None:
     if reason is None:
         return
 
-    task = getattr(runtime_data, "agent_cpu_watchdog_task", None)
+    task = getattr(runtime_data.resources, "agent_cpu_watchdog_task", None)
     if task is not None and not task.done():
         return
     task = _schedule_task(
@@ -149,7 +145,7 @@ def handle_runtime_cpu_metrics_changed(hass: Any, entry: Any) -> None:
         ),
     )
     with suppress(Exception):
-        runtime_data.agent_cpu_watchdog_task = task
+        runtime_data.resources.agent_cpu_watchdog_task = task
 
 
 def _schedule_task(hass: Any, coro: Any) -> asyncio.Task[Any]:
@@ -194,50 +190,16 @@ async def async_handle_runtime_agent_cpu_watchdog(
     await _async_reload_display_gui_for_watchdog(api)
 
 
-async def async_handle_agent_cpu_watchdog(
-    camera: Any,
-    reason: str,
-    *,
-    duration_seconds: int,
-) -> None:
-    """Report sustained CPU load and stop HA-owned media from the camera entity."""
+async def async_handle_agent_cpu_watchdog(camera: Any) -> None:
+    """Close browser sessions; only the runtime watchdog commands the device."""
 
-    entry = camera._entry
-    with suppress(Exception):
-        from .repair_issues import async_create_media_watchdog_issue
-
-        async_create_media_watchdog_issue(
-            camera.hass,
-            entry,
-            reason=reason,
-            cpu_percent=camera._agent_cpu_watchdog.last_percent,
-            duration_seconds=duration_seconds,
+    for session_id in camera._webrtc_session_ids():
+        await camera._async_close_webrtc_session(
+            session_id,
+            stop_media=False,
+            notify_client=True,
+            reason="agent_cpu_watchdog",
         )
-
-    session_ids = camera._webrtc_session_ids()
-    if session_ids:
-        for session_id in session_ids:
-            await camera._async_close_webrtc_session(
-                session_id,
-                stop_media=False,
-                notify_client=True,
-                reason="agent_cpu_watchdog",
-            )
-        await _async_reload_display_gui_for_watchdog(entry.runtime_data.api)
-        return
-
-    with suppress(Exception):
-        await camera._async_refresh_video_status(apply_status=True)
-    await _async_stop_media_for_watchdog(
-        entry.runtime_data.api,
-        {
-            "media_owner": camera._video_owner,
-            "window_available": camera._video_window_available,
-            "external_media_active": camera._external_media_active,
-            "bridge": camera._bridge_status,
-        },
-    )
-    await _async_reload_display_gui_for_watchdog(entry.runtime_data.api)
 
 
 async def _async_stop_media_for_watchdog(

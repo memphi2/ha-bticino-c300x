@@ -77,12 +77,12 @@ def async_request_agent_event_registration(
     if hasattr(runtime, "system_metrics"):
         invalidate_system_metrics(entry)
 
-    unregister = getattr(runtime, "unregister_event_registration", None)
+    unregister = getattr(runtime.resources, "unregister_event_registration", None)
     if callable(unregister):
         unregister()
-        runtime.unregister_event_registration = None
+        runtime.resources.unregister_event_registration = None
     on_runtime_registration_created = getattr(
-        runtime,
+        runtime.resources,
         "on_runtime_registration_created",
         None,
     )
@@ -93,7 +93,7 @@ def async_request_agent_event_registration(
         if getattr(entry, "runtime_data", None) is not runtime:
             return
         active_runtime = cast(Any, runtime)
-        active_runtime.unregister_event_registration = (
+        active_runtime.resources.unregister_event_registration = (
             await async_start_agent_event_registration(
                 hass,
                 entry,
@@ -139,6 +139,7 @@ class _AgentEventRegistration:
         self._entity_registry_cancel: CALLBACK_TYPE | None = None
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._task: Task[Any] | None = None
+        self._active_tasks: set[Task[Any]] = set()
         self._registration_stage = "callback_url"
 
     def start(self) -> Callable[[], None]:
@@ -152,11 +153,13 @@ class _AgentEventRegistration:
         return self.unregister
 
     def unregister(self) -> None:
-        """Stop retries, registry listeners, and the initial registration task."""
+        """Stop timers, registry listeners and every in-flight registration."""
 
         self._stopped = True
         if self._task is not None and not self._task.done():
             self._task.cancel()
+        for task in self._active_tasks:
+            task.cancel()
         self._cancel_retry()
         self._cancel_renewal()
         self._cancel_registry_refresh()
@@ -166,10 +169,16 @@ class _AgentEventRegistration:
     async def _register(self, now: Any = None) -> None:
         if not self._begin_register_attempt():
             return
+        # HA creates separate tasks for timer callbacks, not just start().
+        task = asyncio.current_task()
+        assert task is not None
+        self._active_tasks.add(task)
         try:
             await self._register_once()
         except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
             self._handle_registration_failure(err)
+        finally:
+            self._active_tasks.discard(task)
 
     def _begin_register_attempt(self) -> bool:
         if self._stopped:

@@ -1,5 +1,54 @@
 # Changelog
 
+## v2.0.0 - 2026-11-02
+
+### Fixed
+
+- Cancel in-flight timer-driven event registrations when unloading the
+  integration, preventing late callbacks into a removed runtime.
+- Send a complete 20 ms PCMU silence frame when the microphone is inactive,
+  matching the RTP timestamp increment. Speex silence is unchanged. This
+  corrects undersized agent packets. Repeated on-device PCMU on-demand tests
+  passed without a reboot.
+- Bound incoming HTTP request work, reject incomplete or ambiguous requests,
+  and send complete responses even when sockets accept only part of a write.
+- Deliver event callbacks outside the agent's main loop through a bounded
+  queue. Record delivery only after confirmation and keep event IDs unique
+  across buffer wraparound and agent restarts.
+- Stop memory-diagnostic collection when debug logging is disabled and share
+  one collector across integration entries.
+- Reuse stored-media downloads and conversions through a bounded, short-lived
+  RAM cache. Add byte-range playback and explicit download/conversion limits.
+- Use one runtime watchdog for recovery commands, avoiding duplicate GUI reloads.
+- Reject late message refresh results after an integration reload and complete
+  entry cleanup even when releasing one resource fails.
+- Cancel and await camera background tasks during removal, finish interrupted
+  session cleanup, and dispose of old card sessions before reconfiguration.
+- Run QML maintenance and GUI reload jobs with bounded execution outside the
+  agent's event loop, keeping event processing responsive during maintenance.
+
+### Changed
+
+- Replace the misleading `device_reboot_count` diagnostic attribute with
+  `agent_restart_count`, based on confirmed agent-instance changes. Adjust
+  templates using the old attribute; agent restarts do not prove device reboots.
+- Exclude volatile diagnostic attributes and memo text from new Recorder
+  history entries. Live attributes remain available; existing history and
+  backups are not deleted.
+- Include direct external runtime dependencies in the release SBOM and clarify
+  provenance, callback authentication, privacy, and accepted legacy SSH risks.
+- Reuse the short-lived message cache for media browsing and resolution.
+- Separate runtime resource ownership and display operations, and expand real
+  Home Assistant lifecycle, browser, transport, and security validation.
+
+### Upgrade
+
+- Update the native agent to 2.0.0 to apply the PCMU correction and agent
+  transport improvements; updating only the integration is insufficient.
+  No firmware patch is required.
+- Home Assistant 2026.7 remains the minimum supported version; validation also
+  covers Home Assistant 2026.10. Keep existing integration entries when updating.
+
 ## v1.9.10 - 2026-11-02
 
 ### Added

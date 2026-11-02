@@ -960,6 +960,16 @@ Validation examples:
 
 ## Maintenance Actions
 
+QML status/patch and GUI reload keep their HTTP connection open until the script
+finishes, with a 10-second script deadline and without blocking the event loop. Only one
+such job runs at a time. While it is active, additional script jobs and
+maintenance POST requests return `409` with `error: maintenance_busy` after
+authentication. Retrying must wait for the current job to finish. A client
+disconnect does not cancel or repeat an already accepted operation. Script
+timeouts, failed execution and oversized output use the existing `502` response.
+The legacy `/api/v1/device-user` read also returns busy during a job because
+it invokes the same QML script; media-user setup/status is otherwise synchronous.
+
 All endpoints in this section require maintenance authorization. Mutating
 endpoints require exact confirmation tokens so accidental browser/script calls
 do not perform device writes.

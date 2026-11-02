@@ -293,6 +293,32 @@ def test_release_workflow_validates_both_attestations_before_publication() -> No
     assert steps.index(verify) < steps.index(by_name["Publish GitHub Release assets"])
 
 
+def test_release_requires_browser_checks_at_the_verified_commit() -> None:
+    release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    browser = yaml.safe_load((ROOT / ".github/workflows/browser.yml").read_text())
+    jobs = release["jobs"]
+    assert "browser" in jobs["publish"]["needs"]
+    gate = jobs["browser"]
+    assert gate["uses"] == "./.github/workflows/browser.yml"
+    assert gate["needs"] == "main-validation"
+    assert gate["with"]["ref"] == "${{ needs.main-validation.outputs.commit }}"
+    assert "if" not in gate
+    assert not gate.get("continue-on-error", False)
+    main = jobs["main-validation"]
+    assert main["outputs"]["commit"] == "${{ steps.verified-main.outputs.commit }}"
+    verify = next(step for step in main["steps"] if step.get("id") == "verified-main")
+    assert 'echo "commit=$tag_sha" >> "$GITHUB_OUTPUT"' in verify["run"]
+    # PyYAML's YAML 1.1 loader reads the workflow key "on" as True.
+    assert browser[True]["workflow_call"]["inputs"]["ref"]["required"] is True
+    browser_job = browser["jobs"]["browser"]
+    assert not browser_job.get("continue-on-error", False)
+    checkout = next(step for step in browser_job["steps"] if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "${{ inputs.ref || github.sha }}"
+    smoke = next(step for step in browser_job["steps"] if step.get("run") == "node tests/browser/smoke.mjs")
+    assert "if" not in smoke
+    assert not smoke.get("continue-on-error", False)
+
+
 def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() -> None:
     checker = _load_repo_checker()
 
@@ -426,6 +452,52 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert validate_full_spdx_document(
         parse_file(str(first / "sbom.spdx.json"))
     ) == []
+
+
+def test_sbom_distinguishes_packaged_and_external_runtime_dependencies(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    archive_path = tmp_path / "integration.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("manifest.json", "{}")
+        archive.writestr("device_installer.py", '_REQUIRED_PARAMIKO_VERSION = "9.8.7"\nimport paramiko\n')
+        archive.writestr("media.py", "import aiohttp\nimport av\nfrom homeassistant.core import HomeAssistant\n")
+        archive.writestr("device_agent/bundle.json", '{"agent_version":"1.9.11"}')
+        archive.writestr("device_agent/armhf/c300x-agent-native", b"synthetic-test-agent")
+    writer.write_release_assets(
+        zip_path=archive_path, tag="v1.9.11", repository="example/repo",
+        sha256sums_path=tmp_path / "SHA256SUMS",
+        metadata_path=tmp_path / "build-metadata.json",
+        sbom_path=tmp_path / "sbom.spdx.json",
+    )
+    sbom = json.loads((tmp_path / "sbom.spdx.json").read_text())
+    packages = {package["name"]: package for package in sbom["packages"]}
+    assert packages["paramiko"]["versionInfo"] == "9.8.7"
+    assert packages["paramiko"]["externalRefs"][0]["referenceLocator"] == "pkg:pypi/paramiko@9.8.7"
+    assert packages["c300x-agent-native"]["versionInfo"] == "1.9.11"
+    for name in ("av", "aiohttp", "homeassistant", "glibc", "libsrtp", "speex", "curl"):
+        assert "versionInfo" not in packages[name]
+        assert packages[name]["filesAnalyzed"] is False
+        assert packages[name]["licenseDeclared"] == "NOASSERTION"
+    assert {
+        "spdxElementId": packages["paramiko"]["SPDXID"],
+        "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+        "relatedSpdxElement": sbom["packages"][0]["SPDXID"],
+    } in sbom["relationships"]
+    assert validate_full_spdx_document(parse_file(str(tmp_path / "sbom.spdx.json"))) == []
+
+
+def test_sbom_rejects_unmapped_external_imports(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    archive_path = tmp_path / "integration.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("unknown.py", "import new_external_dependency\n")
+    with pytest.raises(writer.ReleaseAssetError, match="unmapped runtime imports"):
+        writer.write_release_assets(
+            zip_path=archive_path, tag="v1.9.11", repository="example/repo",
+            sha256sums_path=tmp_path / "SHA256SUMS",
+            metadata_path=tmp_path / "build-metadata.json",
+            sbom_path=tmp_path / "sbom.spdx.json",
+        )
 
 
 def test_release_metadata_records_reused_native_agent(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
 from check_dependency_updates import check_dependency_updates
 from check_reporting import report_failures
 
@@ -300,6 +301,8 @@ def check_tracked_runtime_artifacts() -> list[str]:
         suffix = path.suffix.lower()
         if parts[:2] == ("native_agent", "build"):
             failures.append(f"tracked native build artifact: {line}")
+        elif parts[:1] == (".artifacts",):
+            failures.append(f"tracked local test artifact: {line}")
         elif suffix in FORBIDDEN_PAYLOAD_SUFFIXES:
             failures.append(f"tracked binary/firmware payload: {line}")
         elif any(part in FORBIDDEN_REPO_DIRS for part in parts):
@@ -941,10 +944,19 @@ def check_github_automation() -> list[str]:
         "actions/setup-python@v5",
         "actions/upload-artifact@v4",
     }
-    workflow_use = re.compile(r"^\s*uses:\s*([^#\s]+)", re.MULTILINE)
     pinned_sha = re.compile(r"[0-9a-f]{40}")
-    for path in (ROOT / ".github" / "workflows").rglob("*.yml"):
+    local_workflow = re.compile(r"\./\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml")
+    workflow_dir = ROOT / ".github" / "workflows"
+    for path in sorted((*workflow_dir.rglob("*.yml"), *workflow_dir.rglob("*.yaml"))):
         text = path.read_text(encoding="utf-8")
+        try:
+            workflow = yaml.safe_load(text)
+        except yaml.YAMLError:
+            failures.append(f"{relative(path)} contains invalid workflow YAML")
+            continue
+        if not isinstance(workflow, dict) or not isinstance(workflow.get("jobs", {}), dict):
+            failures.append(f"{relative(path)} must contain a workflow mapping")
+            continue
         if "runs-on: ubuntu-latest" in text:
             failures.append(f"{relative(path)} must pin the runner image instead of ubuntu-latest")
         if "permissions:" not in text or "contents: read" not in text:
@@ -964,8 +976,27 @@ def check_github_automation() -> list[str]:
         for action in deprecated_actions:
             if action in text:
                 failures.append(f"{relative(path)} must not use deprecated {action}")
-        for match in workflow_use.finditer(text):
-            spec = match.group(1)
+        references = []
+        for job in workflow.get("jobs", {}).values():
+            if not isinstance(job, dict):
+                failures.append(f"{relative(path)} contains an invalid job")
+                continue
+            if "uses" in job:
+                references.append(job["uses"])
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                failures.append(f"{relative(path)} must contain a steps list")
+                continue
+            references.extend(step["uses"] for step in steps if isinstance(step, dict) and "uses" in step)
+        for spec in references:
+            if not isinstance(spec, str):
+                failures.append(f"{relative(path)} action use must be a string")
+                continue
+            if spec.startswith("./"):
+                # Local reusable workflows execute from the caller's commit.
+                if not local_workflow.fullmatch(spec) or not (ROOT / spec).is_file():
+                    failures.append(f"{relative(path)} invalid local reusable workflow: {spec}")
+                continue
             if "@" not in spec:
                 failures.append(f"{relative(path)} action use must include an immutable ref: {spec}")
                 continue
@@ -1060,6 +1091,8 @@ def is_ignored(path: Path) -> bool:
 
 def _is_tooling_path(parts: tuple[str, ...]) -> bool:
     ignored_paths = {
+        (".artifacts",),
+        ("tests", "browser", "node_modules"),
         ("native_agent", "build"),
         ("custom_components", "bticino_c300x", "device_agent", "armhf"),
         ("custom_components", "bticino_c300x", "device_agent", "qml"),

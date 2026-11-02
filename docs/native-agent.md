@@ -1,5 +1,20 @@
 # Native Agent
 
+## HTTP and Callback Resource Limits
+
+Incoming HTTP requests use at most eight pending buffers, allocated only while
+needed, with a 500 ms total receive deadline. Incomplete clients are polled
+without blocking other incoming requests. HTTP parsing rejects incomplete or
+ambiguous message framing.
+
+Event callbacks use one sleeping worker with a 256 KiB stack and at most eight
+outstanding jobs. No periodic wakeups or device writes are added. Network I/O,
+including DNS, runs outside the main agent loop; confirmed results are applied
+there in order. Queue overflow is reported as `callback_queue_full`, not as a
+successful delivery. Queued jobs older than 30 seconds are discarded. Replacing
+or removing a subscription discards pending jobs and ignores old completions.
+An already active request can finish against its original destination.
+
 This page describes the Home Assistant and release-facing native-agent model.
 For the full HTTP endpoint contract, use
 [Native Agent API Contract](../native_agent/API.md). For source-local build

@@ -28,5 +28,6 @@ int c300x_system_metrics_monitor_tick(
     time_t now
 );
 void c300x_system_metrics_monitor_delivered(struct c300x_system_metrics_monitor *monitor, time_t now);
+void c300x_system_metrics_monitor_delivered_sample(struct c300x_system_metrics_monitor *monitor, const struct system_metrics_sample *sample, time_t now);
 
 #endif

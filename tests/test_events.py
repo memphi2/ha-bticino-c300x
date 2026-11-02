@@ -159,13 +159,14 @@ def restore_webhook_stub() -> None:
     webhook.async_generate_url = _webhook_url
     webhook.async_generate_path = _webhook_path
 
+from custom_components.bticino_c300x import events as events_module  # noqa: E402
+from custom_components.bticino_c300x.data import C300XRuntimeResources  # noqa: E402
 from custom_components.bticino_c300x.events import (  # noqa: E402,I001
     _filter_events_for_active_entities,
     async_request_agent_event_registration,
     async_start_agent_event_registration,
     event_token_fingerprint,
 )
-from custom_components.bticino_c300x import events as events_module  # noqa: E402
 
 
 class _FakeApi:
@@ -791,11 +792,11 @@ def test_event_registration_discovery_refresh_does_not_post_when_ram_subscriptio
             api=api,
             capabilities={},
             connection_state=connection_state,
-            unregister_event_registration=unregister,
+            resources=C300XRuntimeResources(unregister_event_registration=unregister),
         )
         assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
         await _drain_hass_tasks(hass)
-        entry.runtime_data.unregister_event_registration()
+        entry.runtime_data.resources.unregister_event_registration()
 
     asyncio.run(run())
 
@@ -838,11 +839,11 @@ def test_event_registration_discovery_refresh_posts_after_agent_lost_ram_subscri
             api=api,
             capabilities={},
             connection_state=connection_state,
-            unregister_event_registration=unregister,
+            resources=C300XRuntimeResources(unregister_event_registration=unregister),
         )
         assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
         await _drain_hass_tasks(hass)
-        entry.runtime_data.unregister_event_registration()
+        entry.runtime_data.resources.unregister_event_registration()
 
     asyncio.run(run())
 
@@ -893,12 +894,14 @@ def test_event_registration_discovery_refresh_runs_runtime_registration_callback
             api=api,
             capabilities={},
             connection_state=connection_state,
-            unregister_event_registration=unregister,
-            on_runtime_registration_created=_runtime_refresh,
+            resources=C300XRuntimeResources(
+                unregister_event_registration=unregister,
+                on_runtime_registration_created=_runtime_refresh,
+            ),
         )
         assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
         await _drain_hass_tasks(hass)
-        entry.runtime_data.unregister_event_registration()
+        entry.runtime_data.resources.unregister_event_registration()
 
     asyncio.run(run())
 
@@ -944,7 +947,7 @@ def test_event_registration_discovery_refresh_uses_backoff_when_agent_goes_offli
             api=api,
             capabilities={},
             connection_state=connection_state,
-            unregister_event_registration=unregister,
+            resources=C300XRuntimeResources(unregister_event_registration=unregister),
         )
         assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
         await _drain_hass_tasks(hass)
@@ -1323,3 +1326,37 @@ def test_event_registration_persists_subscription_on_unload() -> None:
     asyncio.run(run_unload())
     assert not any(call.delay for call in fake_scheduler.calls if not call.canceled)
     assert api.delete_calls == []
+
+
+def test_unload_cancels_inflight_timer_registration(monkeypatch) -> None:
+    async def run() -> None:
+        api = _FakeApi([{"subscription": {"id": "sub-timer"}}])
+        hass = _FakeHass()
+        fake_scheduler.reset()
+        unregister = await async_start_agent_event_registration(
+            hass, _FakeEntry(), api, {}, _FakeConnectionState(),
+        )
+        await _drain_hass_tasks(hass)
+        renewal = next(call for call in fake_scheduler.calls if not call.canceled)
+        started = asyncio.Event()
+        released = asyncio.Event()
+
+        async def hold_list():
+            started.set()
+            await released.wait()
+            return []
+
+        monkeypatch.setattr(api, "async_list_event_subscriptions", hold_list)
+        task = asyncio.create_task(renewal.callback())
+        await started.wait()
+        calls = len(api.subscription_calls)
+        unregister()
+        await asyncio.sleep(0)
+        try:
+            assert task.cancelled(), "The timer registration survived unload"
+            assert len(api.subscription_calls) == calls
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())

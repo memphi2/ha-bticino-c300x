@@ -102,6 +102,22 @@ test("WebRTC client start accepts omitted options", async () => {
   client.close();
 });
 
+test("closing during client configuration cannot create a late peer", async () => {
+  let release;
+  const client = new C300XWebrtcClient({
+    getEntityId: () => "camera.synthetic",
+    getHass: () => ({ callWS: () => new Promise((resolve) => { release = resolve; }) }),
+    isHomeCallMode: () => false,
+  });
+  const starting = client.start();
+  client.close();
+  release({ iceServers: [] });
+  await assert.rejects(starting, /HA WebRTC offer cancelled/);
+  assert.equal(client.pc, null);
+  assert.equal(client.remoteStream, null);
+  assert.equal(client.running, false);
+});
+
 test("WebRTC client hard-closes the peer when the backend closes a session", async () => {
   const calls = [];
   globalThis.window = {

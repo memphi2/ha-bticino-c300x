@@ -246,7 +246,7 @@ def test_media_source_children_use_playable_video_voice_and_capture_items() -> N
     assert voice_children[0].media_content_type == "audio/wav"
 
 
-def test_media_source_fetch_helpers_force_refresh(monkeypatch) -> None:
+def test_media_source_fetch_helpers_use_cached_reads(monkeypatch) -> None:
     import custom_components.bticino_c300x.media_source as module
 
     async def _messages(_entry: Any, *, force_refresh: bool) -> dict[str, Any]:
@@ -260,10 +260,10 @@ def test_media_source_fetch_helpers_force_refresh(monkeypatch) -> None:
     entry = _FakeEntry("entry1", runtime_data=object())
 
     assert asyncio.run(_async_messages_for_entry(entry)) == {
-        "messages": [{"force_refresh": True}]
+        "messages": [{"force_refresh": False}]
     }
     assert asyncio.run(_async_memos_for_entry(entry)) == {
-        "memos": [{"force_refresh": True}]
+        "memos": [{"force_refresh": False}]
     }
 
 

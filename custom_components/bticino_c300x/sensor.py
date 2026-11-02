@@ -352,11 +352,11 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "last_reconnect_reason": state.last_reconnect_reason,
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
-            "device_reboot_count": getattr(
-                self._entry.runtime_data, "device_reboot_count", 0
+            "agent_restart_count": getattr(
+                self._entry.runtime_data.diagnostics, "agent_restart_count", 0
             ),
             "agent_uptime_seconds": getattr(
-                self._entry.runtime_data, "agent_uptime_seconds", None
+                self._entry.runtime_data.diagnostics, "agent_uptime_seconds", None
             ),
             "media_watchdog_trigger_count": getattr(
                 getattr(self._entry.runtime_data, "agent_cpu_watchdog", None),
@@ -402,6 +402,26 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
     _attr_entity_registry_enabled_default = False
     _attr_options = list(_AGENT_DIAGNOSTICS_STATUS_OPTIONS)
     _attr_translation_key = "agent_diagnostics"
+    _unrecorded_attributes = frozenset(
+        {
+            "updated_at",
+            "updated_by",
+            "loop_iterations",
+            "poll_wakeups",
+            "poll_wakeups_per_loop",
+            "last_wake_reason",
+            "last_poll_timeout_ms",
+            "last_poll_count",
+            "accepted_clients",
+            "open_fd_count",
+            "recent_event_count",
+            "home_assistant_last_seen_at",
+            "ui_event_revision",
+            "ui_event_waiters",
+            "video_bridge_open_fds",
+            "video_bridge_active_threads",
+        }
+    )
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "agent_diagnostics")
@@ -438,15 +458,15 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
         """
 
         runtime_data = self._entry.runtime_data
-        diagnostics = runtime_data.agent_diagnostics
-        media_facts = getattr(runtime_data, "agent_media_facts", None)
+        diagnostics = runtime_data.diagnostics.agent_diagnostics
+        media_facts = getattr(runtime_data.diagnostics, "agent_media_facts", None)
         if not diagnostics or not media_facts:
             # Without a snapshot the entity still reports "diagnostics not
             # loaded"; media facts refine a snapshot, they do not replace one.
             return diagnostics
         if _snapshot_answers_media(diagnostics) and _is_outdated(
-            getattr(runtime_data, "agent_media_facts_updated_at", None),
-            runtime_data.agent_diagnostics_updated_at,
+            getattr(runtime_data.diagnostics, "agent_media_facts_updated_at", None),
+            runtime_data.diagnostics.agent_diagnostics_updated_at,
         ):
             return diagnostics
         return {**dict(diagnostics), **dict(media_facts)}
@@ -462,13 +482,13 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
             "status_reason": _agent_diagnostics_status_reason(status),
             "recommended_action": _agent_diagnostics_recommended_action(status),
             "change_reason": getattr(
-                self._entry.runtime_data,
+                self._entry.runtime_data.diagnostics,
                 "agent_diagnostics_change_reason",
                 None,
             ),
-            "updated_at": self._entry.runtime_data.agent_diagnostics_updated_at,
+            "updated_at": self._entry.runtime_data.diagnostics.agent_diagnostics_updated_at,
             "updated_by": getattr(
-                self._entry.runtime_data,
+                self._entry.runtime_data.diagnostics,
                 "agent_diagnostics_updated_by",
                 None,
             ),
@@ -483,7 +503,9 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
                 0,
             ),
             "media_watchdog_last_reason": getattr(media_watchdog, "last_reason", None),
-            "media_watchdog_last_percent": getattr(media_watchdog, "last_percent", None),
+            "media_watchdog_last_percent": getattr(
+                media_watchdog, "last_percent", None
+            ),
             **_agent_diagnostic_attributes(
                 diagnostics,
                 _AGENT_RUNTIME_DIAGNOSTIC_KEYS,
@@ -1179,6 +1201,7 @@ class C300XTextMemosSensor(C300XStoredItemsSensor):
     _attr_translation_key = "text_memos"
     _items_spec = MEMO_ITEMS
     _memo_kind = "text"
+    _unrecorded_attributes = frozenset({"latest_text"})
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "text_memos")

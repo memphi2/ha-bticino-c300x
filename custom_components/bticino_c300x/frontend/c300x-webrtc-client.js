@@ -1,8 +1,8 @@
-import { C300XMediaAttachment } from "./c300x-media-attach.js?v=46e9e213d1cdd1bc";
+import { C300XMediaAttachment } from "./c300x-media-attach.js?v=6459accc08c815c8";
 
 const C300X_WEBRTC_DISCONNECTED_GRACE_MS = 10000;
 const C300X_WEBRTC_DEBUG_STATUS_COMMAND = "bticino_c300x/debug/status";
-const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=46e9e213d1cdd1bc";
+const C300X_WEBRTC_DEBUG_MODULE = "./c300x-webrtc-debug.js?v=6459accc08c815c8";
 
 export class C300XWebrtcClient {
   constructor({ getHass, getEntityId, isHomeCallMode, onClosed, onTrack, getCardGainDb }) {
@@ -24,6 +24,7 @@ export class C300XWebrtcClient {
     this._running = false;
     this._disconnectedTimer = null;
     this._statsDebug = null;
+    this._generation = 0;
   }
 
   get running() {
@@ -62,11 +63,18 @@ export class C300XWebrtcClient {
     }
     this._running = true;
     this._closing = false;
+    const generation = ++this._generation;
+    const ensureActive = () => {
+      if (generation !== this._generation || this._closing) {
+        throw new Error("HA WebRTC offer cancelled");
+      }
+    };
 
     const clientConfig = await this._callWs({
       type: this._webrtcGetClientConfigCommand(),
       entity_id: this._getEntityId(),
     });
+    ensureActive();
     const rtcConfig = c300xNormalizeRtcConfig(clientConfig);
     this._remoteStream = new MediaStream();
     const mediaAttachment = new C300XMediaAttachment(mediaElement, this._remoteStream, {
@@ -135,18 +143,23 @@ export class C300XWebrtcClient {
     this._maybeStartStatsDebug(mediaElement);
 
     const offer = await pc.createOffer();
+    ensureActive();
     await pc.setLocalDescription(offer);
+    ensureActive();
 
     const answerSdp = await this._subscribeWebrtcOffer(pc.localDescription.sdp);
+    ensureActive();
     if (!answerSdp) {
       throw new Error("HA WebRTC answer missing");
     }
 
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+    ensureActive();
     this._flushRemoteCandidates();
   }
 
   close() {
+    this._generation++;
     this._closing = true;
     this._stopStatsDebug("close");
     if (this._pc) {
@@ -192,6 +205,7 @@ export class C300XWebrtcClient {
   }
 
   async _subscribeWebrtcOffer(offer) {
+    const generation = this._generation;
     const hass = this._getHass();
     if (!hass?.connection?.subscribeMessage) {
       throw new Error("Home Assistant subscription WebSocket is not available");
@@ -219,7 +233,7 @@ export class C300XWebrtcClient {
       hass.connection
         .subscribeMessage(
           (message) => {
-            if (!message) {
+            if (!message || generation !== this._generation) {
               return;
             }
             if (message.type === "closed") {
@@ -266,7 +280,7 @@ export class C300XWebrtcClient {
           { resubscribe: false },
         )
         .then((unsub) => {
-          if (this._closing || !this._pc) {
+          if (generation !== this._generation || this._closing || !this._pc) {
             unsub();
             return;
           }

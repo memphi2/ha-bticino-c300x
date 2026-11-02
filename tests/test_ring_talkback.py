@@ -17,19 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_ring_talkback() -> Any:
-    if (
-        "homeassistant" in sys.modules
-        and "homeassistant.exceptions" not in sys.modules
-    ):
-        exceptions = types.ModuleType("homeassistant.exceptions")
-
-        class HomeAssistantError(Exception):  # pragma: no cover - import-time stub only
-            pass
-
-        exceptions.HomeAssistantError = HomeAssistantError
-        sys.modules["homeassistant.exceptions"] = exceptions
-        sys.modules["homeassistant"].exceptions = exceptions
-
     path = ROOT / "custom_components" / "bticino_c300x" / "ring_talkback.py"
     spec = importlib.util.spec_from_file_location("c300x_ring_talkback_test", path)
     assert spec is not None

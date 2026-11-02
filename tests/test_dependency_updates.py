@@ -42,6 +42,16 @@ def test_repository_policy_passes() -> None:
     assert check_dependency_updates(ROOT) == []
 
 
+def test_browser_tools_must_be_monitored(policy_repo: Path) -> None:
+    _rewrite_yaml(
+        policy_repo / ".github/dependabot.yml",
+        lambda config: config.update(updates=[
+            entry for entry in config["updates"] if entry["package-ecosystem"] != "npm"
+        ]),
+    )
+    assert check_dependency_updates(policy_repo)
+
+
 def test_policy_does_not_depend_on_comments_or_yaml_format(policy_repo: Path) -> None:
     for path in (policy_repo / ".github").rglob("*.yml"):
         _rewrite_yaml(path, lambda _: None)

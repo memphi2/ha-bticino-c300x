@@ -5,15 +5,19 @@ from __future__ import annotations
 from asyncio import Lock, Task
 from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import C300XAgentApiError
+from .api_errors import C300XAgentApiConnectionError
 from .const import SIGNAL_MEMOS_CHANGED, SIGNAL_VIDEO_MESSAGES_CHANGED
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
+
+if TYPE_CHECKING:
+    from .data import BticinoC300XRuntimeData
 
 _VOICEMAIL_CACHE_SECONDS = 10
 _MEMOS_CACHE_SECONDS = 10
@@ -40,11 +44,14 @@ async def _async_refresh_memos_from_agent(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
+    runtime = entry.runtime_data
     try:
         await async_memos(entry, force_refresh=True)
     except C300XAgentApiError:
-        _store_payload(entry, "memos", {**entry.runtime_data.memos, "available": False})
-    finally:
+        if getattr(entry, "runtime_data", None) is not runtime:
+            return
+        _store_payload(runtime, "memos", {**runtime.memos, "available": False})
+    if getattr(entry, "runtime_data", None) is runtime:
         async_dispatcher_send(hass, SIGNAL_MEMOS_CHANGED, entry.entry_id)
 
 
@@ -74,15 +81,16 @@ def _schedule_single_refresh(
 ) -> None:
     """Schedule one refresh task per entry/runtime-data attribute."""
 
-    task: Task[Any] | None = getattr(entry.runtime_data, task_attr)
+    resources = entry.runtime_data.resources
+    task: Task[None] | None = getattr(resources, task_attr)
     if task is not None and not task.done():
         return
     task = hass.async_create_task(refresh())
-    setattr(entry.runtime_data, task_attr, task)
+    setattr(resources, task_attr, task)
 
-    def _clear_task(done_task: Task[Any]) -> None:
-        if getattr(entry.runtime_data, task_attr) is done_task:
-            setattr(entry.runtime_data, task_attr, None)
+    def _clear_task(done_task: Task[None]) -> None:
+        if getattr(resources, task_attr) is done_task:
+            setattr(resources, task_attr, None)
 
     task.add_done_callback(_clear_task)
 
@@ -91,18 +99,21 @@ async def _async_refresh_answering_machine_messages_from_agent(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> None:
+    runtime = entry.runtime_data
     try:
         await async_answering_machine_messages(entry, force_refresh=True)
     except C300XAgentApiError:
+        if getattr(entry, "runtime_data", None) is not runtime:
+            return
         _store_payload(
-            entry,
+            runtime,
             "answering_machine_messages",
             {
-                **entry.runtime_data.answering_machine_messages,
+                **runtime.answering_machine_messages,
                 "available": False,
             },
         )
-    finally:
+    if getattr(entry, "runtime_data", None) is runtime:
         async_dispatcher_send(hass, SIGNAL_VIDEO_MESSAGES_CHANGED, entry.entry_id)
 
 
@@ -148,32 +159,42 @@ async def _async_cached_payload(
 ) -> dict[str, Any]:
     """Return one cached agent payload, refreshing after TTL or on demand."""
 
+    runtime = entry.runtime_data
     if not force_refresh:
-        cached = _fresh_cached_payload(entry, payload_attr, ttl_seconds)
+        cached = _fresh_cached_payload(runtime, payload_attr, ttl_seconds)
         if cached is not None:
             return cached
 
     async with _refresh_lock(entry, payload_attr):
+        _require_current_runtime(entry, runtime)
         if not force_refresh:
             # Re-check: a concurrent caller may have just refreshed this
             # payload while we were waiting for the lock.
-            cached = _fresh_cached_payload(entry, payload_attr, ttl_seconds)
+            cached = _fresh_cached_payload(runtime, payload_attr, ttl_seconds)
             if cached is not None:
                 return cached
         payload = await refresh()
-        _store_payload(entry, payload_attr, payload)
+        _require_current_runtime(entry, runtime)
+        _store_payload(runtime, payload_attr, payload)
         return payload
 
 
+def _require_current_runtime(
+    entry: BticinoC300XConfigEntry, runtime: BticinoC300XRuntimeData,
+) -> None:
+    if getattr(entry, "runtime_data", None) is not runtime:
+        raise C300XAgentApiConnectionError("Config entry changed during message refresh")
+
+
 def _fresh_cached_payload(
-    entry: BticinoC300XConfigEntry,
+    runtime: BticinoC300XRuntimeData,
     payload_attr: str,
     ttl_seconds: int,
 ) -> dict[str, Any] | None:
     """Return the cached payload if it is still within its TTL."""
 
-    payload = getattr(entry.runtime_data, payload_attr)
-    updated_at = getattr(entry.runtime_data, f"{payload_attr}_updated_at")
+    payload = getattr(runtime, payload_attr)
+    updated_at = getattr(runtime, f"{payload_attr}_updated_at")
     if (
         payload
         and updated_at is not None
@@ -184,7 +205,7 @@ def _fresh_cached_payload(
 
 
 def _store_payload(
-    entry: BticinoC300XConfigEntry,
+    runtime: BticinoC300XRuntimeData,
     payload_attr: str,
     payload: dict[str, Any],
     *,
@@ -192,9 +213,9 @@ def _store_payload(
 ) -> None:
     """Store one runtime-data payload with its timestamp."""
 
-    setattr(entry.runtime_data, payload_attr, payload)
+    setattr(runtime, payload_attr, payload)
     setattr(
-        entry.runtime_data,
+        runtime,
         f"{payload_attr}_updated_at",
         updated_at or datetime.now(UTC),
     )

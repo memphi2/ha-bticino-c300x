@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
@@ -19,6 +20,7 @@ from .api import (
 )
 from .const import DOMAIN
 from .entry_types import BticinoC300XConfigEntry
+from .media_cache import MAX_MEDIA_BYTES, MediaBusyError, MediaCache
 from .ring_capture import (
     RING_CAPTURE_PLAYBACK_MIME_TYPE,
     ring_capture_media_path,
@@ -67,9 +69,7 @@ class C300XVideoMessageMediaView(HomeAssistantView):
     """Serve stored C300X answering-machine video through HA auth."""
 
     url = f"/api/{DOMAIN}/video-messages/{{entry_id}}/{{message_id}}/video"
-    extra_urls = [
-        f"/api/{DOMAIN}/video-messages/{{entry_id}}/{{message_id}}/video.mp4"
-    ]
+    extra_urls = [f"/api/{DOMAIN}/video-messages/{{entry_id}}/{{message_id}}/video.mp4"]
     name = f"api:{DOMAIN}:video_message"
     requires_auth = True
 
@@ -82,8 +82,8 @@ class C300XVideoMessageMediaView(HomeAssistantView):
         """Return video-message bytes from the device agent."""
 
         hass: HomeAssistant = request.app["hass"]
-        entry = hass.config_entries.async_get_entry(unquote(entry_id))
-        if entry is None or entry.domain != DOMAIN:
+        entry = runtime_entry(hass, unquote(entry_id))
+        if entry is None:
             raise web.HTTPNotFound()
 
         normalized_message_id = _validated_message_id(message_id)
@@ -92,38 +92,42 @@ class C300XVideoMessageMediaView(HomeAssistantView):
 
         transcode_to_mp4 = request.path.endswith("/video.mp4")
 
-        try:
-            content, content_type = (
-                await entry.runtime_data.api.async_answering_machine_message_video(
-                    normalized_message_id
-                )
+        async def load() -> tuple[bytes, str]:
+            (
+                content,
+                content_type,
+            ) = await entry.runtime_data.api.async_answering_machine_message_video(
+                normalized_message_id
             )
-        except C300XAgentApiUnsupportedError as err:
-            raise web.HTTPNotFound() from err
-        except C300XAgentApiError as err:
-            raise web.HTTPBadGateway() from err
-
-        if transcode_to_mp4 and _should_transcode_video_message(content_type):
-            try:
+            if transcode_to_mp4 and _should_transcode_video_message(content_type):
                 content = await hass.async_add_executor_job(
                     _convert_video_message_to_mp4,
                     content,
                 )
-            except C300XMediaDependencyError as err:
-                raise web.HTTPBadGateway(
-                    text="C300X video message could not be converted to MP4"
-                ) from err
-            except Exception as err:
-                raise web.HTTPBadGateway(
-                    text="C300X video message could not be converted to MP4"
-                ) from err
-            content_type = VIDEO_MESSAGE_PLAYBACK_MIME_TYPE
+                content_type = VIDEO_MESSAGE_PLAYBACK_MIME_TYPE
+            return content, content_type
 
-        return web.Response(
-            body=content,
-            content_type=content_type,
-            headers={"Cache-Control": "no-store"},
+        cache = hass.data.setdefault(DOMAIN, {}).setdefault("media_cache", MediaCache())
+        key = (
+            entry_id,
+            entry.runtime_data.api,
+            normalized_message_id,
+            transcode_to_mp4,
+            getattr(entry.runtime_data, "answering_machine_messages_updated_at", None),
         )
+        try:
+            content, content_type = await cache.get(key, load)
+        except MediaBusyError as err:
+            raise web.HTTPServiceUnavailable(headers={"Retry-After": "2"}) from err
+        except C300XAgentApiUnsupportedError as err:
+            raise web.HTTPNotFound() from err
+        except C300XAgentApiError as err:
+            raise web.HTTPBadGateway() from err
+        except Exception as err:
+            raise web.HTTPBadGateway(
+                text="C300X video message could not be prepared"
+            ) from err
+        return _media_response(request, content, content_type)
 
 
 class C300XVoiceMemoMediaView(HomeAssistantView):
@@ -151,19 +155,26 @@ class C300XVoiceMemoMediaView(HomeAssistantView):
             raise web.HTTPNotFound()
 
         try:
-            content, content_type = await entry.runtime_data.api.async_memo_audio(
-                normalized_memo_id
+            cache = hass.data.setdefault(DOMAIN, {}).setdefault(
+                "media_cache", MediaCache()
             )
+            key = (
+                entry_id,
+                entry.runtime_data.api,
+                normalized_memo_id,
+                getattr(entry.runtime_data, "memos_updated_at", None),
+            )
+            content, content_type = await cache.get(
+                key, lambda: entry.runtime_data.api.async_memo_audio(normalized_memo_id)
+            )
+        except MediaBusyError as err:
+            raise web.HTTPServiceUnavailable(headers={"Retry-After": "2"}) from err
         except C300XAgentApiUnsupportedError as err:
             raise web.HTTPNotFound() from err
         except C300XAgentApiError as err:
             raise web.HTTPBadGateway() from err
 
-        return web.Response(
-            body=content,
-            content_type=content_type,
-            headers={"Cache-Control": "no-store"},
-        )
+        return _media_response(request, content, content_type)
 
 
 class C300XRingCaptureMediaView(HomeAssistantView):
@@ -223,6 +234,40 @@ def _should_transcode_video_message(content_type: str) -> bool:
     return normalized in _ORIGINAL_VIDEO_CONTENT_TYPES
 
 
+def _media_response(
+    request: web.Request, content: bytes, content_type: str
+) -> web.Response:
+    headers = {"Cache-Control": "no-store", "Accept-Ranges": "bytes"}
+    size = len(content)
+    try:
+        requested = getattr(request, "http_range", slice(None))
+    except ValueError as err:
+        raise web.HTTPRequestRangeNotSatisfiable(
+            headers={"Content-Range": f"bytes */{size}"}
+        ) from err
+    if requested.start is None and requested.stop is None:
+        return web.Response(body=content, content_type=content_type, headers=headers)
+    start = requested.start or 0
+    if start < 0:
+        start = max(0, size + start)
+    stop = min(size, requested.stop if requested.stop is not None else size)
+    if start >= size or stop <= start:
+        raise web.HTTPRequestRangeNotSatisfiable(
+            headers={"Content-Range": f"bytes */{size}"}
+        )
+    headers["Content-Range"] = f"bytes {start}-{stop - 1}/{size}"
+    return web.Response(
+        body=content[start:stop], status=206, content_type=content_type, headers=headers
+    )
+
+
+class _BoundedOutput(BytesIO):
+    def write(self, buffer: Any) -> int:
+        if self.tell() + len(buffer) > MAX_MEDIA_BYTES:
+            raise ValueError("converted media exceeds size limit")
+        return super().write(buffer)
+
+
 def _convert_video_message_to_mp4(content: bytes) -> bytes:
     """Convert C300X AVI video messages into browser-playable MP4 bytes."""
 
@@ -235,7 +280,8 @@ def _convert_video_message_to_mp4(content: bytes) -> bytes:
         ) from err
 
     source = BytesIO(content)
-    target = BytesIO()
+    target = _BoundedOutput()
+    deadline = monotonic() + 30
     with av.open(source, mode="r") as input_container:
         video_stream = next(
             (stream for stream in input_container.streams if stream.type == "video"),
@@ -254,6 +300,10 @@ def _convert_video_message_to_mp4(content: bytes) -> bytes:
                 rate=video_stream.average_rate or 2,
             )
             codec_context = cast(Any, video_stream.codec_context)
+            if not (
+                0 < codec_context.width <= 1920 and 0 < codec_context.height <= 1080
+            ):
+                raise ValueError("unsupported video dimensions")
             output_video.width = codec_context.width
             output_video.height = codec_context.height
             output_video.pix_fmt = "yuv420p"
@@ -269,6 +319,8 @@ def _convert_video_message_to_mp4(content: bytes) -> bytes:
             if audio_stream is not None:
                 streams.append(audio_stream)
             for packet in input_container.demux(streams):
+                if monotonic() > deadline:
+                    raise ValueError("video conversion exceeded time limit")
                 if packet.stream.type == "video":
                     for frame in packet.decode():
                         video_frame = cast("VideoFrame", frame)

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import config_validation as cv
 
-from .api import C300XAgentApiError, C300XAgentApiUnsupportedError
 from .const import (
     CONF_AGENT_HOST,
     CONF_EVENT_WEBHOOK_ID,
@@ -17,30 +16,11 @@ from .const import (
     DOMAIN,
 )
 from .entry_config import (
-    entry_config_value as _entry_config_value,
-)
-from .entry_config import (
     normalized_update_options,
 )
 from .entry_types import BticinoC300XConfigEntry
 from .runtime_manager import (
-    BASE_PLATFORMS,
-    CAMERA_PLATFORM,
     C300XRuntimeManager,
-    _async_configure_device_activations,
-    _async_configure_display_bridge,
-    _async_notify_display_bridge_alarm_if_listening,
-    _async_refresh_device_user_status,
-    _async_refresh_self_test,
-    _async_remove_stale_gui_dependent_entities,
-    _async_schedule_display_bridge_notify,
-    _async_start_setup_recovery,
-    _async_sync_device_ui_patch,
-    _async_sync_device_user,
-    _async_track_display_bridge_updates,
-    _entry_activation_config,
-    _entry_platforms,
-    _offline_setup_data,
     cleanup_entry_runtime_resources,
 )
 
@@ -48,27 +28,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 __all__ = (
-    "BASE_PLATFORMS",
-    "CAMERA_PLATFORM",
-    "C300XAgentApiError",
-    "C300XAgentApiUnsupportedError",
-    "C300XRuntimeManager",
-    "_async_configure_device_activations",
-    "_async_configure_display_bridge",
-    "_async_notify_display_bridge_alarm_if_listening",
-    "_async_refresh_device_user_status",
-    "_async_refresh_self_test",
-    "_async_remove_stale_gui_dependent_entities",
-    "_async_schedule_display_bridge_notify",
-    "_async_start_setup_recovery",
-    "_async_sync_device_ui_patch",
-    "_async_sync_device_user",
-    "_async_track_display_bridge_updates",
-    "_entry_activation_config",
-    "_entry_config_value",
-    "_entry_platforms",
-    "_offline_setup_data",
     "async_migrate_entry",
+    "async_remove_entry",
     "async_setup",
     "async_setup_entry",
     "async_unload_entry",

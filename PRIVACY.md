@@ -23,6 +23,16 @@ Home Assistant may store:
 
 Diagnostics redact secrets and avoid exposing callback URLs or token values.
 
+The live text-memo sensor can expose the latest memo text to authorized Home
+Assistant clients. Its `latest_text` attribute is excluded from new Recorder
+history entries. This does not remove text already recorded by older versions,
+copied by automations, exported in logs, or retained in backups.
+
+Deleting a message or memo on the C300X does not delete Home Assistant history,
+exports, optional local ring recordings, or backups. Manage those copies through
+Home Assistant's Recorder retention settings and your backup policy. No automatic
+history purge or backup deletion is performed by this integration.
+
 ## Data Stored on the Device
 
 The native agent may store:
@@ -41,8 +51,35 @@ Doorbell camera handling is local to the device, the native agent, and Home
 Assistant. Users should still treat video/audio streams and Home Assistant
 camera snapshots as sensitive local data.
 
+Stored video and voice-message playback uses a RAM-only cache in Home Assistant
+for up to 30 seconds, with at most four cached results and 64 MiB total. It is
+not written to the device or disk. Changes to the message inventory invalidate
+reuse of previous results. Agent downloads are limited to 32 MiB; converted
+videos are limited to 64 MiB and 1920x1080, with a 30-second conversion budget.
+One media preparation runs at a time, with at most four distinct pending jobs.
+
 ## What Is Not Included
 
 The repository intentionally excludes vendor firmware images, extracted
 firmware, APKs, generated runtime payloads, third-party controller code, local
 device backups, and local secrets.
+
+## Public Content Audit
+
+Maintainers can run `python scripts/audit_github_privacy.py --file <local-file>`
+for offline triage, or explicitly opt into read-only GitHub access with
+`--repository <owner>/<repo> --allow-network`. The latter inspects release
+metadata/assets, issue/PR text, comments and reviews. It can use `GH_TOKEN` for
+GitHub API authentication; that credential is not forwarded to asset redirects.
+Nothing is uploaded, edited, commented on, closed or deleted.
+
+Reports contain numbered source identifiers and finding categories, not matched
+text, private paths or credentials. JSON `complete: false` and exit status 2 mean
+the audit could not finish, including size, request or pagination limits. Exit 1
+means possible findings; exit 0 means no matches within the stated scope.
+
+Archive inspection never extracts files and enforces member, byte and download
+limits. These are heuristic warnings requiring manual review, not proof that
+content is private, safe or legally cleared. Images are not OCR-scanned; linked
+attachments, Git history and discussions are outside the audit's scope. The
+tool is not run automatically against GitHub by CI or the integration.

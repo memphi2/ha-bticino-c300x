@@ -28,7 +28,7 @@ class HomeCallUseCase:
 
         ensure_home_call_supported(self._entry)
         prepare_stop = getattr(
-            self._entry.runtime_data,
+            self._entry.runtime_data.resources,
             "prepare_home_call_stop",
             None,
         )

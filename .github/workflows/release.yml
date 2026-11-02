@@ -49,6 +49,9 @@ jobs:
         run: |
           python -m pip install -r "${{ matrix.requirements-ha }}" -r "${{ matrix.requirements-lock }}"
           python -m pip check
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
       - name: Install native agent toolchain
         run: |
           sudo apt-get update
@@ -86,6 +89,8 @@ jobs:
   main-validation:
     name: main validation gate
     runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.verified-main.outputs.commit }}
     permissions:
       actions: read
       contents: read
@@ -95,6 +100,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.tag || github.ref_name }}
       - name: Wait for canonical main validation
+        id: verified-main
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -199,11 +205,19 @@ jobs:
               sys.exit(1)
           PY
             echo "Canonical main Validate workflow succeeded for $tag_sha: $run_url"
+            echo "commit=$tag_sha" >> "$GITHUB_OUTPUT"
             exit 0
           done
 
           echo "::error::Timed out waiting for Validate workflow on main for $tag_sha"
           exit 1
+
+  browser:
+    name: release browser
+    needs: main-validation
+    uses: ./.github/workflows/browser.yml
+    with:
+      ref: ${{ needs.main-validation.outputs.commit }}
 
   publish:
     runs-on: ubuntu-24.04
@@ -212,6 +226,7 @@ jobs:
       - hacs
       - hassfest
       - main-validation
+      - browser
     permissions:
       contents: write
       attestations: write

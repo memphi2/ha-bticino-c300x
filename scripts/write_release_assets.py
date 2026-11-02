@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from manifest_version import read_integration_version
+from sbom_runtime import runtime_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_MANIFEST = ROOT / "custom_components" / "bticino_c300x" / "manifest.json"
@@ -109,6 +110,11 @@ def write_release_assets(
     commit_date = _git_output("show", "-s", "--format=%cI", "HEAD")
     created = _spdx_timestamp(commit_date)
     bundle = _device_bundle_summary(zip_path)
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            runtime_packages, runtime_relationships = runtime_inventory(archive)
+    except (ValueError, SyntaxError) as err:
+        raise ReleaseAssetError(f"invalid runtime dependency inventory: {err}") from err
 
     metadata = _build_metadata(
         tag=tag,
@@ -134,6 +140,8 @@ def write_release_assets(
         zip_sha256=zip_sha256,
         zip_entries=zip_entries,
         created=created,
+        runtime_packages=runtime_packages,
+        runtime_relationships=runtime_relationships,
     )
     _write_json(sbom_path, sbom)
     _write_sha256sums(sha256sums_path, (zip_path, metadata_path, sbom_path))
@@ -248,6 +256,8 @@ def _spdx_document(
     zip_sha256: str,
     zip_entries: list[ZipEntry],
     created: str,
+    runtime_packages: list[dict[str, Any]],
+    runtime_relationships: list[dict[str, str]],
 ) -> dict[str, Any]:
     package_id = "SPDXRef-Package-ha-bticino-c300x"
     file_documents: list[dict[str, Any]] = []
@@ -266,7 +276,7 @@ def _spdx_document(
                     {
                         "algorithm": "SHA256",
                         "checksumValue": entry.sha256,
-                    }
+                    },
                 ],
                 "licenseConcluded": "NOASSERTION",
                 "copyrightText": "NOASSERTION",
@@ -293,6 +303,7 @@ def _spdx_document(
             "creators": ["Tool: scripts/write_release_assets.py"],
         },
         "documentDescribes": [package_id],
+        "comment": "Archive file inventory and direct runtime dependencies. Runtime-resolved transitive dependencies and installed device library versions are not observed by this build.",
         "packages": [
             {
                 "SPDXID": package_id,
@@ -318,15 +329,16 @@ def _spdx_document(
                     {
                         "algorithm": "SHA256",
                         "checksumValue": zip_sha256,
-                    }
+                    },
                 ],
                 "licenseConcluded": "Apache-2.0",
                 "licenseDeclared": "Apache-2.0",
                 "copyrightText": "NOASSERTION",
             }
-        ],
+        ]
+        + runtime_packages,
         "files": file_documents,
-        "relationships": relationships,
+        "relationships": relationships + runtime_relationships,
     }
 
 
@@ -390,7 +402,9 @@ def _integration_version() -> str:
 
 
 def _project_versions() -> dict[str, str]:
-    versions = cast(dict[str, Any], json.loads(PROJECT_VERSIONS.read_text(encoding="utf-8")))
+    versions = cast(
+        dict[str, Any], json.loads(PROJECT_VERSIONS.read_text(encoding="utf-8"))
+    )
     required = (
         "min_homeassistant",
         "current_homeassistant",
@@ -471,10 +485,7 @@ def _spdx_timestamp(value: str | None) -> str:
     except ValueError:
         return "1970-01-01T00:00:00Z"
     return (
-        parsed.astimezone(UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
+        parsed.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     )
 
 

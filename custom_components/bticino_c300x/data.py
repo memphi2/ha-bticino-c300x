@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from asyncio import Task
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .callback_target import (
     callback_url_host_type,
@@ -14,6 +15,10 @@ from .callback_target import (
 from .media_timeline import C300XMediaTimeline
 from .media_watchdog import AgentCpuWatchdog
 from .system_metrics import SystemMetricsCache
+
+if TYPE_CHECKING:
+    from .agent_update import AgentUpdateState
+    from .api import C300XAgentApi
 
 
 @dataclass(slots=True)
@@ -198,34 +203,101 @@ class C300XEventState:
 
 
 @dataclass(slots=True)
-class BticinoC300XRuntimeData:
-    """Runtime-only resources for a config entry."""
+class C300XRuntimeResources:
+    """Own cancellable work and subscriptions for one config-entry lifetime."""
 
-    api: Any
+    unregister_webhook: Callable[[], None] | None = None
+    unregister_event_webhook: Callable[[], None] | None = None
+    unregister_event_registration: Callable[[], None] | None = None
+    on_runtime_registration_created: Callable[[], Awaitable[None]] | None = None
+    unregister_display_bridge_updates: Callable[[], None] | None = None
+    prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
+    prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
+    agent_cpu_watchdog_task: Task[None] | None = None
+    answering_machine_messages_refresh_task: Task[None] | None = None
+    startup_sync_task: Task[None] | None = None
+    memos_refresh_task: Task[None] | None = None
+
+    def close(self) -> None:
+        """Release callbacks and tasks once; never invoke media/device commands."""
+
+        callbacks = (
+            self.unregister_event_registration,
+            self.unregister_display_bridge_updates,
+            self.unregister_event_webhook,
+            self.unregister_webhook,
+        )
+        tasks = (
+            self.memos_refresh_task,
+            self.answering_machine_messages_refresh_task,
+            self.startup_sync_task,
+            self.agent_cpu_watchdog_task,
+        )
+        self.unregister_event_registration = None
+        self.unregister_display_bridge_updates = None
+        self.unregister_event_webhook = None
+        self.unregister_webhook = None
+        self.on_runtime_registration_created = None
+        self.prepare_doorbell_video_stop = None
+        self.prepare_home_call_stop = None
+        self.memos_refresh_task = None
+        self.answering_machine_messages_refresh_task = None
+        self.startup_sync_task = None
+        self.agent_cpu_watchdog_task = None
+        errors: list[Exception] = []
+        for cancel in callbacks:
+            if cancel is not None:
+                try:
+                    cancel()
+                except Exception as err:
+                    errors.append(err)
+        for task in tasks:
+            if task is not None:
+                task.cancel()
+        if errors:
+            raise ExceptionGroup("Failed to release C300X runtime resources", errors)
+
+
+@dataclass(slots=True)
+class C300XRuntimeDiagnostics:
+    """Diagnostic snapshots, observations and operation results, without live tasks."""
+
+    display_bridge_diagnostics: C300XCallbackDiagnostics = field(
+        default_factory=C300XCallbackDiagnostics
+    )
+    qml_patch_diagnostics: C300XOperationDiagnostics = field(
+        default_factory=C300XOperationDiagnostics
+    )
+    agent_diagnostics: Mapping[str, Any] = field(default_factory=dict)
+    # Media observations can be newer than the last full diagnostics snapshot.
+    agent_media_facts: Mapping[str, Any] = field(default_factory=dict)
+    agent_media_facts_updated_at: datetime | None = None
+    agent_diagnostics_updated_at: datetime | None = None
+    agent_diagnostics_updated_by: str | None = None
+    agent_diagnostics_change_reason: str | None = None
+    # Agent process restarts are not proof of a device reboot.
+    agent_restart_count: int = 0
+    agent_uptime_seconds: int | None = None
+
+
+@dataclass(slots=True)
+class BticinoC300XRuntimeData:
+    """Live state and explicit resource/diagnostic owners for one config entry."""
+
+    api: C300XAgentApi
     event_state: C300XEventState
     connection_state: C300XConnectionState
     capabilities: dict[str, Any]
     agent_info: Mapping[str, Any]
-    unregister_webhook: Callable[[], None]
-    unregister_event_webhook: Callable[[], None]
-    unregister_event_registration: Callable[[], None] | None
-    on_runtime_registration_created: Callable[[], Awaitable[None]] | None
-    unregister_display_bridge_updates: Callable[[], None] | None
     loaded_platforms: tuple[str, ...]
-    prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
-    prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
     system_metrics: dict[str, Any] = field(default_factory=dict)
     system_metrics_updated_at: datetime | None = None
     system_metrics_cache: SystemMetricsCache = field(default_factory=SystemMetricsCache)
     agent_cpu_watchdog: AgentCpuWatchdog = field(default_factory=AgentCpuWatchdog)
-    agent_cpu_watchdog_task: Any | None = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: datetime | None = None
-    answering_machine_messages_refresh_task: Any | None = None
-    startup_sync_task: Any | None = None
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: datetime | None = None
-    memos_refresh_task: Any | None = None
     activations: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     qml_patch_status_updated_at: datetime | None = None
@@ -233,28 +305,10 @@ class BticinoC300XRuntimeData:
     device_user_status_updated_at: datetime | None = None
     self_test_status: Mapping[str, Any] = field(default_factory=dict)
     self_test_status_updated_at: datetime | None = None
-    display_bridge_diagnostics: C300XCallbackDiagnostics = field(
-        default_factory=C300XCallbackDiagnostics
-    )
     display_bridge_alarm_notify_pending: bool = False
-    qml_patch_diagnostics: C300XOperationDiagnostics = field(
-        default_factory=C300XOperationDiagnostics
-    )
-    agent_diagnostics: Mapping[str, Any] = field(default_factory=dict)
-    # Live media facts kept in sync with the camera's bridge view. The agent
-    # only pushes agent.diagnostics_changed on writes, so the media half of
-    # agent_diagnostics would otherwise stay at whatever the last full refresh
-    # saw and latch a finished call.
-    agent_media_facts: Mapping[str, Any] = field(default_factory=dict)
-    agent_media_facts_updated_at: datetime | None = None
-    agent_diagnostics_updated_at: datetime | None = None
-    agent_diagnostics_updated_by: str | None = None
-    agent_diagnostics_change_reason: str | None = None
-    # Count of observed agent restarts (device reboots): the agent-reported
-    # uptime dropping between two diagnostics samples means the process (and, on
-    # this device, usually the whole unit) restarted. Session-scoped like
-    # C300XConnectionState.reconnect_count.
-    device_reboot_count: int = 0
-    agent_uptime_seconds: int | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
-    agent_update_state: Any | None = None
+    agent_update_state: AgentUpdateState | None = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
+    diagnostics: C300XRuntimeDiagnostics = field(
+        default_factory=C300XRuntimeDiagnostics
+    )

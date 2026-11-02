@@ -8,6 +8,55 @@ for normal users.
 Validate that the current Home Assistant integration, bundled Lovelace card and
 packaged C300X device agent work together on a real C300X.
 
+## Isolated Integration Tests
+
+`pytest tests/test_ha_runtime.py` starts real Home Assistant in a subprocess
+with temporary configuration and an authenticated loopback-only fake agent.
+It checks webhook authentication, push state changes, registry renaming,
+service routing, reload, registration retry after disconnect and cancellation
+of an in-flight registration on unload. Unexpected requests and unhandled
+async exceptions fail the test. No device credentials are read.
+
+The browser frontend, go2rtc process and mDNS resolver are excluded from this
+fixture. These tests do not establish physical device or media stability.
+
+The same pytest wrapper runs three measured resource cycles after three warmup
+cycles. For the longer Linux-only probe, run
+`python tests/runtime_lab/run.py --scenario soak --cycles 30` (also scheduled
+weekly in CI). The JSON report includes request counts, tasks, timers, bus
+listeners, file descriptors, traced Python memory and resident memory. It rejects
+retained old API clients and growth beyond the explicit limits in `soak.py`.
+All traffic is synthetic loopback traffic; this is not a device-load measurement.
+
+`python tests/runtime_lab/run.py --scenario recorder` uses real SQLite Recorder
+storage. Forty identical metrics/diagnostic pushes must add zero history rows;
+three changed CPU readings must add exactly three. Memo text must remain visible
+live but absent from recorded attributes, as must volatile diagnostic counters.
+This checks write amplification and attribute privacy, not long-term retention.
+
+The `contract` scenario creates two real HA entries with camera and button
+platforms, renames their entities and reloads them. Its allowlisted export uses
+HA's display-registry fields, not fabricated unique IDs or production data.
+The pytest wrapper feeds it directly to the card's JavaScript resolver/actions:
+camera/readiness discovery and button routing must stay on the selected device,
+including when the second device's light entity is disabled. Synthetic HA button
+service calls also verify the agent API routes. No export is checked into Git.
+
+## Browser Regression Tests
+
+Run `npm ci --prefix tests/browser --ignore-scripts` and
+`node tests/browser/smoke.mjs`. Chrome must be installed; `CHROME_BIN` overrides
+its executable path. CI runs this separately from Python tests.
+
+The actual card is rendered at 320, 390 and 1024 pixels in four languages.
+Tests check action bounds/labels, unavailable and pending buttons, door/light
+routing, repeated WebRTC start/stop, microphone muting and detach cleanup.
+A synthetic canvas feeds a real browser-to-browser WebRTC connection; pixel
+checks require decoded video. HA host elements and signaling are fixtures,
+microphone input is Chrome's fake device and no C300X is contacted. Screenshots
+are written to ignored `.artifacts/browser/`. These are not real-HA frontend or
+device interoperability tests.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.
@@ -23,6 +72,7 @@ packaged C300X device agent work together on a real C300X.
 | Scenario | Expected result |
 | --- | --- |
 | On-demand Stream | Video starts, stops and can start again. |
+| PCMU On-demand, microphone off | Repeated start/stop and normal 60-second session renewal preserve audio/video without a device reboot or firmware-process restart. |
 | On-demand with Smartphone forwarding | Video remains available, readiness shows only a Ring Call warning and no Repair is created. |
 | On-demand Talkback | Microphone works from a secure frontend. |
 | Ring Call Preview | Card shows preview only when real ring media is ready. |
@@ -33,6 +83,13 @@ packaged C300X device agent work together on a real C300X.
 | Ring capture while busy | Capture fails cleanly instead of stealing the live session. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
+
+For the PCMU reboot regression, verify the running agent version and active
+device codec first. Observe boot ID, uptime and the answering-machine/media
+processes for at least 180 seconds after each stop; a successful stream alone
+does not establish that the device remained healthy. Record cold-boot and
+short-gap tests separately rather than inferring them from long-idle runs.
+Keep raw captures and device identifiers private.
 
 ## Readiness and Repairs
 
@@ -88,6 +145,13 @@ Each release must publish deterministic release artifacts:
 - SPDX 2.3 SBOM validated by the official SPDX tools,
 - SLSA provenance and SPDX SBOM attestations verified against the release
   workflow, tag ref and commit before publication.
+
+The SBOM distinguishes archive contents from direct external runtime dependencies.
+Python imports are read from the packaged sources; the optional SSH installer pin
+comes from the packaged installer, not the build environment. Native system and
+optional media/TLS libraries are identified separately. Unknown HA/device library
+versions are omitted, not guessed. This is not a resolved inventory of every
+transitive package installed on a user's systems, nor a vulnerability clearance.
 
 Manual Release runs must also execute from the release tag (`--ref vX.Y.Z`),
 not from `main` with a different tag input. Publication rejects a signing

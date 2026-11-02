@@ -24,6 +24,24 @@ Responsibilities:
 - Bundled Lovelace card registration and resource refresh.
 - Home Assistant WebRTC provider/go2rtc media delegation.
 
+Display requests use `dashboard.py` to assemble read-only payloads. User commands
+go through `executor.py`, also used by the existing service use cases. Both use
+`dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
+readiness and code policy; neither shared module imports the command executor.
+
+Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
+agent API. `resources` owns its tasks, subscriptions and media preparation
+callbacks; unloading closes this owner and clears the references. `diagnostics`
+contains snapshots and operation results, not running tasks. Message-refresh
+completion callbacks retain their original resource owner across an entry reload.
+
+Camera event tasks have their own `CameraBackgroundTasks` owner. Entity removal
+rejects new work, cancels and awaits pending tasks, then finishes session cleanup.
+Interrupted closes retain their session for that cleanup. The camera keeps its
+original runtime; removing an old camera does not clear the replacement runtime's
+callbacks or stop its device media. CPU-watchdog device commands belong to the
+entry runtime; the camera subscriber only closes local WebRTC sessions.
+
 ### Native device agent
 
 Path: `native_agent/`
@@ -43,6 +61,13 @@ Responsibilities:
 - Optional display bridge endpoint for QML dashboard requests.
 - Explicit maintenance/update actions for device-agent, display, firewall, MQTT
   migration and media-user setup.
+
+QML status/patch scripts and GUI reload run as a single bounded child-process
+job in `command_job.c`. The main poll loop continues serving events and requests;
+it never waits synchronously for these scripts. Jobs have a 10-second deadline,
+bounded output and no extra wakeups while idle. Concurrent maintenance writes
+are rejected as busy. A disconnected client does not restart or duplicate its
+job. Other legacy maintenance operations are not yet asynchronous.
 
 ### Device QML UI
 
@@ -64,7 +89,7 @@ Responsibilities:
 ```text
 C300X event source
   -> native agent
-  -> signed callback to HA event webhook
+  -> token-authenticated callback to HA event webhook
   -> HA updates entities/event state
 
 HA service/action
@@ -121,3 +146,12 @@ explicit user actions:
 - No runtime Node.js dependency on device.
 - Mutating APIs use POST and explicit auth.
 - Show only capabilities the agent actually reports.
+
+## Test Boundaries
+
+Dashboard/executor, config-flow, camera and runtime-manager unit tests use the installed Home Assistant
+modules and test-scoped replacements for external operations. Isolated test runs
+check module identities before and after execution. Legacy entity tests still contain
+module stubs, but all tests share the real Home Assistant exception types;
+fixtures verify that these remain unchanged. Full HA lifecycle, Recorder and
+media-contract scenarios run in separate processes under `tests/runtime_lab/`.

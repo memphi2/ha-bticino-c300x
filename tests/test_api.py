@@ -3675,6 +3675,23 @@ def test_request_json_rejects_oversized_response_via_content_length(
         asyncio.run(api._request_json("GET", "/api/v1/state"))
 
 
+@pytest.mark.parametrize("length", [None, _CONTENT_LENGTH_AUTO])
+@pytest.mark.parametrize("status", [200, 500])
+def test_media_responses_and_errors_are_size_bounded(monkeypatch, length, status):
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x._api_core._MAX_MEDIA_RESPONSE_BYTES", 8
+    )
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x._api_core._MAX_JSON_RESPONSE_BYTES", 8
+    )
+    session = _FakeSession(
+        response_status=status, response_body=b"x" * 9, response_content_length=length
+    )
+    api = C300XAgentApi(session, "http://agent.local:8080", "agent-token")
+    with pytest.raises(C300XAgentApiResponseError, match="too large"):
+        asyncio.run(api._request_bytes("GET", "/api/v1/test.bin"))
+
+
 def test_request_json_rejects_oversized_response_via_read_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

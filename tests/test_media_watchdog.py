@@ -292,7 +292,7 @@ def test_runtime_watchdog_does_not_schedule_duplicate_stop_task() -> None:
     assert runtime_data.resources.agent_cpu_watchdog_task is task
 
 
-def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions() -> None:
+def test_camera_watchdog_without_sessions_does_not_touch_the_device() -> None:
     api = _Api()
     runtime_data = SimpleNamespace(
         agent_cpu_watchdog=AgentCpuWatchdog(last_percent=99.0),
@@ -319,17 +319,70 @@ def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions()
 
     camera = _Camera()
 
-    asyncio.run(
-        async_handle_agent_cpu_watchdog(
-            camera,
-            "agent_cpu_high",
-            duration_seconds=300,
-        )
+    asyncio.run(async_handle_agent_cpu_watchdog(camera))
+
+    assert camera.refreshed is False
+    assert api.stop_calls == 0
+    assert api.reload_gui_calls == 0
+
+
+def test_one_watchdog_trip_with_camera_reloads_gui_only_once(monkeypatch):
+    from custom_components.bticino_c300x import repair_issues
+
+    issues = []
+    monkeypatch.setattr(
+        repair_issues, "async_create_media_watchdog_issue",
+        lambda *args, **kwargs: issues.append(kwargs),
     )
 
-    assert camera.refreshed is True
-    assert api.stop_calls == 1
-    assert api.reload_gui_calls == 1
+    async def run():
+        api = _Api()
+        tasks = []
+        sessions = {"browser"}
+        closes = []
+
+        def create(coro):
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+            return task
+
+        async def status():
+            return {"media_owner": "agent", "window_available": True}
+
+        async def close(session_id, **kwargs):
+            closes.append(kwargs)
+            sessions.discard(session_id)
+
+        api.async_doorbell_video_status = status
+        runtime = SimpleNamespace(
+            api=api, system_metrics={"cpu_usage_percent": 95.0},
+            agent_cpu_watchdog=AgentCpuWatchdog(
+                high_since=asyncio.get_running_loop().time() - 301,
+            ), resources=C300XRuntimeResources(),
+        )
+        entry = SimpleNamespace(entry_id="entry-1", runtime_data=runtime)
+        hass = SimpleNamespace(async_create_task=create)
+        camera = SimpleNamespace(
+            _entry=entry, hass=hass, _webrtc_session_ids=lambda: list(sessions),
+            _async_close_webrtc_session=close,
+            _async_write_ha_state_if_ready=lambda: None,
+        )
+        handle_runtime_cpu_metrics_changed(hass, entry)
+        handle_agent_cpu_metrics_changed(camera, entry.entry_id)
+        await asyncio.gather(*tasks)
+        handle_runtime_cpu_metrics_changed(hass, entry)
+        handle_agent_cpu_metrics_changed(camera, entry.entry_id)
+        assert len(tasks) == 2
+        assert api.reload_gui_calls == 1
+        assert api.stop_calls == 1
+        assert runtime.agent_cpu_watchdog.trigger_count == 1
+        assert closes == [{
+            "stop_media": False, "notify_client": True,
+            "reason": "agent_cpu_watchdog",
+        }]
+        assert len(issues) == 1
+
+    asyncio.run(run())
 
 
 def test_schedule_task_uses_running_loop_without_hass_helper() -> None:

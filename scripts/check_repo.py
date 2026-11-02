@@ -945,7 +945,9 @@ def check_github_automation() -> list[str]:
     }
     workflow_use = re.compile(r"^\s*uses:\s*([^#\s]+)", re.MULTILINE)
     pinned_sha = re.compile(r"[0-9a-f]{40}")
-    for path in (ROOT / ".github" / "workflows").rglob("*.yml"):
+    local_workflow = re.compile(r"\./\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml")
+    workflow_dir = ROOT / ".github" / "workflows"
+    for path in sorted((*workflow_dir.rglob("*.yml"), *workflow_dir.rglob("*.yaml"))):
         text = path.read_text(encoding="utf-8")
         if "runs-on: ubuntu-latest" in text:
             failures.append(f"{relative(path)} must pin the runner image instead of ubuntu-latest")
@@ -968,6 +970,11 @@ def check_github_automation() -> list[str]:
                 failures.append(f"{relative(path)} must not use deprecated {action}")
         for match in workflow_use.finditer(text):
             spec = match.group(1)
+            if spec.startswith("./"):
+                # Local reusable workflows execute from the caller's commit.
+                if not local_workflow.fullmatch(spec) or not (ROOT / spec).is_file():
+                    failures.append(f"{relative(path)} invalid local reusable workflow: {spec}")
+                continue
             if "@" not in spec:
                 failures.append(f"{relative(path)} action use must include an immutable ref: {spec}")
                 continue

@@ -38,9 +38,10 @@ class LoopbackResolver(ThreadedResolver):
 class RuntimeLab:
     """Exercise actual config entries, entity platforms, services and webhooks."""
 
-    def __init__(self, config_dir: Path, *, recorder=False) -> None:
+    def __init__(self, config_dir: Path, *, recorder=False, video=False) -> None:
         self.config_dir = config_dir
         self.recorder_enabled = recorder
+        self.video_enabled = video
         self.stack = AsyncExitStack()
         self.agent = FakeAgent()
         self.loop_errors = []
@@ -114,6 +115,8 @@ class RuntimeLab:
                 )
             for platform in BASE_PLATFORMS:
                 assert await async_setup_component(hass, platform, {})
+            if self.video_enabled:
+                assert await async_setup_component(hass, "camera", {})
             self.server = TestServer(hass.http.app, host="127.0.0.1")
             # Routes must be registered before aiohttp freezes the application.
             from custom_components.bticino_c300x import async_setup
@@ -149,10 +152,8 @@ class RuntimeLab:
 
     async def __aexit__(self, *_):
         try:
-            if hasattr(self, "entry") and self.hass.config_entries.async_get_entry(
-                self.entry.entry_id
-            ):
-                await self.hass.config_entries.async_unload(self.entry.entry_id)
+            for entry in self.hass.config_entries.async_entries(const.DOMAIN):
+                await self.hass.config_entries.async_unload(entry.entry_id)
         finally:
             try:
                 await self.hass.async_stop()
@@ -160,14 +161,14 @@ class RuntimeLab:
                 await self.stack.aclose()
         assert not self.loop_errors, self.loop_errors
 
-    async def add_entry(self, *, enabled_sensors=()):
+    async def add_entry(self, *, enabled_sensors=(), name="synthetic"):
         self.entry = config_entries.ConfigEntry(
             version=1,
             minor_version=2,
             domain=const.DOMAIN,
-            title="Synthetic Door",
+            title=f"{name.title()} Door",
             source="user",
-            unique_id="synthetic-device",
+            unique_id=f"{name}-device",
             discovery_keys=MappingProxyType({}),
             subentries_data=None,
             disabled_by=config_entries.ConfigEntryDisabler.USER
@@ -178,11 +179,11 @@ class RuntimeLab:
                 const.CONF_AGENT_HOST: "127.0.0.1",
                 const.CONF_AGENT_PORT: self.agent.server.port,
                 const.CONF_AGENT_TOKEN: TOKEN,
-                const.CONF_WEBHOOK_ID: "synthetic-display",
+                const.CONF_WEBHOOK_ID: f"{name}-display",
                 const.CONF_SHARED_SECRET: "synthetic-display-token",
-                const.CONF_EVENT_WEBHOOK_ID: "synthetic-events",
+                const.CONF_EVENT_WEBHOOK_ID: f"{name}-events",
                 const.CONF_EVENT_WEBHOOK_TOKEN: EVENT_TOKEN,
-                const.CONF_VIDEO_ENABLED: False,
+                const.CONF_VIDEO_ENABLED: self.video_enabled,
                 const.CONF_DEVICE_UI_ENABLED: False,
             },
         )

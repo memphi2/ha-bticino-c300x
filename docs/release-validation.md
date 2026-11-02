@@ -34,6 +34,14 @@ three changed CPU readings must add exactly three. Memo text must remain visible
 live but absent from recorded attributes, as must volatile diagnostic counters.
 This checks write amplification and attribute privacy, not long-term retention.
 
+The `contract` scenario creates two real HA entries with camera and button
+platforms, renames their entities and reloads them. Its allowlisted export uses
+HA's display-registry fields, not fabricated unique IDs or production data.
+The pytest wrapper feeds it directly to the card's JavaScript resolver/actions:
+camera/readiness discovery and button routing must stay on the selected device,
+including when the second device's light entity is disabled. Synthetic HA button
+service calls also verify the agent API routes. No export is checked into Git.
+
 ## Browser Regression Tests
 
 Run `npm ci --prefix tests/browser --ignore-scripts` and

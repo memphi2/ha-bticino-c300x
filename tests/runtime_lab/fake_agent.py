@@ -101,7 +101,11 @@ class FakeAgent:
                 "token_fingerprint": event_token_fingerprint(body.pop("token")),
             }
             subscription.pop("token", None)
-            self.subscriptions = [subscription]
+            self.subscriptions = [
+                item
+                for item in self.subscriptions
+                if item["callback_url"] != subscription["callback_url"]
+            ] + [subscription]
             return web.json_response({"subscription": subscription}, status=201)
         if key == ("GET", "/api/v1/maintenance/auth"):
             return web.json_response(
@@ -111,6 +115,14 @@ class FakeAgent:
             return web.json_response({"items": []})
         if key == ("GET", "/api/v1/display-bridge"):
             return web.json_response({"configured": False, "enabled": False})
+        if key == ("GET", "/api/v1/video/doorbell/status"):
+            return web.json_response(
+                {
+                    "available": False,
+                    "window_available": False,
+                    "bridge": {"media_owner": "idle", "available": True},
+                }
+            )
         if key == ("GET", "/api/v1/self-test"):
             return web.json_response({"ok": True, "checks": {}})
         if key == ("GET", "/api/v1/diagnostics"):
@@ -144,6 +156,7 @@ class FakeAgent:
                 }
             )
         if key in {
+            ("POST", "/api/v1/video/doorbell/actions/stop"),
             ("POST", "/api/v1/locks/default/actions/unlock"),
             ("POST", "/api/v1/stair-light/actions/activate"),
         }:

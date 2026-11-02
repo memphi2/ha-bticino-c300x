@@ -97,6 +97,13 @@ Each release must publish deterministic release artifacts:
 - SLSA provenance and SPDX SBOM attestations verified against the release
   workflow, tag ref and commit before publication.
 
+The SBOM distinguishes archive contents from direct external runtime dependencies.
+Python imports are read from the packaged sources; the optional SSH installer pin
+comes from the packaged installer, not the build environment. Native system and
+optional media/TLS libraries are identified separately. Unknown HA/device library
+versions are omitted, not guessed. This is not a resolved inventory of every
+transitive package installed on a user's systems, nor a vulnerability clearance.
+
 Manual Release runs must also execute from the release tag (`--ref vX.Y.Z`),
 not from `main` with a different tag input. Publication rejects a signing
 workflow ref or commit that differs from the checked-out release. This keeps

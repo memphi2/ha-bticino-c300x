@@ -428,6 +428,52 @@ def test_release_assets_are_reproducible_for_same_zip(
     ) == []
 
 
+def test_sbom_distinguishes_packaged_and_external_runtime_dependencies(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    archive_path = tmp_path / "integration.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("manifest.json", "{}")
+        archive.writestr("device_installer.py", '_REQUIRED_PARAMIKO_VERSION = "9.8.7"\nimport paramiko\n')
+        archive.writestr("media.py", "import aiohttp\nimport av\nfrom homeassistant.core import HomeAssistant\n")
+        archive.writestr("device_agent/bundle.json", '{"agent_version":"1.9.11"}')
+        archive.writestr("device_agent/armhf/c300x-agent-native", b"synthetic-test-agent")
+    writer.write_release_assets(
+        zip_path=archive_path, tag="v1.9.11", repository="example/repo",
+        sha256sums_path=tmp_path / "SHA256SUMS",
+        metadata_path=tmp_path / "build-metadata.json",
+        sbom_path=tmp_path / "sbom.spdx.json",
+    )
+    sbom = json.loads((tmp_path / "sbom.spdx.json").read_text())
+    packages = {package["name"]: package for package in sbom["packages"]}
+    assert packages["paramiko"]["versionInfo"] == "9.8.7"
+    assert packages["paramiko"]["externalRefs"][0]["referenceLocator"] == "pkg:pypi/paramiko@9.8.7"
+    assert packages["c300x-agent-native"]["versionInfo"] == "1.9.11"
+    for name in ("av", "aiohttp", "homeassistant", "glibc", "libsrtp", "speex", "curl"):
+        assert "versionInfo" not in packages[name]
+        assert packages[name]["filesAnalyzed"] is False
+        assert packages[name]["licenseDeclared"] == "NOASSERTION"
+    assert {
+        "spdxElementId": packages["paramiko"]["SPDXID"],
+        "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+        "relatedSpdxElement": sbom["packages"][0]["SPDXID"],
+    } in sbom["relationships"]
+    assert validate_full_spdx_document(parse_file(str(tmp_path / "sbom.spdx.json"))) == []
+
+
+def test_sbom_rejects_unmapped_external_imports(tmp_path: Path) -> None:
+    writer = _load_release_assets()
+    archive_path = tmp_path / "integration.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("unknown.py", "import new_external_dependency\n")
+    with pytest.raises(writer.ReleaseAssetError, match="unmapped runtime imports"):
+        writer.write_release_assets(
+            zip_path=archive_path, tag="v1.9.11", repository="example/repo",
+            sha256sums_path=tmp_path / "SHA256SUMS",
+            metadata_path=tmp_path / "build-metadata.json",
+            sbom_path=tmp_path / "sbom.spdx.json",
+        )
+
+
 def test_release_metadata_records_reused_native_agent(tmp_path: Path) -> None:
     writer = _load_release_assets()
     zip_path = tmp_path / "ha-bticino-c300x.zip"

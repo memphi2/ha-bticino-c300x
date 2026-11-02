@@ -24,6 +24,7 @@ from propcache.api import cached_property
 
 from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
+from .camera_media.background_tasks import CameraBackgroundTasks
 from .camera_media.ha_compat import CameraEntityFeature, WebRTCError, WebRTCSendMessage
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
@@ -223,6 +224,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         Camera.__init__(self)
         C300XEntity.__init__(self, entry, "doorbell_camera")
+        self._runtime_data = entry.runtime_data
+        self._background_tasks = CameraBackgroundTasks()
         self._attr_unique_id = doorbell_camera_unique_id(entry)
         self._attr_is_streaming = False
         self.content_type = STILL_IMAGE_CONTENT_TYPE
@@ -315,7 +318,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """Refresh doorbell video metadata on explicit HA update requests."""
 
         try:
-            status = await self._entry.runtime_data.api.async_doorbell_video_status()
+            status = await self._runtime_data.api.async_doorbell_video_status()
         except Exception:  # noqa: BLE001 - keep explicit refresh non-fatal
             self._bridge_available = False
             self._attr_available = False
@@ -450,6 +453,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     ) -> None:
         """Handle a WebRTC offer for doorbell video or Home Call audio."""
 
+        if self._background_tasks.closing:
+            send_message(WebRTCError("bticino_webrtc_offer_failed", "Camera is unloading"))
+            return
         has_audio_media = _offer_has_audio(offer_sdp)
         talkback_requested = _offer_can_send_microphone(offer_sdp)
         wants_audio = has_audio_media and _offer_should_use_audio_stream(offer_sdp)
@@ -490,7 +496,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         )
         try:
             if _owner_is_home_call(owner):
-                await self._entry.runtime_data.api.async_start_home_call(
+                await self._runtime_data.api.async_start_home_call(
                     duration_seconds=duration_seconds
                 )
                 home_call_started = True
@@ -522,7 +528,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
             if home_call_started:
                 with suppress(Exception):
-                    await self._entry.runtime_data.api.async_stop_home_call()
+                    await self._runtime_data.api.async_stop_home_call()
             send_message(WebRTCError("bticino_webrtc_unavailable", str(err)))
         except Exception as err:
             self._log_webrtc_debug(
@@ -543,7 +549,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
             if home_call_started:
                 with suppress(Exception):
-                    await self._entry.runtime_data.api.async_stop_home_call()
+                    await self._runtime_data.api.async_stop_home_call()
             send_message(WebRTCError("bticino_webrtc_offer_failed", str(err)))
 
     async def _async_handle_provider_webrtc_offer(
@@ -815,7 +821,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
         ):
             with suppress(Exception):
-                await self._entry.runtime_data.api.async_stop_doorbell_video()
+                await self._runtime_data.api.async_stop_doorbell_video()
 
     def _provider_offer_failure_should_stop_doorbell_media(
         self,
@@ -837,6 +843,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     async def async_on_webrtc_candidate(self, session_id: str, candidate: Any) -> None:
         """Forward browser ICE candidates to the active WebRTC provider session."""
 
+        if self._background_tasks.closing:
+            return
         provider_session = self._provider_webrtc_sessions.get(session_id)
         if provider_session is not None:
             if not provider_session.ready:
@@ -883,23 +891,27 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         # RTSP drain backstop.
         session = self._provider_webrtc_sessions.get(session_id)
         stop_media = session is not None and session.requires_explicit_stop
-        self.hass.async_create_task(
+        self._background_tasks.create(self.hass,
             self._async_close_webrtc_session(
                 session_id,
                 stop_media=stop_media,
                 reason="webrtc_session_closed",
-            )
+            ),
+            key=f"close:{session_id}",
         )
 
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""
 
-        self._entry.runtime_data.resources.prepare_doorbell_video_stop = None
-        self._entry.runtime_data.resources.prepare_home_call_stop = None
+        await self._background_tasks.close()
+        self._runtime_data.resources.prepare_doorbell_video_stop = None
+        self._runtime_data.resources.prepare_home_call_stop = None
+        current = getattr(self._entry, "runtime_data", None) is self._runtime_data
         for session_id in self._webrtc_session_ids():
-            await self._async_close_webrtc_session(session_id, force_stop_media=True)
-        with suppress(Exception):
-            await self._entry.runtime_data.api.async_stop_doorbell_video()
+            await self._async_close_webrtc_session(session_id, stop_media=current, force_stop_media=current)
+        if current:
+            with suppress(Exception):
+                await self._runtime_data.api.async_stop_doorbell_video()
 
     async def async_prepare_doorbell_video_stop(self) -> None:
         """Close HA-owned doorbell media before an explicit agent stop."""
@@ -969,6 +981,27 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
 
     async def _async_close_webrtc_session(
+        self,
+        session_id: str,
+        *,
+        stop_media: bool = True,
+        force_stop_media: bool = False,
+        notify_client: bool = False,
+        reason: str = "closed",
+    ) -> None:
+        session = self._provider_webrtc_sessions.get(session_id)
+        try:
+            await self._async_close_webrtc_session_impl(
+                session_id, stop_media=stop_media, force_stop_media=force_stop_media,
+                notify_client=notify_client, reason=reason,
+            )
+        except asyncio.CancelledError:
+            # Unload must be able to finish a close interrupted after its pop.
+            if session is not None:
+                self._provider_webrtc_sessions.setdefault(session_id, session)
+            raise
+
+    async def _async_close_webrtc_session_impl(
         self,
         session_id: str,
         *,
@@ -1105,15 +1138,15 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     )
                     if provider_session.is_home_call:
                         with suppress(Exception):
-                            await self._entry.runtime_data.api.async_stop_home_call()
+                            await self._runtime_data.api.async_stop_home_call()
                     elif provider_session.ring_call:
                         with suppress(Exception):
-                            await self._entry.runtime_data.api.async_hangup_doorbell_call()
+                            await self._runtime_data.api.async_hangup_doorbell_call()
                         with suppress(Exception):
-                            await self._entry.runtime_data.api.async_stop_doorbell_video()
+                            await self._runtime_data.api.async_stop_doorbell_video()
                     else:
                         with suppress(Exception):
-                            await self._entry.runtime_data.api.async_stop_doorbell_video()
+                            await self._runtime_data.api.async_stop_doorbell_video()
                     await self._async_log_video_status_debug(
                         "provider_agent_stop_after_request",
                         session_id=session_id,
@@ -1143,7 +1176,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             return
 
         try:
-            status = await self._entry.runtime_data.api.async_home_call_status()
+            status = await self._runtime_data.api.async_home_call_status()
         except Exception:  # noqa: BLE001 - keep active-looking local sessions on status errors
             return
         if _home_call_status_has_media(status):
@@ -1205,7 +1238,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     ) -> dict[str, Any]:
         status = cast(
             dict[str, Any],
-            await self._entry.runtime_data.api.async_doorbell_video_status(),
+            await self._runtime_data.api.async_doorbell_video_status(),
         )
         if apply_status:
             self._apply_status(status)
@@ -1301,6 +1334,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     await result
                     return "go2rtc_ws_awaited"
                 return "go2rtc_ws_sync"
+            except asyncio.CancelledError:
+                sessions.setdefault(session_id, ws_client)
+                raise
             except Exception as err:  # noqa: BLE001 - close cleanup must continue
                 self._log_webrtc_debug(
                     "provider_go2rtc_ws_close_failed",
@@ -1404,10 +1440,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """Subscribe to runtime event-state updates."""
 
         await super().async_added_to_hass()
-        self._entry.runtime_data.resources.prepare_doorbell_video_stop = (
+        self._runtime_data.resources.prepare_doorbell_video_stop = (
             self.async_prepare_doorbell_video_stop
         )
-        self._entry.runtime_data.resources.prepare_home_call_stop = (
+        self._runtime_data.resources.prepare_home_call_stop = (
             self.async_prepare_home_call_stop
         )
         self.async_on_remove(
@@ -1431,6 +1467,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """React to the periodic agent metrics heartbeat: run the CPU watchdog
         and self-heal a stale busy latch (the camera has no poll of its own)."""
 
+        if self._background_tasks.closing:
+            return
         handle_agent_cpu_metrics_changed(self, entry_id)
         if (
             entry_id == self._entry.entry_id
@@ -1438,7 +1476,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             and not self._reconcile_in_flight
         ):
             self._reconcile_in_flight = True
-            self.hass.async_create_task(self._async_reconcile_local_sessions())
+            self._background_tasks.create(self.hass, self._async_reconcile_local_sessions(), key="reconcile")
 
     async def _async_reconcile_local_sessions(self) -> None:
         """Close stale ready doorbell/on-demand sessions an idle agent orphaned
@@ -1476,7 +1514,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
 
     @callback
     def _handle_agent_event(self, event: Any) -> None:
-        if event.data.get("entry_id") != self._entry.entry_id:
+        if self._background_tasks.closing or event.data.get("entry_id") != self._entry.entry_id:
             return
         event_type = agent_event_key(event.data)
         if event_type in HOME_CALL_EVENTS:
@@ -1484,7 +1522,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._record_media_timeline(
                 "agent_event",
                 event_type,
-                details=self._agent_event_timeline_details(event.data),
+                details=_webrtc_debug.agent_event_timeline_details(event.data),
             )
             self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
@@ -1493,11 +1531,11 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             return
         if event_type in VIDEO_WINDOW_CLOSED_EVENTS:
             self._clear_video_window()
-            self._close_doorbell_webrtc_sessions_from_event()
+            self._close_webrtc_sessions_from_event("doorbell", "doorbell_media_closed")
             self._record_media_timeline(
                 "agent_event",
                 event_type,
-                details=self._agent_event_timeline_details(event.data),
+                details=_webrtc_debug.agent_event_timeline_details(event.data),
             )
             self._wake_rtsp_event_waiters()
             self._async_write_ha_state_if_ready()
@@ -1517,7 +1555,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._record_media_timeline(
             "agent_event",
             event_type,
-            details=self._agent_event_timeline_details(event.data),
+            details=_webrtc_debug.agent_event_timeline_details(event.data),
         )
         self._wake_rtsp_event_waiters()
         self._async_write_ha_state_if_ready()
@@ -1526,7 +1564,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         payload = _home_call_payload(data)
         if event_type == "home_call_ended":
             self._apply_home_call_ended(payload)
-            self._close_home_call_webrtc_sessions_from_event()
+            self._close_webrtc_sessions_from_event("home_call", "home_call_ended")
             return
         if event_type == "home_call_answered":
             self._apply_home_call_status(
@@ -1547,59 +1585,22 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             }
         )
 
-    def _close_home_call_webrtc_sessions_from_event(self) -> None:
-        """Close HA Home Call WebRTC sessions after an authoritative agent end event."""
+    def _close_webrtc_sessions_from_event(self, owner: str, reason: str) -> None:
+        """Close local sessions after an authoritative agent media-end event."""
 
-        session_ids = self._webrtc_session_ids_by_owner("home_call")
-        if (
-            not session_ids
-            or not hasattr(self, "hass")
-            or not hasattr(self.hass, "async_create_task")
-        ):
+        session_ids = self._webrtc_session_ids_by_owner(owner)
+        if not session_ids or getattr(self, "hass", None) is None:
             return
 
         async def _close_sessions() -> None:
             for session_id in session_ids:
                 await self._async_close_webrtc_session(
-                    session_id,
-                    stop_media=False,
-                    notify_client=True,
-                    reason="home_call_ended",
+                    session_id, stop_media=False, notify_client=True, reason=reason,
                 )
-            # Re-derive after the sessions drop out of local_sessions so a
-            # transient RTSP_BUSY at the home_call_ended event does not latch.
             self._refresh_derived_media_state()
             self._async_write_ha_state_if_ready()
 
-        self.hass.async_create_task(_close_sessions())
-
-    def _close_doorbell_webrtc_sessions_from_event(self) -> None:
-        """Close HA Doorbell WebRTC sessions after authoritative media close."""
-
-        session_ids = self._webrtc_session_ids_by_owner("doorbell")
-        if (
-            not session_ids
-            or not hasattr(self, "hass")
-            or not hasattr(self.hass, "async_create_task")
-        ):
-            return
-
-        async def _close_sessions() -> None:
-            for session_id in session_ids:
-                await self._async_close_webrtc_session(
-                    session_id,
-                    stop_media=False,
-                    notify_client=True,
-                    reason="doorbell_media_closed",
-                )
-            # The closed sessions no longer count toward local_sessions. Re-derive
-            # and write state so a transient RTSP_BUSY -- owner is already idle at
-            # the media.closed event but the sessions were still counted then --
-            # does not latch and block the next capture (a second viewer).
-            self._refresh_derived_media_state()
-            self._async_write_ha_state_if_ready()
-
-        self.hass.async_create_task(_close_sessions())
+        self._background_tasks.create(self.hass, _close_sessions())
 
     def _apply_home_call_ended(self, status: dict[str, Any]) -> None:
         self._mark_home_call_sessions_inactive()
@@ -1673,7 +1674,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         self._refresh_derived_media_state()
 
     def _async_write_ha_state_if_ready(self) -> None:
-        if not hasattr(self, "async_write_ha_state"):
+        if self._background_tasks.closing or not hasattr(self, "async_write_ha_state"):
             return
         snapshot = _camera_state_snapshot(self)
         if snapshot == self._last_state_snapshot:
@@ -1690,7 +1691,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     ) -> None:
         """Record a safe media transition using already-known runtime state."""
 
-        runtime = getattr(self._entry, "runtime_data", None)
+        runtime = self._runtime_data
         timeline = getattr(runtime, "media_timeline", None)
         record = getattr(timeline, "record", None)
         if not callable(record):
@@ -1709,41 +1710,11 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             details=details,
         )
 
-    def _agent_event_timeline_details(
-        self,
-        data: Mapping[str, Any],
-    ) -> dict[str, Any]:
-        """Return safe media facts from one already-received agent event."""
-
-        details: dict[str, Any] = {}
-        for key in (
-            "video_available",
-            "video_window_available",
-            "external_media_active",
-        ):
-            if key in data:
-                details[key] = bool(data[key])
-        bridge = optional_mapping(data.get("bridge"))
-        if bridge:
-            for key in (
-                "clients",
-                "media_active",
-                "ring_call_active",
-                "ring_media_active",
-                "ring_audio_active",
-                "ring_answer_requested",
-                "ring_answered",
-                "ring_hangup_requested",
-                "home_call_running",
-                "home_call_active",
-            ):
-                if key in bridge:
-                    details[f"bridge_{key}"] = bridge[key]
-        return details
-
     def _refresh_derived_media_state(self) -> None:
         self._last_media_decision = self._derive_media_decision()
         self._last_media_state = self._last_media_decision.state
+        if self._background_tasks.closing:
+            return
         publish_agent_media_facts(
             getattr(self, "hass", None), self._entry, self._bridge_status
         )

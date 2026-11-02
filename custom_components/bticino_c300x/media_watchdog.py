@@ -95,16 +95,16 @@ def _optional_float(value: Any) -> float | None:
 def handle_agent_cpu_metrics_changed(camera: Any, entry_id: str) -> None:
     """Close local camera WebRTC sessions after the entry watchdog trips."""
 
-    if entry_id != camera._entry.entry_id:
+    if camera._background_tasks.closing or entry_id != camera._entry.entry_id:
         return
-    watchdog = getattr(camera._entry.runtime_data, "agent_cpu_watchdog", None)
+    watchdog = getattr(camera._runtime_data, "agent_cpu_watchdog", None)
     if not getattr(watchdog, "tripped", False):
         return
     watchdog = cast(AgentCpuWatchdog, watchdog)
     camera._agent_cpu_watchdog = watchdog
     if camera._webrtc_session_ids():
-        camera.hass.async_create_task(
-            async_handle_agent_cpu_watchdog(camera)
+        camera._background_tasks.create(
+            camera.hass, async_handle_agent_cpu_watchdog(camera), key="watchdog"
         )
     camera._async_write_ha_state_if_ready()
 

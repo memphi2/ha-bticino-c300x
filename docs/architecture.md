@@ -35,6 +35,13 @@ callbacks; unloading closes this owner and clears the references. `diagnostics`
 contains snapshots and operation results, not running tasks. Message-refresh
 completion callbacks retain their original resource owner across an entry reload.
 
+Camera event tasks have their own `CameraBackgroundTasks` owner. Entity removal
+rejects new work, cancels and awaits pending tasks, then finishes session cleanup.
+Interrupted closes retain their session for that cleanup. The camera keeps its
+original runtime; removing an old camera does not clear the replacement runtime's
+callbacks or stop its device media. CPU-watchdog device commands belong to the
+entry runtime; the camera subscriber only closes local WebRTC sessions.
+
 ### Native device agent
 
 Path: `native_agent/`
@@ -142,7 +149,7 @@ explicit user actions:
 
 ## Test Boundaries
 
-Dashboard/executor and runtime-manager unit tests use the installed Home Assistant
+Dashboard/executor, config-flow, camera and runtime-manager unit tests use the installed Home Assistant
 modules and test-scoped replacements for external operations. Isolated test runs
 check module identities before and after execution. Legacy entity tests still contain
 module stubs, but all tests share the real Home Assistant exception types;

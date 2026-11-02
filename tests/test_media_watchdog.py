@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from custom_components.bticino_c300x.camera_media.background_tasks import (
+    CameraBackgroundTasks,
+)
 from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.media_watchdog import (
     AgentCpuWatchdog,
@@ -113,6 +116,8 @@ def test_agent_cpu_metric_signal_ignores_wrong_or_untripped_entry() -> None:
 
     class _Camera:
         _entry = _Entry()
+        _runtime_data = _entry.runtime_data
+        _background_tasks = CameraBackgroundTasks()
         writes = 0
 
         def _webrtc_session_ids(self) -> list[str]:
@@ -364,6 +369,7 @@ def test_one_watchdog_trip_with_camera_reloads_gui_only_once(monkeypatch):
         hass = SimpleNamespace(async_create_task=create)
         camera = SimpleNamespace(
             _entry=entry, hass=hass, _webrtc_session_ids=lambda: list(sessions),
+            _runtime_data=runtime, _background_tasks=CameraBackgroundTasks(),
             _async_close_webrtc_session=close,
             _async_write_ha_state_if_ready=lambda: None,
         )

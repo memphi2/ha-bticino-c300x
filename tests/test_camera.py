@@ -2,104 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
-import types
 from contextlib import suppress
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
+from homeassistant.components.camera import _async_get_image as ha_async_get_image
 from homeassistant.exceptions import HomeAssistantError
 
-if "homeassistant.components.camera" not in sys.modules:
-    homeassistant = types.ModuleType("homeassistant")
-    components = types.ModuleType("homeassistant.components")
-    camera = types.ModuleType("homeassistant.components.camera")
-    camera_const = types.ModuleType("homeassistant.components.camera.const")
-    stream = types.ModuleType("homeassistant.components.stream")
-    config_entries = types.ModuleType("homeassistant.config_entries")
-    const = types.ModuleType("homeassistant.const")
-    core = types.ModuleType("homeassistant.core")
-    entity_platform = types.ModuleType("homeassistant.helpers.entity_platform")
-    helpers = types.ModuleType("homeassistant.helpers")
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-    entity = types.ModuleType("homeassistant.helpers.entity")
-    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
-    event = types.ModuleType("homeassistant.helpers.event")
-
-    class Camera:  # pragma: no cover - import-time stub only
-        pass
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    camera.Camera = Camera
-    camera.CameraEntityFeature = types.SimpleNamespace(STREAM=1)
-    camera_const.CameraEntityFeature = camera.CameraEntityFeature
-    camera.WebRTCAnswer = lambda sdp: {"type": "answer", "sdp": sdp}
-    camera.WebRTCError = lambda code, message: {
-        "type": "error",
-        "code": code,
-        "message": message,
-    }
-    camera.WebRTCSendMessage = object
-    config_entries.ConfigEntry = ConfigEntry
-    core.CALLBACK_TYPE = object
-    const.ATTR_ENTITY_ID = "entity_id"
-    const.MAJOR_VERSION = MAJOR_VERSION
-    const.MINOR_VERSION = MINOR_VERSION
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
-    dispatcher.async_dispatcher_send = (
-        lambda hass, signal, entry_id: dispatcher_signals.append((signal, entry_id))
-    )
-    entity_registry.async_get = lambda hass: None
-    event.async_call_later = lambda *args, **kwargs: (lambda: None)
-    entity_platform.AddEntitiesCallback = object
-    stream.CONF_RTSP_TRANSPORT = "rtsp_transport"
-    stream.CONF_USE_WALLCLOCK_AS_TIMESTAMPS = "use_wallclock_as_timestamps"
-    helpers.config_validation = config_validation
-    helpers.event = event
-    helpers.entity_registry = entity_registry
-    sys.modules.setdefault("homeassistant", homeassistant)
-    sys.modules["homeassistant.components"] = components
-    sys.modules["homeassistant.components.camera"] = camera
-    sys.modules["homeassistant.components.camera.const"] = camera_const
-    sys.modules["homeassistant.components.stream"] = stream
-    sys.modules["homeassistant.config_entries"] = config_entries
-    sys.modules["homeassistant.const"] = const
-    sys.modules["homeassistant.core"] = core
-    sys.modules["homeassistant.helpers"] = helpers
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
-    sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-    sys.modules["homeassistant.helpers.entity"] = entity
-    sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
-    sys.modules["homeassistant.helpers.event"] = event
-    sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-
-try:
-    from homeassistant.components.camera import _async_get_image as ha_async_get_image
-except ImportError:  # pragma: no cover - only used by the lightweight stub fallback
-    ha_async_get_image = None
-
+from custom_components.bticino_c300x import (
+    agent_diagnostics,
+    entity,
+    media_watchdog,
+    video,
+)
 from custom_components.bticino_c300x import camera as camera_module
-from custom_components.bticino_c300x import media_watchdog
 from custom_components.bticino_c300x.camera import (
     STILL_IMAGE_BYTES,
     STILL_IMAGE_CONTENT_TYPE,
@@ -110,6 +28,7 @@ from custom_components.bticino_c300x.camera import (
     _ProviderWebRTCStreamContext,
     async_setup_entry,
 )
+from custom_components.bticino_c300x.camera_media.ha_compat import CameraEntityFeature
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
 from custom_components.bticino_c300x.data import (
     C300XRuntimeDiagnostics,
@@ -119,6 +38,21 @@ from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
 dispatcher_signals: list[tuple[str, str]] = []
+
+
+@pytest.fixture(autouse=True)
+def camera_ha_boundary(monkeypatch):
+    """Keep the camera real while replacing its HA event/state boundary locally."""
+    monkeypatch.setattr(C300XDoorbellCamera, "async_write_ha_state", lambda self: None)
+    monkeypatch.setattr(camera_module, "async_dispatcher_connect", lambda *_: lambda: None)
+    monkeypatch.setattr(entity, "async_dispatcher_connect", lambda *_: lambda: None)
+    monkeypatch.setattr(agent_diagnostics, "async_dispatcher_send", lambda *_: None)
+
+
+def _record_task(tasks, coro):
+    task = asyncio.create_task(coro)
+    tasks.append(task)
+    return task
 
 
 def _stub_rtsp_ready(
@@ -299,7 +233,8 @@ def _install_fake_webrtc_provider(
     )
 
 
-def test_resolve_doorbell_camera_entity_id_handles_missing_registry() -> None:
+def test_resolve_doorbell_camera_entity_id_handles_missing_registry(monkeypatch) -> None:
+    monkeypatch.setattr(video.er, "async_get", lambda _hass: None)
     assert (
         resolve_doorbell_camera_entity_id(
             SimpleNamespace(),
@@ -319,7 +254,7 @@ class _FakeEntry:
 
 
 def test_doorbell_camera_sets_visible_entity_icon() -> None:
-    assert C300XDoorbellCamera._attr_icon == "mdi:cctv"
+    assert C300XDoorbellCamera(_FakeEntry()).icon == "mdi:cctv"
 
 
 def test_camera_setup_entry_adds_entity_only_when_capability_is_supported() -> None:
@@ -356,7 +291,7 @@ def test_doorbell_camera_advertises_native_webrtc_frontend_stream() -> None:
 
 
 def test_doorbell_camera_advertises_stream_feature_for_ha_frontend() -> None:
-    assert C300XDoorbellCamera._attr_supported_features == 1
+    assert C300XDoorbellCamera(_FakeEntry()).supported_features == CameraEntityFeature.STREAM
 
 
 def test_doorbell_camera_does_not_use_background_stream_for_stills() -> None:
@@ -390,8 +325,6 @@ def test_doorbell_camera_returns_local_still_without_device_warmup() -> None:
 
 
 def test_doorbell_camera_proxy_still_uses_local_fallback() -> None:
-    if ha_async_get_image is None:
-        return
     entry = _FakeEntry()
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
 
@@ -503,7 +436,7 @@ def test_doorbell_camera_webrtc_offer_reports_missing_provider(
         )
     )
 
-    assert sent_messages == [
+    assert [message.as_dict() for message in sent_messages] == [
         {
             "type": "error",
             "code": "bticino_webrtc_unavailable",
@@ -1246,7 +1179,7 @@ def test_doorbell_camera_ha_webrtc_close_does_not_stop_agent_media() -> None:
         provider = _FakeWebRTCProvider()
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
             provider=provider,
@@ -1277,7 +1210,7 @@ def test_doorbell_camera_ha_webrtc_close_stops_home_call_media() -> None:
         provider = _FakeWebRTCProvider()
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["home-call-session"] = _ProviderWebRTCSession(
             provider=provider,
@@ -1320,7 +1253,7 @@ def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning() -> None:
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
             provider=provider,
@@ -1391,6 +1324,115 @@ def test_doorbell_camera_remove_clears_callbacks_and_stops_media() -> None:
     assert provider.closed == ["doorbell-session"]
     assert api.stop_calls == 2
     assert camera._webrtc_session_ids() == []
+
+
+def test_remove_cancels_reconcile_without_touching_replacement_runtime() -> None:
+    async def run():
+        started, cancelled = asyncio.Event(), asyncio.Event()
+
+        class BlockingApi(_FakeApi):
+            async def async_doorbell_video_status(self):
+                started.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    cancelled.set()
+
+        old = _FakeRuntimeData(api=BlockingApi())
+        entry = _FakeEntry(runtime_data=old)
+        camera = C300XDoorbellCamera(entry)
+        tasks = []
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: _record_task(tasks, coro))
+        camera._provider_webrtc_sessions["s"] = _ready_doorbell_session()
+        camera._handle_system_metrics_changed(entry.entry_id)
+        await started.wait()
+        replacement = _FakeRuntimeData()
+        callback = object()
+        replacement.resources.prepare_doorbell_video_stop = callback
+        replacement.resources.prepare_home_call_stop = callback
+        entry.runtime_data = replacement
+        await camera.async_will_remove_from_hass()
+        assert cancelled.is_set()
+        assert all(task.cancelled() for task in tasks)
+        assert not camera._background_tasks._tasks
+        assert not camera._webrtc_session_ids()
+        assert old.api.stop_calls == replacement.api.stop_calls == 0
+        assert replacement.resources.prepare_doorbell_video_stop is callback
+        assert replacement.resources.prepare_home_call_stop is callback
+        assert replacement.diagnostics.agent_media_facts == {}
+        task_count = len(tasks)
+        camera._handle_system_metrics_changed(entry.entry_id)
+        camera._handle_agent_event(SimpleNamespace(data={"entry_id": entry.entry_id, "event": "doorbell.media.closed"}))
+        camera.close_webrtc_session("late")
+        await camera.async_on_webrtc_candidate("late", {})
+        assert len(tasks) == task_count
+        assert not camera._presession_webrtc_candidates
+
+    asyncio.run(run())
+
+
+def test_remove_finishes_an_interrupted_provider_websocket_close() -> None:
+    async def run():
+        started = asyncio.Event()
+        closes = []
+
+        class Socket:
+            async def close(self):
+                closes.append("close")
+                if len(closes) == 1:
+                    started.set()
+                    await asyncio.Future()
+
+        entry = _FakeEntry()
+        camera = C300XDoorbellCamera(entry)
+        tasks = []
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: _record_task(tasks, coro))
+        provider = _FakeWebRTCProvider()
+        provider._sessions = {"s": Socket()}
+        session = _ready_doorbell_session()
+        session.provider = provider
+        camera._provider_webrtc_sessions["s"] = session
+        camera.close_webrtc_session("s")
+        await started.wait()
+        assert camera._webrtc_session_ids() == []
+        assert provider._sessions == {}
+        await camera.async_will_remove_from_hass()
+        assert tasks[0].cancelled()
+        assert closes == ["close", "close"]
+        assert not camera._webrtc_session_ids()
+        assert not provider._sessions
+        assert entry.runtime_data.api.stop_calls == 2
+
+    asyncio.run(run())
+
+
+def test_repeated_watchdog_samples_do_not_spawn_duplicate_camera_cleanup() -> None:
+    async def run():
+        entry = _FakeEntry()
+        camera = C300XDoorbellCamera(entry)
+        entry.runtime_data.agent_cpu_watchdog.tripped = True
+        gate = asyncio.Event()
+        tasks, closes = [], []
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: _record_task(tasks, coro))
+        camera._provider_webrtc_sessions["s"] = _ready_doorbell_session()
+
+        async def close(session_id, **kwargs):
+            closes.append(kwargs)
+            await gate.wait()
+            camera._provider_webrtc_sessions.pop(session_id)
+
+        camera._async_close_webrtc_session = close
+        for _ in range(3):
+            media_watchdog.handle_agent_cpu_metrics_changed(camera, entry.entry_id)
+        assert len(tasks) == 1
+        gate.set()
+        await asyncio.gather(*tasks)
+        assert len(closes) == 1
+        assert closes[0]["stop_media"] is False
+        assert entry.runtime_data.api.reload_gui_calls == 0
+        await camera._background_tasks.close()
+
+    asyncio.run(run())
 
 
 def test_doorbell_camera_remove_hangs_up_active_ring_call() -> None:
@@ -2964,7 +3006,7 @@ def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> N
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["doorbell-session"] = _ProviderWebRTCSession(
             provider=provider,
@@ -2983,7 +3025,7 @@ def test_doorbell_media_closed_rederives_state_after_local_sessions_close() -> N
         assert camera._last_media_state is MediaState.IDLE
         assert camera._active_local_media_sessions() == 0
 
-        camera._close_doorbell_webrtc_sessions_from_event()
+        camera._close_webrtc_sessions_from_event("doorbell", "doorbell_media_closed")
         await asyncio.gather(*tasks)
         assert camera._active_local_media_sessions() == 0
         return camera._last_media_state
@@ -3006,7 +3048,7 @@ def test_unanswered_ring_preview_media_closed_rederives_state_after_close() -> N
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["ring-preview-session"] = (
             _ProviderWebRTCSession(
@@ -3024,7 +3066,7 @@ def test_unanswered_ring_preview_media_closed_rederives_state_after_close() -> N
         camera._clear_video_window()
         assert camera._last_media_state is MediaState.IDLE
 
-        camera._close_doorbell_webrtc_sessions_from_event()
+        camera._close_webrtc_sessions_from_event("doorbell", "doorbell_media_closed")
         await asyncio.gather(*tasks)
         return camera._last_media_state
 
@@ -3102,12 +3144,13 @@ def test_metrics_heartbeat_schedules_reconcile_only_while_sessions_held() -> Non
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
     scheduled: list[Any] = []
 
-    def _create_task(coro: Any) -> Any:
+    def _create_task(_hass: Any, coro: Any, **_kwargs: Any) -> Any:
         scheduled.append(coro)
         coro.close()  # we only assert it was scheduled
         return SimpleNamespace()
 
-    camera.hass = SimpleNamespace(async_create_task=_create_task)
+    camera.hass = SimpleNamespace()
+    camera._background_tasks.create = _create_task
 
     # No sessions held -> nothing to reconcile.
     camera._handle_system_metrics_changed("entry-1")
@@ -3150,7 +3193,7 @@ def test_reconcile_removes_stale_ready_session_when_agent_idle() -> None:
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["doorbell-session"] = _ready_doorbell_session()
         camera._provider_webrtc_sessions["doorbell-session"].provider = provider
@@ -3244,7 +3287,7 @@ def test_reconcile_closes_finished_home_call_session_via_home_status() -> None:
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
-            async_create_task=lambda coro: tasks.append(asyncio.create_task(coro)),
+            async_create_task=lambda coro: _record_task(tasks, coro),
         )
         camera._provider_webrtc_sessions["home"] = _ProviderWebRTCSession(
             provider=provider,
@@ -3268,12 +3311,13 @@ def test_metrics_heartbeat_skips_reconcile_while_one_is_in_flight() -> None:
     camera = C300XDoorbellCamera(_FakeEntry())  # type: ignore[arg-type]
     scheduled: list[Any] = []
 
-    def _create_task(coro: Any) -> Any:
+    def _create_task(_hass: Any, coro: Any, **_kwargs: Any) -> Any:
         scheduled.append(coro)
         coro.close()
         return SimpleNamespace()
 
-    camera.hass = SimpleNamespace(async_create_task=_create_task)
+    camera.hass = SimpleNamespace()
+    camera._background_tasks.create = _create_task
     camera._provider_webrtc_sessions["s"] = _ready_doorbell_session()
 
     camera._reconcile_in_flight = True

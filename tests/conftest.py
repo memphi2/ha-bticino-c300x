@@ -2,8 +2,10 @@
 
 import sys
 
+import homeassistant.components.camera  # noqa: F401
 import homeassistant.const  # noqa: F401
 import homeassistant.exceptions  # noqa: F401
+import homeassistant.helpers.aiohttp_client  # noqa: F401
 import homeassistant.helpers.selector  # noqa: F401
 import pytest
 

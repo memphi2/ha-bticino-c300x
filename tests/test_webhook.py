@@ -1518,6 +1518,10 @@ def test_metrics_subscribers_see_current_watchdog_before_closing_sessions(
 ) -> None:
     from unittest.mock import AsyncMock
 
+    from custom_components.bticino_c300x.camera_media.background_tasks import (
+        CameraBackgroundTasks,
+    )
+
     async def run() -> None:
         hass = _FakeHass()
         runtime = SimpleNamespace(
@@ -1533,6 +1537,8 @@ def test_metrics_subscribers_see_current_watchdog_before_closing_sessions(
         close_session = AsyncMock()
         camera = SimpleNamespace(
             _entry=entry,
+            _runtime_data=runtime,
+            _background_tasks=CameraBackgroundTasks(),
             hass=hass,
             _webrtc_session_ids=lambda: ["session"],
             _async_close_webrtc_session=close_session,

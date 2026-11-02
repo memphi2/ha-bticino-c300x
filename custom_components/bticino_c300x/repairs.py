@@ -32,6 +32,7 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
@@ -425,6 +426,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             )
         try:
             patch_state = await _async_capture_external_patch_state(entry)
+            if getattr(update_state, "payload_bootstrap_required", False):
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
+                )
             update_result = await async_apply_packaged_agent_update(
                 self.hass,
                 entry.runtime_data.api,
@@ -474,6 +479,10 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 errors={"base": "update_failed"},
                 description_placeholders=placeholders,
             )
+        if entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True:
+            data = dict(entry.data)
+            data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING)
+            self.hass.config_entries.async_update_entry(entry, data=data)
         await _async_apply_repaired_agent_setup(self.hass, entry, setup_data)
         if entry.runtime_data.agent_update_state.update_required:
             return self.async_show_form(
@@ -681,6 +690,9 @@ async def _async_apply_repaired_agent_setup(
     entry.runtime_data.agent_update_state = compare_agent_bundle(
         setup_data,
         await async_load_packaged_bundle_metadata(hass),
+        payload_bootstrap_pending=(
+            entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True
+        ),
     )
     async_dispatcher_send(hass, SIGNAL_AGENT_INFO_CHANGED, entry.entry_id)
 

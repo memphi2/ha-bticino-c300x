@@ -53,6 +53,22 @@ def test_compare_agent_bundle_detects_missing_bundle() -> None:
     assert state.reason == "bundle_missing"
 
 
+def test_matching_metadata_does_not_hide_pending_payload_after_reload() -> None:
+    state = compare_agent_bundle(
+        {"version": "1.9.9", "api_version": "1", "agent": {
+            "bundle_hash": "sha256:abc", "self_update_supported": True,
+            "self_update_file_set_version": 2,
+        }},
+        {"agent_version": "1.9.9", "api_version": "1",
+         "bundle_hash": "sha256:abc", "update_file_set_version": 2},
+        payload_bootstrap_pending=True,
+    )
+    assert state.update_required
+    assert state.self_update_repair_supported
+    assert not state.payload_bootstrap_required
+    assert state.reason == "payload_bootstrap_pending"
+
+
 @pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, True, "2"])
 def test_compare_agent_bundle_requires_compatible_updater_file_set(
     installed_file_set: Any,

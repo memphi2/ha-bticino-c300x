@@ -56,6 +56,7 @@ class AgentUpdateState:
         return self.update_required and self.self_update_supported and self.reason in {
             "bundle_hash_mismatch",
             "installed_bundle_manifest_missing",
+            "payload_bootstrap_pending",
             "version_mismatch",
         }
 
@@ -101,6 +102,8 @@ async def async_load_packaged_bundle_metadata(
 def compare_agent_bundle(
     setup_data: Mapping[str, Any],
     bundle: dict[str, Any] | None,
+    *,
+    payload_bootstrap_pending: bool = False,
 ) -> AgentUpdateState:
     """Compare the installed agent metadata with the packaged bundle metadata."""
 
@@ -144,6 +147,7 @@ def compare_agent_bundle(
         )
     if (
         installed_version == available_version
+        and not payload_bootstrap_pending
         and (
             not available_bundle_hash
             or (
@@ -157,6 +161,12 @@ def compare_agent_bundle(
         return AgentUpdateState(
             state=UPDATE_STATE_INCOMPATIBLE,
             reason="self_update_not_supported",
+            **common,
+        )
+    if payload_bootstrap_pending:
+        return AgentUpdateState(
+            state=UPDATE_STATE_UPDATE_AVAILABLE,
+            reason="payload_bootstrap_pending",
             **common,
         )
     if installed_version != available_version:

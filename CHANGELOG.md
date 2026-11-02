@@ -8,6 +8,11 @@
   Home Assistant event loop. A failed event registration could otherwise trigger
   a Repairs thread-safety warning after 15 seconds.
 
+### Diagnostics
+
+- Identify the failing registration stage in event-registration warnings without
+  extra device requests. A connection closure is not treated as proof of a reboot.
+
 ### Upgrade notes
 
 - Home Assistant integration fix only; the packaged native agent remains 1.9.9.

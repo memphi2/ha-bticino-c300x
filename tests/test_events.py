@@ -1215,7 +1215,7 @@ def test_async_start_agent_event_registration_updates_token_mismatch() -> None:
     ]
 
 
-def test_async_start_agent_event_registration_reconnects_with_backoff() -> None:
+def test_async_start_agent_event_registration_reconnects_with_backoff(caplog) -> None:
     api = _FakeApi([RuntimeError("down"), {"subscription": {"id": "sub-ok"}}])
     hass = _FakeHass()
     fake_dispatcher.signals.clear()
@@ -1236,6 +1236,8 @@ def test_async_start_agent_event_registration_reconnects_with_backoff() -> None:
     assert connection_state.connection_state == "reconnecting"
     assert connection_state.last_reconnect_reason == "event_subscription_registration"
     assert connection_state.last_connection_error == "RuntimeError: down"
+    assert "event registration failed (event_subscription): RuntimeError: down" in caplog.text
+    assert "event-token" not in caplog.text
     assert connection_state.next_reconnect_delay_seconds == 30
     assert len(fake_scheduler.calls) == 2
     assert sorted(call.delay for call in fake_scheduler.calls) == [15, 30]

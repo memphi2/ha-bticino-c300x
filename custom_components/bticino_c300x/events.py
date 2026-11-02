@@ -139,6 +139,7 @@ class _AgentEventRegistration:
         self._entity_registry_cancel: CALLBACK_TYPE | None = None
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._task: Task[Any] | None = None
+        self._registration_stage = "callback_url"
 
     def start(self) -> Callable[[], None]:
         """Start registration and return the cleanup callback."""
@@ -179,6 +180,7 @@ class _AgentEventRegistration:
         return True
 
     async def _register_once(self) -> None:
+        self._registration_stage = "callback_url"
         runtime = getattr(self._entry, "runtime_data", None)
         prior_metrics = getattr(runtime, "system_metrics", None)
         base_url = await async_generate_agent_callback_url(
@@ -198,8 +200,10 @@ class _AgentEventRegistration:
             len(registration_events),
             datetime.now(UTC),
         )
+        self._registration_stage = "callback_transport"
         transport_changed = await self._callback_transport.async_prepare(base_url)
         if registration_events:
+            self._registration_stage = "event_subscription"
             self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
                 callback_url=base_url,
@@ -208,6 +212,7 @@ class _AgentEventRegistration:
             )
             self._schedule_renewal()
         else:
+            self._registration_stage = "subscription_cleanup"
             await _remove_inactive_subscriptions(self._api, callback_url=base_url)
             self._subscription_id = None
         self._connection_state.mark_event_subscription_success(
@@ -228,6 +233,7 @@ class _AgentEventRegistration:
         self._send_connection_state_changed()
         if registration_created or transport_changed:
             await self._handle_runtime_registration_created()
+        self._registration_stage = "diagnostics"
         await async_refresh_agent_diagnostics(self._hass, self._entry)
 
     async def _handle_runtime_registration_created(self) -> None:
@@ -247,7 +253,9 @@ class _AgentEventRegistration:
         if hasattr(getattr(self._entry, "runtime_data", None), "system_metrics"):
             invalidate_system_metrics(self._entry)
         error = compact_error_text(err)
-        _LOGGER.warning("C300X event registration failed: %s", error)
+        _LOGGER.warning(
+            "C300X event registration failed (%s): %s", self._registration_stage, error
+        )
         self._connection_state.mark_event_subscription_failure(datetime.now(UTC), error)
         self._connection_state.mark_reconnecting(
             "event_subscription_registration",

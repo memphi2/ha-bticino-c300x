@@ -172,10 +172,12 @@ def test_idle_gui_does_not_poll_write_or_wake_the_agent(lab: Lab) -> None:
     before = api_get(lab.api_port, "/api/v1/diagnostics")
     assert before["ringer_gui_ready"] is True
     assert before["ringer_command_pending"] is False
-    assert before["last_poll_timeout_ms"] == -1
-    time.sleep(0.15)
+    # The diagnostic request itself uses the bounded HTTP receive slot.
+    assert 0 <= before["last_poll_timeout_ms"] <= 500
+    time.sleep(0.65)
     after = api_get(lab.api_port, "/api/v1/diagnostics")
-    assert after["loop_iterations"] == before["loop_iterations"] + 1
+    # Only accept + receive may wake the loop, not the expired receive deadline.
+    assert after["loop_iterations"] == before["loop_iterations"] + 2
     assert after["agent_write_count"] == before["agent_write_count"]
     assert lab.device.frames == []
 

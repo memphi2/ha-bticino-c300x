@@ -8,11 +8,32 @@
   matching the RTP timestamp increment. Speex silence is unchanged. This
   corrects undersized agent packets. Repeated on-device PCMU on-demand tests
   passed without a reboot.
+- Bound incoming HTTP request work, reject incomplete or ambiguous requests,
+  and send complete responses even when sockets accept only part of a write.
+- Deliver event callbacks outside the agent's main loop through a bounded
+  queue. Record delivery only after confirmation and keep event IDs unique
+  across buffer wraparound and agent restarts.
+- Stop memory-diagnostic collection when debug logging is disabled and share
+  one collector across integration entries.
+- Reuse stored-media downloads and conversions through a bounded, short-lived
+  RAM cache. Add byte-range playback and explicit download/conversion limits.
+
+### Changed
+
+- Replace the misleading `device_reboot_count` diagnostic attribute with
+  `agent_restart_count`, based on confirmed agent-instance changes. Adjust
+  templates using the old attribute; agent restarts do not prove device reboots.
+- Exclude volatile diagnostic attributes and memo text from new Recorder
+  history entries. Live attributes remain available; existing history and
+  backups are not deleted.
+- Include direct external runtime dependencies in the release SBOM and clarify
+  provenance, callback authentication, privacy, and accepted legacy SSH risks.
 
 ### Upgrade
 
-- Update the native agent to 1.9.11 to apply the PCMU correction; updating only
-  the integration is insufficient. No firmware patch is required.
+- Update the native agent to 1.9.11 to apply the PCMU correction and agent
+  transport improvements; updating only the integration is insufficient.
+  No firmware patch is required.
 
 ## v1.9.10 - 2026-11-02
 

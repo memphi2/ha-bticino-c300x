@@ -69,3 +69,31 @@ def test_local_yaml_workflow_does_not_bypass_remote_pin_checks(tmp_path, monkeyp
 
     assert len(findings) == 1
     assert "full commit SHA" in findings[0]
+
+
+@pytest.mark.parametrize("steps, valid", [
+    ("      - uses: actions/checkout@main", False),
+    ('      - uses: "actions/checkout@main"', False),
+    ("      - {uses: actions/checkout@main}", False),
+    ("      - name: Checkout\n        uses: actions/checkout@main", False),
+    ("      - uses: null", False),
+    ("      - uses: actions/checkout@" + "a" * 40, True),
+    ('      - run: |\n          uses: actions/checkout@main', True),
+])
+def test_step_references_are_parsed_as_yaml(tmp_path, monkeypatch, steps, valid):
+    workflows = tmp_path / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "check.yml").write_text(
+        "permissions:\n  contents: read\njobs:\n  check:\n    steps:\n" + steps + "\n"
+    )
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    assert bool(check_repo.check_github_automation()) is not valid
+
+
+@pytest.mark.parametrize("body", ["jobs: [", "[]", "jobs: []", "jobs: {test: 1}"])
+def test_invalid_workflows_fail_closed(tmp_path, monkeypatch, body):
+    workflows = tmp_path / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "check.yml").write_text(body)
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    assert check_repo.check_github_automation()

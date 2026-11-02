@@ -533,7 +533,7 @@ def _async_start_setup_recovery(
     entry: BticinoC300XConfigEntry,
     api: C300XAgentApi,
     connection_state: C300XConnectionState,
-) -> Any:
+) -> Callable[[], None]:
     """Reload the entry once an agent that was offline during setup returns."""
 
     from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -542,15 +542,19 @@ def _async_start_setup_recovery(
     stopped = False
     retry_cancel = None
     retry_delay_seconds = DEFAULT_RECONNECT_GRACE_SECONDS
+    probe_task: asyncio.Task[Any] | None = None
 
     async def _retry(now: Any = None) -> None:
-        nonlocal retry_cancel, retry_delay_seconds
-        if stopped:
+        nonlocal retry_cancel, retry_delay_seconds, probe_task
+        if stopped or probe_task is not None:
             return
         retry_cancel = None
+        probe_task = asyncio.current_task()
         try:
             await api.async_validate_setup()
         except C300XAgentApiError as err:
+            if stopped:
+                return
             connection_state.mark_reconnecting(
                 type(err).__name__,
                 retry_delay_seconds,
@@ -565,15 +569,22 @@ def _async_start_setup_recovery(
             retry_cancel = async_call_later(hass, retry_delay_seconds, _retry)
             retry_delay_seconds = min(300, retry_delay_seconds * 2)
             return
-        await hass.config_entries.async_reload(entry.entry_id)
+        finally:
+            # A successful reload unloads this entry; it must not cancel itself.
+            probe_task = None
+        if not stopped:
+            await hass.config_entries.async_reload(entry.entry_id)
 
     retry_cancel = async_call_later(hass, retry_delay_seconds, _retry)
 
     def _cancel() -> None:
-        nonlocal stopped
+        nonlocal stopped, retry_cancel
         stopped = True
         if retry_cancel is not None:
             retry_cancel()
+            retry_cancel = None
+        if probe_task is not None:
+            probe_task.cancel()
 
     return _cancel
 

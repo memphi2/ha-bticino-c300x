@@ -454,6 +454,88 @@ def test_setup_recovery_retries_until_agent_returns(
     assert cancelled == []
 
 
+@pytest.mark.parametrize("result", ["success", "failure", "cancelled"])
+def test_setup_recovery_cancel_stops_inflight_probe(
+    monkeypatch: pytest.MonkeyPatch, result: str
+) -> None:
+    scheduled = []
+    sent = []
+    reloaded = []
+    import homeassistant.helpers.dispatcher as dispatcher
+    import homeassistant.helpers.event as event_helper
+
+    def call_later(_hass, _delay, callback):
+        scheduled.append(callback)
+        return lambda: None
+
+    monkeypatch.setattr(event_helper, "async_call_later", call_later)
+    monkeypatch.setattr(dispatcher, "async_dispatcher_send", lambda *args: sent.append(args))
+
+    async def run():
+        started = asyncio.Event()
+        finish = asyncio.Event()
+        interrupted = []
+
+        async def validate():
+            started.set()
+            try:
+                await finish.wait()
+            except asyncio.CancelledError:
+                interrupted.append(True)
+                if result == "cancelled":
+                    raise
+            if result == "failure":
+                raise integration.C300XAgentApiError("offline")
+            return {}
+
+        async def reload(entry_id):
+            reloaded.append(entry_id)
+
+        hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=reload))
+        cancel = integration._async_start_setup_recovery(
+            hass, _entry(), SimpleNamespace(async_validate_setup=validate), C300XConnectionState()
+        )
+        task = asyncio.create_task(scheduled[0]())
+        await started.wait()
+        cancel()
+        finish.set()
+        await asyncio.gather(task, return_exceptions=True)
+        assert interrupted == [True]
+        assert reloaded == []
+        assert sent == []
+        assert len(scheduled) == 1
+
+    asyncio.run(run())
+
+
+def test_setup_recovery_does_not_cancel_its_own_successful_reload(monkeypatch):
+    scheduled = []
+    reloaded = []
+    import homeassistant.helpers.event as event_helper
+
+    def call_later(_hass, _delay, callback):
+        scheduled.append(callback)
+        return lambda: None
+
+    monkeypatch.setattr(event_helper, "async_call_later", call_later)
+
+    async def run():
+        async def reload(entry_id):
+            cancel()
+            await asyncio.sleep(0)
+            reloaded.append(entry_id)
+
+        hass = SimpleNamespace(config_entries=SimpleNamespace(async_reload=reload))
+        cancel = integration._async_start_setup_recovery(
+            hass, _entry(), SimpleNamespace(async_validate_setup=lambda: _async_value({})),
+            C300XConnectionState(),
+        )
+        await scheduled[0]()
+        assert reloaded == ["entry-1"]
+
+    asyncio.run(run())
+
+
 def test_setup_helpers_keep_existing_secrets_and_select_platforms() -> None:
     data = {CONF_WEBHOOK_ID: "existing", CONF_SHARED_SECRET: object()}
 

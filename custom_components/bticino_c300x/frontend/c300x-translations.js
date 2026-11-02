@@ -1,5 +1,8 @@
 export const C300X_TRANSLATIONS = {
   en: {
+    device_unresolved: "Camera device assignment unavailable",
+    door_unlock: "Open door",
+    stair_light: "Staircase light",
     answer: "Answer",
     auto_mode: "Doorstation + Home Call",
     call_home: "Call Home",
@@ -41,6 +44,9 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unknown",
   },
   de: {
+    device_unresolved: "Gerätezuordnung der Kamera nicht verfügbar",
+    door_unlock: "Tür öffnen",
+    stair_light: "Treppenlicht",
     answer: "Abheben",
     auto_mode: "Türstation + Home Call",
     call_home: "Zuhause anrufen",
@@ -82,6 +88,9 @@ export const C300X_TRANSLATIONS = {
     unknown: "Unbekannt",
   },
   fr: {
+    device_unresolved: "Affectation de l'appareil de la caméra indisponible",
+    door_unlock: "Ouvrir la porte",
+    stair_light: "Éclairage de l'escalier",
     answer: "Répondre",
     auto_mode: "Platine + Home Call",
     call_home: "Appeler la maison",
@@ -123,6 +132,9 @@ export const C300X_TRANSLATIONS = {
     unknown: "Inconnu",
   },
   it: {
+    device_unresolved: "Associazione del dispositivo della telecamera non disponibile",
+    door_unlock: "Apri porta",
+    stair_light: "Luce scale",
     answer: "Rispondi",
     auto_mode: "Postazione porta + Home Call",
     call_home: "Chiama casa",

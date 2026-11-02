@@ -2,8 +2,16 @@
 
 ## v1.9.10 - Unreleased
 
+### Added
+
+- Door unlock and staircase-light buttons at the bottom right of the card,
+  using the selected device's existing Home Assistant button entities.
+
 ### Fixed
 
+- Keep card sensors and call controls associated with the selected camera's
+  device, including current Home Assistant device-registry metadata. Missing
+  assignments no longer fall back to another doorstation.
 - Keep the reconnect-grace timer and entity-registry refresh listener on the
   Home Assistant event loop. A failed event registration could otherwise trigger
   a Repairs thread-safety warning after 15 seconds.

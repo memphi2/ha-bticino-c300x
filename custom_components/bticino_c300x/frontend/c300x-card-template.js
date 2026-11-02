@@ -54,12 +54,14 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: flex;
           align-items: center;
           flex: 0 0 auto;
+          flex-wrap: wrap;
+          gap: 8px;
         }
         .entity-main {
           display: flex;
           align-items: center;
           min-width: 0;
-          flex: 1 1 auto;
+          flex: 1 1 220px;
         }
         .row-actions {
           display: flex;
@@ -70,6 +72,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         }
         .row-action,
         .home-action,
+        .device-action,
         .mic-action {
           display: flex;
           align-items: center;
@@ -87,6 +90,19 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           cursor: pointer;
           font: inherit;
           transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+        }
+        .device-actions {
+          display: flex;
+          gap: 8px;
+          flex: 0 0 auto;
+          margin-left: auto;
+        }
+        .device-action:disabled {
+          color: var(--disabled-text-color);
+          cursor: default;
+        }
+        .device-action[aria-busy="true"] {
+          color: var(--primary-color);
         }
         .row-action.active {
           color: var(--primary-color);
@@ -157,7 +173,8 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           0% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color) 45%, transparent); }
           100% { opacity: .35; box-shadow: 0 0 0 8px color-mix(in srgb, var(--error-color) 0%, transparent); }
         }
-        .row-action:focus-visible {
+        .row-action:focus-visible,
+        .device-action:focus-visible {
           outline: 2px solid var(--primary-color);
           outline-offset: 2px;
         }
@@ -196,6 +213,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           color: var(--secondary-text-color);
           font-size: 13px;
           line-height: 18px;
+          overflow-wrap: anywhere;
         }
         .secondary.error {
           color: var(--error-color);
@@ -232,6 +250,11 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         }
         .readiness-icon {
           --mdc-icon-size: 16px;
+          flex: 0 0 auto;
+        }
+        .readiness-text {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
       </style>
       <ha-card>
@@ -262,6 +285,14 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
                 <span class="readiness-text"></span>
               </div>
             </div>
+          </div>
+          <div class="device-actions">
+            <button class="device-action door-action" type="button" disabled>
+              <ha-icon icon="mdi:door-open"></ha-icon>
+            </button>
+            <button class="device-action light-action" type="button" disabled>
+              <ha-icon icon="mdi:lightbulb-on-outline"></ha-icon>
+            </button>
           </div>
         </div>
       </ha-card>

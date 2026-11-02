@@ -35,18 +35,30 @@ function c300xStateExists(hass, entityId) {
   return !hass?.states || !!hass.states[entityId];
 }
 
+function c300xRegistryEntryId(hass, registryEntry) {
+  const device = hass?.devices?.[registryEntry?.device_id];
+  // Current HA exposes a single owner; older display registries only list owners.
+  return device?.config_entry_id || registryEntry?.config_entry_id
+    || (device?.config_entries?.length === 1 ? device.config_entries[0] : "")
+    || "";
+}
+
+function c300xSameDevice(hass, camera, candidate) {
+  if (camera?.device_id) {
+    return candidate?.device_id === camera.device_id;
+  }
+  const entryId = c300xRegistryEntryId(hass, camera);
+  return !!entryId && c300xRegistryEntryId(hass, candidate) === entryId;
+}
+
 function c300xRegistryEntityMatches(
   entityId,
   registryEntry,
   domain,
   baseObjectId,
-  entryId = "",
 ) {
   const [entityDomain, objectId] = entityId.split(".");
   if (entityDomain !== domain) {
-    return false;
-  }
-  if (entryId && registryEntry?.config_entry_id !== entryId) {
     return false;
   }
   const translationKey = c300xTranslationKey(baseObjectId);
@@ -54,9 +66,10 @@ function c300xRegistryEntityMatches(
   return (
     registryEntry?.platform === C300X_PLATFORM
     && (
-      registryEntry?.translation_key === translationKey
-      || uniqueId.endsWith(`_${translationKey}`)
-      || objectId?.startsWith(baseObjectId)
+      registryEntry?.translation_key
+        ? registryEntry.translation_key === translationKey
+        : uniqueId.endsWith(`_${translationKey}`)
+          || c300xObjectSuffix(objectId, baseObjectId) !== null
     )
   );
 }
@@ -65,70 +78,87 @@ export function c300xFirstEntity(hass, domain, baseObjectId, entryId = "") {
   const registryMatch = Object.entries(hass?.entities || {}).find(
     ([entityId, registryEntry]) => (
       c300xStateExists(hass, entityId)
+      && (!entryId || c300xRegistryEntryId(hass, registryEntry) === entryId)
       && c300xRegistryEntityMatches(
         entityId,
         registryEntry,
         domain,
         baseObjectId,
-        entryId,
       )
     ),
   );
   if (registryMatch) {
     return registryMatch[0];
   }
+  if (entryId) {
+    return undefined;
+  }
 
   return Object.keys(hass?.states || {}).find((entityId) => {
     const [entityDomain, objectId] = entityId.split(".");
-    return entityDomain === domain && objectId?.startsWith(baseObjectId);
+    return !hass?.entities?.[entityId]
+      && entityDomain === domain && c300xObjectSuffix(objectId, baseObjectId) !== null;
   });
 }
 
 export function c300xResolveEntity(hass, config, domain, baseObjectId) {
-  const configured = config.entity;
+  const configured = config?.entity;
   if (configured) {
-    if (!hass?.states || hass.states[configured]) {
-      return configured;
-    }
+    return configured;
   }
-  return c300xFirstEntity(hass, domain, baseObjectId, config.entry_id || "")
-    || c300xEntityId(domain, baseObjectId);
+  return c300xFirstEntity(hass, domain, baseObjectId, config?.entry_id || "")
+    || (config?.entry_id ? "" : c300xEntityId(domain, baseObjectId));
 }
 
 export function c300xRelatedEntity(hass, config, domain, baseObjectId, configKey) {
   const configured = config?.[configKey];
   if (configured) {
-    if (!hass?.states || hass.states[configured]) {
-      return configured;
-    }
+    return configured;
   }
 
   const cameraEntityId = c300xResolveEntity(hass, config, "camera", C300X_CAMERA_OBJECT_ID);
-  const entryId = c300xEntryId(hass, config, cameraEntityId);
-  if (entryId) {
-    const match = Object.entries(hass?.entities || {}).find(
-      ([entityId, registryEntry]) => (
-        c300xStateExists(hass, entityId)
-        && c300xRegistryEntityMatches(
-          entityId,
-          registryEntry,
-          domain,
-          baseObjectId,
-          entryId,
-        )
-      ),
-    );
-    if (match) {
-      return match[0];
-    }
+  const camera = hass?.entities?.[cameraEntityId];
+  if (camera?.platform !== C300X_PLATFORM
+    || (config?.entry_id && !c300xEntryId(hass, config, cameraEntityId))) {
+    return undefined;
   }
-
-  return c300xFirstEntity(hass, domain, baseObjectId);
+  return Object.keys(hass?.entities || {}).find((entityId) => (
+    c300xStateExists(hass, entityId)
+    && c300xSameDevice(hass, camera, hass.entities[entityId])
+    && c300xRegistryEntityMatches(entityId, hass.entities[entityId], domain, baseObjectId)
+  ));
 }
 
 export function c300xEntryId(hass, config, entityId) {
-  if (config.entry_id) {
-    return config.entry_id;
+  const registryEntry = hass?.entities?.[entityId || config?.entity];
+  if (registryEntry?.platform !== C300X_PLATFORM) {
+    return "";
   }
-  return hass?.entities?.[entityId || config.entity]?.config_entry_id || "";
+  const entryId = c300xRegistryEntryId(hass, registryEntry);
+  return config?.entry_id && config.entry_id !== entryId ? "" : entryId;
+}
+
+export function c300xDeviceActionEntity(hass, config, key) {
+  if (!config || !["door_unlock", "stair_light"].includes(key)) {
+    return "";
+  }
+  const camera = config.entity || c300xResolveEntity(hass, config, "camera", C300X_CAMERA_OBJECT_ID);
+  const cameraRegistry = hass?.entities?.[camera];
+  const entryId = c300xEntryId(hass, config, camera);
+  // HA's display registry exposes device_id, not config_entry_id or unique_id.
+  // Physical actions must never fall back to a different device.
+  if (cameraRegistry?.platform !== C300X_PLATFORM
+    || (config.entry_id && !entryId)) {
+    return "";
+  }
+  return Object.keys(hass?.entities || {}).find((entityId) => {
+    const state = hass?.states?.[entityId];
+    const entry = hass.entities[entityId];
+    return !!state
+      && entityId.startsWith("button.")
+      && entry.platform === C300X_PLATFORM
+      && c300xSameDevice(hass, cameraRegistry, entry)
+      && (entry.translation_key === key || (entryId && entry.unique_id === `${entryId}_${key}`))
+      && (key !== "door_unlock" || state.attributes?.lock_id === "default");
+  }) || "";
 }

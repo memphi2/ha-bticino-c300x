@@ -44,8 +44,7 @@ def main() -> int:
         [
             ValidationStep("Quality scale checks", (sys.executable, "scripts/check_quality_scale.py")),
             ValidationStep("Ruff", (sys.executable, "-m", "ruff", "check", ".")),
-            ValidationStep("Python tests", (sys.executable, "-m", "pytest")),
-            ValidationStep("Python coverage ratchet", (sys.executable, "scripts/check_coverage.py")),
+            ValidationStep("Python tests and coverage ratchet", (sys.executable, "scripts/check_coverage.py")),
             ValidationStep("Python typing ratchet", (sys.executable, "scripts/check_typing.py")),
         ]
     )

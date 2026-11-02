@@ -203,9 +203,12 @@ class _AgentEventRegistration:
         self._registration_stage = "callback_transport"
         transport_changed = await self._callback_transport.async_prepare(base_url)
         if registration_events:
-            self._registration_stage = "event_subscription"
+            self._registration_stage = "event_subscription_list"
+            subscriptions = await self._api.async_list_event_subscriptions()
+            self._registration_stage = "event_subscription_create"
             self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
+                subscriptions=subscriptions,
                 callback_url=base_url,
                 token=token,
                 events=registration_events,
@@ -506,14 +509,14 @@ def _registry_entity_active(
 async def _ensure_subscription(
     api: C300XAgentApi,
     *,
+    subscriptions: dict[str, Any],
     callback_url: str,
     token: str,
     events: list[str],
 ) -> tuple[str | None, bool]:
     """Reuse the agent's RAM event subscription or create one when needed."""
 
-    subscriptions = _subscriptions(await api.async_list_event_subscriptions())
-    for subscription in subscriptions:
+    for subscription in _subscriptions(subscriptions):
         if _subscription_matches(subscription, callback_url, token, events):
             return _subscription_id({"subscription": subscription}), False
 

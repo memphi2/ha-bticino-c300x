@@ -16,11 +16,13 @@ struct c300x_ringer_control {
     int gui_fd;
     int client_fd;
     long long deadline_ms;
+    int gui_confirmed;
     char id[33];
     struct c300x_ringer_command command;
 };
 
-typedef void (*c300x_ringer_apply_fn)(int fd, const struct c300x_ringer_command *command, void *ctx);
+/* Return zero while device readback still needs confirmation. */
+typedef int (*c300x_ringer_apply_fn)(int fd, const struct c300x_ringer_command *command, void *ctx);
 
 void c300x_ringer_control_init(struct c300x_ringer_control *control);
 /* Return zero when the connection is retained by the control channel. */
@@ -33,6 +35,11 @@ void c300x_ringer_control_request(
 );
 int c300x_ringer_control_timeout_ms(const struct c300x_ringer_control *control);
 void c300x_ringer_control_expire(struct c300x_ringer_control *control);
+/* Return nonzero when a pending command consumed the state event. */
+int c300x_ringer_control_confirm(
+    struct c300x_ringer_control *control, int muted,
+    c300x_ringer_apply_fn apply, void *ctx
+);
 int c300x_ringer_control_pollfds(const struct c300x_ringer_control *control, struct pollfd *fds);
 void c300x_ringer_control_handle_pollfds(struct c300x_ringer_control *control, const struct pollfd *fds, int count);
 void c300x_ringer_control_close(struct c300x_ringer_control *control);

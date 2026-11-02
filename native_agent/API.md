@@ -12,7 +12,7 @@ proxy if a site needs TLS.
 ## Versioning
 
 - HTTP base path: `/api/v1`
-- Current packaged agent version: `1.9.9`
+- Current packaged agent version: `1.9.10`
 - Self-test contract version: `api_version: "1.1"`
 - Normal payloads are JSON unless an endpoint explicitly returns binary media.
 
@@ -594,8 +594,13 @@ Request fields:
 just like the device button. The API response waits for the matching GUI
 acknowledgment and device readback. Only the GUI sends the mute/unmute device
 command; the agent never overrides its audio-state priorities with a raw write.
-A differing readback returns `409 ringer_not_applied`, and an undecodable
-readback returns `502 ringer_readback_failed`. An ACK alone is not a confirmed value.
+If the GUI has queued its write and readback still differs, the request stays
+pending until a matching device event triggers a fresh readback, within the
+existing five-second command deadline. Expiry returns `409 ringer_not_applied`;
+an undecodable readback returns `502 ringer_readback_failed`. A GUI acknowledgment
+or event alone is not a confirmed device value. There are no retry writes or
+periodic reads while waiting. Clients must allow enough HTTP time for the
+command deadline, device readback and response delivery.
 The core QML hook must be updated and loaded; the optional display bridge
 pages are not required. A missing GUI returns `503 ringer_gui_unavailable`,
 a concurrent command `409 ringer_gui_busy`, and a missing acknowledgment
@@ -1259,6 +1264,7 @@ request has a monotonic five-second deadline. Diagnostics expose
 
 | Agent version | Self-test API | Firmware family | Notes |
 | --- | --- | --- | --- |
+| 1.9.10 | 1.1 | 1.7.x | Waits for device events and verified readback after a GUI-confirmed ringer write remains queued; no retry writes or idle polling. |
 | 1.9.9 | 1.1 | 1.7.x | Installs the required ringer GUI component and advertises self-update file set 2. Older self-updaters install the executable first, then finish the payload using the new updater and existing maintenance token. |
 | 1.9.8 (withdrawn) | 1.1 | 1.7.x | Changes are included in 1.9.9: GUI-confirmed ringer mute/unmute, corrected core call-end notification port and opt-in verified HTTPS callbacks. Removes the ineffective teardown settle window, limits cleanup to owned BT-AV clients, aligns PCMU negotiation and bounds SIP/TCP framing. Ringer and HTTPS operation are confirmed with 1.9.9; the PCMU reboot remains unresolved. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |

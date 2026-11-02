@@ -144,7 +144,7 @@ depend on enabled options and installed agent capabilities.
 | Quality scale tracking | [Quality scale](docs/quality-scale.md) |
 | Hardware release checks | [Release validation](docs/release-validation.md) |
 | Privacy, security, and legal notes | [Privacy](PRIVACY.md), [Security](SECURITY.md), [Legal notes](docs/legal.md) |
-| Evidence and baselines | [Current legal/provenance audit](docs/audits/current-legal-provenance.md), [Media refactor baseline](docs/dev/media-refactor-baseline.md) |
+| Legal and provenance audit | [Current legal/provenance audit](docs/audits/current-legal-provenance.md) |
 | Release history | [Changelog](CHANGELOG.md) |
 
 ## Project Status

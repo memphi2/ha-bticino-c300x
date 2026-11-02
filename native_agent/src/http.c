@@ -492,6 +492,9 @@ static void handle_gui_reload(
     const struct c300x_config *config,
     const struct request *request
 );
+static int apply_gui_ringer_command(
+    int client_fd, const struct c300x_ringer_command *command, void *ctx
+);
 static void handle_restart_agent(
     int client_fd,
     const struct c300x_config *config,
@@ -6257,6 +6260,13 @@ static void handle_udp_event(
     }
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
+    int confirmed_muted;
+    if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)
+        && c300x_ringer_control_confirm(
+            &runtime->ringer_control, confirmed_muted, apply_gui_ringer_command, runtime
+        )) {
+        return;
+    }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
         if (
             strcmp(type, "doorbell.view_requested") == 0
@@ -7951,7 +7961,7 @@ static void handle_ringer_get(
     send_json(client_fd, 200, "OK", body);
 }
 
-static void handle_ringer_post(
+static int handle_ringer_post(
     int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
@@ -7990,31 +8000,31 @@ static void handle_ringer_post(
     has_volume = c300x_json_int_field(request_body, "volume", &volume);
     if (!has_muted && !has_volume) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"ringer_muted_required\"}\n");
-        return;
+        return 1;
     }
     if (has_volume && (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_volume\"}\n");
-        return;
+        return 1;
     }
 
     if (has_muted) {
         if (!gui_confirmed) {
             struct c300x_ringer_command pending = {muted, has_volume, volume};
             c300x_ringer_control_request(&runtime->ringer_control, client_fd, &pending);
-            return;
+            return 0;
         }
         if (!c300x_openwebnet_send(config, "*#8**33##", muted_reply, sizeof(muted_reply), error, sizeof(error))) {
             send_device_error(client_fd, error);
-            return;
+            return 1;
         }
         /* Never override the GUI's audio-state priorities with a raw write. */
         if (!c300x_ringer_muted_from_reply(muted_reply, &muted_readback)) {
             send_json(client_fd, 502, "Bad Gateway", "{\"ok\":false,\"error\":\"ringer_readback_failed\"}\n");
-            return;
+            return 1;
         }
         if (muted_readback != muted) {
-            send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_not_applied\"}\n");
-            return;
+            /* The stock GUI queues its write on a Qt timer; await its state event. */
+            return 0;
         }
         if (note_ringer_muted_changed(runtime, muted_readback)) {
             char event_data[96];
@@ -8040,7 +8050,7 @@ static void handle_ringer_post(
             sizeof(error)
         )) {
             send_device_error(client_fd, error);
-            return;
+            return 1;
         }
         c300x_json_string(volume_reply, volume_reply_json, sizeof(volume_reply_json));
         c300x_json_string(volume_readback_reply, volume_readback_reply_json, sizeof(volume_readback_reply_json));
@@ -8053,7 +8063,7 @@ static void handle_ringer_post(
                 volume_readback_reply_json
             );
             send_json(client_fd, 502, "Bad Gateway", body);
-            return;
+            return 1;
         }
         remember_ringer_volume(runtime, volume_readback);
         if (volume_readback != volume) {
@@ -8067,7 +8077,7 @@ static void handle_ringer_post(
                 volume_readback_reply_json
             );
             send_json(client_fd, 409, "Conflict", body);
-            return;
+            return 1;
         }
     }
 
@@ -8101,9 +8111,10 @@ static void handle_ringer_post(
         );
     }
     send_json(client_fd, 200, "OK", body);
+    return 1;
 }
 
-static void apply_gui_ringer_command(int client_fd, const struct c300x_ringer_command *command, void *ctx)
+static int apply_gui_ringer_command(int client_fd, const struct c300x_ringer_command *command, void *ctx)
 {
     struct agent_runtime *runtime = ctx;
     char body[96];
@@ -8113,7 +8124,7 @@ static void apply_gui_ringer_command(int client_fd, const struct c300x_ringer_co
     } else {
         snprintf(body, sizeof(body), "{\"muted\":%s}", command->muted ? "true" : "false");
     }
-    handle_ringer_post(client_fd, runtime->config, runtime, body, 1);
+    return handle_ringer_post(client_fd, runtime->config, runtime, body, 1);
 }
 
 static int handle_ui_ringer_next(int client_fd, struct agent_runtime *runtime, const struct request *request)

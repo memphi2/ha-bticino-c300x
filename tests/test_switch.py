@@ -605,6 +605,28 @@ def test_ringer_switch_marks_unavailable_when_refresh_fails() -> None:
     assert entity.is_on is None
 
 
+@pytest.mark.parametrize("muted", [True, False])
+def test_ringer_write_failure_is_a_handled_ha_error_without_retry(muted: bool) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    entry = _FakeEntry()
+    entity = C300XRingerMuteSwitch(entry)  # type: ignore[arg-type]
+    entity._muted = not muted
+    calls: list[bool] = []
+
+    async def reject(value: bool) -> dict[str, Any]:
+        calls.append(value)
+        raise C300XAgentApiConnectionError("device agent returned HTTP 409: ringer_not_applied")
+
+    entry.runtime_data.api.async_set_ringer_muted = reject  # type: ignore[method-assign]
+    action = entity.async_turn_on if muted else entity.async_turn_off
+    with pytest.raises(HomeAssistantError, match="ringer_not_applied"):
+        asyncio.run(action())
+    assert calls == [muted]
+    assert entity.is_on is not muted
+    assert entry.runtime_data.api.ringer_reads == 0
+
+
 def test_ringer_event_ignores_foreign_or_unrelated_updates() -> None:
     entity = C300XRingerMuteSwitch(_FakeEntry())  # type: ignore[arg-type]
     entity._muted = True

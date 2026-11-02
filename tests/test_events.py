@@ -1236,7 +1236,7 @@ def test_async_start_agent_event_registration_reconnects_with_backoff(caplog) ->
     assert connection_state.connection_state == "reconnecting"
     assert connection_state.last_reconnect_reason == "event_subscription_registration"
     assert connection_state.last_connection_error == "RuntimeError: down"
-    assert "event registration failed (event_subscription): RuntimeError: down" in caplog.text
+    assert "event registration failed (event_subscription_create): RuntimeError: down" in caplog.text
     assert "event-token" not in caplog.text
     assert connection_state.next_reconnect_delay_seconds == 30
     assert len(fake_scheduler.calls) == 2
@@ -1250,7 +1250,7 @@ def test_async_start_agent_event_registration_reconnects_with_backoff(caplog) ->
     assert connection_state.next_reconnect_delay_seconds is None
 
 
-def test_event_registration_waits_for_offline_agent_before_reusing_subscription() -> None:
+def test_event_registration_waits_for_offline_agent_before_reusing_subscription(caplog) -> None:
     api = _FakeApi(
         [{"subscription": {"id": "sub-a"}}],
         subscription_lists=[
@@ -1286,6 +1286,8 @@ def test_event_registration_waits_for_offline_agent_before_reusing_subscription(
     assert api.list_calls == 1
     assert api.subscription_calls == []
     assert connection_state.connection_state == "reconnecting"
+    assert "event registration failed (event_subscription_list): RuntimeError: agent offline" in caplog.text
+    assert "event-token" not in caplog.text
 
     retry_callback = fake_scheduler.calls[1].callback
     asyncio.run(retry_callback())

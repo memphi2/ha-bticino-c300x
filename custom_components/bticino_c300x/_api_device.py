@@ -150,6 +150,8 @@ class _ApiDeviceMixin(_C300XApiCore):
             "POST",
             "/api/v1/ringer",
             json_data={"muted": muted},
+            # Cover the GUI deadline, device readback and final event delivery.
+            request_timeout=15.0,
         )
         return normalize_ringer(data)
 

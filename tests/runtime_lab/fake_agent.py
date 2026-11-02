@@ -97,7 +97,7 @@ class FakeAgent:
         if key == ("POST", "/api/v1/events/subscriptions"):
             subscription = {
                 **body,
-                "id": "synthetic-subscription",
+                "id": f"synthetic-subscription-{self.requests[key]}",
                 "token_fingerprint": event_token_fingerprint(body.pop("token")),
             }
             subscription.pop("token", None)
@@ -129,12 +129,10 @@ class FakeAgent:
             return web.json_response(
                 {
                     "ok": True,
-                    "diagnostics": {
-                        "agent_write_count": 0,
-                        "subscription_count": len(self.subscriptions),
-                        "loop_iterations": 100,
-                        "open_fd_count": 8,
-                    },
+                    "agent_write_count": 0,
+                    "subscription_count": len(self.subscriptions),
+                    "loop_iterations": 100,
+                    "open_fd_count": 8,
                 }
             )
         if key == ("GET", "/api/v1/system/metrics"):
@@ -150,7 +148,8 @@ class FakeAgent:
                             "id": "memo-1",
                             "kind": "text",
                             "text": self.memo_text,
-                            "created_at": "2026-01-01T12:00:00Z",
+                            "iso_time": "2026-01-01T12:00:00Z",
+                            "has_text": True,
                         }
                     ]
                 }

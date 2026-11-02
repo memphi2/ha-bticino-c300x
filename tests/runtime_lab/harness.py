@@ -13,7 +13,6 @@ from aiohttp.test_utils import TestServer
 from fake_agent import EVENT_TOKEN, TOKEN, FakeAgent
 from homeassistant import auth, bootstrap, config_entries, core, loader
 from homeassistant.components import webhook
-from homeassistant.components.http.server import HomeAssistantHTTP
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
@@ -21,6 +20,13 @@ from homeassistant.setup import async_setup_component
 from custom_components.bticino_c300x import const, events
 from custom_components.bticino_c300x.media import async_setup_media_view
 from custom_components.bticino_c300x.runtime_manager import BASE_PLATFORMS
+
+try:
+    from homeassistant.components.http.server import HomeAssistantHTTP
+except ModuleNotFoundError as err:
+    if err.name != "homeassistant.components.http.server":
+        raise
+    from homeassistant.components.http import HomeAssistantHTTP
 
 ROOT = Path(__file__).resolve().parents[2]
 

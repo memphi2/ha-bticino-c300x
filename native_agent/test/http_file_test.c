@@ -3,7 +3,7 @@ static ssize_t short_send(int fd, const void *buffer, size_t length, int flags);
 #define send short_send
 #include "../src/http_util.c"
 #undef send
-#include "../src/http.c"
+#include "../src/http_response.h"
 #include <assert.h>
 
 static int interrupted;

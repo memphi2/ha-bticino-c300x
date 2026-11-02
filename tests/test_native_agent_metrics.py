@@ -16,16 +16,6 @@ def _c300x_run_loop_body(text: str) -> str:
     )[0]
 
 
-def test_native_agent_metrics_threshold_uses_last_dispatched_baseline() -> None:
-    text = (ROOT / "native_agent" / "src" / "system_metrics_monitor.c").read_text(encoding="utf-8")
-    assert "monitor->last_delivered = *sample;" in text
-    assert "c300x_system_metrics_changed(config, &monitor->last_delivered, &sample)" in text
-    watchdog = (
-        ROOT / "native_agent" / "src" / "system_metrics_watchdog.c"
-    ).read_text(encoding="utf-8")
-    assert "metric_changed_points(" in watchdog
-
-
 def test_native_agent_metrics_reads_memory_only_inside_metrics_sample() -> None:
     text = (ROOT / "native_agent" / "src" / "system_metrics.c").read_text(
         encoding="utf-8"

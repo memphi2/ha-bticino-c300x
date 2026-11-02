@@ -21,9 +21,22 @@ def test_native_agent_http_module_stays_within_interim_budget() -> None:
 
     path = ROOT / "native_agent" / "src" / "http.c"
 
-    # Ratchet down after extracting metrics monitoring and capabilities JSON.
-    assert path.stat().st_size <= 430_000
-    assert path.read_text(encoding="utf-8").count("\n") <= 12_540
+    # Ratchet down after extracting transport, file responses and callback I/O.
+    assert path.stat().st_size <= 425_000
+    assert path.read_text(encoding="utf-8").count("\n") <= 12_300
+
+
+def test_extracted_http_modules_have_separate_budgets() -> None:
+    limits = {
+        "http_request.c": (7_000, 240),
+        "http_response.c": (3_000, 110),
+        "http_clients.c": (4_000, 130),
+        "callback_queue.c": (6_500, 220),
+    }
+    for name, (size, lines) in limits.items():
+        path = ROOT / "native_agent" / "src" / name
+        assert path.stat().st_size <= size, name
+        assert path.read_text(encoding="utf-8").count("\n") <= lines, name
 
 
 def test_native_agent_capabilities_module_stays_small() -> None:

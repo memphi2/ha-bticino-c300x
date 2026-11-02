@@ -1,5 +1,11 @@
-#include "../src/http.c"
+#include "../src/http_request.h"
+#include "../src/system_metrics.h"
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static void deadline_test(void)
 {
@@ -40,6 +46,11 @@ static void framing_test(const char *payload, int expected, int expected_size_er
     int size_error = 0;
     assert(receive_http_request(pair[0], buffer, sizeof(buffer), &size_error) == expected);
     assert(size_error == expected_size_error);
+    if (expected) {
+        struct request parsed;
+        assert(parse_request(buffer, &parsed));
+        assert(strcmp(parsed.path, "/") == 0);
+    }
     close(pair[0]);
     close(pair[1]);
 }

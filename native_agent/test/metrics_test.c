@@ -330,6 +330,26 @@ static void check_hourly_budget(struct c300x_config *config, struct agent_runtim
     }
 }
 
+static void check_acknowledged_snapshot_is_not_replaced_by_newer_measurement(void)
+{
+    struct c300x_system_metrics_monitor monitor = {0};
+    monitor.last.sample_sequence = 5;
+    monitor.last.cpu_usage_percent = 50;
+    struct system_metrics_sample sent = monitor.last;
+    sent.sample_sequence = 3;
+    sent.cpu_usage_percent = 10;
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &sent, 100);
+    assert(monitor.last_delivered.sample_sequence == 3);
+    assert(monitor.last_delivered.cpu_usage_percent == 10);
+    assert(monitor.delivery_pending);
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &monitor.last, 101);
+    assert(monitor.last_delivered.sample_sequence == 5);
+    assert(!monitor.delivery_pending);
+    c300x_system_metrics_monitor_delivered_sample(&monitor, &sent, 102);
+    assert(monitor.last_delivered.sample_sequence == 5);
+    assert(monitor.last_delivered_at == 101);
+}
+
 int main(void)
 {
     struct c300x_config config;
@@ -338,6 +358,7 @@ int main(void)
     c300x_default_config(&config);
     config.mqtt_enabled = 0;
     assert(runtime != NULL);
+    check_acknowledged_snapshot_is_not_replaced_by_newer_measurement();
     check_http_snapshot(&config, runtime, now);
     check_failed_push(&config, runtime, now);
     check_success_and_http_error(&config, runtime, now);

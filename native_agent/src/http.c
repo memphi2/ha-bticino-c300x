@@ -3,6 +3,7 @@
 #include "agent_update_paths.h"
 #include "c300x_agent.h"
 #include "capabilities.h"
+#include "callback_queue.h"
 #include "device_user.h"
 #include "event_payload.h"
 #include "http_util.h"
@@ -185,6 +186,8 @@ struct agent_runtime {
     const struct c300x_config *config;
     struct subscription subscriptions[C300X_MAX_SUBSCRIPTIONS];
     int subscription_count;
+    unsigned long callback_generation;
+    struct c300x_callback_queue *callbacks;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
     int display_bridge_registered;
@@ -2991,28 +2994,67 @@ static void subscription_token_fingerprint(
     fnv1a64_fingerprint(token, output, output_len);
 }
 
-static int post_callback(
+static int queue_callback(
     const struct c300x_config *config,
+    struct agent_runtime *runtime,
     struct subscription *subscription,
-    const char *event_json
+    const char *event_json,
+    const char *event_type
 )
 {
-    subscription->last_http_status = 0;
-    subscription->last_error = NULL;
-    if (strncmp(subscription->callback_url, "https://", 8) == 0) {
-        char host[256], port[16], path[256];
-        if (!parse_http_url(subscription->callback_url, host, sizeof(host), port, sizeof(port), path, sizeof(path))) {
-            return 0;
-        }
-        return c300x_https_post(
-            subscription->callback_url, C300X_EVENT_TOKEN_HEADER, subscription->token,
-            event_json, NULL, 0, config->callback_timeout_ms,
-            &subscription->last_http_status, &subscription->last_error
-        );
+    struct c300x_callback_job *job = calloc(1, sizeof(*job));
+    if (job == NULL) {
+        subscription->last_ok = 0;
+        subscription->last_http_status = 0;
+        subscription->last_error = "callback_out_of_memory";
+        return 0;
     }
-    return c300x_http_post_callback(
-        subscription->callback_url, subscription->token, event_json, config->callback_timeout_ms
-    );
+    snprintf(job->url, sizeof(job->url), "%s", subscription->callback_url);
+    snprintf(job->token, sizeof(job->token), "%s", subscription->token);
+    snprintf(job->subscription_id, sizeof(job->subscription_id), "%s", subscription->id);
+    snprintf(job->payload, sizeof(job->payload), "%s", event_json);
+    snprintf(job->event_type, sizeof(job->event_type), "%s", event_type);
+    job->generation = runtime->callback_generation;
+    job->timeout_ms = config->callback_timeout_ms;
+    job->queued_at = c300x_system_metrics_monotonic_ms();
+    job->has_metrics = strcmp(event_type, "system.metrics_changed") == 0;
+    if (job->has_metrics) {
+        job->metrics = runtime->metrics.last;
+    }
+    if (!c300x_callback_queue_submit(runtime->callbacks, job)) {
+        free(job);
+        subscription->last_ok = 0;
+        subscription->last_http_status = 0;
+        subscription->last_error = "callback_queue_full";
+        return 0;
+    }
+    return 1;
+}
+
+static void apply_callback_results(struct agent_runtime *runtime, time_t now)
+{
+    struct c300x_callback_job *job;
+    while ((job = c300x_callback_queue_take(runtime->callbacks)) != NULL) {
+        if (job->generation == runtime->callback_generation) {
+            for (int i = 0; i < runtime->subscription_count; i++) {
+                struct subscription *subscription = &runtime->subscriptions[i];
+                if (strcmp(subscription->id, job->subscription_id) != 0) {
+                    continue;
+                }
+                subscription->last_ok = job->ok;
+                subscription->last_http_status = job->http_status;
+                subscription->last_error = job->error;
+                if (subscription->last_ok) {
+                    mark_home_assistant_callback_seen(runtime, now);
+                    utc_now(subscription->last_delivered_at, sizeof(subscription->last_delivered_at));
+                    if (job->has_metrics) {
+                        c300x_system_metrics_monitor_delivered_sample(&runtime->metrics, &job->metrics, now);
+                    }
+                }
+            }
+        }
+        free(job);
+    }
 }
 
 static void handle_subscriptions_get(int client_fd, const struct agent_runtime *runtime)
@@ -3196,6 +3238,8 @@ static void handle_subscriptions_post(
         }
     }
 
+    runtime->callback_generation++;
+    c300x_callback_queue_discard_pending(runtime->callbacks);
     runtime->subscriptions[0] = subscription;
     runtime->subscription_count = 1;
     c300x_json_string(runtime->subscriptions[0].id, subscription_id_json, sizeof(subscription_id_json));
@@ -5360,6 +5404,8 @@ static void handle_subscription_delete(
             runtime->subscriptions[move - 1] = runtime->subscriptions[move];
         }
         runtime->subscription_count--;
+        runtime->callback_generation++;
+        c300x_callback_queue_discard_pending(runtime->callbacks);
         send_json(client_fd, 200, "OK", "{\"ok\":true}\n");
         return;
     }
@@ -5438,11 +5484,7 @@ static int dispatch_event_internal(
         if (!subscription_matches_event(subscription, event_type)) {
             continue;
         }
-        subscription->last_ok = post_callback(config, subscription, event_json);
-        if (subscription->last_ok) {
-            mark_home_assistant_callback_seen(runtime, time(NULL));
-            utc_now(subscription->last_delivered_at, sizeof(subscription->last_delivered_at));
-        } else {
+        if (!queue_callback(config, runtime, subscription, event_json, event_type)) {
             delivered = 0;
         }
         snprintf(subscription->last_event_type, sizeof(subscription->last_event_type), "%s", event_type);
@@ -5677,6 +5719,8 @@ static void system_metrics_dispatch_now(
     char metrics_json[2048];
     char data[2300];
 
+    (void)now;
+
     if (!system_metrics_watch_active(config, runtime) || !runtime->metrics.initialized) {
         return;
     }
@@ -5687,9 +5731,7 @@ static void system_metrics_dispatch_now(
         return;
     }
     runtime->metrics.delivery_pending = 1;
-    if (dispatch_event(config, runtime, "system.metrics_changed", data, 30)) {
-        c300x_system_metrics_monitor_delivered(&runtime->metrics, now);
-    }
+    dispatch_event(config, runtime, "system.metrics_changed", data, 30);
 }
 
 static void system_metrics_dispatch_if_due(
@@ -11837,7 +11879,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 3 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 3 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -11871,6 +11913,12 @@ int c300x_run(struct c300x_config *config)
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
     memos_init(runtime, config);
+    runtime->callbacks = c300x_callback_queue_create();
+    if (runtime->callbacks == NULL) {
+        fprintf(stderr, "fatal: callback_queue_init_failed\n");
+        result = 2;
+        goto cleanup;
+    }
     if (!c300x_system_metrics_monitor_init(config, &runtime->metrics)) {
         fprintf(stderr, "fatal: system_metrics_instance_id_failed\n");
         result = 2;
@@ -11948,6 +11996,7 @@ int c300x_run(struct c300x_config *config)
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         int http_poll_index;
+        int callback_poll_index;
         time_t now = time(NULL);
         int network_online = runtime_network_online(runtime, now);
 
@@ -11960,6 +12009,8 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
         poll_count += C300X_HTTP_MAX_CLIENTS;
+        callback_poll_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
         c300x_mdns_open_if_needed(
             &mdns,
             config,
@@ -12083,6 +12134,9 @@ int c300x_run(struct c300x_config *config)
         /* Drain old descriptors before accept can reuse one of their numbers. */
         c300x_ringer_control_handle_pollfds(&runtime->ringer_control, &poll_fds[ringer_poll_index], ringer_poll_count);
         c300x_ringer_control_expire(&runtime->ringer_control);
+        if (poll_fds[callback_poll_index].revents) {
+            apply_callback_results(runtime, time(NULL));
+        }
         c300x_http_clients_handle(&runtime->http_clients, &poll_fds[http_poll_index], handle_client, &http);
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
@@ -12196,6 +12250,7 @@ cleanup:
     }
     c300x_mdns_close(&mdns);
     if (runtime != NULL) {
+        c300x_callback_queue_close(runtime->callbacks);
         c300x_http_clients_close(&runtime->http_clients);
         c300x_mqtt_close(&runtime->mqtt);
         voicemail_close(&runtime->voicemail);

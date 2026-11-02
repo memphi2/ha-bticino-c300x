@@ -34,11 +34,19 @@ int c300x_system_metrics_monitor_timeout_ms(const struct c300x_system_metrics_mo
 
 void c300x_system_metrics_monitor_delivered(struct c300x_system_metrics_monitor *monitor, time_t now)
 {
-    monitor->last_delivered = monitor->last;
+    c300x_system_metrics_monitor_delivered_sample(monitor, &monitor->last, now);
+}
+
+void c300x_system_metrics_monitor_delivered_sample(struct c300x_system_metrics_monitor *monitor, const struct system_metrics_sample *sample, time_t now)
+{
+    if (monitor->delivered_initialized && sample->sample_sequence < monitor->last_delivered.sample_sequence) {
+        return;
+    }
+    monitor->last_delivered = *sample;
     monitor->delivered_initialized = 1;
     monitor->last_delivered_at = now;
     monitor->last_delivered_ms = c300x_system_metrics_monotonic_ms();
-    monitor->delivery_pending = 0;
+    monitor->delivery_pending = sample->sample_sequence != monitor->last.sample_sequence;
 }
 
 int c300x_system_metrics_monitor_tick(

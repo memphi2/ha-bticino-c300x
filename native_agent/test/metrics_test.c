@@ -96,13 +96,16 @@ static void check_http_snapshot(struct c300x_config *config, struct agent_runtim
 static void check_failed_push(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
 {
     baseline(config, runtime, now, 15.0);
-    /* Invalid callback fails deterministically without accessing a network. */
-    strcpy(runtime->subscriptions[0].callback_url, "invalid");
+    /* No queue is available: a local failure must not retain an old HTTP 200. */
+    runtime->subscriptions[0].last_ok = 1;
+    runtime->subscriptions[0].last_http_status = 200;
     test_busy += 30;
     test_idle += 2970;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 30);
     assert(runtime->subscriptions[0].last_ok == 0);
+    assert(runtime->subscriptions[0].last_http_status == 0);
+    assert(strcmp(runtime->subscriptions[0].last_error, "callback_queue_full") == 0);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
     assert(runtime->metrics.last_delivered_at == now);
     assert(c300x_recent_events_count(&runtime->recent_events) == 1);
@@ -147,22 +150,27 @@ static pid_t start_callback(struct agent_runtime *runtime, const char *status)
     return child;
 }
 
-static void finish_callback(pid_t child)
+static void finish_callback(pid_t child, struct agent_runtime *runtime, time_t now)
 {
     int status = 0;
     assert(waitpid(child, &status, 0) == child);
     assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    struct pollfd completed = {.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
+    assert(poll(&completed, 1, 2000) == 1);
+    apply_callback_results(runtime, now);
 }
 
 static void check_success_and_http_error(struct c300x_config *config, struct agent_runtime *runtime, time_t now)
 {
     baseline(config, runtime, now, 15.0);
     pid_t child = start_callback(runtime, "1 503 Unavailable\r\nContent-Length: 0\r\n\r\n");
+    runtime->callbacks = c300x_callback_queue_create();
+    assert(runtime->callbacks != NULL);
     test_busy += 30;
     test_idle += 2970;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 30);
-    finish_callback(child);
+    finish_callback(child, runtime, now + 30);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
     assert(runtime->subscriptions[0].last_delivered_at[0] == '\0');
 
@@ -171,7 +179,8 @@ static void check_success_and_http_error(struct c300x_config *config, struct age
     test_idle += 2940;
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 60);
-    finish_callback(child);
+    assert(runtime->metrics.last_delivered.cpu_usage_percent == 15.0);
+    finish_callback(child, runtime, now + 60);
     assert(runtime->metrics.last_delivered.cpu_usage_percent == 2.0);
     assert(runtime->metrics.last_delivered_at == now + 60);
     assert(runtime->metrics.delivery_pending == 0);
@@ -184,6 +193,19 @@ static void check_success_and_http_error(struct c300x_config *config, struct age
     test_now_ms += 30000;
     system_metrics_dispatch_if_due(config, runtime, now + 90);
     assert(c300x_recent_events_count(&runtime->recent_events) == count);
+
+    child = start_callback(runtime, "1 200 OK\r\nContent-Length: 2\r\n\r\n{}");
+    test_busy += 900;
+    test_idle += 2100;
+    test_now_ms += 30000;
+    system_metrics_dispatch_if_due(config, runtime, now + 120);
+    runtime->callback_generation++;
+    finish_callback(child, runtime, now + 120);
+    assert(runtime->metrics.last_delivered_at == now + 60);
+    assert(runtime->metrics.last_delivered.cpu_usage_percent == 2.0);
+    assert(runtime->metrics.delivery_pending);
+    c300x_callback_queue_close(runtime->callbacks);
+    runtime->callbacks = NULL;
     c300x_recent_events_clear(&runtime->recent_events);
 }
 

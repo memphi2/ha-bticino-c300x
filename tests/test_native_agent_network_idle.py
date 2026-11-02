@@ -26,7 +26,7 @@ def test_agent_skips_callback_io_without_local_network() -> None:
     bridge_body = _function_body(text, "int", "forward_to_homeassistant")
 
     assert dispatch_body.index("runtime_network_online(runtime, time(NULL))") < (
-        dispatch_body.index("post_callback")
+        dispatch_body.index("queue_callback")
     )
     assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
         bridge_body.index("parse_http_url")
@@ -250,8 +250,10 @@ def test_mdns_uses_current_runtime_connection_not_persisted_subscriptions() -> N
     assert "runtime->subscription_count > 0" not in body
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in subscription_body
     assert "mark_home_assistant_callback_seen(runtime, time(NULL))" not in display_body
-    assert "if (subscription->last_ok)" in dispatch_body
-    assert "mark_home_assistant_callback_seen(runtime, time(NULL))" in dispatch_body
+    completed = _function_body(text, "static void", "apply_callback_results")
+    assert "if (subscription->last_ok)" in completed
+    assert "mark_home_assistant_callback_seen(runtime, now)" in completed
+    assert "mark_home_assistant_callback_seen" not in dispatch_body
 
 
 def test_subscription_snapshots_are_marked_as_non_live_events() -> None:

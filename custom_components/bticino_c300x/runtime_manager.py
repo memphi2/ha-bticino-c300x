@@ -510,19 +510,31 @@ def cleanup_entry_runtime_resources(
     """Release runtime-only resources after confirmed unload or removal."""
 
     runtime_data = runtime_data or getattr(entry, "runtime_data", None)
-    if runtime_data is not None:
-        if getattr(runtime_data, "system_metrics_cache", None) is not None:
-            runtime_data.system_metrics_cache.cancel()
-        runtime_data.display_bridge_alarm_notify_pending = False
-        if runtime_data.connection_state.expire_unavailable:
-            runtime_data.connection_state.expire_unavailable()
+    errors: list[Exception] = []
+    try:
+        if runtime_data is not None:
+            cache = getattr(runtime_data, "system_metrics_cache", None)
+            cleanup = (
+                cache.cancel if cache is not None else None,
+                runtime_data.connection_state.expire_unavailable,
+                runtime_data.resources.close,
+            )
+            runtime_data.display_bridge_alarm_notify_pending = False
             runtime_data.connection_state.expire_unavailable = None
-        runtime_data.resources.close()
-    clear_entry_locks(entry.entry_id)
-    hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
-        entry.entry_id,
-        None,
-    )
+            for release in cleanup:
+                if release is not None:
+                    try:
+                        release()
+                    except Exception as err:
+                        errors.append(err)
+    finally:
+        clear_entry_locks(entry.entry_id)
+        hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
+            entry.entry_id,
+            None,
+        )
+    if errors:
+        raise ExceptionGroup("Failed to clean up C300X entry", errors)
 
 
 def _async_start_setup_recovery(

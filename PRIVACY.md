@@ -41,6 +41,13 @@ Doorbell camera handling is local to the device, the native agent, and Home
 Assistant. Users should still treat video/audio streams and Home Assistant
 camera snapshots as sensitive local data.
 
+Stored video and voice-message playback uses a RAM-only cache in Home Assistant
+for up to 30 seconds, with at most four cached results and 64 MiB total. It is
+not written to the device or disk. Changes to the message inventory invalidate
+reuse of previous results. Agent downloads are limited to 32 MiB; converted
+videos are limited to 64 MiB and 1920x1080, with a 30-second conversion budget.
+One media preparation runs at a time, with at most four distinct pending jobs.
+
 ## What Is Not Included
 
 The repository intentionally excludes vendor firmware images, extracted

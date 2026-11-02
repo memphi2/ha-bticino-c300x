@@ -25,6 +25,7 @@ from .const import (
     CONF_AGENT_HOST,
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
+    CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
@@ -63,7 +64,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .error_text import compact_error_text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from homeassistant.core import HomeAssistant
 
@@ -122,7 +123,9 @@ class C300XRuntimeManager:
         from .services import async_setup_services
 
         async_sync_entry_repair_issues(self.hass, self.entry)
-        self.entry.async_on_unload(self.entry.add_update_listener(_async_update_listener))
+        self.entry.async_on_unload(
+            self.entry.add_update_listener(_entry_update_listener(self.entry))
+        )
         await async_setup_services(self.hass)
         await self.async_sync_platform_gate_state()
         # After the gate state, never before: the cleanup asks whether the
@@ -177,6 +180,9 @@ class C300XRuntimeManager:
             self.agent_update_state = compare_agent_bundle(
                 self.setup_data,
                 await async_load_packaged_bundle_metadata(self.hass),
+                payload_bootstrap_pending=(
+                    self.entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True
+                ),
             )
 
     async def async_register_callbacks(self) -> None:
@@ -388,6 +394,29 @@ class C300XRuntimeManager:
         if self.unregister_event_webhook is None:
             raise RuntimeError("C300X runtime event webhook is not registered")
         return self.unregister_event_webhook
+
+
+def _entry_update_listener(
+    entry: BticinoC300XConfigEntry,
+) -> Callable[[HomeAssistant, BticinoC300XConfigEntry], Awaitable[None]]:
+    """Do not reload an active updater for its internal recovery marker."""
+
+    def settings(current: BticinoC300XConfigEntry) -> tuple[dict[str, Any], dict[str, Any]]:
+        data = dict(current.data)
+        data.pop(CONF_AGENT_UPDATE_PAYLOAD_PENDING, None)
+        return data, dict(current.options)
+
+    previous = settings(entry)
+
+    async def listener(hass: HomeAssistant, updated: BticinoC300XConfigEntry) -> None:
+        nonlocal previous
+        current = settings(updated)
+        if current == previous:
+            return
+        previous = current
+        await _async_update_listener(hass, updated)
+
+    return listener
 
 
 async def _async_update_listener(

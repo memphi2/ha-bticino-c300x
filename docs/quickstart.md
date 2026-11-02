@@ -22,7 +22,13 @@ You need:
 This integration cannot root a stock device. If a separate rooting or
 SSH-enablement workflow asks for a firmware target, use `1.7.19`.
 
-## 1. Install Through HACS
+## 1. Install Through Marketplace or HACS
+
+On Home Assistant 2026.11 and newer, open **Settings > Marketplace**, search for
+**BTicino C300X**, and install it. Follow any restart Repair before continuing.
+The built-in Marketplace replaces HACS; do not install HACS separately there.
+The integration domain, configuration entries and bundled cards remain unchanged.
+On HA 2026.7 through 2026.10, use the HACS instructions below.
 
 This integration is part of the HACS default list, so no custom repository is
 needed.

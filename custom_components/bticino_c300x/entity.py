@@ -101,16 +101,21 @@ def _connection_state_available(entry: BticinoC300XConfigEntry) -> bool | None:
 def _device_info(entry: BticinoC300XConfigEntry) -> DeviceInfo:
     """Return C300X device metadata without extra device reads."""
 
-    info: DeviceInfo = {
-        "identifiers": {(DOMAIN, entry.entry_id)},
-        "manufacturer": "BTicino",
-        "model": "Classe 300X",
-        "name": entry.title,
-    }
     firmware = _agent_info_string(entry, "firmware")
-    if firmware is not None:
-        info["sw_version"] = firmware
-    return info
+    if firmware is None:
+        return DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            manufacturer="BTicino",
+            model="Classe 300X",
+            name=entry.title,
+        )
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        manufacturer="BTicino",
+        model="Classe 300X",
+        name=entry.title,
+        sw_version=firmware,
+    )
 
 
 def _agent_info_string(entry: BticinoC300XConfigEntry, key: str) -> str | None:

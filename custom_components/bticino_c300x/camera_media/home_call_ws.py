@@ -46,25 +46,27 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         Callable[[Any, _WsCommand], None],
         websocket_api.async_register_command,
     )
+    # Older HA stubs omit these public re-exports; type the aliases below.
+    ws_exports = cast(Any, websocket_api)
     async_response = cast(
         _WsCommandDecorator,
-        websocket_api.async_response,  # type: ignore[attr-defined]
+        ws_exports.async_response,
     )
     event_message = cast(
         Callable[[Any, Any], dict[str, Any]],
-        websocket_api.event_message,  # type: ignore[attr-defined]
+        ws_exports.event_message,
     )
     result_message = cast(
         Callable[[Any], dict[str, Any]],
-        websocket_api.result_message,  # type: ignore[attr-defined]
+        ws_exports.result_message,
     )
     websocket_command = cast(
         _WsCommandFactory,
-        websocket_api.websocket_command,  # type: ignore[attr-defined]
+        ws_exports.websocket_command,
     )
     WebRTCError = cast(
         type[Any],
-        camera_component.WebRTCError,  # type: ignore[attr-defined]
+        cast(Any, camera_component).WebRTCError,
     )
 
     def _home_call_camera(entity_id: str) -> Any | None:

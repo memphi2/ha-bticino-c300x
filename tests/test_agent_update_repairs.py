@@ -389,18 +389,26 @@ def test_repair_flow_init_ignores_internal_flow_data() -> None:
     assert entry.runtime_data.api.calls == []
 
 
-def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
+@pytest.mark.parametrize("bootstrap", [False, True])
+def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    entry.runtime_data.agent_update_state.payload_bootstrap_required = bootstrap
     hass = FakeHass(entry)
     flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
     calls: list[str] = []
 
     async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
+        if bootstrap:
+            assert entry.data["agent_update_payload_pending"] is True
         calls.append("apply_update")
-        return {"ok": True, "restart_scheduled": False}
+        return {
+            "ok": True, "restart_scheduled": False,
+            "runtime_changed": bootstrap and calls.count("apply_update") == 1,
+            "qml_patch_changed": bootstrap and calls.count("apply_update") == 2,
+        }
 
     async def verify_update(
         _hass: Any,
@@ -408,10 +416,16 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
         result: dict[str, Any],
     ) -> dict[str, Any]:
         calls.append(f"verify:{result['ok']}")
-        return {"version": "1.1.0", "capabilities": {}}
+        return {
+            "version": "1.1.0", "capabilities": {},
+            "agent": {"self_update_supported": True, "self_update_file_set_version": 2},
+        }
 
     async def restore_state(*_args: Any) -> None:
         calls.append("restore")
+        if bootstrap:
+            assert _args[2].runtime_changed
+            assert _args[2].qml_patch_changed
 
     async def migrate_mqtt(_api: Any) -> None:
         calls.append("migrate_mqtt")
@@ -427,6 +441,10 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
     monkeypatch.setattr(repairs, "_async_restore_external_patch_state", restore_state)
     monkeypatch.setattr(repairs, "async_migrate_legacy_mqtt_if_available", migrate_mqtt)
     monkeypatch.setattr(repairs, "_async_apply_repaired_agent_setup", apply_setup)
+    async def packaged_bundle(_hass: Any) -> dict[str, Any]:
+        return {"agent_version": "1.1.0", "update_file_set_version": 2}
+
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", packaged_bundle)
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
     flow.async_create_entry = lambda **kwargs: {"type": "create_entry", **kwargs}  # type: ignore[method-assign]
 
@@ -436,21 +454,22 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch) -> None:
     assert form["type"] == "form"
     assert form["step_id"] == "confirm"
     assert result == {"type": "create_entry", "data": {}}
-    assert calls == [
-        "apply_update",
-        "verify:True",
+    assert calls == ["apply_update", "verify:True"] * (2 if bootstrap else 1) + [
         "restore",
         "migrate_mqtt",
         "apply_setup",
     ]
     assert hass.config_entries.reloads == ["entry-1"]
+    assert "agent_update_payload_pending" not in entry.data
 
 
-def test_agent_update_repair_self_update_reports_failures(monkeypatch) -> None:
+@pytest.mark.parametrize("bootstrap", [False, True])
+def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
     entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    entry.runtime_data.agent_update_state.payload_bootstrap_required = bootstrap
     flow = DeviceAgentUpdateRepairFlow(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
 
     async def apply_update(_hass: Any, _api: Any) -> dict[str, Any]:
@@ -464,6 +483,51 @@ def test_agent_update_repair_self_update_reports_failures(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "update_failed"}
+    assert entry.data.get("agent_update_payload_pending", False) is bootstrap
+
+
+def test_failed_second_transaction_remains_repairable_after_reload(monkeypatch) -> None:
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    entry.runtime_data.agent_update_state = FakeSelfUpdateState()
+    entry.runtime_data.agent_update_state.payload_bootstrap_required = True
+    hass = FakeHass(entry)
+    flow = DeviceAgentUpdateRepairFlow(hass, "entry-1")  # type: ignore[arg-type]
+    setup = {"version": "1.9.9", "agent": {
+        "bundle_hash": "sha256:abc", "self_update_supported": True,
+        "self_update_file_set_version": 2,
+    }}
+    bundle = {"agent_version": "1.9.9", "bundle_hash": "sha256:abc",
+              "update_file_set_version": 2}
+    calls = 0
+
+    async def apply_update(*_args: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise C300XAgentApiError("upload interrupted")
+        return {"ok": True}
+
+    async def verify(*_args: Any) -> dict[str, Any]:
+        return setup
+
+    async def packaged_bundle(*_args: Any) -> dict[str, Any]:
+        return bundle
+
+    monkeypatch.setattr(repairs, "async_apply_packaged_agent_update", apply_update)
+    monkeypatch.setattr(repairs, "_async_verify_agent_after_update", verify)
+    monkeypatch.setattr(repairs, "async_load_packaged_bundle_metadata", packaged_bundle)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    result = asyncio.run(flow.async_step_confirm({}))
+    assert result["errors"] == {"base": "update_failed"}
+    assert calls == 2
+    assert entry.data["agent_update_payload_pending"] is True
+    asyncio.run(repairs._async_apply_repaired_agent_setup(hass, entry, setup))  # type: ignore[arg-type]
+    assert entry.runtime_data.agent_update_state.update_required
+    assert entry.runtime_data.agent_update_state.self_update_repair_supported
+    assert not entry.runtime_data.agent_update_state.payload_bootstrap_required
 
 
 def test_agent_update_repair_self_update_normalizes_changed_config(

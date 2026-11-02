@@ -53,6 +53,40 @@ def test_compare_agent_bundle_detects_missing_bundle() -> None:
     assert state.reason == "bundle_missing"
 
 
+def test_matching_metadata_does_not_hide_pending_payload_after_reload() -> None:
+    state = compare_agent_bundle(
+        {"version": "1.9.9", "api_version": "1", "agent": {
+            "bundle_hash": "sha256:abc", "self_update_supported": True,
+            "self_update_file_set_version": 2,
+        }},
+        {"agent_version": "1.9.9", "api_version": "1",
+         "bundle_hash": "sha256:abc", "update_file_set_version": 2},
+        payload_bootstrap_pending=True,
+    )
+    assert state.update_required
+    assert state.self_update_repair_supported
+    assert not state.payload_bootstrap_required
+    assert state.reason == "payload_bootstrap_pending"
+
+
+@pytest.mark.parametrize("installed_file_set", [None, 1, 2, 3, True, "2"])
+def test_compare_agent_bundle_requires_compatible_updater_file_set(
+    installed_file_set: Any,
+) -> None:
+    agent = {"self_update_supported": True}
+    if installed_file_set is not None:
+        agent["self_update_file_set_version"] = installed_file_set
+    state = compare_agent_bundle(
+        {"version": "1.9.7", "api_version": "1", "agent": agent},
+        {"agent_version": "1.9.9", "api_version": "1", "update_file_set_version": 2},
+    )
+    supported = type(installed_file_set) is int and installed_file_set >= 2
+    assert state.self_update_repair_supported
+    assert state.self_update_supported
+    assert state.payload_bootstrap_required is not supported
+    assert state.update_required
+
+
 def test_load_packaged_bundle_metadata_rejects_missing_invalid_and_non_object(
     tmp_path: Path,
 ) -> None:

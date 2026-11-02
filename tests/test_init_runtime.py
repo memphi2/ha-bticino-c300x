@@ -208,6 +208,27 @@ def test_async_setup_registers_frontend_services_and_websocket(
     assert calls == ["blueprints", "frontend", "services", "debug-ws", "ws"]
 
 
+def test_payload_recovery_marker_does_not_reload_active_update() -> None:
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    hass = types.SimpleNamespace(config_entries=types.SimpleNamespace(async_reload=reload))
+    entry = types.SimpleNamespace(entry_id="entry-1", data={"agent_host": "test"}, options={})
+    listener = _entry_update_listener(entry)
+    entry.data["agent_update_payload_pending"] = True
+    asyncio.run(listener(hass, entry))
+    entry.data.pop("agent_update_payload_pending")
+    asyncio.run(listener(hass, entry))
+    assert calls == []
+    entry.options["video_enabled"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+
 def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -231,7 +252,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch.setattr(
         agent_update,
         "compare_agent_bundle",
-        lambda _setup, _bundle: {"available": False},
+        lambda _setup, _bundle, **_kwargs: {"available": False},
     )
     monkeypatch.setattr(
         capabilities,

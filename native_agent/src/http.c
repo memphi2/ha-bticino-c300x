@@ -6587,10 +6587,12 @@ static int parse_request(char *buffer, struct request *request)
     return 1;
 }
 
-static size_t content_length_from_buffer(const char *buffer, const char *header_end)
+static int content_length_from_buffer(const char *buffer, const char *header_end, size_t *length)
 {
     const char *line = strstr(buffer, "\r\n");
+    int seen = 0;
 
+    *length = 0;
     if (line == NULL || line >= header_end) {
         return 0;
     }
@@ -6604,30 +6606,41 @@ static size_t content_length_from_buffer(const char *buffer, const char *header_
         if (line_end == NULL || line_end > header_end) {
             line_end = header_end;
         }
+        if ((size_t)(line_end - line) >= strlen("transfer-encoding:")
+            && strncasecmp(line, "transfer-encoding:", strlen("transfer-encoding:")) == 0) {
+            return 0;
+        }
         if (
-            (size_t)(line_end - line) > strlen("content-length:")
+            (size_t)(line_end - line) >= strlen("content-length:")
             && strncasecmp(line, "content-length:", strlen("content-length:")) == 0
         ) {
             value = line + strlen("content-length:");
             while (value < line_end && (*value == ' ' || *value == '\t')) {
                 value++;
             }
+            if (seen || value == line_end || !isdigit((unsigned char)*value)) {
+                return 0;
+            }
             errno = 0;
             parsed = strtoul(value, &endptr, 10);
             if (errno != 0 || endptr == value) {
                 return 0;
             }
-            if (parsed > REQUEST_BUFFER_SIZE) {
-                return REQUEST_BUFFER_SIZE;
+            while (endptr < line_end && (*endptr == ' ' || *endptr == '\t')) {
+                endptr++;
             }
-            return (size_t)parsed;
+            if (endptr != line_end) {
+                return 0;
+            }
+            *length = parsed > REQUEST_BUFFER_SIZE ? REQUEST_BUFFER_SIZE : (size_t)parsed;
+            seen = 1;
         }
         if (line_end >= header_end) {
             break;
         }
         line = line_end + 2;
     }
-    return 0;
+    return 1;
 }
 
 static int receive_http_request(int client_fd, char *buffer, size_t buffer_len, int *too_large)
@@ -6659,7 +6672,11 @@ static int receive_http_request(int client_fd, char *buffer, size_t buffer_len, 
             continue;
         }
         if (received <= 0) {
-            return used > 0 ? 1 : 0;
+            return 0;
+        }
+        if (memchr(buffer + used, '\0', (size_t)received) != NULL) {
+            *too_large = -1;
+            return 0;
         }
         used += (size_t)received;
         buffer[used] = '\0';
@@ -6668,12 +6685,19 @@ static int receive_http_request(int client_fd, char *buffer, size_t buffer_len, 
             continue;
         }
         header_len = (size_t)(header_end + 4 - buffer);
-        content_len = content_length_from_buffer(buffer, header_end);
+        if (!content_length_from_buffer(buffer, header_end, &content_len)) {
+            *too_large = -1;
+            return 0;
+        }
         if (content_len > buffer_len - header_len - 1) {
             *too_large = 1;
             return 0;
         }
-        if (used >= header_len + content_len) {
+        if (used > header_len + content_len) {
+            *too_large = -1;
+            return 0;
+        }
+        if (used == header_len + content_len) {
             return 1;
         }
     }
@@ -12101,8 +12125,10 @@ static void handle_client(
     );
 
     if (!receive_http_request(client_fd, workspace->buffer, sizeof(workspace->buffer), &too_large)) {
-        if (too_large) {
+        if (too_large > 0) {
             send_json(client_fd, 413, "Payload Too Large", "{\"ok\":false,\"error\":\"request_too_large\"}\n");
+        } else if (too_large < 0) {
+            send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"bad_request\"}\n");
         }
         goto cleanup;
     }

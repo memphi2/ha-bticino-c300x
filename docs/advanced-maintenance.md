@@ -26,6 +26,22 @@ Use the Home Assistant setup or Repair flow to:
 The installer deploys project-owned files only. It does not contain vendor
 firmware, extracted firmware files, APKs or third-party controller code.
 
+## Updates
+
+1. Install the integration update offered by Marketplace or HACS and follow any
+   Home Assistant restart request.
+2. Run the device-agent update Repair if offered. Supported self-updates use the
+   existing maintenance credentials; SSH is needed for first install or recovery.
+3. Apply or update the core GUI hook when Repairs requests it, then reload the
+   C300X GUI. Updating only the integration does not update device-side behavior.
+4. Run the C300X Lovelace card Repair if offered. Hard-reload the browser if the
+   card still shows old frontend state.
+5. Check **Media readiness** before testing video and calls.
+
+Keep existing integration entries when updating. The integration archive includes
+the agent, its GUI components and the Lovelace card; no separate card repository
+is needed.
+
 ## Tokens
 
 Installer-based setup generates:
@@ -71,9 +87,16 @@ The Display patch writes display files on the C300X and reloads the device UI.
 The operation can take up to about a minute. Use the integration status and
 Repairs instead of manually editing device files.
 
-The core media hook is separate from the optional display dashboard. It is used
-for media session state tracking and is handled by the integration/Repair flow
-when required.
+## Core GUI Hook
+
+The core GUI hook is separate from the optional display dashboard. It tracks
+media session state and synchronizes ringer mute/unmute with the GUI's saved
+audio state. The integration's Repair flow applies it when required.
+
+Use the matching agent and core GUI files, then reload the C300X GUI to activate
+changes. Ringer commands require GUI confirmation and device readback; a missing
+or unresponsive GUI returns an error rather than changing only the LED/device
+value. Optional Alarmo, weather and Home Assistant display pages are not required.
 
 ## Home Assistant Media User
 
@@ -105,6 +128,10 @@ write activation config during normal Home Assistant startup when nothing
 changed.
 
 ## Callback URL
+
+This setting controls the C300X-to-Home Assistant connection for events and
+display callbacks. It is independent of the browser's frontend URL: using HTTPS
+for browser microphone access does not require HTTPS callbacks on the C300X.
 
 Callbacks must use an HTTP or HTTPS URL that the C300X can reach directly.
 HTTPS must be explicitly selected in the callback base URL override. It requires

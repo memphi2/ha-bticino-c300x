@@ -5,8 +5,8 @@ Use this page as the entry point after installing the integration.
 ## Recommended Path
 
 ```text
-HACS install -> add integration -> install/update agent -> check Media readiness
--> run Repair if needed -> add the C300X card
+Install integration -> add device -> install/update agent -> check Media readiness
+-> add the C300X card
 ```
 
 Most users only need:
@@ -20,28 +20,27 @@ Most users only need:
 
 | Task | Read |
 | --- | --- |
-| First install or update | [Quickstart](quickstart.md) |
+| First installation | [Quickstart](quickstart.md) |
+| Update the integration, agent or card | [Updates](advanced-maintenance.md#updates) |
 | See all entities, services, options and device writes | [Feature reference](feature-reference.md) |
 | Check why Answer, Talkback or Home Call does not work | [Media readiness](media-readiness.md) |
 | Fix stream/call/capture problems | [Media troubleshooting](media-troubleshooting.md) |
 | Add notification or capture automations | [Blueprints](blueprints.md) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
-| Validate a release on real hardware | [Release validation](release-validation.md) |
 
 ## Daily Use
 
-- Use the Doorbell/On-demand card for live view and Ring Call handling.
-- Use the Home Call card for audio-only calls to the C300X display.
+- Use the **C300X Doorbell Call Card** in **Auto** mode for live view, Ring Call
+  handling and audio-only Home Calls to the display.
 - Keep the card's Media Readiness line visible unless you intentionally want to
   hide all readiness status from that card.
 - Keep **Forwarding** set to **Home Assistant** when you want Ring Calls to be
   answerable from Home Assistant.
 - Use **Ringer mute** and **Ringer volume** for ringtone behavior. Volume uses
   the C300X `0..10` scale; `0` is mute.
-- From agent 1.9.8, mute/unmute also updates the display's saved mute state.
-  Update the agent and its core QML hook together and reload the device GUI.
-  A missing or unresponsive GUI returns an error instead of changing only the
-  LED/device value. The optional Home Assistant display pages are not required.
+- Ringer mute/unmute stays synchronized with the display's saved audio state.
+  It requires the matching agent and [core GUI hook](advanced-maintenance.md#core-gui-hook),
+  not the optional display pages.
 - Start troubleshooting with **Media readiness** before editing card YAML.
 
 ## Feature Areas
@@ -51,7 +50,7 @@ Most users only need:
 | Doorbell and Ring Call | C300X Doorbell Call Card, Forwarding select, Doorbell event, Doorbell state, Answer/Hang Up services. |
 | On-demand video | Doorbell camera entity, card Stream/Stop controls, `activate_doorbell_video` and `stop_doorbell_video`. |
 | Talkback | Secure browser frontend with microphone permission; HTTPS or Home Assistant Cloud is expected. |
-| Home Call | Home Call card mode or `start_home_call` / `stop_home_call`. |
+| Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
 | Display pages | Optional Display patch with Alarmo, weather and selected dashboard entities. |

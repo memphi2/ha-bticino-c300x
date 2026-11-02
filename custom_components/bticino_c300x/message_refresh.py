@@ -74,15 +74,16 @@ def _schedule_single_refresh(
 ) -> None:
     """Schedule one refresh task per entry/runtime-data attribute."""
 
-    task: Task[Any] | None = getattr(entry.runtime_data, task_attr)
+    resources = entry.runtime_data.resources
+    task: Task[None] | None = getattr(resources, task_attr)
     if task is not None and not task.done():
         return
     task = hass.async_create_task(refresh())
-    setattr(entry.runtime_data, task_attr, task)
+    setattr(resources, task_attr, task)
 
-    def _clear_task(done_task: Task[Any]) -> None:
-        if getattr(entry.runtime_data, task_attr) is done_task:
-            setattr(entry.runtime_data, task_attr, None)
+    def _clear_task(done_task: Task[None]) -> None:
+        if getattr(resources, task_attr) is done_task:
+            setattr(resources, task_attr, None)
 
     task.add_done_callback(_clear_task)
 

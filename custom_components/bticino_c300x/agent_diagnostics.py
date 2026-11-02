@@ -74,10 +74,10 @@ def publish_agent_media_facts(
     # Stamp on every observation, not only on change: the timestamp says when
     # this view was last confirmed, and a call that stays active must not age
     # out behind an unrelated snapshot refresh.
-    runtime_data.agent_media_facts_updated_at = datetime.now(UTC)
-    if facts == runtime_data.agent_media_facts:
+    runtime_data.diagnostics.agent_media_facts_updated_at = datetime.now(UTC)
+    if facts == runtime_data.diagnostics.agent_media_facts:
         return facts
-    runtime_data.agent_media_facts = facts
+    runtime_data.diagnostics.agent_media_facts = facts
     if isinstance(hass, HomeAssistant):
         # Consumers read the facts on demand, so the signal is only the
         # re-render trigger: a camera that is not wired into hass yet (entity
@@ -197,7 +197,7 @@ def apply_agent_diagnostics_event(
         diagnostics,
         updated_by="push_event",
         reason=_agent_diagnostics_change_reason(
-            runtime_data.agent_diagnostics,
+            runtime_data.diagnostics.agent_diagnostics,
             diagnostics,
         ),
         notify_if_unchanged=False,
@@ -219,14 +219,14 @@ def _store_agent_diagnostics(
     runtime_data = entry.runtime_data
     uptime = diagnostics.get("agent_uptime_seconds")
     if isinstance(uptime, int):
-        runtime_data.agent_uptime_seconds = uptime
-    changed = diagnostics != runtime_data.agent_diagnostics
+        runtime_data.diagnostics.agent_uptime_seconds = uptime
+    changed = diagnostics != runtime_data.diagnostics.agent_diagnostics
     if not changed and not notify_if_unchanged:
         return False
-    runtime_data.agent_diagnostics = diagnostics
-    runtime_data.agent_diagnostics_updated_at = datetime.now(UTC)
-    runtime_data.agent_diagnostics_updated_by = updated_by
-    runtime_data.agent_diagnostics_change_reason = (
+    runtime_data.diagnostics.agent_diagnostics = diagnostics
+    runtime_data.diagnostics.agent_diagnostics_updated_at = datetime.now(UTC)
+    runtime_data.diagnostics.agent_diagnostics_updated_by = updated_by
+    runtime_data.diagnostics.agent_diagnostics_change_reason = (
         reason if changed else f"{reason}_unchanged"
     )
     async_dispatcher_send(hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, entry.entry_id)

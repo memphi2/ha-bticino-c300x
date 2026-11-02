@@ -136,7 +136,7 @@ def handle_runtime_cpu_metrics_changed(hass: Any, entry: Any) -> None:
     if reason is None:
         return
 
-    task = getattr(runtime_data, "agent_cpu_watchdog_task", None)
+    task = getattr(runtime_data.resources, "agent_cpu_watchdog_task", None)
     if task is not None and not task.done():
         return
     task = _schedule_task(
@@ -149,7 +149,7 @@ def handle_runtime_cpu_metrics_changed(hass: Any, entry: Any) -> None:
         ),
     )
     with suppress(Exception):
-        runtime_data.agent_cpu_watchdog_task = task
+        runtime_data.resources.agent_cpu_watchdog_task = task
 
 
 def _schedule_task(hass: Any, coro: Any) -> asyncio.Task[Any]:

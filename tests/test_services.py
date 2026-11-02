@@ -139,6 +139,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
 )
+from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.exceptions import (  # noqa: E402
     service_validation_error,
 )
@@ -166,7 +167,7 @@ class _FakeRuntimeData:
     capabilities: dict[str, Any] = field(default_factory=dict)
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     api: Any = None
-    prepare_doorbell_video_stop: Any = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
     memos: dict[str, Any] = field(default_factory=dict)
@@ -1479,7 +1480,9 @@ def test_stop_doorbell_video_service_stops_agent_after_prepare_reaches_idle() ->
             _FakeRuntimeData(
                 capabilities={"doorbell_video": {"supported": True}},
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -1556,7 +1559,9 @@ def test_hangup_doorbell_call_service_prepares_stop_before_agent_hangup() -> Non
             _FakeRuntimeData(
                 capabilities={"doorbell_call": {"supported": True}},
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -2187,7 +2192,9 @@ def test_capture_doorbell_call_service_uses_ring_hangup_prepare(
                     "doorbell_call": {"supported": True},
                 },
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )
@@ -2257,7 +2264,9 @@ def test_capture_doorbell_call_service_hangs_up_when_answer_wait_fails(
                     "doorbell_call": {"supported": True},
                 },
                 api=api,
-                prepare_doorbell_video_stop=_prepare_stop,
+                resources=C300XRuntimeResources(
+                    prepare_doorbell_video_stop=_prepare_stop
+                ),
             ),
             data={CONF_VIDEO_ENABLED: True},
         )

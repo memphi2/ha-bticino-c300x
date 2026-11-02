@@ -157,7 +157,11 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     SIGNAL_SYSTEM_METRICS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
-from custom_components.bticino_c300x.data import C300XEventState  # noqa: E402
+from custom_components.bticino_c300x.data import (  # noqa: E402
+    C300XEventState,
+    C300XRuntimeDiagnostics,
+    C300XRuntimeResources,
+)
 from custom_components.bticino_c300x.webhook import (  # noqa: E402
     _async_handle_agent_event,
     _async_handle_webhook,
@@ -1474,7 +1478,7 @@ def test_system_metrics_event_runtime_watchdog_stops_home_call(
             system_metrics={},
             system_metrics_updated_at=None,
             agent_cpu_watchdog=media_watchdog.AgentCpuWatchdog(),
-            agent_cpu_watchdog_task=None,
+            resources=C300XRuntimeResources(agent_cpu_watchdog_task=None),
         )
         entry = SimpleNamespace(
             entry_id="entry-1",
@@ -1523,7 +1527,7 @@ def test_metrics_subscribers_see_current_watchdog_before_closing_sessions(
             agent_cpu_watchdog=media_watchdog.AgentCpuWatchdog(
                 high_since=asyncio.get_running_loop().time() - 301,
             ),
-            agent_cpu_watchdog_task=None,
+            resources=C300XRuntimeResources(agent_cpu_watchdog_task=None),
         )
         entry = SimpleNamespace(entry_id="entry-1", runtime_data=runtime)
         close_session = AsyncMock()
@@ -1589,8 +1593,9 @@ def test_agent_diagnostics_event_refreshes_cache_without_public_event() -> None:
     runtime_data = SimpleNamespace(
         event_state=event_state,
         capabilities={"diagnostics": {"supported": True, "writes": True}},
-        agent_diagnostics={},
-        agent_diagnostics_updated_at=None,
+        diagnostics=C300XRuntimeDiagnostics(
+            agent_diagnostics={}, agent_diagnostics_updated_at=None
+        ),
     )
     entry = SimpleNamespace(
         entry_id="entry-1",
@@ -1628,8 +1633,8 @@ def test_agent_diagnostics_event_refreshes_cache_without_public_event() -> None:
         agent_diagnostics_module.async_dispatcher_send = original_dispatcher
 
     assert response.status == 200
-    assert runtime_data.agent_diagnostics["agent_write_count"] == 3
-    assert runtime_data.agent_diagnostics_updated_at is not None
+    assert runtime_data.diagnostics.agent_diagnostics["agent_write_count"] == 3
+    assert runtime_data.diagnostics.agent_diagnostics_updated_at is not None
     assert event_state.last_event is None
     assert hass.bus.events == []
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from asyncio import Lock
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 from .const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
 from .entry_config import entry_config_value
@@ -22,7 +22,7 @@ def _qml_patch_lock(entry: BticinoC300XConfigEntry) -> Lock:
 async def async_refresh_qml_patch_status(entry: BticinoC300XConfigEntry) -> dict[str, Any]:
     """Refresh and store the device-reported Display patch status."""
 
-    status = cast(dict[str, Any], await entry.runtime_data.api.async_qml_patch_status())
+    status = await entry.runtime_data.api.async_qml_patch_status()
     _store_qml_patch_status(entry, status)
     return status
 
@@ -70,10 +70,7 @@ async def async_restore_qml_patches_after_update(
     """
 
     async with _qml_patch_lock(entry):
-        core_status = cast(
-            dict[str, Any],
-            await entry.runtime_data.api.async_apply_qml_core_patch(),
-        )
+        core_status = await entry.runtime_data.api.async_apply_qml_core_patch()
         _store_qml_patch_status(entry, core_status)
         if apply_full_patch:
             await _async_run_qml_patch_action_unlocked(
@@ -98,10 +95,7 @@ async def async_apply_qml_core_patch_and_confirm(
         _store_transient_qml_core_patch_status(entry, "core_patching")
         _notify_status_changed(status_changed)
         try:
-            action_status = cast(
-                dict[str, Any],
-                await entry.runtime_data.api.async_apply_qml_core_patch(),
-            )
+            action_status = await entry.runtime_data.api.async_apply_qml_core_patch()
         except Exception:
             _store_qml_patch_status(entry, previous_status)
             _notify_status_changed(status_changed)
@@ -126,10 +120,7 @@ async def async_restore_qml_core_patch_and_confirm(
         _store_transient_qml_core_patch_status(entry, "core_restoring")
         _notify_status_changed(status_changed)
         try:
-            action_status = cast(
-                dict[str, Any],
-                await entry.runtime_data.api.async_restore_qml_core_patch(),
-            )
+            action_status = await entry.runtime_data.api.async_restore_qml_core_patch()
         except Exception:
             _store_qml_patch_status(entry, previous_status)
             _notify_status_changed(status_changed)

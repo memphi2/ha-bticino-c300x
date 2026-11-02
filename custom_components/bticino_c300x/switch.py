@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, cast
 
 from homeassistant.components.switch import SwitchEntity
@@ -484,7 +485,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "firewall_patch")
-        self._status: dict[str, Any] = {}
+        self._status: Mapping[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -587,7 +588,7 @@ class C300XFirewallPatchSwitch(C300XEntity, SwitchEntity):
             }
         )
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         _apply_patch_switch_status(self, status)
 
 
@@ -601,7 +602,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
 
     def __init__(self, entry: BticinoC300XConfigEntry) -> None:
         super().__init__(entry, "ipv6_firewall_patch")
-        self._status: dict[str, Any] = {}
+        self._status: Mapping[str, Any] = {}
         self._attr_available = True
 
     @property
@@ -706,7 +707,7 @@ class C300XIpv6FirewallPatchSwitch(C300XEntity, SwitchEntity):
             }
         )
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         _apply_patch_switch_status(self, status)
 
 
@@ -981,19 +982,21 @@ class _AuthConfigStatusEntity(C300XEntity):
         )
 
     @callback
-    def _handle_auth_config_status(self, entry_id: str, status: dict[str, Any]) -> None:
+    def _handle_auth_config_status(
+        self, entry_id: str, status: Mapping[str, Any]
+    ) -> None:
         if entry_id != self._entry.entry_id:
             return
         self._apply_status(status)
         self.async_write_ha_state()
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         """Apply a shared auth-config status payload."""
 
         raise NotImplementedError
 
 
-def _dispatch_auth_config_status(entity: Any, status: dict[str, Any]) -> None:
+def _dispatch_auth_config_status(entity: Any, status: Mapping[str, Any]) -> None:
     hass = getattr(entity, "hass", None)
     if hass is not None:
         async_dispatcher_send(
@@ -1086,7 +1089,7 @@ class C300XNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         self._enabled = status.get("no_auth")
         self._api_token_configured = status.get("api_token_configured")
         self._maintenance_token_configured = status.get(
@@ -1145,7 +1148,7 @@ class C300XMdnsDiscoverySwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         self._enabled = status.get("mdns_enabled")
         self._attr_available = True
 
@@ -1210,7 +1213,7 @@ class C300XMaintenanceNoAuthSwitch(_AuthConfigStatusEntity, SwitchEntity):
         self._apply_status(status)
         _dispatch_auth_config_status(self, status)
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         self._enabled = status.get("maintenance_no_auth_allowed")
         self._no_auth = status.get("no_auth")
         self._attr_available = True
@@ -1250,7 +1253,7 @@ def _supports_maintenance_actions(entry: BticinoC300XConfigEntry, *actions: str)
     return all(entry_maintenance_action_is_advertised(entry, action) for action in actions)
 
 
-def _apply_patch_switch_status(entity: Any, status: dict[str, Any]) -> None:
+def _apply_patch_switch_status(entity: Any, status: Mapping[str, Any]) -> None:
     entity._status = status
     entity._attr_available = bool(status.get("available", True))
 

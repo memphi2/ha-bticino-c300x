@@ -11,6 +11,7 @@ from custom_components.bticino_c300x.const import (
     SIGNAL_MEMOS_CHANGED,
     SIGNAL_VIDEO_MESSAGES_CHANGED,
 )
+from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.message_refresh import (
     _async_refresh_answering_machine_messages_from_agent,
     _async_refresh_memos_from_agent,
@@ -60,15 +61,18 @@ def _entry(api: _FakeApi) -> SimpleNamespace:
             api=api,
             memos={"available": True, "total": 7},
             memos_updated_at=None,
-            memos_refresh_task=None,
             answering_machine_messages={"available": True, "total": 9},
             answering_machine_messages_updated_at=None,
-            answering_machine_messages_refresh_task=None,
+            resources=C300XRuntimeResources(
+                memos_refresh_task=None, answering_machine_messages_refresh_task=None
+            ),
         ),
     )
 
 
-def test_concurrent_memos_refresh_after_ttl_expiry_coalesces_into_one_agent_call() -> None:
+def test_concurrent_memos_refresh_after_ttl_expiry_coalesces_into_one_agent_call() -> (
+    None
+):
     class _SlowApi(_FakeApi):
         async def async_memos(self) -> dict[str, Any]:
             await asyncio.sleep(0.02)
@@ -99,7 +103,9 @@ def test_memos_cache_hit_skips_agent_read() -> None:
     assert api.memo_reads == 0
 
 
-def test_memos_refresh_error_marks_cache_unavailable_and_dispatches(monkeypatch) -> None:
+def test_memos_refresh_error_marks_cache_unavailable_and_dispatches(
+    monkeypatch,
+) -> None:
     signals: list[tuple[str, str]] = []
     monkeypatch.setattr(
         message_refresh,
@@ -113,6 +119,32 @@ def test_memos_refresh_error_marks_cache_unavailable_and_dispatches(monkeypatch)
     assert entry.runtime_data.memos["available"] is False
     assert entry.runtime_data.memos["total"] == 7
     assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
+
+
+def test_refresh_completion_keeps_original_resource_owner_after_reload() -> None:
+    async def run():
+        entry = _entry(_FakeApi())
+        old_resources = entry.runtime_data.resources
+        done = asyncio.Event()
+        message_refresh._schedule_single_refresh(
+            _FakeHass(),
+            entry,
+            task_attr="memos_refresh_task",
+            refresh=done.wait,
+        )
+        old_task = old_resources.memos_refresh_task
+        replacement_task = asyncio.create_task(asyncio.Event().wait())
+        new_resources = C300XRuntimeResources(memos_refresh_task=replacement_task)
+        entry.runtime_data = SimpleNamespace(resources=new_resources)
+        done.set()
+        await old_task
+        await asyncio.sleep(0)
+        assert old_resources.memos_refresh_task is None
+        assert new_resources.memos_refresh_task is replacement_task
+        new_resources.close()
+        await asyncio.gather(replacement_task, return_exceptions=True)
+
+    asyncio.run(run())
 
 
 def test_answering_machine_refresh_error_marks_cache_unavailable_and_dispatches(
@@ -149,13 +181,13 @@ def test_scheduled_refresh_deduplicates_pending_task_and_clears_when_done(
         entry = _entry(_FakeApi(memos={"available": True, "total": 3}))
 
         schedule_memos_refresh(_FakeHass(), entry)
-        first_task = entry.runtime_data.memos_refresh_task
+        first_task = entry.runtime_data.resources.memos_refresh_task
         schedule_memos_refresh(_FakeHass(), entry)
 
-        assert entry.runtime_data.memos_refresh_task is first_task
+        assert entry.runtime_data.resources.memos_refresh_task is first_task
         await first_task
         await asyncio.sleep(0)
-        assert entry.runtime_data.memos_refresh_task is None
+        assert entry.runtime_data.resources.memos_refresh_task is None
         assert entry.runtime_data.memos == {"available": True, "total": 3}
 
     asyncio.run(_run())

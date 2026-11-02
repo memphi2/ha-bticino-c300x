@@ -82,6 +82,7 @@ from custom_components.bticino_c300x.data import (
     C300XConnectionState,
     C300XEventState,
     C300XOperationDiagnostics,
+    C300XRuntimeDiagnostics,
 )
 from custom_components.bticino_c300x.diagnostics import (
     _agent_info_diagnostics,
@@ -211,13 +212,6 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         answering_machine_messages_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
         memos={"text": [{"id": "private-text"}], "voice": []},
         memos_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
-        agent_diagnostics={
-            "agent_write_count": 2,
-            "last_write_class": "config",
-            "last_write_reason": "updated",
-            "raw": {"token": "private-token"},
-        },
-        agent_diagnostics_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
         device_user_status={
             "available": True,
             "supported": True,
@@ -240,6 +234,15 @@ def test_config_entry_diagnostics_explain_setup_without_private_values() -> None
         },
         self_test_status_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
         media_timeline=C300XMediaTimeline(),
+        diagnostics=C300XRuntimeDiagnostics(
+            agent_diagnostics={
+                "agent_write_count": 2,
+                "last_write_class": "config",
+                "last_write_reason": "updated",
+                "raw": {"token": "private-token"},
+            },
+            agent_diagnostics_updated_at=datetime(2026, 6, 2, tzinfo=UTC),
+        ),
     )
     runtime_data.media_timeline.record(
         kind="webrtc",
@@ -579,7 +582,7 @@ def test_config_entry_diagnostics_flag_unclean_subscription_callback() -> None:
             agent_update_state=None,
             qml_patch_status={},
             system_metrics={},
-            agent_diagnostics={},
+            diagnostics=C300XRuntimeDiagnostics(agent_diagnostics={}),
         ),
     )
 
@@ -611,7 +614,7 @@ def test_config_entry_diagnostics_redact_hostname_errors() -> None:
             agent_update_state=None,
             qml_patch_status={},
             system_metrics={},
-            agent_diagnostics={},
+            diagnostics=C300XRuntimeDiagnostics(agent_diagnostics={}),
         ),
     )
 
@@ -653,10 +656,12 @@ def test_config_entry_diagnostics_explain_callback_and_maintenance_failures() ->
             capabilities={},
             agent_update_state=None,
             qml_patch_status={},
-            qml_patch_diagnostics=qml_patch,
-            display_bridge_diagnostics=display_bridge,
             system_metrics={},
-            agent_diagnostics={},
+            diagnostics=C300XRuntimeDiagnostics(
+                qml_patch_diagnostics=qml_patch,
+                display_bridge_diagnostics=display_bridge,
+                agent_diagnostics={},
+            ),
         ),
     )
 
@@ -699,14 +704,16 @@ def test_diagnostics_helpers_keep_runtime_data_safe_and_useful() -> None:
             "temperature_c": 41.2,
             "extra": "ignored",
         },
-        agent_diagnostics={
-            "agent_write_count": 3,
-            "last_write_reason": "config_changed",
-            "token": "secret",
-            "nested": {"hidden": True},
-        },
-        agent_diagnostics_updated_by="push_event",
-        agent_diagnostics_change_reason="write_diagnostics_changed",
+        diagnostics=C300XRuntimeDiagnostics(
+            agent_diagnostics={
+                "agent_write_count": 3,
+                "last_write_reason": "config_changed",
+                "token": "secret",
+                "nested": {"hidden": True},
+            },
+            agent_diagnostics_updated_by="push_event",
+            agent_diagnostics_change_reason="write_diagnostics_changed",
+        ),
     )
     entry = _FakeEntry(runtime_data=runtime)
 
@@ -839,7 +846,11 @@ def test_diagnostics_helpers_handle_missing_or_invalid_runtime_data() -> None:
     assert _agent_write_diagnostics(SimpleNamespace()) is None  # type: ignore[arg-type]
     assert (
         _agent_write_diagnostics(  # type: ignore[arg-type]
-            _FakeEntry(runtime_data=SimpleNamespace(agent_diagnostics=[]))
+            _FakeEntry(
+                runtime_data=SimpleNamespace(
+                    diagnostics=C300XRuntimeDiagnostics(agent_diagnostics=[])
+                )
+            )
         )
         is None
     )

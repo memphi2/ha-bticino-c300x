@@ -353,10 +353,10 @@ class C300XAgentStatusSensor(C300XConnectionDiagnosticSensor):
             "next_reconnect_delay_seconds": state.next_reconnect_delay_seconds,
             "reconnect_count": state.reconnect_count,
             "agent_restart_count": getattr(
-                self._entry.runtime_data, "agent_restart_count", 0
+                self._entry.runtime_data.diagnostics, "agent_restart_count", 0
             ),
             "agent_uptime_seconds": getattr(
-                self._entry.runtime_data, "agent_uptime_seconds", None
+                self._entry.runtime_data.diagnostics, "agent_uptime_seconds", None
             ),
             "media_watchdog_trigger_count": getattr(
                 getattr(self._entry.runtime_data, "agent_cpu_watchdog", None),
@@ -458,15 +458,15 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
         """
 
         runtime_data = self._entry.runtime_data
-        diagnostics = runtime_data.agent_diagnostics
-        media_facts = getattr(runtime_data, "agent_media_facts", None)
+        diagnostics = runtime_data.diagnostics.agent_diagnostics
+        media_facts = getattr(runtime_data.diagnostics, "agent_media_facts", None)
         if not diagnostics or not media_facts:
             # Without a snapshot the entity still reports "diagnostics not
             # loaded"; media facts refine a snapshot, they do not replace one.
             return diagnostics
         if _snapshot_answers_media(diagnostics) and _is_outdated(
-            getattr(runtime_data, "agent_media_facts_updated_at", None),
-            runtime_data.agent_diagnostics_updated_at,
+            getattr(runtime_data.diagnostics, "agent_media_facts_updated_at", None),
+            runtime_data.diagnostics.agent_diagnostics_updated_at,
         ):
             return diagnostics
         return {**dict(diagnostics), **dict(media_facts)}
@@ -482,13 +482,13 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
             "status_reason": _agent_diagnostics_status_reason(status),
             "recommended_action": _agent_diagnostics_recommended_action(status),
             "change_reason": getattr(
-                self._entry.runtime_data,
+                self._entry.runtime_data.diagnostics,
                 "agent_diagnostics_change_reason",
                 None,
             ),
-            "updated_at": self._entry.runtime_data.agent_diagnostics_updated_at,
+            "updated_at": self._entry.runtime_data.diagnostics.agent_diagnostics_updated_at,
             "updated_by": getattr(
-                self._entry.runtime_data,
+                self._entry.runtime_data.diagnostics,
                 "agent_diagnostics_updated_by",
                 None,
             ),
@@ -503,7 +503,9 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
                 0,
             ),
             "media_watchdog_last_reason": getattr(media_watchdog, "last_reason", None),
-            "media_watchdog_last_percent": getattr(media_watchdog, "last_percent", None),
+            "media_watchdog_last_percent": getattr(
+                media_watchdog, "last_percent", None
+            ),
             **_agent_diagnostic_attributes(
                 diagnostics,
                 _AGENT_RUNTIME_DIAGNOSTIC_KEYS,

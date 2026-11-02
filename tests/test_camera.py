@@ -128,6 +128,10 @@ from custom_components.bticino_c300x.camera import (
     async_setup_entry,
 )
 from custom_components.bticino_c300x.camera_media.state_machine import MediaState
+from custom_components.bticino_c300x.data import (
+    C300XRuntimeDiagnostics,
+    C300XRuntimeResources,
+)
 from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
 from custom_components.bticino_c300x.video import resolve_doorbell_camera_entity_id
 
@@ -240,11 +244,12 @@ class _FakeRuntimeData:
         default_factory=lambda: {"doorbell_video": {"supported": True}},
     )
     agent_cpu_watchdog: Any = field(default_factory=media_watchdog.AgentCpuWatchdog)
-    agent_cpu_watchdog_task: Any = None
-    prepare_doorbell_video_stop: Any = None
-    prepare_home_call_stop: Any = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
+
     media_timeline: Any = field(default_factory=C300XMediaTimeline)
-    agent_media_facts: dict[str, Any] = field(default_factory=dict)
+    diagnostics: C300XRuntimeDiagnostics = field(
+        default_factory=C300XRuntimeDiagnostics
+    )
 
 
 def _webrtc_message_value(message: Any, key: str) -> Any:
@@ -1381,8 +1386,8 @@ def test_doorbell_camera_home_call_offer_without_audio_is_rejected() -> None:
 def test_doorbell_camera_remove_clears_callbacks_and_stops_media() -> None:
     api = _FakeApi()
     runtime_data = _FakeRuntimeData(api=api)
-    runtime_data.prepare_doorbell_video_stop = object()
-    runtime_data.prepare_home_call_stop = object()
+    runtime_data.resources.prepare_doorbell_video_stop = object()
+    runtime_data.resources.prepare_home_call_stop = object()
     entry = _FakeEntry(runtime_data=runtime_data)
     camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
     provider = _FakeWebRTCProvider()
@@ -1398,8 +1403,8 @@ def test_doorbell_camera_remove_clears_callbacks_and_stops_media() -> None:
 
     asyncio.run(camera.async_will_remove_from_hass())
 
-    assert runtime_data.prepare_doorbell_video_stop is None
-    assert runtime_data.prepare_home_call_stop is None
+    assert runtime_data.resources.prepare_doorbell_video_stop is None
+    assert runtime_data.resources.prepare_home_call_stop is None
     assert provider.closed == ["doorbell-session"]
     assert api.stop_calls == 2
     assert camera._webrtc_session_ids() == []
@@ -1671,15 +1676,22 @@ def test_doorbell_camera_publishes_live_media_facts_for_diagnostics() -> None:
 
     camera._refresh_derived_media_state()
 
-    assert entry.runtime_data.agent_media_facts["video_call_active"] is True
-    assert entry.runtime_data.agent_media_facts["video_clients"] == 1
+    assert entry.runtime_data.diagnostics.agent_media_facts["video_call_active"] is True
+    assert entry.runtime_data.diagnostics.agent_media_facts["video_clients"] == 1
 
     camera._clear_video_window()
 
-    assert entry.runtime_data.agent_media_facts["video_call_active"] is False
-    assert entry.runtime_data.agent_media_facts["video_bridge_media_active"] is False
-    assert entry.runtime_data.agent_media_facts["video_media_owner"] == "idle"
-    assert entry.runtime_data.agent_media_facts["video_clients"] == 0
+    assert (
+        entry.runtime_data.diagnostics.agent_media_facts["video_call_active"] is False
+    )
+    assert (
+        entry.runtime_data.diagnostics.agent_media_facts["video_bridge_media_active"]
+        is False
+    )
+    assert (
+        entry.runtime_data.diagnostics.agent_media_facts["video_media_owner"] == "idle"
+    )
+    assert entry.runtime_data.diagnostics.agent_media_facts["video_clients"] == 0
 
 
 def test_doorbell_camera_publishes_ring_media_facts_from_event_bridge() -> None:
@@ -1703,7 +1715,7 @@ def test_doorbell_camera_publishes_ring_media_facts_from_event_bridge() -> None:
 
     camera._refresh_derived_media_state()
 
-    facts = entry.runtime_data.agent_media_facts
+    facts = entry.runtime_data.diagnostics.agent_media_facts
     assert facts["ring_call_active"] is True
     assert facts["ring_media_active"] is True
     # Not carried by the event payload: inferred from the owner, never latched.
@@ -1753,7 +1765,7 @@ def test_doorbell_camera_registers_explicit_stop_hook() -> None:
 
     asyncio.run(camera.async_added_to_hass())
 
-    assert entry.runtime_data.prepare_doorbell_video_stop is not None
+    assert entry.runtime_data.resources.prepare_doorbell_video_stop is not None
 
 
 def test_doorbell_camera_webrtc_stream_url_does_not_pre_warm_video_call_path() -> None:
@@ -3986,11 +3998,16 @@ def test_doorbell_camera_media_facts_do_not_latch_a_finished_stop() -> None:
         "clients": 1,
     }
     camera._refresh_derived_media_state()
-    assert entry.runtime_data.agent_media_facts["video_bridge_stop_in_progress"] is True
+    assert (
+        entry.runtime_data.diagnostics.agent_media_facts[
+            "video_bridge_stop_in_progress"
+        ]
+        is True
+    )
 
     camera._clear_video_window()
 
-    facts = entry.runtime_data.agent_media_facts
+    facts = entry.runtime_data.diagnostics.agent_media_facts
     assert facts["video_media_owner"] == "idle"
     assert facts["video_bridge_stop_in_progress"] is False
     assert facts["video_media_starting"] is False
@@ -4018,7 +4035,7 @@ def test_doorbell_camera_media_facts_scope_flags_to_the_reported_owner() -> None
     )
     camera._refresh_derived_media_state()
 
-    facts = entry.runtime_data.agent_media_facts
+    facts = entry.runtime_data.diagnostics.agent_media_facts
     assert facts["ring_call_active"] is True
     assert facts["video_call_active"] is False
     assert facts["video_bridge_media_active"] is False
@@ -4036,7 +4053,9 @@ def test_doorbell_camera_media_facts_report_a_starting_stream() -> None:
 
     camera._refresh_derived_media_state()
 
-    assert entry.runtime_data.agent_media_facts["video_media_starting"] is True
+    assert (
+        entry.runtime_data.diagnostics.agent_media_facts["video_media_starting"] is True
+    )
 
 
 def test_doorbell_camera_media_facts_do_not_invent_an_active_home_call() -> None:
@@ -4051,6 +4070,6 @@ def test_doorbell_camera_media_facts_do_not_invent_an_active_home_call() -> None
 
     camera._refresh_derived_media_state()
 
-    facts = entry.runtime_data.agent_media_facts
+    facts = entry.runtime_data.diagnostics.agent_media_facts
     assert facts["home_call_active"] is False
     assert facts["home_call_running"] is True

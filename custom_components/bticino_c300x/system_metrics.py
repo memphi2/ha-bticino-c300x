@@ -128,7 +128,9 @@ def apply_system_metrics(
         state.retired_instances.append(old_instance)
     restarted = bool(old_instance and instance and instance != old_instance)
     if restarted:
-        runtime.agent_restart_count = getattr(runtime, "agent_restart_count", 0) + 1
+        runtime.diagnostics.agent_restart_count = (
+            getattr(runtime.diagnostics, "agent_restart_count", 0) + 1
+        )
 
     now = monotonic()
     interval = metrics.get("sample_interval_seconds") or 30
@@ -210,7 +212,7 @@ async def _async_read_metrics(
     generation = metrics_cache(entry).generation
     snapshot = runtime.system_metrics
     try:
-        metrics = cast(dict[str, Any], await runtime.api.async_system_metrics())
+        metrics = await runtime.api.async_system_metrics()
     except C300XAgentApiError:
         if runtime.system_metrics is not snapshot and metrics_are_fresh(entry):
             return runtime.system_metrics

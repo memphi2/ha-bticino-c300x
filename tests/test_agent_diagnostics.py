@@ -12,6 +12,7 @@ from custom_components.bticino_c300x.agent_diagnostics import (
     async_refresh_agent_diagnostics,
 )
 from custom_components.bticino_c300x.api import C300XAgentApiError
+from custom_components.bticino_c300x.data import C300XRuntimeDiagnostics
 
 
 @dataclass
@@ -31,12 +32,14 @@ def _entry(*, api: _FakeApi | None = None, capabilities: dict[str, Any] | None =
         runtime_data=SimpleNamespace(
             api=api or _FakeApi(),
             capabilities=capabilities or {"diagnostics": {"supported": True}},
-            agent_diagnostics={},
-            agent_diagnostics_updated_at=None,
-            agent_diagnostics_updated_by=None,
-            agent_diagnostics_change_reason=None,
-            agent_restart_count=0,
-            agent_uptime_seconds=None,
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={},
+                agent_diagnostics_updated_at=None,
+                agent_diagnostics_updated_by=None,
+                agent_diagnostics_change_reason=None,
+                agent_restart_count=0,
+                agent_uptime_seconds=None,
+            ),
         ),
     )
 
@@ -62,10 +65,12 @@ def test_refresh_agent_diagnostics_stores_status_and_notifies(
 
     assert result["agent_write_count"] == 2
     assert result["last_write_reason"] == "qml"
-    assert entry.runtime_data.agent_diagnostics == result
-    assert entry.runtime_data.agent_diagnostics_updated_at is not None
-    assert entry.runtime_data.agent_diagnostics_updated_by == "api_refresh"
-    assert entry.runtime_data.agent_diagnostics_change_reason == "api_refresh"
+    assert entry.runtime_data.diagnostics.agent_diagnostics == result
+    assert entry.runtime_data.diagnostics.agent_diagnostics_updated_at is not None
+    assert entry.runtime_data.diagnostics.agent_diagnostics_updated_by == "api_refresh"
+    assert (
+        entry.runtime_data.diagnostics.agent_diagnostics_change_reason == "api_refresh"
+    )
     assert sent == [("hass", "bticino_c300x_agent_diagnostics_changed", "entry-1")]
     assert synced == ["entry-1"]
 
@@ -86,26 +91,26 @@ def test_uptime_drop_does_not_claim_a_device_or_agent_restart(monkeypatch) -> No
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 1, "uptime_seconds": 500}
     )
-    assert entry.runtime_data.agent_restart_count == 0
-    assert entry.runtime_data.agent_uptime_seconds == 500
+    assert entry.runtime_data.diagnostics.agent_restart_count == 0
+    assert entry.runtime_data.diagnostics.agent_uptime_seconds == 500
 
     # Uptime grows within the same process -> still no reboot.
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 2, "uptime_seconds": 800}
     )
-    assert entry.runtime_data.agent_restart_count == 0
+    assert entry.runtime_data.diagnostics.agent_restart_count == 0
 
     # A lower uptime alone is not proof of a new agent process or device boot.
     apply_agent_diagnostics_event(
         "hass", entry, {"agent_write_count": 1, "uptime_seconds": 12}
     )
-    assert entry.runtime_data.agent_restart_count == 0
-    assert entry.runtime_data.agent_uptime_seconds == 12
+    assert entry.runtime_data.diagnostics.agent_restart_count == 0
+    assert entry.runtime_data.diagnostics.agent_uptime_seconds == 12
 
     # An agent that does not report uptime leaves the counter untouched.
     apply_agent_diagnostics_event("hass", entry, {"agent_write_count": 5})
-    assert entry.runtime_data.agent_restart_count == 0
-    assert entry.runtime_data.agent_uptime_seconds == 12
+    assert entry.runtime_data.diagnostics.agent_restart_count == 0
+    assert entry.runtime_data.diagnostics.agent_uptime_seconds == 12
 
 
 def test_refresh_agent_diagnostics_skips_unsupported_or_failed_status() -> None:
@@ -138,9 +143,11 @@ def test_apply_agent_diagnostics_event_stores_valid_push_payload(monkeypatch) ->
 
     assert result["agent_write_count"] == 3
     assert result["video_clients"] == 1
-    assert entry.runtime_data.agent_diagnostics == result
-    assert entry.runtime_data.agent_diagnostics_updated_by == "push_event"
-    assert entry.runtime_data.agent_diagnostics_change_reason == "initial_push"
+    assert entry.runtime_data.diagnostics.agent_diagnostics == result
+    assert entry.runtime_data.diagnostics.agent_diagnostics_updated_by == "push_event"
+    assert (
+        entry.runtime_data.diagnostics.agent_diagnostics_change_reason == "initial_push"
+    )
     assert sent == ["entry-1"]
 
 
@@ -161,10 +168,12 @@ def test_apply_agent_diagnostics_event_skips_duplicate_push_payloads(monkeypatch
     )
 
     assert apply_agent_diagnostics_event("hass", entry, payload) is not None
-    first_updated_at = entry.runtime_data.agent_diagnostics_updated_at
+    first_updated_at = entry.runtime_data.diagnostics.agent_diagnostics_updated_at
     assert apply_agent_diagnostics_event("hass", entry, payload) is not None
 
-    assert entry.runtime_data.agent_diagnostics_updated_at == first_updated_at
+    assert (
+        entry.runtime_data.diagnostics.agent_diagnostics_updated_at == first_updated_at
+    )
     assert sent == ["entry-1"]
     assert synced == ["entry-1"]
 
@@ -188,7 +197,7 @@ def test_agent_diagnostics_event_records_specific_change_reason(monkeypatch) -> 
         {"agent_write_count": 1, "ring_call_active": True},
     )
 
-    assert entry.runtime_data.agent_diagnostics_change_reason == (
+    assert entry.runtime_data.diagnostics.agent_diagnostics_change_reason == (
         "media_diagnostics_changed"
     )
 
@@ -237,4 +246,4 @@ def test_apply_agent_diagnostics_event_ignores_invalid_or_unsupported_payloads()
 
     assert apply_agent_diagnostics_event("hass", unsupported, {"agent_write_count": 1}) is None
     assert apply_agent_diagnostics_event("hass", supported, []) is None  # type: ignore[arg-type]
-    assert supported.runtime_data.agent_diagnostics == {}
+    assert supported.runtime_data.diagnostics.agent_diagnostics == {}

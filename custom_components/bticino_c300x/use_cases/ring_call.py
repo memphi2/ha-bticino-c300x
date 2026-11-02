@@ -29,7 +29,7 @@ class RingCallUseCase:
 
         ensure_doorbell_call_supported(self._entry)
         prepare_stop = getattr(
-            self._entry.runtime_data,
+            self._entry.runtime_data.resources,
             "prepare_doorbell_video_stop",
             None,
         )

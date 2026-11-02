@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from custom_components.bticino_c300x.data import C300XRuntimeResources
 from custom_components.bticino_c300x.media_watchdog import (
     AgentCpuWatchdog,
     _async_stop_media_for_watchdog,
@@ -275,7 +276,7 @@ def test_runtime_watchdog_does_not_schedule_duplicate_stop_task() -> None:
     runtime_data = SimpleNamespace(
         system_metrics={"cpu_usage_percent": 95.0},
         agent_cpu_watchdog=AgentCpuWatchdog(high_since=0.0),
-        agent_cpu_watchdog_task=task,
+        resources=C300XRuntimeResources(agent_cpu_watchdog_task=task),
     )
     entry = SimpleNamespace(runtime_data=runtime_data)
 
@@ -288,7 +289,7 @@ def test_runtime_watchdog_does_not_schedule_duplicate_stop_task() -> None:
     asyncio.run(_run())
 
     assert runtime_data.agent_cpu_watchdog.trigger_count == 1
-    assert runtime_data.agent_cpu_watchdog_task is task
+    assert runtime_data.resources.agent_cpu_watchdog_task is task
 
 
 def test_camera_watchdog_refreshes_status_and_stops_on_demand_without_sessions() -> None:

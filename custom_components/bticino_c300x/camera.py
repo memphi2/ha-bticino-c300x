@@ -894,8 +894,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     async def async_will_remove_from_hass(self) -> None:
         """Stop active media sessions when HA removes the camera entity."""
 
-        self._entry.runtime_data.prepare_doorbell_video_stop = None
-        self._entry.runtime_data.prepare_home_call_stop = None
+        self._entry.runtime_data.resources.prepare_doorbell_video_stop = None
+        self._entry.runtime_data.resources.prepare_home_call_stop = None
         for session_id in self._webrtc_session_ids():
             await self._async_close_webrtc_session(session_id, force_stop_media=True)
         with suppress(Exception):
@@ -1385,7 +1385,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             allow_absolute_url=True,
         )
 
-    def _apply_status(self, status: dict[str, Any]) -> None:
+    def _apply_status(self, status: Mapping[str, Any]) -> None:
         self._bridge_available = bool(status.get("available"))
         self._bridge_status = optional_mapping(status.get("bridge"))
         self._video_window_available = bool(status.get("window_available"))
@@ -1404,10 +1404,12 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         """Subscribe to runtime event-state updates."""
 
         await super().async_added_to_hass()
-        self._entry.runtime_data.prepare_doorbell_video_stop = (
+        self._entry.runtime_data.resources.prepare_doorbell_video_stop = (
             self.async_prepare_doorbell_video_stop
         )
-        self._entry.runtime_data.prepare_home_call_stop = self.async_prepare_home_call_stop
+        self._entry.runtime_data.resources.prepare_home_call_stop = (
+            self.async_prepare_home_call_stop
+        )
         self.async_on_remove(
             self.hass.bus.async_listen(
                 EVENT_AGENT_EVENT_RECEIVED,

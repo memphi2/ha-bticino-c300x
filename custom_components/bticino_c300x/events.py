@@ -77,12 +77,12 @@ def async_request_agent_event_registration(
     if hasattr(runtime, "system_metrics"):
         invalidate_system_metrics(entry)
 
-    unregister = getattr(runtime, "unregister_event_registration", None)
+    unregister = getattr(runtime.resources, "unregister_event_registration", None)
     if callable(unregister):
         unregister()
-        runtime.unregister_event_registration = None
+        runtime.resources.unregister_event_registration = None
     on_runtime_registration_created = getattr(
-        runtime,
+        runtime.resources,
         "on_runtime_registration_created",
         None,
     )
@@ -93,7 +93,7 @@ def async_request_agent_event_registration(
         if getattr(entry, "runtime_data", None) is not runtime:
             return
         active_runtime = cast(Any, runtime)
-        active_runtime.unregister_event_registration = (
+        active_runtime.resources.unregister_event_registration = (
             await async_start_agent_event_registration(
                 hass,
                 entry,

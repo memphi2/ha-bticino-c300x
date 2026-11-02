@@ -100,6 +100,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
 from custom_components.bticino_c300x.data import (  # noqa: E402
     C300XCallbackDiagnostics,
     C300XConnectionState,
+    C300XRuntimeDiagnostics,
 )
 from custom_components.bticino_c300x.media_setup import (  # noqa: E402
     media_setup_fixable_checks,
@@ -148,8 +149,10 @@ class FakeRuntimeData:
             smartphone_forwarding_mode="homeassistant"
         )
     )
-    display_bridge_diagnostics: Any | None = None
-    agent_diagnostics: dict[str, Any] | None = None
+    diagnostics: C300XRuntimeDiagnostics = field(
+        default_factory=C300XRuntimeDiagnostics
+    )
+
     qml_patch_status: dict[str, Any] = field(default_factory=dict)
     device_user_status: dict[str, Any] = field(default_factory=dict)
     self_test_status: dict[str, Any] = field(default_factory=dict)
@@ -534,10 +537,12 @@ def test_agent_update_up_to_date_clears_repair_issue() -> None:
 def test_missing_agent_startup_link_creates_repair_issue() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": False,
-            }
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": False,
+                }
+            )
         )
     )
 
@@ -553,10 +558,12 @@ def test_missing_agent_startup_link_creates_repair_issue() -> None:
 def test_agent_startup_link_ok_clears_repair_issue() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-            }
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                }
+            )
         )
     )
 
@@ -1012,11 +1019,13 @@ def test_ok_self_test_clears_repair_issue() -> None:
 def test_ui_event_watchdog_creates_repair_issue() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(
-            agent_diagnostics={
-                "ui_event_waiters": 4,
-                "ui_event_waiter_capacity": 4,
-                "ui_event_waiter_overflows": 2,
-            }
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "ui_event_waiters": 4,
+                    "ui_event_waiter_capacity": 4,
+                    "ui_event_waiter_overflows": 2,
+                }
+            )
         )
     )
 
@@ -1035,11 +1044,13 @@ def test_ui_event_watchdog_creates_repair_issue() -> None:
 def test_ui_event_watchdog_ignores_historical_overflow() -> None:
     entry = FakeEntry(
         runtime_data=FakeRuntimeData(
-            agent_diagnostics={
-                "ui_event_waiters": 0,
-                "ui_event_waiter_capacity": 4,
-                "ui_event_waiter_overflows": 2,
-            }
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "ui_event_waiters": 0,
+                    "ui_event_waiter_capacity": 4,
+                    "ui_event_waiter_overflows": 2,
+                }
+            )
         )
     )
 
@@ -1436,7 +1447,11 @@ def test_clean_callback_url_clears_repair_issue() -> None:
         datetime(2026, 6, 2, tzinfo=UTC),
     )
     entry = FakeEntry(
-        runtime_data=FakeRuntimeData(display_bridge_diagnostics=display_bridge),
+        runtime_data=FakeRuntimeData(
+            diagnostics=C300XRuntimeDiagnostics(
+                display_bridge_diagnostics=display_bridge
+            )
+        ),
     )
 
     async_sync_entry_repair_issues(FakeHass(), entry)
@@ -1502,7 +1517,13 @@ def test_repair_issue_defensive_helpers_cover_edge_paths(monkeypatch) -> None:
         callback_host_type="mdns",
     )
     assert repair_issues._callback_problem(  # noqa: SLF001
-        FakeEntry(runtime_data=FakeRuntimeData(display_bridge_diagnostics=display_bridge))
+        FakeEntry(
+            runtime_data=FakeRuntimeData(
+                diagnostics=C300XRuntimeDiagnostics(
+                    display_bridge_diagnostics=display_bridge
+                )
+            )
+        )
     ) == {
         "source": "display bridge",
         "scheme": "https",

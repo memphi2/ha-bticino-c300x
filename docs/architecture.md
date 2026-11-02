@@ -29,6 +29,12 @@ go through `executor.py`, also used by the existing service use cases. Both use
 `dashboard_config.py` for the configured allowlist and `alarm_state.py` for alarm
 readiness and code policy; neither shared module imports the command executor.
 
+Each config entry keeps its live state in `BticinoC300XRuntimeData`, with a typed
+agent API. `resources` owns its tasks, subscriptions and media preparation
+callbacks; unloading closes this owner and clears the references. `diagnostics`
+contains snapshots and operation results, not running tasks. Message-refresh
+completion callbacks retain their original resource owner across an entry reload.
+
 ### Native device agent
 
 Path: `native_agent/`

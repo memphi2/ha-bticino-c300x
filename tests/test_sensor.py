@@ -139,6 +139,10 @@ from custom_components.bticino_c300x.const import (
     SIGNAL_AGENT_DIAGNOSTICS_CHANGED,
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
+from custom_components.bticino_c300x.data import (
+    C300XRuntimeDiagnostics,
+    C300XRuntimeResources,
+)
 from custom_components.bticino_c300x.media_readiness import media_readiness
 from custom_components.bticino_c300x.sensor import (
     C300XAgentDiagnosticsSensor,
@@ -370,16 +374,14 @@ class _FakeRuntimeData:
     system_metrics_updated_at: Any = None
     answering_machine_messages: dict[str, Any] = field(default_factory=dict)
     answering_machine_messages_updated_at: Any = None
-    answering_machine_messages_refresh_task: asyncio.Task[Any] | None = None
+    resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)
     memos: dict[str, Any] = field(default_factory=dict)
     memos_updated_at: Any = None
-    memos_refresh_task: asyncio.Task[Any] | None = None
-    agent_diagnostics: dict[str, Any] = field(default_factory=dict)
-    agent_media_facts: dict[str, Any] = field(default_factory=dict)
-    agent_media_facts_updated_at: Any = None
-    agent_diagnostics_updated_at: Any = None
-    agent_diagnostics_updated_by: str | None = None
-    agent_diagnostics_change_reason: str | None = None
+
+    diagnostics: C300XRuntimeDiagnostics = field(
+        default_factory=C300XRuntimeDiagnostics
+    )
+
     device_user_status: dict[str, Any] = field(default_factory=dict)
     self_test_status: dict[str, Any] = field(default_factory=dict)
     agent_update_state: Any = None
@@ -402,32 +404,34 @@ async def _drain_tasks() -> None:
 def test_agent_status_sensor_reports_ok_with_safe_context() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_write_count": 2,
-                "last_write_at": 1770000000,
-                "last_write_reason": "updated",
-                "last_write_class": "config",
-                "last_wake_reason": "api",
-                "loop_iterations": 10,
-                "poll_wakeups": 4,
-                "last_poll_timeout_ms": 5000,
-                "last_poll_count": 6,
-                "open_fd_count": 9,
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "recent_event_count": 4,
-                "recent_event_capacity": 16,
-                "display_bridge_registered": True,
-                "display_bridge_disabled": False,
-                "home_assistant_connected_this_run": True,
-                "home_assistant_last_seen_at": 1770000010,
-                "ui_event_revision": 7,
-                "flexisip_backup_available": True,
-                "flexisip_restart_marker": True,
-                "flexisip_backup_marker": False,
-                "flexisip_reference_state": "legacy_mqtt_patch",
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_write_count": 2,
+                    "last_write_at": 1770000000,
+                    "last_write_reason": "updated",
+                    "last_write_class": "config",
+                    "last_wake_reason": "api",
+                    "loop_iterations": 10,
+                    "poll_wakeups": 4,
+                    "last_poll_timeout_ms": 5000,
+                    "last_poll_count": 6,
+                    "open_fd_count": 9,
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "recent_event_count": 4,
+                    "recent_event_capacity": 16,
+                    "display_bridge_registered": True,
+                    "display_bridge_disabled": False,
+                    "home_assistant_connected_this_run": True,
+                    "home_assistant_last_seen_at": 1770000010,
+                    "ui_event_revision": 7,
+                    "flexisip_backup_available": True,
+                    "flexisip_restart_marker": True,
+                    "flexisip_backup_marker": False,
+                    "flexisip_reference_state": "legacy_mqtt_patch",
+                }
+            )
         )
     )
     entity = C300XAgentStatusSensor(entry)  # type: ignore[arg-type]
@@ -830,48 +834,50 @@ def test_media_readiness_treats_optional_ipv6_self_test_as_warning() -> None:
 def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_write_count": 2,
-                "last_write_at": 1770000000,
-                "last_write_reason": "updated",
-                "last_write_class": "config",
-                "last_wake_reason": "api",
-                "loop_iterations": 10,
-                "poll_wakeups": 4,
-                "last_poll_timeout_ms": 5000,
-                "last_poll_count": 6,
-                "open_fd_count": 9,
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "recent_event_count": 4,
-                "recent_event_capacity": 16,
-                "display_bridge_registered": True,
-                "display_bridge_disabled": False,
-                "home_assistant_connected_this_run": True,
-                "home_assistant_last_seen_at": 1770000010,
-                "ui_event_revision": 7,
-                "video_running": False,
-                "video_rtsp_server_running": True,
-                "video_media_starting": True,
-                "video_call_active": True,
-                "video_clients": 1,
-                "video_bridge_running": True,
-                "video_bridge_media_active": True,
-                "video_bridge_stop_in_progress": False,
-                "video_bridge_open_fds": 2,
-                "video_bridge_active_threads": 1,
-                "ring_receiver_running": True,
-                "ring_registered": True,
-                "ring_call_active": False,
-                "ring_media_active": False,
-                "home_call_running": False,
-                "home_call_active": False,
-                "flexisip_backup_available": True,
-                "flexisip_restart_marker": True,
-                "flexisip_backup_marker": False,
-                "flexisip_reference_state": "legacy_mqtt_patch",
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_write_count": 2,
+                    "last_write_at": 1770000000,
+                    "last_write_reason": "updated",
+                    "last_write_class": "config",
+                    "last_wake_reason": "api",
+                    "loop_iterations": 10,
+                    "poll_wakeups": 4,
+                    "last_poll_timeout_ms": 5000,
+                    "last_poll_count": 6,
+                    "open_fd_count": 9,
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "recent_event_count": 4,
+                    "recent_event_capacity": 16,
+                    "display_bridge_registered": True,
+                    "display_bridge_disabled": False,
+                    "home_assistant_connected_this_run": True,
+                    "home_assistant_last_seen_at": 1770000010,
+                    "ui_event_revision": 7,
+                    "video_running": False,
+                    "video_rtsp_server_running": True,
+                    "video_media_starting": True,
+                    "video_call_active": True,
+                    "video_clients": 1,
+                    "video_bridge_running": True,
+                    "video_bridge_media_active": True,
+                    "video_bridge_stop_in_progress": False,
+                    "video_bridge_open_fds": 2,
+                    "video_bridge_active_threads": 1,
+                    "ring_receiver_running": True,
+                    "ring_registered": True,
+                    "ring_call_active": False,
+                    "ring_media_active": False,
+                    "home_call_running": False,
+                    "home_call_active": False,
+                    "flexisip_backup_available": True,
+                    "flexisip_restart_marker": True,
+                    "flexisip_backup_marker": False,
+                    "flexisip_reference_state": "legacy_mqtt_patch",
+                }
+            )
         )
     )
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
@@ -942,19 +948,21 @@ def test_agent_diagnostics_sensor_reports_disabled_detailed_context() -> None:
 def test_agent_diagnostics_sensor_reports_idle_despite_historical_writes() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_write_count": 2,
-                "last_write_at": 1770000000,
-                "last_write_reason": "updated",
-                "last_write_class": "config",
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_clients": 0,
-                "video_bridge_open_fds": 0,
-                "video_bridge_active_threads": 0,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_write_count": 2,
+                    "last_write_at": 1770000000,
+                    "last_write_reason": "updated",
+                    "last_write_class": "config",
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_clients": 0,
+                    "video_bridge_open_fds": 0,
+                    "video_bridge_active_threads": 0,
+                }
+            )
         )
     )
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
@@ -968,12 +976,14 @@ def test_agent_diagnostics_sensor_reports_idle_despite_historical_writes() -> No
 def test_agent_diagnostics_sensor_reports_installation_and_subscription_issues() -> None:
     repair_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": False,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": False,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                }
+            )
         )
     )
     repair_entity = C300XAgentDiagnosticsSensor(repair_entry)  # type: ignore[arg-type]
@@ -988,12 +998,14 @@ def test_agent_diagnostics_sensor_reports_installation_and_subscription_issues()
 
     subscription_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 0,
-                "home_assistant_connected_this_run": True,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 0,
+                    "home_assistant_connected_this_run": True,
+                }
+            )
         )
     )
     subscription_entity = C300XAgentDiagnosticsSensor(subscription_entry)  # type: ignore[arg-type]
@@ -1011,12 +1023,14 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
     offline_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
             connection_state=_FakeConnectionState(available=False),
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                }
+            ),
         )
     )
     offline_entity = C300XAgentDiagnosticsSensor(offline_entry)  # type: ignore[arg-type]
@@ -1031,12 +1045,14 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
 
     watchdog_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                }
+            )
         )
     )
     watchdog_entry.runtime_data.agent_cpu_watchdog = types.SimpleNamespace(
@@ -1057,15 +1073,17 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
 
     ui_event_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "ui_event_waiters": 4,
-                "ui_event_waiter_capacity": 4,
-                "ui_event_waiter_overflows": 1,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "ui_event_waiters": 4,
+                    "ui_event_waiter_capacity": 4,
+                    "ui_event_waiter_overflows": 1,
+                }
+            )
         )
     )
     ui_event_entity = C300XAgentDiagnosticsSensor(ui_event_entry)  # type: ignore[arg-type]
@@ -1082,15 +1100,17 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
 
     historical_ui_event_entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "ui_event_waiters": 0,
-                "ui_event_waiter_capacity": 4,
-                "ui_event_waiter_overflows": 1,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "ui_event_waiters": 0,
+                    "ui_event_waiter_capacity": 4,
+                    "ui_event_waiter_overflows": 1,
+                }
+            )
         )
     )
     historical_ui_event_entity = C300XAgentDiagnosticsSensor(  # type: ignore[arg-type]
@@ -1103,16 +1123,18 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
 def _diagnostics_entry_with_stale_call(**runtime_kwargs: Any) -> _FakeEntry:
     return _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_call_active": True,
-                "video_bridge_media_active": True,
-                "video_clients": 1,
-            },
-            **runtime_kwargs,
+            diagnostics=C300XRuntimeDiagnostics(
+                **runtime_kwargs,
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_call_active": True,
+                    "video_bridge_media_active": True,
+                    "video_clients": 1,
+                },
+            )
         )
     )
 
@@ -1150,27 +1172,29 @@ def test_agent_diagnostics_sensor_reports_call_started_after_stale_idle_snapshot
 
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_call_active": False,
-                "video_clients": 0,
-            },
-            agent_media_facts={
-                "video_media_starting": False,
-                "video_call_active": True,
-                "video_bridge_media_active": True,
-                "video_bridge_stop_in_progress": False,
-                "video_external_media_active": False,
-                "ring_call_active": False,
-                "ring_media_active": False,
-                "home_call_running": False,
-                "home_call_active": False,
-                "video_clients": 1,
-                "video_media_owner": "agent",
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_call_active": False,
+                    "video_clients": 0,
+                },
+                agent_media_facts={
+                    "video_media_starting": False,
+                    "video_call_active": True,
+                    "video_bridge_media_active": True,
+                    "video_bridge_stop_in_progress": False,
+                    "video_external_media_active": False,
+                    "ring_call_active": False,
+                    "ring_media_active": False,
+                    "home_call_running": False,
+                    "home_call_active": False,
+                    "video_clients": 1,
+                    "video_media_owner": "agent",
+                },
+            )
         )
     )
 
@@ -1273,7 +1297,9 @@ def test_agent_diagnostics_sensor_reports_all_operator_statuses() -> None:
 
     for diagnostics, status, reason, action in cases:
         entry = _FakeEntry(
-            runtime_data=_FakeRuntimeData(agent_diagnostics=diagnostics)
+            runtime_data=_FakeRuntimeData(
+                diagnostics=C300XRuntimeDiagnostics(agent_diagnostics=diagnostics)
+            )
         )
         entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
 
@@ -1290,12 +1316,14 @@ def test_agent_diagnostics_sensor_reports_reconnecting_operator_status() -> None
                 available=True,
                 connection_state="reconnecting",
             ),
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                }
+            ),
         )
     )
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
@@ -1455,7 +1483,10 @@ def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
         assert attrs["agent_write_count"] == 2
         assert attrs["last_write_reason"] == "updated"
         assert attrs["change_reason"] == "api_refresh"
-        assert attrs["updated_at"] == entry.runtime_data.agent_diagnostics_updated_at
+        assert (
+            attrs["updated_at"]
+            == entry.runtime_data.diagnostics.agent_diagnostics_updated_at
+        )
         assert attrs["updated_by"] == "api_refresh"
         assert attrs["qml_patch_last_action"] == "apply"
         assert attrs["accepted_clients"] == 3
@@ -1468,23 +1499,25 @@ def test_agent_diagnostics_sensor_refreshes_safe_write_diagnostics() -> None:
 def test_agent_diagnostics_sensor_reports_idle_for_ready_rtsp_bridge() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_bridge_running": True,
-                "video_bridge_media_active": False,
-                "video_bridge_stop_in_progress": False,
-                "video_bridge_open_fds": 2,
-                "video_bridge_active_threads": 2,
-                "video_clients": 0,
-                "video_running": False,
-                "home_call_running": False,
-                "home_call_active": False,
-                "ring_call_active": False,
-                "ring_media_active": False,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_bridge_running": True,
+                    "video_bridge_media_active": False,
+                    "video_bridge_stop_in_progress": False,
+                    "video_bridge_open_fds": 2,
+                    "video_bridge_active_threads": 2,
+                    "video_clients": 0,
+                    "video_running": False,
+                    "home_call_running": False,
+                    "home_call_active": False,
+                    "ring_call_active": False,
+                    "ring_media_active": False,
+                }
+            )
         )
     )
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
@@ -1496,18 +1529,20 @@ def test_agent_diagnostics_sensor_reports_idle_for_ready_rtsp_bridge() -> None:
 def test_agent_diagnostics_sensor_reports_resources_when_bridge_stopped_with_fds() -> None:
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_bridge_running": False,
-                "video_bridge_media_active": False,
-                "video_bridge_stop_in_progress": False,
-                "video_bridge_open_fds": 1,
-                "video_bridge_active_threads": 1,
-                "video_clients": 0,
-            },
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_bridge_running": False,
+                    "video_bridge_media_active": False,
+                    "video_bridge_stop_in_progress": False,
+                    "video_bridge_open_fds": 1,
+                    "video_bridge_active_threads": 1,
+                    "video_clients": 0,
+                }
+            )
         )
     )
     entity = C300XAgentDiagnosticsSensor(entry)  # type: ignore[arg-type]
@@ -1538,7 +1573,9 @@ def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:
 
         assert result is not None
         assert entry.runtime_data.api.diagnostics_calls == 1
-        assert entry.runtime_data.agent_diagnostics["agent_write_count"] == 2
+        assert (
+            entry.runtime_data.diagnostics.agent_diagnostics["agent_write_count"] == 2
+        )
         assert dispatcher_signals == [
             (SIGNAL_AGENT_DIAGNOSTICS_CHANGED, "entry-1")
         ]
@@ -2533,7 +2570,7 @@ def test_memo_event_refresh_is_deduplicated_between_memo_sensors() -> None:
         await _drain_tasks()
 
         assert entry.runtime_data.api.memos_calls == 1
-        assert entry.runtime_data.memos_refresh_task is None
+        assert entry.runtime_data.resources.memos_refresh_task is None
         assert entry.runtime_data.memos["memos"][0]["text"] == "local memo"
 
     asyncio.run(_run())
@@ -2553,7 +2590,7 @@ def test_agent_diagnostics_sensor_prefers_a_newer_snapshot_over_stale_facts() ->
         },
         agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
     )
-    entry.runtime_data.agent_diagnostics = {
+    entry.runtime_data.diagnostics.agent_diagnostics = {
         "agent_init_script_present": True,
         "agent_init_link_ok": True,
         "subscription_count": 1,
@@ -2561,7 +2598,7 @@ def test_agent_diagnostics_sensor_prefers_a_newer_snapshot_over_stale_facts() ->
         "video_call_active": False,
         "video_clients": 0,
     }
-    entry.runtime_data.agent_diagnostics_updated_at = datetime(
+    entry.runtime_data.diagnostics.agent_diagnostics_updated_at = datetime(
         2026, 8, 22, 10, 5, tzinfo=UTC
     )
 
@@ -2576,22 +2613,24 @@ def test_agent_diagnostics_sensor_prefers_newer_facts_over_an_older_snapshot() -
 
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics={
-                "agent_init_script_present": True,
-                "agent_init_link_ok": True,
-                "subscription_count": 1,
-                "home_assistant_connected_this_run": True,
-                "video_call_active": False,
-                "video_clients": 0,
-            },
-            agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
-            agent_media_facts={
-                "video_call_active": True,
-                "video_bridge_media_active": True,
-                "video_clients": 1,
-                "video_media_owner": "agent",
-            },
-            agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics={
+                    "agent_init_script_present": True,
+                    "agent_init_link_ok": True,
+                    "subscription_count": 1,
+                    "home_assistant_connected_this_run": True,
+                    "video_call_active": False,
+                    "video_clients": 0,
+                },
+                agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+                agent_media_facts={
+                    "video_call_active": True,
+                    "video_bridge_media_active": True,
+                    "video_clients": 1,
+                    "video_media_owner": "agent",
+                },
+                agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
+            )
         )
     )
 
@@ -2608,25 +2647,27 @@ def test_agent_diagnostics_sensor_ignores_a_write_only_push_for_media() -> None:
 
     entry = _FakeEntry(
         runtime_data=_FakeRuntimeData(
-            agent_diagnostics=normalize_agent_diagnostics(
-                {
-                    "agent_write_count": 3,
-                    "last_write_class": "qml_patch",
-                    "last_write_reason": "apply",
-                    "agent_init_script_present": True,
-                    "agent_init_link_ok": True,
-                    "subscription_count": 1,
-                    "home_assistant_connected_this_run": True,
-                }
-            ),
-            agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
-            agent_media_facts={
-                "video_call_active": True,
-                "video_bridge_media_active": True,
-                "video_clients": 1,
-                "video_media_owner": "agent",
-            },
-            agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+            diagnostics=C300XRuntimeDiagnostics(
+                agent_diagnostics=normalize_agent_diagnostics(
+                    {
+                        "agent_write_count": 3,
+                        "last_write_class": "qml_patch",
+                        "last_write_reason": "apply",
+                        "agent_init_script_present": True,
+                        "agent_init_link_ok": True,
+                        "subscription_count": 1,
+                        "home_assistant_connected_this_run": True,
+                    }
+                ),
+                agent_diagnostics_updated_at=datetime(2026, 8, 22, 10, 5, tzinfo=UTC),
+                agent_media_facts={
+                    "video_call_active": True,
+                    "video_bridge_media_active": True,
+                    "video_clients": 1,
+                    "video_media_owner": "agent",
+                },
+                agent_media_facts_updated_at=datetime(2026, 8, 22, 10, 0, tzinfo=UTC),
+            )
         )
     )
 

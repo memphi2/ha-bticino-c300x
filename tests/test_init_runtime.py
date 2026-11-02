@@ -37,6 +37,8 @@ from custom_components.bticino_c300x.data import (
     C300XCallbackDiagnostics,
     C300XConnectionState,
     C300XOperationDiagnostics,
+    C300XRuntimeDiagnostics,
+    C300XRuntimeResources,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -386,15 +388,23 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     )
     entry = _entry(data={})
     entry.runtime_data = SimpleNamespace(
-        system_metrics_cache=SimpleNamespace(cancel=lambda: cancelled.append("metrics")),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
-        connection_state=SimpleNamespace(expire_unavailable=lambda: callbacks.append("expire")),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        system_metrics_cache=SimpleNamespace(
+            cancel=lambda: cancelled.append("metrics")
+        ),
+        connection_state=SimpleNamespace(
+            expire_unavailable=lambda: callbacks.append("expire")
+        ),
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     entry_locks.entry_lock(entry.entry_id, "ring_capture")
@@ -405,10 +415,16 @@ def test_remove_entry_clears_repair_issues_and_runtime_resources(
     asyncio.run(integration.async_remove_entry(hass, entry))
 
     assert cleared == [entry.entry_id]
-    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert callbacks == [
+        "expire",
+        "registration",
+        "display",
+        "event-webhook",
+        "webhook",
+    ]
     assert cancelled == ["metrics", "memos", "messages"]
-    assert entry.runtime_data.memos_refresh_task is None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert entry.runtime_data.resources.memos_refresh_task is None
+    assert entry.runtime_data.resources.answering_machine_messages_refresh_task is None
     assert not any(key[0] == entry.entry_id for key in entry_locks._locks)
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
@@ -742,14 +758,16 @@ def test_configure_display_bridge_registers_and_clears_callback(
         options={CONF_DEVICE_UI_ENABLED: True},
     )
     entry.runtime_data = SimpleNamespace(
-        display_bridge_diagnostics=C300XCallbackDiagnostics()
+        diagnostics=C300XRuntimeDiagnostics(
+            display_bridge_diagnostics=C300XCallbackDiagnostics()
+        )
     )
     api = _DisplayBridgeApi({"configured": False})
 
     asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == [(True, "https://ha.local/webhook-id", "secret")]
-    assert entry.runtime_data.display_bridge_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
     entry.options[CONF_DEVICE_UI_ENABLED] = False
     api = _DisplayBridgeApi({"configured": True})
@@ -782,7 +800,9 @@ def test_configure_display_bridge_skips_matching_registration(
         "secret",
     )
     entry.runtime_data = SimpleNamespace(
-        display_bridge_diagnostics=C300XCallbackDiagnostics()
+        diagnostics=C300XRuntimeDiagnostics(
+            display_bridge_diagnostics=C300XCallbackDiagnostics()
+        )
     )
     api = _DisplayBridgeApi(
         {"configured": True, "callback_hash": expected_hash}
@@ -791,7 +811,7 @@ def test_configure_display_bridge_skips_matching_registration(
     asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
 
     assert api.configured == []
-    assert entry.runtime_data.display_bridge_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error is None
 
 
 def test_configure_display_bridge_records_agent_failures(
@@ -815,14 +835,19 @@ def test_configure_display_bridge_records_agent_failures(
             options={CONF_DEVICE_UI_ENABLED: True},
         )
         entry.runtime_data = SimpleNamespace(
-            display_bridge_diagnostics=C300XCallbackDiagnostics()
+            diagnostics=C300XRuntimeDiagnostics(
+                display_bridge_diagnostics=C300XCallbackDiagnostics()
+            )
         )
         api = _DisplayBridgeApi({}, error=error)
 
         asyncio.run(integration._async_configure_display_bridge("hass", entry, api))
 
         assert api.configured == []
-        assert entry.runtime_data.display_bridge_diagnostics.last_error is not None
+        assert (
+            entry.runtime_data.diagnostics.display_bridge_diagnostics.last_error
+            is not None
+        )
 
 
 def test_sync_device_user_bootstraps_missing_media_user_once() -> None:
@@ -1126,14 +1151,16 @@ def test_sync_device_ui_patch_refreshes_status(monkeypatch: pytest.MonkeyPatch) 
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         capabilities={"maintenance": {"supported": True, "qml_status": True}},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
 
     asyncio.run(integration._async_sync_device_ui_patch(entry))
 
     assert entry.runtime_data.qml_patch_status == {"applied": True}
-    assert entry.runtime_data.qml_patch_diagnostics.last_error is None
+    assert entry.runtime_data.diagnostics.qml_patch_diagnostics.last_error is None
 
 
 def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
@@ -1149,8 +1176,10 @@ def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
     unsupported_entry = _entry()
     unsupported_entry.runtime_data = SimpleNamespace(
         capabilities={},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={"old": True},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
     asyncio.run(integration._async_sync_device_ui_patch(unsupported_entry))
     assert unsupported_entry.runtime_data.qml_patch_status == {}
@@ -1158,13 +1187,15 @@ def test_sync_device_ui_patch_skips_unsupported_or_failed_status(
     failed_entry = _entry()
     failed_entry.runtime_data = SimpleNamespace(
         capabilities={"maintenance": {"supported": True, "qml_status": True}},
-        qml_patch_diagnostics=C300XOperationDiagnostics(),
         qml_patch_status={"old": True},
+        diagnostics=C300XRuntimeDiagnostics(
+            qml_patch_diagnostics=C300XOperationDiagnostics()
+        ),
     )
     asyncio.run(integration._async_sync_device_ui_patch(failed_entry))
     assert failed_entry.runtime_data.qml_patch_status == {"old": True}
     assert (
-        failed_entry.runtime_data.qml_patch_diagnostics.last_error
+        failed_entry.runtime_data.diagnostics.qml_patch_diagnostics.last_error
         == "C300XAgentApiError: failed"
     )
 
@@ -1404,16 +1435,20 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         loaded_platforms=("sensor", "camera"),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
         connection_state=SimpleNamespace(
             expire_unavailable=lambda: callbacks.append("expire")
         ),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     hass = SimpleNamespace(
@@ -1433,10 +1468,16 @@ def test_unload_entry_cleans_runtime_callbacks_and_tasks() -> None:
 
     assert asyncio.run(integration.async_unload_entry(hass, entry)) is True
 
-    assert callbacks == ["registration", "display", "expire", "event-webhook", "webhook"]
+    assert callbacks == [
+        "expire",
+        "registration",
+        "display",
+        "event-webhook",
+        "webhook",
+    ]
     assert cancelled == ["memos", "messages"]
-    assert entry.runtime_data.memos_refresh_task is None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is None
+    assert entry.runtime_data.resources.memos_refresh_task is None
+    assert entry.runtime_data.resources.answering_machine_messages_refresh_task is None
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {}
 
 
@@ -1446,16 +1487,20 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
     entry = _entry()
     entry.runtime_data = SimpleNamespace(
         loaded_platforms=("sensor", "camera"),
-        unregister_event_registration=lambda: callbacks.append("registration"),
-        unregister_display_bridge_updates=lambda: callbacks.append("display"),
-        unregister_event_webhook=lambda: callbacks.append("event-webhook"),
-        unregister_webhook=lambda: callbacks.append("webhook"),
         connection_state=SimpleNamespace(
             expire_unavailable=lambda: callbacks.append("expire")
         ),
-        memos_refresh_task=SimpleNamespace(cancel=lambda: cancelled.append("memos")),
-        answering_machine_messages_refresh_task=SimpleNamespace(
-            cancel=lambda: cancelled.append("messages")
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: callbacks.append("registration"),
+            unregister_display_bridge_updates=lambda: callbacks.append("display"),
+            unregister_event_webhook=lambda: callbacks.append("event-webhook"),
+            unregister_webhook=lambda: callbacks.append("webhook"),
+            memos_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("memos")
+            ),
+            answering_machine_messages_refresh_task=SimpleNamespace(
+                cancel=lambda: cancelled.append("messages")
+            ),
         ),
     )
     entry_locks.entry_lock(entry.entry_id, "message_refresh:memos")
@@ -1477,8 +1522,10 @@ def test_unload_entry_preserves_runtime_state_when_platform_unload_fails() -> No
 
     assert callbacks == []
     assert cancelled == []
-    assert entry.runtime_data.memos_refresh_task is not None
-    assert entry.runtime_data.answering_machine_messages_refresh_task is not None
+    assert entry.runtime_data.resources.memos_refresh_task is not None
+    assert (
+        entry.runtime_data.resources.answering_machine_messages_refresh_task is not None
+    )
     assert any(key[0] == entry.entry_id for key in entry_locks._locks)
     assert hass.data[DOMAIN][DATA_RUNTIME_ENTRIES] == {entry.entry_id: entry.runtime_data}
 
@@ -1510,7 +1557,9 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
         repair_module.async_sync_entry_repair_issues = _repair
         sys.modules[repair_module_name] = repair_module
 
-        old_runtime = SimpleNamespace(startup_sync_task=None)
+        old_runtime = SimpleNamespace(
+            resources=C300XRuntimeResources(startup_sync_task=None)
+        )
         new_task = SimpleNamespace(cancel=lambda: None)
         entry = _entry()
         entry.runtime_data = old_runtime
@@ -1520,11 +1569,13 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
         runtime_manager.C300XRuntimeManager.async_sync_device_state = _sync_device_state
         try:
             manager.async_schedule_startup_sync()
-            old_task = old_runtime.startup_sync_task
+            old_task = old_runtime.resources.startup_sync_task
             assert old_task is not None
             await started.wait()
 
-            entry.runtime_data = SimpleNamespace(startup_sync_task=new_task)
+            entry.runtime_data = SimpleNamespace(
+                resources=C300XRuntimeResources(startup_sync_task=new_task)
+            )
             release.set()
             await old_task
         finally:
@@ -1535,8 +1586,8 @@ def test_startup_sync_stale_task_does_not_clear_new_runtime_task() -> None:
             else:
                 sys.modules[repair_module_name] = previous_repair_module
 
-        assert old_runtime.startup_sync_task is None
-        assert entry.runtime_data.startup_sync_task is new_task
+        assert old_runtime.resources.startup_sync_task is None
+        assert entry.runtime_data.resources.startup_sync_task is new_task
         assert repairs == [entry.entry_id]
         assert dispatches
 

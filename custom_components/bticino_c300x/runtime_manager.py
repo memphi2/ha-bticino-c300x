@@ -48,7 +48,12 @@ from .const import (
     DOMAIN,
     SIGNAL_CONNECTION_STATE_CHANGED,
 )
-from .data import BticinoC300XRuntimeData, C300XConnectionState, C300XEventState
+from .data import (
+    BticinoC300XRuntimeData,
+    C300XConnectionState,
+    C300XEventState,
+    C300XRuntimeResources,
+)
 from .device_activations import (
     activation_items_match,
     desired_activation_items,
@@ -67,6 +72,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from homeassistant.core import HomeAssistant
+
+    from .agent_update import AgentUpdateState
 
 BASE_PLATFORMS = (
     "binary_sensor",
@@ -99,11 +106,13 @@ class C300XRuntimeManager:
         self.connection_state = C300XConnectionState()
         self.setup_data: Mapping[str, Any] = {}
         self.capabilities: dict[str, Any] = {}
-        self.agent_update_state: Any | None = None
+        self.agent_update_state: AgentUpdateState | None = None
         self.unregister_webhook: Callable[[], None] | None = None
         self.unregister_event_webhook: Callable[[], None] | None = None
         self.unregister_event_registration: Callable[[], None] | None = None
-        self.on_runtime_registration_created: Callable[[], Any] | None = None
+        self.on_runtime_registration_created: Callable[[], Awaitable[None]] | None = (
+            None
+        )
         self.platforms: tuple[str, ...] = BASE_PLATFORMS
         self._platform_gate_state_loaded = False
 
@@ -219,7 +228,7 @@ class C300XRuntimeManager:
     async def async_sync_device_state(self) -> None:
         """Synchronize startup-only runtime state with the device agent."""
 
-        self.entry.runtime_data.unregister_display_bridge_updates = (
+        self.entry.runtime_data.resources.unregister_display_bridge_updates = (
             _async_track_display_bridge_updates(self.hass, self.entry)
         )
         if not self.connection_state.available:
@@ -279,8 +288,8 @@ class C300XRuntimeManager:
                         SIGNAL_CONNECTION_STATE_CHANGED,
                         self.entry.entry_id,
                     )
-                if runtime_data.startup_sync_task is task:
-                    runtime_data.startup_sync_task = None
+                if runtime_data.resources.startup_sync_task is task:
+                    runtime_data.resources.startup_sync_task = None
 
         create_task = getattr(self.hass, "async_create_task", None)
         task = (
@@ -288,7 +297,7 @@ class C300XRuntimeManager:
             if callable(create_task)
             else asyncio.create_task(_async_run_startup_sync())
         )
-        runtime_data.startup_sync_task = task
+        runtime_data.resources.startup_sync_task = task
 
     async def async_forward_platforms(self) -> None:
         """Set up media routes and forward entity platforms."""
@@ -362,13 +371,15 @@ class C300XRuntimeManager:
             connection_state=self.connection_state,
             capabilities=self.capabilities,
             agent_info=self.setup_data,
-            unregister_webhook=self._unregister_webhook(),
-            unregister_event_webhook=self._unregister_event_webhook(),
-            unregister_event_registration=self.unregister_event_registration,
-            on_runtime_registration_created=self.on_runtime_registration_created,
-            unregister_display_bridge_updates=None,
             loaded_platforms=self.platforms,
             agent_update_state=self.agent_update_state,
+            resources=C300XRuntimeResources(
+                unregister_webhook=self._unregister_webhook(),
+                unregister_event_webhook=self._unregister_event_webhook(),
+                unregister_event_registration=self.unregister_event_registration,
+                on_runtime_registration_created=self.on_runtime_registration_created,
+                unregister_display_bridge_updates=None,
+            ),
         )
         self.hass.data.setdefault(DOMAIN, {}).setdefault(DATA_RUNTIME_ENTRIES, {})[
             self.entry.entry_id
@@ -502,25 +513,11 @@ def cleanup_entry_runtime_resources(
     if runtime_data is not None:
         if getattr(runtime_data, "system_metrics_cache", None) is not None:
             runtime_data.system_metrics_cache.cancel()
-        if runtime_data.unregister_event_registration:
-            runtime_data.unregister_event_registration()
-        if runtime_data.unregister_display_bridge_updates:
-            runtime_data.unregister_display_bridge_updates()
         runtime_data.display_bridge_alarm_notify_pending = False
         if runtime_data.connection_state.expire_unavailable:
             runtime_data.connection_state.expire_unavailable()
-        if runtime_data.memos_refresh_task:
-            runtime_data.memos_refresh_task.cancel()
-            runtime_data.memos_refresh_task = None
-        if runtime_data.answering_machine_messages_refresh_task:
-            runtime_data.answering_machine_messages_refresh_task.cancel()
-            runtime_data.answering_machine_messages_refresh_task = None
-        startup_sync_task = getattr(runtime_data, "startup_sync_task", None)
-        if startup_sync_task:
-            startup_sync_task.cancel()
-            runtime_data.startup_sync_task = None
-        runtime_data.unregister_event_webhook()
-        runtime_data.unregister_webhook()
+            runtime_data.connection_state.expire_unavailable = None
+        runtime_data.resources.close()
     clear_entry_locks(entry.entry_id)
     hass.data.get(DOMAIN, {}).get(DATA_RUNTIME_ENTRIES, {}).pop(
         entry.entry_id,
@@ -601,7 +598,7 @@ async def _async_sync_device_ui_patch(entry: BticinoC300XConfigEntry) -> bool:
     from .qml_patch import async_refresh_qml_patch_status
 
     capabilities = getattr(entry.runtime_data, "capabilities", {})
-    diagnostics = entry.runtime_data.qml_patch_diagnostics
+    diagnostics = entry.runtime_data.diagnostics.qml_patch_diagnostics
     try:
         if maintenance_action_is_advertised(capabilities, "qml_status"):
             diagnostics.mark_attempt(datetime.now(UTC))
@@ -835,7 +832,7 @@ async def _async_configure_display_bridge(
         else ""
     )
     shared_secret = entry.data.get(CONF_SHARED_SECRET, "") if enabled else ""
-    diagnostics = entry.runtime_data.display_bridge_diagnostics
+    diagnostics = entry.runtime_data.diagnostics.display_bridge_diagnostics
     if enabled:
         diagnostics.mark_callback_attempt(webhook_url, datetime.now(UTC))
     else:

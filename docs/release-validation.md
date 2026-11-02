@@ -8,6 +8,18 @@ for normal users.
 Validate that the current Home Assistant integration, bundled Lovelace card and
 packaged C300X device agent work together on a real C300X.
 
+## Isolated Integration Tests
+
+`pytest tests/test_ha_runtime.py` starts real Home Assistant in a subprocess
+with temporary configuration and an authenticated loopback-only fake agent.
+It checks webhook authentication, push state changes, registry renaming,
+service routing, reload, registration retry after disconnect and cancellation
+of an in-flight registration on unload. Unexpected requests and unhandled
+async exceptions fail the test. No device credentials are read.
+
+The browser frontend, go2rtc process and mDNS resolver are excluded from this
+fixture. These tests do not establish physical device or media stability.
+
 ## Clean Install Path
 
 - Marketplace or HACS install/update succeeds on the corresponding HA version.

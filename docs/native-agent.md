@@ -9,7 +9,8 @@ notes, use [native_agent/README.md](../native_agent/README.md).
 
 The device runtime is a native C binary from `native_agent/`. Node.js and `node_modules` are not part of the runtime path.
 
-Current packaged agent version: `1.7.6`.
+The packaged agent version is defined in [native_agent/VERSION](../native_agent/VERSION).
+Release notes identify the matching integration and agent versions.
 
 ## Build
 
@@ -86,16 +87,10 @@ IP address. Do not use `homeassistant.local`, other `.local` names, or
 link-local addresses for callbacks or media routing; those names can resolve to
 different paths for Home Assistant, the C300X, browsers and HA Cloud.
 
-The Home Assistant integration can override only the callback base URL sent to
-the agent. This is a Home Assistant-side setting; the agent still receives the
-normal generated webhook path and shared secret. The override accepts HTTP or
-HTTPS and must not use `.local`, loopback or link-local addresses.
-
-HTTPS is opt-in: enter an explicit `https://` callback base URL in the integration
-options to enable it for both event subscriptions and the display bridge. Leaving
-the override empty does not enable TLS, even if HA advertises an HTTPS URL. Use
-an `http://` override when HA has an HTTPS frontend but is reachable over HTTP
-on the local network. The HTTP transport does not load or initialize libcurl/TLS.
+For user-facing callback configuration and HTTP/HTTPS selection, see
+[Callback URL](advanced-maintenance.md#callback-url). The integration overrides
+only the callback base URL; the generated webhook path and shared secret remain
+unchanged. The HTTP transport does not load or initialize libcurl/TLS.
 
 HA derives the agent's internal `callbacks.httpsEnabled` setting from the override;
 there is no second user-facing switch. Changing between HTTP and HTTPS persists

@@ -1,13 +1,11 @@
 # Quickstart
 
-This is the recommended first setup path. Follow it in order and do not start
-with YAML, manual card configuration or advanced display pages.
-
-Goal:
+Follow these steps for a first installation. No YAML or manual card setup is
+required.
 
 ```text
-HACS install -> add integration -> install/update agent
--> Media readiness ready or understood warning -> add the C300X card
+Install integration -> add device -> install/update agent -> check Media readiness
+-> add the C300X card
 ```
 
 ## Before You Start
@@ -24,27 +22,26 @@ SSH-enablement workflow asks for a firmware target, use `1.7.19`.
 
 ## 1. Install Through Marketplace or HACS
 
-On Home Assistant 2026.11 and newer, open **Settings > Marketplace**, search for
-**BTicino C300X**, and install it. Follow any restart Repair before continuing.
-The built-in Marketplace replaces HACS; do not install HACS separately there.
-The integration domain, configuration entries and bundled cards remain unchanged.
-On HA 2026.7 through 2026.10, use the HACS instructions below.
+### Marketplace: Home Assistant 2026.11+
 
-This integration is part of the HACS default list, so no custom repository is
-needed.
+[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
+
+1. Open the button above, or go to **Settings > Marketplace**.
+2. Find **BTicino C300X**, install it and confirm the community-integration notice.
+3. Follow any restart request before continuing.
+
+### HACS: Home Assistant 2026.7-2026.10
 
 1. Open **HACS**.
 2. Search for **BTicino C300X**.
 3. Install it.
 4. Restart Home Assistant.
 
-If the search finds nothing, add it as a custom repository instead — use this
-only when your HACS list is not up to date yet:
+No custom repository is needed. If the search finds nothing, refresh the HACS
+catalog before retrying.
 
-1. Open **HACS** and choose **Custom repositories** from the overflow menu.
-2. Add `https://github.com/memphi2/ha-bticino-c300x` with category
-   **Integration**.
-3. Install **BTicino C300X** and restart Home Assistant.
+Both installation methods use the same repository and release archive. Existing
+configuration entries and bundled cards remain unchanged when moving to Marketplace.
 
 ## 2. Add the Integration
 
@@ -64,6 +61,10 @@ Use it only on a rooted or SSH-enabled C300X.
 
 If an older agent is reachable, Home Assistant may show an agent-update Repair.
 Run that Repair before testing camera or call features.
+
+Apply the core GUI hook when Repairs requests it, then reload the device GUI.
+This hook is separate from the optional Home Assistant display pages. It is
+needed for media state tracking and synchronized ringer mute/unmute.
 
 The SSH credentials used during installation are one-time setup inputs. They
 are not stored in the Home Assistant config entry, diagnostics or logs.
@@ -127,7 +128,7 @@ cache if the card still looks old.
 Test in this order:
 
 1. **On-demand**: press Stream in the card.
-2. **Home Call**: start and stop a Home Call from the Home Call card.
+2. **Home Call**: start and stop a Home Call from the card in **Auto** mode.
 3. **Ring Call**: set **Forwarding** to **Home Assistant**, ring the doorbell,
    then press **Answer** in the card.
 
@@ -143,6 +144,8 @@ are installed into Home Assistant's blueprint folder when the integration loads.
 Details: [Blueprints](blueprints.md)
 
 ## After the First Test
+
+For later updates, follow [Updates](advanced-maintenance.md#updates).
 
 Use [Feature reference](feature-reference.md) to decide what to enable next:
 

@@ -22,6 +22,14 @@ card or call `bticino_c300x.stop_doorbell_video`, then retry.
 If this happens directly after updating the native agent or changing display
 pages, reload the integration once and re-check `Media readiness`.
 
+## Device Reboots After PCMU On-demand Video
+
+PCMU-specific reboots after ending an on-demand stream remain unresolved
+([issue #55](https://github.com/memphi2/ha-bticino-c300x/issues/55)). The current
+media cleanup changes are not a confirmed fix. Use **Speex (stock)** in the
+**Audio codec** select to avoid this known failure. Changing the device codec is
+an explicit maintenance operation that reboots the C300X.
+
 ## Card Shows Stream Instead of Answer
 
 The card can show **Answer** only when Home Assistant receives a real Ring Call.
@@ -59,6 +67,10 @@ Talkback needs browser microphone permission. Use:
 Plain HTTP is not a reliable microphone path. In mobile notifications, open the
 dashboard and press **Answer** in the card; do not expect a background
 notification action to grant microphone access.
+
+The secure browser frontend is independent of device callbacks. Leave callback
+transport unchanged unless the C300X needs a different reachable Home Assistant
+endpoint; see [Callback URL](advanced-maintenance.md#callback-url).
 
 ## Audio Is Too Quiet or Too Loud
 

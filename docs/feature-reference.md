@@ -22,7 +22,7 @@ The integration is local-first:
 
 | Area | Purpose | Writes to device |
 | --- | --- | --- |
-| Connection | Agent host, port, API token, maintenance token, optional callback base URL. | No, except token setup during explicit bootstrap/install. |
+| Connection | Agent host, port, API token, maintenance token, optional callback base URL. | Token setup during explicit install. Changing callback HTTP/HTTPS mode updates agent config and schedules an agent-only restart. |
 | Media features | Doorstation media, Home Assistant media user, live audio gain, Ring Capture gain. | Media-user setup writes only when setup/Repair is run. Audio gain is runtime-only and is sent only when non-default or different. |
 | Device activations | Optional extra C300X activation buttons. | Only after saving, and only when the desired activation config differs. |
 | Display dashboard | Optional Display patch, Alarmo/weather/dashboard entities and action allowlist. | Yes, only when the Display patch is applied/restored. |

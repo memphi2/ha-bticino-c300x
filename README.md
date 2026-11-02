@@ -17,16 +17,16 @@ forwarding controls, messages and optional display pages.
   <img src="custom_components/bticino_c300x/brand/logo.png" alt="BTicino C300X integration logo" width="140">
 </p>
 
+[Installation](#installation) | [Quickstart](docs/quickstart.md) |
+[User guide](docs/user-guide.md) | [Troubleshooting](docs/media-troubleshooting.md)
+
 ## What You Get
 
 - Doorbell ring events and local camera viewing.
-- Optional verified HTTPS callbacks through the callback base URL override.
-  HTTP remains the default without TLS initialization on the C300X. See
-  [callback configuration](docs/advanced-maintenance.md#callback-url).
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.
-- Talkback from a secure Home Assistant frontend with microphone permission.
+- Talkback through the bundled C300X card.
 - Door unlock, stair light, ringer mute, forwarding and answering-machine
   controls.
 - Stored video messages, voice memos and text memos when the agent reports
@@ -49,6 +49,44 @@ workflow. This repository does not provide firmware images, firmware extraction
 output, APKs, exploits, rooting instructions or vendor files. If another
 workflow asks for a firmware target, use `1.7.19`. Everything is used at your
 own risk and without warranty.
+
+## Installation
+
+### Home Assistant Marketplace
+
+[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
+
+On Home Assistant `2026.11+`:
+
+1. Open the button above, or go to **Settings > Marketplace**.
+2. Find **BTicino C300X**, install it and confirm the community-integration notice.
+3. Follow any restart request, then add **BTicino C300X** under
+   **Settings > Devices & services**.
+
+### HACS
+
+On Home Assistant `2026.7-2026.10`, find **BTicino C300X** in HACS, download it
+and restart Home Assistant. Then add the integration under
+**Settings > Devices & services**. No custom repository is needed.
+
+Both installation methods use the same repository and release archive. Existing
+configuration entries and bundled cards remain unchanged when moving to Marketplace.
+
+## First Setup
+
+Follow the [Quickstart](docs/quickstart.md) to install or update the device agent,
+complete any required Repairs and add the bundled C300X card.
+
+```text
+Install integration -> add device -> install/update agent -> check Media readiness
+-> add the C300X card
+```
+
+Start with live video, Home Call and Ring Call. Add display pages, blueprints and
+other optional features once these work. Talkback requires a secure Home Assistant
+frontend and browser microphone permission; see [media troubleshooting](docs/media-troubleshooting.md#talkback-or-microphone-does-not-work).
+
+For updates, follow the [update instructions](docs/advanced-maintenance.md#updates).
 
 ## Screenshots
 
@@ -85,69 +123,26 @@ depend on enabled options and installed agent capabilities.
   </tr>
 </table>
 
-## Installation
-
-### Home Assistant Marketplace
-
-[![Open your Home Assistant instance and open this repository in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=memphi2&repository=ha-bticino-c300x&category=integration)
-
-On Home Assistant `2026.11+`:
-
-1. Open the button above, or go to **Settings > Marketplace**.
-2. Find **BTicino C300X**, install it and confirm the community-integration notice.
-3. Follow any restart request, then add **BTicino C300X** under
-   **Settings > Devices & services**.
-
-### HACS
-
-On Home Assistant `2026.7-2026.10`, find **BTicino C300X** in HACS, download it
-and restart Home Assistant. Then add the integration under
-**Settings > Devices & services**. No custom repository is needed.
-
-Both installation methods use the same repository and release archive. Existing
-configuration entries and bundled cards remain unchanged when moving to Marketplace.
-
-## 5-Minute Setup
-
-Start with the guided setup document:
-
-**[Quickstart: install, agent, Media readiness, card](docs/quickstart.md)**
-
-The short path is:
-
-```text
-Marketplace / HACS -> add integration -> install/update agent -> Media readiness
--> Fix now if needed -> add the C300X card
-```
-
-Keep the first install boring: get **Media readiness** to `ready` or only the
-understood Ring Call forwarding warning, then add the bundled card. Blueprints,
-display pages and advanced maintenance can wait until the three media paths work.
-
-After an update, run the C300X Lovelace card Repair if Home Assistant offers it
-and hard-reload the browser if the card picker still shows old frontend state.
-
 ## Documentation
 
 | User documentation | Link |
 | --- | --- |
-| 5-minute setup path | [Quickstart](docs/quickstart.md) |
+| Install and configure | [Quickstart](docs/quickstart.md) |
 | Task-focused user guide | [User guide](docs/user-guide.md) |
 | Complete feature and entity/service reference | [Feature reference](docs/feature-reference.md) |
 | Media readiness states and fixes | [Media readiness](docs/media-readiness.md) |
 | Answer, Talkback, Home Call or stream problems | [Media troubleshooting](docs/media-troubleshooting.md) |
 | Ready-made automations | [Blueprints](docs/blueprints.md) |
-| SSH, firewall, Display patch, remove agent | [Advanced maintenance](docs/advanced-maintenance.md) |
-| Hardware release checks | [Release validation](docs/release-validation.md) |
+| Updates, callbacks, SSH, firewall and display patches | [Advanced maintenance](docs/advanced-maintenance.md) |
 
 | Maintainer documentation | Link |
 | --- | --- |
 | Architecture and data flow | [Architecture](docs/architecture.md) |
-| Current functional surface | [Feature reference](docs/feature-reference.md) |
 | Native agent runtime and packaging | [Native agent](docs/native-agent.md) |
 | Native agent HTTP API contract | [Native Agent API](native_agent/API.md) |
 | Device QML display pages | [Device QML UI](device_qml/README.md) |
 | Quality scale tracking | [Quality scale](docs/quality-scale.md) |
+| Hardware release checks | [Release validation](docs/release-validation.md) |
 | Privacy, security, and legal notes | [Privacy](PRIVACY.md), [Security](SECURITY.md), [Legal notes](docs/legal.md) |
 | Evidence and baselines | [Current legal/provenance audit](docs/audits/current-legal-provenance.md), [Media refactor baseline](docs/dev/media-refactor-baseline.md) |
 | Release history | [Changelog](CHANGELOG.md) |

@@ -10,7 +10,7 @@ packaged C300X device agent work together on a real C300X.
 
 ## Clean Install Path
 
-- HACS install or update succeeds.
+- Marketplace or HACS install/update succeeds on the corresponding HA version.
 - Home Assistant restart succeeds without blocking I/O warnings from this
   integration.
 - The integration setup flow completes.

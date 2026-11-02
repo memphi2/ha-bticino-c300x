@@ -64,7 +64,7 @@ Responsibilities:
 ```text
 C300X event source
   -> native agent
-  -> signed callback to HA event webhook
+  -> token-authenticated callback to HA event webhook
   -> HA updates entities/event state
 
 HA service/action

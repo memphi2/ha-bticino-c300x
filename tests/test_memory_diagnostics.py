@@ -54,7 +54,7 @@ def test_enabled_registers_tracker_and_runs_first_snapshot(
     monkeypatch.setattr(
         he,
         "async_track_time_interval",
-        lambda hass, action, interval: (lambda: None),
+        lambda hass, action, interval: lambda: None,
         raising=False,
     )
     logger = logging.getLogger(_LOGGER_NAME)
@@ -67,6 +67,7 @@ def test_enabled_registers_tracker_and_runs_first_snapshot(
             return func(*args)
 
         hass = SimpleNamespace(
+            data={},
             async_add_executor_job=_executor,
             async_create_task=created.append,
         )
@@ -81,3 +82,51 @@ def test_enabled_registers_tracker_and_runs_first_snapshot(
         asyncio.run(created[0])  # runs without error and logs one snapshot
     finally:
         logger.setLevel(previous_level)
+
+
+def test_shared_diagnostics_stop_collecting_when_debug_is_disabled(monkeypatch) -> None:
+    import homeassistant.helpers.event as he
+
+    callbacks = []
+    cancelled = []
+    created = []
+    collections = []
+
+    def track(hass, action, interval):
+        callbacks.append(action)
+        return lambda: cancelled.append(True)
+
+    async def executor(func):
+        collections.append(True)
+        return 1024, 1, Counter({"dict": 1})
+
+    monkeypatch.setattr(he, "async_track_time_interval", track, raising=False)
+    hass = SimpleNamespace(
+        data={}, async_add_executor_job=executor, async_create_task=created.append
+    )
+    unload_a, unload_b = [], []
+    logger = logging.getLogger(_LOGGER_NAME)
+    previous = logger.level
+    try:
+        logger.setLevel(logging.DEBUG)
+        async_start_memory_diagnostics(
+            hass, SimpleNamespace(async_on_unload=unload_a.append)
+        )
+        async_start_memory_diagnostics(
+            hass, SimpleNamespace(async_on_unload=unload_b.append)
+        )
+        assert len(callbacks) == len(created) == 1
+        asyncio.run(created.pop())
+        assert len(collections) == 1
+        logger.setLevel(logging.WARNING)
+        asyncio.run(callbacks[0]())
+        assert len(collections) == 1
+        unload_a[0]()
+        assert not cancelled
+        unload_b[0]()
+        assert cancelled == [True]
+        logger.setLevel(logging.DEBUG)
+        asyncio.run(callbacks[0]())
+        assert len(collections) == 1
+    finally:
+        logger.setLevel(previous)

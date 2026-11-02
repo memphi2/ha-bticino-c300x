@@ -35,7 +35,7 @@ of observation after each stop. The issue is closed following this validation;
 the reporter's exact cold-boot, short-gap and multi-unit setup has not yet been
 retested with the corrected agent.
 
-The fix is included in the upcoming 2.0.0 release. Once available, follow the
+The fix is included in release 2.0.0. Follow the
 [update instructions](advanced-maintenance.md#updates) and verify that the
 **native agent**, not just the integration, is version 2.0.0 or newer.
 Updating only Home Assistant files does not apply the correction.

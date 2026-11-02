@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 
@@ -139,6 +139,7 @@ class _AgentEventRegistration:
         self._entity_registry_cancel: CALLBACK_TYPE | None = None
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._task: Task[Any] | None = None
+        self._registration_stage = "callback_url"
 
     def start(self) -> Callable[[], None]:
         """Start registration and return the cleanup callback."""
@@ -179,6 +180,7 @@ class _AgentEventRegistration:
         return True
 
     async def _register_once(self) -> None:
+        self._registration_stage = "callback_url"
         runtime = getattr(self._entry, "runtime_data", None)
         prior_metrics = getattr(runtime, "system_metrics", None)
         base_url = await async_generate_agent_callback_url(
@@ -198,16 +200,22 @@ class _AgentEventRegistration:
             len(registration_events),
             datetime.now(UTC),
         )
+        self._registration_stage = "callback_transport"
         transport_changed = await self._callback_transport.async_prepare(base_url)
         if registration_events:
+            self._registration_stage = "event_subscription_list"
+            subscriptions = await self._api.async_list_event_subscriptions()
+            self._registration_stage = "event_subscription_create"
             self._subscription_id, registration_created = await _ensure_subscription(
                 self._api,
+                subscriptions=subscriptions,
                 callback_url=base_url,
                 token=token,
                 events=registration_events,
             )
             self._schedule_renewal()
         else:
+            self._registration_stage = "subscription_cleanup"
             await _remove_inactive_subscriptions(self._api, callback_url=base_url)
             self._subscription_id = None
         self._connection_state.mark_event_subscription_success(
@@ -228,6 +236,7 @@ class _AgentEventRegistration:
         self._send_connection_state_changed()
         if registration_created or transport_changed:
             await self._handle_runtime_registration_created()
+        self._registration_stage = "diagnostics"
         await async_refresh_agent_diagnostics(self._hass, self._entry)
 
     async def _handle_runtime_registration_created(self) -> None:
@@ -247,7 +256,9 @@ class _AgentEventRegistration:
         if hasattr(getattr(self._entry, "runtime_data", None), "system_metrics"):
             invalidate_system_metrics(self._entry)
         error = compact_error_text(err)
-        _LOGGER.warning("C300X event registration failed: %s", error)
+        _LOGGER.warning(
+            "C300X event registration failed (%s): %s", self._registration_stage, error
+        )
         self._connection_state.mark_event_subscription_failure(datetime.now(UTC), error)
         self._connection_state.mark_reconnecting(
             "event_subscription_registration",
@@ -284,6 +295,7 @@ class _AgentEventRegistration:
             self._register,
         )
 
+    @callback
     def _schedule_registry_refresh(self, event: Any = None) -> None:
         if self._stopped or self._registry_refresh_cancel is not None:
             return
@@ -497,14 +509,14 @@ def _registry_entity_active(
 async def _ensure_subscription(
     api: C300XAgentApi,
     *,
+    subscriptions: dict[str, Any],
     callback_url: str,
     token: str,
     events: list[str],
 ) -> tuple[str | None, bool]:
     """Reuse the agent's RAM event subscription or create one when needed."""
 
-    subscriptions = _subscriptions(await api.async_list_event_subscriptions())
-    for subscription in subscriptions:
+    for subscription in _subscriptions(subscriptions):
         if _subscription_matches(subscription, callback_url, token, events):
             return _subscription_id({"subscription": subscription}), False
 
@@ -580,6 +592,7 @@ def _schedule_unavailable_expiry(
     if connection_state.expire_unavailable is not None:
         return
 
+    @callback
     def _expire(now: Any = None) -> None:
         connection_state.expire_unavailable = None
         connection_state.mark_unavailable()

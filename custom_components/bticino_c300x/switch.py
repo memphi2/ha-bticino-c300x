@@ -211,7 +211,10 @@ class C300XRingerMuteSwitch(C300XEntity, SwitchEntity):
         self._apply_status(status)
 
     async def _set_muted(self, muted: bool) -> None:
-        status = await self._entry.runtime_data.api.async_set_ringer_muted(muted)
+        try:
+            status = await self._entry.runtime_data.api.async_set_ringer_muted(muted)
+        except C300XAgentApiError as err:
+            raise HomeAssistantError(f"C300X ringer mute update failed: {err}") from err
         self._apply_status(status)
 
     def _apply_status(self, status: dict[str, Any]) -> None:

@@ -20,6 +20,7 @@ static void finish(struct c300x_ringer_control *control)
     close_agent_socket(control->client_fd);
     control->client_fd = -1;
     control->deadline_ms = 0;
+    control->gui_confirmed = 0;
     control->id[0] = '\0';
 }
 
@@ -62,35 +63,68 @@ int c300x_ringer_control_timeout_ms(const struct c300x_ringer_control *control)
 void c300x_ringer_control_expire(struct c300x_ringer_control *control)
 {
     if (c300x_ringer_control_timeout_ms(control) == 0) {
-        fail(control->client_fd, 504, "ringer_gui_timeout");
+        fail(control->client_fd, control->gui_confirmed ? 409 : 504,
+             control->gui_confirmed ? "ringer_not_applied" : "ringer_gui_timeout");
         finish(control);
     }
 }
 
 int c300x_ringer_control_next(
-    struct c300x_ringer_control *control, int fd, const char *completed, int muted,
+    struct c300x_ringer_control *control, int fd, const char *query,
     c300x_ringer_apply_fn apply, void *ctx
 )
 {
+    char completed[64];
+    char muted_text[16];
+    int muted = -1;
+    query_param_value(query, "completed", completed, sizeof(completed));
+    query_param_value(query, "muted", muted_text, sizeof(muted_text));
+    if (strcmp(muted_text, "0") == 0 || strcmp(muted_text, "1") == 0) {
+        muted = muted_text[0] == '1';
+    }
+    if (completed[0] != '\0' && (strlen(completed) != 32 || muted < 0)) {
+        c300x_http_send_json(fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_gui_ack\"}\n");
+        return 1;
+    }
     c300x_ringer_control_expire(control);
     if (completed[0] != '\0') {
-        if (control->client_fd < 0 || strcmp(completed, control->id) != 0) {
+        if (control->client_fd < 0 || control->gui_confirmed
+            || strcmp(completed, control->id) != 0) {
             fail(fd, 409, "ringer_gui_stale_ack");
             return 1;
         }
         if (muted != control->command.muted) {
             fail(control->client_fd, 502, "ringer_gui_not_applied");
+            finish(control);
         } else {
-            apply(control->client_fd, &control->command, ctx);
+            control->gui_confirmed = 1;
+            if (apply(control->client_fd, &control->command, ctx)) {
+                finish(control);
+            }
         }
-        finish(control);
     }
-    if (control->gui_fd >= 0 || control->client_fd >= 0) {
+    if (control->gui_fd >= 0 || (control->client_fd >= 0 && !control->gui_confirmed)) {
         fail(fd, 409, "ringer_gui_busy");
         return 1;
     }
     /* A single sleeping connection, without periodic expiry or device reads. */
     control->gui_fd = fd;
+    return 0;
+}
+
+int c300x_ringer_control_confirm(
+    struct c300x_ringer_control *control, int muted,
+    c300x_ringer_apply_fn apply, void *ctx
+)
+{
+    c300x_ringer_control_expire(control);
+    if (control->client_fd >= 0 && control->gui_confirmed
+        && muted == control->command.muted) {
+        if (apply(control->client_fd, &control->command, ctx)) {
+            finish(control);
+        }
+        return 1;
+    }
     return 0;
 }
 

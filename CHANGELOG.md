@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.9.10 - 2026-11-02
+
+### Added
+
+- Door unlock and staircase-light buttons at the bottom right of the card,
+  using the selected device's existing Home Assistant button entities.
+
+### Fixed
+
+- Keep card sensors and call controls associated with the selected camera's
+  device, including current Home Assistant device-registry metadata. Missing
+  assignments no longer fall back to another doorstation.
+- Keep the reconnect-grace timer and entity-registry refresh listener on the
+  Home Assistant event loop. A failed event registration could otherwise trigger
+  a Repairs thread-safety warning after 15 seconds.
+- Wait for a device state event and verified readback when the GUI has queued
+  a ringer change but the device still reports its previous value. Keep the
+  existing bounded command deadline without polling or repeating device writes.
+- Report rejected ringer commands as handled Home Assistant errors rather than
+  unexpected WebSocket exceptions. Allow the request to outlast device confirmation.
+
+### Diagnostics
+
+- Identify the failing registration stage in event-registration warnings without
+  extra device requests. A connection closure is not treated as proof of a reboot.
+
+### Upgrade notes
+
+- Includes native agent 1.9.10 for the ringer confirmation fix. Update the device
+  agent to activate it. The event-loop callback fix is Home Assistant-side only.
+
 ## v1.9.9 - 2026-11-02
 
 Includes all changes from the withdrawn v1.9.8 release.

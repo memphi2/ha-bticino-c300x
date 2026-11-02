@@ -84,9 +84,22 @@ test("action controller answers a ring call before promoting the answered stream
   assert.deepEqual(calls, [
     ["service", "bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }],
     ["answered_stream"],
+    ["update_state"],
   ]);
   assert.equal(card._lifecycle.answeringDoorbell, false);
   assert.equal(card._lifecycle.doorbellAnswered, true);
+});
+
+test("answering fails visibly without sending an unscoped service or starting media", async () => {
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "answer" }),
+    _serviceData() { throw new Error("Camera device assignment unavailable"); },
+  });
+  await new C300XCardActions(card).handlePrimaryAction();
+  assert.deepEqual(calls, [["update_state"]]);
+  assert.equal(card._error, "Camera device assignment unavailable");
+  assert.equal(card._lifecycle.answeringDoorbell, false);
+  assert.equal(card._lifecycle.doorbellAnswered, false);
 });
 
 test("action controller stops doorstation media before closing the local peer", async () => {
@@ -165,4 +178,49 @@ test("action controller starts a home-call audio session through the shared talk
   ]);
   assert.equal(card._lifecycle.activeHomeCallSession, true);
   assert.equal(card._lifecycle.startingCall, false);
+});
+
+for (const key of ["door_unlock", "stair_light"]) {
+  test(`${key} uses one HA button press without changing media`, async () => {
+    const { calls, card } = fakeCard({ _deviceActionEntity: () => `button.${key}` });
+    const actions = new C300XCardActions(card);
+    await actions.handleDeviceAction(key);
+    assert.deepEqual(calls, [
+      ["clear_notice"], ["update_state"],
+      ["service", "button", "press", { entity_id: `button.${key}` }],
+      ["update_state"],
+    ]);
+    assert.equal(actions.deviceActionPending(key), false);
+  });
+}
+
+test("physical actions prevent duplicate requests and retain errors", async () => {
+  let reject;
+  let presses = 0;
+  const { card } = fakeCard({
+    _deviceActionEntity: () => "button.door",
+    _hass: { callService() {
+      presses++;
+      return new Promise((_resolve, fail) => { reject = fail; });
+    } },
+  });
+  const actions = new C300XCardActions(card);
+  const pending = actions.handleDeviceAction("door_unlock");
+  assert.equal(actions.deviceActionPending("door_unlock"), true);
+  await actions.handleDeviceAction("door_unlock");
+  assert.equal(presses, 1);
+  reject(new Error("Not permitted"));
+  await pending;
+  assert.equal(card._error, "Not permitted");
+  assert.equal(actions.deviceActionPending("door_unlock"), false);
+});
+
+test("missing or unavailable device buttons do not execute commands", async () => {
+  const { calls, card } = fakeCard({ _deviceActionEntity: () => "" });
+  const actions = new C300XCardActions(card);
+  await actions.handleDeviceAction("door_unlock");
+  card._deviceActionEntity = () => "button.door";
+  card._hass.states = { "button.door": { state: "unavailable" } };
+  await actions.handleDeviceAction("door_unlock");
+  assert.deepEqual(calls, []);
 });

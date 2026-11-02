@@ -59,6 +59,16 @@ Most users only need:
 See [Feature reference](feature-reference.md) for the full entity and service
 list.
 
+The card's bottom-right door and light buttons press the existing default door
+unlock and staircase-light entities for the selected C300X. They work without
+starting or stopping video. Missing or unavailable buttons are disabled; no
+extra device polling is added.
+
+Related status and codec entities are selected from the camera's device. If a
+configured camera is removed, the card does not switch to another C300X. Call
+controls require an unambiguous device assignment; an unavailable assignment
+is reported in the card instead of sending a command to another doorstation.
+
 ## Advanced Use
 
 Display pages, capture/transcription workflows and strict phrase decisions are

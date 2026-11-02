@@ -212,19 +212,99 @@ def test_audio_state_priorities_are_not_overridden_by_raw_write(lab: Lab) -> Non
     assert lab.device.muted is True
 
 
-@pytest.mark.parametrize("bad_ack", ["missing", "malformed", "wrong_id"])
+@pytest.mark.parametrize("muted", [True, False])
+def test_queued_gui_write_waits_for_device_event_then_readback(lab: Lab, muted: bool) -> None:
+    lab.device.muted = not muted
+    gui = lab.next()
+    post = lab.post({"muted": muted})
+    command = response(gui)
+    next_gui = lab.next(command["id"], muted)
+    assert lab.device.frames == ["*#8**33##"]
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
+
+    lab.device.muted = muted
+    send_udp_event(lab.udp_port, f"*#8**33*{0 if muted else 1}##")
+    assert response(post)["muted"] is muted
+    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is False
+    assert next_gui.sock is not None
+
+
+def test_device_event_before_gui_ack_does_not_complete_request(lab: Lab) -> None:
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    lab.device.muted = True
+    send_udp_event(lab.udp_port, "*#8**33*0##")
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
+    lab.next(command["id"], True)
+    assert response(post)["muted"] is True
+    assert lab.device.frames == ["*#8**33##"]
+
+
+def test_matching_event_still_requires_confirmed_device_readback(lab: Lab) -> None:
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    lab.next(command["id"], True)
+    # A stale notification is not proof of the current device value.
+    send_udp_event(lab.udp_port, "*#8**33*0##")
+    deadline = time.monotonic() + 2
+    while len(lab.device.frames) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
+    assert api_get(lab.api_port, "/api/v1/events/recent")["events"] == []
+    lab.device.muted = True
+    send_udp_event(lab.udp_port, "*#8**33*0##")
+    assert response(post)["muted"] is True
+    events = api_get(lab.api_port, "/api/v1/events/recent")["events"]
+    assert [event["type"] for event in events] == ["ringer.muted"]
+
+
+@pytest.mark.parametrize("bad_ack", ["missing", "malformed", "wrong_id", "missing_muted", "invalid_muted", "long_id"])
 def test_invalid_ack_cannot_complete_pending_command(lab: Lab, bad_ack: str) -> None:
     gui = lab.next()
     post = lab.post({"muted": True})
     command = response(gui)
-    query = {"missing": "", "malformed": "?completed=x&muted=1",
-             "wrong_id": "?completed=" + "0" * 32 + "&muted=1"}[bad_ack]
+    query = {
+        "missing": "",
+        "malformed": "?completed=x&muted=1",
+        "wrong_id": "?completed=" + "0" * 32 + "&muted=1",
+        "missing_muted": f"?completed={command['id']}",
+        "invalid_muted": f"?completed={command['id']}&muted=true",
+        "long_id": f"?completed={command['id']}extra&muted=1",
+    }[bad_ack]
     conn = lab.request(lab.ui_port, GUI_PATH + query, headers={"X-C300X-GUI": "ringer-v1"})
-    response(conn, 400 if bad_ack == "malformed" else 409)
+    response(conn, 409 if bad_ack in {"missing", "wrong_id"} else 400)
     assert lab.device.frames == []
     lab.device.muted = True
     lab.next(command["id"], True)
     assert response(post)["muted"] is True
+
+
+@pytest.mark.parametrize("replayed_muted", [True, False])
+def test_gui_ack_is_single_use_while_device_confirmation_is_pending(
+    lab: Lab, replayed_muted: bool,
+) -> None:
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    next_gui = lab.next(command["id"], True)
+    replay = response(lab.next(command["id"], replayed_muted), 409)
+    assert lab.device.frames == ["*#8**33##"]
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
+    assert replay["error"] == "ringer_gui_stale_ack"
+
+    lab.device.muted = True
+    send_udp_event(lab.udp_port, "*#8**33*0##")
+    assert response(post)["muted"] is True
+    second_post = lab.post({"muted": False})
+    second_command = response(next_gui)
+    assert second_command["id"] != command["id"]
+    lab.device.muted = False
+    lab.next(second_command["id"], False)
+    assert response(second_post)["muted"] is False
 
 
 def test_gui_mismatch_fails_without_device_write(lab: Lab) -> None:
@@ -244,6 +324,39 @@ def test_timeout_and_late_ack_do_not_replay_command(lab: Lab) -> None:
     assert response(lab.next(command["id"], True), 409)["error"] == "ringer_gui_stale_ack"
     assert lab.device.frames == []
     assert api_post(lab.api_port, PATH, {"muted": False}, expected_status=503)["error"] == "ringer_gui_unavailable"
+
+
+def test_device_confirmation_timeout_preserves_next_gui_waiter(lab: Lab) -> None:
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    next_gui = lab.next(command["id"], True)
+    assert response(post, 409)["error"] == "ringer_not_applied"
+    assert response(lab.next(command["id"], True), 409)["error"] == "ringer_gui_stale_ack"
+    assert lab.device.frames == ["*#8**33##"]
+
+    next_post = lab.post({"muted": False})
+    next_command = response(next_gui)
+    lab.next(next_command["id"], False)
+    assert response(next_post)["muted"] is False
+
+
+def test_client_disconnect_after_gui_ack_preserves_next_gui_waiter(lab: Lab) -> None:
+    gui = lab.next()
+    post = lab.post({"muted": True})
+    command = response(gui)
+    next_gui = lab.next(command["id"], True)
+    assert post.sock is not None
+    post.sock.shutdown(socket.SHUT_RDWR)
+    post.close()
+    api_get(lab.ui_port, "/ui/events/status", authorized=False)
+    assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is False
+
+    next_post = lab.post({"muted": False})
+    next_command = response(next_gui)
+    lab.next(next_command["id"], False)
+    assert response(next_post)["muted"] is False
+    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
 
 
 def test_concurrent_write_cannot_replace_pending_request(lab: Lab) -> None:

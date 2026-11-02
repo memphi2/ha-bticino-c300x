@@ -68,6 +68,8 @@ function installFakeDom() {
           ".home-action-icon",
           ".mic-action",
           ".mic-icon",
+          ".door-action",
+          ".light-action",
           ".title",
           ".secondary",
           ".readiness",
@@ -136,18 +138,17 @@ function installFakeDom() {
 function fakeHass({ cameraEntity, connection } = {}) {
   return {
     connection,
+    devices: { "device-1": { config_entry_id: "entry-1" } },
     entities: {
       "camera.bticino_c300x_doorbell_camera": {
-        config_entry_id: "entry-1",
+        device_id: "device-1",
         platform: "bticino_c300x",
         translation_key: "doorbell_camera",
-        unique_id: "entry-1_doorbell_camera",
       },
       "sensor.bticino_c300x_media_readiness": {
-        config_entry_id: "entry-1",
+        device_id: "device-1",
         platform: "bticino_c300x",
         translation_key: "media_readiness",
-        unique_id: "entry-1_media_readiness",
       },
     },
     states: {
@@ -239,6 +240,106 @@ test("readiness warnings do not open Repairs while blockers do", async () => {
   assert.deepEqual(paths, ["/config/repairs"]);
 });
 
+test("footer device buttons follow HA state, localize and dispatch existing actions", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?device-actions-test");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  const hass = fakeHass();
+  const calls = [];
+  hass.language = "de";
+  hass.entities["camera.bticino_c300x_doorbell_camera"] = {
+    device_id: "device-1", platform: "bticino_c300x", translation_key: "doorbell_camera",
+  };
+  hass.callService = async (...args) => calls.push(args);
+  for (const key of ["door_unlock", "stair_light"]) {
+    hass.entities[`button.${key}`] = {
+      device_id: "device-1", platform: "bticino_c300x", translation_key: key,
+    };
+    hass.states[`button.${key}`] = { state: "unknown", attributes: { lock_id: "default" } };
+  }
+  card.hass = hass;
+  const door = card.shadowRoot.querySelector(".door-action");
+  const light = card.shadowRoot.querySelector(".light-action");
+  assert.equal(door.title, "Tür öffnen");
+  assert.equal(light.attributes.get("aria-label"), "Treppenlicht");
+  assert.equal(door.disabled, false);
+  assert.equal(light.disabled, false);
+  await door.dispatch("click");
+  await light.dispatch("click");
+  assert.deepEqual(calls, [
+    ["button", "press", { entity_id: "button.door_unlock" }],
+    ["button", "press", { entity_id: "button.stair_light" }],
+  ]);
+  hass.states["button.door_unlock"].state = "unavailable";
+  card.hass = hass;
+  assert.equal(door.disabled, true);
+  delete hass.states["button.stair_light"];
+  card.hass = hass;
+  assert.equal(light.disabled, true);
+});
+
+test("call services use the camera device owner and reject missing or ambiguous assignments", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?service-device-owner-test");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  const hass = fakeHass();
+  const calls = [];
+  hass.callService = async (...args) => calls.push(args);
+  card.hass = hass;
+  await card._actions.answerDoorbellCall();
+  assert.deepEqual(calls, [["bticino_c300x", "answer_doorbell_call", { entry_id: "entry-1" }]]);
+  hass.devices = { "device-1": { config_entries: ["entry-1"] } };
+  assert.deepEqual(card._serviceData(), { entry_id: "entry-1" });
+  for (const device of [undefined, { config_entries: ["entry-1", "entry-2"] }]) {
+    hass.devices = { "device-1": device };
+    await assert.rejects(card._actions.answerDoorbellCall(), /Camera device assignment unavailable/);
+    await assert.rejects(card._actions.stopDoorbellVideo(), /Camera device assignment unavailable/);
+    await assert.rejects(card._actions.stopHomeCall(), /Camera device assignment unavailable/);
+    assert.equal(calls.length, 1);
+  }
+  hass.devices = { "device-1": { config_entry_id: "entry-1" } };
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera", entry_id: "entry-2" });
+  await assert.rejects(card._actions.answerDoorbellCall(), /Camera device assignment unavailable/);
+  assert.equal(calls.length, 1);
+});
+
+test("registry changes invalidate cached codec and a removed camera does not retain old state", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?registry-cache-test");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const cameraId = "camera.bticino_c300x_doorbell_camera";
+  card.setConfig({ entity: cameraId });
+  const hass = fakeHass();
+  for (const [id, mode] of [["1", "pcmu"], ["2", "speex"]]) {
+    hass.entities[`select.codec_${id}`] = {
+      device_id: `device-${id}`, platform: "bticino_c300x", translation_key: "audio_codec",
+    };
+    hass.states[`select.codec_${id}`] = { state: mode, attributes: {} };
+  }
+  card.hass = hass;
+  assert.equal(card._audioCodecMode(), "pcmu");
+  hass.entities = {
+    ...hass.entities,
+    [cameraId]: { ...hass.entities[cameraId], device_id: "device-2" },
+  };
+  card.hass = hass;
+  assert.equal(card._audioCodecMode(), "speex");
+  assert.ok(hass.states["select.codec_1"]);
+  delete hass.states[cameraId];
+  hass.entities = { ...hass.entities };
+  delete hass.entities[cameraId];
+  hass.states["camera.other"] = { attributes: { media_state: "ring_active" }, state: "idle" };
+  hass.entities["camera.other"] = { device_id: "device-2", platform: "bticino_c300x", translation_key: "doorbell_camera" };
+  card.hass = hass;
+  assert.equal(card._resolvedCameraEntityId(), cameraId);
+  assert.equal(card._cameraEntity(), undefined);
+  assert.equal(card._audioCodecMode(), null);
+  assert.throws(() => card._serviceData(), /Camera device assignment unavailable/);
+});
+
 test("card derives the PCMU browser gain from HA state, zero for speex", async () => {
   const registry = installFakeDom();
 
@@ -253,10 +354,9 @@ test("card derives the PCMU browser gain from HA state, zero for speex", async (
 
   const hass = fakeHass();
   hass.entities["select.bticino_c300x_audio_codec"] = {
-    config_entry_id: "entry-1",
+    device_id: "device-1",
     platform: "bticino_c300x",
     translation_key: "audio_codec",
-    unique_id: "entry-1_audio_codec",
   };
   hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
   hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };
@@ -284,10 +384,9 @@ test("card keeps its gain when the codec select entity blips to unavailable", as
 
   const hass = fakeHass();
   hass.entities["select.bticino_c300x_audio_codec"] = {
-    config_entry_id: "entry-1",
+    device_id: "device-1",
     platform: "bticino_c300x",
     translation_key: "audio_codec",
-    unique_id: "entry-1_audio_codec",
   };
   hass.states["camera.bticino_c300x_doorbell_camera"].attributes.doorstation_audio_gain_db = 6;
   hass.states["select.bticino_c300x_audio_codec"] = { state: "pcmu", attributes: {} };

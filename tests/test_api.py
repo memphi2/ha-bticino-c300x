@@ -2853,7 +2853,7 @@ def test_ringer_and_answering_machine_setters_post_payloads() -> None:
         "enabled"
     ] is False
     assert calls == [
-        ("POST", "/api/v1/ringer", {"json_data": {"muted": True}}),
+        ("POST", "/api/v1/ringer", {"json_data": {"muted": True}, "request_timeout": 15.0}),
         ("POST", "/api/v1/ringer", {"json_data": {"volume": 3}}),
         ("POST", "/api/v1/answering-machine", {"json_data": {"enabled": False}}),
     ]

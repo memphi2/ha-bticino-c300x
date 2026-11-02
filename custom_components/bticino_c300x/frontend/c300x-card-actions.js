@@ -1,6 +1,32 @@
 export class C300XCardActions {
   constructor(card) {
     this._card = card;
+    this._pendingDeviceActions = new Set();
+  }
+
+  deviceActionPending(key) {
+    return this._pendingDeviceActions.has(key);
+  }
+
+  async handleDeviceAction(key) {
+    const card = this._card;
+    const entityId = card._deviceActionEntity(key);
+    if (!entityId || !card._hass?.callService || this.deviceActionPending(key)
+      || card._hass.states?.[entityId]?.state === "unavailable") {
+      return;
+    }
+    this._pendingDeviceActions.add(key);
+    card._error = "";
+    card._clearNotice();
+    card._updateState();
+    try {
+      await card._hass.callService("button", "press", { entity_id: entityId });
+    } catch (err) {
+      card._error = err?.message || `${err}`;
+    } finally {
+      this._pendingDeviceActions.delete(key);
+      card._updateState();
+    }
   }
 
   async handlePrimaryAction() {
@@ -27,8 +53,11 @@ export class C300XCardActions {
           } else {
             await card._startTalkback();
           }
+        } catch (err) {
+          card._error = err?.message || `${err}`;
         } finally {
           card._lifecycle.answeringDoorbell = false;
+          card._updateState();
         }
         return;
       }

@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=9bdbfdc3de6966e8";
+} from "./c300x-translations.js?v=46e9e213d1cdd1bc";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -10,27 +10,28 @@ import {
   C300X_DEFAULT_CONFIG,
   C300X_DOCUMENTATION_URL,
   C300X_MEDIA_READINESS_OBJECT_ID,
+  c300xDeviceActionEntity,
   c300xEntryId,
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=9bdbfdc3de6966e8";
+} from "./c300x-entity-resolver.js?v=46e9e213d1cdd1bc";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=9bdbfdc3de6966e8";
-import { C300XCardActions } from "./c300x-card-actions.js?v=9bdbfdc3de6966e8";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=9bdbfdc3de6966e8";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=9bdbfdc3de6966e8";
+} from "./c300x-card-editor.js?v=46e9e213d1cdd1bc";
+import { C300XCardActions } from "./c300x-card-actions.js?v=46e9e213d1cdd1bc";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=46e9e213d1cdd1bc";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=46e9e213d1cdd1bc";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=9bdbfdc3de6966e8";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=9bdbfdc3de6966e8";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=9bdbfdc3de6966e8";
+} from "./c300x-state-model.js?v=46e9e213d1cdd1bc";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=46e9e213d1cdd1bc";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=46e9e213d1cdd1bc";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -161,10 +162,13 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _audioCodecMode() {
     // Cache the resolved select entity id so the common path is an O(1) state
-    // lookup instead of scanning hass.entities on every hass update; re-resolve
-    // only when the cached id is gone.
+    // lookup; invalidate when HA replaces registry data or the camera changes.
+    const cameraEntityId = this._resolvedCameraEntityId();
     let entityId = this._audioCodecEntityId;
-    if (!entityId || !this._hass?.states?.[entityId]) {
+    if (!entityId || !this._hass?.states?.[entityId]
+      || this._audioCodecRegistry !== this._hass?.entities
+      || this._audioCodecDevices !== this._hass?.devices
+      || this._audioCodecCamera !== cameraEntityId) {
       entityId = c300xRelatedEntity(
         this._hass,
         this._config,
@@ -173,6 +177,9 @@ class C300XDoorbellCallCard extends HTMLElement {
         "audio_codec_entity",
       );
       this._audioCodecEntityId = entityId;
+      this._audioCodecRegistry = this._hass?.entities;
+      this._audioCodecDevices = this._hass?.devices;
+      this._audioCodecCamera = cameraEntityId;
     }
     return entityId ? this._hass?.states?.[entityId]?.state : null;
   }
@@ -242,6 +249,8 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._homeActionIconEl = root.querySelector(".home-action-icon");
     this._micButtonEl = root.querySelector(".mic-action");
     this._micIconEl = root.querySelector(".mic-icon");
+    this._doorButtonEl = root.querySelector(".door-action");
+    this._lightButtonEl = root.querySelector(".light-action");
     this._titleEl = root.querySelector(".title");
     this._secondaryEl = root.querySelector(".secondary");
     this._readinessEl = root.querySelector(".readiness");
@@ -250,6 +259,14 @@ class C300XDoorbellCallCard extends HTMLElement {
 
     this._actionButtonEl.addEventListener("click", () => this._actions.handlePrimaryAction());
     this._homeActionButtonEl.addEventListener("click", () => this._actions.handleHomeCallAction());
+    this._doorButtonEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      return this._actions.handleDeviceAction("door_unlock");
+    });
+    this._lightButtonEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      return this._actions.handleDeviceAction("stair_light");
+    });
     this._readinessEl.addEventListener("click", () => {
       if (c300xMediaReadinessHasRepair(this._mediaReadinessEntity())) {
         this._openRepairs();
@@ -270,6 +287,11 @@ class C300XDoorbellCallCard extends HTMLElement {
     return JSON.stringify({
       cameraEntityId: this._resolvedCameraEntityId(),
       cameraState: entity?.state || "",
+      deviceActions: ["door_unlock", "stair_light"].map((key) => {
+        const id = this._deviceActionEntity(key);
+        return [id, this._hass?.states?.[id]?.state, this._actions.deviceActionPending(key)];
+      }),
+      language: this._hass?.language || this._hass?.locale?.language || "en",
       error: this._error || "",
       externalMediaActive: attributes.external_media_active === true,
       externalOwner: attributes.external_owner || "",
@@ -431,6 +453,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._actionButtonEl.classList.toggle("recording", view.actionRecording);
     this._updateHomeActionButton(homeView, autoMode, doorstationActive);
     this._updateMicButton();
+    this._updateDeviceActionButtons();
     this._secondaryEl.textContent = this._error
       || this._notice
       || this._labelOrRaw(view.secondaryKey);
@@ -784,9 +807,7 @@ class C300XDoorbellCallCard extends HTMLElement {
   _syncCameraEntityFromHass() {
     const entityId = this._resolvedCameraEntityId();
     const entity = this._hass?.states?.[entityId];
-    if (entity) {
-      this._cameraEntityState = entity;
-    }
+    this._cameraEntityState = entity || null;
   }
 
   _ensureStateSubscription() {
@@ -1026,7 +1047,10 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _serviceData() {
     const entryId = this._entryId();
-    return entryId ? { entry_id: entryId } : {};
+    if (!entryId) {
+      throw new Error(this._label("device_unresolved"));
+    }
+    return { entry_id: entryId };
   }
 
   _isConfiguredCallActive() {
@@ -1146,6 +1170,23 @@ class C300XDoorbellCallCard extends HTMLElement {
 
   _defaultName() {
     return this._label(this._isHomeCallMode() ? "home_call_name" : "door_station");
+  }
+
+  _deviceActionEntity(key) {
+    return c300xDeviceActionEntity(this._hass, this._config, key);
+  }
+
+  _updateDeviceActionButtons() {
+    for (const [key, button] of [["door_unlock", this._doorButtonEl], ["stair_light", this._lightButtonEl]]) {
+      const entityId = this._deviceActionEntity(key);
+      const pending = this._actions.deviceActionPending(key);
+      const label = this._label(key);
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("aria-busy", String(pending));
+      button.disabled = !entityId || !this._hass?.callService || pending
+        || this._hass.states[entityId].state === "unavailable";
+    }
   }
 
   _label(key) {

@@ -300,6 +300,8 @@ def check_tracked_runtime_artifacts() -> list[str]:
         suffix = path.suffix.lower()
         if parts[:2] == ("native_agent", "build"):
             failures.append(f"tracked native build artifact: {line}")
+        elif parts[:1] == (".artifacts",):
+            failures.append(f"tracked local test artifact: {line}")
         elif suffix in FORBIDDEN_PAYLOAD_SUFFIXES:
             failures.append(f"tracked binary/firmware payload: {line}")
         elif any(part in FORBIDDEN_REPO_DIRS for part in parts):
@@ -1060,6 +1062,8 @@ def is_ignored(path: Path) -> bool:
 
 def _is_tooling_path(parts: tuple[str, ...]) -> bool:
     ignored_paths = {
+        (".artifacts",),
+        ("tests", "browser", "node_modules"),
         ("native_agent", "build"),
         ("custom_components", "bticino_c300x", "device_agent", "armhf"),
         ("custom_components", "bticino_c300x", "device_agent", "qml"),

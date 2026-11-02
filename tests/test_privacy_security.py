@@ -14,6 +14,18 @@ def test_repository_has_no_private_hosts_or_token_literals() -> None:
     assert check_repo.check_forbidden_text_patterns() == []
 
 
+def test_only_local_browser_dependency_tree_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setattr(check_repo, "ROOT", tmp_path)
+    browser_modules = tmp_path / "tests/browser/node_modules/example/dist"
+    browser_modules.mkdir(parents=True)
+    assert check_repo.check_forbidden_generated_paths() == []
+    runtime_modules = tmp_path / "custom_components/bticino_c300x/node_modules"
+    runtime_modules.mkdir(parents=True)
+    assert check_repo.check_forbidden_generated_paths() == [
+        "forbidden foreign/runtime directory present: custom_components/bticino_c300x/node_modules"
+    ]
+
+
 def test_marketplace_link_exception_does_not_allow_other_owner_text(
     tmp_path, monkeypatch,
 ) -> None:  # noqa: ANN001

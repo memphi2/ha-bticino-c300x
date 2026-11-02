@@ -63,3 +63,23 @@ One media preparation runs at a time, with at most four distinct pending jobs.
 The repository intentionally excludes vendor firmware images, extracted
 firmware, APKs, generated runtime payloads, third-party controller code, local
 device backups, and local secrets.
+
+## Public Content Audit
+
+Maintainers can run `python scripts/audit_github_privacy.py --file <local-file>`
+for offline triage, or explicitly opt into read-only GitHub access with
+`--repository <owner>/<repo> --allow-network`. The latter inspects release
+metadata/assets, issue/PR text, comments and reviews. It can use `GH_TOKEN` for
+GitHub API authentication; that credential is not forwarded to asset redirects.
+Nothing is uploaded, edited, commented on, closed or deleted.
+
+Reports contain numbered source identifiers and finding categories, not matched
+text, private paths or credentials. JSON `complete: false` and exit status 2 mean
+the audit could not finish, including size, request or pagination limits. Exit 1
+means possible findings; exit 0 means no matches within the stated scope.
+
+Archive inspection never extracts files and enforces member, byte and download
+limits. These are heuristic warnings requiring manual review, not proof that
+content is private, safe or legally cleared. Images are not OCR-scanned; linked
+attachments, Git history and discussions are outside the audit's scope. The
+tool is not run automatically against GitHub by CI or the integration.

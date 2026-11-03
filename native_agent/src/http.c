@@ -939,7 +939,7 @@ static int forward_to_homeassistant(
     const char *webhook_url = display_bridge_webhook_url(config, runtime);
     const char *shared_secret = display_bridge_shared_secret(config, runtime);
     int ok = 0;
-    ssize_t receive_result;
+    ssize_t receive_result = -1;
 
     if (response_len > 0) {
         response[0] = '\0';
@@ -1022,11 +1022,14 @@ static int forward_to_homeassistant(
         shared_secret[0] != '\0' ? "\r\n" : ""
     );
 
-    if (send(fd, header, strlen(header), MSG_NOSIGNAL) > 0
-        && send(fd, body, strlen(body), MSG_NOSIGNAL) > 0) {
+    if (send_all_bytes(fd, header, strlen(header))
+        && send_all_bytes(fd, body, strlen(body))) {
         size_t received = 0;
         while (received + 1 < response_len) {
             receive_result = recv(fd, response + received, response_len - received - 1, 0);
+            if (receive_result < 0 && errno == EINTR) {
+                continue;
+            }
             if (receive_result <= 0) {
                 break;
             }
@@ -1038,19 +1041,22 @@ static int forward_to_homeassistant(
     }
     close(fd);
 
-    if (response_len > 0) {
+    if (response_len > 0 && receive_result == 0) {
         const char *status_end = strstr(response, "\r\n");
-        if (status_end != NULL) {
+        const char *separator = strstr(response, "\r\n\r\n");
+        if (status_end != NULL && separator != NULL) {
             size_t status_len = (size_t)(status_end - response);
             if (
-                status_len >= 9
-                && (strncmp(response, "HTTP/1.1 2", 9) == 0 || strncmp(response, "HTTP/1.0 2", 9) == 0)
+                status_len >= 13
+                && (strncmp(response, "HTTP/1.1 2", 10) == 0 || strncmp(response, "HTTP/1.0 2", 10) == 0)
+                && isdigit((unsigned char)response[10])
+                && isdigit((unsigned char)response[11])
+                && response[12] == ' '
             ) {
                 ok = 1;
             }
         }
         if (ok) {
-            const char *separator = strstr(response, "\r\n\r\n");
             if (separator != NULL) {
                 const char *body = separator + 4;
                 size_t body_len = strlen(body);
@@ -1063,9 +1069,6 @@ static int forward_to_homeassistant(
             if (response[0] == '\0') {
                 snprintf(response, response_len, "{}\n");
             }
-        } else if (response[0] == '\0') {
-            snprintf(response, response_len, "{}\n");
-            ok = 1;
         }
     }
 

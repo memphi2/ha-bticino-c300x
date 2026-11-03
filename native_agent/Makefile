@@ -40,11 +40,7 @@ all: $(TARGET)
 armhf: $(ARMHF_TARGET)
 
 armhf-abi-check: $(ARMHF_TARGET)
-	@$(ARMHF_READELF) --version-info $(ARMHF_TARGET) | grep -E 'GLIBC_2\.([3-9][0-9]|2[7-9])' >/dev/null && { \
-		echo "FAIL: $(ARMHF_TARGET) requires glibc newer than the C300X firmware glibc 2.26"; \
-		$(ARMHF_READELF) --version-info $(ARMHF_TARGET) | grep -E 'GLIBC_2\.([3-9][0-9]|2[7-9])'; \
-		exit 1; \
-	} || echo "ARMHF ABI check passed"
+	$(PYTHON) ../scripts/check_agent_abi.py $(ARMHF_TARGET) --readelf $(ARMHF_READELF)
 
 armhf-stack-check:
 	$(MAKE) clean

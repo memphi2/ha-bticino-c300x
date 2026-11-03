@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
     "test_binary_sensor", "test_button", "test_callback_url", "test_diagnostics",
     "test_event_entity", "test_frontend", "test_media", "test_media_source", "test_number",
     "test_repair_issues", "test_ring_capture", "test_select", "test_sensor", "test_services", "test_switch",
+    "test_system_metrics",
 ])
 def test_unit_tests_preserve_home_assistant_modules(module):
     result = subprocess.run(

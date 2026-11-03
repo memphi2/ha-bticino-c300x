@@ -256,6 +256,67 @@ def test_scheduled_refresh_deduplicates_pending_task_and_clears_when_done(
 
 
 @pytest.mark.parametrize("kind", ["memos", "answering_machine_messages"])
+@pytest.mark.parametrize("fail_first", [False, True])
+def test_events_during_refresh_trigger_one_trailing_fetch(monkeypatch, kind, fail_first):
+    monkeypatch.setattr(message_refresh, "async_dispatcher_send", lambda *_: None)
+
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        entry = _entry(_FakeApi())
+        entry.entry_id = f"trailing-{kind}-{fail_first}"
+        reads = []
+        total = 1
+
+        async def fetch():
+            snapshot = {"available": True, "total": total}
+            reads.append(snapshot)
+            if len(reads) == 1:
+                started.set()
+                await release.wait()
+                if fail_first:
+                    raise C300XAgentApiError("first snapshot failed")
+            return snapshot
+
+        setattr(entry.runtime_data.api, f"async_{kind}", fetch)
+        schedule = getattr(message_refresh, f"schedule_{kind}_refresh")
+        schedule(_FakeHass(), entry)
+        task = getattr(entry.runtime_data.resources, f"{kind}_refresh_task")
+        await started.wait()
+        total = 2
+        for _ in range(5):
+            schedule(_FakeHass(), entry)
+        release.set()
+        await task
+        await asyncio.sleep(0)
+        assert len(reads) == 2
+        assert getattr(entry.runtime_data, kind) == {"available": True, "total": 2}
+        assert not entry.runtime_data.resources.pending_message_refreshes
+        assert getattr(entry.runtime_data.resources, f"{kind}_refresh_task") is None
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("close", [False, True])
+def test_pending_refresh_does_not_run_after_runtime_replacement_or_close(close):
+    async def run():
+        entry = _entry(_FakeApi())
+        old = entry.runtime_data
+        schedule_memos_refresh(_FakeHass(), entry)
+        task = old.resources.memos_refresh_task
+        if close:
+            old.resources.close()
+        else:
+            entry.runtime_data = _entry(_FakeApi()).runtime_data
+        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.sleep(0)
+        assert old.api.memo_reads == 0
+        assert entry.runtime_data.api.memo_reads == 0
+        assert not old.resources.pending_message_refreshes
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("kind", ["memos", "answering_machine_messages"])
 def test_media_reads_share_cache_but_expiry_and_changes_fetch_fresh_data(kind):
     from custom_components.bticino_c300x import media_source
 

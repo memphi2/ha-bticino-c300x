@@ -78,6 +78,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/camera_media/rtsp_probe.py",
     "custom_components/bticino_c300x/camera_media/rtsp_url.py",
     "custom_components/bticino_c300x/camera_media/sdp.py",
+    "custom_components/bticino_c300x/camera_media/session_lifecycle.py",
     "custom_components/bticino_c300x/camera_media/state_machine.py",
     "custom_components/bticino_c300x/camera_media/webrtc_session.py",
     "custom_components/bticino_c300x/forwarding.py",

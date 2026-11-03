@@ -1406,6 +1406,211 @@ def test_remove_finishes_an_interrupted_provider_websocket_close() -> None:
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("stage", ["provider_lookup", "provider_offer"])
+@pytest.mark.parametrize("replace_runtime", [False, True])
+@pytest.mark.parametrize("owner", ["doorbell", "home_call"])
+def test_window_close_cancels_only_its_inflight_offer(monkeypatch, stage, replace_runtime, owner):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        tasks = []
+
+        class BlockingProvider(_FakeWebRTCProvider):
+            async def async_handle_async_webrtc_offer(self, camera, offer, session_id, send):
+                self.offer_sources.append(await camera.stream_source())
+                if stage == "provider_offer":
+                    started.set()
+                    await release.wait()
+                send({"type": "answer", "sdp": "v=0\r\n"})
+
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+        old = entry.runtime_data
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace(async_create_task=lambda coro: _record_task(tasks, coro))
+        provider = BlockingProvider()
+        _stub_rtsp_ready(camera)
+
+        async def lookup(*_):
+            if stage == "provider_lookup":
+                started.set()
+                await release.wait()
+            return provider
+
+        monkeypatch.setattr(camera_module, "_async_get_supported_webrtc_provider", lookup)
+        messages = []
+        handler = (camera.async_handle_home_call_webrtc_offer if owner == "home_call"
+                   else camera.async_handle_async_webrtc_offer)
+        sdp = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=recvonly\r\n"
+        await camera.async_on_webrtc_candidate("closing", "candidate")
+        offer = asyncio.create_task(handler(sdp, "closing", messages.append))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            if replace_runtime:
+                entry.runtime_data = _FakeRuntimeData()
+            camera.close_webrtc_session("closing")
+            camera.close_webrtc_session("closing")
+            await asyncio.wait_for(asyncio.gather(*tasks), 1)
+            release.set()
+            assert offer.cancelled()
+            assert not camera._webrtc_session_ids()
+            assert not camera._presession_webrtc_candidates
+            assert not camera._webrtc_offer_tasks
+            assert messages == []
+            if replace_runtime:
+                assert old.api.stop_calls == entry.runtime_data.api.stop_calls == 0
+                assert old.api.home_call_stop_calls == entry.runtime_data.api.home_call_stop_calls == 0
+            else:
+                await handler(sdp, "reopened", messages.append)
+                assert camera._webrtc_session_ids() == ["reopened"]
+                camera.close_webrtc_session("closing")
+                await asyncio.gather(*tasks)
+                assert camera._webrtc_session_ids() == ["reopened"]
+        finally:
+            offer.cancel()
+            await asyncio.gather(offer, return_exceptions=True)
+            await camera.async_will_remove_from_hass()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("stage", ["provider_lookup", "provider_offer"])
+@pytest.mark.parametrize("replace_runtime", [False, True])
+def test_remove_cancels_inflight_webrtc_offer(monkeypatch, stage, replace_runtime):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+
+        class BlockingProvider(_FakeWebRTCProvider):
+            async def async_handle_async_webrtc_offer(self, camera, offer, session_id, send):
+                self.offer_sources.append(await camera.stream_source())
+                started.set()
+                await release.wait()
+                send({"type": "answer", "sdp": "v=0\r\n"})
+
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+        old = entry.runtime_data
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace(async_create_task=asyncio.create_task)
+        provider = BlockingProvider()
+        _stub_rtsp_ready(camera)
+
+        async def lookup(*_):
+            if stage == "provider_lookup":
+                started.set()
+                await release.wait()
+            return provider
+
+        monkeypatch.setattr(camera_module, "_async_get_supported_webrtc_provider", lookup)
+        messages = []
+        sdp = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=sendrecv\r\n"
+        await camera.async_on_webrtc_candidate("inflight", "candidate")
+        offer = asyncio.create_task(camera.async_handle_async_webrtc_offer(
+            sdp, "inflight", messages.append,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            if replace_runtime:
+                entry.runtime_data = _FakeRuntimeData()
+            await asyncio.wait_for(camera.async_will_remove_from_hass(), 1)
+            assert offer.done()
+            assert offer.cancelled()
+            release.set()
+            await asyncio.sleep(0)
+            assert not camera._webrtc_session_ids()
+            assert not camera._presession_webrtc_candidates
+            assert not camera._background_tasks._tasks
+            assert messages == []
+            assert provider.closed == (["inflight"] if stage == "provider_offer" else [])
+            if replace_runtime:
+                assert old.api.stop_calls == entry.runtime_data.api.stop_calls == 0
+            await camera.async_handle_async_webrtc_offer(sdp, "late", messages.append)
+            assert _webrtc_message_value(messages[0], "type") == "error"
+            assert not camera._webrtc_session_ids()
+        finally:
+            offer.cancel()
+            await asyncio.gather(offer, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("replace_runtime", [False, True])
+def test_remove_cleans_up_inflight_home_call_start(replace_runtime):
+    async def run():
+        started = asyncio.Event()
+
+        class BlockingApi(_FakeApi):
+            async def async_start_home_call(self, duration_seconds=None):
+                self.home_call_start_calls.append(duration_seconds)
+                started.set()
+                await asyncio.Future()
+
+        old = _FakeRuntimeData(api=BlockingApi())
+        entry = _FakeEntry(runtime_data=old)
+        camera = C300XDoorbellCamera(entry)
+        messages = []
+        offer = asyncio.create_task(camera.async_handle_home_call_webrtc_offer(
+            "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=sendrecv\r\n",
+            "home-start", messages.append, duration_seconds=30,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            if replace_runtime:
+                entry.runtime_data = _FakeRuntimeData()
+            await asyncio.wait_for(camera.async_will_remove_from_hass(), 1)
+            assert offer.cancelled()
+            assert old.api.home_call_stop_calls == (0 if replace_runtime else 1)
+            assert not camera._webrtc_session_ids()
+            assert not camera._background_tasks._tasks
+            assert messages == []
+        finally:
+            offer.cancel()
+            await asyncio.gather(offer, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("owner", ["doorbell", "home_call"])
+def test_cancelled_offer_cleans_up_without_entity_removal(monkeypatch, owner):
+    async def run():
+        started = asyncio.Event()
+
+        class BlockingProvider(_FakeWebRTCProvider):
+            async def async_handle_async_webrtc_offer(self, camera, offer, session_id, send):
+                self.offer_sources.append(await camera.stream_source())
+                started.set()
+                await asyncio.Future()
+
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        provider = BlockingProvider()
+        _install_fake_webrtc_provider(monkeypatch, provider)
+        _stub_rtsp_ready(camera)
+        messages = []
+        handler = (
+            camera.async_handle_home_call_webrtc_offer if owner == "home_call"
+            else camera.async_handle_async_webrtc_offer
+        )
+        offer = asyncio.create_task(handler(
+            "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=sendrecv\r\n",
+            "cancelled", messages.append,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+        finally:
+            offer.cancel()
+            await asyncio.gather(offer, return_exceptions=True)
+        assert offer.cancelled()
+        assert not camera._background_tasks._tasks
+        assert not camera._webrtc_session_ids()
+        assert provider.closed == ["cancelled"]
+        assert messages == []
+        if owner == "home_call":
+            assert entry.runtime_data.api.home_call_stop_calls == 1
+        else:
+            assert entry.runtime_data.api.stop_calls == 1
+
+    asyncio.run(run())
+
+
 def test_repeated_watchdog_samples_do_not_spawn_duplicate_camera_cleanup() -> None:
     async def run():
         entry = _FakeEntry()
@@ -1638,6 +1843,76 @@ def test_doorbell_camera_provider_offer_omits_backchannel_without_microphone(
     assert session.wants_backchannel is False
     assert provider.offer_sources == ["rtsp://127.0.0.1:6554/doorbell"]
     assert provider.support_sources == ["rtsp://127.0.0.1:6554/doorbell"]
+
+
+@pytest.mark.parametrize("close_before_microphone", [True, False])
+def test_native_camera_microphone_reconnect_and_repeated_close(
+    monkeypatch, close_before_microphone,
+) -> None:
+    """HA replaces the listening session on the first microphone activation."""
+    entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+    camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
+    tasks = []
+    camera.hass = SimpleNamespace(
+        async_create_task=lambda coro, **_: _record_task(tasks, coro),
+    )
+    provider = _FakeWebRTCProvider()
+    _install_fake_webrtc_provider(monkeypatch, provider)
+    _stub_rtsp_ready(camera)
+    messages = []
+    listen_offer = (
+        "v=0\r\n"
+        "m=audio 9 UDP/TLS/RTP/SAVPF 111 0 8\r\n"
+        "a=recvonly\r\n"
+        "m=video 9 UDP/TLS/RTP/SAVPF 96\r\n"
+        "a=recvonly\r\n"
+    )
+    microphone_offer = listen_offer.replace(
+        "a=recvonly", "a=sendrecv", 1,
+    )
+
+    async def run() -> None:
+        for index in range(2):
+            listen_id = f"native-listen-{index}"
+            microphone_id = f"native-microphone-{index}"
+            await camera.async_handle_async_webrtc_offer(
+                listen_offer, listen_id, messages.append,
+            )
+            assert not camera._provider_webrtc_sessions[listen_id].wants_backchannel
+            camera.close_webrtc_session(listen_id)
+            if close_before_microphone:
+                await asyncio.gather(*tasks)
+                assert camera._webrtc_session_ids() == []
+            await camera.async_handle_async_webrtc_offer(
+                microphone_offer, microphone_id, messages.append,
+            )
+            assert camera._provider_webrtc_sessions[microphone_id].wants_backchannel
+            await asyncio.gather(*tasks)
+            assert camera._webrtc_session_ids() == [microphone_id]
+            await camera.async_on_webrtc_candidate(microphone_id, "candidate")
+            camera.close_webrtc_session(microphone_id)
+            await asyncio.gather(*tasks)
+            assert camera._webrtc_session_ids() == []
+        await camera._background_tasks.close()
+
+    asyncio.run(run())
+    assert provider.offer_sources == [
+        "rtsp://127.0.0.1:6554/doorbell",
+        "rtsp://127.0.0.1:6554/doorbell#backchannel=1",
+    ] * 2
+    assert provider.closed == [
+        "native-listen-0", "native-microphone-0",
+        "native-listen-1", "native-microphone-1",
+    ]
+    assert provider.candidates == [
+        ("native-microphone-0", "candidate"),
+        ("native-microphone-1", "candidate"),
+    ]
+    assert len(messages) == 4
+    assert all(_webrtc_message_value(message, "type") == "answer" for message in messages)
+    # RTSP disconnect handles on-demand stop; no late API stop may kill its replacement.
+    assert entry.runtime_data.api.stop_calls == 0
+    assert entry.runtime_data.api.hangup_calls == 0
 
 
 def test_doorbell_camera_initial_refresh_sets_idle_stream_action() -> None:

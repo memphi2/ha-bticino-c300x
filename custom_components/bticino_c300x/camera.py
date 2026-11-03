@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import time
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping
 from contextlib import suppress
 from contextvars import ContextVar
 from typing import Any, cast
@@ -64,6 +63,7 @@ from .camera_media.webrtc_session import (
 from .camera_media.webrtc_session import (
     ProviderWebRTCStreamContext as _ProviderWebRTCStreamContext,
 )
+from .camera_media.webrtc_session import async_close_provider_session
 from .camera_media.webrtc_session import (
     owner_is_doorbell_media as _owner_is_doorbell_media,
 )
@@ -1110,9 +1110,10 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 stop_media=stop_media,
                 reason=reason,
             )
-            provider_close_path = await self._async_close_provider_webrtc_session(
+            provider_close_path = await async_close_provider_session(
                 provider_session.provider,
                 session_id,
+                self._log_webrtc_debug,
             )
             await self._async_log_go2rtc_debug(
                 provider_session.provider,
@@ -1354,57 +1355,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             for session_id, session in self._webrtc_sessions.active.items()
             if session.owner == "doorbell" and session.ring_preview
         ]
-
-    async def _async_close_provider_webrtc_session(
-        self,
-        provider: Any,
-        session_id: str,
-    ) -> str:
-        """Close the provider session and await HA go2rtc consumer shutdown."""
-
-        sessions = getattr(provider, "_sessions", None)
-        if isinstance(sessions, MutableMapping):
-            ws_client = sessions.pop(session_id, None)
-            if ws_client is None:
-                return "go2rtc_ws_missing"
-            close = getattr(ws_client, "close", None)
-            if not callable(close):
-                return "go2rtc_ws_close_missing"
-            try:
-                result = close()
-                if inspect.isawaitable(result):
-                    await result
-                    return "go2rtc_ws_awaited"
-                return "go2rtc_ws_sync"
-            except asyncio.CancelledError:
-                sessions.setdefault(session_id, ws_client)
-                raise
-            except Exception as err:  # noqa: BLE001 - close cleanup must continue
-                self._log_webrtc_debug(
-                    "provider_go2rtc_ws_close_failed",
-                    session_id=session_id,
-                    provider=str(getattr(provider, "domain", type(provider).__name__)),
-                    error_type=type(err).__name__,
-                )
-                return "go2rtc_ws_failed"
-
-        close_session = getattr(provider, "async_close_session", None)
-        if not callable(close_session):
-            return "provider_close_missing"
-        try:
-            result = close_session(session_id)
-            if inspect.isawaitable(result):
-                await result
-                return "provider_close_awaited"
-            return "provider_close_sync"
-        except Exception as err:  # noqa: BLE001 - close cleanup must continue
-            self._log_webrtc_debug(
-                "provider_close_failed",
-                session_id=session_id,
-                provider=str(getattr(provider, "domain", type(provider).__name__)),
-                error_type=type(err).__name__,
-            )
-            return "provider_close_failed"
 
     def _has_webrtc_sessions_for_resource(self, resource_id: str) -> bool:
         """Return true while a local session still owns the same media resource."""

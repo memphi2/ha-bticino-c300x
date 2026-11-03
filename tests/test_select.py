@@ -1,71 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import types
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-if "homeassistant.components.select" not in sys.modules:
-    homeassistant = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
-    components = sys.modules.setdefault(
-        "homeassistant.components", types.ModuleType("homeassistant.components")
-    )
-    select = types.ModuleType("homeassistant.components.select")
-    config_entries = sys.modules.setdefault(
-        "homeassistant.config_entries", types.ModuleType("homeassistant.config_entries")
-    )
-    core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-    const = sys.modules.setdefault("homeassistant.const", types.ModuleType("homeassistant.const"))
-    helpers = sys.modules.setdefault("homeassistant.helpers", types.ModuleType("homeassistant.helpers"))
-    entity = sys.modules.setdefault("homeassistant.helpers.entity", types.ModuleType("homeassistant.helpers.entity"))
-    entity_platform = sys.modules.setdefault(
-        "homeassistant.helpers.entity_platform",
-        types.ModuleType("homeassistant.helpers.entity_platform"),
-    )
-    dispatcher = sys.modules.setdefault(
-        "homeassistant.helpers.dispatcher", types.ModuleType("homeassistant.helpers.dispatcher")
-    )
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
+import pytest
 
-    class SelectEntity:
-        def async_write_ha_state(self) -> None:
-            self.wrote_state = True
-
-    class ConfigEntry:
-        pass
-
-    class HomeAssistant:
-        pass
-
-    class Entity:
-        pass
-
-    class DeviceInfo(dict):
-        pass
-
-    class EntityCategory:
-        CONFIG = "config"
-
-    select.SelectEntity = SelectEntity
-    config_entries.ConfigEntry = ConfigEntry
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    const.EntityCategory = EntityCategory
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    entity_platform.AddEntitiesCallback = object
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    helpers.entity = entity
-    helpers.entity_platform = entity_platform
-    helpers.dispatcher = dispatcher
-    helpers.config_validation = config_validation
-    components.select = select
-    homeassistant.components = components
-    sys.modules["homeassistant.components.select"] = select
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.select import (  # noqa: E402

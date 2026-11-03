@@ -3,93 +3,12 @@ from __future__ import annotations
 # ruff: noqa: E402,I001
 
 import asyncio
-import sys
-import types
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
 
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-webhook = types.ModuleType("homeassistant.components.webhook")
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-
-
-class ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-webhook.async_generate_url = (
-    lambda _hass, webhook_id, **_kwargs: f"http://homeassistant.local:8123/api/webhook/{webhook_id}"
-)
-webhook.async_generate_path = lambda webhook_id: f"/api/webhook/{webhook_id}"
-components.webhook = webhook
-config_entries.ConfigEntry = ConfigEntry
-core.HomeAssistant = HomeAssistant
-core.callback = lambda func: func
-sys.modules["homeassistant.components.webhook"] = webhook
-
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-helpers_config_validation = sys.modules.setdefault(
-    "homeassistant.helpers.config_validation",
-    types.ModuleType("homeassistant.helpers.config_validation"),
-)
-helpers_dispatcher = sys.modules.setdefault(
-    "homeassistant.helpers.dispatcher",
-    types.ModuleType("homeassistant.helpers.dispatcher"),
-)
-helpers_network = sys.modules.setdefault(
-    "homeassistant.helpers.network",
-    types.ModuleType("homeassistant.helpers.network"),
-)
-helpers_entity = sys.modules.setdefault(
-    "homeassistant.helpers.entity",
-    types.ModuleType("homeassistant.helpers.entity"),
-)
-
-
-class NoURLAvailableError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
-if not hasattr(helpers_dispatcher, "async_dispatcher_connect"):
-    helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-if not hasattr(helpers_config_validation, "config_entry_only_config_schema"):
-    helpers_config_validation.config_entry_only_config_schema = lambda _domain: dict
-if not hasattr(helpers_network, "NoURLAvailableError"):
-    helpers_network.NoURLAvailableError = NoURLAvailableError
-if not hasattr(helpers_entity, "Entity"):
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    helpers_entity.Entity = Entity
-    helpers_entity.DeviceInfo = DeviceInfo
-helpers.config_validation = helpers_config_validation
-helpers.dispatcher = helpers_dispatcher
-helpers.network = helpers_network
-helpers.entity = helpers_entity
+from homeassistant.components import webhook
 
 from custom_components.bticino_c300x import callback_url as callback_url_module
 from custom_components.bticino_c300x.callback_url import (
@@ -116,12 +35,10 @@ TEST_NET_IPV4 = "203.0.113.20"
 TEST_NET_IPV6 = "2001:db8::10"
 
 
-def _restore_callback_webhook_stub() -> None:
-    homeassistant.components = components
-    components.webhook = webhook
-    sys.modules["homeassistant.components"] = components
-    sys.modules["homeassistant.components.webhook"] = webhook
-    webhook.async_generate_path = lambda webhook_id: f"/api/webhook/{webhook_id}"
+@pytest.fixture(autouse=True)
+def callback_url_ha_boundary(monkeypatch):
+    monkeypatch.setattr(webhook, "async_generate_url", lambda _hass, key, **_: f"http://homeassistant.local:8123/api/webhook/{key}")
+    monkeypatch.setattr(webhook, "async_generate_path", lambda key: f"/api/webhook/{key}")
 
 
 @dataclass
@@ -238,7 +155,6 @@ def test_apply_callback_base_path_preserves_generated_webhook_path() -> None:
 
 
 def test_agent_callback_url_rewrites_homeassistant_local_to_route_source() -> None:
-    _restore_callback_webhook_stub()
     original_selector = callback_url_module._select_non_link_local_source_ip
     callback_url_module._select_non_link_local_source_ip = lambda *_args: TEST_NET_IPV4
     try:
@@ -259,7 +175,6 @@ def test_agent_callback_url_rewrites_homeassistant_local_to_route_source() -> No
 
 
 def test_agent_callback_url_uses_configured_base_before_route_rewrite() -> None:
-    _restore_callback_webhook_stub()
     original_selector = callback_url_module._select_non_link_local_source_ip
     callback_url_module._select_non_link_local_source_ip = lambda *_args: pytest.fail(
         "configured callback base URL must not need route source probing"
@@ -285,7 +200,6 @@ def test_agent_callback_url_uses_configured_base_before_route_rewrite() -> None:
 def test_agent_callback_url_uses_configured_base_when_ha_url_is_unavailable(
     monkeypatch,
 ) -> None:
-    _restore_callback_webhook_stub()
 
     def fail_generate_url(*_args: Any, **_kwargs: Any) -> str:
         from homeassistant.helpers.network import NoURLAvailableError as CurrentError
@@ -315,7 +229,6 @@ def test_agent_callback_url_uses_configured_base_when_ha_url_is_unavailable(
 def test_agent_callback_url_falls_back_to_route_source_when_ha_url_is_unavailable(
     monkeypatch,
 ) -> None:
-    _restore_callback_webhook_stub()
 
     def fail_generate_url(*_args: Any, **_kwargs: Any) -> str:
         from homeassistant.helpers.network import NoURLAvailableError as CurrentError

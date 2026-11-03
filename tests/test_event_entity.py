@@ -3,110 +3,13 @@ from __future__ import annotations
 # ruff: noqa: E402, I001
 
 import asyncio
-import sys
-import types
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-event_module = types.ModuleType("homeassistant.components.event")
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-const = sys.modules.setdefault(
-    "homeassistant.const",
-    types.ModuleType("homeassistant.const"),
-)
-core = sys.modules.setdefault(
-    "homeassistant.core",
-    types.ModuleType("homeassistant.core"),
-)
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-entity = sys.modules.setdefault(
-    "homeassistant.helpers.entity",
-    types.ModuleType("homeassistant.helpers.entity"),
-)
-entity_platform = sys.modules.setdefault(
-    "homeassistant.helpers.entity_platform",
-    types.ModuleType("homeassistant.helpers.entity_platform"),
-)
+import pytest
 
-
-class EventEntity:  # pragma: no cover - import-time stub only
-    def _trigger_event(self, event_type: str, event_attributes: dict[str, Any]) -> None:
-        self.triggered_event = (event_type, event_attributes)
-
-    def async_write_ha_state(self) -> None:
-        self.wrote_state = True
-
-    def async_on_remove(self, _callback: Any) -> None:
-        pass
-
-
-class ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-class Entity:  # pragma: no cover - import-time stub only
-    pass
-
-
-class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-    pass
-
-
-class DoorbellEventType:  # pragma: no cover - import-time stub only
-    RING = "ring"
-
-
-class EventDeviceClass:  # pragma: no cover - import-time stub only
-    DOORBELL = "doorbell"
-
-
-class EntityCategory:  # pragma: no cover - import-time stub only
-    DIAGNOSTIC = "diagnostic"
-
-
-event_module.DoorbellEventType = DoorbellEventType
-event_module.EventDeviceClass = EventDeviceClass
-event_module.EventEntity = EventEntity
-config_entries.ConfigEntry = ConfigEntry
-const.EntityCategory = EntityCategory
-core.HomeAssistant = HomeAssistant
-core.callback = lambda func: func
-config_validation.config_entry_only_config_schema = lambda _domain: dict
-dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-entity.Entity = Entity
-entity.DeviceInfo = DeviceInfo
-entity_platform.AddEntitiesCallback = object
-components.event = event_module
-homeassistant.const = const
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.entity = entity
-helpers.entity_platform = entity_platform
-homeassistant.components = components
-sys.modules["homeassistant.components.event"] = event_module
-sys.modules["homeassistant.helpers.config_validation"] = config_validation
-sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from homeassistant.const import EntityCategory  # noqa: E402
 from custom_components.bticino_c300x.agent_contracts import CapabilityPayload  # noqa: E402
@@ -123,6 +26,16 @@ from custom_components.bticino_c300x.event import (  # noqa: E402
     _nested_dict_value,
     async_setup_entry,
 )
+
+
+@pytest.fixture(autouse=True)
+def event_entity_ha_boundary(monkeypatch):
+    from custom_components.bticino_c300x import entity
+
+    monkeypatch.setattr(entity, "async_dispatcher_connect", lambda *_: lambda: None)
+    for cls in (C300XDoorbellEventEntity, C300XDeviceAgentEventEntity):
+        monkeypatch.setattr(cls, "_trigger_event", lambda self, kind, attrs: setattr(self, "triggered_event", (kind, attrs)))
+        monkeypatch.setattr(cls, "async_write_ha_state", lambda self: setattr(self, "wrote_state", True))
 
 
 @dataclass
@@ -173,11 +86,9 @@ class _FakeHass:
 
 
 def test_device_event_entity_is_diagnostic_enabled_by_default() -> None:
-    assert C300XDeviceAgentEventEntity._attr_entity_category == EntityCategory.DIAGNOSTIC
-    assert not hasattr(
-        C300XDeviceAgentEventEntity,
-        "_attr_entity_registry_enabled_default",
-    )
+    entity = C300XDeviceAgentEventEntity(_FakeEntry(), ["doorbell_pressed"])
+    assert entity.entity_category == EntityCategory.DIAGNOSTIC
+    assert entity.entity_registry_enabled_default is True
 
 
 def test_async_setup_entry_adds_supported_event_entities() -> None:

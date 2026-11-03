@@ -3,102 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-number = sys.modules.setdefault(
-    "homeassistant.components.number",
-    types.ModuleType("homeassistant.components.number"),
-)
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-const = sys.modules.setdefault(
-    "homeassistant.const",
-    types.ModuleType("homeassistant.const"),
-)
-core = sys.modules.setdefault(
-    "homeassistant.core",
-    types.ModuleType("homeassistant.core"),
-)
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = sys.modules.setdefault(
-    "homeassistant.helpers.config_validation",
-    types.ModuleType("homeassistant.helpers.config_validation"),
-)
-dispatcher = sys.modules.setdefault(
-    "homeassistant.helpers.dispatcher",
-    types.ModuleType("homeassistant.helpers.dispatcher"),
-)
-entity = sys.modules.setdefault(
-    "homeassistant.helpers.entity",
-    types.ModuleType("homeassistant.helpers.entity"),
-)
-entity_platform = sys.modules.setdefault(
-    "homeassistant.helpers.entity_platform",
-    types.ModuleType("homeassistant.helpers.entity_platform"),
-)
-
-
-class NumberEntity:  # pragma: no cover - import-time stub only
-    def async_write_ha_state(self) -> None:
-        self.wrote_state = True
-
-
-class ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-class ServiceCall:  # pragma: no cover - import-time stub only
-    pass
-
-
-class Entity:  # pragma: no cover - import-time stub only
-    pass
-
-
-class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-    pass
-
-
-number.NumberEntity = NumberEntity
-config_entries.ConfigEntry = ConfigEntry
-core.HomeAssistant = HomeAssistant
-core.ServiceCall = ServiceCall
-core.callback = lambda func: func
-config_validation.config_entry_only_config_schema = lambda _domain: dict
-dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
-entity.Entity = Entity
-entity.DeviceInfo = DeviceInfo
-entity_platform.AddEntitiesCallback = object
-components.number = number
-homeassistant.components = components
-homeassistant.const = const
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.entity = entity
-helpers.entity_platform = entity_platform
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from homeassistant.exceptions import HomeAssistantError  # noqa: E402
 

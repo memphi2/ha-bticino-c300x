@@ -4,58 +4,12 @@ import asyncio
 import ipaddress
 import json
 import socket
-import sys
-import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
-if "homeassistant.config_entries" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    config_entries = types.ModuleType("homeassistant.config_entries")
-    core = types.ModuleType("homeassistant.core")
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-    entity = types.ModuleType("homeassistant.helpers.entity")
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    config_entries.ConfigEntry = ConfigEntry
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    homeassistant.config_entries = config_entries
-    homeassistant.core = core
-    homeassistant.helpers = helpers
-    helpers.config_validation = config_validation
-    helpers.dispatcher = dispatcher
-    helpers.entity = entity
-    sys.modules["homeassistant.config_entries"] = config_entries
-    sys.modules["homeassistant.core"] = core
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
-    sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-    sys.modules["homeassistant.helpers.entity"] = entity
+import pytest
 
 from custom_components.bticino_c300x.const import (
     CONF_ACTIONS,
@@ -110,6 +64,8 @@ from custom_components.bticino_c300x.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.bticino_c300x.media_timeline import C300XMediaTimeline
+
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 
 @dataclass

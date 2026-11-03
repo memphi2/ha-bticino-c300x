@@ -90,6 +90,8 @@ class _FakeHass:
 
 
 def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> None:
+    from homeassistant import components as ha_components
+
     http_server_module = types.ModuleType("homeassistant.components.http.server")
     http_server_module.StaticPathConfig = _StaticPathConfig
     frontend_module = types.ModuleType("homeassistant.components.frontend")
@@ -104,6 +106,7 @@ def test_async_setup_frontend_registers_bundled_card_once(monkeypatch: Any) -> N
 
     frontend_module.add_extra_js_url = add_extra_js_url
     frontend_module.remove_extra_js_url = remove_extra_js_url
+    monkeypatch.setattr(ha_components, "frontend", frontend_module, raising=False)
     monkeypatch.setitem(
         sys.modules,
         "homeassistant.components.http.server",

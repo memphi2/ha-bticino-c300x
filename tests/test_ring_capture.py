@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
-import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,40 +11,6 @@ from types import MappingProxyType
 from typing import Any
 
 import pytest
-
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-homeassistant.__path__ = []
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-
-
-class _ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class _HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-config_entries.ConfigEntry = getattr(config_entries, "ConfigEntry", _ConfigEntry)
-core.HomeAssistant = getattr(core, "HomeAssistant", _HomeAssistant)
-homeassistant.config_entries = config_entries
-homeassistant.core = core
-config_validation.config_entry_only_config_schema = lambda _domain: dict
-helpers.config_validation = config_validation
-homeassistant.helpers = helpers
-sys.modules["homeassistant.helpers.config_validation"] = config_validation
 
 from custom_components.bticino_c300x import ring_capture as ring_capture_module
 from custom_components.bticino_c300x.camera_media.rtsp_probe import (

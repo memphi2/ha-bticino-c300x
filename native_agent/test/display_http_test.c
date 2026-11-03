@@ -42,6 +42,7 @@ static ssize_t fragmented_recv(int fd, void *buffer, size_t length, int flags)
 #define socket callback_socket
 #define connect callback_connect
 #define recv fragmented_recv
+#include "../src/display_callback.c"
 #include "../src/http.c"
 #undef recv
 #undef connect

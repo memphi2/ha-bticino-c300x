@@ -29,10 +29,7 @@ def test_agent_skips_callback_io_without_local_network() -> None:
         dispatch_body.index("queue_callback")
     )
     assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
-        bridge_body.index("parse_http_url")
-    )
-    assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
-        bridge_body.index("getaddrinfo")
+        bridge_body.index("c300x_display_post")
     )
 
 

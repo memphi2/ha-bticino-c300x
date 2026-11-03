@@ -4,39 +4,11 @@ import asyncio
 import datetime
 import json
 import sys
-import types
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 
 import pytest
-
-homeassistant = sys.modules.setdefault(
-    "homeassistant",
-    types.ModuleType("homeassistant"),
-)
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-webhook = types.ModuleType("homeassistant.components.webhook")
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-helpers_config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-helpers_dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-helpers_event = types.ModuleType("homeassistant.helpers.event")
-helpers_entity = types.ModuleType("homeassistant.helpers.entity")
-helpers_entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
-helpers_issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
-helpers_network = types.ModuleType("homeassistant.helpers.network")
-util = sys.modules.setdefault("homeassistant.util", types.ModuleType("homeassistant.util"))
-util_dt = types.ModuleType("homeassistant.util.dt")
+from homeassistant.components import webhook
 
 
 def _utcnow() -> datetime.datetime:
@@ -71,72 +43,6 @@ class _FakeHass:  # pragma: no cover - import-time stub only
 def _webhook_url(_: _FakeHass, webhook_id: str) -> str:
     return f"http://localhost:8123/webhook/{webhook_id}"
 
-
-class NoURLAvailableError(Exception):  # pragma: no cover - import-time stub only
-    pass
-
-
-webhook.async_generate_url = _webhook_url
-webhook.async_generate_path = lambda webhook_id: f"/webhook/{webhook_id}"
-webhook.async_register = lambda *args, **kwargs: None
-webhook.async_unregister = lambda *args, **kwargs: None
-
-config_entries.ConfigEntry = type("ConfigEntry", (), {})
-core.HomeAssistant = type("HomeAssistant", (), {"config": _FakeConfig()})
-core.CALLBACK_TYPE = type(_utcnow())
-core.callback = lambda func: func
-helpers.dispatcher = helpers_dispatcher
-helpers.event = helpers_event
-helpers.entity = helpers_entity
-helpers.entity_registry = helpers_entity_registry
-helpers.issue_registry = helpers_issue_registry
-helpers.network = helpers_network
-helpers.config_validation = helpers_config_validation
-helpers_config_validation.config_entry_only_config_schema = lambda domain: None
-helpers_entity_registry.async_get = lambda hass: None
-helpers_issue_registry.IssueSeverity = types.SimpleNamespace(
-    ERROR="error",
-    WARNING="warning",
-)
-helpers_issue_registry.async_create_issue = lambda *args, **kwargs: None
-helpers_issue_registry.async_delete_issue = lambda *args, **kwargs: None
-helpers_network.NoURLAvailableError = NoURLAvailableError
-helpers_dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-helpers_dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-helpers_event.async_call_later = lambda *args, **kwargs: None
-helpers_entity.DeviceInfo = lambda **kwargs: kwargs
-
-
-class _FakeEntity:  # pragma: no cover - import-time stub only
-    def __init__(self, *args, **kwargs) -> None:
-        self.hass = kwargs.get("hass")
-
-
-helpers_entity.Entity = _FakeEntity
-util_dt.utcnow = _utcnow
-util.dt = util_dt
-
-components.webhook = webhook
-components.webhook.async_generate_url = _webhook_url
-homeassistant.components = components
-homeassistant.core = core
-homeassistant.config_entries = config_entries
-homeassistant.helpers = helpers
-homeassistant.util = util
-sys.modules["homeassistant.components.webhook"] = webhook
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.components"] = components
-sys.modules["homeassistant.core"] = core
-sys.modules["homeassistant.helpers"] = helpers
-sys.modules["homeassistant.helpers.config_validation"] = helpers_config_validation
-sys.modules["homeassistant.helpers.dispatcher"] = helpers_dispatcher
-sys.modules["homeassistant.helpers.event"] = helpers_event
-sys.modules["homeassistant.helpers.entity"] = helpers_entity
-sys.modules["homeassistant.helpers.entity_registry"] = helpers_entity_registry
-sys.modules["homeassistant.helpers.issue_registry"] = helpers_issue_registry
-sys.modules["homeassistant.helpers.network"] = helpers_network
-sys.modules["homeassistant.util"] = util
-sys.modules["homeassistant.util.dt"] = util_dt
 
 from custom_components.bticino_c300x import (  # noqa: E402
     agent_diagnostics as agent_diagnostics_module,
@@ -176,6 +82,25 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
 )  # pylint: disable=wrong-import-position
 
 _REQUEST_CONTENT_LENGTH_AUTO = object()
+
+
+@pytest.fixture(autouse=True)
+def webhook_ha_boundary(monkeypatch):
+    from homeassistant.helpers import dispatcher, event
+
+    from custom_components.bticino_c300x import repair_issues
+
+    monkeypatch.setattr(webhook, "async_generate_url", _webhook_url)
+    monkeypatch.setattr(webhook, "async_generate_path", lambda key: f"/webhook/{key}")
+    monkeypatch.setattr(webhook, "async_register", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook, "async_unregister", lambda *args: None)
+    monkeypatch.setattr(webhook_module, "async_dispatcher_send", lambda *_: None)
+    monkeypatch.setattr(agent_diagnostics_module, "async_dispatcher_send", lambda *_: None)
+    monkeypatch.setattr(dispatcher, "async_dispatcher_send", lambda *_: None)
+    monkeypatch.setattr(event, "async_call_later", lambda *_: lambda: None)
+    monkeypatch.setattr(repair_issues.ir, "async_create_issue", lambda *args, **kwargs: None)
+    monkeypatch.setattr(repair_issues.ir, "async_delete_issue", lambda *args, **kwargs: None)
+    monkeypatch.setattr(webhook_module.dt_util, "utcnow", _utcnow)
 
 
 class _FakeRequestContent:

@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("module", ["test_executor", "test_init_runtime", "test_config_flow_helpers", "test_config_flow_forms", "test_camera"])
+@pytest.mark.parametrize("module", ["test_executor", "test_init_runtime", "test_config_flow_helpers", "test_config_flow_forms", "test_camera", "test_events", "test_agent_update_repairs", "test_webhook"])
 def test_unit_tests_preserve_home_assistant_modules(module):
     result = subprocess.run(
         [
@@ -23,14 +23,14 @@ import pytest
 
 attributes = {
     "homeassistant.config_entries": ("ConfigEntry",),
-    "homeassistant.core": ("HomeAssistant", "callback"),
+    "homeassistant.core": ("HomeAssistant", "callback", "ServiceCall"),
     "homeassistant.exceptions": ("HomeAssistantError", "ServiceValidationError"),
     "homeassistant.helpers.selector": ("SelectSelector", "EntitySelector"),
     "homeassistant.helpers.config_validation": ("ensure_list",),
     "homeassistant.helpers.dispatcher": ("async_dispatcher_send",),
     "homeassistant.helpers.aiohttp_client": ("async_get_clientsession",),
     "homeassistant.components.http": ("HomeAssistantView",),
-    "homeassistant.components.webhook": ("async_register",),
+    "homeassistant.components.webhook": ("async_register", "async_generate_url", "async_generate_path"),
     "homeassistant.helpers": ("selector",),
 }
 modules = {name: importlib.import_module(name) for name in attributes}

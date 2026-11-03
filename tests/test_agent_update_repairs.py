@@ -8,62 +8,7 @@ from typing import Any
 
 import pytest
 
-homeassistant = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
-homeassistant.__path__ = []
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-components.__path__ = []
-repairs_module = types.ModuleType("homeassistant.components.repairs")
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
-
-
-class RepairsFlow:  # pragma: no cover - import-time stub only
-    pass
-
-
-class HomeAssistant:  # pragma: no cover - import-time stub only
-    pass
-
-
-class ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-repairs_module.RepairsFlow = RepairsFlow
-core.HomeAssistant = HomeAssistant
-core.callback = lambda func: func
-config_entries.ConfigEntry = ConfigEntry
 IGNORED_ISSUES: list[tuple[str, str, bool]] = []
-issue_registry.async_delete_issue = lambda **_kwargs: None
-issue_registry.async_ignore_issue = (
-    lambda hass, domain, issue_id, ignore: IGNORED_ISSUES.append(
-        (domain, issue_id, ignore)
-    )
-)
-config_validation.config_entry_only_config_schema = lambda _domain: dict
-dispatcher.async_dispatcher_send = lambda *_args, **_kwargs: None
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.issue_registry = issue_registry
-sys.modules["homeassistant.components.repairs"] = repairs_module
-sys.modules["homeassistant.core"] = core
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.helpers.config_validation"] = config_validation
-sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
 
 from custom_components.bticino_c300x.api import C300XAgentApiError  # noqa: E402
 from custom_components.bticino_c300x.const import (  # noqa: E402
@@ -315,8 +260,17 @@ class FakeSelfUpdateState:
         }
 
 
-def setup_function() -> None:
+@pytest.fixture(autouse=True)
+def repair_ha_boundary(monkeypatch):
+    from custom_components.bticino_c300x import repairs
+
     IGNORED_ISSUES.clear()
+    monkeypatch.setattr(repairs, "async_dispatcher_send", lambda *_: None)
+    monkeypatch.setattr(repairs.ir, "async_delete_issue", lambda **_: None)
+    monkeypatch.setattr(
+        repairs.ir, "async_ignore_issue",
+        lambda hass, domain, issue_id, ignore: IGNORED_ISSUES.append((domain, issue_id, ignore)),
+    )
 
 
 def test_create_fix_flow_routes_known_issues() -> None:

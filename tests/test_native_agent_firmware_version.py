@@ -17,9 +17,7 @@ def test_native_agent_reads_firmware_from_stock_webserver_db() -> None:
 
 def test_native_agent_uses_configured_firmware_before_stock_fallback() -> None:
     source = HTTP_C.read_text(encoding="utf-8")
-    resolver_start = source.index("static void resolve_device_firmware(")
-    resolver_end = source.index("static int path_parent_inplace", resolver_start)
-    resolver = source[resolver_start:resolver_end]
+    resolver = source.rsplit("static void resolve_device_firmware(", 1)[1].split("\n}", 1)[0]
 
     configured_index = resolver.index("config->device_firmware[0] != '\\0'")
     fallback_index = resolver.index("read_firmware_from_webserver_db(out, out_len)")

@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+int constant_time_equal(const char *left, size_t left_len, const char *right);
+
 void c300x_copy_string(char *dest, size_t dest_len, const char *value);
 int c300x_join_path(char *dest, size_t dest_len, const char *path, const char *name);
 int c300x_join_suffix(char *dest, size_t dest_len, const char *base, const char *suffix);

@@ -750,27 +750,19 @@ def test_native_self_update_apply_matches_staged_manifest_files() -> None:
     assert '"device_agent/init/c300x-native-agent"' in update_paths
 
 
+def _native_update_function(name: str) -> str:
+    source = (ROOT / "native_agent/src/agent_update.c").read_text(encoding="utf-8")
+    return source.rsplit(f"int {name}(", 1)[1].split("\n}", 1)[0]
+
+
 def test_native_self_update_reserves_external_patch_scripts_without_staging() -> None:
     """Carrier agent can receive future patch scripts without packaging them yet."""
 
-    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
     update_paths = (ROOT / "native_agent/src/agent_update_paths.h").read_text(encoding="utf-8")
-    safe_path = native_http.split("static int safe_agent_update_path", 1)[1].split(
-        "static int agent_update_stage_path",
-        1,
-    )[0]
-    target_path = native_http.split("static int agent_update_target_path", 1)[1].split(
-        "static int read_agent_bundle_metadata",
-        1,
-    )[0]
-    apply_file = native_http.split("static int apply_agent_update_file", 1)[1].split(
-        "static int render_agent_init_script",
-        1,
-    )[0]
-    apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
-        "static void handle_agent_update_apply",
-        1,
-    )[0]
+    safe_path = _native_update_function("safe_agent_update_path")
+    target_path = _native_update_function("agent_update_target_path")
+    apply_file = _native_update_function("apply_agent_update_file")
+    apply_files = _native_update_function("apply_agent_update_files")
 
     assert "c300x_agent_update_file_path(path)" in safe_path
     assert "c300x_agent_update_patch_path(bundle_path)" in target_path
@@ -787,15 +779,8 @@ def test_native_self_update_reserves_external_patch_scripts_without_staging() ->
 def test_native_self_update_apply_repairs_existing_startup_link() -> None:
     """Self-update keeps legacy bundles compatible but still repairs rc startup."""
 
-    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
-    apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
-        "static void handle_agent_update_apply",
-        1,
-    )[0]
-    repair = native_http.split(
-        "static int repair_agent_init_link_after_update",
-        1,
-    )[1].split("static int apply_agent_update_files", 1)[0]
+    apply_files = _native_update_function("apply_agent_update_files")
+    repair = _native_update_function("repair_agent_init_link_after_update")
 
     assert "repair_agent_init_link_after_update(summary)" in apply_files
     assert "agent_init_link_matches()" in repair
@@ -806,15 +791,8 @@ def test_native_self_update_apply_repairs_existing_startup_link() -> None:
 def test_native_self_update_restarts_when_running_binary_is_stale() -> None:
     """Self-update must not trust bundle.json when the old process is still running."""
 
-    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
-    stale_check = native_http.split(
-        "static int running_agent_binary_differs_from_update_manifest",
-        1,
-    )[1].split("static int apply_agent_update_file", 1)[0]
-    apply_files = native_http.split("static int apply_agent_update_files", 1)[1].split(
-        "static void handle_agent_update_apply",
-        1,
-    )[0]
+    stale_check = _native_update_function("running_agent_binary_differs_from_update_manifest")
+    apply_files = _native_update_function("apply_agent_update_files")
 
     assert '"/proc/self/exe"' in stale_check
     assert "c300x_sha256_file_hex" in stale_check
@@ -826,15 +804,8 @@ def test_native_self_update_restarts_when_running_binary_is_stale() -> None:
 def test_native_agent_startup_link_check_accepts_relative_rc_links() -> None:
     """Stock rc links are usually relative but still point to the same init script."""
 
-    native_http = (ROOT / "native_agent/src/http.c").read_text(encoding="utf-8")
-    link_check = native_http.split(
-        "static int agent_init_link_matches(void)\n{",
-        1,
-    )[1].split("static int apply_agent_update_init_script", 1)[0]
-    ensure_link = native_http.split(
-        "static int ensure_agent_init_link",
-        1,
-    )[1].split("static int agent_init_link_matches", 1)[0]
+    link_check = _native_update_function("agent_init_link_matches")
+    ensure_link = _native_update_function("ensure_agent_init_link")
 
     assert "realpath(C300X_AGENT_INIT_LINK, resolved)" in link_check
     assert "strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0" in link_check

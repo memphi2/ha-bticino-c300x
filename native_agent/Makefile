@@ -33,7 +33,7 @@ ARMHF_PTHREAD_LDFLAGS := -Wl,--no-as-needed -l:libpthread.so.0 -l:libdl.so.2
 endif
 ARMHF_LDFLAGS ?= -pthread $(ARMHF_PTHREAD_LDFLAGS) -nostartfiles
 
-.PHONY: all armhf armhf-abi-check armhf-stack-check check smoke clean
+.PHONY: all armhf armhf-abi-check armhf-stack-check check smoke clean FORCE
 
 all: $(TARGET)
 
@@ -57,13 +57,23 @@ $(TARGET): $(OBJECTS)
 $(ARMHF_TARGET): $(ARMHF_OBJECTS)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -o $@ $(ARMHF_OBJECTS) $(ARMHF_LDFLAGS)
 
-$(HOST_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(HOST_BUILD_DIR)
+$(HOST_BUILD_DIR)/build-settings: FORCE | $(HOST_BUILD_DIR)
+	@printf '%s\n' '$(AGENT_VERSION)' '$(CC)' '$(CFLAGS)' '$(CURL_CPPFLAGS)' '$(LDFLAGS)' > $@.tmp
+	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+
+$(ARMHF_BUILD_DIR)/build-settings: FORCE | $(ARMHF_BUILD_DIR)
+	@printf '%s\n' '$(AGENT_VERSION)' '$(ARMHF_CC)' '$(ARMHF_CFLAGS)' '$(CURL_CPPFLAGS)' '$(ARMHF_LDFLAGS)' > $@.tmp
+	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+
+FORCE:
+
+$(HOST_BUILD_DIR)/%.o: src/%.c $(HEADERS) VERSION $(HOST_BUILD_DIR)/build-settings | $(HOST_BUILD_DIR)
 	$(CC) $(CFLAGS) $(CURL_CPPFLAGS) -c $< -o $@
 
-$(ARMHF_BUILD_DIR)/%.o: src/%.c $(HEADERS) | $(ARMHF_BUILD_DIR)
+$(ARMHF_BUILD_DIR)/%.o: src/%.c $(HEADERS) VERSION $(ARMHF_BUILD_DIR)/build-settings | $(ARMHF_BUILD_DIR)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) $(CURL_CPPFLAGS) -c $< -o $@
 
-$(ARMHF_BUILD_DIR)/arm_start.o: src/arm_start.S | $(ARMHF_BUILD_DIR)
+$(ARMHF_BUILD_DIR)/arm_start.o: src/arm_start.S $(ARMHF_BUILD_DIR)/build-settings | $(ARMHF_BUILD_DIR)
 	$(ARMHF_CC) $(ARMHF_CFLAGS) -c $< -o $@
 
 $(HOST_BUILD_DIR) $(ARMHF_BUILD_DIR):

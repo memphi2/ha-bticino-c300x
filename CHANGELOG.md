@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Cancel in-flight camera connection setup when the player closes or the camera
+  unloads, and clean up pending WebRTC sessions and Home Call starts.
+- Refresh stored-message metadata again when a newer change arrives during an
+  ongoing fetch, without adding periodic device polling.
+- Reject HTTP errors, empty responses and incomplete display callback headers
+  instead of reporting Home Assistant as connected. Requires an updated agent.
+- Rebuild the native agent when its version or build settings change, and reject
+  ABI checks when the verification tool fails or requirements cannot be read.
+- Scope Home Assistant test mocks to individual tests, removing global module
+  replacements that made combined and isolated test runs behave differently.
+
+### Changed
+
+- Group camera session ownership and separate native display callback transport,
+  update-file handling and shared file operations from HTTP orchestration.
+
 ## v2.0.0 - 2026-11-02
 
 ### Fixed

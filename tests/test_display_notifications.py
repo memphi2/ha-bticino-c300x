@@ -165,6 +165,8 @@ def test_action_allowlist_replacement_replay_and_dismiss(context):
         "[]",
         "{}",
         json.dumps({"revision": 1, "action_id": "delete"}),
+        json.dumps({"revision": True, "action_id": None}),
+        json.dumps({"revision": 1, "service": "delete"}),
     ):
         with pytest.raises(ValueError):
             asyncio.run(async_notification_action(hass, entry, "notice", invalid))
@@ -191,6 +193,27 @@ def test_disabled_and_unknown_actions_fail_without_side_effects(context):
     with pytest.raises(ValueError, match="display_disabled"):
         show_notification(hass, entry, data())
     assert not calls
+
+
+def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(context, monkeypatch):
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.bticino_c300x import services
+
+    async def run():
+        hass, entry, _ = context
+        monkeypatch.setattr(services, "_entry_for_call", lambda *_: entry)
+        handlers = services._C300XServiceHandlers(hass)
+        await handlers.async_show_display_notification(SimpleNamespace(data=data()))
+        assert len(notification_payload(entry)) == 1
+        await handlers.async_dismiss_display_notification(SimpleNamespace(data={"notification_id": "notice"}))
+        assert notification_payload(entry) == []
+        with pytest.raises(ServiceValidationError, match="unknown_notification_action"):
+            await handlers.async_show_display_notification(SimpleNamespace(data=data(actions=[{"action_id": "missing", "label": "X"}])))
+        entry.options["device_ui_enabled"] = False
+        with pytest.raises(ServiceValidationError, match="display_disabled"):
+            await handlers.async_dismiss_display_notification(SimpleNamespace(data={"notification_id": "notice"}))
+    asyncio.run(run())
 
 
 def test_concurrent_action_is_single_flight(context):

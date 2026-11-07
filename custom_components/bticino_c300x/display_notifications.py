@@ -229,6 +229,12 @@ async def async_notification_action(
         command = json.loads(option or "")
     except (ValueError, TypeError) as err:
         raise ValueError("invalid_notification_action") from err
+    if (
+        not isinstance(command, dict)
+        or set(command) != {"revision", "action_id"}
+        or type(command["revision"]) is not int
+    ):
+        raise ValueError("invalid_notification_action")
     item = next((item for item in store.payload() if item["id"] == key), None)
     if (
         not isinstance(command, dict)

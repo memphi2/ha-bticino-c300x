@@ -88,6 +88,13 @@ def dashboard_entity_custom_name_selector() -> Any:
     return selector.TextSelector(selector.TextSelectorConfig())
 
 
+def dashboard_entity_order_selector() -> Any:
+    """Return a bounded position input for a native display page."""
+    return selector.NumberSelector(selector.NumberSelectorConfig(
+        min=0, max=10000, step=1, mode=selector.NumberSelectorMode.BOX,
+    ))
+
+
 def dashboard_entity_secondary_info_selector() -> Any:
     """Return the selector for one dashboard entity secondary text."""
 

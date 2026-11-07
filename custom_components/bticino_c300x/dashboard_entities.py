@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -84,6 +85,22 @@ def normalize_dashboard_entity_display_overrides(
             or ""
         ).strip()
         custom_name = str(raw_options.get("custom_name", "") or "").strip()
+        page = str(raw_options.get("page", "") or "").strip()
+        if page:
+            if len(page) > 60 or any(ord(char) < 32 for char in page):
+                if strict:
+                    raise ValueError("invalid dashboard page name")
+            else:
+                options["page"] = page
+        if "order" in raw_options:
+            try:
+                order = float(raw_options["order"])
+                if isinstance(raw_options["order"], bool) or not math.isfinite(order) or not order.is_integer() or not 0 <= order <= 10000:
+                    raise ValueError("invalid dashboard order")
+                options["order"] = str(int(order))
+            except (TypeError, ValueError, OverflowError):
+                if strict:
+                    raise ValueError("invalid dashboard order") from None
         if name:
             if name not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
                 if strict:

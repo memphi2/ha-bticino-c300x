@@ -198,6 +198,11 @@ async def async_dashboard_payload(
         )
         if dashboard_item is None:
             continue
+        layout = entity_display_overrides.get(entity_id, {})
+        if "page" in layout:
+            dashboard_item["_page"] = layout["page"]
+        if "order" in layout:
+            dashboard_item["_order"] = int(layout["order"])
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
 
@@ -254,6 +259,7 @@ def _alarm_page_entity(
         0,
         name_display=dashboard_entity_name_display_override(overrides, entity_id),
         custom_name=dashboard_entity_custom_name_override(overrides, entity_id),
+        secondary_info=dashboard_entity_secondary_info_override(overrides, entity_id),
         language=language,
     )
     if item is None:

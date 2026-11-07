@@ -1017,11 +1017,11 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
     )
     result = asyncio.run(
         flow.async_step_user_dashboard_entity_display(
-            {
+            entity_display_form["data_schema"]({
                 "1. Temperature - Name": "custom",
                 "1. Temperature - Custom name": "Outside",
                 "1. Temperature - Secondary line": "none",
-            }
+            })
         )
     )
 
@@ -2386,11 +2386,11 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     )
     result = asyncio.run(
         flow.async_step_dashboard_entity_display(
-            {
+            entity_options_form["data_schema"]({
                 "1. Entry - Name": "custom",
                 "1. Entry - Custom name": "Entry",
                 "1. Entry - Secondary line": "state",
-            }
+            })
         )
     )
 
@@ -2562,11 +2562,11 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     )
     result = asyncio.run(
         flow.async_step_reconfigure_dashboard_entity_display(
-            {
+            entity_display_form["data_schema"]({
                 "1. Forwarding - Name": "friendly_name",
                 "1. Forwarding - Custom name": "",
                 "1. Forwarding - Secondary line": "last_changed",
-            }
+            })
         )
     )
 

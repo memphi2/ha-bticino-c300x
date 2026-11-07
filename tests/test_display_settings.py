@@ -1,0 +1,157 @@
+"""Native display layout forms preserve older selections and infer controls."""
+
+import asyncio
+from types import SimpleNamespace
+
+import pytest
+
+from custom_components.bticino_c300x.config_flow_dashboard import (
+    dashboard_display_entity_ids,
+    dashboard_entity_display_overrides_from_fields,
+    dashboard_entity_display_schema,
+    dashboard_input_defaults,
+)
+from custom_components.bticino_c300x.dashboard import (
+    async_dashboard_payload,
+    async_status,
+)
+from custom_components.bticino_c300x.dashboard_entities import (
+    normalize_dashboard_entity_display_overrides,
+)
+
+
+def test_layout_fields_roundtrip_and_clear_without_losing_names():
+    old = {
+        "light.room": {
+            "name": "custom",
+            "custom_name": "Desk",
+            "secondary": "none",
+            "page": "Study",
+            "order": "5",
+        }
+    }
+    schema = dashboard_entity_display_schema(["light.room"], old)
+    posted = schema({})
+    assert posted["1. Room - Page"] == "Study"
+    assert posted["1. Room - Position"] == 5
+    result = dashboard_entity_display_overrides_from_fields(posted, ["light.room"], old)
+    assert normalize_dashboard_entity_display_overrides(result, strict=True) == old
+    posted["1. Room - Page"] = ""
+    posted["1. Room - Position"] = 10
+    result = dashboard_entity_display_overrides_from_fields(posted, ["light.room"], old)
+    assert result == {
+        "light.room": {"name": "custom", "custom_name": "Desk", "secondary": "none"}
+    }
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"page": "x" * 61},
+        {"page": "a\nb"},
+        {"order": "NaN"},
+        {"order": True},
+        {"order": -1},
+        {"order": 10001},
+        {"order": 1.5},
+    ],
+)
+def test_invalid_layout_rejected_without_corrupting_saved_data(options):
+    with pytest.raises(ValueError):
+        normalize_dashboard_entity_display_overrides(
+            {"light.room": options}, strict=True
+        )
+    assert normalize_dashboard_entity_display_overrides({"light.room": options}) == {}
+
+
+def test_quick_action_settings_do_not_add_an_overview_entity():
+    data = {
+        "device_ui_enabled": True,
+        "dashboard_entities": [],
+        "alarm_page_entity_id": "button.porch",
+    }
+    ids = dashboard_display_entity_ids(data)
+    assert ids == ["button.porch"]
+    schema = dashboard_entity_display_schema(ids, layout_entity_ids=[])
+    values = schema({"1. Porch - Name": "custom", "1. Porch - Custom name": "Porch"})
+    assert "1. Porch - Page" not in values
+    configured = dashboard_input_defaults({**data, **values})
+    assert configured["dashboard_entities"] == []
+    assert configured["dashboard_entity_display_overrides"] == {
+        "button.porch": {"name": "custom", "custom_name": "Porch"}
+    }
+    assert dashboard_display_entity_ids({**data, "dashboard_entities": ids}) == ids
+
+
+def test_pages_and_positions_are_applied_without_changing_capabilities():
+    states = {
+        "light.one": SimpleNamespace(
+            state="on", attributes={"supported_color_modes": ["onoff"]}
+        ),
+        "light.two": SimpleNamespace(
+            state="off", attributes={"supported_color_modes": ["onoff"]}
+        ),
+        "cover.shade": SimpleNamespace(
+            state="closed", attributes={"supported_features": 15}
+        ),
+        "button.porch": SimpleNamespace(state="unknown", attributes={}),
+    }
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
+    )
+    entry = SimpleNamespace(
+        entry_id="entry",
+        title="Door",
+        data={},
+        options={
+            "device_ui_enabled": True,
+            "dashboard_entities": ["light.one", "light.two", "cover.shade"],
+            "alarm_page_entity_id": "button.porch",
+            "dashboard_entity_display_overrides": {
+                "light.one": {"page": "Room", "order": "20"},
+                "light.two": {"page": "Room", "order": "10"},
+                "cover.shade": {"page": "Outside"},
+                "button.porch": {"name": "custom", "custom_name": "Outside light"},
+            },
+        },
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    pages = {page["title"]: page for page in payload["data"]["pages"]}
+    assert list(pages) == ["C300X", "Room", "Outside"]
+    assert [item["entity_id"] for item in pages["Room"]["items"]] == [
+        "light.two",
+        "light.one",
+    ]
+    assert pages["Outside"]["items"][0]["controls"][0]["command"] == "open_cover"
+    status = asyncio.run(async_status(hass, entry))
+    assert status["alarm_page_entity"]["name"] == "Outside light"
+    assert all(
+        item["entity_id"] != "button.porch"
+        for page in pages.values()
+        for item in page.get("items", [])
+    )
+
+
+@pytest.mark.parametrize(
+    ("secondary", "expected"),
+    [("none", ""), ("entity_id", "light.porch"), ("state", "On")],
+)
+def test_quick_entity_honors_secondary_line_without_overview_selection(secondary, expected):
+    state = SimpleNamespace(state="on", attributes={"friendly_name": "Porch"})
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=lambda entity_id: state if entity_id == "light.porch" else None),
+        config=SimpleNamespace(language="en"),
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={
+            "device_ui_enabled": True,
+            "dashboard_entities": [],
+            "alarm_page_entity_id": "light.porch",
+            "dashboard_entity_display_overrides": {
+                "light.porch": {"secondary": secondary},
+            },
+        },
+    )
+    status = asyncio.run(async_status(hass, entry))
+    assert status["alarm_page_entity"]["state_label"] == expected

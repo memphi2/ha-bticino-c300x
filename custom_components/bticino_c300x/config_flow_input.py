@@ -55,6 +55,7 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -483,6 +484,9 @@ def _feature_input(
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: device_activation_stair_light_p,
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: device_activation_stair_light_n,
             CONF_VIDEO_ENABLED: media_enabled,
+            CONF_NATIVE_TWO_WAY_AUDIO: (
+                media_enabled and user_input.get(CONF_NATIVE_TWO_WAY_AUDIO, False) is True
+            ),
             CONF_CREATE_HOMEASSISTANT_USER: (
                 bool(
                     user_input.get(

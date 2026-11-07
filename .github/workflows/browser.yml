@@ -3,7 +3,7 @@ name: Card Browser
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, beta]
   workflow_call:
     inputs:
       ref:

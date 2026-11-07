@@ -45,7 +45,11 @@
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter"
+          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "native_two_way_audio": "Two-way audio in the HA camera player"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
       "user_device_activations": {
@@ -110,7 +114,11 @@
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter"
+          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "native_two_way_audio": "Two-way audio in the HA camera player"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
       "reconfigure_device_activations": {
@@ -201,7 +209,11 @@
           "create_homeassistant_user": "Create Home Assistant media user for these features",
           "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
           "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter"
+          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "native_two_way_audio": "Two-way audio in the HA camera player"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
       "device_activations": {
@@ -608,7 +620,7 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "C300X media setup can be repaired",
+      "title": "C300X media setup checks failed: {failed_checks}",
       "fix_flow": {
         "step": {
           "confirm": {

@@ -496,7 +496,9 @@ def _sync_media_setup_repair_issue(hass: HomeAssistant, entry: BticinoC300XConfi
         return
     readiness = media_readiness(entry)
     failed = readiness.get("failed_checks")
-    if readiness.get("status") not in {"blocked", "unavailable"} or not isinstance(
+    # Connection recovery is automatic; an offline agent does not prove that
+    # its media setup needs repair. Keep outages in the availability state.
+    if readiness.get("status") != "blocked" or not isinstance(
         failed,
         list,
     ):

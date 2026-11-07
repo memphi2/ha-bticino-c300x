@@ -24,7 +24,12 @@ from propcache.api import cached_property
 from .agent_diagnostics import publish_agent_media_facts
 from .camera_media import webrtc_debug as _webrtc_debug
 from .camera_media.background_tasks import CameraBackgroundTasks
-from .camera_media.ha_compat import CameraEntityFeature, WebRTCError, WebRTCSendMessage
+from .camera_media.ha_compat import (
+    CameraEntityCapabilities,
+    CameraEntityFeature,
+    WebRTCError,
+    WebRTCSendMessage,
+)
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
 )
@@ -78,6 +83,7 @@ from .camera_media.webrtc_session import (
 )
 from .const import (
     CONF_AGENT_HOST,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_VIDEO_PORT,
     CONF_VIDEO_STREAM_PATH,
     DEFAULT_VIDEO_PORT,
@@ -1426,6 +1432,14 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             self._video_stream_path = str(status["stream_path"])
         self._audio_stream_path = optional_string(status.get("audio_stream_path"))
         self._recorder_stream_path = optional_string(status.get("recorder_stream_path"))
+        if CameraEntityCapabilities is not None:
+            self._attr_camera_entity_capabilities = CameraEntityCapabilities(
+                two_way_audio=(
+                    entry_config_value(self._entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
+                    and self._bridge_status.get("talkback_supported") is True
+                    and bool(self._audio_stream_path)
+                )
+            )
         self._refresh_derived_media_state()
 
     async def async_added_to_hass(self) -> None:

@@ -245,7 +245,7 @@ def test_release_tag_checker_matches_current_metadata() -> None:
         )
 
     assert checker.validate_release_tag(version) == [
-        f"release tag must use vX.Y.Z format, got {version!r}"
+        f"release tag must use vX.Y.Z, vX.Y.ZbN or vX.Y.ZrcN format, got {version!r}"
     ]
 
 
@@ -351,9 +351,11 @@ def test_native_agent_release_gate_accepts_matching_version_bump() -> None:
     )
 
 
+@pytest.mark.parametrize("tag", ["v1.6.2", "v2.1.0b1", "v2.1.0rc1"])
 def test_release_assets_are_reproducible_for_same_zip(
     tmp_path: Path,
     monkeypatch,
+    tag: str,
 ) -> None:
     writer = _load_release_assets()
     monkeypatch.delenv("C300X_DEVICE_SYSROOT", raising=False)
@@ -373,7 +375,7 @@ def test_release_assets_are_reproducible_for_same_zip(
     for output_dir in (first, second):
         writer.write_release_assets(
             zip_path=zip_path,
-            tag="v1.6.2",
+            tag=tag,
             repository="example/repo",
             sha256sums_path=output_dir / "SHA256SUMS",
             metadata_path=output_dir / "build-metadata.json",
@@ -389,11 +391,11 @@ def test_release_assets_are_reproducible_for_same_zip(
     assert (first / "SHA256SUMS").read_bytes() == (second / "SHA256SUMS").read_bytes()
 
     metadata = json.loads((first / "build-metadata.json").read_text(encoding="utf-8"))
-    assert metadata["release_tag"] == "v1.6.2"
+    assert metadata["release_tag"] == tag
     assert metadata["repository"] == "example/repo"
     assert metadata["device_agent_bundle"]["bundle_hash"] == "bundle-sha"
     assert metadata["lts_evidence"] == {
-        "release": "v1.6.2",
+        "release": tag,
         "min_homeassistant": "2026.7.0",
         "current_homeassistant": "2026.10.0",
         "validated_homeassistant": ["2026.7.0", "2026.10.0"],
@@ -430,7 +432,7 @@ def test_release_assets_are_reproducible_for_same_zip(
     package = sbom["packages"][0]
     assert package["packageFileName"] == "ha-bticino-c300x.zip"
     assert package["downloadLocation"].endswith(
-        "/releases/download/v1.6.2/ha-bticino-c300x.zip"
+        f"/releases/download/{tag}/ha-bticino-c300x.zip"
     )
     with zipfile.ZipFile(zip_path) as archive:
         file_sha1s = []
@@ -559,25 +561,29 @@ def test_release_metadata_records_native_sysroot_evidence(
     assert "path" not in sysroot_evidence
 
 
+@pytest.mark.parametrize("version", ["0.3.1", "2.1.0b1", "2.1.0rc1"])
 def test_staged_self_update_bundle_contains_agent_managed_files(
     tmp_path: Path,
     monkeypatch,
+    version: str,
 ) -> None:
     stager = _load_bundle_stager()
     component_dir = tmp_path / "bticino_c300x"
     agent_binary = tmp_path / "c300x-agent-native"
     version_file = tmp_path / "VERSION"
     agent_binary.write_bytes(b"agent")
-    version_file.write_text("0.3.1\n", encoding="utf-8")
+    version_file.write_text(f"{version}\n", encoding="utf-8")
     monkeypatch.setattr(stager, "AGENT_BINARY", agent_binary)
     monkeypatch.setattr(stager, "AGENT_VERSION_FILE", version_file)
 
-    stager.stage_bundle(component_dir, version="0.3.1", skip_build=True)
+    stager.stage_bundle(component_dir, version=version, skip_build=True)
 
     bundle = json.loads(
         (component_dir / "device_agent" / "bundle.json").read_text(encoding="utf-8")
     )
     paths = {entry["path"] for entry in bundle["files"]}
+    assert bundle["integration_version"] == version
+    assert bundle["agent_version"] == version
     assert bundle["update_file_set_version"] == 2
     probe = tmp_path / "update_paths.c"
     probe.write_text(

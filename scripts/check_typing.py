@@ -141,6 +141,8 @@ STRICT_TARGETS = (
     "scripts/extract_pcap_fingerprint.py",
     "scripts/ha_https_proxy.py",
     "scripts/manifest_version.py",
+    "scripts/publish_release.py",
+    "scripts/release_version.py",
     "scripts/smoke_ha.py",
     "scripts/stage_device_agent_bundle.py",
     "scripts/update_frontend_hashes.py",

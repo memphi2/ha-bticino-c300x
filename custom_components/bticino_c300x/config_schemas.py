@@ -29,6 +29,7 @@ from .const import (
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_VIDEO_ENABLED,
@@ -62,6 +63,7 @@ def setup_features_schema(
     default_create_homeassistant_user: bool = CREATE_HOMEASSISTANT_USER_DEFAULT,
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
+    default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
     """Return the initial setup feature schema."""
 
@@ -70,6 +72,7 @@ def setup_features_schema(
         default_create_homeassistant_user=default_create_homeassistant_user,
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
+        default_native_two_way_audio=default_native_two_way_audio,
     )
 
 
@@ -184,6 +187,7 @@ def reconfigure_features_schema(
     default_doorstation_audio_gain_db: float = DEFAULT_DOORSTATION_AUDIO_GAIN_DB,
     default_ring_capture_audio_gain_db: float = DEFAULT_RING_CAPTURE_AUDIO_GAIN_DB,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
+    default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
     """Return the reconfigure feature schema."""
 
@@ -193,6 +197,7 @@ def reconfigure_features_schema(
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
+        default_native_two_way_audio=default_native_two_way_audio,
     )
 
 
@@ -341,11 +346,15 @@ def _media_feature_schema(
     default_doorstation_audio_gain_db: float,
     default_ring_capture_audio_gain_db: float,
     default_webrtc_ice_policy: str = DEFAULT_WEBRTC_ICE_POLICY,
+    default_native_two_way_audio: bool = False,
 ) -> vol.Schema:
     fields: dict[Any, Any] = {
         vol.Optional(CONF_VIDEO_ENABLED, default=default_video_enabled): bool,
     }
     if default_video_enabled:
+        fields[
+            vol.Optional(CONF_NATIVE_TWO_WAY_AUDIO, default=default_native_two_way_audio)
+        ] = bool
         fields[
             vol.Optional(
                 CONF_CREATE_HOMEASSISTANT_USER,

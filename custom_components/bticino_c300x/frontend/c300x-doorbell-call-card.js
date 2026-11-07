@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=6459accc08c815c8";
+} from "./c300x-translations.js?v=f4c5677a314448fd";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,23 +15,23 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=6459accc08c815c8";
+} from "./c300x-entity-resolver.js?v=f4c5677a314448fd";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=6459accc08c815c8";
-import { C300XCardActions } from "./c300x-card-actions.js?v=6459accc08c815c8";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=6459accc08c815c8";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=6459accc08c815c8";
+} from "./c300x-card-editor.js?v=f4c5677a314448fd";
+import { C300XCardActions } from "./c300x-card-actions.js?v=f4c5677a314448fd";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=f4c5677a314448fd";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=f4c5677a314448fd";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=6459accc08c815c8";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=6459accc08c815c8";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=6459accc08c815c8";
+} from "./c300x-state-model.js?v=f4c5677a314448fd";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=f4c5677a314448fd";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=f4c5677a314448fd";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -267,6 +267,7 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._micIconEl = root.querySelector(".mic-icon");
     this._doorButtonEl = root.querySelector(".door-action");
     this._lightButtonEl = root.querySelector(".light-action");
+    this._deviceActionsEl = root.querySelector(".device-actions");
     this._titleEl = root.querySelector(".title");
     this._secondaryEl = root.querySelector(".secondary");
     this._readinessEl = root.querySelector(".readiness");
@@ -305,7 +306,8 @@ class C300XDoorbellCallCard extends HTMLElement {
       cameraState: entity?.state || "",
       deviceActions: ["door_unlock", "stair_light"].map((key) => {
         const id = this._deviceActionEntity(key);
-        return [id, this._hass?.states?.[id]?.state, this._actions.deviceActionPending(key)];
+        return [id, this._hass?.states?.[id]?.state, this._actions.deviceActionPending(key),
+          this._config?.[`show_${key}`] !== false];
       }),
       language: this._hass?.language || this._hass?.locale?.language || "en",
       error: this._error || "",
@@ -1223,14 +1225,18 @@ class C300XDoorbellCallCard extends HTMLElement {
   }
 
   _updateDeviceActionButtons() {
+    this._deviceActionsEl.classList.toggle("hidden",
+      this._config?.show_door_unlock === false && this._config?.show_stair_light === false);
     for (const [key, button] of [["door_unlock", this._doorButtonEl], ["stair_light", this._lightButtonEl]]) {
+      const visible = this._config?.[`show_${key}`] !== false;
       const entityId = this._deviceActionEntity(key);
       const pending = this._actions.deviceActionPending(key);
       const label = this._label(key);
       button.title = label;
       button.setAttribute("aria-label", label);
       button.setAttribute("aria-busy", String(pending));
-      button.disabled = !entityId || !this._hass?.callService || pending
+      button.classList.toggle("hidden", !visible);
+      button.disabled = !visible || !entityId || !this._hass?.callService || pending
         || this._hass.states[entityId].state === "unavailable";
     }
   }

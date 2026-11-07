@@ -46,6 +46,7 @@ from .const import (
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_VIDEO_ENABLED,
     CONF_VIDEO_PORT,
@@ -116,6 +117,7 @@ def options_features_schema(
     video_enabled: bool | None = None,
     create_homeassistant_user: bool | None = None,
     webrtc_ice_policy: str | None = None,
+    native_two_way_audio: bool | None = None,
 ) -> vol.Schema:
     """Return the second options page schema."""
 
@@ -160,6 +162,11 @@ def options_features_schema(
         default_doorstation_audio_gain_db=default_doorstation_audio_gain_db,
         default_ring_capture_audio_gain_db=default_ring_capture_audio_gain_db,
         default_webrtc_ice_policy=default_webrtc_ice_policy,
+        default_native_two_way_audio=(
+            _config_default(config_entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
+            if native_two_way_audio is None
+            else native_two_way_audio
+        ),
     )
 
 
@@ -219,6 +226,9 @@ def current_feature_options(
         ),
         CONF_VIDEO_ENABLED: bool(
             _config_default(config_entry, CONF_VIDEO_ENABLED, False)
+        ),
+        CONF_NATIVE_TWO_WAY_AUDIO: (
+            _config_default(config_entry, CONF_NATIVE_TWO_WAY_AUDIO, False) is True
         ),
         CONF_VIDEO_PORT: int(
             _config_default(config_entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT)
@@ -323,6 +333,7 @@ def reconfigure_features_schema_from_current(
         default_webrtc_ice_policy=webrtc_ice_policy_or_default(
             current[CONF_WEBRTC_ICE_POLICY]
         ),
+        default_native_two_way_audio=current[CONF_NATIVE_TWO_WAY_AUDIO],
     )
 
 
@@ -333,6 +344,7 @@ def feature_input_defaults(
     """Return feature input with hidden display fields preserved when absent."""
 
     data = dict(user_input)
+    data.setdefault(CONF_NATIVE_TWO_WAY_AUDIO, defaults.get(CONF_NATIVE_TWO_WAY_AUDIO, False))
     if CONF_CREATE_HOMEASSISTANT_USER not in data:
         media_was_enabled = bool(defaults.get(CONF_VIDEO_ENABLED, False))
         media_enabled = bool(data.get(CONF_VIDEO_ENABLED, media_was_enabled))

@@ -8,6 +8,39 @@ for normal users.
 Validate that the current Home Assistant integration, bundled Lovelace card and
 packaged C300X device agent work together on a real C300X.
 
+## Stable and Beta Channels
+
+- Stable: `X.Y.Z`, tagged `vX.Y.Z`.
+- Beta: `X.Y.ZbN`, tagged `vX.Y.ZbN`, starting at `b1`.
+- Release candidate: `X.Y.ZrcN`, tagged `vX.Y.ZrcN`, starting at `rc1`.
+
+Versions are canonical and shared by the integration manifest, project metadata,
+changelog and release notes. A beta label is not permission to skip validation.
+Both channels require the tagged commit to be the validated `main` HEAD, the
+release checks, browser checks and verified provenance/SBOM attestations. The
+optional `beta` development branch runs normal Validate, Browser and CodeQL
+checks; it is not a shortcut around the main release gate.
+
+The publisher derives the channel from the tag. Beta/RC releases are marked
+as GitHub prereleases and explicitly excluded from Latest. New releases are
+drafts until their four downloaded assets match the validated local artifacts.
+Reruns verify existing assets, notes and channel without overwriting them;
+conflicts or API errors stop publication. Tags are checked against the source
+commit again immediately before publishing a draft.
+
+Each channel ships `ha-bticino-c300x.zip`, `SHA256SUMS`, `build-metadata.json`
+and `sbom.spdx.json`. The ZIP includes the frontend and device-agent bundle.
+Agent reuse and version-bump checks include preceding beta/RC tags, ordered
+numerically (`b2 < b10 < rc1 < stable`) and restricted to merged older versions.
+Changes to native inputs require an agent version bump and rebuild, including
+between two betas. Integration-only changes may retain the verified agent;
+never relabel an old binary to give it the integration's beta version.
+
+Prepare a new version and its dated notes only when that release is intended.
+Adding beta support or creating a development branch does not publish a beta.
+See [beta installation and return to stable](advanced-maintenance.md#beta-versions)
+for the user-facing opt-in workflow.
+
 ## Isolated Integration Tests
 
 `pytest tests/test_ha_runtime.py` starts real Home Assistant in a subprocess

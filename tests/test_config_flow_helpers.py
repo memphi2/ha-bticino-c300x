@@ -90,6 +90,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DEVICE_UI_ENABLED,
     CONF_DOORSTATION_AUDIO_GAIN_DB,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
@@ -2105,8 +2106,9 @@ def test_options_features_schema_never_contains_dashboard_fields() -> None:
     assert CONF_DASHBOARD_ENTITIES not in disabled_keys
     assert CONF_ACTIONS_JSON not in disabled_keys
     assert CONF_DASHBOARD_PREVENT_RETURN not in disabled_keys
-    assert enabled_keys[:4] == [
+    assert enabled_keys[:5] == [
         CONF_VIDEO_ENABLED,
+        CONF_NATIVE_TWO_WAY_AUDIO,
         CONF_CREATE_HOMEASSISTANT_USER,
         CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,

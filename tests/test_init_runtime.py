@@ -1200,6 +1200,16 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     assert state_unsubs == ["state"]
     assert dispatch_unsubs == ["dispatch"]
 
+    entry.options["alarm_page_entity_id"] = "switch.porch"
+    unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
+    before = len(calls)
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "switch.porch"}))
+    assert len(calls) == before + 1
+    dispatcher_callbacks[-1]()
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "switch.porch"}))
+    assert len(calls) == before + 3
+    unsubscribe()
+
 
 def test_display_bridge_tracking_skips_when_disabled_or_unconfigured() -> None:
     assert (

@@ -1318,14 +1318,7 @@ def test_async_status_returns_alarm_state_and_action_ids() -> None:
     assert result["alarm_configured"] is True
     assert result["dashboard_available"] is True
     assert result["actions"] == ["a", "b"]
-    assert result["alarm_page_entity"] == {
-        "kind": "button",
-        "domain": "c300x",
-        "entity_id": "stair_light",
-        "name": "stair_light",
-        "name_key": "stair_light",
-        "state_label": "",
-    }
+    assert result["alarm_page_entity"] is None
 
 
 def test_async_status_uses_configured_alarm_page_entity() -> None:

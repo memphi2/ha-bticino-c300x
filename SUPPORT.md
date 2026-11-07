@@ -2,7 +2,8 @@
 
 ## Supported Release Line
 
-- `2.0.x`: active
+- `2.0.x`: current stable
+- `2.1.x`: opt-in beta testing, beginning with `2.1.0b1`
 
 ## Compatibility Baseline
 

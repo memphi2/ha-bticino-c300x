@@ -711,21 +711,78 @@ def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -
     assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
 
 
-def test_offline_media_readiness_creates_fixable_media_setup_repair() -> None:
+@pytest.mark.parametrize("setup_failed", [False, True])
+def test_offline_media_readiness_does_not_create_setup_repair(
+    setup_failed: bool,
+) -> None:
+    connection_state = C300XConnectionState()
+    connection_state.mark_reconnecting("agent_api", 15, "Server disconnected")
+    connection_state.mark_unavailable()
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
-            connection_state=types.SimpleNamespace(available=False),
+            connection_state=connection_state,
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {"supported": True, "firewall_apply": True},
+            },
+            self_test_status=(
+                {
+                    "ok": False,
+                    "checks": {
+                        "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+                    },
+                }
+                if setup_failed
+                else {}
+            ),
         ),
     )
+    hass = FakeHass()
+    issue_id = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
 
-    async_sync_entry_repair_issues(FakeHass(), entry)
+    async_sync_entry_repair_issues(hass, entry)
 
-    issue = CREATED_ISSUES[
-        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
-    ]
-    assert issue["is_fixable"] is True
-    assert issue["translation_placeholders"]["fixable_checks"] == "agent_reachable"
+    assert repair_issues.media_readiness(entry)["status"] == "unavailable"
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
+
+    connection_state.mark_connected()
+    async_sync_entry_repair_issues(hass, entry)
+
+    if setup_failed:
+        issue = CREATED_ISSUES[issue_id]
+        assert issue["is_fixable"] is True
+        assert issue["translation_placeholders"]["failed_checks"] == "firewall"
+        assert issue["translation_placeholders"]["fixable_checks"] == "firewall"
+        entry.runtime_data.self_test_status = {
+            "ok": True,
+            "checks": {"firewall": {"ok": True}},
+        }
+        async_sync_entry_repair_issues(hass, entry)
+    assert issue_id not in CREATED_ISSUES
+
+
+def test_offline_media_setup_clears_existing_repair() -> None:
+    connection_state = C300XConnectionState()
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=connection_state,
+            capabilities={"doorbell_video": {"supported": True}},
+            self_test_status={"ok": False, "checks": {"rtsp": {"ok": False}}},
+        ),
+    )
+    hass = FakeHass()
+    issue_id = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    async_sync_entry_repair_issues(hass, entry)
+    assert issue_id in CREATED_ISSUES
+
+    connection_state.mark_unavailable()
+    async_sync_entry_repair_issues(hass, entry)
+
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
 
 
 def test_forwarding_choice_does_not_create_media_setup_repair() -> None:

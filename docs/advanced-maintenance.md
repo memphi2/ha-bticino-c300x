@@ -48,6 +48,32 @@ require a firmware patch or a GUI change. For availability, validation scope
 and the workaround for older agents, see
 [PCMU reboot troubleshooting](media-troubleshooting.md#device-reboots-after-pcmu-on-demand-video).
 
+## Beta Versions
+
+Betas use versions such as `2.1.0b1`; release candidates use `2.1.0rc1`.
+These are format examples, not a statement that either version is published.
+Prereleases use the same integration, card and packaged agent as stable releases,
+with no separate repository or duplicate config entry.
+
+To test an available prerelease:
+
+1. Back up Home Assistant and read the release's known limitations and agent
+   requirements. Device/media behavior still needs hardware testing.
+2. In Marketplace, enable this repository's **Pre-release** switch. In HACS,
+   open **Redownload**, enable beta versions and select the published version.
+3. Follow the normal [update steps](#updates), including the device-agent Repair
+   if offered. Installing the integration alone does not install its agent.
+
+Stable users do not receive betas automatically. Prereleases are offered only
+after opt-in and while newer than the latest regular release; see the official
+[Marketplace prerelease guidance](https://contributors.home-assistant.io/marketplace/guides/releases/#pre-releases).
+
+To leave the beta channel, disable prereleases. This does not itself downgrade
+an installed beta. Wait for the matching/newer stable version or explicitly
+select a compatible stable release after reading its downgrade guidance. Keep
+the existing integration entry. A Home Assistant backup does not restore the
+device-side agent; follow the selected release's agent requirements separately.
+
 ## Tokens
 
 Installer-based setup generates:

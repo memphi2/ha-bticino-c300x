@@ -138,6 +138,7 @@ from .const import (
     CONF_EVENT_WEBHOOK_ID,
     CONF_EVENT_WEBHOOK_TOKEN,
     CONF_MAINTENANCE_TOKEN,
+    CONF_NATIVE_TWO_WAY_AUDIO,
     CONF_RING_CAPTURE_AUDIO_GAIN_DB,
     CONF_ROTATE_SHARED_SECRET,
     CONF_SHARED_SECRET,
@@ -207,6 +208,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DEVICE_UI_ENABLED,
         CONF_DOORSTATION_AUDIO_GAIN_DB,
         CONF_MAINTENANCE_TOKEN,
+        CONF_NATIVE_TWO_WAY_AUDIO,
         CONF_RING_CAPTURE_AUDIO_GAIN_DB,
         CONF_VIDEO_ENABLED,
         CONF_VIDEO_PORT,
@@ -594,6 +596,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 _CREATE_HOMEASSISTANT_USER_DEFAULT,
                             )
                         ),
+                        default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
                     ),
                     errors=errors,
             )
@@ -941,6 +944,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 feature_defaults[CONF_WEBRTC_ICE_POLICY],
                             )
                         ),
+                        default_native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
                     ),
                     errors=errors,
                     description_placeholders=(
@@ -1325,6 +1329,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                                 feature_defaults[CONF_WEBRTC_ICE_POLICY],
                             )
                         ),
+                        native_two_way_audio=feature_data[CONF_NATIVE_TWO_WAY_AUDIO],
                     ),
                     errors=errors,
                     description_placeholders=(

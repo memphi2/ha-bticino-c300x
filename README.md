@@ -2,8 +2,8 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v2.0.0-0366d6?style=flat-square)](CHANGELOG.md)
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://www.hacs.xyz/)
+[![Release](https://img.shields.io/badge/prerelease-v2.1.0b1-0366d6?style=flat-square)](CHANGELOG.md)
+[![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 Local-first Home Assistant custom integration for the BTicino Classe 300X /
@@ -26,7 +26,8 @@ forwarding controls, messages and optional display pages.
 - Ring Call answer/hang-up from Home Assistant when forwarding is set to Home
   Assistant.
 - Audio-only Home Call from Home Assistant to the C300X display.
-- Talkback through the bundled C300X card.
+- Talkback through the bundled C300X card. Optional native HA camera talkback
+  requires enabling it in the integration options and HA 2026.11+ Labs.
 - Door unlock, stair light, ringer mute, forwarding and answering-machine
   controls.
 - Stored video messages, voice memos and text memos when the agent reports
@@ -71,6 +72,14 @@ and restart Home Assistant. Then add the integration under
 
 Both installation methods use the same repository and release archive. Existing
 configuration entries and bundled cards remain unchanged when moving to Marketplace.
+
+### Beta Versions
+
+Beta and release-candidate builds are opt-in. When a prerelease is available,
+enable **Pre-release** for this repository in Marketplace, or beta versions in
+HACS. Stable installations are not switched to beta automatically. The same
+integration ZIP includes the card and device-agent bundle; no second repository
+or integration entry is needed. See [beta updates and returning to stable](docs/advanced-maintenance.md#beta-versions).
 
 ## First Setup
 

@@ -9,6 +9,18 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_alarm_production_qml_controls() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    subprocess.run(
+        [node, str(ROOT / "tests/qml/alarm_controls.cjs")],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_alarm_qml_contains_alarmo_card_feedback_hooks() -> None:
     alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
 
@@ -52,7 +64,7 @@ def test_alarm_qml_uses_configured_return_to_home_and_refreshes_on_resume() -> N
         in dashboard_js
     )
     assert "refreshAlarmStatus(false)" in visible_body
-    assert "stopStatusWatch()" in screen_off_body
+    assert "pausePage()" in screen_off_body
     assert "lastStatusRefreshMs = 0" in screen_off_body
     assert "return preventReturnToHomepage" in screen_off_body
     assert "Date.now()" in refresh_body
@@ -489,7 +501,7 @@ function assertBlockedModesLookLikeAlarmoCard() {{
   page.executeCommand("arm_away", true);
   assert(calls.includes("/ui/alarm/command?command=arm_away&force=true"));
   assert.strictEqual(page.modeFeedbackVisible("arm_away"), true);
-  assert.strictEqual(page.modeFeedbackColor("arm_away"), "#58d68d");
+  assert.strictEqual(page.modeFeedbackColor("arm_away"), "#f1c40f");
 }}
 
 function assertReadyModeExecutesWithoutPin() {{
@@ -505,10 +517,10 @@ function assertReadyModeExecutesWithoutPin() {{
   assert.strictEqual(page.modeFeedbackColor("arm_vacation"), "transparent");
   page.selectCommand("arm_vacation");
   assert(calls.includes("/ui/alarm/command?command=arm_vacation"));
-  assert.strictEqual(statusItem.text, "Alarmbefehl gesendet: Urlaub");
-  assert.strictEqual(statusItem.color, "#58d68d");
+  assert.strictEqual(statusItem.text, "Sende: Urlaub");
+  assert.strictEqual(statusItem.color, "#f1c40f");
   assert.strictEqual(page.modeFeedbackVisible("arm_vacation"), true);
-  assert.strictEqual(page.modeFeedbackColor("arm_vacation"), "#58d68d");
+  assert.strictEqual(page.modeFeedbackColor("arm_vacation"), "#f1c40f");
   assert.strictEqual(page.refreshSoonCalls, 1);
 }}
 

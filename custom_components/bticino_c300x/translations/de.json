@@ -45,7 +45,11 @@
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter",
+          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
         }
       },
       "user_device_activations": {
@@ -110,7 +114,11 @@
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter",
+          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
         }
       },
       "reconfigure_device_activations": {
@@ -201,7 +209,11 @@
           "create_homeassistant_user": "Home-Assistant-Media-User fuer diese Funktionen erstellen",
           "doorstation_audio_gain_db": "Tuerstation-Live-Audioverstaerkung (dB)",
           "ring_capture_audio_gain_db": "Klingelaufnahme-Audioverstaerkung (dB)",
-          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter"
+          "webrtc_ice_policy": "WebRTC ICE-Kandidaten-Filter",
+          "native_two_way_audio": "Two-way Audio im HA-Kameraplayer"
+        },
+        "data_description": {
+          "native_two_way_audio": "Optional, standardmäßig aus. Benötigt HA 2026.11+, Two-way Audio unter Einstellungen > System > Labs, WebRTC, HTTPS und die Mikrofonfreigabe im Browser. Eingehende Anrufe zuerst über die C300X-Karte annehmen; diese Option nimmt sie nicht automatisch an. Talkback in der Karte bleibt unverändert. Kein zusätzliches Polling im Leerlauf und kein Agent-Update nötig."
         }
       },
       "device_activations": {
@@ -608,7 +620,7 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "C300X Medien-Setup kann repariert werden",
+      "title": "C300X Medien-Setup: Pruefung fehlgeschlagen ({failed_checks})",
       "fix_flow": {
         "step": {
           "confirm": {

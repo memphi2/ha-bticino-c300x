@@ -553,7 +553,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             ):
                 # The agent may accept start before its HTTP response is cancelled.
                 with suppress(Exception):
-                    await self._runtime_data.api.async_stop_home_call()
+                    await self._async_stop_unowned_home_call()
             raise
         except HomeAssistantError as err:
             self._log_webrtc_debug(
@@ -574,7 +574,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
             if home_call_started:
                 with suppress(Exception):
-                    await self._runtime_data.api.async_stop_home_call()
+                    await self._async_stop_unowned_home_call()
             send_message(WebRTCError("bticino_webrtc_unavailable", str(err)))
         except Exception as err:
             self._log_webrtc_debug(
@@ -595,8 +595,19 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             )
             if home_call_started:
                 with suppress(Exception):
-                    await self._runtime_data.api.async_stop_home_call()
+                    await self._async_stop_unowned_home_call()
             send_message(WebRTCError("bticino_webrtc_offer_failed", str(err)))
+
+    async def _async_stop_unowned_home_call(self) -> None:
+        """A failed offer must not stop media shared by a surviving session."""
+        async with self._rtsp_prepare_lock:
+            if (
+                getattr(self._entry, "runtime_data", None) is self._runtime_data
+                and not self._has_webrtc_sessions_for_resource(
+                    f"home_call:{self._entry.entry_id}"
+                )
+            ):
+                await self._runtime_data.api.async_stop_home_call()
 
     async def _async_handle_provider_webrtc_offer(
         self,

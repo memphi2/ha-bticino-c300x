@@ -1611,6 +1611,48 @@ def test_cancelled_offer_cleans_up_without_entity_removal(monkeypatch, owner):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("failure", ["cancel", "ha_error", "exception"])
+def test_failed_second_home_call_preserves_existing_session(monkeypatch, failure):
+    async def run():
+        started = asyncio.Event()
+
+        class Provider(_FakeWebRTCProvider):
+            async def async_handle_async_webrtc_offer(self, camera, offer, session_id, send):
+                self.offer_sources.append(await camera.stream_source())
+                if session_id == "second":
+                    started.set()
+                    if failure == "cancel":
+                        await asyncio.Future()
+                    if failure == "ha_error":
+                        raise HomeAssistantError("failed")
+                    raise RuntimeError("failed")
+                send({"type": "answer", "sdp": "v=0\r\n"})
+
+        entry = _FakeEntry(data={"agent_host": "127.0.0.1", "video_port": 6554})
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        provider = Provider()
+        _install_fake_webrtc_provider(monkeypatch, provider)
+        _stub_rtsp_ready(camera)
+        sdp = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=recvonly\r\n"
+        await camera.async_handle_home_call_webrtc_offer(sdp, "first", lambda _: None)
+        offer = asyncio.create_task(camera.async_handle_home_call_webrtc_offer(
+            sdp, "second", lambda _: None,
+        ))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+        finally:
+            if failure == "cancel":
+                offer.cancel()
+            await asyncio.gather(offer, return_exceptions=True)
+        assert camera._webrtc_session_ids() == ["first"]
+        assert entry.runtime_data.api.home_call_stop_calls == 0
+        await camera._async_close_webrtc_session("first")
+        assert entry.runtime_data.api.home_call_stop_calls == 1
+
+    asyncio.run(run())
+
+
 def test_repeated_watchdog_samples_do_not_spawn_duplicate_camera_cleanup() -> None:
     async def run():
         entry = _FakeEntry()

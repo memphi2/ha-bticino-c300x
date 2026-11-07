@@ -76,6 +76,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
         if (!pageItem.commandInFlight) pageItem.commandPending = false
         pageItem.alarmOnline = false
+        pageItem.watchFailed = true
         pageItem.pinCode = ""
         alarmStateItem.text = uiText(pageItem, "offline")
         if (activeSinceItem) activeSinceItem.text = ""

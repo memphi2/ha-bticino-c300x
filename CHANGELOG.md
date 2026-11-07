@@ -35,6 +35,8 @@
 
 ### Fixed
 
+- Record only actual watchdog trigger values in the diagnostics CPU attribute,
+  avoiding duplicate history for healthy CPU observations.
 - Keep the selected PIN mode across unchanged status updates, clear PINs on page
   exit, ignore stale replies, and show unavailable alarm data as offline.
 - Do not report temporary agent unavailability as a repairable media setup fault.

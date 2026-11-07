@@ -43,6 +43,7 @@ class AgentCpuWatchdog:
     high_since: float | None = None
     tripped: bool = False
     last_percent: float | None = None
+    last_trigger_percent: float | None = None
     last_reason: str | None = None
     trigger_count: int = 0
 
@@ -73,6 +74,7 @@ class AgentCpuWatchdog:
 
         self.tripped = True
         self.trigger_count += 1
+        self.last_trigger_percent = cpu_percent
         self.last_reason = (
             f"agent_cpu_high_{cpu_percent:.1f}_percent_"
             f"{int(duration_seconds)}s"

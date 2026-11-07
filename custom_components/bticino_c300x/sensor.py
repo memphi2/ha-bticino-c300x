@@ -504,7 +504,7 @@ class C300XAgentDiagnosticsSensor(C300XConnectionDiagnosticSensor):
             ),
             "media_watchdog_last_reason": getattr(media_watchdog, "last_reason", None),
             "media_watchdog_last_percent": getattr(
-                media_watchdog, "last_percent", None
+                media_watchdog, "last_trigger_percent", None
             ),
             **_agent_diagnostic_attributes(
                 diagnostics,

@@ -8,7 +8,10 @@ from pathlib import Path
 from harness import RuntimeLab
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.tasks import SynchronizeTask
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from sqlalchemy import text
+
+from custom_components.bticino_c300x.const import SIGNAL_AGENT_DIAGNOSTICS_CHANGED
 
 
 async def rows(lab):
@@ -57,6 +60,17 @@ async def run(root: Path):
         assert lab.hass.states.get(cpu).state == "1.0"
         before = await rows(lab)
         assert {cpu, memo, diagnostics} <= {row[0] for row in before}
+        # Healthy watchdog observations must not create a second CPU history.
+        # Force the diagnostics signal instead of relying on callback timing.
+        lab.entry.runtime_data.agent_cpu_watchdog.evaluate(
+            {"cpu_usage_percent": 2.0}, lab.hass.loop.time()
+        )
+        async_dispatcher_send(
+            lab.hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, lab.entry.entry_id
+        )
+        await lab.settle()
+        assert lab.hass.states.get(diagnostics).attributes["media_watchdog_last_percent"] is None
+        assert await rows(lab) == before, "Watchdog snapshots grew Recorder history"
         for _ in range(20):
             assert (await lab.push("system.metrics_changed", lab.agent.metrics()))[
                 0
@@ -88,11 +102,22 @@ async def run(root: Path):
                     not {"loop_iterations", "open_fd_count", "updated_at"}
                     & recorded.keys()
                 )
+        watchdog = lab.entry.runtime_data.agent_cpu_watchdog
+        watchdog.evaluate({"cpu_usage_percent": 95.0}, 0.0)
+        assert watchdog.evaluate({"cpu_usage_percent": 96.0}, 300.0)
+        async_dispatcher_send(lab.hass, SIGNAL_AGENT_DIAGNOSTICS_CHANGED, lab.entry.entry_id)
+        triggered = await rows(lab)
+        assert any(
+            entity_id == diagnostics and state == "media_watchdog_tripped"
+            and json.loads(attributes)["media_watchdog_last_percent"] == 96.0
+            for entity_id, state, attributes in triggered
+        )
         return {
             "scenario": "recorder",
             "idle_events": 40,
             "idle_rows_added": 0,
             "changed_cpu_rows_added": 3,
+            "watchdog_trigger_recorded": True,
             "memo_text_live": True,
             "memo_text_recorded": False,
         }

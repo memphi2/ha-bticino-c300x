@@ -44,6 +44,7 @@ class _Api:
 
 def test_agent_cpu_watchdog_counts_real_triggers_once_per_high_run() -> None:
     watchdog = AgentCpuWatchdog()
+    assert watchdog.last_trigger_percent is None
 
     assert (
         watchdog.evaluate(
@@ -61,6 +62,7 @@ def test_agent_cpu_watchdog_counts_real_triggers_once_per_high_run() -> None:
         duration_seconds=5.0,
     )
     assert watchdog.trigger_count == 1
+    assert watchdog.last_trigger_percent == 96.0
     assert (
         watchdog.evaluate(
             {"cpu_usage_percent": 97.0},
@@ -71,6 +73,8 @@ def test_agent_cpu_watchdog_counts_real_triggers_once_per_high_run() -> None:
         is None
     )
     assert watchdog.trigger_count == 1
+    assert watchdog.last_percent == 97.0
+    assert watchdog.last_trigger_percent == 96.0
 
     assert (
         watchdog.evaluate(
@@ -87,6 +91,7 @@ def test_agent_cpu_watchdog_counts_real_triggers_once_per_high_run() -> None:
         threshold_percent=90.0,
         duration_seconds=5.0,
     )
+    assert watchdog.last_trigger_percent == 96.0
     assert watchdog.evaluate(
         {"cpu_usage_percent": 96.0},
         17.0,

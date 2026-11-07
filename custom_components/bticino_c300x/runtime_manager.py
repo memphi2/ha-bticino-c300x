@@ -27,7 +27,6 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_ALARM_ENTITY_ID,
-    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -521,6 +520,7 @@ def cleanup_entry_runtime_resources(
                 runtime_data.resources.close,
             )
             runtime_data.display_bridge_alarm_notify_pending = False
+            runtime_data.display_bridge_notify_dirty = False
             runtime_data.connection_state.expire_unavailable = None
             for release in cleanup:
                 if release is not None:
@@ -891,25 +891,37 @@ def _async_track_display_bridge_updates(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
 ) -> Any:
-    """Wake the C300X display bridge for HA-side alarm display changes."""
+    """Wake visible display pages for selected HA state changes, without polling."""
 
     alarm_entity_id = _entry_config_value(entry, CONF_ALARM_ENTITY_ID, "")
-    if not _entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False) or not alarm_entity_id:
+    if not _entry_config_value(entry, CONF_DEVICE_UI_ENABLED, False):
         return None
 
     from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-    alarm_sensor_entity_ids = set(_alarmo_sensor_entity_ids(hass))
-    quick_entity = _entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID, "")
-    if quick_entity:
-        alarm_sensor_entity_ids.add(str(quick_entity))
+    from .dashboard import _dashboard_state_entity_id
+    from .dashboard_config import (
+        configured_actions,
+        configured_alarm_page_entity_id,
+        configured_dashboard_entities,
+        configured_weather_entity_id,
+    )
+
+    selected_entity_ids = set(configured_dashboard_entities(entry))
+    for entity_id in (configured_alarm_page_entity_id(entry), configured_weather_entity_id(entry)):
+        if entity_id:
+            selected_entity_ids.add(entity_id)
+    for action in configured_actions(entry).values():
+        entity_id = _dashboard_state_entity_id(action, action.get("dashboard", {}))
+        if entity_id:
+            selected_entity_ids.add(entity_id)
+    alarm_sensor_entity_ids = selected_entity_ids | set(_alarmo_sensor_entity_ids(hass))
 
     def _refresh_alarm_sensor_entity_ids() -> None:
         alarm_sensor_entity_ids.clear()
+        alarm_sensor_entity_ids.update(selected_entity_ids)
         alarm_sensor_entity_ids.update(_alarmo_sensor_entity_ids(hass))
-        if quick_entity:
-            alarm_sensor_entity_ids.add(str(quick_entity))
 
     @callback
     def _handle_alarm_state_change(event: Any) -> None:
@@ -1028,6 +1040,7 @@ def _async_schedule_display_bridge_notify(
     connection_state = getattr(runtime_data, "connection_state", None)
     if connection_state is not None and not connection_state.available:
         return
+    runtime_data.display_bridge_notify_dirty = True
     if getattr(runtime_data, "display_bridge_alarm_notify_pending", False):
         return
     runtime_data.display_bridge_alarm_notify_pending = True
@@ -1038,19 +1051,21 @@ async def _async_notify_display_bridge_alarm_if_listening(
     entry: BticinoC300XConfigEntry,
     runtime_data: BticinoC300XRuntimeData | None = None,
 ) -> None:
-    """Notify the display bridge only while a local QML page is listening."""
+    """Advance the event revision, including between long-poll requests."""
 
     runtime_data = runtime_data or getattr(entry, "runtime_data", None)
     try:
         if runtime_data is None or getattr(entry, "runtime_data", None) is not runtime_data:
             return
-        diagnostics = await runtime_data.api.async_diagnostics()
-        if getattr(entry, "runtime_data", None) is not runtime_data:
-            return
-        waiters = diagnostics.get("ui_event_waiters")
-        if not isinstance(waiters, int) or waiters <= 0:
-            return
-        await runtime_data.api.async_notify_display_bridge_event("alarm")
+        while True:
+            # Coalesce a state-event burst without dropping changes during delivery.
+            await asyncio.sleep(0.05)
+            if getattr(entry, "runtime_data", None) is not runtime_data:
+                return
+            runtime_data.display_bridge_notify_dirty = False
+            await runtime_data.api.async_notify_display_bridge_event("alarm")
+            if not runtime_data.display_bridge_notify_dirty:
+                break
     except C300XAgentApiUnsupportedError:
         _LOGGER.debug("C300X device agent does not support display bridge events")
     except C300XAgentApiError:
@@ -1058,3 +1073,4 @@ async def _async_notify_display_bridge_alarm_if_listening(
     finally:
         if runtime_data is not None:
             runtime_data.display_bridge_alarm_notify_pending = False
+            runtime_data.display_bridge_notify_dirty = False

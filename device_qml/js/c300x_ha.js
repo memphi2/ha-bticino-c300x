@@ -89,14 +89,28 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
 }
 
 function dashboard(statusItem, pageItem) {
+    var generation = pageItem.runtimeGeneration
+    if (pageItem.dashboardLoading || pageItem.interactionActive) {
+        pageItem.dashboardRefreshAgain = true
+        return
+    }
+    pageItem.dashboardLoading = true
     var path = "/homeassistant"
-    if (dashboardRevision.length > 0) {
+    if (dashboardRevision.length > 0 && pageItem.dashboardPages && pageItem.dashboardPages.length > 0) {
         path += "?revision=" + encodeURIComponent(dashboardRevision)
     }
     getJson(path, function(data) {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.dashboardLoading = false
+        if (pageItem.interactionActive) {
+            pageItem.dashboardRefreshAgain = true
+            return
+        }
+        pageItem.dashboardOnline = true
         if (data && data.not_modified === true) {
             statusItem.text = uiText(pageItem, "board_loaded")
             statusItem.color = "#58d68d"
+            finishDashboardRefresh(statusItem, pageItem)
             return
         }
         if (data && data.revision !== undefined) {
@@ -112,7 +126,16 @@ function dashboard(statusItem, pageItem) {
         loadDashboardPage(statusItem, pageItem)
         statusItem.text = pages.length > 0 ? uiText(pageItem, "board_loaded") : uiText(pageItem, "no_dashboard_pages")
         statusItem.color = pages.length > 0 ? "#58d68d" : "#f1c40f"
+        if (pageItem.refreshSelectedItem) pageItem.refreshSelectedItem()
+        finishDashboardRefresh(statusItem, pageItem)
     }, function(error) {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.dashboardLoading = false
+        pageItem.dashboardRefreshAgain = false
+        pageItem.dashboardOnline = false
+        pageItem.watchFailed = true
+        dashboardRevision = ""
+        if (!pageItem.controlInFlight) pageItem.pendingEntity = ""
         statusItem.text = error
         statusItem.color = "#ff6b6b"
         pageItem.dashboardPages = []
@@ -125,6 +148,42 @@ function dashboard(statusItem, pageItem) {
         pageItem.pageCount = 0
         pageItem.pageTitle = ""
         pageItem.pageLabel = ""
+    })
+}
+
+function finishDashboardRefresh(statusItem, pageItem) {
+    if (pageItem.dashboardRefreshAgain) {
+        pageItem.dashboardRefreshAgain = false
+        dashboard(statusItem, pageItem)
+    } else if (!pageItem.controlInFlight) {
+        pageItem.pendingEntity = ""
+    }
+}
+
+function dashboardControl(item, control, value, statusItem, pageItem) {
+    if (!item || !control || item.available === false || !pageItem.dashboardOnline || pageItem.pendingEntity) return
+    var generation = pageItem.runtimeGeneration
+    pageItem.pendingEntity = item.entity_id
+    pageItem.controlInFlight = true
+    var path = "/homeassistant?domain=c300x&service=toggle&entities="
+        + encodeURIComponent(item.entity_id + ":" + control.command)
+    if (value !== null && value !== undefined) path += "&option=" + encodeURIComponent(value)
+    getJson(path, function(data) {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.controlInFlight = false
+        if (!data || data.ok !== true) {
+            pageItem.pendingEntity = ""
+            statusItem.text = uiText(pageItem, "action_error")
+            statusItem.color = "#ff6b6b"
+            return
+        }
+        dashboard(statusItem, pageItem)
+    }, function() {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.controlInFlight = false
+        pageItem.pendingEntity = ""
+        statusItem.text = uiText(pageItem, "action_error")
+        statusItem.color = "#ff6b6b"
     })
 }
 
@@ -737,6 +796,12 @@ function dashboardMixedItems(source) {
             normalized = dashboardItems([source[i]], kind || "entity")
         }
         if (normalized.length > 0) {
+            if (source[i].controls !== undefined) {
+                normalized[0].controls = listOrEmpty(source[i].controls)
+                normalized[0].available = source[i].available !== false
+                normalized[0].current_temperature = source[i].current_temperature
+                normalized[0].temperature_unit = source[i].temperature_unit || ""
+            }
             target.push(normalized[0])
         }
     }

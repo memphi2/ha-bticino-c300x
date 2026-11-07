@@ -90,6 +90,29 @@ is added. Reconnect attempts run only after a failed event connection while the
 page is active. Device rendering and interruption by a physical Ring Call still
 need confirmation during beta testing.
 
+## Display Device Controls
+
+Select lights, covers and climate entities under **Display dashboard**. The blue
+overview provides direct light on/off, cover up/stop/down and target-temperature
+adjustment. The detail button opens the remaining supported controls; Back returns
+to the same overview page and scroll position.
+
+- Lights expose brightness, Kelvin color temperature and hue/saturation only when
+  supported by the entity.
+- Covers expose reported position and supported tilt adjustment.
+- Climate entities show actual and target temperatures, supported modes/presets
+  and, where available, the lower/upper target range.
+- Number entities use HA units, bounds and step sizes; select entities show their
+  actual options. Sliders send one command on release, not during movement.
+
+State changes for selected entities use the existing event bridge, including
+when no Alarmo entity is configured. There is no regular device-state polling.
+Bursts are combined into a notification; the display reloads confirmed HA values.
+Unavailable controls are disabled and commands are validated again in HA against
+the current selection and entity capabilities. Timeout and reconnect handling
+only runs while the page is active. These controls require the updated display
+files; device rendering and physical Ring Call interruption remain beta checks.
+
 ## Entity Reference
 
 Entities are capability-gated. If the installed agent does not advertise a

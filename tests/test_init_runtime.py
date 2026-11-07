@@ -1210,6 +1210,17 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     assert len(calls) == before + 3
     unsubscribe()
 
+    entry.options.pop(CONF_ALARM_ENTITY_ID)
+    entry.options["dashboard_entities"] = ["light.room", "cover.room", "climate.room"]
+    unsubscribe = runtime_manager._async_track_display_bridge_updates(hass, entry)
+    before = len(calls)
+    for entity_id in entry.options["dashboard_entities"]:
+        state_callbacks[-1](SimpleNamespace(data={"entity_id": entity_id}))
+    assert len(calls) == before + 3
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "light.unselected"}))
+    assert len(calls) == before + 3
+    unsubscribe()
+
 
 def test_display_bridge_tracking_skips_when_disabled_or_unconfigured() -> None:
     assert (
@@ -1241,7 +1252,7 @@ def test_display_bridge_notify_skips_offline_entries() -> None:
     assert jobs == []
 
 
-def test_display_bridge_notify_requires_active_ui_waiter() -> None:
+def test_display_bridge_notify_preserves_revision_between_ui_waiters() -> None:
     calls: list[str] = []
 
     class FakeApi:
@@ -1263,7 +1274,7 @@ def test_display_bridge_notify_requires_active_ui_waiter() -> None:
     entry.runtime_data.api = FakeApi(1)
     asyncio.run(runtime_manager._async_notify_display_bridge_alarm_if_listening(entry))
 
-    assert calls == ["diagnostics:0", "diagnostics:1", "event:alarm"]
+    assert calls == ["event:alarm", "event:alarm"]
 
 
 def test_display_bridge_notify_coalesces_inflight_jobs() -> None:
@@ -1271,9 +1282,9 @@ def test_display_bridge_notify_coalesces_inflight_jobs() -> None:
     jobs: list[tuple[Any, ...]] = []
 
     class FakeApi:
-        async def async_diagnostics(self) -> dict[str, Any]:
-            calls.append("diagnostics")
-            return {"ui_event_waiters": 0}
+        async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+            calls.append(topic)
+            return {"ok": True}
 
     runtime_data = SimpleNamespace(
         api=FakeApi(),
@@ -1292,8 +1303,30 @@ def test_display_bridge_notify_coalesces_inflight_jobs() -> None:
 
     asyncio.run(jobs[0][0](*jobs[0][1:]))
 
-    assert calls == ["diagnostics"]
+    assert calls == ["alarm"]
     assert runtime_data.display_bridge_alarm_notify_pending is False
+
+
+def test_display_bridge_notify_keeps_changes_arriving_during_delivery() -> None:
+    jobs: list[Any] = []
+    calls: list[str] = []
+    hass = SimpleNamespace(add_job=lambda *args: jobs.append(args))
+    entry = _entry()
+
+    class FakeApi:
+        async def async_notify_display_bridge_event(self, topic: str) -> dict[str, Any]:
+            calls.append(topic)
+            if len(calls) == 1:
+                runtime_manager._async_schedule_display_bridge_notify(hass, entry)
+            return {"ok": True}
+
+    entry.runtime_data = SimpleNamespace(api=FakeApi())
+    runtime_manager._async_schedule_display_bridge_notify(hass, entry)
+    asyncio.run(jobs[0][0](*jobs[0][1:]))
+    assert len(jobs) == 1
+    assert calls == ["alarm", "alarm"]
+    assert not entry.runtime_data.display_bridge_alarm_notify_pending
+    assert not entry.runtime_data.display_bridge_notify_dirty
 
 
 def test_display_bridge_notify_ignores_stale_runtime() -> None:

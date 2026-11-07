@@ -8,8 +8,11 @@ import "js/c300x_i18n.js" as I18n
 Page {
     id: page
     showBackButton: true
-    onBackClicked: tabView.activateTab(homePage)
-    headerLabel: uiText("home_assistant") + trsl.empty
+    onBackClicked: {
+        if (selectedItem) selectedItem = null
+        else tabView.activateTab(homePage)
+    }
+    headerLabel: (selectedItem ? itemName(selectedItem) : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
@@ -41,18 +44,112 @@ Page {
     property string weatherSunset: ""
     property string weatherUpdated: ""
     property string weatherColor: "#58d68d"
+    property variant selectedItem: null
+    property bool dashboardOnline: false
+    property bool dashboardLoading: false
+    property bool dashboardRefreshAgain: false
+    property bool pageActive: false
+    property bool watchFailed: false
+    property int runtimeGeneration: 0
+    property string pendingEntity: ""
+    property bool controlInFlight: false
+    property bool interactionActive: false
 
     function aboutToShow() {
+        pageActive = true
         Api.dashboard(status, page)
+        startWatch()
     }
 
     function aboutToHide() {
+        pageActive = false
+        runtimeGeneration += 1
+        dashboardLoading = false
+        dashboardRefreshAgain = false
+        dashboardOnline = false
+        pendingEntity = ""
+        controlInFlight = false
+        interactionActive = false
         Api.stopDashboardRuntime()
     }
 
     function handleScreenOff() {
-        Api.stopDashboardRuntime()
+        aboutToHide()
         return preventReturnToHomepage
+    }
+
+    function startWatch() {
+        watchFailed = false
+        Api.startEventWatch(function(event) {
+            if (event.topic === "connection.error") {
+                watchFailed = true
+                dashboardOnline = false
+                badges = [{state: uiText("offline"), color: "#f1c40f"}]
+                status.text = uiText("offline")
+                status.color = "#f1c40f"
+            } else {
+                Api.dashboard(status, page)
+            }
+        })
+    }
+
+    function refreshSelectedItem() {
+        if (!selectedItem) return
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].entity_id === selectedItem.entity_id) {
+                selectedItem = items[i]
+                return
+            }
+        }
+        selectedItem = null
+    }
+
+    function controlLabel(control) {
+        if (control.command === "open_cover") return "\u2191"
+        if (control.command === "stop_cover") return "\u25a0"
+        if (control.command === "close_cover") return "\u2193"
+        return uiText(control.command)
+    }
+
+    function controlValue(control) {
+        return control.value === null || control.value === undefined ? "?" : String(control.value) + (control.unit ? " " + control.unit : "")
+    }
+
+    function overviewControls(item) {
+        var result = []
+        var controls = item.controls || []
+        for (var i = 0; i < controls.length; i++) {
+            if (controls[i].kind === "button" || controls[i].command === "temperature" || controls[i].command === "value") result.push(controls[i])
+        }
+        return result
+    }
+
+    function adjustControl(item, control, direction) {
+        if (control.value === null || control.value === undefined) return
+        var steps = Math.round((Number(control.value) - control.min) / control.step) + direction
+        steps = Math.max(0, Math.min(Math.floor((control.max - control.min) / control.step), steps))
+        var value = control.min + steps * control.step
+        Api.dashboardControl(item, control, String(Number(value.toFixed(6))), status, page)
+    }
+
+    Timer {
+        interval: 5000
+        repeat: false
+        running: pageActive && watchFailed
+        onTriggered: {
+            startWatch()
+            Api.dashboard(status, page)
+        }
+    }
+
+    Timer {
+        interval: 10000
+        repeat: false
+        running: pageActive && pendingEntity.length > 0
+        onTriggered: {
+            aboutToHide()
+            aboutToShow()
+        }
     }
 
     function itemName(item) {
@@ -60,6 +157,20 @@ Page {
     }
 
     function itemDetail(item) {
+        if (!dashboardOnline || item.available === false) return uiText("offline")
+        if (pendingEntity === item.entity_id) return uiText("sending")
+        var values = []
+        if (item.kind === "switch") values.push(item.state ? uiText("on") : uiText("off"))
+        if (item.current_temperature !== undefined && item.current_temperature !== null) {
+            values.push(String(item.current_temperature) + " " + (item.temperature_unit || ""))
+        }
+        var controls = item.controls || []
+        for (var i = 0; i < controls.length; i++) {
+            if (controls[i].command === "temperature" || controls[i].command === "brightness" || controls[i].command === "position") {
+                values.push(controlLabel(controls[i]) + ": " + controlValue(controls[i]))
+            }
+        }
+        if (values.length > 0) return values.join("   ")
         if (item.kind === "switch") {
             return item.state ? uiText("on") : uiText("off")
         }
@@ -170,7 +281,240 @@ Page {
         return item && item.time ? item.time : ""
     }
 
+    Component {
+        id: controlOverview
+        Item {
+            property variant tileItem: parent ? parent.tileItem : ({})
+            anchors.fill: parent
+            Image {
+                anchors.fill: parent
+                source: "images/settings/act_btn.svg"
+                fillMode: Image.Stretch
+            }
+            UbuntuLightText {
+                anchors.left: parent.left
+                anchors.right: detailsButton.left
+                anchors.top: parent.top
+                anchors.margins: 12
+                text: itemName(tileItem)
+                textFormat: Text.PlainText
+                font.pixelSize: 20
+                color: "white"
+                elide: Text.ElideRight
+            }
+            UbuntuLightText {
+                anchors.left: parent.left
+                anchors.right: detailsButton.left
+                anchors.top: parent.top
+                anchors.leftMargin: 12
+                anchors.topMargin: 39
+                text: itemDetail(tileItem)
+                textFormat: Text.PlainText
+                font.pixelSize: 15
+                color: tileItem.available === false ? "#f1c40f" : "#c7d0d9"
+                elide: Text.ElideRight
+            }
+            Item {
+                id: detailsButton
+                width: 52
+                height: 42
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 8
+                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                UbuntuLightText { anchors.centerIn: parent; text: "..."; font.pixelSize: 24; color: "white" }
+                BeepingMouseArea { anchors.fill: parent; onClicked: selectedItem = tileItem }
+            }
+            Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: 8
+                spacing: 8
+                Repeater {
+                    model: overviewControls(tileItem)
+                    Row {
+                        property variant control: modelData
+                        spacing: 8
+                        Repeater {
+                            model: control.kind === "number" ? [-1, 1] : [0]
+                            Item {
+                                width: control.command === "toggle" ? 140 : 80
+                                height: 38
+                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                                UbuntuLightText {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    text: modelData === -1 ? "-" : modelData === 1 ? "+" : controlLabel(control)
+                                    textFormat: Text.PlainText
+                                    font.pixelSize: 18
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                    color: "white"
+                                }
+                                BeepingMouseArea {
+                                    anchors.fill: parent
+                                    enabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
+                                    onClicked: {
+                                        if (control.kind === "number") adjustControl(tileItem, control, modelData)
+                                        else Api.dashboardControl(tileItem, control, null, status, page)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Flickable {
+        id: details
+        visible: selectedItem !== null
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: detailStatus.top
+        anchors.margins: 24
+        clip: true
+        contentWidth: width
+        contentHeight: controlColumn.height
+        flickableDirection: Flickable.VerticalFlick
+        interactive: !interactionActive
+        Column {
+            id: controlColumn
+            width: details.width
+            spacing: 12
+            UbuntuLightText {
+                width: parent.width
+                text: selectedItem ? itemDetail(selectedItem) : ""
+                textFormat: Text.PlainText
+                font.pixelSize: 18
+                color: dashboardOnline ? "white" : "#f1c40f"
+                wrapMode: Text.Wrap
+            }
+            Repeater {
+                model: selectedItem ? (selectedItem.controls || []) : []
+                Item {
+                    id: controlRow
+                    property variant control: modelData
+                    property real preview: control.kind === "number" ? (control.value === null ? control.min : Number(control.value)) : 0
+                    width: controlColumn.width
+                    height: control.kind === "choice" ? 42 + optionGrid.height : control.kind === "number" ? 96 : 44
+                    enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
+                    Image {
+                        visible: control.kind === "button"
+                        anchors.fill: parent
+                        source: "images/settings/list_btn.svg"
+                        fillMode: Image.Stretch
+                    }
+                    UbuntuLightText {
+                        width: parent.width
+                        height: 32
+                        text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? preview + " " + (control.unit || "") : controlValue(control)) : "")
+                        textFormat: Text.PlainText
+                        font.pixelSize: 18
+                        color: "white"
+                        elide: Text.ElideRight
+                    }
+                    Row {
+                        visible: control.kind === "number"
+                        anchors.bottom: parent.bottom
+                        spacing: 12
+                        Repeater {
+                            model: [-1, 1]
+                            Item {
+                                width: 52
+                                height: 44
+                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                                UbuntuLightText { anchors.centerIn: parent; text: modelData < 0 ? "-" : "+"; font.pixelSize: 24; color: "white" }
+                                BeepingMouseArea { anchors.fill: parent; onClicked: adjustControl(selectedItem, control, modelData) }
+                            }
+                        }
+                    }
+                    Item {
+                        id: sliderTrack
+                        visible: control.kind === "number"
+                        anchors.left: parent.left
+                        anchors.leftMargin: 140
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: 44
+                        Rectangle { width: parent.width; height: 5; anchors.verticalCenter: parent.verticalCenter; color: "#c7d0d9" }
+                        Rectangle {
+                            width: 22; height: 30; radius: 4
+                            color: "#58d68d"
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: control.kind === "number" ? Math.max(0, Math.min(parent.width - width, (preview - control.min) / (control.max - control.min) * (parent.width - width))) : 0
+                        }
+                        BeepingMouseArea {
+                            id: sliderMouse
+                            anchors.fill: parent
+                            function updatePreview(x) {
+                                var ratio = Math.max(0, Math.min(1, x / width))
+                                var steps = Math.min(Math.floor((control.max - control.min) / control.step), Math.round(ratio * (control.max - control.min) / control.step))
+                                preview = Number((control.min + steps * control.step).toFixed(6))
+                            }
+                            onPressed: { interactionActive = true; updatePreview(mouse.x) }
+                            onPositionChanged: if (pressed) updatePreview(mouse.x)
+                            onReleased: {
+                                interactionActive = false
+                                Api.dashboardControl(selectedItem, control, String(preview), status, page)
+                            }
+                            onCanceled: { interactionActive = false; Api.dashboard(status, page) }
+                        }
+                    }
+                    Grid {
+                        id: optionGrid
+                        visible: control.kind === "choice"
+                        anchors.top: parent.top
+                        anchors.topMargin: 38
+                        width: parent.width
+                        columns: 2
+                        spacing: 8
+                        height: Math.ceil((control.options || []).length / 2) * 50
+                        Repeater {
+                            model: control.options || []
+                            Item {
+                                width: (optionGrid.width - 8) / 2
+                                height: 42
+                                Image { anchors.fill: parent; source: control.value === modelData ? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+                                UbuntuLightText {
+                                    anchors.fill: parent; anchors.margins: 8
+                                    text: modelData; textFormat: Text.PlainText; font.pixelSize: 16; color: "white"
+                                    elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                }
+                                BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, control, modelData, status, page) }
+                            }
+                        }
+                    }
+                    BeepingMouseArea {
+                        visible: control.kind === "button"
+                        anchors.fill: parent
+                        onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
+                    }
+                }
+            }
+        }
+    }
+
+    UbuntuLightText {
+        id: detailStatus
+        visible: selectedItem !== null
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 24
+        height: 32
+        text: status.text
+        textFormat: Text.PlainText
+        color: status.color
+        font.pixelSize: 16
+        elide: Text.ElideRight
+    }
+
     Column {
+        visible: selectedItem === null
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -535,6 +879,7 @@ Page {
 
                 Flow {
                     id: itemColumn
+                    enabled: dashboardOnline
                     width: parent.width
                     spacing: 10
                     visible: items.length > 0
@@ -884,13 +1229,14 @@ Page {
                             property bool isSlider: tileItem.kind === "slider"
                             property bool isChoice: tileItem.kind === "choice"
                             property bool isImage: tileItem.kind === "image"
-                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
-                            height: isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))
+                            property bool hasControls: tileItem.controls !== undefined
+                            width: hasControls || isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
+                            height: hasControls ? 104 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58)))
 
                             Loader {
                                 anchors.fill: parent
                                 property variant tileItem: mixedTile.tileItem
-                                sourceComponent: mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent))))
+                                sourceComponent: mixedTile.hasControls ? controlOverview : (mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
                             }
                         }
                     }

@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.1.0b1 - 2026-11-07
+## v2.1.0b1 - Unreleased
 
 ### Added
 
@@ -47,9 +47,9 @@
 
 - Includes a rebuilt native agent `2.1.0b1`. Update the agent and apply the
   Display patch to use the revised Alarmo page; applying the patch restarts the GUI.
-- This is an opt-in prerelease. The stable release remains `2.0.0`. Advanced
+- This is planned as an opt-in prerelease. The stable release remains `2.0.0`. Advanced
   light/cover/climate controls, notifications and the calendar blueprint follow
-  in separate betas and are not included here.
+  in separate pull requests and are not included here yet.
 
 ## v2.0.0 - 2026-11-02
 

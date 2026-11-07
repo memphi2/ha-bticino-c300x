@@ -1,6 +1,7 @@
 #include "../src/http_request.h"
 #include "../src/system_metrics.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -55,8 +56,36 @@ static void framing_test(const char *payload, int expected, int expected_size_er
     close(pair[1]);
 }
 
+static void target_bounds_test(void)
+{
+    char buffer[REQUEST_BUFFER_SIZE];
+    char target[C300X_HTTP_TARGET_SIZE + 2];
+    struct request parsed;
+    memset(target, 'a', sizeof(target));
+    memcpy(target, "/homeassistant?entities=", strlen("/homeassistant?entities="));
+    target[600] = '\0';
+    snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: test\r\n\r\n", target);
+    assert(parse_request(buffer, &parsed));
+    assert(strcmp(parsed.query, strchr(target, '?') + 1) == 0);
+    memset(target, 'a', sizeof(target));
+    memcpy(target, "/?q=", 4);
+    target[C300X_HTTP_TARGET_SIZE - 1] = '\0';
+    snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: test\r\n\r\n", target);
+    assert(parse_request(buffer, &parsed));
+    target[C300X_HTTP_TARGET_SIZE - 1] = 'a';
+    target[C300X_HTTP_TARGET_SIZE] = '\0';
+    snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: test\r\n\r\n", target);
+    assert(!parse_request(buffer, &parsed));
+    memset(target, 'a', 256);
+    target[0] = '/';
+    target[256] = '\0';
+    snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: test\r\n\r\n", target);
+    assert(!parse_request(buffer, &parsed));
+}
+
 int main(void)
 {
+    target_bounds_test();
     deadline_test();
     framing_test("POST / HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}", 1, 0);
     framing_test("POST / HTTP/1.1\r\nContent-Length: 100\r\n\r\n{}", 0, 0);

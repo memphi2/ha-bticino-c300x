@@ -1532,7 +1532,7 @@ def test_remove_cancels_inflight_webrtc_offer(monkeypatch, stage, replace_runtim
 
 
 @pytest.mark.parametrize("replace_runtime", [False, True])
-def test_remove_cleans_up_inflight_home_call_start(replace_runtime):
+def test_remove_cleans_up_inflight_home_call_start(replace_runtime, monkeypatch):
     async def run():
         started = asyncio.Event()
 
@@ -1545,6 +1545,10 @@ def test_remove_cleans_up_inflight_home_call_start(replace_runtime):
         old = _FakeRuntimeData(api=BlockingApi())
         entry = _FakeEntry(runtime_data=old)
         camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        async def provider(*_args):
+            return _FakeWebRTCProvider()
+        monkeypatch.setattr(camera_module, "_async_get_supported_webrtc_provider", provider)
         messages = []
         offer = asyncio.create_task(camera.async_handle_home_call_webrtc_offer(
             "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=sendrecv\r\n",
@@ -1563,6 +1567,122 @@ def test_remove_cleans_up_inflight_home_call_start(replace_runtime):
         finally:
             offer.cancel()
             await asyncio.gather(offer, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("trigger", ["snapshot", "metrics"])
+def test_home_call_reconciliation_waits_for_native_start(monkeypatch, trigger):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+
+        class Api(_FakeApi):
+            running = False
+
+            async def async_start_home_call(self, duration_seconds=None):
+                started.set()
+                await release.wait()
+                self.running = True
+                return await super().async_start_home_call(duration_seconds)
+
+            async def async_home_call_status(self):
+                status = await super().async_home_call_status()
+                return {**status, "running": self.running, "active": self.running,
+                        "answered": self.running, "rtp_proxy": self.running}
+
+        api = Api()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        provider = _FakeWebRTCProvider()
+        _install_fake_webrtc_provider(monkeypatch, provider)
+        _stub_rtsp_ready(camera)
+        offer = asyncio.create_task(camera.async_handle_home_call_webrtc_offer(
+            "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=recvonly\r\n",
+            "starting", lambda _: None,
+        ))
+        tasks = [offer]
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            reconcile = asyncio.create_task(
+                camera._async_close_finished_home_call_sessions() if trigger == "snapshot"
+                else camera._async_reconcile_local_sessions()
+            )
+            tasks.append(reconcile)
+            await asyncio.sleep(0)
+            assert api.home_call_status_calls == 0
+            assert not reconcile.done()
+            assert "starting" in camera._webrtc_sessions.active
+            release.set()
+            await asyncio.wait_for(asyncio.gather(*tasks), 1)
+            assert camera._webrtc_sessions.active["starting"].ready
+            assert provider.closed == []
+            assert api.home_call_stop_calls == 0
+            await camera._async_close_webrtc_session("starting")
+            assert provider.closed == ["starting"]
+            assert api.home_call_stop_calls == 1
+        finally:
+            release.set()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+def test_home_call_start_waits_for_pending_idle_reconciliation(monkeypatch):
+    async def run():
+        status_started, release, lookup = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        class Api(_FakeApi):
+            async def async_home_call_status(self):
+                if not status_started.is_set():
+                    status_started.set()
+                    await release.wait()
+                    return {"available": True, "running": False, "active": False}
+                return await super().async_home_call_status()
+
+        api = Api()
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData(api=api))
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        provider = _FakeWebRTCProvider()
+
+        async def find_provider(*_):
+            lookup.set()
+            return provider
+
+        monkeypatch.setattr(camera_module, "_async_get_supported_webrtc_provider", find_provider)
+        _stub_rtsp_ready(camera)
+        camera._webrtc_sessions.active["old"] = _ProviderWebRTCSession(
+            provider=provider, owner="home_call", send_message=lambda _: None,
+            wants_audio=True, wants_backchannel=False,
+            resource_id="home_call:entry-1", ready=True,
+        )
+        reconcile = asyncio.create_task(camera._async_close_finished_home_call_sessions())
+        tasks = [reconcile]
+        try:
+            await asyncio.wait_for(status_started.wait(), 1)
+            offer = asyncio.create_task(camera.async_handle_home_call_webrtc_offer(
+                "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 0\r\na=recvonly\r\n",
+                "new", lambda _: None,
+            ))
+            tasks.append(offer)
+            await asyncio.wait_for(lookup.wait(), 1)
+            assert api.home_call_start_calls == []
+            release.set()
+            await asyncio.wait_for(asyncio.gather(*tasks), 1)
+            assert camera._webrtc_session_ids() == ["new"]
+            assert camera._webrtc_sessions.active["new"].ready
+            assert provider.closed == ["old"]
+            assert api.home_call_stop_calls == 0
+            await camera._async_close_webrtc_session("new")
+            assert api.home_call_stop_calls == 1
+        finally:
+            release.set()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     asyncio.run(run())
 
@@ -2846,6 +2966,37 @@ def test_doorbell_camera_serializes_parallel_rtsp_warmups() -> None:
 
     assert api.activate_calls == [True, True]
     assert api.max_active_activate_calls == 1
+
+
+@pytest.mark.parametrize("arrival", ["lock", "drain"])
+@pytest.mark.parametrize("owner,resource", [("home_call", "home_call:entry-1"), ("doorbell", "doorbell:entry-1:audio")])
+def test_old_close_preserves_new_resource_owner(arrival, owner, resource):
+    async def run():
+        entry = _FakeEntry()
+        camera = C300XDoorbellCamera(entry)
+        camera.hass = SimpleNamespace()
+        provider = _FakeWebRTCProvider()
+        def session():
+            return _ProviderWebRTCSession(provider=provider, owner=owner,
+                send_message=lambda _: None, wants_audio=True, wants_backchannel=False,
+                resource_id=resource, ready=True)
+        async def drain():
+            if arrival == "drain":
+                camera._webrtc_sessions.active["new"] = session()
+        camera._async_wait_for_provider_rtsp_clients_to_drain = drain
+        camera._webrtc_sessions.active["old"] = session()
+        await camera._rtsp_prepare_lock.acquire()
+        closing = asyncio.create_task(camera._async_close_webrtc_session("old"))
+        await asyncio.sleep(0)
+        assert "old" not in camera._webrtc_sessions.active
+        if arrival == "lock":
+            camera._webrtc_sessions.active["new"] = session()
+        camera._rtsp_prepare_lock.release()
+        await closing
+        assert "new" in camera._webrtc_sessions.active
+        assert entry.runtime_data.api.home_call_stop_calls == 0
+        assert entry.runtime_data.api.stop_calls == 0
+    asyncio.run(run())
 
 
 def test_doorbell_camera_serializes_stop_against_parallel_rtsp_warmup() -> None:

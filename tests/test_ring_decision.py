@@ -19,7 +19,6 @@ from custom_components.bticino_c300x.ring_decision import (
     _capture_guardrail_result,
     _capture_is_stale,
     _capture_result_paths_match,
-    _last_used_capture_id,
     _phrase_match,
     _ring_decision_path,
     _ring_result_path,
@@ -195,7 +194,7 @@ def test_evaluate_ring_analysis_consumes_fresh_capture_once(
     assert payload["capture_guardrails_ok"] is False
     assert payload["capture_guardrail_reasons"] == ["capture_already_used"]
     used = tmp_path / "c300x" / "analysis" / "used_captures.json"
-    assert json.loads(used.read_text(encoding="utf-8"))["capture_id"] == "capture-1"
+    assert "capture-1" in json.loads(used.read_text(encoding="utf-8"))["captures"]
 
 
 def test_evaluate_ring_analysis_requires_capture_without_consuming_it(
@@ -386,7 +385,7 @@ def test_evaluate_ring_analysis_blocks_mismatched_capture_metadata(
     ]
 
 
-def test_evaluate_ring_analysis_treats_invalid_used_capture_file_as_unused(
+def test_evaluate_ring_analysis_blocks_invalid_used_capture_file(
     tmp_path: Path,
 ) -> None:
     hass = _FakeHass(tmp_path)
@@ -431,8 +430,9 @@ def test_evaluate_ring_analysis_treats_invalid_used_capture_file_as_unused(
         )
     )
 
-    assert evaluated.matched is True
-    assert json.loads(used.read_text(encoding="utf-8"))["capture_id"] == "capture-1"
+    assert evaluated.matched is False
+    assert used.read_text(encoding="utf-8") == "{"
+    assert json.loads(decision.read_text())["capture_guardrail_reasons"] == ["capture_ledger_unavailable"]
 
 
 def test_evaluate_ring_analysis_uses_payload_match_without_executor(
@@ -534,7 +534,8 @@ def test_capture_path_match_rejects_missing_or_unsafe_paths(tmp_path: Path) -> N
 
 def test_capture_stale_handles_missing_and_naive_timestamps() -> None:
     assert _capture_is_stale({}) is True
-    assert _capture_is_stale({"created_at": datetime.now().isoformat()}) is False
+    assert _capture_is_stale({"created_at": datetime.now(UTC).replace(tzinfo=None).isoformat()}) is False
+    assert _capture_is_stale({"created_at": (datetime.now(UTC) + timedelta(minutes=1)).isoformat()}) is True
 
 
 def test_used_capture_helpers_fall_back_without_hass_config(
@@ -553,7 +554,6 @@ def test_used_capture_helpers_fall_back_without_hass_config(
     used.write_text("[]", encoding="utf-8")
 
     assert _used_captures_path(hass) == used
-    assert _last_used_capture_id(hass) == ""
 
 
 def test_mark_capture_used_uses_thread_fallback(
@@ -566,4 +566,4 @@ def test_mark_capture_used_uses_thread_fallback(
     asyncio.run(async_mark_ring_capture_used(hass, "capture-thread"))
 
     used = tmp_path / "c300x" / "analysis" / "used_captures.json"
-    assert json.loads(used.read_text(encoding="utf-8"))["capture_id"] == "capture-thread"
+    assert "capture-thread" in json.loads(used.read_text(encoding="utf-8"))["captures"]

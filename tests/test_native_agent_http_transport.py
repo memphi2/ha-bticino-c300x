@@ -41,7 +41,7 @@ def test_native_http_transport(tmp_path: Path, harness: str) -> None:
     subprocess.run([str(binary)], check=True, timeout=10)
 
 
-def test_display_callback_status_and_connection_tracking(tmp_path: Path) -> None:
+def test_display_callback_http_status_and_response_validation(tmp_path: Path) -> None:
     binary = tmp_path / "display-http-test"
     result = subprocess.run(
         [

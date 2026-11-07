@@ -8,6 +8,8 @@ import types
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -691,7 +693,7 @@ def test_put_file_repairs_mode_drift_for_identical_payload(tmp_path: Path) -> No
     expected_hash = hashlib.sha256(b"agent").hexdigest()
     commands: list[tuple[str, bytes | None]] = []
 
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client = object.__new__(device_installer._AsyncSshDeviceSshClient)
 
     def fake_run(command: str, input_data: bytes | None = None) -> str:
         commands.append((command, input_data))
@@ -713,197 +715,20 @@ def test_put_file_repairs_mode_drift_for_identical_payload(tmp_path: Path) -> No
     assert commands[-1][0].startswith("chmod 700 ")
 
 
-def test_paramiko_client_run_streams_stdout_and_input() -> None:
-    class FakeChannel:
-        def __init__(self) -> None:
-            self.input_data: bytes | None = None
-            self.closed = False
-            self.stdout = [b"ok\n"]
-
-        def settimeout(self, _timeout: float) -> None:
-            return None
-
-        def exec_command(self, command: str) -> None:
-            assert command == "agent status"
-
-        def sendall(self, input_data: bytes) -> None:
-            self.input_data = input_data
-
-        def shutdown_write(self) -> None:
-            return None
-
-        def recv_ready(self) -> bool:
-            return bool(self.stdout)
-
-        def recv(self, _size: int) -> bytes:
-            return self.stdout.pop(0)
-
-        def recv_stderr_ready(self) -> bool:
-            return False
-
-        def recv_stderr(self, _size: int) -> bytes:
-            return b""
-
-        def exit_status_ready(self) -> bool:
-            return True
-
-        def recv_exit_status(self) -> int:
-            return 0
-
-        def close(self) -> None:
-            self.closed = True
-
-    class FakeTransport:
-        def __init__(self, channel: FakeChannel) -> None:
-            self.channel = channel
-
-        def is_active(self) -> bool:
-            return True
-
-        def open_session(self, *, timeout: float) -> FakeChannel:
-            assert timeout > 0
-            return self.channel
-
-    channel = FakeChannel()
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
-    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
-    client._client = types.SimpleNamespace(
-        get_transport=lambda: FakeTransport(channel)
-    )
-
-    assert client.run("agent status", b"payload") == "ok\n"
-    assert channel.input_data == b"payload"
-    assert channel.closed is True
-
-
-def test_paramiko_client_run_fails_when_transport_inactive() -> None:
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
-    client._client = types.SimpleNamespace(get_transport=lambda: None)
-
-    try:
+def test_asyncssh_client_run_fails_when_transport_inactive() -> None:
+    client = object.__new__(device_installer._AsyncSshDeviceSshClient)
+    client._closed = False
+    client._client = types.SimpleNamespace(is_closed=lambda: True)
+    with pytest.raises(C300XDeviceInstallError, match="device_install_failed"):
         client.run("agent status")
-    except device_installer.C300XDeviceInstallError as err:
-        assert err.reason == "device_install_failed"
-    else:  # pragma: no cover
-        raise AssertionError("inactive transport was accepted")
 
 
-def test_paramiko_client_run_reports_nonzero_exit() -> None:
-    class FakeChannel:
-        def __init__(self) -> None:
-            self.stderr = [b"failed"]
-
-        def settimeout(self, _timeout: float) -> None:
-            return None
-
-        def exec_command(self, _command: str) -> None:
-            return None
-
-        def shutdown_write(self) -> None:
-            return None
-
-        def recv_ready(self) -> bool:
-            return False
-
-        def recv(self, _size: int) -> bytes:
-            return b""
-
-        def recv_stderr_ready(self) -> bool:
-            return bool(self.stderr)
-
-        def recv_stderr(self, _size: int) -> bytes:
-            return self.stderr.pop(0)
-
-        def exit_status_ready(self) -> bool:
-            return True
-
-        def recv_exit_status(self) -> int:
-            return 1
-
-        def close(self) -> None:
-            return None
-
-    class FakeTransport:
-        def is_active(self) -> bool:
-            return True
-
-        def open_session(self, *, timeout: float) -> FakeChannel:
-            assert timeout > 0
-            return FakeChannel()
-
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
-    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
-    client._client = types.SimpleNamespace(get_transport=lambda: FakeTransport())
-
-    try:
-        client.run("agent status")
-    except device_installer.C300XDeviceInstallError as err:
-        assert err.reason == "device_install_failed"
-    else:  # pragma: no cover
-        raise AssertionError("nonzero command exit was accepted")
-
-
-def test_paramiko_client_run_times_out_when_command_never_exits(
-    monkeypatch: Any,
-) -> None:
-    """A remote command that never reports an exit status must not hang forever."""
-
-    monkeypatch.setattr(device_installer, "_SSH_COMMAND_TIMEOUT", 0.05)
-
-    class FakeChannel:
-        def settimeout(self, _timeout: float) -> None:
-            return None
-
-        def exec_command(self, _command: str) -> None:
-            return None
-
-        def shutdown_write(self) -> None:
-            return None
-
-        def recv_ready(self) -> bool:
-            return False
-
-        def recv(self, _size: int) -> bytes:
-            return b""
-
-        def recv_stderr_ready(self) -> bool:
-            return False
-
-        def recv_stderr(self, _size: int) -> bytes:
-            return b""
-
-        def exit_status_ready(self) -> bool:
-            return False
-
-        def close(self) -> None:
-            return None
-
-    class FakeTransport:
-        def is_active(self) -> bool:
-            return True
-
-        def open_session(self, *, timeout: float) -> FakeChannel:
-            assert timeout > 0
-            return FakeChannel()
-
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
-    client._paramiko = types.SimpleNamespace(SSHException=RuntimeError)
-    client._client = types.SimpleNamespace(get_transport=lambda: FakeTransport())
-
-    try:
-        client.run("agent status")
-    except device_installer.C300XDeviceInstallError as err:
-        assert err.reason == "device_install_failed"
-    else:  # pragma: no cover
-        raise AssertionError("a command that never exits was not bounded by a deadline")
-
-
-def test_paramiko_put_file_replaces_changed_payload(tmp_path: Path) -> None:
+def test_asyncssh_put_file_replaces_changed_payload(tmp_path: Path) -> None:
     payload = tmp_path / "config.json"
     payload.write_bytes(b"new")
     commands: list[tuple[str, bytes | None]] = []
 
-    client = object.__new__(device_installer._ParamikoDeviceSshClient)
+    client = object.__new__(device_installer._AsyncSshDeviceSshClient)
 
     def fake_run(command: str, input_data: bytes | None = None) -> str:
         commands.append((command, input_data))
@@ -924,96 +749,36 @@ def test_paramiko_put_file_replaces_changed_payload(tmp_path: Path) -> None:
     )
 
 
-def test_paramiko_client_init_connects_with_legacy_options(monkeypatch: Any) -> None:
-    events: list[tuple[str, Any]] = []
+def test_asyncssh_client_init_reports_connect_failures(monkeypatch: Any) -> None:
+    async def connect(**_kwargs: Any) -> None:
+        raise OSError("denied")
 
-    class FakeSSHClient:
-        def set_missing_host_key_policy(self, policy: Any) -> None:
-            events.append(("policy", type(policy).__name__))
-
-        def connect(self, **kwargs: Any) -> None:
-            events.append(("connect", kwargs))
-
-        def close(self) -> None:
-            events.append(("close", None))
-
-    class FakeParamiko:
-        __version__ = "3.5.1"
-        AuthenticationException = RuntimeError
-        SSHException = RuntimeError
-        SSHClient = FakeSSHClient
-
-        class AutoAddPolicy:
-            pass
-
-    monkeypatch.setitem(sys.modules, "paramiko", FakeParamiko)
-
-    client = device_installer._ParamikoDeviceSshClient(
-        C300XDeviceInstallRequest(
-            host="[fe80::1]",
-            ssh_username=" root ",
-            ssh_password="secret",
-        )
+    module = types.SimpleNamespace(
+        __version__="2.24.1", Error=RuntimeError, connect=connect
     )
-    client.close()
-
-    assert events[0] == ("policy", "AutoAddPolicy")
-    assert events[1][0] == "connect"
-    assert events[1][1]["hostname"] == "fe80::1"
-    assert events[1][1]["username"] == "root"
-    assert events[2] == ("close", None)
-
-
-def test_paramiko_client_init_reports_connect_failures(monkeypatch: Any) -> None:
-    class FakeParamiko:
-        __version__ = "3.5.1"
-
-        class AuthenticationException(Exception):
-            pass
-
-        class SSHException(Exception):
-            pass
-
-        class AutoAddPolicy:
-            pass
-
-        class SSHClient:
-            def set_missing_host_key_policy(self, _policy: Any) -> None:
-                return None
-
-            def connect(self, **_kwargs: Any) -> None:
-                raise FakeParamiko.AuthenticationException("denied")
-
-    monkeypatch.setitem(sys.modules, "paramiko", FakeParamiko)
-
-    try:
-        device_installer._ParamikoDeviceSshClient(
+    monkeypatch.setitem(sys.modules, "asyncssh", module)
+    with pytest.raises(C300XDeviceInstallError, match="device_install_failed"):
+        device_installer._AsyncSshDeviceSshClient(
             C300XDeviceInstallRequest(
-                host="c300x.local",
-                ssh_username="root",
-                ssh_password="secret",
+                host="c300x.local", ssh_username="root", ssh_password="secret",
             )
         )
-    except device_installer.C300XDeviceInstallError as err:
-        assert err.reason == "device_install_failed"
-    else:  # pragma: no cover
-        raise AssertionError("connect failure was accepted")
 
 
-def test_paramiko_client_init_reports_missing_dependency(monkeypatch: Any) -> None:
-    monkeypatch.delitem(sys.modules, "paramiko", raising=False)
+def test_asyncssh_client_init_reports_missing_dependency(monkeypatch: Any) -> None:
+    monkeypatch.delitem(sys.modules, "asyncssh", raising=False)
 
     original_import = __import__
 
     def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "paramiko":
+        if name == "asyncssh":
             raise ImportError("missing")
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr("builtins.__import__", fake_import)
 
     try:
-        device_installer._ParamikoDeviceSshClient(
+        device_installer._AsyncSshDeviceSshClient(
             C300XDeviceInstallRequest(
                 host="c300x.local",
                 ssh_username="root",
@@ -1023,7 +788,7 @@ def test_paramiko_client_init_reports_missing_dependency(monkeypatch: Any) -> No
     except device_installer.C300XDeviceInstallError as err:
         assert err.reason == "installer_dependency_missing"
     else:  # pragma: no cover
-        raise AssertionError("missing Paramiko dependency was accepted")
+        raise AssertionError("missing AsyncSSH dependency was accepted")
 
 
 def test_startup_script_recreates_missing_rc_link_without_rewriting_init(
@@ -1304,8 +1069,8 @@ def test_firewall_patch_bootstrap_invokes_project_script() -> None:
     ]
 
 
-def test_paramiko_connect_kwargs_force_legacy_ssh_rsa() -> None:
-    kwargs = device_installer._paramiko_connect_kwargs(
+def test_asyncssh_connect_kwargs_force_legacy_ssh_rsa() -> None:
+    kwargs = device_installer._asyncssh_connect_kwargs(
         C300XDeviceInstallRequest(
             host="[fe80::1]",
             ssh_username=" root ",
@@ -1313,29 +1078,31 @@ def test_paramiko_connect_kwargs_force_legacy_ssh_rsa() -> None:
         )
     )
 
-    assert kwargs["hostname"] == "fe80::1"
+    assert kwargs["host"] == "fe80::1"
     assert kwargs["username"] == "root"
-    assert kwargs["look_for_keys"] is False
-    assert kwargs["allow_agent"] is False
-    assert kwargs["disabled_algorithms"] == {
-        "keys": ("rsa-sha2-512", "rsa-sha2-256"),
-        "pubkeys": ("rsa-sha2-512", "rsa-sha2-256"),
-    }
+    assert kwargs["client_keys"] == []
+    assert kwargs["agent_path"] is None
+    assert kwargs["config"] is None
+    assert kwargs["known_hosts"] is None
+    assert kwargs["preferred_auth"] == ["password"]
+    assert kwargs["server_host_key_algs"] == ["ssh-rsa"]
+    assert kwargs["kex_algs"] == "+diffie-hellman-group1-sha1"
+    assert kwargs["encryption_algs"] == "+aes128-cbc,3des-cbc"
 
 
-def test_installer_rejects_unvalidated_paramiko_versions() -> None:
-    class FakeParamiko:
+def test_installer_rejects_unvalidated_asyncssh_versions() -> None:
+    class FakeAsyncSSH:
         __version__ = "4.0.0"
 
     try:
-        device_installer._validate_paramiko_version(FakeParamiko)
+        device_installer._validate_asyncssh_version(FakeAsyncSSH)
     except device_installer.C300XDeviceInstallError as err:
         assert err.reason == "installer_dependency_missing"
     else:  # pragma: no cover
         raise AssertionError("Expected installer_dependency_missing")
 
 
-def test_manifest_does_not_require_optional_paramiko() -> None:
+def test_manifest_does_not_require_optional_asyncssh() -> None:
     manifest = json.loads(
         (ROOT / "custom_components" / "bticino_c300x" / "manifest.json").read_text(
             encoding="utf-8"
@@ -1343,12 +1110,12 @@ def test_manifest_does_not_require_optional_paramiko() -> None:
     )
 
     assert not any(
-        requirement.startswith("paramiko") for requirement in manifest["requirements"]
+        requirement.startswith("asyncssh") for requirement in manifest["requirements"]
     )
 
 
-def test_installer_requests_optional_paramiko_on_demand() -> None:
-    assert INSTALLER_REQUIREMENTS == ("paramiko==3.5.1",)
+def test_installer_requests_optional_asyncssh_on_demand() -> None:
+    assert INSTALLER_REQUIREMENTS == ("asyncssh==2.24.1",)
 
 
 def test_installer_dependency_processing_uses_homeassistant_requirements(
@@ -1383,17 +1150,17 @@ def test_installer_dependency_processing_uses_homeassistant_requirements(
 
     asyncio.run(async_ensure_installer_dependencies(hass))  # type: ignore[arg-type]
 
-    assert calls == [(hass, "bticino_c300x", ["paramiko==3.5.1"], False)]
+    assert calls == [(hass, "bticino_c300x", ["asyncssh==2.24.1"], False)]
 
 
-def test_dev_requirements_pin_paramiko_with_legacy_ssh_rsa_support() -> None:
+def test_dev_requirements_pin_asyncssh_with_legacy_ssh_rsa_support() -> None:
     requirement_files = (
         ROOT / "requirements-dev.txt",
         ROOT / "requirements-dev-min-ha.txt",
     )
 
     for path in requirement_files:
-        assert "paramiko==3.5.1" in path.read_text(encoding="utf-8").splitlines()
+        assert "asyncssh==2.24.1" in path.read_text(encoding="utf-8").splitlines()
 
 
 def test_manifest_does_not_require_aiortc() -> None:

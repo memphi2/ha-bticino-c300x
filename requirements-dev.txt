@@ -5,7 +5,7 @@ av==18.1.0
 mypy==2.4.1
 numpy==2.5.4
 packaging==26.3
-paramiko==3.5.1
+asyncssh==2.24.1
 PyTurboJPEG==2.6.1
 PyYAML==6.0.3
 pytest==9.2.0

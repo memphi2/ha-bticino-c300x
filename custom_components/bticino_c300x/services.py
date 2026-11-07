@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
@@ -53,6 +53,7 @@ from .display_notifications import (
 )
 from .exceptions import service_validation_error
 from .schema_compat import vol
+from .service_authorization import authorized_service
 from .service_schema import (
     ATTR_ACTION_ID as _ATTR_ACTION_ID,
 )
@@ -251,7 +252,7 @@ class _C300XServiceHandlers:
 
         entry = _entry_for_call(self._hass, call)
         await DeviceActionsUseCase(self._hass, entry).run_action(
-            call.data[_ATTR_ACTION_ID]
+            call.data[_ATTR_ACTION_ID], context=getattr(call, "context", None)
         )
 
     async def async_run_device_activation(self, call: ServiceCall) -> None:
@@ -270,6 +271,7 @@ class _C300XServiceHandlers:
             call.data[_ATTR_COMMAND],
             call.data.get(_ATTR_CODE),
             force=bool(call.data.get(_ATTR_FORCE, False)),
+            context=getattr(call, "context", None),
         )
 
     async def async_stair_light(self, call: ServiceCall) -> None:
@@ -448,7 +450,11 @@ def _register_base_services(
     """Register services that are always part of the integration."""
 
     for service_name, handler, schema in _base_service_specs(handlers):
-        hass.services.async_register(DOMAIN, service_name, cast(Any, handler), schema=schema)
+        hass.services.async_register(
+            DOMAIN, service_name,
+            authorized_service(hass, service_name, handler, lambda call: _entry_for_call(hass, call)),
+            schema=schema,
+        )
 
 
 def _base_service_specs(handlers: _C300XServiceHandlers) -> tuple[_ServiceSpec, ...]:
@@ -723,7 +729,9 @@ def _sync_gui_required_services(
             hass.services.async_register(
                 DOMAIN,
                 service_name,
-                cast(Any, handlers[service_name]),
+                authorized_service(
+                    hass, service_name, handlers[service_name], lambda call: _entry_for_call(hass, call)
+                ),
                 schema=vol.Schema({vol.Optional(_ATTR_ENTRY_ID): cv.string}),
             )
             registered.add(service_name)

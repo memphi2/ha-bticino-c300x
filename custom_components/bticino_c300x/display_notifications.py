@@ -85,6 +85,7 @@ class DisplayNotifications:
         self._expiry: asyncio.TimerHandle | None = None
         self.closed = False
         self.busy: set[str] = set()
+        self._pending: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
     def show(self, data: dict[str, Any]) -> None:
         if self.closed:
@@ -154,6 +155,8 @@ class DisplayNotifications:
 
     def close(self) -> None:
         self.closed = True
+        for task in self._pending.values():
+            task.cancel()
         if self._expiry is not None:
             self._expiry.cancel()
             self._expiry = None
@@ -259,8 +262,11 @@ async def async_notification_action(
     }:
         raise ValueError("unknown_notification_action")
     store.busy.add(key)
+    task = asyncio.create_task(async_execute_action(hass, entry, action_id, blocking=True))
+    store._pending[key] = task
     try:
-        await async_execute_action(hass, entry, action_id)
+        await task
     finally:
+        store._pending.pop(key, None)
         store.busy.discard(key)
     return {"ok": True}

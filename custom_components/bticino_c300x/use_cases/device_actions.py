@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 
 from ..action import ActionValidationError
 from ..exceptions import service_validation_error
@@ -24,11 +24,15 @@ class DeviceActionsUseCase:
         self._hass = hass
         self._entry = entry
 
-    async def run_action(self, action_id: str) -> None:
+    async def run_action(self, action_id: str, *, context: Context | None = None) -> None:
         """Run one allowlisted Home Assistant action."""
 
         try:
-            await async_execute_action(self._hass, self._entry, action_id)
+            await async_execute_action(
+                self._hass, self._entry, action_id,
+                blocking=True,
+                context=context,
+            )
         except ActionValidationError as err:
             raise service_validation_error("invalid_action_id") from err
         except KeyError as err:
@@ -50,6 +54,7 @@ class DeviceActionsUseCase:
         code: str | None,
         *,
         force: bool = False,
+        context: Context | None = None,
     ) -> None:
         """Forward one alarm command to the configured HA alarm entity."""
 
@@ -60,6 +65,7 @@ class DeviceActionsUseCase:
                 command,
                 code,
                 force=force,
+                context=context,
             )
         except ActionValidationError as err:
             raise service_validation_error("invalid_alarm_command") from err

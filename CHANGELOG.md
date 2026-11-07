@@ -1,5 +1,43 @@
 # Changelog
 
+## v2.1.0b2 - 2026-11-07
+
+### Fixed
+
+- Replace the optional legacy Paramiko installer with current AsyncSSH, keeping
+  device-required legacy algorithms scoped to explicit bootstrap/recovery.
+  Normal agent updates remain SSH-free; document the residual device risk.
+- Defer ringer status verification until device confirmation instead of feeding
+  the previous mute state back into the GUI during a queued change. Guard
+  concurrent status reads and handle missing events with a final verification.
+  Requires an updated agent.
+- Enforce HA caller permissions for C300X services and preserve the caller's
+  context when invoking configured actions or alarm commands.
+- Reserve ring captures atomically before an unlock attempt. Keep all used IDs
+  for the freshness window, including across restarts; reject corrupt ledgers
+  instead of allowing a replay. Failed or cancelled attempts remain consumed.
+- Forward display commands asynchronously so HA can call back into the agent
+  without a timeout deadlock. Reject concurrent display commands rather than
+  queueing physical actions. Requires an updated agent.
+- Preserve complete display request targets and options; reject oversized
+  requests instead of truncating them. Requires an updated agent.
+- Keep notification actions pending until the HA service call finishes, and
+  cancel pending work when the integration unloads.
+- Recheck media ownership before stopping a closing camera session, and
+  serialize Home Call admission/start with teardown and idle-status cleanup.
+- Validate the complete agent update before installation and restore previous
+  files on an apply failure. Publish bundle metadata only after successful
+  activation. This protection applies to updates performed by the new agent.
+
+### Upgrade
+
+- Includes rebuilt native agent `2.1.0b2`. Install the integration, restart HA
+  and complete the agent-update Repair. Existing 2.1.0b1 display pages do not
+  need reapplying solely for these fixes.
+- Ringer feedback regressions are covered by local tests; confirmation with the
+  corrected agent on affected devices is still needed. Issue #65 remains open.
+- Opt-in prerelease; stable remains `2.0.0`.
+
 ## v2.1.0b1 - 2026-11-07
 
 ### Added

@@ -195,9 +195,18 @@ arbitrary binaries on its own and does not check for updates in idle.
 - If an update is needed, Home Assistant raises a Repair.
 - The Repair uploads the packaged files through the maintenance API only after
   user confirmation.
-- The agent verifies staged files before apply, preserves the existing config
-  and subscription store, and restarts only after the update request.
+- The agent verifies the complete staged bundle before replacing any installed
+  file. It keeps temporary local backups for changed files, rolls them back on
+  an apply error, and writes bundle metadata only after activation succeeds.
+  Existing config is preserved; restart is scheduled only after success.
 - Older agents without self-update support still require the installer/SSH path.
+
+These checks run in the currently installed agent, so updating an older agent
+does not retroactively change its updater. The rollback handles reported apply
+errors, not power loss or storage failure during rollback. Recovery backups
+left by an interrupted update are not overwritten; inspect and recover that
+installation before trying another update. No update checks or backup writes
+are added to idle operation.
 
 ## Release agent reuse
 

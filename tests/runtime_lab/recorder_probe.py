@@ -39,6 +39,14 @@ async def rows(lab):
 async def run(root: Path):
     async with RuntimeLab(root, recorder=True) as lab:
         await lab.add_entry(enabled_sensors=("device_cpu", "agent_diagnostics"))
+        # Entity creation schedules a delayed subscription refresh. HA's task
+        # barrier does not wait for timers; finish that refresh before measuring.
+        registration = lab.entry.runtime_data.resources.unregister_event_registration.__self__
+        await lab.wait_for(
+            lambda: registration._registry_refresh_cancel is None
+            and not registration._active_tasks
+            and registration._task.done()
+        )
         cpu = lab.entity("device_cpu")
         memo = lab.entity("text_memos")
         diagnostics = lab.entity("agent_diagnostics")
@@ -78,7 +86,11 @@ async def run(root: Path):
             assert (await lab.push("agent.diagnostics_changed", diagnostic_payload))[
                 0
             ] == 200
-        assert await rows(lab) == before, "Identical measurements grew Recorder history"
+        unchanged = await rows(lab)
+        assert unchanged == before, (
+            "Identical measurements grew Recorder history: "
+            f"{[tuple(row) for row in unchanged[len(before):]]!r}"
+        )
         for value in (2.0, 3.0, 4.0):
             assert (
                 await lab.push(

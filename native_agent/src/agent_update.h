@@ -59,7 +59,8 @@ int apply_agent_update_files(
     const struct c300x_config *config,
     const char *manifest,
     const char *installed_manifest,
-    struct agent_update_change_summary *summary
+    struct agent_update_change_summary *summary,
+    int (*activate)(const struct c300x_config *, struct agent_update_change_summary *)
 );
 
 #endif

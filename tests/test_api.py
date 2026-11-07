@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Callable
 
 import pytest
@@ -2780,10 +2781,11 @@ def test_smartphone_forwarding_status_falls_back_to_state_endpoint() -> None:
 
 
 
-def test_ringer_status_falls_back_to_state_endpoint() -> None:
+@pytest.mark.parametrize("http_status,error", [(500, "ringer_unavailable"), (409, "ringer_gui_busy")])
+def test_ringer_status_falls_back_to_state_endpoint(http_status: int, error: str) -> None:
     session = _QueuedSession(
         [
-            (500, '{"error": "ringer_unavailable"}'),
+            (http_status, json.dumps({"error": error})),
             (200, '{"state": {"ringer_muted": true, "ringer_volume": 3}}'),
         ]
     )

@@ -5,6 +5,7 @@ static ssize_t short_send(int fd, const void *buffer, size_t length, int flags);
 #undef send
 #include "../src/http_response.h"
 #include <assert.h>
+#include <limits.h>
 
 static int interrupted;
 static ssize_t short_send(int fd, const void *buffer, size_t length, int flags)
@@ -18,7 +19,11 @@ static ssize_t short_send(int fd, const void *buffer, size_t length, int flags)
 
 int main(void)
 {
-    char path[] = "/tmp/c300x-http-file-test-XXXXXX";
+    char path[PATH_MAX];
+    const char *temporary = getenv("TMPDIR");
+    int path_length = snprintf(path, sizeof(path), "%s/c300x-http-file-test-XXXXXX",
+                               temporary != NULL ? temporary : "/tmp");
+    assert(path_length > 0 && (size_t)path_length < sizeof(path));
     const char body[] = "0123456789abcdef0123456789abcdef";
     int file = mkstemp(path);
     assert(file >= 0);

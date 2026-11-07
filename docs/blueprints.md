@@ -123,3 +123,10 @@ The decision service checks that:
 - the capture ID was not already consumed for unlock,
 - the phrase matches exactly,
 - unlock only runs when `unlock_on_match` is enabled.
+
+A capture is reserved on HA before the unlock request is sent. Overlapping
+evaluations cannot use it twice, and another capture does not erase the first
+reservation. Reservations survive HA restarts for the capture freshness window.
+If an unlock attempt fails or is cancelled, use a new capture rather than
+retrying the old one. An unreadable or corrupt reservation file blocks unlocking;
+do not delete it to retry a still-fresh capture.

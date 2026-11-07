@@ -16,7 +16,7 @@ _PYTHON_PACKAGES = {
     "aiohttp": False,
     "av": True,
     "homeassistant": False,
-    "paramiko": True,
+    "asyncssh": True,
     "probatio": True,
     "propcache": False,
     "voluptuous": True,
@@ -28,7 +28,7 @@ def runtime_inventory(
     archive: zipfile.ZipFile,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     imports: set[str] = set()
-    paramiko_version: str | None = None
+    asyncssh_version: str | None = None
     for name in sorted(archive.namelist()):
         if not name.endswith(".py"):
             continue
@@ -43,30 +43,30 @@ def runtime_inventory(
                 and isinstance(node, ast.Assign)
                 and any(
                     isinstance(target, ast.Name)
-                    and target.id == "_REQUIRED_PARAMIKO_VERSION"
+                    and target.id == "_REQUIRED_ASYNCSSH_VERSION"
                     for target in node.targets
                 )
             ):
                 value = ast.literal_eval(node.value)
                 if isinstance(value, str):
-                    paramiko_version = value
+                    asyncssh_version = value
     external = imports - sys.stdlib_module_names
     unknown = external - _PYTHON_PACKAGES.keys()
     if unknown:
         raise ValueError(
             f"unmapped runtime imports in release: {', '.join(sorted(unknown))}"
         )
-    if "paramiko" in external and not paramiko_version:
-        raise ValueError("packaged SSH installer does not declare its Paramiko version")
+    if "asyncssh" in external and not asyncssh_version:
+        raise ValueError("packaged SSH installer does not declare its AsyncSSH version")
 
     packages: list[dict[str, Any]] = []
     relationships: list[dict[str, str]] = []
     for name in sorted(external):
         package_id = f"SPDXRef-Runtime-Python-{name}"
-        version = paramiko_version if name == "paramiko" else None
+        version = asyncssh_version if name == "asyncssh" else None
         comment = (
             "Optional SSH install/repair dependency, installed through Home Assistant on demand; not bundled."
-            if name == "paramiko"
+            if name == "asyncssh"
             else "External Home Assistant runtime dependency; installed version not observed; not bundled."
         )
         package = _external_package(package_id, name, comment)

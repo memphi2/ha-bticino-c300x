@@ -113,7 +113,7 @@ def test_comments_cannot_satisfy_missing_ignore_policy(policy_repo: Path) -> Non
         ).pop("ignore"),
     )
     path.write_text(
-        path.read_text() + '\n# dependency-name: "paramiko"\n# ">=4"\n# ">=0"\n'
+        path.read_text() + '\n# dependency-name: "*"\n# version-update:semver-major\n'
     )
     assert any(
         "incorrect ignore" in failure

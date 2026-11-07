@@ -14,11 +14,15 @@ from homeassistant.exceptions import HomeAssistantError
 from .json_io import async_write_json_file
 from .ring_ai import _read_capture_metadata, _ring_capture_metadata_path
 from .ring_capture import _safe_c300x_path
+from .ring_capture_ledger import (
+    MAX_RING_ANALYSIS_AGE_SECONDS,
+    read_used_captures,
+    reserve_capture,
+)
 
 DEFAULT_RING_ANALYSIS_RESULT_PATH = "/config/c300x/analysis/result.json"
 DEFAULT_RING_ANALYSIS_DECISION_PATH = "/config/c300x/analysis/decision.json"
 DEFAULT_USED_RING_CAPTURES_PATH = "/config/c300x/analysis/used_captures.json"
-MAX_RING_ANALYSIS_AGE_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,11 @@ async def async_evaluate_ring_analysis(
         required=consume_on_match or require_capture,
     )
     matched = phrase_match and guardrail["ok"]
+    if matched and consume_on_match:
+        matched = await async_mark_ring_capture_used(hass, guardrail["capture_id"])
+        if not matched:
+            guardrail["ok"] = False
+            guardrail["reasons"].append("capture_already_used")
     decision_payload = {
         "created_at": datetime.now(UTC).isoformat(),
         "result_path": str(result),
@@ -67,8 +76,6 @@ async def async_evaluate_ring_analysis(
         "transcript": str(payload.get("transcript") or "").strip(),
     }
     await async_write_json_file(hass, decision, decision_payload)
-    if matched and consume_on_match and guardrail["capture_id"]:
-        await _async_mark_capture_used(hass, guardrail["capture_id"])
     return RingAnalysisDecision(
         matched=matched,
         phrase_match=phrase_match,
@@ -77,13 +84,19 @@ async def async_evaluate_ring_analysis(
     )
 
 
-async def async_mark_ring_capture_used(hass: Any, capture_id: str | None) -> None:
-    """Mark a ring capture as consumed after the guarded action succeeded."""
+async def async_mark_ring_capture_used(hass: Any, capture_id: str | None) -> bool:
+    """Reserve a capture durably before attempting the guarded physical action."""
 
     capture_id = str(capture_id or "").strip()
     if not capture_id:
-        return
-    await _async_mark_capture_used(hass, capture_id)
+        return False
+
+    def _reserve() -> bool:
+        return reserve_capture(_used_captures_path(hass), capture_id)
+
+    if hasattr(hass, "async_add_executor_job"):
+        return bool(await hass.async_add_executor_job(_reserve))
+    return await asyncio.to_thread(_reserve)
 
 
 def _ring_result_path(hass: Any, result_path: str | None) -> Path:
@@ -185,8 +198,12 @@ def _capture_guardrail_result(
             reasons.append("capture_wav_mismatch")
         if _capture_is_stale(capture_payload):
             reasons.append("capture_stale")
-    if result_capture_id and _capture_id_was_used(hass, result_capture_id):
-        reasons.append("capture_already_used")
+    if result_capture_id:
+        try:
+            if result_capture_id in read_used_captures(_used_captures_path(hass), datetime.now(UTC)):
+                reasons.append("capture_already_used")
+        except HomeAssistantError:
+            reasons.append("capture_ledger_unavailable")
 
     if not required and not result_capture_id and not result_capture_path:
         reasons = []
@@ -225,7 +242,8 @@ def _capture_is_stale(payload: dict[str, Any]) -> bool:
         return True
     if created.tzinfo is None:
         created = created.replace(tzinfo=UTC)
-    return datetime.now(UTC) - created > timedelta(seconds=MAX_RING_ANALYSIS_AGE_SECONDS)
+    age = datetime.now(UTC) - created
+    return not timedelta(0) <= age <= timedelta(seconds=MAX_RING_ANALYSIS_AGE_SECONDS)
 
 
 def _used_captures_path(hass: Any) -> Path:
@@ -241,46 +259,6 @@ def _used_captures_path(hass: Any) -> Path:
         Path(DEFAULT_USED_RING_CAPTURES_PATH),
         "used ring captures",
     )
-
-
-def _last_used_capture_id(hass: Any) -> str:
-    path = _used_captures_path(hass)
-    if not path.is_file():
-        return ""
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return ""
-    if not isinstance(data, dict):
-        return ""
-    return str(data.get("capture_id") or "").strip()
-
-
-def _capture_id_was_used(hass: Any, capture_id: str) -> bool:
-    return _last_used_capture_id(hass) == capture_id
-
-
-async def _async_mark_capture_used(hass: Any, capture_id: str) -> None:
-    def _mark() -> None:
-        path = _used_captures_path(hass)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {
-                    "capture_id": capture_id,
-                    "used_at": datetime.now(UTC).isoformat(),
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-
-    if hasattr(hass, "async_add_executor_job"):
-        await hass.async_add_executor_job(_mark)
-        return
-    await asyncio.to_thread(_mark)
 
 
 def _phrase_match(payload: dict[str, Any], *, expected_phrase: str | None) -> bool:

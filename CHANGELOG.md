@@ -2,6 +2,10 @@
 
 ## v2.1.0b1 - Unreleased
 
+- HA-owned native display notifications with stable IDs, bounded priority queue,
+  expiry, explicit dismissal and up to two allowlisted actions. Includes a
+  calendar reminder blueprint; no display wake or overlay on PIN entry/calls.
+
 - Native display controls for lights, covers and climate entities, with capability-
   based details, actual select options and bounded number adjustments. Sliders
   send on release; selected entities receive event-driven state updates without

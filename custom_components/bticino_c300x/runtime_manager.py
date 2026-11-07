@@ -1031,6 +1031,7 @@ def _alarmo_display_entities(alarmo_data: dict[str, Any]) -> tuple[Any, ...]:
 def _async_schedule_display_bridge_notify(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
+    *, notifications: bool = False,
 ) -> None:
     """Schedule one non-blocking display bridge wake-up."""
 
@@ -1041,6 +1042,8 @@ def _async_schedule_display_bridge_notify(
     if connection_state is not None and not connection_state.available:
         return
     runtime_data.display_bridge_notify_dirty = True
+    if notifications:
+        runtime_data.display_bridge_notify_messages = True
     if getattr(runtime_data, "display_bridge_alarm_notify_pending", False):
         return
     runtime_data.display_bridge_alarm_notify_pending = True
@@ -1063,7 +1066,9 @@ async def _async_notify_display_bridge_alarm_if_listening(
             if getattr(entry, "runtime_data", None) is not runtime_data:
                 return
             runtime_data.display_bridge_notify_dirty = False
-            await runtime_data.api.async_notify_display_bridge_event("alarm")
+            topic = "notifications" if getattr(runtime_data, "display_bridge_notify_messages", False) else "alarm"
+            runtime_data.display_bridge_notify_messages = False
+            await runtime_data.api.async_notify_display_bridge_event(topic)
             if not runtime_data.display_bridge_notify_dirty:
                 break
     except C300XAgentApiUnsupportedError:

@@ -75,6 +75,7 @@ def test_install_bundled_blueprints_copies_missing_files(tmp_path: Path) -> None
     result = install_bundled_blueprints(target)
 
     assert {path.name for path in result.installed} == {
+        "calendar_display_reminder.yaml",
         "doorbell_call_android.yaml",
         "doorbell_call_ios.yaml",
         "doorbell_notification.yaml",

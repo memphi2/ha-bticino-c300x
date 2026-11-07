@@ -86,3 +86,19 @@ assert.equal(sliderHandlers.split("onReleased:")[0].includes("Api.dashboardContr
 assert.match(qml, /contentWidth: width/);
 assert.match(qml, /interactive: !interactionActive/);
 console.log("Dashboard QML production controls passed");
+
+Api.dashboard(p.status, p);
+queue.shift().success({...payload("five"), notifications: [
+    {id: "calendar", revision: 12, title: "Appointment", message: "At 10", actions: []},
+]});
+assert.equal(p.notifications.length, 1);
+p.notificationsOpen = true;
+p.notificationAction(p.notifications[0], null);
+assert.match(queue[0].url, /entities=notification.calendar&option=/);
+assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).revision, 12);
+p.notificationAction(p.notifications[0], null);
+assert.equal(queue.length, 1, "notification actions are single-flight too");
+queue.shift().success({ok: true});
+queue.shift().success(payload("six"));
+assert.equal(p.notifications.length, 0);
+assert.equal(p.notificationsOpen, false, "expiry/dismissal closes the empty details view");

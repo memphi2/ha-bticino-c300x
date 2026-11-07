@@ -19,6 +19,7 @@ from .system_metrics import SystemMetricsCache
 if TYPE_CHECKING:
     from .agent_update import AgentUpdateState
     from .api import C300XAgentApi
+    from .display_notifications import DisplayNotifications
 
 
 @dataclass(slots=True)
@@ -211,6 +212,7 @@ class C300XRuntimeResources:
     unregister_event_registration: Callable[[], None] | None = None
     on_runtime_registration_created: Callable[[], Awaitable[None]] | None = None
     unregister_display_bridge_updates: Callable[[], None] | None = None
+    close_display_notifications: Callable[[], None] | None = None
     prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
     prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
     agent_cpu_watchdog_task: Task[None] | None = None
@@ -223,6 +225,7 @@ class C300XRuntimeResources:
         """Release callbacks and tasks once; never invoke media/device commands."""
 
         callbacks = (
+            self.close_display_notifications,
             self.unregister_event_registration,
             self.unregister_display_bridge_updates,
             self.unregister_event_webhook,
@@ -235,6 +238,7 @@ class C300XRuntimeResources:
             self.agent_cpu_watchdog_task,
         )
         self.unregister_event_registration = None
+        self.close_display_notifications = None
         self.unregister_display_bridge_updates = None
         self.unregister_event_webhook = None
         self.unregister_webhook = None
@@ -309,6 +313,8 @@ class BticinoC300XRuntimeData:
     self_test_status_updated_at: datetime | None = None
     display_bridge_alarm_notify_pending: bool = False
     display_bridge_notify_dirty: bool = False
+    display_bridge_notify_messages: bool = False
+    display_notifications: DisplayNotifications | None = None
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: AgentUpdateState | None = None
     resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)

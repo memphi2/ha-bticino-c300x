@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -43,6 +44,12 @@ from .const import (
     SERVICE_UNLOCK_DOOR,
     SERVICE_WRITE_TEXT_MEMO,
     SIGNAL_QML_PATCH_CHANGED,
+)
+from .display_notifications import (
+    DISMISS_SCHEMA,
+    SHOW_SCHEMA,
+    notifications_for_entry,
+    show_notification,
 )
 from .exceptions import service_validation_error
 from .schema_compat import vol
@@ -224,6 +231,20 @@ class _C300XServiceHandlers:
             SERVICE_DELETE_LATEST_TEXT_MEMO: self.async_delete_latest_text_memo,
             SERVICE_DELETE_LATEST_VOICE_MEMO: self.async_delete_latest_voice_memo,
         }
+
+    async def async_show_display_notification(self, call: ServiceCall) -> None:
+        entry = _entry_for_call(self._hass, call)
+        try:
+            show_notification(self._hass, entry, dict(call.data))
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
+    async def async_dismiss_display_notification(self, call: ServiceCall) -> None:
+        entry = _entry_for_call(self._hass, call)
+        try:
+            notifications_for_entry(self._hass, entry).dismiss(call.data["notification_id"])
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
 
     async def async_run_action(self, call: ServiceCall) -> None:
         """Run one allowlisted Home Assistant action."""
@@ -435,6 +456,8 @@ def _base_service_specs(handlers: _C300XServiceHandlers) -> tuple[_ServiceSpec, 
 
     return (
         *_device_action_service_specs(handlers),
+        ("show_display_notification", handlers.async_show_display_notification, SHOW_SCHEMA),
+        ("dismiss_display_notification", handlers.async_dismiss_display_notification, DISMISS_SCHEMA),
         *_doorbell_media_service_specs(handlers),
         *_ring_analysis_service_specs(handlers),
         *_maintenance_service_specs(handlers),

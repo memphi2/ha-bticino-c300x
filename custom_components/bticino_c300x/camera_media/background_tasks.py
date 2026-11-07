@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -14,12 +15,27 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CameraBackgroundTasks:
-    """Own camera event tasks and optionally coalesce one named operation."""
+    """Own camera work and optionally coalesce one named operation."""
 
     def __init__(self) -> None:
         self.closing = False
         self._tasks: set[asyncio.Task[Any]] = set()
         self._named: dict[str, asyncio.Task[Any]] = {}
+
+    @contextmanager
+    def track_current(self) -> Iterator[None]:
+        """Own an awaited request only for the duration of its camera work."""
+        if self.closing:
+            raise asyncio.CancelledError
+        task = asyncio.current_task()
+        assert task is not None
+        already_owned = task in self._tasks
+        self._tasks.add(task)
+        try:
+            yield
+        finally:
+            if not already_owned:
+                self._tasks.discard(task)
 
     def create(
         self, hass: HomeAssistant, coro: Coroutine[Any, Any, None], *, key: str | None = None,

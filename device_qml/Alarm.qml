@@ -15,7 +15,7 @@ Page {
             refreshAlarmStatus(false)
             startStatusWatch()
         } else {
-            stopStatusWatch()
+            pausePage()
         }
     }
 
@@ -39,6 +39,16 @@ Page {
     property variant alarmPageItem: null
     property bool preventReturnToHomepage: true
     property real lastStatusRefreshMs: 0
+    property bool alarmOnline: false
+    property bool commandPending: false
+    property bool commandInFlight: false
+    property bool quickActionPending: false
+    property int quickActionGeneration: 0
+    property bool pinRequested: false
+    property bool pageActive: false
+    property bool watchFailed: false
+    property int runtimeGeneration: 0
+    property int statusGeneration: 0
 
     Timer {
         id: modeFeedbackTimer
@@ -48,6 +58,7 @@ Page {
     }
 
     function aboutToShow() {
+        pageActive = true
         activeFeedbackCommand = ""
         clearCommandFeedback()
         refreshAlarmStatus(false)
@@ -55,12 +66,32 @@ Page {
     }
 
     function handleScreenOff() {
-        stopStatusWatch()
+        pausePage()
         lastStatusRefreshMs = 0
         return preventReturnToHomepage
     }
 
+    function aboutToHide() {
+        pausePage()
+    }
+
+    function pausePage() {
+        pageActive = false
+        runtimeGeneration += 1
+        clearPin()
+        pinRequested = false
+        commandPending = false
+        commandInFlight = false
+        quickActionPending = false
+        alarmOnline = false
+        delayedStatusRefresh.stop()
+        stopStatusWatch()
+        lastStatusRefreshMs = 0
+    }
+
     function startStatusWatch() {
+        pageActive = true
+        watchFailed = false
         Api.startEventWatch(handleStatusEvent)
     }
 
@@ -78,6 +109,14 @@ Page {
     }
 
     function handleStatusEvent(event) {
+        if (event && event.topic === "connection.error") {
+            watchFailed = true
+            alarmOnline = false
+            alarmState.text = uiText("offline")
+            activeSince.text = ""
+            clearPin()
+            return
+        }
         if (event && (event.topic === "alarm" || event.topic === "display_bridge.state")) {
             activeFeedbackCommand = ""
             clearCommandFeedback()
@@ -86,7 +125,7 @@ Page {
     }
 
     function appendDigit(digit) {
-        if (pinCode.length < 10) {
+        if (keypadVisible() && !commandPending && pinCode.length < 10) {
             pinCode = pinCode + digit
         }
     }
@@ -182,10 +221,13 @@ Page {
     }
 
     function selectCommand(command) {
+        if (!alarmOnline || commandPending || !Api.contains(alarmCommands, command)) return
         if (selectedCommand !== command) {
             bypassOffered = false
+            clearPin()
         }
         selectedCommand = command
+        pinRequested = commandRequiresPin(command)
         flashCommandButton(command, "#f1c40f")
         refreshCommandReadiness()
         if (!selectedCommandReady) {
@@ -212,7 +254,24 @@ Page {
         executeCommand(selectedCommand, false)
     }
 
+    function keypadVisible() {
+        return alarmOnline && commandRequiresPin(selectedCommand)
+            && (pinRequested || alarmRawState === "pending" || alarmRawState === "triggered")
+    }
+
+    function statusApplied(previousState, previousCommand) {
+        if (previousState !== alarmRawState || previousCommand !== selectedCommand) {
+            clearPin()
+            pinRequested = false
+        }
+        if ((alarmRawState === "pending" || alarmRawState === "triggered")
+                && Api.contains(alarmCommands, "disarm")) {
+            selectedCommand = "disarm"
+        }
+    }
+
     function executeCommand(command, force) {
+        if (!alarmOnline || commandPending || !Api.contains(alarmCommands, command)) return
         if (!alarmConfigured) {
             status.text = uiText("alarm_not_configured")
             status.color = "#ff6b6b"
@@ -253,7 +312,7 @@ Page {
     }
 
     function modeReadyIndicatorVisible(command) {
-        return isArmCommand(command) && commandTargetState(command) !== alarmRawState
+        return alarmOnline && isArmCommand(command) && commandTargetState(command) !== alarmRawState
     }
 
     function modeFeedbackVisible(command) {
@@ -283,6 +342,8 @@ Page {
     }
 
     function feedbackTitle() {
+        if (!alarmOnline) return uiText("offline")
+        if (commandPending) return uiText("sending")
         if (!alarmConfigured) return uiText("alarm_not_configured")
         if (alarmCommands.length === 0) return uiText("no_mode_available")
         if (bypassVisible()) return uiText("not_ready_to_arm")
@@ -291,8 +352,10 @@ Page {
     }
 
     function feedbackDetail() {
+        if (!alarmOnline) return ""
         if (!alarmConfigured || alarmCommands.length === 0) return ""
         if (alarmRawState === "triggered") {
+            if (pinCode.length > 0) return commandLabel(selectedCommand) + "  " + uiText("pin_label") + ": " + pinMask()
             var sensors = Api.alarmOpenSensorsText(page)
             if (sensors.length > 0) return sensors
             return commandLabel(selectedCommand)
@@ -323,6 +386,8 @@ Page {
     }
 
     function feedbackColor() {
+        if (!alarmOnline) return "#f1c40f"
+        if (commandPending) return "#f1c40f"
         if (alarmRawState === "triggered") return "#ff6b6b"
         if (!alarmConfigured || bypassVisible()) return "#ff6b6b"
         if (alarmRawState === "arming" || alarmRawState === "pending") return "#f1c40f"
@@ -339,13 +404,13 @@ Page {
     }
 
     function alarmPageItemName() {
-        if (!alarmPageItem) return uiText("stair_light")
+        if (!alarmPageItem) return ""
         if (alarmPageItem.name_key === "stair_light" || alarmPageItem.entity_id === "stair_light") return uiText("stair_light")
         return alarmPageItem.name || alarmPageItem.entity_id || uiText("action")
     }
 
     function alarmPageItemDetail() {
-        return ""
+        return alarmPageItem ? (alarmPageItem.state_label || "") : ""
     }
 
     function alarmPageItemColor() {
@@ -356,17 +421,7 @@ Page {
     }
 
     function executeAlarmPageItem() {
-        if (!alarmPageItem) {
-            alarmPageItem = {
-                "kind": "button",
-                "domain": "c300x",
-                "entity_id": "stair_light",
-                "name_key": "stair_light",
-                "name": "stair_light",
-                "state": false,
-                "state_label": ""
-            }
-        }
+        if (!alarmOnline || !alarmPageItem || commandPending || quickActionPending) return
         if (alarmPageItem.kind === "button" || alarmPageItem.kind === "switch") {
             Api.dashboardAction(alarmPageItem, status, page, false)
             return
@@ -376,6 +431,7 @@ Page {
     }
 
     function stateColor() {
+        if (!alarmOnline) return "#f1c40f"
         if (alarmRawState === "triggered") return "#ff6b6b"
         if (alarmRawState === "arming" || alarmRawState === "pending") return "#f1c40f"
         if (alarmRawState === "unavailable" || alarmRawState === "unknown") return "#f1c40f"
@@ -397,9 +453,45 @@ Page {
     }
 
     Timer {
+        interval: 10000
+        repeat: false
+        running: pageActive && quickActionPending
+        onTriggered: {
+            quickActionGeneration += 1
+            quickActionPending = false
+            status.text = uiText("action_error")
+            status.color = "#ff6b6b"
+            refreshAlarmStatus(true)
+        }
+    }
+
+    Timer {
+        interval: 10000
+        repeat: false
+        running: pageActive && commandPending
+        onTriggered: {
+            runtimeGeneration += 1
+            commandPending = false
+            commandInFlight = false
+            setCommandFeedback("alarm_command_error", selectedCommand, "#ff6b6b")
+            refreshAlarmStatus(true)
+        }
+    }
+
+    Timer {
+        interval: 5000
+        repeat: false
+        running: pageActive && watchFailed
+        onTriggered: {
+            startStatusWatch()
+            refreshAlarmStatus(true)
+        }
+    }
+
+    Timer {
         interval: 1000
         repeat: true
-        running: alarmDelayRemaining > 0
+        running: pageActive && alarmOnline && alarmDelayRemaining > 0
         onTriggered: setAlarmDelayRemaining(alarmDelayRemaining - 1)
     }
 
@@ -436,11 +528,15 @@ Page {
 
             UbuntuLightText {
                 id: alarmState
+                textFormat: Text.PlainText
                 text: "..."
                 color: stateColor()
                 font.pixelSize: 30
                 anchors.left: parent.left
                 anchors.leftMargin: 76
+                anchors.right: activeSince.left
+                anchors.rightMargin: 12
+                elide: Text.ElideRight
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -456,6 +552,7 @@ Page {
 
             UbuntuLightText {
                 id: activeSince
+                textFormat: Text.PlainText
                 text: ""
                 color: "#c7d0d9"
                 font.pixelSize: 17
@@ -518,19 +615,20 @@ Page {
 
                     BeepingMouseArea {
                         anchors.fill: parent
+                        enabled: alarmOnline && !commandPending
                         onClicked: selectCommand(modelData)
                     }
                 }
             }
         }
 
-        Row {
+        Item {
             width: parent.width
             height: 204
-            spacing: 20
 
             Grid {
                 id: keypad
+                visible: keypadVisible()
                 columns: 3
                 spacing: 6
                 property int keyWidth: 132
@@ -561,6 +659,7 @@ Page {
                         BeepingMouseArea {
                             id: keyMouse
                             anchors.fill: parent
+                            enabled: !commandPending && alarmOnline
                             onClicked: {
                                 if (modelData === "C") {
                                     clearPin()
@@ -576,13 +675,16 @@ Page {
             }
 
             Column {
-                width: parent.width - keypad.width - parent.spacing
+                anchors.right: parent.right
+                width: keypad.visible ? parent.width - keypad.width - 20 : parent.width
                 height: parent.height
                 spacing: 8
 
                 Item {
-                    width: parent.width
-                    height: 42
+                    width: keypad.visible ? parent.width : parent.width - keypad.width - 20
+                    anchors.right: parent.right
+                    height: visible ? 50 : 0
+                    visible: alarmPageItem !== null
 
                     Image {
                         anchors.fill: parent
@@ -592,6 +694,7 @@ Page {
 
                     UbuntuLightText {
                         text: alarmPageItemName() + trsl.empty
+                        textFormat: Text.PlainText
                         color: "white"
                         font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20
                         elide: Text.ElideRight
@@ -599,11 +702,13 @@ Page {
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.top: parent.top
+                        anchors.topMargin: alarmPageItemDetail().length > 0 ? 5 : 13
                     }
 
                     UbuntuLightText {
                         text: alarmPageItemDetail() + trsl.empty
+                        textFormat: Text.PlainText
                         color: alarmPageItemColor()
                         font.pixelSize: 13
                         visible: alarmPageItemDetail().length > 0
@@ -619,13 +724,14 @@ Page {
                     BeepingMouseArea {
                         id: stairMouse
                         anchors.fill: parent
+                        enabled: alarmOnline && !commandPending && !quickActionPending
                         onClicked: executeAlarmPageItem()
                     }
                 }
 
                 Item {
                     width: parent.width
-                    height: bypassVisible() ? 96 : 120
+                    height: parent.height - (alarmPageItem ? 58 : 0) - (bypassVisible() ? 44 : 0) - 46
 
                     Image {
                         anchors.fill: parent
@@ -635,25 +741,41 @@ Page {
 
                     UbuntuLightText {
                         text: feedbackTitle() + trsl.empty
+                        textFormat: Text.PlainText
                         color: feedbackColor()
                         font.pixelSize: 15
                         anchors.left: parent.left
                         anchors.leftMargin: 18
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        elide: Text.ElideRight
                         anchors.top: parent.top
                         anchors.topMargin: 10
                     }
 
-                    UbuntuLightText {
-                        text: feedbackDetail() + trsl.empty
-                        color: "white"
-                        font.pixelSize: feedbackDetail().length > 62 ? 11 : (feedbackDetail().length > 36 ? 13 : 20)
+                    Flickable {
                         anchors.left: parent.left
                         anchors.leftMargin: 18
                         anchors.right: parent.right
                         anchors.rightMargin: 14
                         anchors.top: parent.top
                         anchors.topMargin: 36
-                        wrapMode: Text.Wrap
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 8
+                        clip: true
+                        contentWidth: width
+                        contentHeight: detailText.height
+                        flickableDirection: Flickable.VerticalFlick
+
+                        UbuntuLightText {
+                            id: detailText
+                            textFormat: Text.PlainText
+                            width: parent.width
+                            text: feedbackDetail() + trsl.empty
+                            color: "white"
+                            font.pixelSize: 16
+                            wrapMode: Text.Wrap
+                        }
                     }
                 }
 
@@ -678,16 +800,20 @@ Page {
                     BeepingMouseArea {
                         id: bypassMouse
                         anchors.fill: parent
+                        enabled: alarmOnline && !commandPending
                         onClicked: executeCommand(selectedCommand, true)
                     }
                 }
 
                 UbuntuLightText {
                     id: status
+                    textFormat: Text.PlainText
                     text: ""
                     color: "#c7d0d9"
                     font.pixelSize: 16
                     width: parent.width
+                    height: 38
+                    clip: true
                     wrapMode: Text.Wrap
                 }
             }

@@ -39,3 +39,20 @@ def test_native_http_transport(tmp_path: Path, harness: str) -> None:
         text=True,
     )
     subprocess.run([str(binary)], check=True, timeout=10)
+
+
+def test_display_callback_status_and_connection_tracking(tmp_path: Path) -> None:
+    binary = tmp_path / "display-http-test"
+    result = subprocess.run(
+        [
+            "cc", "-std=c11", "-O2", "-D_DEFAULT_SOURCE", "-D_POSIX_C_SOURCE=200809L",
+            "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections", "-pthread",
+            str(ROOT / "native_agent/test/display_http_test.c"),
+            str(ROOT / "native_agent/src/http_util.c"),
+            "-o", str(binary),
+        ],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr

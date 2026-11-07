@@ -1,12 +1,14 @@
 #include "activations.h"
 #include "activation_discovery.h"
-#include "agent_update_paths.h"
+#include "agent_update.h"
 #include "c300x_agent.h"
 #include "capabilities.h"
 #include "callback_queue.h"
 #include "command_job.h"
 #include "device_user.h"
+#include "display_callback.h"
 #include "event_payload.h"
+#include "file_io.h"
 #include "http_util.h"
 #include "http_request.h"
 #include "http_response.h"
@@ -80,11 +82,6 @@
 #define C300X_FIREWALL_BUFFER_SIZE 49152
 #define C300X_NETWORK_ONLINE_RECHECK_SECONDS 5
 #define C300X_NETWORK_OFFLINE_RECHECK_SECONDS 30
-#define C300X_AGENT_UPDATE_STAGE ".update"
-#define C300X_AGENT_BUNDLE_MANIFEST "bundle.json"
-#define C300X_AGENT_BUNDLE_HASH_LEN 96
-#define C300X_AGENT_INIT_SCRIPT "/etc/init.d/c300x-native-agent"
-#define C300X_AGENT_INIT_LINK "/etc/rc5.d/S40c300x-native-agent"
 #define C300X_LEGACY_MQTT_DIR "/etc/tcpdump2mqtt"
 #define C300X_LEGACY_MQTT_CONFIG "/etc/tcpdump2mqtt/TcpDump2Mqtt.conf"
 #define C300X_LEGACY_MQTT_SCRIPT "/etc/tcpdump2mqtt/TcpDump2Mqtt.sh"
@@ -113,17 +110,6 @@ static void handle_shutdown_signal(int signo)
     shutdown_requested = 1;
 }
 
-
-struct agent_update_change_summary {
-    int changed_files;
-    int runtime_changed;
-    int qml_patch_changed;
-    int script_changed;
-    int firewall_patch_changed;
-    int ipv6_firewall_patch_changed;
-    int config_schema_changed;
-    int manifest_changed;
-};
 struct subscription {
     char id[48];
     char callback_url[C300X_MAX_URL_LEN];
@@ -319,7 +305,6 @@ static void handle_device_user_restore(
 static int flexisip_restart_marker_present(void);
 static int flexisip_backup_marker_present(void);
 static const char *flexisip_reference_state(void);
-static int agent_init_link_matches(void);
 static void handle_setup_page(int client_fd);
 static void handle_auth_config_get(int client_fd, const struct c300x_config *config);
 static void handle_auth_config_post(
@@ -362,7 +347,6 @@ static int system_metrics_watch_active(
     const struct agent_runtime *runtime
 );
 static int system_metrics_monitor_active(const struct c300x_config *config);
-static int constant_time_equal(const char *left, size_t left_len, const char *right);
 static int event_requests_metrics_refresh(const char *event_type);
 static int runtime_network_online(struct agent_runtime *runtime, time_t now);
 static int local_network_online(void);
@@ -513,19 +497,7 @@ static void handle_config_normalize(
     struct agent_runtime *runtime,
     const struct request *request
 );
-static int apply_agent_update_init_script(
-    const struct c300x_config *config,
-    const char *stage_path,
-    int *changed
-);
 static int client_is_loopback(int client_fd);
-static int path_parent_inplace(char *path);
-static int read_bounded_text_file(
-    const char *path,
-    char *out,
-    size_t out_len,
-    int *truncated
-);
 static void resolve_device_firmware(
     const struct c300x_config *config,
     char *out,
@@ -704,188 +676,6 @@ static void record_agent_write(
     dispatch_event(config, runtime, "agent.diagnostics_changed", data, 30);
 }
 
-static int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len)
-{
-    if (out_len == 0 || config == NULL || config->config_path[0] == '\0') {
-        return 0;
-    }
-    if (strlen(config->config_path) >= out_len) {
-        return 0;
-    }
-    c300x_copy_string(out, out_len, config->config_path);
-    if (!path_parent_inplace(out)) {
-        return 0;
-    }
-    return out[0] != '\0';
-}
-
-static int agent_update_stage_dir(
-    const struct c300x_config *config,
-    char *out,
-    size_t out_len
-)
-{
-    char base[C300X_MAX_PATH_LEN];
-
-    if (!agent_base_dir(config, base, sizeof(base))) {
-        return 0;
-    }
-    return c300x_join_path(out, out_len, base, C300X_AGENT_UPDATE_STAGE);
-}
-
-static int agent_bundle_manifest_path(
-    const struct c300x_config *config,
-    char *out,
-    size_t out_len
-)
-{
-    char base[C300X_MAX_PATH_LEN];
-
-    if (!agent_base_dir(config, base, sizeof(base))) {
-        return 0;
-    }
-    return c300x_join_path(out, out_len, base, C300X_AGENT_BUNDLE_MANIFEST);
-}
-
-static int safe_agent_update_path(const char *path)
-{
-    size_t len;
-    const char *prefix = "device_agent/";
-
-    if (path == NULL || path[0] == '\0' || path[0] == '/' || strstr(path, "\\") != NULL) {
-        return 0;
-    }
-    len = strlen(path);
-    if (len >= C300X_MAX_PATH_LEN || strncmp(path, prefix, strlen(prefix)) != 0) {
-        return 0;
-    }
-    if (strstr(path, "/../") != NULL || strstr(path, "../") == path || strstr(path, "/..") == path + len - 3) {
-        return 0;
-    }
-    if (c300x_agent_update_file_path(path) || strncmp(path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
-        return 1;
-    }
-    return 0;
-}
-
-static int agent_update_stage_path(
-    const struct c300x_config *config,
-    const char *bundle_path,
-    char *out,
-    size_t out_len
-)
-{
-    char stage_dir[C300X_MAX_PATH_LEN];
-
-    if (!safe_agent_update_path(bundle_path) || !agent_update_stage_dir(config, stage_dir, sizeof(stage_dir))) {
-        return 0;
-    }
-    return c300x_join_path(out, out_len, stage_dir, bundle_path);
-}
-
-static int agent_update_target_path(
-    const struct c300x_config *config,
-    const char *bundle_path,
-    char *out,
-    size_t out_len
-)
-{
-    char base[C300X_MAX_PATH_LEN];
-    const char *relative_target = NULL;
-
-    if (!safe_agent_update_path(bundle_path) || !agent_base_dir(config, base, sizeof(base))) {
-        return 0;
-    }
-    if (strcmp(bundle_path, "device_agent/armhf/c300x-agent-native") == 0) {
-        relative_target = "c300x-agent-native";
-    } else if (strcmp(bundle_path, "device_agent/scripts/qml_patch.sh") == 0) {
-        relative_target = "qml_patch.sh";
-    } else if (strcmp(bundle_path, "device_agent/scripts/remove_agent.sh") == 0) {
-        relative_target = "remove_agent.sh";
-    } else if (strcmp(bundle_path, "device_agent/scripts/bootstrap_firewall.sh") == 0) {
-        relative_target = "bootstrap_firewall.sh";
-    } else if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
-        if (strlen(C300X_AGENT_INIT_SCRIPT) >= out_len) {
-            return 0;
-        }
-        c300x_copy_string(out, out_len, C300X_AGENT_INIT_SCRIPT);
-        return 1;
-    } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
-        relative_target = C300X_AGENT_BUNDLE_MANIFEST;
-    } else if (
-        c300x_agent_update_patch_path(bundle_path)
-        || strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0
-    ) {
-        relative_target = bundle_path + strlen("device_agent/");
-    }
-    if (relative_target == NULL) {
-        return 0;
-    }
-    return c300x_join_path(out, out_len, base, relative_target);
-}
-
-static int read_agent_bundle_metadata(
-    const struct c300x_config *config,
-    char *bundle_hash,
-    size_t bundle_hash_len,
-    char *agent_version,
-    size_t agent_version_len,
-    char *api_version,
-    size_t api_version_len
-)
-{
-    char manifest_path[C300X_MAX_PATH_LEN];
-    char manifest[8192];
-    int truncated = 0;
-
-    if (bundle_hash_len > 0) {
-        bundle_hash[0] = '\0';
-    }
-    if (agent_version_len > 0) {
-        agent_version[0] = '\0';
-    }
-    if (api_version_len > 0) {
-        api_version[0] = '\0';
-    }
-    if (!agent_bundle_manifest_path(config, manifest_path, sizeof(manifest_path))) {
-        return 0;
-    }
-    if (!read_bounded_text_file(manifest_path, manifest, sizeof(manifest), &truncated) || truncated) {
-        return 0;
-    }
-    c300x_json_string_field(manifest, "bundle_hash", bundle_hash, bundle_hash_len);
-    c300x_json_string_field(manifest, "agent_version", agent_version, agent_version_len);
-    if (agent_version_len > 0 && agent_version[0] == '\0') {
-        c300x_json_string_field(manifest, "version", agent_version, agent_version_len);
-    }
-    c300x_json_string_field(manifest, "api_version", api_version, api_version_len);
-    return bundle_hash[0] != '\0' || agent_version[0] != '\0' || api_version[0] != '\0';
-}
-
-static int agent_update_manifest_field_changed(
-    const char *installed_manifest,
-    const char *staged_manifest,
-    const char *field
-)
-{
-    char installed_value[C300X_AGENT_BUNDLE_HASH_LEN];
-    char staged_value[C300X_AGENT_BUNDLE_HASH_LEN];
-
-    c300x_json_string_field(staged_manifest, field, staged_value, sizeof(staged_value));
-    if (staged_value[0] == '\0') {
-        return 0;
-    }
-    if (installed_manifest == NULL || installed_manifest[0] == '\0') {
-        return 1;
-    }
-    c300x_json_string_field(installed_manifest, field, installed_value, sizeof(installed_value));
-    return !constant_time_equal(
-        installed_value,
-        strlen(installed_value),
-        staged_value
-    );
-}
-
 static int display_bridge_active(
     const struct c300x_config *config,
     const struct agent_runtime *runtime
@@ -927,148 +717,18 @@ static int forward_to_homeassistant(
     size_t response_len
 )
 {
-    char host[256];
-    char host_header[288];
-    char port[16];
-    char path[256];
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *item;
-    int fd = -1;
-    char header[1024];
-    const char *webhook_url = display_bridge_webhook_url(config, runtime);
-    const char *shared_secret = display_bridge_shared_secret(config, runtime);
-    int ok = 0;
-    ssize_t receive_result;
-
     if (response_len > 0) {
         response[0] = '\0';
     }
     if (!runtime_network_online(runtime, time(NULL))) {
         return 0;
     }
-    if (webhook_url[0] == '\0') {
-        return 0;
-    }
-    if (!parse_http_url(
-        webhook_url,
-        host,
-        sizeof(host),
-        port,
-        sizeof(port),
-        path,
-        sizeof(path)
-    )) {
-        return 0;
-    }
-
-    if (strncmp(webhook_url, "https://", 8) == 0) {
-        long status;
-        const char *error;
-        ok = c300x_https_post(
-            webhook_url, "X-Bticino-C300X-Secret", shared_secret, body,
-            response, response_len, config->home_assistant_request_timeout_ms,
-            &status, &error
-        );
-        if (ok) {
-            if (response_len > 0 && response[0] == '\0') {
-                snprintf(response, response_len, "{}\n");
-            }
-            mark_home_assistant_callback_seen(runtime, time(NULL));
-        }
-        return ok;
-    }
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = AF_UNSPEC;
-    if (getaddrinfo(host, port, &hints, &result) != 0) {
-        return 0;
-    }
-    http_host_header_value(host, port, host_header, sizeof(host_header));
-    for (item = result; item != NULL; item = item->ai_next) {
-        fd = socket(item->ai_family, item->ai_socktype, item->ai_protocol);
-        if (fd < 0) {
-            continue;
-        }
-        set_fd_cloexec(fd);
-        set_socket_timeout(fd, config->home_assistant_request_timeout_ms);
-        if (connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
-            break;
-        }
-        close(fd);
-        fd = -1;
-    }
-    freeaddrinfo(result);
-    if (fd < 0) {
-        return 0;
-    }
-
-    snprintf(
-        header,
-        sizeof(header),
-        "POST %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
-        "%s%s%s"
-        "Connection: close\r\n"
-        "\r\n",
-        path,
-        host_header,
-        strlen(body),
-        shared_secret[0] != '\0' ? "X-Bticino-C300X-Secret: " : "",
-        shared_secret[0] != '\0' ? shared_secret : "",
-        shared_secret[0] != '\0' ? "\r\n" : ""
+    int ok = c300x_display_post(
+        display_bridge_webhook_url(config, runtime),
+        display_bridge_shared_secret(config, runtime),
+        config->home_assistant_request_timeout_ms,
+        body, response, response_len
     );
-
-    if (send(fd, header, strlen(header), MSG_NOSIGNAL) > 0
-        && send(fd, body, strlen(body), MSG_NOSIGNAL) > 0) {
-        size_t received = 0;
-        while (received + 1 < response_len) {
-            receive_result = recv(fd, response + received, response_len - received - 1, 0);
-            if (receive_result <= 0) {
-                break;
-            }
-            received += (size_t)receive_result;
-        }
-        if (received > 0) {
-            response[received] = '\0';
-        }
-    }
-    close(fd);
-
-    if (response_len > 0) {
-        const char *status_end = strstr(response, "\r\n");
-        if (status_end != NULL) {
-            size_t status_len = (size_t)(status_end - response);
-            if (
-                status_len >= 9
-                && (strncmp(response, "HTTP/1.1 2", 9) == 0 || strncmp(response, "HTTP/1.0 2", 9) == 0)
-            ) {
-                ok = 1;
-            }
-        }
-        if (ok) {
-            const char *separator = strstr(response, "\r\n\r\n");
-            if (separator != NULL) {
-                const char *body = separator + 4;
-                size_t body_len = strlen(body);
-                if (body_len >= response_len) {
-                    body_len = response_len - 1;
-                }
-                memmove(response, body, body_len);
-                response[body_len] = '\0';
-            }
-            if (response[0] == '\0') {
-                snprintf(response, response_len, "{}\n");
-            }
-        } else if (response[0] == '\0') {
-            snprintf(response, response_len, "{}\n");
-            ok = 1;
-        }
-    }
-
     if (ok) {
         mark_home_assistant_callback_seen(runtime, time(NULL));
     }
@@ -1239,42 +899,6 @@ static int path_is_symlink(const char *path, int *is_symlink)
     return 0;
 }
 
-static int read_bounded_text_file(
-    const char *path,
-    char *out,
-    size_t out_len,
-    int *truncated
-)
-{
-    FILE *file;
-    size_t read_len;
-
-    if (truncated != NULL) {
-        *truncated = 0;
-    }
-    if (out_len == 0) {
-        return 0;
-    }
-    out[0] = '\0';
-    if (path == NULL || path[0] == '\0') {
-        return 0;
-    }
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
-    }
-    read_len = fread(out, 1, out_len - 1, file);
-    out[read_len] = '\0';
-    if (truncated != NULL && read_len == out_len - 1 && fgetc(file) != EOF) {
-        *truncated = 1;
-    }
-    fclose(file);
-    while (read_len > 0 && (out[read_len - 1] == '\n' || out[read_len - 1] == '\r')) {
-        out[--read_len] = '\0';
-    }
-    return read_len > 0;
-}
-
 static int firmware_version_is_safe(const char *value, size_t len)
 {
     if (len == 0 || len >= C300X_MAX_VERSION_LEN) {
@@ -1351,130 +975,6 @@ static void resolve_device_firmware(
     (void)read_firmware_from_webserver_db(out, out_len);
 }
 
-static int path_parent_inplace(char *path)
-{
-    size_t len;
-    char *slash;
-
-    if (path == NULL || path[0] == '\0') {
-        return 0;
-    }
-    len = strlen(path);
-    while (len > 1 && path[len - 1] == '/') {
-        path[len - 1] = '\0';
-        len--;
-    }
-    slash = strrchr(path, '/');
-    if (slash == NULL) {
-        return 0;
-    }
-    if (slash == path) {
-        path[1] = '\0';
-        return 1;
-    }
-    *slash = '\0';
-    return 1;
-}
-
-static int mkdir_p(const char *path, mode_t mode)
-{
-    char buffer[C300X_MAX_PATH_LEN];
-    size_t len;
-
-    if (path == NULL || path[0] != '/') {
-        return 0;
-    }
-    if (snprintf(buffer, sizeof(buffer), "%s", path) >= (int)sizeof(buffer)) {
-        return 0;
-    }
-    len = strlen(buffer);
-    while (len > 1 && buffer[len - 1] == '/') {
-        buffer[--len] = '\0';
-    }
-    for (char *ptr = buffer + 1; *ptr != '\0'; ptr++) {
-        if (*ptr != '/') {
-            continue;
-        }
-        *ptr = '\0';
-        if (mkdir(buffer, mode) != 0 && errno != EEXIST) {
-            *ptr = '/';
-            return 0;
-        }
-        *ptr = '/';
-    }
-    return mkdir(buffer, mode) == 0 || errno == EEXIST;
-}
-
-static int mkdir_parent(const char *path, mode_t mode)
-{
-    char parent[C300X_MAX_PATH_LEN];
-
-    if (snprintf(parent, sizeof(parent), "%s", path) >= (int)sizeof(parent)) {
-        return 0;
-    }
-    if (!path_parent_inplace(parent)) {
-        return 0;
-    }
-    return mkdir_p(parent, mode);
-}
-
-static int remove_tree(const char *path)
-{
-    DIR *directory;
-    struct dirent *entry;
-
-    directory = opendir(path);
-    if (directory == NULL) {
-        return errno == ENOENT;
-    }
-    while ((entry = readdir(directory)) != NULL) {
-        char child[C300X_MAX_PATH_LEN];
-        DIR *child_directory;
-
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-        if (!c300x_join_path(child, sizeof(child), path, entry->d_name)) {
-            closedir(directory);
-            return 0;
-        }
-        child_directory = opendir(child);
-        if (child_directory != NULL) {
-            closedir(child_directory);
-            if (!remove_tree(child)) {
-                closedir(directory);
-                return 0;
-            }
-        } else if (unlink(child) != 0) {
-            closedir(directory);
-            return 0;
-        }
-    }
-    closedir(directory);
-    return rmdir(path) == 0 || errno == ENOENT;
-}
-
-static int file_size_matches(const char *path, long expected_size)
-{
-    FILE *file;
-    long size;
-
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
-    }
-    if (fseek(file, 0, SEEK_END) != 0) {
-        fclose(file);
-        return 0;
-    }
-    size = ftell(file);
-    fclose(file);
-    if (size < 0) {
-        return 0;
-    }
-    return size == expected_size;
-}
-
 static int parse_file_mode(const char *value, mode_t fallback, mode_t *mode)
 {
     char *endptr = NULL;
@@ -1493,141 +993,6 @@ static int parse_file_mode(const char *value, mode_t fallback, mode_t *mode)
         return 0;
     }
     *mode = (mode_t)parsed;
-    return 1;
-}
-
-static int write_binary_chunk(
-    const char *path,
-    const unsigned char *data,
-    size_t data_len,
-    long offset,
-    mode_t mode
-)
-{
-    FILE *file;
-    int fd;
-
-    if (path == NULL || path[0] == '\0' || offset < 0) {
-        return 0;
-    }
-    if (!mkdir_parent(path, 0755)) {
-        return 0;
-    }
-    if (offset == 0) {
-        file = fopen(path, "wb");
-    } else {
-        if (!file_size_matches(path, offset)) {
-            return 0;
-        }
-        file = fopen(path, "ab");
-    }
-    if (file == NULL) {
-        return 0;
-    }
-    if (data_len > 0 && fwrite(data, 1, data_len, file) != data_len) {
-        (void)fclose(file);
-        return 0;
-    }
-    fd = fileno(file);
-    if (fd >= 0) {
-        (void)fchmod(fd, mode);
-    }
-    if (fclose(file) != 0) {
-        return 0;
-    }
-    return 1;
-}
-
-static int copy_binary_file(const char *source, const char *target, mode_t mode)
-{
-    char temporary_path[C300X_MAX_PATH_LEN + 8];
-    unsigned char buffer[4096];
-    FILE *in;
-    FILE *out;
-    size_t read_len;
-    int out_fd;
-
-    if (!mkdir_parent(target, 0755)) {
-        return 0;
-    }
-    if (snprintf(temporary_path, sizeof(temporary_path), "%s.tmp", target) >= (int)sizeof(temporary_path)) {
-        return 0;
-    }
-    in = fopen(source, "rb");
-    if (in == NULL) {
-        return 0;
-    }
-    out = fopen(temporary_path, "wb");
-    if (out == NULL) {
-        fclose(in);
-        return 0;
-    }
-    while ((read_len = fread(buffer, 1, sizeof(buffer), in)) > 0) {
-        if (fwrite(buffer, 1, read_len, out) != read_len) {
-            fclose(in);
-            fclose(out);
-            (void)unlink(temporary_path);
-            return 0;
-        }
-    }
-    if (ferror(in)) {
-        fclose(in);
-        fclose(out);
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    out_fd = fileno(out);
-    if (out_fd >= 0) {
-        (void)fchmod(out_fd, mode);
-    }
-    {
-        int close_in = fclose(in);
-        int close_out = fclose(out);
-        if (close_in != 0 || close_out != 0) {
-            (void)unlink(temporary_path);
-            return 0;
-        }
-    }
-    if (rename(temporary_path, target) != 0) {
-        (void)unlink(temporary_path);
-        return 0;
-    }
-    return 1;
-}
-
-static int file_content_matches(const char *source, const char *target)
-{
-    char source_sha[65];
-    char target_sha[65];
-
-    if (
-        !c300x_sha256_file_hex(source, source_sha, sizeof(source_sha))
-        || !c300x_sha256_file_hex(target, target_sha, sizeof(target_sha))
-    ) {
-        return 0;
-    }
-    return constant_time_equal(source_sha, strlen(source_sha), target_sha);
-}
-
-static int copy_binary_file_if_changed(
-    const char *source,
-    const char *target,
-    mode_t mode,
-    int *changed
-)
-{
-    if (changed != NULL) {
-        *changed = 0;
-    }
-    if (file_content_matches(source, target)) {
-        return 1;
-    }
-    if (!copy_binary_file(source, target, mode)) {
-        return 0;
-    }
-    if (changed != NULL) {
-        *changed = 1;
-    }
     return 1;
 }
 
@@ -1692,19 +1057,6 @@ static int base64_decode_bytes(
         *decoded_len = used;
     }
     return 1;
-}
-
-static int sha256_hex_matches(const char *path, const char *expected)
-{
-    char actual[65];
-
-    if (expected == NULL || strlen(expected) != 64) {
-        return 0;
-    }
-    if (!c300x_sha256_file_hex(path, actual, sizeof(actual))) {
-        return 0;
-    }
-    return constant_time_equal(actual, strlen(actual), expected);
 }
 
 static int safe_voicemail_entry_name(const char *name)
@@ -6374,21 +5726,6 @@ static void send_auth_required(int client_fd)
     );
 }
 
-static int constant_time_equal(const char *left, size_t left_len, const char *right)
-{
-    size_t right_len = strlen(right);
-    size_t max_len = left_len > right_len ? left_len : right_len;
-    unsigned char diff = (unsigned char)(left_len ^ right_len);
-    size_t index;
-
-    for (index = 0; index < max_len; index++) {
-        unsigned char left_ch = index < left_len ? (unsigned char)left[index] : 0;
-        unsigned char right_ch = index < right_len ? (unsigned char)right[index] : 0;
-        diff |= (unsigned char)(left_ch ^ right_ch);
-    }
-    return diff == 0;
-}
-
 static int has_valid_bearer(const struct request *request, const char *token)
 {
     const char *line = request->headers;
@@ -6436,7 +5773,6 @@ static int api_request_authorized(const struct c300x_config *config, const struc
 {
     return config->api_no_auth || has_valid_bearer(request, config->api_token);
 }
-
 
 static const struct c300x_activation_discovery *runtime_activation_discovery(
     const struct c300x_config *config,
@@ -10407,322 +9743,6 @@ static void handle_agent_update_file(
     );
     send_json(client_fd, 200, "OK", workspace->body);
     free(workspace);
-}
-
-static int agent_update_manifest_sha_for_path(
-    const char *manifest,
-    const char *bundle_path,
-    char *sha256,
-    size_t sha256_len
-)
-{
-    const char *found;
-
-    if (sha256_len > 0) { sha256[0] = '\0'; }
-    found = strstr(manifest, bundle_path);
-    if (found == NULL) { return 0; }
-    c300x_json_string_field(found, "sha256", sha256, sha256_len);
-    return sha256[0] != '\0';
-}
-
-static int running_agent_binary_differs_from_update_manifest(const char *manifest)
-{
-    char expected_sha256[65], running_sha256[65];
-    return agent_update_manifest_sha_for_path(manifest, "device_agent/armhf/c300x-agent-native", expected_sha256, sizeof(expected_sha256))
-        && c300x_sha256_file_hex("/proc/self/exe", running_sha256, sizeof(running_sha256))
-        && !constant_time_equal(running_sha256, strlen(running_sha256), expected_sha256);
-}
-
-static int apply_agent_update_file(
-    const struct c300x_config *config,
-    const char *manifest,
-    const char *bundle_path,
-    mode_t fallback_mode,
-    int optional,
-    struct agent_update_change_summary *summary
-)
-{
-    char stage_path[C300X_MAX_PATH_LEN];
-    char target_path[C300X_MAX_PATH_LEN];
-    char sha256[65];
-    int changed = 0;
-
-    if (
-        !agent_update_stage_path(config, bundle_path, stage_path, sizeof(stage_path))
-        || !agent_update_target_path(config, bundle_path, target_path, sizeof(target_path))
-    ) {
-        return 0;
-    }
-    if (access(stage_path, F_OK) != 0) {
-        return optional && !agent_update_manifest_sha_for_path(manifest, bundle_path, sha256, sizeof(sha256));
-    }
-    if (
-        strcmp(bundle_path, "device_agent/bundle.json") != 0
-        && (
-            !agent_update_manifest_sha_for_path(manifest, bundle_path, sha256, sizeof(sha256))
-            || !sha256_hex_matches(stage_path, sha256)
-        )
-    ) {
-        return 0;
-    }
-    if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
-        if (!apply_agent_update_init_script(config, stage_path, &changed)) {
-            return 0;
-        }
-        if (changed && summary != NULL) {
-            summary->changed_files++;
-            summary->script_changed = 1;
-        }
-        return 1;
-    }
-    if (!copy_binary_file_if_changed(stage_path, target_path, fallback_mode, &changed)) {
-        return 0;
-    }
-    if (changed && summary != NULL) {
-        summary->changed_files++;
-        if (strcmp(bundle_path, "device_agent/armhf/c300x-agent-native") == 0) {
-            summary->runtime_changed = 1;
-        } else if (strcmp(bundle_path, "device_agent/scripts/qml_patch.sh") == 0) {
-            summary->script_changed = 1;
-            summary->qml_patch_changed = 1;
-        } else if (strcmp(bundle_path, "device_agent/scripts/remove_agent.sh") == 0) {
-            summary->script_changed = 1;
-        } else if (strcmp(bundle_path, "device_agent/init/c300x-native-agent") == 0) {
-            summary->script_changed = 1;
-        } else if (strcmp(bundle_path, "device_agent/bundle.json") == 0) {
-            summary->manifest_changed = 1;
-        } else if (c300x_agent_update_patch_path(bundle_path)) {
-            summary->script_changed = 1;
-        } else if (strncmp(bundle_path, "device_agent/qml/", strlen("device_agent/qml/")) == 0) {
-            summary->qml_patch_changed = 1;
-        }
-    }
-    return 1;
-}
-
-static int render_agent_init_script(
-    const struct c300x_config *config,
-    const char *source_path,
-    const char *rendered_path
-)
-{
-    struct render_init_workspace {
-        char source[8192];
-        char rendered[8192];
-    };
-    struct render_init_workspace *workspace = calloc(1, sizeof(*workspace));
-    char base[C300X_MAX_PATH_LEN];
-    const char *needle = "DEFAULT_AGENT_DIR=\"/home/bticino/cfg/extra/c300x-native-agent\"";
-    const char *found;
-    int truncated = 0;
-    size_t prefix_len;
-    size_t used = 0;
-
-    if (workspace == NULL) {
-        return 0;
-    }
-    if (
-        !agent_base_dir(config, base, sizeof(base))
-        || !read_bounded_text_file(source_path, workspace->source, sizeof(workspace->source), &truncated)
-        || truncated
-    ) {
-        free(workspace);
-        return 0;
-    }
-    found = strstr(workspace->source, needle);
-    if (found == NULL) {
-        free(workspace);
-        return 0;
-    }
-    prefix_len = (size_t)(found - workspace->source);
-    if (!c300x_appendf(
-        workspace->rendered,
-        sizeof(workspace->rendered),
-        &used,
-        "%.*sDEFAULT_AGENT_DIR=\"%s\"%s",
-        (int)prefix_len,
-        workspace->source,
-        base,
-        found + strlen(needle)
-    )) {
-        free(workspace);
-        return 0;
-    }
-    int ok = write_binary_chunk(
-        rendered_path,
-        (const unsigned char *)workspace->rendered,
-        strlen(workspace->rendered),
-        0,
-        0700
-    );
-    free(workspace);
-    return ok;
-}
-
-static int ensure_agent_init_link(void)
-{
-    char current[C300X_MAX_PATH_LEN];
-    ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
-
-    if (len >= 0) {
-        current[len] = '\0';
-        if (agent_init_link_matches()) {
-            return 1;
-        }
-        (void)unlink(C300X_AGENT_INIT_LINK);
-    }
-    return symlink(C300X_AGENT_INIT_SCRIPT, C300X_AGENT_INIT_LINK) == 0 || errno == EEXIST;
-}
-
-static int agent_init_link_matches(void)
-{
-    char current[C300X_MAX_PATH_LEN];
-    char resolved[PATH_MAX];
-    ssize_t len = readlink(C300X_AGENT_INIT_LINK, current, sizeof(current) - 1);
-
-    if (len < 0) {
-        return 0;
-    }
-    current[len] = '\0';
-    if (strcmp(current, C300X_AGENT_INIT_SCRIPT) == 0) {
-        return 1;
-    }
-    if (realpath(C300X_AGENT_INIT_LINK, resolved) == NULL) {
-        return 0;
-    }
-    return strcmp(resolved, C300X_AGENT_INIT_SCRIPT) == 0;
-}
-
-static int apply_agent_update_init_script(
-    const struct c300x_config *config,
-    const char *stage_path,
-    int *changed
-)
-{
-    char rendered_path[C300X_MAX_PATH_LEN + 16];
-    int content_changed;
-    int link_changed;
-
-    if (changed != NULL) {
-        *changed = 0;
-    }
-    if (snprintf(rendered_path, sizeof(rendered_path), "%s.rendered", stage_path) >= (int)sizeof(rendered_path)) {
-        return 0;
-    }
-    if (!render_agent_init_script(config, stage_path, rendered_path)) {
-        (void)unlink(rendered_path);
-        return 0;
-    }
-    content_changed = !file_content_matches(rendered_path, C300X_AGENT_INIT_SCRIPT);
-    link_changed = !agent_init_link_matches();
-    if (!content_changed && !link_changed) {
-        (void)unlink(rendered_path);
-        return 1;
-    }
-    {
-        int status = system("mount -o remount,rw / >/dev/null 2>&1");
-        (void)status;
-    }
-    if (
-        (content_changed && !copy_binary_file(rendered_path, C300X_AGENT_INIT_SCRIPT, 0700))
-        || !ensure_agent_init_link()
-    ) {
-        (void)unlink(rendered_path);
-        {
-            int status = system("mount -o remount,ro / >/dev/null 2>&1");
-            (void)status;
-        }
-        return 0;
-    }
-    {
-        int status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
-    }
-    (void)unlink(rendered_path);
-    if (changed != NULL) {
-        *changed = 1;
-    }
-    return 1;
-}
-
-static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary)
-{
-    int status;
-
-    if (agent_init_link_matches()) {
-        return 1;
-    }
-    if (access(C300X_AGENT_INIT_SCRIPT, X_OK) != 0) {
-        return 1;
-    }
-    status = system("mount -o remount,rw / >/dev/null 2>&1");
-    (void)status;
-    if (!ensure_agent_init_link()) {
-        status = system("mount -o remount,ro / >/dev/null 2>&1");
-        (void)status;
-        return 0;
-    }
-    status = system("mount -o remount,ro / >/dev/null 2>&1");
-    (void)status;
-    if (summary != NULL) {
-        summary->changed_files++;
-        summary->script_changed = 1;
-    }
-    return 1;
-}
-
-static int apply_agent_update_files(
-    const struct c300x_config *config,
-    const char *manifest,
-    const char *installed_manifest,
-    struct agent_update_change_summary *summary
-)
-{
-    if (summary != NULL) {
-        memset(summary, 0, sizeof(*summary));
-        summary->runtime_changed = agent_update_manifest_field_changed(installed_manifest, manifest, "runtime_hash")
-            || running_agent_binary_differs_from_update_manifest(manifest);
-        summary->qml_patch_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "qml_patch_hash"
-        );
-        summary->script_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "script_hash"
-        );
-        summary->firewall_patch_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "firewall_patch_hash"
-        );
-        summary->ipv6_firewall_patch_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "ipv6_firewall_patch_hash"
-        );
-        summary->config_schema_changed = agent_update_manifest_field_changed(
-            installed_manifest,
-            manifest,
-            "config_schema_hash"
-        );
-    }
-    for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
-        if (
-            !apply_agent_update_file(
-                config,
-                manifest,
-                C300X_AGENT_UPDATE_FILES[index].path,
-                C300X_AGENT_UPDATE_FILES[index].mode,
-                C300X_AGENT_UPDATE_FILES[index].optional,
-                summary
-            )
-        ) {
-            return 0;
-        }
-    }
-    return repair_agent_init_link_after_update(summary);
 }
 
 static void handle_agent_update_apply(

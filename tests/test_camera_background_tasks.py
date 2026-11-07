@@ -88,3 +88,24 @@ def test_creation_failure_closes_unscheduled_coroutine():
     with pytest.raises(RuntimeError, match="not running"):
         CameraBackgroundTasks().create(SimpleNamespace(async_create_task=fail), coro)
     assert inspect.getcoroutinestate(coro) == inspect.CORO_CLOSED
+
+
+def test_awaited_work_is_owned_only_inside_its_scope():
+    async def run():
+        owner = CameraBackgroundTasks()
+        task = asyncio.current_task()
+        with owner.track_current():
+            assert owner._tasks == {task}
+            with owner.track_current():
+                assert owner._tasks == {task}
+            assert owner._tasks == {task}
+        assert not owner._tasks
+        with pytest.raises(ValueError), owner.track_current():
+            raise ValueError("request failed")
+        assert not owner._tasks
+        await owner.close()
+        with pytest.raises(asyncio.CancelledError), owner.track_current():
+            pytest.fail("Work must not run after close")
+        assert not owner._tasks
+
+    asyncio.run(run())

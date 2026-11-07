@@ -27,6 +27,7 @@ from .const import (
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_ALARM_ENTITY_ID,
+    CONF_ALARM_PAGE_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -900,10 +901,15 @@ def _async_track_display_bridge_updates(
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     alarm_sensor_entity_ids = set(_alarmo_sensor_entity_ids(hass))
+    quick_entity = _entry_config_value(entry, CONF_ALARM_PAGE_ENTITY_ID, "")
+    if quick_entity:
+        alarm_sensor_entity_ids.add(str(quick_entity))
 
     def _refresh_alarm_sensor_entity_ids() -> None:
         alarm_sensor_entity_ids.clear()
         alarm_sensor_entity_ids.update(_alarmo_sensor_entity_ids(hass))
+        if quick_entity:
+            alarm_sensor_entity_ids.add(str(quick_entity))
 
     @callback
     def _handle_alarm_state_change(event: Any) -> None:

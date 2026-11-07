@@ -3,90 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
-homeassistant = sys.modules.setdefault("homeassistant", types.ModuleType("homeassistant"))
-homeassistant.__path__ = []
-components = sys.modules.setdefault(
-    "homeassistant.components",
-    types.ModuleType("homeassistant.components"),
-)
-config_entries = sys.modules.setdefault(
-    "homeassistant.config_entries",
-    types.ModuleType("homeassistant.config_entries"),
-)
-const = sys.modules.setdefault("homeassistant.const", types.ModuleType("homeassistant.const"))
-core = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-entity = types.ModuleType("homeassistant.helpers.entity")
-media_player = types.ModuleType("homeassistant.components.media_player")
-
-
-class _MediaType:
-    MUSIC = "music"
-    VIDEO = "video"
-
-
-class _ServiceCall:  # pragma: no cover - import-time stub only
-    data: dict[str, Any] = {}
-
-
-class _Event:  # pragma: no cover - import-time stub only
-    pass
-
-
-class _ConfigEntry:  # pragma: no cover - import-time stub only
-    pass
-
-
-class _DeviceInfo(dict):  # pragma: no cover - import-time stub only
-    pass
-
-
-class _Entity:  # pragma: no cover - import-time stub only
-    pass
-
-
-config_entries.ConfigEntry = _ConfigEntry
-const.ATTR_ENTITY_ID = "entity_id"
-core.Event = getattr(core, "Event", _Event)
-core.HomeAssistant = getattr(core, "HomeAssistant", object)
-core.ServiceCall = getattr(core, "ServiceCall", _ServiceCall)
-core.callback = getattr(core, "callback", lambda func: func)
-config_validation.string = str
-config_validation.entity_id = str
-config_validation.config_entry_only_config_schema = lambda _domain: None
-dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-entity.DeviceInfo = _DeviceInfo
-entity.Entity = _Entity
-helpers.config_validation = config_validation
-helpers.dispatcher = dispatcher
-helpers.entity = entity
-media_player.DOMAIN = "media_player"
-media_player.SERVICE_PLAY_MEDIA = "play_media"
-media_player.MediaType = _MediaType
-components.media_player = media_player
-homeassistant.components = components
-homeassistant.config_entries = config_entries
-homeassistant.const = const
-homeassistant.core = core
-homeassistant.helpers = helpers
-sys.modules["homeassistant.components.media_player"] = media_player
-sys.modules["homeassistant.helpers.config_validation"] = config_validation
-sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-sys.modules["homeassistant.helpers.entity"] = entity
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from custom_components.bticino_c300x import services as service_module  # noqa: E402
 from custom_components.bticino_c300x.action import ActionValidationError  # noqa: E402

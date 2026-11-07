@@ -217,6 +217,7 @@ class C300XRuntimeResources:
     answering_machine_messages_refresh_task: Task[None] | None = None
     startup_sync_task: Task[None] | None = None
     memos_refresh_task: Task[None] | None = None
+    pending_message_refreshes: set[str] = field(default_factory=set)
 
     def close(self) -> None:
         """Release callbacks and tasks once; never invoke media/device commands."""
@@ -241,6 +242,7 @@ class C300XRuntimeResources:
         self.prepare_doorbell_video_stop = None
         self.prepare_home_call_stop = None
         self.memos_refresh_task = None
+        self.pending_message_refreshes.clear()
         self.answering_machine_messages_refresh_task = None
         self.startup_sync_task = None
         self.agent_cpu_watchdog_task = None

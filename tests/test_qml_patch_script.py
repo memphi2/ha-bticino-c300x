@@ -224,9 +224,9 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "fa597ad79aa05684d2c6dd5770ade4f962393e5ffe5bac04b1b9dc90a98ecca7",
+    "Alarm.qml": "546839d12a9aa815eaebf25d6ecf0f71040c8ca0c2e1270dabd6cbbff87da425",
     "HomeAssistant.qml": "9f71af5653da2e90111dacdc9a06ef422fb21980dfa85ac4d7d7fe6ea3661371",
-    "js/c300x_ha.js": "8c872e05b9d8e5e0d516ce1bb47019ca906015c00a98be87a6d0a334749aad72",
+    "js/c300x_ha.js": "713dcdb21d248fa150a5aa1d2a050f656873d56131ec7ffedb55ad578fb2d34e",
     "js/c300x_i18n.js": "0cdbc4c08842839188c8d1ae24a5e413eda2ac9072b0d73b7f5db481d8212a57",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -629,7 +629,7 @@ def test_home_page_message_watch_stops_on_hide(tmp_path: Path) -> None:
     )
 
 
-def test_alarm_quick_action_uses_single_line_large_label() -> None:
+def test_alarm_quick_action_keeps_label_and_confirmed_state_separate() -> None:
     alarm_qml = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
     detail_body = alarm_qml[
         alarm_qml.index("function alarmPageItemDetail") :
@@ -640,9 +640,11 @@ def test_alarm_quick_action_uses_single_line_large_label() -> None:
         alarm_qml.index("id: stairMouse")
     ]
 
-    assert 'return ""' in detail_body
+    assert 'alarmPageItem.state_label || ""' in detail_body
     assert "font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20" in quick_tile_body
-    assert "anchors.verticalCenter: parent.verticalCenter" in quick_tile_body
+    assert "anchors.topMargin: alarmPageItemDetail().length > 0 ? 5 : 13" in quick_tile_body
+    assert "textFormat: Text.PlainText" in quick_tile_body
+    assert "visible: alarmPageItem !== null" in alarm_qml
 
 
 def test_alarm_quick_action_does_not_refresh_home_assistant_dashboard() -> None:

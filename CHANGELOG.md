@@ -1,5 +1,56 @@
 # Changelog
 
+## v2.1.0b1 - Unreleased
+
+### Added
+
+- Context-sensitive native Alarmo subpage in the original blue design: the PIN
+  keypad appears only when needed, including entry delay. Modes without a PIN
+  execute directly; pending commands block repeat taps until status is refreshed.
+- Optional Alarmo quick entity with confirmed state. Leave it empty to hide the
+  action; choose a stair-light button explicitly when wanted.
+- Opt-in beta/RC release support with the same bundled card, agent and release
+  validation as stable versions. Prereleases never replace GitHub Latest;
+  publication verifies downloads and preserves existing release assets.
+- Independent card-editor options to show or hide the Open door and Staircase
+  light buttons. Both remain visible by default.
+- Optional native Home Assistant camera microphone support on HA 2026.11+,
+  disabled by default with prerequisites explained in the integration options.
+  Requires enabling the option and HA Labs Two-way audio, plus WebRTC, HTTPS
+  and microphone permission. Card talkback is unchanged; no agent update or
+  extra idle polling is required.
+
+### Fixed
+
+- Keep the selected PIN mode across unchanged status updates, clear PINs on page
+  exit, ignore stale replies, and show unavailable alarm data as offline.
+- Do not report temporary agent unavailability as a repairable media setup fault.
+  Media setup Repairs now name the failed checks in their title.
+- Keep card controls in the top footer row when text wraps on narrow cards.
+- Cancel in-flight camera connection setup when the player closes or the camera
+  unloads, and clean up pending WebRTC sessions and Home Call starts.
+- Refresh stored-message metadata again when a newer change arrives during an
+  ongoing fetch, without adding periodic device polling.
+- Reject HTTP errors, empty responses and incomplete display callback headers
+  instead of reporting Home Assistant as connected. Requires an updated agent.
+- Rebuild the native agent when its version or build settings change, and reject
+  ABI checks when the verification tool fails or requirements cannot be read.
+- Scope Home Assistant test mocks to individual tests, removing global module
+  replacements that made combined and isolated test runs behave differently.
+
+### Changed
+
+- Group camera session ownership and separate native display callback transport,
+  update-file handling and shared file operations from HTTP orchestration.
+
+### Upgrade
+
+- Includes a rebuilt native agent `2.1.0b1`. Update the agent and apply the
+  Display patch to use the revised Alarmo page; applying the patch restarts the GUI.
+- This is planned as an opt-in prerelease. The stable release remains `2.0.0`. Advanced
+  light/cover/climate controls, notifications and the calendar blueprint follow
+  in separate pull requests and are not included here yet.
+
 ## v2.0.0 - 2026-11-02
 
 ### Fixed

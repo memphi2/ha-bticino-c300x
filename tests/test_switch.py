@@ -8,86 +8,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
-if "homeassistant.components.switch" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    switch = types.ModuleType("homeassistant.components.switch")
-    config_entries = sys.modules.setdefault(
-        "homeassistant.config_entries",
-        types.ModuleType("homeassistant.config_entries"),
-    )
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    const = sys.modules.setdefault(
-        "homeassistant.const",
-        types.ModuleType("homeassistant.const"),
-    )
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    entity = sys.modules.setdefault(
-        "homeassistant.helpers.entity",
-        types.ModuleType("homeassistant.helpers.entity"),
-    )
-    dispatcher = sys.modules.setdefault(
-        "homeassistant.helpers.dispatcher",
-        types.ModuleType("homeassistant.helpers.dispatcher"),
-    )
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-    entity_platform = sys.modules.setdefault(
-        "homeassistant.helpers.entity_platform",
-        types.ModuleType("homeassistant.helpers.entity_platform"),
-    )
-
-    class SwitchEntity:  # pragma: no cover - import-time stub only
-        def async_write_ha_state(self) -> None:
-            self.wrote_state = True
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    class EntityCategory:  # pragma: no cover - import-time stub only
-        CONFIG = "config"
-
-    switch.SwitchEntity = SwitchEntity
-    config_entries.ConfigEntry = ConfigEntry
-    const.EntityCategory = EntityCategory
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: (lambda: None)
-    dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-    helpers.config_validation = config_validation
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    entity_platform.AddEntitiesCallback = object
-    helpers.entity = entity
-    helpers.dispatcher = dispatcher
-    helpers.entity_platform = entity_platform
-    components.switch = switch
-    homeassistant.components = components
-    sys.modules["homeassistant.components.switch"] = switch
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
-
 from homeassistant.exceptions import HomeAssistantError  # noqa: E402
 
 from custom_components.bticino_c300x.api import (
@@ -127,7 +47,10 @@ def test_config_switches_are_disabled_by_default() -> None:
     )
 
     for switch_class in config_switch_classes:
-        assert switch_class._attr_entity_registry_enabled_default is False
+        assert switch_class(_FakeEntry()).entity_registry_enabled_default is False
+
+
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 
 class _FakeApi:

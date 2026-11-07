@@ -1,110 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import types
 from dataclasses import dataclass, field
 from typing import Any
 
-if "homeassistant.components.button" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    button = types.ModuleType("homeassistant.components.button")
-    config_entries = sys.modules.setdefault(
-        "homeassistant.config_entries",
-        types.ModuleType("homeassistant.config_entries"),
-    )
-    const = sys.modules.setdefault(
-        "homeassistant.const",
-        types.ModuleType("homeassistant.const"),
-    )
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-    issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
-    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
-    entity = sys.modules.setdefault(
-        "homeassistant.helpers.entity",
-        types.ModuleType("homeassistant.helpers.entity"),
-    )
-    entity_platform = sys.modules.setdefault(
-        "homeassistant.helpers.entity_platform",
-        types.ModuleType("homeassistant.helpers.entity_platform"),
-    )
-
-    class ButtonEntity:  # pragma: no cover - import-time stub only
-        def async_write_ha_state(self) -> None:
-            self.wrote_state = True
-
-        def async_on_remove(self, _callback: Any) -> None:
-            return
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    class EntityCategory:  # pragma: no cover - import-time stub only
-        CONFIG = "config"
-
-    class Event:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    button.ButtonEntity = ButtonEntity
-    config_entries.ConfigEntry = ConfigEntry
-    const.ATTR_ENTITY_ID = "entity_id"
-    const.EntityCategory = EntityCategory
-    core.Event = Event
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-    dispatcher.async_dispatcher_send = lambda *args, **kwargs: None
-    issue_registry.IssueSeverity = types.SimpleNamespace(
-        ERROR="error",
-        WARNING="warning",
-    )
-    issue_registry.async_create_issue = lambda **kwargs: None
-    issue_registry.async_delete_issue = lambda **kwargs: None
-    entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
-    entity_registry.EventEntityRegistryUpdatedData = dict
-    entity_registry.async_get = lambda _hass: types.SimpleNamespace(
-        async_get=lambda _entity_id: None
-    )
-    helpers.config_validation = config_validation
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    entity_platform.AddEntitiesCallback = object
-    helpers.dispatcher = dispatcher
-    helpers.entity = entity
-    helpers.entity_platform = entity_platform
-    components.button = button
-    homeassistant.components = components
-    sys.modules["homeassistant.components.button"] = button
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
-    sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-    sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
-    sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
+import pytest
 
 from custom_components.bticino_c300x import button as button_module  # noqa: E402
 from custom_components.bticino_c300x.api_errors import (  # noqa: E402
@@ -145,6 +46,8 @@ from custom_components.bticino_c300x.qml_patch import (  # noqa: E402
     async_restore_qml_patch_and_confirm,
 )
 
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
+
 HOME_ASSISTANT_ERROR = button_module.HomeAssistantError
 
 
@@ -154,8 +57,8 @@ def test_maintenance_buttons_default_visibility() -> None:
         C300XRestartAgentButton,
         C300XReloadGuiButton,
     ):
-        assert not hasattr(button_class, "_attr_entity_registry_enabled_default")
-    assert C300XRemoveAgentButton._attr_entity_registry_enabled_default is False
+        assert button_class(_FakeEntry()).entity_registry_enabled_default is True
+    assert C300XRemoveAgentButton(_FakeEntry()).entity_registry_enabled_default is False
 
 
 class _FakeHass:

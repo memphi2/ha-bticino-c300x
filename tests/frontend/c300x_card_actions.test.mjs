@@ -181,6 +181,17 @@ test("action controller starts a home-call audio session through the shared talk
 });
 
 for (const key of ["door_unlock", "stair_light"]) {
+  test(`hidden ${key} cannot execute a device action`, async () => {
+    const { calls, card } = fakeCard({
+      _config: { [`show_${key}`]: false },
+      _deviceActionEntity: () => `button.${key}`,
+    });
+    const actions = new C300XCardActions(card);
+    await actions.handleDeviceAction(key);
+    assert.deepEqual(calls, []);
+    assert.equal(actions.deviceActionPending(key), false);
+  });
+
   test(`${key} uses one HA button press without changing media`, async () => {
     const { calls, card } = fakeCard({ _deviceActionEntity: () => `button.${key}` });
     const actions = new C300XCardActions(card);

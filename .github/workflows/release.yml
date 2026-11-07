@@ -7,9 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish, for example v1.6.2"
+        description: "Release tag to publish, for example v2.1.0 or v2.1.0b1"
         required: false
         type: string
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   actions: read
@@ -273,10 +277,7 @@ jobs:
             echo "reused_from=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          previous_tag="$(git tag --sort=-v:refname \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-            | grep -F -x -v "$RELEASE_TAG" \
-            | head -n 1 || true)"
+          previous_tag="$(python scripts/release_version.py "$RELEASE_TAG")"
           if [ -z "$previous_tag" ]; then
             echo "::error::C300X_DEVICE_SYSROOT is unavailable and no previous release tag exists for agent reuse"
             exit 1
@@ -427,18 +428,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
         run: |
-          assets=(
-            "$RELEASE_ZIP"
-            "$RELEASE_SHA256SUMS"
-            "$RELEASE_METADATA"
-            "$RELEASE_SBOM"
-          )
-          notes_file=".github/release-notes/${RELEASE_TAG}.md"
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-          else
-            gh release create "$RELEASE_TAG" "${assets[@]}" \
-              --title "$RELEASE_TAG" \
-              --notes-file "$notes_file" \
-              --verify-tag
-          fi
+          python scripts/publish_release.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --directory .release

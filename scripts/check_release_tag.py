@@ -11,15 +11,16 @@ from pathlib import Path
 
 from check_reporting import report_failures
 from manifest_version import read_integration_version
+from release_version import VERSION_PATTERN
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG_RE = re.compile(r"v(?P<version>\d+\.\d+\.\d+)")
+TAG_RE = re.compile(rf"v(?P<version>{VERSION_PATTERN})")
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("tag", help="Release tag, for example v1.6.2.")
+    parser.add_argument("tag", help="Release tag, for example v2.1.0 or v2.1.0b1.")
     parser.add_argument(
         "--attestation-context",
         action="store_true",
@@ -50,7 +51,7 @@ def validate_release_tag(tag: str, root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     match = TAG_RE.fullmatch(tag)
     if match is None:
-        return [f"release tag must use vX.Y.Z format, got {tag!r}"]
+        return [f"release tag must use vX.Y.Z, vX.Y.ZbN or vX.Y.ZrcN format, got {tag!r}"]
 
     version = match.group("version")
     manifest_version = read_integration_version(

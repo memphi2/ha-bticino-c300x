@@ -24,7 +24,6 @@ from .const import (
     DASHBOARD_ENTITY_SECONDARY_INFO_LAST_UPDATED,
     DASHBOARD_ENTITY_SECONDARY_INFO_NONE,
     DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
-    DASHBOARD_ENTITY_STAIR_LIGHT,
 )
 from .dashboard_config import (
     _DASHBOARD_ACTION_PAGE,
@@ -240,21 +239,17 @@ def _alarm_page_entity(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     language: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     entity_id = configured_alarm_page_entity_id(entry)
     if entity_id is None:
-        return {
-            "kind": "button",
-            "domain": DASHBOARD_ACTION_DOMAIN,
-            "entity_id": DASHBOARD_ENTITY_STAIR_LIGHT,
-            "name": DASHBOARD_ENTITY_STAIR_LIGHT,
-            "name_key": "stair_light",
-            "state_label": "",
-        }
+        return None
+    overrides = configured_dashboard_entity_display_overrides(entry)
     item = _dashboard_item_for_entity(
         hass,
         entity_id,
         0,
+        name_display=dashboard_entity_name_display_override(overrides, entity_id),
+        custom_name=dashboard_entity_custom_name_override(overrides, entity_id),
         language=language,
     )
     if item is None:

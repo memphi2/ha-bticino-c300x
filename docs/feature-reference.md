@@ -48,7 +48,7 @@ The integration is local-first:
 | On-demand camera | Camera entity, C300X Doorbell Call Card, `activate_doorbell_video` / `stop_doorbell_video`. | Uses local RTSP through Home Assistant's WebRTC provider/go2rtc and does not require Home Assistant Ring Call forwarding. |
 | Ring Call preview | C300X Doorbell Call Card. | Multiple browser previews are supported; only the active answered browser should show Answer/Hang Up. |
 | Ring Call answer/hangup | C300X card, mobile blueprints, `answer_doorbell_call`, `hangup_doorbell_call`. | Requires Forwarding set to Home Assistant and media readiness without blocking failures. |
-| Talkback | Browser microphone through the card. | Requires HTTPS, Home Assistant Cloud, or another secure browser context with microphone permission. |
+| Talkback | Browser microphone through the card, or optionally the native HA camera player on HA 2026.11+. | Native HA control is off by default. Enable **Two-way audio in the HA camera player** in the integration options and Two-way audio in HA Labs. Requires WebRTC, HTTPS and microphone permission. Card talkback is unchanged. |
 | Home Call | C300X card, Home Call websocket path, `start_home_call`, `stop_home_call`. | Audio-only call from Home Assistant to the C300X display. |
 | Door unlock | Button entity, service, optional dashboard action. | Sends one configured unlock command through the native agent. |
 | Stair light | Button entity, service, optional generated activation. | Manual mode uses P/N parts to generate the stair-light activation address. |
@@ -60,6 +60,35 @@ The integration is local-first:
 | Display pages | Optional C300X display dashboard. | Native QML pages, not Lovelace embedding; no Home Assistant token is stored on the device display side. |
 | Ring Capture and local analysis | Services and blueprints. | Writes local MP4/WAV/JPEG/JSON below allowed Home Assistant paths; local Wyoming transcription is optional. |
 | Media readiness and Repairs | Diagnostic sensor and Repair flows. | Media prerequisites can be repaired; the selected Ring Call forwarding target is reported but never changed by a Repair. |
+
+### Card Buttons
+
+The card editor lets you show or hide **Open door** and **Staircase light**
+independently. Both are shown by default. In YAML, set `show_door_unlock: false`
+or `show_stair_light: false` to hide the corresponding button. This only changes
+that card; the Home Assistant entities and services remain available.
+
+## Alarmo Display
+
+The optional native Alarmo page stays a subpage in the original blue C300X
+design. The configured return-after-standby setting still applies. It shows
+reported alarm state, readiness, blocking contacts and entry/exit countdowns.
+Tap a mode to execute directly when no PIN is required; otherwise the keypad
+appears. Entry delay opens the disarm keypad when required. A pending command
+blocks repeated taps; unavailable data is not displayed as a ready alarm.
+
+Under **Display dashboard**, **Alarm page entity** selects the optional quick
+action or status entity. Leave it empty to hide this area. To retain a stair-light
+shortcut, select the integration's stair-light button explicitly. No stair-light
+action is inserted automatically. Buttons, switches, scenes and scripts can be
+operated directly; other supported selections remain read-only on this page.
+The selected entity's name is used, including an existing display-name override.
+
+The revised page is included in `2.1.0b1`. Update the bundled agent and apply
+the Display patch to install it. No new background polling or device-file history
+is added. Reconnect attempts run only after a failed event connection while the
+page is active. Device rendering and interruption by a physical Ring Call still
+need confirmation during beta testing.
 
 ## Entity Reference
 

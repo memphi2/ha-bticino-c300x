@@ -1,51 +1,12 @@
 from __future__ import annotations
 
-import sys
 import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
 
-if "homeassistant.core" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    core = types.ModuleType("homeassistant.core")
-
-    def callback(func: Any) -> Any:
-        return func
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    core.HomeAssistant = HomeAssistant
-    core.callback = callback
-    sys.modules["homeassistant.core"] = core
-else:
-    core = sys.modules["homeassistant.core"]
-    if not hasattr(core, "callback"):
-        core.callback = lambda func: func
-
-if "homeassistant.config_entries" not in sys.modules:
-    config_entries = types.ModuleType("homeassistant.config_entries")
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    config_entries.ConfigEntry = ConfigEntry
-    sys.modules["homeassistant.config_entries"] = config_entries
-
-helpers = sys.modules.setdefault(
-    "homeassistant.helpers",
-    types.ModuleType("homeassistant.helpers"),
-)
-config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
-entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
-entity_registry.EVENT_ENTITY_REGISTRY_UPDATED = "entity_registry_updated"
-entity_registry.EventEntityRegistryUpdatedData = dict
+import pytest
 
 CREATED_ISSUES: dict[str, dict[str, Any]] = {}
 DELETED_ISSUES: list[str] = []
@@ -61,30 +22,9 @@ def _delete_issue(**kwargs: Any) -> None:
     CREATED_ISSUES.pop(issue_id, None)
 
 
-issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
-issue_registry.EVENT_REPAIRS_ISSUE_REGISTRY_UPDATED = (
-    "repairs_issue_registry_updated"
-)
-issue_registry.async_create_issue = _create_issue
-issue_registry.async_delete_issue = _delete_issue
-config_validation.config_entry_only_config_schema = lambda _domain: dict
-config_validation.empty_config_schema = lambda _domain: dict
-config_validation.ensure_list = lambda value: value if isinstance(value, list) else [value]
-config_validation.string = str
-config_validation.boolean = bool
-
-
 def _async_get_entity_registry(hass: Any) -> Any:
     return hass.entity_registry
 
-
-entity_registry.async_get = _async_get_entity_registry
-helpers.issue_registry = issue_registry
-helpers.entity_registry = entity_registry
-helpers.config_validation = config_validation
-sys.modules["homeassistant.helpers.config_validation"] = config_validation
-sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
-sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
 
 from custom_components.bticino_c300x import repair_issues  # noqa: E402
 from custom_components.bticino_c300x.agent_update import AgentUpdateState  # noqa: E402
@@ -132,10 +72,12 @@ from custom_components.bticino_c300x.repair_issues import (  # noqa: E402
     repair_issue_id,
 )
 
-repair_issues.ir.IssueSeverity = issue_registry.IssueSeverity
-repair_issues.ir.async_create_issue = _create_issue
-repair_issues.ir.async_delete_issue = _delete_issue
-repair_issues.er = entity_registry
+
+@pytest.fixture(autouse=True)
+def repair_registry_boundary(monkeypatch):
+    monkeypatch.setattr(repair_issues.ir, "async_create_issue", _create_issue)
+    monkeypatch.setattr(repair_issues.ir, "async_delete_issue", _delete_issue)
+    monkeypatch.setattr(repair_issues.er, "async_get", _async_get_entity_registry)
 
 
 @dataclass(slots=True)
@@ -769,21 +711,78 @@ def test_combined_media_self_test_failure_creates_fixable_media_setup_repair() -
     assert repair_issue_id(DEVICE_USER_REQUIRED_ISSUE, entry.entry_id) not in CREATED_ISSUES
 
 
-def test_offline_media_readiness_creates_fixable_media_setup_repair() -> None:
+@pytest.mark.parametrize("setup_failed", [False, True])
+def test_offline_media_readiness_does_not_create_setup_repair(
+    setup_failed: bool,
+) -> None:
+    connection_state = C300XConnectionState()
+    connection_state.mark_reconnecting("agent_api", 15, "Server disconnected")
+    connection_state.mark_unavailable()
     entry = FakeEntry(
         data={CONF_VIDEO_ENABLED: True},
         runtime_data=FakeRuntimeData(
-            connection_state=types.SimpleNamespace(available=False),
+            connection_state=connection_state,
+            capabilities={
+                "doorbell_video": {"supported": True},
+                "maintenance": {"supported": True, "firewall_apply": True},
+            },
+            self_test_status=(
+                {
+                    "ok": False,
+                    "checks": {
+                        "firewall": {"ok": False, "reason": "ipv4_media_ports_missing"},
+                    },
+                }
+                if setup_failed
+                else {}
+            ),
         ),
     )
+    hass = FakeHass()
+    issue_id = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
 
-    async_sync_entry_repair_issues(FakeHass(), entry)
+    async_sync_entry_repair_issues(hass, entry)
 
-    issue = CREATED_ISSUES[
-        repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
-    ]
-    assert issue["is_fixable"] is True
-    assert issue["translation_placeholders"]["fixable_checks"] == "agent_reachable"
+    assert repair_issues.media_readiness(entry)["status"] == "unavailable"
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
+
+    connection_state.mark_connected()
+    async_sync_entry_repair_issues(hass, entry)
+
+    if setup_failed:
+        issue = CREATED_ISSUES[issue_id]
+        assert issue["is_fixable"] is True
+        assert issue["translation_placeholders"]["failed_checks"] == "firewall"
+        assert issue["translation_placeholders"]["fixable_checks"] == "firewall"
+        entry.runtime_data.self_test_status = {
+            "ok": True,
+            "checks": {"firewall": {"ok": True}},
+        }
+        async_sync_entry_repair_issues(hass, entry)
+    assert issue_id not in CREATED_ISSUES
+
+
+def test_offline_media_setup_clears_existing_repair() -> None:
+    connection_state = C300XConnectionState()
+    entry = FakeEntry(
+        data={CONF_VIDEO_ENABLED: True},
+        runtime_data=FakeRuntimeData(
+            connection_state=connection_state,
+            capabilities={"doorbell_video": {"supported": True}},
+            self_test_status={"ok": False, "checks": {"rtsp": {"ok": False}}},
+        ),
+    )
+    hass = FakeHass()
+    issue_id = repair_issue_id(MEDIA_SETUP_REPAIR_REQUIRED_ISSUE, entry.entry_id)
+    async_sync_entry_repair_issues(hass, entry)
+    assert issue_id in CREATED_ISSUES
+
+    connection_state.mark_unavailable()
+    async_sync_entry_repair_issues(hass, entry)
+
+    assert issue_id not in CREATED_ISSUES
+    assert issue_id in DELETED_ISSUES
 
 
 def test_forwarding_choice_does_not_create_media_setup_repair() -> None:
@@ -1476,7 +1475,7 @@ def test_media_watchdog_creates_error_repair_issue() -> None:
     issue = CREATED_ISSUES[
         repair_issue_id(MEDIA_WATCHDOG_TIMEOUT_ISSUE, entry.entry_id)
     ]
-    assert issue["severity"] == issue_registry.IssueSeverity.ERROR
+    assert issue["severity"] == repair_issues.ir.IssueSeverity.ERROR
     assert issue["translation_key"] == MEDIA_WATCHDOG_TIMEOUT_ISSUE
     assert issue["translation_placeholders"]["cpu_percent"] == "95.0"
     assert issue["translation_placeholders"]["duration_seconds"] == "300"

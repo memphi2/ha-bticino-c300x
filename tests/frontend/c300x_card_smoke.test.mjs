@@ -9,8 +9,15 @@ function installFakeDom() {
     constructor(selector = "") {
       this.selector = selector;
       this.attributes = new Map();
+      const classes = new Set();
       this.classList = {
-        toggle: () => {},
+        toggle(name, force) {
+          const enabled = force ?? !classes.has(name);
+          if (enabled) classes.add(name);
+          else classes.delete(name);
+          return enabled;
+        },
+        contains: (name) => classes.has(name),
       };
       this.disabled = false;
       this.listeners = new Map();
@@ -70,6 +77,7 @@ function installFakeDom() {
           ".mic-icon",
           ".door-action",
           ".light-action",
+          ".device-actions",
           ".title",
           ".secondary",
           ".readiness",
@@ -266,12 +274,24 @@ test("footer device buttons follow HA state, localize and dispatch existing acti
   assert.equal(light.attributes.get("aria-label"), "Treppenlicht");
   assert.equal(door.disabled, false);
   assert.equal(light.disabled, false);
+  assert.equal(door.classList.contains("hidden"), false);
+  assert.equal(light.classList.contains("hidden"), false);
   await door.dispatch("click");
   await light.dispatch("click");
   assert.deepEqual(calls, [
     ["button", "press", { entity_id: "button.door_unlock" }],
     ["button", "press", { entity_id: "button.stair_light" }],
   ]);
+  for (const [showDoor, showLight] of [[false, true], [true, false], [false, false], [true, true]]) {
+    const previousSignature = card._renderSignature();
+    card.setConfig({ ...card._config, show_door_unlock: showDoor, show_stair_light: showLight });
+    assert.notEqual(card._renderSignature(), previousSignature);
+    assert.equal(door.classList.contains("hidden"), !showDoor);
+    assert.equal(light.classList.contains("hidden"), !showLight);
+    assert.equal(door.disabled, !showDoor);
+    assert.equal(light.disabled, !showLight);
+    assert.equal(card.shadowRoot.querySelector(".device-actions").classList.contains("hidden"), !showDoor && !showLight);
+  }
   hass.states["button.door_unlock"].state = "unavailable";
   card.hass = hass;
   assert.equal(door.disabled, true);

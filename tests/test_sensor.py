@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -11,123 +10,9 @@ from typing import Any
 
 dispatcher_signals: list[tuple[str, str]] = []
 
-if "homeassistant.components.sensor" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    sensor = types.ModuleType("homeassistant.components.sensor")
-    config_entries = sys.modules.setdefault(
-        "homeassistant.config_entries",
-        types.ModuleType("homeassistant.config_entries"),
-    )
-    const = sys.modules.setdefault(
-        "homeassistant.const",
-        types.ModuleType("homeassistant.const"),
-    )
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    config_validation = types.ModuleType("homeassistant.helpers.config_validation")
-    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
-    event_helper = types.ModuleType("homeassistant.helpers.event")
-    issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
-    entity_registry = types.ModuleType("homeassistant.helpers.entity_registry")
-    entity = sys.modules.setdefault(
-        "homeassistant.helpers.entity",
-        types.ModuleType("homeassistant.helpers.entity"),
-    )
-    entity_platform = sys.modules.setdefault(
-        "homeassistant.helpers.entity_platform",
-        types.ModuleType("homeassistant.helpers.entity_platform"),
-    )
+import pytest
 
-    class SensorEntity:  # pragma: no cover - import-time stub only
-        def async_write_ha_state(self) -> None:
-            self.wrote_state = True
-
-        def async_on_remove(self, callback: Any) -> None:
-            self._remove_callback = callback
-
-    class SensorDeviceClass:  # pragma: no cover - import-time stub only
-        ENUM = "enum"
-        TIMESTAMP = "timestamp"
-        TEMPERATURE = "temperature"
-        DURATION = "duration"
-
-    class SensorStateClass:  # pragma: no cover - import-time stub only
-        MEASUREMENT = "measurement"
-        TOTAL_INCREASING = "total_increasing"
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    class Entity:  # pragma: no cover - import-time stub only
-        pass
-
-    class DeviceInfo(dict):  # pragma: no cover - import-time stub only
-        pass
-
-    class EntityCategory:  # pragma: no cover - import-time stub only
-        DIAGNOSTIC = "diagnostic"
-
-    class UnitOfTemperature:  # pragma: no cover - import-time stub only
-        CELSIUS = "°C"
-
-    class UnitOfTime:  # pragma: no cover - import-time stub only
-        SECONDS = "s"
-
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    issue_registry.IssueSeverity = types.SimpleNamespace(ERROR="error", WARNING="warning")
-    issue_registry.async_create_issue = lambda **kwargs: None
-    issue_registry.async_delete_issue = lambda **kwargs: None
-    entity_registry.async_get = lambda hass: types.SimpleNamespace(
-        async_get=lambda entity_id: None
-    )
-    sensor.SensorEntity = SensorEntity
-    sensor.SensorDeviceClass = SensorDeviceClass
-    sensor.SensorStateClass = SensorStateClass
-    config_entries.ConfigEntry = ConfigEntry
-    const.EntityCategory = EntityCategory
-    const.UnitOfTemperature = UnitOfTemperature
-    const.UnitOfTime = UnitOfTime
-    core.HomeAssistant = HomeAssistant
-    core.callback = lambda func: func
-    dispatcher.async_dispatcher_connect = lambda *args, **kwargs: lambda: None
-    dispatcher.async_dispatcher_send = (
-        lambda hass, signal, entry_id: dispatcher_signals.append((signal, entry_id))
-    )
-    event_helper.async_call_later = lambda *args, **kwargs: (lambda: None)
-    entity.Entity = Entity
-    entity.DeviceInfo = DeviceInfo
-    entity_platform.AddEntitiesCallback = object
-    helpers.dispatcher = dispatcher
-    helpers.config_validation = config_validation
-    helpers.event = event_helper
-    helpers.issue_registry = issue_registry
-    helpers.entity_registry = entity_registry
-    helpers.entity = entity
-    helpers.entity_platform = entity_platform
-    components.sensor = sensor
-    homeassistant.components = components
-    sys.modules["homeassistant.components.sensor"] = sensor
-    sys.modules["homeassistant.helpers.config_validation"] = config_validation
-    sys.modules["homeassistant.helpers.dispatcher"] = dispatcher
-    sys.modules["homeassistant.helpers.event"] = event_helper
-    sys.modules["homeassistant.helpers.issue_registry"] = issue_registry
-    sys.modules["homeassistant.helpers.entity_registry"] = entity_registry
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
 
 from custom_components.bticino_c300x import agent_diagnostics
 from custom_components.bticino_c300x._api_normalize import (
@@ -1584,11 +1469,14 @@ def test_agent_write_diagnostics_refresh_dispatches_one_shot_update() -> None:
 
 
 def test_system_metric_sensors_are_disabled_by_default() -> None:
-    assert C300XAgentDiagnosticsSensor._attr_entity_registry_enabled_default is False
-    assert C300XDeviceCpuSensor._attr_entity_registry_enabled_default is False
-    assert C300XDeviceLoadSensor._attr_entity_registry_enabled_default is False
-    assert C300XDeviceMemorySensor._attr_entity_registry_enabled_default is False
-    assert C300XDeviceTemperatureSensor._attr_entity_registry_enabled_default is False
+    for sensor_class in (
+        C300XAgentDiagnosticsSensor,
+        C300XDeviceCpuSensor,
+        C300XDeviceLoadSensor,
+        C300XDeviceMemorySensor,
+        C300XDeviceTemperatureSensor,
+    ):
+        assert sensor_class(_FakeEntry()).entity_registry_enabled_default is False
 
 
 def test_non_connection_sensor_goes_unavailable_when_agent_disconnected() -> None:

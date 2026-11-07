@@ -30,6 +30,8 @@ from custom_components.bticino_c300x.system_metrics import (
     metrics_cache,
 )
 
+pytestmark = pytest.mark.usefixtures("entity_ha_boundary")
+
 
 def snapshot(
     sequence: int = 1, instance: str = "a" * 32, **values: Any

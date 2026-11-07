@@ -4,6 +4,21 @@
 #include <stdio.h>
 #include <string.h>
 
+int constant_time_equal(const char *left, size_t left_len, const char *right)
+{
+    size_t right_len = strlen(right);
+    size_t max_len = left_len > right_len ? left_len : right_len;
+    unsigned char diff = (unsigned char)(left_len ^ right_len);
+    size_t index;
+
+    for (index = 0; index < max_len; index++) {
+        unsigned char left_ch = index < left_len ? (unsigned char)left[index] : 0;
+        unsigned char right_ch = index < right_len ? (unsigned char)right[index] : 0;
+        diff |= (unsigned char)(left_ch ^ right_ch);
+    }
+    return diff == 0;
+}
+
 void c300x_copy_string(char *dest, size_t dest_len, const char *value)
 {
     const char *source = value != NULL ? value : "";

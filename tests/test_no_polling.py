@@ -31,7 +31,11 @@ def test_device_alarm_page_has_no_refresh_timer() -> None:
     text = (ROOT / "device_qml" / "Alarm.qml").read_text(encoding="utf-8")
 
     assert "refreshTimer" not in text
-    assert "interval: 5000" not in text
+    start = text.index("interval: 5000")
+    recovery = text[start : text.index("interval: 1000\n", start)]
+    assert "repeat: false" in recovery
+    assert "running: pageActive && watchFailed" in recovery
+    assert "repeat: true" not in recovery
 
 
 def test_device_homeassistant_page_has_no_refresh_timer() -> None:

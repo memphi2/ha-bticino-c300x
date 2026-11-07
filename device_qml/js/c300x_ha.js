@@ -9,17 +9,25 @@ var eventWatching = false
 var eventCallback = null
 
 function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
+    var generation = pageItem.runtimeGeneration
+    var request = (pageItem.statusGeneration || 0) + 1
+    pageItem.statusGeneration = request
     getJson("/ui/state", function(data) {
+        if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
+        if (!pageItem.commandInFlight) pageItem.commandPending = false
+        pageItem.alarmOnline = !!(data.alarm && data.alarm.state
+            && data.alarm.state !== "unavailable" && data.alarm.state !== "unknown")
         if (pageItem.clearCommandFeedback) {
             pageItem.clearCommandFeedback()
         }
         if (pageItem.preventReturnToHomepage !== undefined) {
             pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         }
-        statusItem.text = uiText(pageItem, "ha_connected")
-        statusItem.color = "#58d68d"
+        statusItem.text = uiText(pageItem, pageItem.commandPending ? "sending" : "ha_connected")
+        statusItem.color = pageItem.commandPending ? "#f1c40f" : "#58d68d"
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
+            var previousCommand = pageItem.selectedCommand
             pageItem.alarmConfigured = true
             pageItem.alarmRawState = data.alarm.state
             if (previousState !== data.alarm.state) {
@@ -36,9 +44,10 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
                 pageItem.selectedCommand = pageItem.alarmCommands[0]
             }
             var currentCommand = commandForState(data.alarm.state)
-            if (currentCommand && contains(pageItem.alarmCommands, currentCommand)) {
+            if (previousState !== data.alarm.state && currentCommand && contains(pageItem.alarmCommands, currentCommand)) {
                 pageItem.selectedCommand = currentCommand
             }
+            if (pageItem.statusApplied) pageItem.statusApplied(previousState, previousCommand)
             alarmStateItem.text = alarmLabel(data.alarm.state, pageItem)
             if (activeSinceItem) {
                 activeSinceItem.text = formatActiveSince(data.alarm.active_since, pageItem) || data.alarm.active_since_label || ""
@@ -64,6 +73,13 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         }
         pageItem.alarmPageItem = alarmPageItem(data.alarm_page_entity)
     }, function(error) {
+        if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
+        if (!pageItem.commandInFlight) pageItem.commandPending = false
+        pageItem.alarmOnline = false
+        pageItem.watchFailed = true
+        pageItem.pinCode = ""
+        alarmStateItem.text = uiText(pageItem, "offline")
+        if (activeSinceItem) activeSinceItem.text = ""
         statusItem.text = error
         statusItem.color = "#ff6b6b"
         if (pageItem.setAlarmDelayRemaining) {
@@ -156,15 +172,33 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         statusItem.color = "#ff6b6b"
         return
     }
+    var generation = pageItem.runtimeGeneration
+    if (refreshDashboard === false) {
+        if (pageItem.quickActionPending) return
+        pageItem.quickActionPending = true
+    }
+    var quickGeneration = pageItem.quickActionGeneration
     var path = "/homeassistant?domain=" + encodeURIComponent(item.domain)
         + "&service=toggle&entities=" + encodeURIComponent(item.entity_id)
     getJson(path, function(data) {
+        if (generation !== pageItem.runtimeGeneration) return
+        if (refreshDashboard === false) {
+            if (quickGeneration !== pageItem.quickActionGeneration) return
+            pageItem.quickActionPending = false
+        }
         statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
         statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
         if (refreshDashboard !== false) {
             dashboard(statusItem, pageItem)
+        } else if (data.ok && pageItem.refreshAlarmStatus) {
+            pageItem.refreshAlarmStatus(true)
         }
     }, function(error) {
+        if (generation !== pageItem.runtimeGeneration) return
+        if (refreshDashboard === false) {
+            if (quickGeneration !== pageItem.quickActionGeneration) return
+            pageItem.quickActionPending = false
+        }
         statusItem.text = error
         statusItem.color = "#ff6b6b"
     })
@@ -224,15 +258,7 @@ function dashboardChoiceOptionValue(option) {
 
 function alarmPageItem(source) {
     if (!source || !source.entity_id || !source.domain) {
-        return {
-            "kind": "button",
-            "domain": "c300x",
-            "entity_id": "stair_light",
-            "name_key": "stair_light",
-            "name": "stair_light",
-            "state": false,
-            "state_label": ""
-        }
+        return null
     }
     var item = {
         "kind": source.kind || "entity",
@@ -258,6 +284,7 @@ function alarmPageItem(source) {
 
 
 function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activeSinceItem, force) {
+    if (pageItem.commandPending || pageItem.alarmOnline === false) return
     if (!force && !alarmCommandReady(pageItem.alarmCommandDetails, command)) {
         if (pageItem.setCommandFeedback) {
             pageItem.setCommandFeedback("not_ready_to_arm", command, "#ff6b6b")
@@ -267,6 +294,9 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         }
         return
     }
+    var generation = pageItem.runtimeGeneration
+    pageItem.commandPending = true
+    pageItem.commandInFlight = true
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command)
     if (code && code.length > 0) {
         path += "&code=" + encodeURIComponent(code)
@@ -275,15 +305,19 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         path += "&force=true"
     }
     getJson(path, function(data) {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.commandInFlight = false
+        pageItem.commandPending = false
         if (applyAlarmCommandResult(data, command, statusItem, pageItem)) {
             return
         }
         if (data.ok) {
+            pageItem.commandPending = true
             if (pageItem.setCommandFeedback) {
-                pageItem.setCommandFeedback("alarm_command_sent", command, "#58d68d")
+                pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
-                statusItem.text = uiText(pageItem, "alarm_command_sent")
-                statusItem.color = "#58d68d"
+                statusItem.text = uiText(pageItem, "sending")
+                statusItem.color = "#f1c40f"
             }
             pageItem.bypassOffered = false
             if (command === "disarm" && pageItem.setAlarmDelayRemaining) {
@@ -298,13 +332,23 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         }
         setErrorFeedback(command, statusItem, pageItem)
     }, function() {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.commandInFlight = false
+        pageItem.commandPending = false
         setErrorFeedback(command, statusItem, pageItem)
     })
 }
 
 function alarmCheck(command, statusItem, pageItem) {
+    if (pageItem.commandPending || pageItem.alarmOnline === false) return
+    var generation = pageItem.runtimeGeneration
+    pageItem.commandPending = true
+    pageItem.commandInFlight = true
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command) + "&check=true"
     getJson(path, function(data) {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.commandInFlight = false
+        pageItem.commandPending = false
         if (applyAlarmCommandResult(data, command, statusItem, pageItem)) {
             return
         }
@@ -334,6 +378,9 @@ function alarmCheck(command, statusItem, pageItem) {
         }
         setErrorFeedback(command, statusItem, pageItem)
     }, function() {
+        if (generation !== pageItem.runtimeGeneration) return
+        pageItem.commandInFlight = false
+        pageItem.commandPending = false
         setErrorFeedback(command, statusItem, pageItem)
     })
 }
@@ -823,23 +870,21 @@ function startEventWatch(callback) {
 function stopEventWatch() {
     eventWatching = false
     eventCallback = null
-    if (eventRequest && eventRequest.readyState < 4) {
-        eventRequest.abort()
-    }
-    if (eventRequest) {
-        removeConnection(eventRequest)
-    }
+    var request = eventRequest
     eventRequest = null
+    if (request) {
+        request.onreadystatechange = function() {}
+        removeConnection(request)
+        if (request.readyState < 4) request.abort()
+    }
 }
 
 function stopDashboardRuntime() {
     stopEventWatch()
-    var i = connections.length
-    while (i--) {
-        if (connections[i].readyState < 4) {
-            connections[i].abort()
-        }
-        connections.splice(i, 1)
+    while (connections.length > 0) {
+        var request = connections.pop()
+        request.onreadystatechange = function() {}
+        if (request.readyState < 4) request.abort()
     }
 }
 
@@ -859,6 +904,7 @@ function requestNextEvent() {
             return
         }
         removeConnection(xhr)
+        if (eventRequest !== xhr) return
         eventRequest = null
         if (xhr.status === 200 && eventWatching === true) {
             try {
@@ -872,9 +918,11 @@ function requestNextEvent() {
                 requestNextEvent()
             } catch (error) {
                 eventWatching = false
+                if (eventCallback) eventCallback({topic: "connection.error"})
             }
         } else if (eventWatching === true) {
             eventWatching = false
+            if (eventCallback) eventCallback({topic: "connection.error"})
         }
     }
     xhr.open("GET", BASE_URL + "/ui/events/next?since=" + eventRevision)
@@ -919,16 +967,16 @@ function getJson(path, callback, errorCallback) {
 }
 
 function cleanupConnections() {
-    var i = connections.length
+    var pending = connections.slice(0)
+    var i = pending.length
     while (i--) {
-        if (connections[i].longPoll === true && connections[i] === eventRequest && eventWatching === true) {
+        var request = pending[i]
+        if (request.longPoll === true && request === eventRequest && eventWatching === true) {
             continue
         }
-        if (Date.now() - connections[i].startTime > 3000) {
-            if (connections[i].readyState < 4) {
-                connections[i].abort()
-            }
-            connections.splice(i, 1)
+        if (Date.now() - request.startTime > 10000) {
+            if (request.readyState < 4) request.abort()
+            removeConnection(request)
         }
     }
 }

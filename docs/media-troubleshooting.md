@@ -74,6 +74,21 @@ Check:
 
 ## Talkback or Microphone Does Not Work
 
+The normal HA camera player's microphone is optional and **off by default**.
+In the integration options, enable **Two-way audio in the HA camera player**
+on the features page. This requires Home Assistant 2026.11 or newer,
+**Settings > System > Labs > Two-way audio**, a WebRTC stream, HTTPS and browser
+microphone permission. See the [Home Assistant requirements](https://contributors.home-assistant.io/core/entities/camera/#two-way-audio).
+The integration declares support only when this option is enabled and the agent
+explicitly reports talkback and an audio stream.
+It uses the existing WebRTC backchannel without additional idle device polling
+or an agent update. Card talkback is unaffected by this option. On older
+supported HA versions, use the card's microphone.
+
+The native microphone supports on-demand video and already answered Ring Calls.
+Continue to answer and hang up incoming calls through the card; opening the
+camera or enabling its microphone does not automatically answer a pending call.
+
 Talkback needs browser microphone permission. Use:
 
 - HTTPS,

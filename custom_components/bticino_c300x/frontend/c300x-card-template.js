@@ -3,6 +3,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         :host {
           display: block;
           height: 100%;
+          container-type: inline-size;
         }
         ha-card {
           overflow: hidden;
@@ -51,24 +52,18 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
         .body {
           min-height: 48px;
           padding: 4px 16px;
-          display: flex;
-          align-items: center;
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          grid-template-areas: "controls text devices";
+          align-items: start;
           flex: 0 0 auto;
-          flex-wrap: wrap;
           gap: 8px;
-        }
-        .entity-main {
-          display: flex;
-          align-items: center;
-          min-width: 0;
-          flex: 1 1 220px;
         }
         .row-actions {
+          grid-area: controls;
           display: flex;
           align-items: center;
           gap: 8px;
-          margin: 0 16px 0 0;
-          flex: 0 0 auto;
         }
         .row-action,
         .home-action,
@@ -92,10 +87,10 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
         }
         .device-actions {
+          grid-area: devices;
           display: flex;
           gap: 8px;
-          flex: 0 0 auto;
-          margin-left: auto;
+          justify-self: end;
         }
         .device-action:disabled {
           color: var(--disabled-text-color);
@@ -108,7 +103,9 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           color: var(--primary-color);
           background: color-mix(in srgb, var(--primary-color) 18%, transparent);
         }
-        .home-action.hidden {
+        .home-action.hidden,
+        .device-action.hidden,
+        .device-actions.hidden {
           display: none;
         }
         .home-action.active {
@@ -198,6 +195,7 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           display: flex;
         }
         .entity-text {
+          grid-area: text;
           min-width: 0;
         }
         .title {
@@ -256,6 +254,33 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           min-width: 0;
           overflow-wrap: anywhere;
         }
+        @container (max-width: 420px) {
+          .body {
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas: "controls devices" "text text";
+          }
+          .title {
+            white-space: normal;
+            overflow-wrap: anywhere;
+          }
+        }
+        @container (max-width: 280px) {
+          .body {
+            padding-inline: 8px;
+          }
+          .row-actions,
+          .device-actions {
+            gap: 4px;
+          }
+          .row-action,
+          .home-action,
+          .device-action,
+          .mic-action {
+            width: 32px;
+            height: 32px;
+            --mdc-icon-size: 20px;
+          }
+        }
       </style>
       <ha-card>
         <audio class="remote-audio" autoplay playsinline></audio>
@@ -265,25 +290,23 @@ export const C300X_DOORBELL_CARD_TEMPLATE = `
           <div class="empty"></div>
         </div>
         <div class="body">
-          <div class="entity-main">
-            <div class="row-actions">
-              <button class="row-action" type="button">
-                <ha-icon class="action-icon" icon="mdi:phone"></ha-icon>
-              </button>
-              <button class="home-action hidden" type="button">
-                <ha-icon class="home-action-icon" icon="mdi:phone"></ha-icon>
-              </button>
-              <button class="mic-action hidden" type="button">
-                <ha-icon class="mic-icon" icon="mdi:microphone"></ha-icon>
-              </button>
-            </div>
-            <div class="entity-text">
-              <div class="title"></div>
-              <div class="secondary"></div>
-              <div class="readiness hidden">
-                <ha-icon class="readiness-icon" icon="mdi:check-circle"></ha-icon>
-                <span class="readiness-text"></span>
-              </div>
+          <div class="row-actions">
+            <button class="row-action" type="button">
+              <ha-icon class="action-icon" icon="mdi:phone"></ha-icon>
+            </button>
+            <button class="home-action hidden" type="button">
+              <ha-icon class="home-action-icon" icon="mdi:phone"></ha-icon>
+            </button>
+            <button class="mic-action hidden" type="button">
+              <ha-icon class="mic-icon" icon="mdi:microphone"></ha-icon>
+            </button>
+          </div>
+          <div class="entity-text">
+            <div class="title"></div>
+            <div class="secondary"></div>
+            <div class="readiness hidden">
+              <ha-icon class="readiness-icon" icon="mdi:check-circle"></ha-icon>
+              <span class="readiness-text"></span>
             </div>
           </div>
           <div class="device-actions">

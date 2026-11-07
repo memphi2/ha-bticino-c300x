@@ -13,6 +13,7 @@ from pathlib import Path
 import yaml
 from check_dependency_updates import check_dependency_updates
 from check_reporting import report_failures
+from release_version import previous_release_tag, validate_version
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_CONFIG_PATH = ROOT / "project-versions.json"
@@ -139,6 +140,8 @@ REQUIRED_PATHS = [
     "scripts/check_legal_audit.py",
     "scripts/check_media_contracts.py",
     "scripts/check_release_tag.py",
+    "scripts/release_version.py",
+    "scripts/publish_release.py",
     "scripts/check_typing.py",
     "scripts/check_validate.py",
     "scripts/update_frontend_hashes.py",
@@ -462,8 +465,10 @@ def check_release_metadata() -> list[str]:
         )
     )
     version = str(manifest.get("version", ""))
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        failures.append("manifest version must be a stable semver release")
+    try:
+        validate_version(version)
+    except ValueError:
+        failures.append("manifest version must use X.Y.Z, X.Y.ZbN or X.Y.ZrcN")
         return failures
     if version != CURRENT_RELEASE_VERSION:
         failures.append(
@@ -519,7 +524,10 @@ def check_release_metadata() -> list[str]:
 def check_native_agent_version_bump() -> list[str]:
     """Require a native-agent version bump for release-visible bundle changes."""
 
-    previous_tag = _previous_release_tag()
+    try:
+        previous_tag = _previous_release_tag()
+    except (ValueError, subprocess.CalledProcessError):
+        return ["unable to inspect previous native-agent release tag"]
     if previous_tag is None:
         return []
     changed_paths = _git_changed_paths(previous_tag, *NATIVE_AGENT_BUNDLE_INPUT_PATHS)
@@ -550,20 +558,7 @@ def _native_agent_version_bump_failures(
 
 
 def _previous_release_tag() -> str | None:
-    current_tag = f"v{CURRENT_RELEASE_VERSION}"
-    result = subprocess.run(
-        ["git", "-C", str(ROOT), "tag", "--merged", "HEAD", "--sort=-version:refname"],
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
-    for line in result.stdout.splitlines():
-        tag = line.strip()
-        if re.fullmatch(r"v\d+\.\d+\.\d+", tag) and tag != current_tag:
-            return tag
-    return None
+    return previous_release_tag(f"v{CURRENT_RELEASE_VERSION}", ROOT)
 
 
 def _git_changed_paths(base_ref: str, *paths: str) -> list[str] | None:
@@ -832,8 +827,8 @@ def check_hacs_metadata() -> list[str]:
         "actions/attest@": "release workflow must generate GitHub artifact attestations",
         "gh attestation verify": "release workflow must verify generated attestations",
         "https://spdx.dev/Document/v2.3": "release workflow must verify the SPDX attestation",
-        "gh release create": "release workflow must publish GitHub Release assets",
-        "gh release upload": "release workflow must update existing GitHub Release assets",
+        "scripts/publish_release.py": "release workflow must publish verified channel-aware assets",
+        "scripts/release_version.py": "release workflow must include beta/RC tags when resolving agent reuse",
     }
     for token, message in required_release_tokens.items():
         if token not in release_workflow:

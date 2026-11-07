@@ -10,6 +10,9 @@ export class C300XCardActions {
 
   async handleDeviceAction(key) {
     const card = this._card;
+    if (card._config?.[`show_${key}`] === false) {
+      return;
+    }
     const entityId = card._deviceActionEntity(key);
     if (!entityId || !card._hass?.callService || this.deviceActionPending(key)
       || card._hass.states?.[entityId]?.state === "unavailable") {

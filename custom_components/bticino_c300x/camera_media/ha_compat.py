@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from homeassistant.components import camera as camera_platform
 from homeassistant.components.camera import const as camera_const
 
 if TYPE_CHECKING:
@@ -15,4 +16,12 @@ if HA_CAMERA_FEATURE_IN_CONST:
 else:
     from homeassistant.components.camera import CameraEntityFeature
 
-__all__ = ("CameraEntityFeature", "WebRTCError", "WebRTCSendMessage")
+# The native microphone capability was added in HA 2026.11.
+CameraEntityCapabilities = getattr(camera_platform, "CameraEntityCapabilities", None)
+
+__all__ = (
+    "CameraEntityCapabilities",
+    "CameraEntityFeature",
+    "WebRTCError",
+    "WebRTCSendMessage",
+)

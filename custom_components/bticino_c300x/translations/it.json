@@ -45,7 +45,11 @@
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC",
+          "native_two_way_audio": "Audio bidirezionale nel lettore telecamera HA"
+        },
+        "data_description": {
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede HA 2026.11+, Two-way audio attivato in Impostazioni > Sistema > Labs, WebRTC, HTTPS e il permesso del microfono nel browser. Rispondere alle chiamate in arrivo tramite la scheda C300X; questa opzione non risponde automaticamente. Il microfono della scheda resta invariato. Nessun polling aggiuntivo a riposo né aggiornamento dell'agente necessario."
         }
       },
       "user_device_activations": {
@@ -110,7 +114,11 @@
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC",
+          "native_two_way_audio": "Audio bidirezionale nel lettore telecamera HA"
+        },
+        "data_description": {
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede HA 2026.11+, Two-way audio attivato in Impostazioni > Sistema > Labs, WebRTC, HTTPS e il permesso del microfono nel browser. Rispondere alle chiamate in arrivo tramite la scheda C300X; questa opzione non risponde automaticamente. Il microfono della scheda resta invariato. Nessun polling aggiuntivo a riposo né aggiornamento dell'agente necessario."
         }
       },
       "reconfigure_device_activations": {
@@ -201,7 +209,11 @@
           "create_homeassistant_user": "Crea utente media Home Assistant per queste funzioni",
           "doorstation_audio_gain_db": "Guadagno audio live posto esterno (dB)",
           "ring_capture_audio_gain_db": "Guadagno audio cattura campanello (dB)",
-          "webrtc_ice_policy": "Filtro candidati ICE WebRTC"
+          "webrtc_ice_policy": "Filtro candidati ICE WebRTC",
+          "native_two_way_audio": "Audio bidirezionale nel lettore telecamera HA"
+        },
+        "data_description": {
+          "native_two_way_audio": "Opzionale, disattivato per impostazione predefinita. Richiede HA 2026.11+, Two-way audio attivato in Impostazioni > Sistema > Labs, WebRTC, HTTPS e il permesso del microfono nel browser. Rispondere alle chiamate in arrivo tramite la scheda C300X; questa opzione non risponde automaticamente. Il microfono della scheda resta invariato. Nessun polling aggiuntivo a riposo né aggiornamento dell'agente necessario."
         }
       },
       "device_activations": {
@@ -608,7 +620,7 @@
       }
     },
     "media_setup_repair_required": {
-      "title": "Configurazione media C300X riparabile",
+      "title": "Controlli configurazione media C300X falliti: {failed_checks}",
       "fix_flow": {
         "step": {
           "confirm": {

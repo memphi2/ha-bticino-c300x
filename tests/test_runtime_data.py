@@ -74,6 +74,7 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         resources.prepare_doorbell_video_stop = device_action
         resources.prepare_home_call_stop = device_action
         resources.on_runtime_registration_created = device_action
+        resources.pending_message_refreshes.add("memos")
         tasks = []
         for name in task_names:
             task = asyncio.create_task(blocker.wait())
@@ -85,7 +86,12 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         await asyncio.gather(*tasks, return_exceptions=True)
         assert all(task.cancelled() for task in tasks)
         assert calls == ["registration", "display", "event-webhook", "webhook"]
-        assert all(getattr(resources, item.name) is None for item in fields(resources))
+        assert not resources.pending_message_refreshes
+        assert all(
+            getattr(resources, item.name) is None
+            for item in fields(resources)
+            if item.name != "pending_message_refreshes"
+        )
 
     asyncio.run(run())
 
@@ -102,6 +108,7 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
             unregister_event_registration=fail,
             unregister_webhook=lambda: calls.append("webhook"),
             startup_sync_task=task,
+            pending_message_refreshes={"memos"},
         )
         with pytest.raises(ExceptionGroup) as error:
             resources.close()
@@ -111,7 +118,12 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
         assert calls == ["webhook"]
         assert len(error.value.exceptions) == 1
         assert isinstance(error.value.exceptions[0], RuntimeError)
-        assert all(getattr(resources, item.name) is None for item in fields(resources))
+        assert not resources.pending_message_refreshes
+        assert all(
+            getattr(resources, item.name) is None
+            for item in fields(resources)
+            if item.name != "pending_message_refreshes"
+        )
 
     asyncio.run(run())
 

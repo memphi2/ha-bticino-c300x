@@ -131,8 +131,8 @@ class WebRTCDebugMixin:
             provider or "-",
             self._last_media_state.value,
             self._video_owner,
-            len(self._provider_webrtc_sessions),
-            sum(1 for session in self._provider_webrtc_sessions.values() if session.ready),
+            len(self._webrtc_sessions.active),
+            sum(1 for session in self._webrtc_sessions.active.values() if session.ready),
             detail_text,
         )
 

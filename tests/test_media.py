@@ -11,53 +11,6 @@ from typing import Any
 import pytest
 from aiohttp import web
 
-if "homeassistant.components.http" not in sys.modules:
-    homeassistant = sys.modules.setdefault(
-        "homeassistant",
-        types.ModuleType("homeassistant"),
-    )
-    components = sys.modules.setdefault(
-        "homeassistant.components",
-        types.ModuleType("homeassistant.components"),
-    )
-    http = types.ModuleType("homeassistant.components.http")
-    config_entries = sys.modules.setdefault(
-        "homeassistant.config_entries",
-        types.ModuleType("homeassistant.config_entries"),
-    )
-    core = sys.modules.setdefault(
-        "homeassistant.core",
-        types.ModuleType("homeassistant.core"),
-    )
-    helpers = sys.modules.setdefault(
-        "homeassistant.helpers",
-        types.ModuleType("homeassistant.helpers"),
-    )
-    helpers.__path__ = []
-    config_validation = sys.modules.setdefault(
-        "homeassistant.helpers.config_validation",
-        types.ModuleType("homeassistant.helpers.config_validation"),
-    )
-
-    class ConfigEntry:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistant:  # pragma: no cover - import-time stub only
-        pass
-
-    class HomeAssistantView:  # pragma: no cover - import-time stub only
-        extra_urls: list[str] = []
-
-    config_entries.ConfigEntry = ConfigEntry
-    core.HomeAssistant = HomeAssistant
-    http.HomeAssistantView = HomeAssistantView
-    config_validation.config_entry_only_config_schema = lambda _domain: dict
-    components.http = http
-    helpers.config_validation = config_validation
-    homeassistant.components = components
-    homeassistant.helpers = helpers
-    sys.modules["homeassistant.components.http"] = http
-
 from custom_components.bticino_c300x import media as media_module
 from custom_components.bticino_c300x.api import (
     C300XAgentApiError,

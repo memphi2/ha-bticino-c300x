@@ -21,6 +21,20 @@ def test_localized_translation_files_match_english_keys() -> None:
         assert _leaf_paths(localized) == _leaf_paths(english)
 
 
+def test_native_camera_audio_explains_prerequisites_on_all_feature_forms() -> None:
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area, step in (
+            ("config", "user_features"), ("config", "reconfigure_features"),
+            ("options", "features"),
+        ):
+            form = data[area]["step"][step]
+            assert form["data"]["native_two_way_audio"]
+            hint = form["data_description"]["native_two_way_audio"]
+            for prerequisite in ("2026.11", "Labs", "WebRTC", "HTTPS", "C300X"):
+                assert prerequisite in hint
+
+
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:
     for path in (
         INTEGRATION / "strings.json",
@@ -218,11 +232,13 @@ def test_fixable_media_setup_repair_uses_ha_issue_fix_flow_schema() -> None:
         TRANSLATIONS / "fr.json",
     ):
         data = _load_json(path)
-        assert "description" not in _path_value(
+        issue = _path_value(
             data,
             "issues",
             "media_setup_repair_required",
         )
+        assert "description" not in issue
+        assert "firewall, rtsp" in issue["title"].format(failed_checks="firewall, rtsp")
         fix_flow = _path_value(
             data,
             "issues",

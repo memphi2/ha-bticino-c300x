@@ -1208,26 +1208,29 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
     async def _async_close_finished_home_call_sessions(self) -> None:
         """Close stale local Home Call sessions before starting doorbell media."""
 
-        session_ids = self._webrtc_session_ids_by_owner("home_call")
-        if not session_ids and not self._cached_home_call_state_needs_refresh():
-            return
+        # Keep both the status read and its cleanup indivisible with admission
+        # and native start; an idle reply from before startup must not win later.
+        async with self._rtsp_prepare_lock:
+            session_ids = self._webrtc_session_ids_by_owner("home_call")
+            if not session_ids and not self._cached_home_call_state_needs_refresh():
+                return
 
-        try:
-            status = await self._runtime_data.api.async_home_call_status()
-        except Exception:  # noqa: BLE001 - keep active-looking local sessions on status errors
-            return
-        if _home_call_status_has_media(status):
-            self._apply_home_call_status(status)
-            return
+            try:
+                status = await self._runtime_data.api.async_home_call_status()
+            except Exception:  # noqa: BLE001 - preserve sessions on status errors
+                return
+            if _home_call_status_has_media(status):
+                self._apply_home_call_status(status)
+                return
 
-        self._apply_home_call_ended(dict(status))
-        for session_id in session_ids:
-            await self._async_close_webrtc_session(
-                session_id,
-                stop_media=False,
-                notify_client=True,
-                reason="home_call_ended",
-            )
+            self._apply_home_call_ended(dict(status))
+            for session_id in session_ids:
+                await self._async_close_webrtc_session(
+                    session_id,
+                    stop_media=False,
+                    notify_client=True,
+                    reason="home_call_ended",
+                )
 
     def _cached_home_call_state_needs_refresh(self) -> bool:
         """Return true when cached media facts still look like Home Call."""

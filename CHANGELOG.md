@@ -24,7 +24,7 @@
 - Keep notification actions pending until the HA service call finishes, and
   cancel pending work when the integration unloads.
 - Recheck media ownership before stopping a closing camera session, and
-  serialize Home Call admission/start with teardown.
+  serialize Home Call admission/start with teardown and idle-status cleanup.
 - Validate the complete agent update before installation and restore previous
   files on an apply failure. Publish bundle metadata only after successful
   activation. This protection applies to updates performed by the new agent.

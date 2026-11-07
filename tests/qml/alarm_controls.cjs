@@ -99,6 +99,7 @@ assert.equal(q.alarmRawState, "armed_away", "out-of-order status ignored");
 Api.status(q.status, q, q.alarmState, q.activeSince);
 pending.shift().error("offline");
 assert.equal(q.alarmOnline, false);
+assert.equal(q.watchFailed, true, "status failure schedules recovery even with a healthy event watch");
 assert.equal(q.alarmState.text, "Offline");
 q.selectCommand("arm_home");
 assert.equal(pending.length, 0);

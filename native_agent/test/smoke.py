@@ -1125,6 +1125,13 @@ def run_smoke(
                 raise AssertionError("dashboard choice entity id was not forwarded")
             if dashboard_callback["body"].get("option") != "Home Assistant, manual":
                 raise AssertionError("dashboard choice option was not forwarded")
+            for control in ("toggle", "color_temp_kelvin"):
+                callback_seen = len(callback.requests)
+                entity_action = "light." + "x" * 249 + ":" + control
+                ui_get_json(ui_port, "/homeassistant?domain=c300x&service=toggle&entities=" + entity_action)
+                received = wait_for_callback_type(callback, "dashboard_action", callback_seen)
+                if received["body"].get("entity_id") != entity_action:
+                    raise AssertionError("long dashboard control was truncated")
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "muted", False)
             assert_json_field(api_get(api_port, "/api/v1/ringer"), "volume", 2)
             ringer_before = len(openwebnet.frames)

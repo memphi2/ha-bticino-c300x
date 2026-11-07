@@ -103,6 +103,9 @@ from .media_status import (
     home_call_payload as _home_call_payload,
 )
 from .media_status import (
+    home_call_status_has_media as _home_call_status_has_media,
+)
+from .media_status import (
     rtsp_client_count_from_status as _rtsp_client_count_from_status,
 )
 from .media_watchdog import AgentCpuWatchdog, handle_agent_cpu_metrics_changed
@@ -1794,18 +1797,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             if session.ready
         }
         return len(provider_resources)
-
-
-def _home_call_status_has_media(status: Mapping[str, Any]) -> bool:
-    """Return true while the agent reports an active Home Call media path."""
-
-    return bool(
-        status.get("running")
-        or status.get("active")
-        or status.get("answered")
-        or status.get("rtp_proxy")
-        or status.get("target_audio_port")
-    )
 
 
 @callback

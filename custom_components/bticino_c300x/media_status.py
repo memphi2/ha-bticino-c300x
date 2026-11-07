@@ -36,3 +36,15 @@ def home_call_payload(data: Mapping[str, Any]) -> dict[str, Any]:
             return payload
         return nested
     return {}
+
+
+def home_call_status_has_media(status: Mapping[str, Any]) -> bool:
+    """Return true while the agent reports an active Home Call media path."""
+
+    return bool(
+        status.get("running")
+        or status.get("active")
+        or status.get("answered")
+        or status.get("rtp_proxy")
+        or status.get("target_audio_port")
+    )

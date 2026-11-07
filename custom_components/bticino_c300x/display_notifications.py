@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 
@@ -93,7 +94,8 @@ class DisplayNotifications:
         candidate = dict(self._items)
         candidate[key] = {
             "id": key,
-            "revision": self._sequence + 1,
+            "revision": uuid4().hex,
+            "sequence": self._sequence + 1,
             "title": data["title"],
             "message": data["message"],
             "icon": data["icon"],
@@ -119,7 +121,7 @@ class DisplayNotifications:
                 victims,
                 key=lambda other: (
                     _PRIORITY[candidate[other]["priority"]],
-                    candidate[other]["revision"],
+                    candidate[other]["sequence"],
                 ),
             )
             del candidate[oldest]
@@ -136,12 +138,16 @@ class DisplayNotifications:
     def payload(self) -> list[dict[str, Any]]:
         self._purge()
         return [
-            {key: value for key, value in item.items() if key != "deadline"}
+            {
+                key: value
+                for key, value in item.items()
+                if key not in {"deadline", "sequence"}
+            }
             for item in sorted(
                 self._items.values(),
                 key=lambda item: (
                     -_PRIORITY[item["priority"]],
-                    -item["revision"],
+                    -item["sequence"],
                 ),
             )
         ]
@@ -232,7 +238,7 @@ async def async_notification_action(
     if (
         not isinstance(command, dict)
         or set(command) != {"revision", "action_id"}
-        or type(command["revision"]) is not int
+        or not isinstance(command["revision"], str)
     ):
         raise ValueError("invalid_notification_action")
     item = next((item for item in store.payload() if item["id"] == key), None)

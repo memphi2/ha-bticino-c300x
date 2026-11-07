@@ -48,7 +48,7 @@ def test_expiry_replacement_bound_and_cleanup():
     store.show(data(title="New", expires_in=20))
     assert old_timer.cancelled
     assert len(store.payload()) == 1
-    assert store.payload()[0]["revision"] == 2
+    assert store._items["notice"]["sequence"] == 2
     for index in range(MAX_NOTIFICATIONS):
         store.show(data(str(index)))
     assert len(store.payload()) == MAX_NOTIFICATIONS
@@ -164,7 +164,7 @@ def test_action_allowlist_replacement_replay_and_dismiss(context):
         "null",
         "[]",
         "{}",
-        json.dumps({"revision": 1, "action_id": "delete"}),
+        json.dumps({"revision": payload["revision"], "action_id": "delete"}),
         json.dumps({"revision": True, "action_id": None}),
         json.dumps({"revision": 1, "service": "delete"}),
     ):
@@ -173,7 +173,9 @@ def test_action_allowlist_replacement_replay_and_dismiss(context):
     show_notification(hass, entry, data(title="Replaced"))
     with pytest.raises(ValueError, match="stale"):
         asyncio.run(async_notification_action(hass, entry, "notice", option))
-    option = json.dumps({"revision": 2, "action_id": None})
+    option = json.dumps(
+        {"revision": notification_payload(entry)[0]["revision"], "action_id": None}
+    )
     asyncio.run(async_notification_action(hass, entry, "notice", option))
     assert notification_payload(entry) == []
     assert hass.services.async_call.await_count == 1
@@ -195,7 +197,28 @@ def test_disabled_and_unknown_actions_fail_without_side_effects(context):
     assert not calls
 
 
-def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(context, monkeypatch):
+def test_old_display_cannot_dismiss_a_new_message_after_ha_reload(context):
+    hass, entry, _ = context
+    show_notification(hass, entry, data())
+    old_revision = notification_payload(entry)[0]["revision"]
+    entry.runtime_data.resources.close()
+    entry.runtime_data.display_notifications = None
+    show_notification(hass, entry, data())
+    with pytest.raises(ValueError, match="stale_notification"):
+        asyncio.run(
+            async_notification_action(
+                hass,
+                entry,
+                "notice",
+                json.dumps({"revision": old_revision, "action_id": None}),
+            )
+        )
+    assert len(notification_payload(entry)) == 1
+
+
+def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(
+    context, monkeypatch
+):
     from homeassistant.exceptions import ServiceValidationError
 
     from custom_components.bticino_c300x import services
@@ -206,13 +229,22 @@ def test_registered_service_handlers_show_dismiss_and_reject_unknown_actions(con
         handlers = services._C300XServiceHandlers(hass)
         await handlers.async_show_display_notification(SimpleNamespace(data=data()))
         assert len(notification_payload(entry)) == 1
-        await handlers.async_dismiss_display_notification(SimpleNamespace(data={"notification_id": "notice"}))
+        await handlers.async_dismiss_display_notification(
+            SimpleNamespace(data={"notification_id": "notice"})
+        )
         assert notification_payload(entry) == []
         with pytest.raises(ServiceValidationError, match="unknown_notification_action"):
-            await handlers.async_show_display_notification(SimpleNamespace(data=data(actions=[{"action_id": "missing", "label": "X"}])))
+            await handlers.async_show_display_notification(
+                SimpleNamespace(
+                    data=data(actions=[{"action_id": "missing", "label": "X"}])
+                )
+            )
         entry.options["device_ui_enabled"] = False
         with pytest.raises(ServiceValidationError, match="display_disabled"):
-            await handlers.async_dismiss_display_notification(SimpleNamespace(data={"notification_id": "notice"}))
+            await handlers.async_dismiss_display_notification(
+                SimpleNamespace(data={"notification_id": "notice"})
+            )
+
     asyncio.run(run())
 
 
@@ -229,7 +261,12 @@ def test_concurrent_action_is_single_flight(context):
         show_notification(
             hass, entry, data(actions=[{"action_id": "porch", "label": "Porch"}])
         )
-        option = json.dumps({"revision": 1, "action_id": "porch"})
+        option = json.dumps(
+            {
+                "revision": notification_payload(entry)[0]["revision"],
+                "action_id": "porch",
+            }
+        )
         pending = asyncio.create_task(
             async_notification_action(hass, entry, "notice", option)
         )

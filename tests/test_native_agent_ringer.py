@@ -7,7 +7,7 @@ import socket
 import socketserver
 import subprocess
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from http.client import HTTPConnection
 from pathlib import Path
@@ -46,6 +46,8 @@ class DeviceHandler(socketserver.BaseRequestHandler):
             while frame := read_frame(self.request):
                 device.frames.append(frame)
                 if frame == "*#8**33##":
+                    if device.ringer_read_hook is not None:
+                        device.ringer_read_hook()
                     reply = device.read_reply or f"*#8**33*{0 if device.muted else 1}##"
                 elif frame.startswith("*#8**#33*"):
                     if device.write_reply != "*#*0##":
@@ -71,6 +73,7 @@ class Device(socketserver.ThreadingTCPServer):
         self.volume = 3
         self.write_reply = "*#*1##"
         self.read_reply: str | None = None
+        self.ringer_read_hook: Callable[[], None] | None = None
 
 
 @dataclass
@@ -193,6 +196,7 @@ def test_mute_unmute_repeat_and_publish_confirmed_changes(lab: Lab) -> None:
         # Model the device write made by the existing GUI state transition.
         lab.device.muted = muted
         gui = lab.next(command["id"], muted)
+        send_udp_event(lab.udp_port, f"*#8**33*{0 if muted else 1}##")
         assert response(post)["muted"] is muted
         assert lab.device.frames == ["*#8**33##"]
         lab.device.frames.clear()
@@ -221,13 +225,13 @@ def test_queued_gui_write_waits_for_device_event_then_readback(lab: Lab, muted: 
     post = lab.post({"muted": muted})
     command = response(gui)
     next_gui = lab.next(command["id"], muted)
-    assert lab.device.frames == ["*#8**33##"]
+    assert lab.device.frames == []
     assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
 
     lab.device.muted = muted
     send_udp_event(lab.udp_port, f"*#8**33*{0 if muted else 1}##")
     assert response(post)["muted"] is muted
-    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
+    assert lab.device.frames == ["*#8**33##"]
     assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is False
     assert next_gui.sock is not None
 
@@ -252,9 +256,9 @@ def test_matching_event_still_requires_confirmed_device_readback(lab: Lab) -> No
     # A stale notification is not proof of the current device value.
     send_udp_event(lab.udp_port, "*#8**33*0##")
     deadline = time.monotonic() + 2
-    while len(lab.device.frames) < 2 and time.monotonic() < deadline:
+    while not lab.device.frames and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
+    assert lab.device.frames == ["*#8**33##"]
     assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
     assert api_get(lab.api_port, "/api/v1/events/recent")["events"] == []
     lab.device.muted = True
@@ -282,6 +286,7 @@ def test_invalid_ack_cannot_complete_pending_command(lab: Lab, bad_ack: str) -> 
     assert lab.device.frames == []
     lab.device.muted = True
     lab.next(command["id"], True)
+    send_udp_event(lab.udp_port, "*#8**33*0##")
     assert response(post)["muted"] is True
 
 
@@ -294,7 +299,7 @@ def test_gui_ack_is_single_use_while_device_confirmation_is_pending(
     command = response(gui)
     next_gui = lab.next(command["id"], True)
     replay = response(lab.next(command["id"], replayed_muted), 409)
-    assert lab.device.frames == ["*#8**33##"]
+    assert lab.device.frames == []
     assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is True
     assert replay["error"] == "ringer_gui_stale_ack"
 
@@ -306,6 +311,7 @@ def test_gui_ack_is_single_use_while_device_confirmation_is_pending(
     assert second_command["id"] != command["id"]
     lab.device.muted = False
     lab.next(second_command["id"], False)
+    send_udp_event(lab.udp_port, "*#8**33*1##")
     assert response(second_post)["muted"] is False
 
 
@@ -353,12 +359,13 @@ def test_client_disconnect_after_gui_ack_preserves_next_gui_waiter(lab: Lab) -> 
     post.close()
     api_get(lab.ui_port, "/ui/events/status", authorized=False)
     assert api_get(lab.api_port, "/api/v1/diagnostics")["ringer_command_pending"] is False
+    assert lab.device.frames == []
 
     next_post = lab.post({"muted": False})
     next_command = response(next_gui)
     lab.next(next_command["id"], False)
     assert response(next_post)["muted"] is False
-    assert lab.device.frames == ["*#8**33##", "*#8**33##"]
+    assert lab.device.frames == ["*#8**33##"]
 
 
 def test_concurrent_write_cannot_replace_pending_request(lab: Lab) -> None:
@@ -368,6 +375,7 @@ def test_concurrent_write_cannot_replace_pending_request(lab: Lab) -> None:
     assert api_post(lab.api_port, PATH, {"muted": False}, expected_status=409)["error"] == "ringer_gui_busy"
     lab.device.muted = True
     lab.next(command["id"], True)
+    send_udp_event(lab.udp_port, "*#8**33*0##")
     assert response(post)["muted"] is True
 
 
@@ -432,5 +440,6 @@ def test_combined_volume_waits_for_gui_confirmation(lab: Lab) -> None:
     assert lab.device.frames == []
     lab.device.muted = True
     lab.next(command["id"], True)
+    send_udp_event(lab.udp_port, "*#8**33*0##")
     data = response(post)
     assert data["muted"] is True and data["volume"] == 4

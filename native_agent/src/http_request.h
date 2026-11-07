@@ -7,11 +7,12 @@
 #define REQUEST_BUFFER_SIZE 8192
 #define C300X_HTTP_REQUEST_TIMEOUT_MS 500
 #define C300X_HTTP_ACCEPT_BUDGET 8
+#define C300X_HTTP_TARGET_SIZE 4096
 
 struct request {
     char method[8];
     char path[256];
-    char query[256];
+    char query[C300X_HTTP_TARGET_SIZE];
     char headers[REQUEST_BUFFER_SIZE];
     char body[REQUEST_BUFFER_SIZE];
     size_t body_len;

@@ -7,6 +7,7 @@ import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 import yaml
@@ -123,6 +124,7 @@ class _FakeServices:
         data: dict[str, Any],
         *,
         blocking: bool,
+        context: Any = None,
     ) -> None:
         self.calls.append((domain, service, data, blocking))
 
@@ -749,7 +751,8 @@ def test_base_executor_services_call_expected_helpers(monkeypatch) -> None:  # n
     assert [call[0] for call in calls] == ["action", "alarm", "stair", "unlock"]
     assert calls[0][1][2] == "entry_light"
     assert calls[1][1][2:] == ("disarm", "1234")
-    assert calls[1][2] == {"force": True}
+    assert calls[0][2] == {"blocking": True, "context": None}
+    assert calls[1][2] == {"force": True, "context": None}
     assert calls[2][1][2] == "10"
     assert calls[3][1][2] == "main"
 
@@ -919,6 +922,7 @@ def test_analysis_services_call_helpers(monkeypatch) -> None:  # noqa: ANN001
         calls.append(("unlock", {"args": args, **kwargs}))
 
     monkeypatch.setattr(ring_analysis_use_cases, "async_run_wyoming_ring_analysis", _wyoming)
+    monkeypatch.setattr(ring_analysis_use_cases, "async_mark_ring_capture_used", AsyncMock(return_value=True))
     monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
     monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
 
@@ -1079,7 +1083,7 @@ def test_evaluate_ring_analysis_resolves_entry_only_after_match(monkeypatch) -> 
     ]
 
 
-def test_evaluate_ring_analysis_marks_capture_after_successful_unlock(monkeypatch) -> None:  # noqa: ANN001
+def test_evaluate_ring_analysis_reserves_capture_before_unlock(monkeypatch) -> None:  # noqa: ANN001
     calls: list[tuple[str, dict[str, Any]]] = []
 
     async def _evaluate(_hass: Any, **kwargs: Any) -> Any:
@@ -1089,8 +1093,9 @@ def test_evaluate_ring_analysis_marks_capture_after_successful_unlock(monkeypatc
     async def _unlock(*args: Any, **kwargs: Any) -> None:
         calls.append(("unlock", {"args": args, **kwargs}))
 
-    async def _mark(_hass: Any, capture_id: str | None) -> None:
+    async def _mark(_hass: Any, capture_id: str | None) -> bool:
         calls.append(("mark", {"capture_id": capture_id}))
+        return True
 
     monkeypatch.setattr(ring_analysis_use_cases, "async_evaluate_ring_analysis", _evaluate)
     monkeypatch.setattr(device_action_use_cases, "async_unlock_door", _unlock)
@@ -1126,8 +1131,8 @@ def test_evaluate_ring_analysis_marks_capture_after_successful_unlock(monkeypatc
             "require_capture": True,
         },
     )
-    assert calls[1][0] == "unlock"
-    assert calls[2] == ("mark", {"capture_id": "capture-1"})
+    assert calls[1] == ("mark", {"capture_id": "capture-1"})
+    assert calls[2][0] == "unlock"
 
 
 def test_evaluate_ring_analysis_does_not_consume_capture_when_entry_is_missing(

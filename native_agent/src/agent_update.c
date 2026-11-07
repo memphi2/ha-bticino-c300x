@@ -1,3 +1,9 @@
+#ifdef __arm__
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE 1
+#endif
+#endif
+
 #include "agent_update.h"
 #include "agent_update_paths.h"
 #include "c300x_agent.h"
@@ -10,7 +16,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#ifdef __arm__
+#include <sys/syscall.h>
+#endif
 #include <unistd.h>
+
+#ifdef __arm__
+#define C300X_UPDATE_STAT_STRUCT struct stat64
+#else
+#define C300X_UPDATE_STAT_STRUCT struct stat
+#endif
+
+static int update_lstat(const char *path, C300X_UPDATE_STAT_STRUCT *status)
+{
+#ifdef __arm__
+    return (int)syscall(SYS_lstat64, path, status);
+#else
+    return lstat(path, status);
+#endif
+}
 
 static int safe_agent_update_path(const char *path);
 static int agent_update_target_path(
@@ -51,6 +76,121 @@ static int apply_agent_update_init_script(
     int *changed
 );
 static int repair_agent_init_link_after_update(struct agent_update_change_summary *summary);
+static int validate_agent_update_files(const struct c300x_config *config, const char *manifest);
+
+struct update_backup {
+    char target[C300X_MAX_PATH_LEN];
+    char backup[C300X_MAX_PATH_LEN + 24];
+    int existed;
+};
+
+struct update_transaction {
+    struct update_backup files[C300X_AGENT_UPDATE_FILE_COUNT + 1];
+    size_t count;
+    int root_touched;
+};
+
+static void update_remount(int writable)
+{
+    int status = system(writable ? "mount -o remount,rw / >/dev/null 2>&1"
+                                 : "mount -o remount,ro / >/dev/null 2>&1");
+    (void)status;
+}
+
+static int update_backup_target(struct update_transaction *transaction, const char *target)
+{
+    C300X_UPDATE_STAT_STRUCT info;
+    struct update_backup *file = &transaction->files[transaction->count];
+    if (transaction->count >= C300X_AGENT_UPDATE_FILE_COUNT + 1
+        || snprintf(file->target, sizeof(file->target), "%s", target) >= (int)sizeof(file->target)
+        || snprintf(file->backup, sizeof(file->backup), "%s.update-backup", target) >= (int)sizeof(file->backup)) {
+        return 0;
+    }
+    /* Never overwrite recovery material left by an interrupted update. */
+    if (update_lstat(file->backup, &info) == 0 || errno != ENOENT) {
+        return 0;
+    }
+    if (update_lstat(target, &info) == 0) {
+        if ((!S_ISREG(info.st_mode) && !S_ISLNK(info.st_mode)) || link(target, file->backup) != 0) {
+            return 0;
+        }
+        file->existed = 1;
+    } else if (errno != ENOENT) {
+        return 0;
+    }
+    transaction->count++;
+    return 1;
+}
+
+static int update_finish_transaction(struct update_transaction *transaction, int rollback)
+{
+    int ok = 1;
+    if (transaction->root_touched) {
+        update_remount(1);
+    }
+    for (size_t index = transaction->count; index > 0; index--) {
+        struct update_backup *file = &transaction->files[index - 1];
+        C300X_UPDATE_STAT_STRUCT target_info, backup_info;
+        int unchanged = rollback && file->existed
+            && update_lstat(file->target, &target_info) == 0 && update_lstat(file->backup, &backup_info) == 0
+            && target_info.st_dev == backup_info.st_dev && target_info.st_ino == backup_info.st_ino;
+        int result = rollback && file->existed && !unchanged
+            ? rename(file->backup, file->target)
+            : unlink(rollback && !file->existed ? file->target : file->backup);
+        if (result != 0 && !(errno == ENOENT && !(rollback && file->existed))) {
+            fprintf(stderr, "Agent update %s failed for %s; recovery files retained\n",
+                rollback ? "rollback" : "backup cleanup", file->target);
+            ok = 0;
+        }
+    }
+    if (transaction->root_touched) {
+        update_remount(0);
+    }
+    return ok;
+}
+
+static int update_prepare_transaction(const struct c300x_config *config, struct update_transaction *transaction)
+{
+    char target[C300X_MAX_PATH_LEN], stage[C300X_MAX_PATH_LEN];
+    char backup[C300X_MAX_PATH_LEN + 24];
+    C300X_UPDATE_STAT_STRUCT info;
+    for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
+        const char *name = C300X_AGENT_UPDATE_FILES[index].path;
+        if (!agent_update_target_path(config, name, target, sizeof(target))
+            || !agent_update_stage_path(config, name, stage, sizeof(stage))) {
+            return 0;
+        }
+        if (snprintf(backup, sizeof(backup), "%s.update-backup", target) >= (int)sizeof(backup)
+            || update_lstat(backup, &info) == 0 || errno != ENOENT) {
+            return 0;
+        }
+        if (access(stage, F_OK) != 0 || file_content_matches(stage, target)) {
+            continue;
+        }
+        if (strcmp(target, C300X_AGENT_INIT_SCRIPT) == 0) {
+            transaction->root_touched = 1;
+            update_remount(1);
+        }
+        if (!update_backup_target(transaction, target)) {
+            return 0;
+        }
+    }
+    if (snprintf(backup, sizeof(backup), "%s.update-backup", C300X_AGENT_INIT_LINK) >= (int)sizeof(backup)
+        || update_lstat(backup, &info) == 0 || errno != ENOENT) {
+        return 0;
+    }
+    if (!agent_init_link_matches()) {
+        transaction->root_touched = 1;
+        update_remount(1);
+        if (!update_backup_target(transaction, C300X_AGENT_INIT_LINK)) {
+            return 0;
+        }
+    }
+    if (transaction->root_touched) {
+        update_remount(0);
+    }
+    return 1;
+}
 
 int agent_base_dir(const struct c300x_config *config, char *out, size_t out_len)
 {
@@ -171,11 +311,29 @@ int apply_agent_update_files(
     const struct c300x_config *config,
     const char *manifest,
     const char *installed_manifest,
-    struct agent_update_change_summary *summary
+    struct agent_update_change_summary *summary,
+    int (*activate)(const struct c300x_config *, struct agent_update_change_summary *)
 )
 {
+    struct update_transaction *transaction;
+    int activation_attempted = 0;
     if (summary != NULL) {
         memset(summary, 0, sizeof(*summary));
+    }
+    /* Never install an earlier file from an incomplete or corrupt staged bundle. */
+    if (!validate_agent_update_files(config, manifest)) {
+        return 0;
+    }
+    transaction = calloc(1, sizeof(*transaction));
+    if (transaction == NULL) {
+        return 0;
+    }
+    if (!update_prepare_transaction(config, transaction)) {
+        (void)update_finish_transaction(transaction, 0);
+        free(transaction);
+        return 0;
+    }
+    if (summary != NULL) {
         summary->runtime_changed = agent_update_manifest_field_changed(installed_manifest, manifest, "runtime_hash")
             || running_agent_binary_differs_from_update_manifest(manifest);
         summary->qml_patch_changed = agent_update_manifest_field_changed(
@@ -205,6 +363,17 @@ int apply_agent_update_files(
         );
     }
     for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
+        if (strcmp(C300X_AGENT_UPDATE_FILES[index].path, "device_agent/bundle.json") == 0) {
+            if (!repair_agent_init_link_after_update(summary)) {
+                goto rollback;
+            }
+            if (activate != NULL) {
+                activation_attempted = 1;
+                if (!activate(config, summary)) {
+                    goto rollback;
+                }
+            }
+        }
         if (
             !apply_agent_update_file(
                 config,
@@ -215,10 +384,61 @@ int apply_agent_update_files(
                 summary
             )
         ) {
-            return 0;
+            goto rollback;
         }
     }
-    return repair_agent_init_link_after_update(summary);
+    (void)update_finish_transaction(transaction, 0);
+    free(transaction);
+    return 1;
+
+rollback:
+    if (update_finish_transaction(transaction, 1)) {
+        if (activation_attempted && !activate(config, summary)) {
+            fprintf(stderr, "Agent update: restoring previous firewall settings failed\n");
+        }
+        if (summary != NULL) {
+            memset(summary, 0, sizeof(*summary));
+        }
+    }
+    free(transaction);
+    return 0;
+}
+
+static int validate_agent_update_files(const struct c300x_config *config, const char *manifest)
+{
+    char stage[C300X_MAX_PATH_LEN];
+    char target[C300X_MAX_PATH_LEN];
+    char sha256[65];
+    for (size_t index = 0; index < C300X_AGENT_UPDATE_FILE_COUNT; index++) {
+        const struct c300x_agent_update_file *file = &C300X_AGENT_UPDATE_FILES[index];
+        if (!agent_update_stage_path(config, file->path, stage, sizeof(stage))
+            || !agent_update_target_path(config, file->path, target, sizeof(target))) {
+            return 0;
+        }
+        int has_hash = agent_update_manifest_sha_for_path(manifest, file->path, sha256, sizeof(sha256));
+        if (access(stage, F_OK) != 0) {
+            if (errno == ENOENT && file->optional && !has_hash) {
+                continue;
+            }
+            return 0;
+        }
+        if (strcmp(file->path, "device_agent/bundle.json") != 0
+            && (!has_hash || !sha256_hex_matches(stage, sha256))) {
+            return 0;
+        }
+        if (strcmp(file->path, "device_agent/init/c300x-native-agent") == 0) {
+            char rendered[C300X_MAX_PATH_LEN + 16];
+            if (snprintf(rendered, sizeof(rendered), "%s.rendered", stage) >= (int)sizeof(rendered)) {
+                return 0;
+            }
+            int valid = render_agent_init_script(config, stage, rendered);
+            (void)unlink(rendered);
+            if (!valid) {
+                return 0;
+            }
+        }
+    }
+    return 1;
 }
 
 static int safe_agent_update_path(const char *path)

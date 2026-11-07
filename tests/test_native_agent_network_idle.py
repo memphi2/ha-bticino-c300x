@@ -23,13 +23,13 @@ def _c300x_run_loop_body(text: str) -> str:
 def test_agent_skips_callback_io_without_local_network() -> None:
     text = (ROOT / "native_agent" / "src" / "http.c").read_text(encoding="utf-8")
     dispatch_body = _function_body(text, "int", "dispatch_event_internal")
-    bridge_body = _function_body(text, "int", "forward_to_homeassistant")
+    bridge_body = _function_body(text, "void", "forward_to_homeassistant")
 
     assert dispatch_body.index("runtime_network_online(runtime, time(NULL))") < (
         dispatch_body.index("queue_callback")
     )
     assert bridge_body.index("runtime_network_online(runtime, time(NULL))") < (
-        bridge_body.index("c300x_display_post")
+        bridge_body.index("c300x_callback_queue_submit")
     )
 
 

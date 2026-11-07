@@ -25,6 +25,21 @@ gate.
 - Avoid sharing debug logs, diagnostics, screenshots, or packet captures without
   reviewing them for private hosts and local identifiers.
 
+## Home Assistant Service Permissions
+
+Calls with a Home Assistant user context are checked before sending device
+commands. Door, configured stair-light and activation services require control
+permission for the corresponding enabled entity; media services use the camera
+entity. Alarm commands require permission for the configured alarm entity.
+Configured HA actions retain the original user context and the target service's
+permission checks.
+
+Maintenance, arbitrary stair-light addresses, capture/analysis, display
+notification management and stored-message services require an administrator.
+Context-free HA automations remain trusted. The physical display uses its
+separate authenticated bridge and configured action allowlist, not HA user
+impersonation.
+
 ## Token Handling
 
 Home Assistant stores the configured agent token, maintenance token, webhook id,
@@ -35,19 +50,48 @@ token is supplied through the `C300X_AGENT_TOKEN` environment variable.
 The setup page and diagnostics only report whether tokens are configured. They
 do not echo token values back.
 
-## Legacy SSH Installer Dependency
+## Legacy SSH Bootstrap
 
-The optional first-install and fallback repair path pins `paramiko==3.5.1`
-because the C300X SSH server needs legacy SSH compatibility. The installer asks
-Home Assistant to install this dependency on demand; it is neither a mandatory
-manifest requirement nor a bundled Python package. Normal C300X agent operation
-does not use Paramiko after the native agent is installed; it communicates
-through the local token-protected agent API.
+From 2.1.0b2, first installation and explicit SSH recovery use
+`asyncssh==2.24.1`. Home Assistant installs it on demand; it is not a mandatory
+manifest requirement or bundled Python package. Paramiko is no longer imported,
+requested or pinned by this project. Its former advisory
+[GHSA-r374-rxx8-8654 / CVE-2026-44405](https://github.com/advisories/GHSA-r374-rxx8-8654)
+is addressed by removing that dependency, not by hiding the scanner result.
+Older releases keep their original dependency and limitations.
 
-Security scanners may flag Paramiko for SHA-1/RSA-key handling
-(`CVE-2026-44405`). Keep SSH and the native-agent installer on a trusted local
-network, use the installer only for rooted/SSH-enabled devices you control, and
-disable SSH again after bootstrap when your maintenance model allows it.
+### LEGACY-SSH-001: RSA/SHA-1 During Bootstrap
+
+- **Decision:** accepted device-protocol risk, reviewed 2026-11-07; owner:
+  repository maintainer.
+- **Scope:** only the explicit installer connection to a supported local C300X.
+  RSA/SHA-1 host signatures and legacy key exchange/cipher fallbacks are enabled
+  per connection. No global SSH configuration or library defaults are changed.
+- **Reason:** the device's SSH implementation needs legacy interoperability.
+  Updating the client does not modernize the device protocol. Paramiko 5 removes
+  the required RSA/SHA-1 support; AsyncSSH retains a configurable legacy path.
+- **Host identity:** rooted devices can regenerate SSH host keys, so this
+  one-shot installer does not enforce persistent host-key pinning. Use it only
+  for a device you control on an isolated/trusted network.
+- **Credentials:** only the supplied password is used, in process memory.
+  No local key discovery, SSH agent, user SSH config, proxy or interactive
+  terminal is used. Credentials are not stored by the integration.
+- **Exposure:** temporary first installation or explicit SSH recovery.
+  Normal operation and supported agent self-updates use the authenticated agent
+  API and existing maintenance credentials, not SSH. Startup never silently
+  invokes the installer. Disable SSH after bootstrap when practical.
+- **Residual risk:** the connection is encrypted, but legacy cryptography and
+  unverified host identity still permit on-path attacks. Network isolation is
+  a mitigation, not proof of safety. This exception never permits internet exposure.
+- **Review triggers:** changes to the client, negotiated algorithms, host-key
+  handling, supported devices, or relevant advisories. A newly reported issue
+  needs separate triage.
+
+Repeated reports of this exact device-protocol limitation should reference
+`LEGACY-SSH-001` instead of removing required interoperability or filing a
+duplicate fix. New memory-safety, credential-leak, authentication-bypass or update
+validation bugs are not covered. Do not dismiss findings based on a package name
+or reporter. Leave Dependabot alerts and security-update PRs enabled.
 
 ## Dependency Update Coverage
 
@@ -70,9 +114,9 @@ repository settings. A local configuration change cannot enable those settings.
 Alerts, security-update PRs and normal version-update schedules are distinct;
 an ignored update version does not suppress the advisory itself.
 
-The `paramiko >=4` ignore range remains a deliberate legacy SSH exception:
-a fix available only there needs manual security triage and device compatibility
-testing. The minimum-HA **tool** file is also maintained manually and excluded
+There is no longer a package-specific SSH dependency ignore range. AsyncSSH
+updates follow the normal policy and require legacy-device compatibility tests.
+The minimum-HA **tool** file is maintained manually and excluded
 from automatic updates; that exception does not cover the minimum HA manifest.
 
 `requirements-dev.txt` and `requirements-dev-min-ha.txt` contain direct tools,
@@ -87,14 +131,11 @@ See the [Dependabot configuration reference](https://docs.github.com/en/code-sec
 
 ## Accepted Local-Only Security Exceptions
 
-The following scanner findings are documented and intentionally suppressed in
-source:
+The following narrowly scoped exceptions remain:
 
-- CodeQL `py/paramiko-missing-host-key-validation`: the rooted C300X can
-  regenerate its SSH host key after reboot, so stable host-key pinning would
-  make the local bootstrap/repair installer unreliable. The Paramiko path is
-  optional, pinned to `paramiko==3.5.1`, and used only for trusted local devices
-  during install or repair.
+- Bootstrap host-key validation and legacy algorithms: see `LEGACY-SSH-001`
+  above. The former Paramiko-specific source suppression has been removed
+  together with that client; the device-side limitation remains explicit.
 - CodeQL `cpp/cleartext-transmission`: the native MQTT bridge uses the device's
   local MQTT transport model. TLS is not available on this device-side path, so
   MQTT must stay on a trusted local network and must not be exposed externally.
@@ -115,6 +156,10 @@ Incoming HTTP requests have bounded buffers, a total receive deadline and a
 bounded pending-client pool. Event delivery has one worker and a bounded queue;
 overflow and failed delivery are not reported as successful callbacks. Home
 Assistant media downloads, conversions and cache retention have explicit limits.
+Display forwarding uses a separate worker with at most one outstanding request,
+leaving the HTTP loop available for nested HA commands. It does not retry or
+queue additional physical actions. A callback timeout is not proof that a
+downstream physical action did not execute.
 These controls reduce resource-exhaustion risk but do not replace authentication,
 network isolation, or timely dependency review. They add no persistent packet
 capture or additional device polling.

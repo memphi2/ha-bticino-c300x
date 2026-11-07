@@ -12,10 +12,9 @@ import hashlib
 import json
 import shlex
 import stat
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .activation_address import stair_light_where_from_entry_values
 from .const import (
@@ -47,9 +46,8 @@ REMOTE_FIREWALL_BACKUP = (
 )
 _SSH_CONNECT_TIMEOUT = 12.0
 _SSH_COMMAND_TIMEOUT = 30.0
-_REQUIRED_PARAMIKO_VERSION = "3.5.1"
-INSTALLER_REQUIREMENTS = (f"paramiko=={_REQUIRED_PARAMIKO_VERSION}",)
-_LEGACY_RSA_SHA2_ALGORITHMS = ("rsa-sha2-512", "rsa-sha2-256")
+_REQUIRED_ASYNCSSH_VERSION = "2.24.1"
+INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)
 
 
 class C300XDeviceInstallError(Exception):
@@ -483,106 +481,86 @@ class _DeviceSshClient:
 
 
 def _connect_device_client(request: C300XDeviceInstallRequest) -> _DeviceSshClient:
-    return _ParamikoDeviceSshClient(request)
+    return _AsyncSshDeviceSshClient(request)
 
 
-def _paramiko_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, Any]:
+def _asyncssh_connect_kwargs(request: C300XDeviceInstallRequest) -> dict[str, Any]:
     """Return C300X SSH connect arguments with legacy RSA compatibility."""
     return {
-        "hostname": _ssh_host(request.host),
+        "host": _ssh_host(request.host),
         "port": 22,
         "username": request.ssh_username.strip(),
         "password": request.ssh_password,
-        "timeout": _SSH_CONNECT_TIMEOUT,
-        "auth_timeout": _SSH_CONNECT_TIMEOUT,
-        "banner_timeout": _SSH_CONNECT_TIMEOUT,
-        "look_for_keys": False,
-        "allow_agent": False,
-        "disabled_algorithms": {
-            # The C300X SSH stack is old and must be allowed to fall back to
-            # ssh-rsa instead of Paramiko's newer RSA-SHA2 preference.
-            "keys": _LEGACY_RSA_SHA2_ALGORITHMS,
-            "pubkeys": _LEGACY_RSA_SHA2_ALGORITHMS,
-        },
+        "connect_timeout": _SSH_CONNECT_TIMEOUT,
+        "login_timeout": _SSH_CONNECT_TIMEOUT,
+        "config": None,
+        "client_keys": [],
+        "agent_path": None,
+        "preferred_auth": ["password"],
+        "public_key_auth": False,
+        "kbdint_auth": False,
+        "gss_auth": False,
+        "gss_kex": False,
+        "host_based_auth": False,
+        # LEGACY-SSH-001 in SECURITY.md: explicit local bootstrap/recovery only.
+        "known_hosts": None,
+        "server_host_key_algs": ["ssh-rsa"],
+        "kex_algs": "+diffie-hellman-group1-sha1",
+        "encryption_algs": "+aes128-cbc,3des-cbc",
     }
 
 
-def _validate_paramiko_version(paramiko_module: Any) -> None:
-    """Reject Paramiko versions that are not validated for the C300X SSH stack."""
-    version = getattr(paramiko_module, "__version__", "")
-    if version != _REQUIRED_PARAMIKO_VERSION:
+def _validate_asyncssh_version(asyncssh_module: Any) -> None:
+    """Reject AsyncSSH versions that are not validated for the C300X SSH stack."""
+    version = getattr(asyncssh_module, "__version__", "")
+    if version != _REQUIRED_ASYNCSSH_VERSION:
         raise C300XDeviceInstallError("installer_dependency_missing")
 
 
-class _ParamikoDeviceSshClient(_DeviceSshClient):
-    """Paramiko-backed SSH client which does not need HA host tools."""
+class _AsyncSshDeviceSshClient(_DeviceSshClient):
+    """AsyncSSH-backed SSH client which does not need HA host tools."""
 
     def __init__(self, request: C300XDeviceInstallRequest) -> None:
         try:
-            import paramiko
+            import asyncssh
         except ImportError as err:
             raise C300XDeviceInstallError("installer_dependency_missing") from err
 
-        _validate_paramiko_version(paramiko)
-        self._paramiko = paramiko
-        self._client = paramiko.SSHClient()
-
-        # The rooted C300X regenerates its SSH host key across reboots, so
-        # host-key pinning is not stable. This installer is an optional local
-        # bootstrap path and never used for normal agent runtime.
-        # codeql[py/paramiko-missing-host-key-validation]
-        self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        _validate_asyncssh_version(asyncssh)
+        self._asyncssh = asyncssh
+        # The synchronous installer already runs in a worker thread. Keep one
+        # private event loop/connection for the entire installation, never HA's.
+        self._runner = asyncio.Runner()
+        self._closed = False
         try:
-            self._client.connect(**_paramiko_connect_kwargs(request))
-        except (
-            OSError,
-            TimeoutError,
-            paramiko.AuthenticationException,
-            paramiko.SSHException,
-        ) as err:
+            self._client = self._runner.run(self._connect(request))
+        except (OSError, asyncssh.Error) as err:
+            self._runner.close()
+            self._closed = True
             raise C300XDeviceInstallError("device_install_failed") from err
+
+    async def _connect(self, request: C300XDeviceInstallRequest) -> Any:
+        return await self._asyncssh.connect(**_asyncssh_connect_kwargs(request))
 
     def run(self, command: str, input_data: bytes | None = None) -> str:
-        transport = self._client.get_transport()
-        if transport is None or not transport.is_active():
+        if self._closed or self._client.is_closed():
             raise C300XDeviceInstallError("device_install_failed")
-        channel = transport.open_session(timeout=_SSH_COMMAND_TIMEOUT)
-        channel.settimeout(_SSH_COMMAND_TIMEOUT)
-        stdout_chunks: list[bytes] = []
-        stderr_chunks: list[bytes] = []
         try:
-            channel.exec_command(command)
-            if input_data is not None:
-                channel.sendall(input_data)
-            channel.shutdown_write()
-            # recv_ready()/recv_stderr_ready()/exit_status_ready() are
-            # non-blocking polls, so channel.settimeout() above never fires
-            # here; a remote command that never exits (wedged process,
-            # dropped connection that doesn't surface as an error) would
-            # otherwise spin this loop forever on a worker thread.
-            deadline = time.monotonic() + _SSH_COMMAND_TIMEOUT
-            while True:
-                while channel.recv_ready():
-                    stdout_chunks.append(channel.recv(65536))
-                while channel.recv_stderr_ready():
-                    stderr_chunks.append(channel.recv_stderr(65536))
-                if channel.exit_status_ready():
-                    returncode = channel.recv_exit_status()
-                    while channel.recv_ready():
-                        stdout_chunks.append(channel.recv(65536))
-                    while channel.recv_stderr_ready():
-                        stderr_chunks.append(channel.recv_stderr(65536))
-                    break
-                if time.monotonic() >= deadline:
-                    raise C300XDeviceInstallError("device_install_failed")
-                time.sleep(0.01)
-        except (OSError, TimeoutError, self._paramiko.SSHException) as err:
+            return self._runner.run(self._run(command, input_data))
+        except (OSError, self._asyncssh.Error) as err:
             raise C300XDeviceInstallError("device_install_failed") from err
-        finally:
-            channel.close()
-        if returncode != 0:
-            raise C300XDeviceInstallError("device_install_failed")
-        return b"".join(stdout_chunks).decode("utf-8", "replace")
+
+    async def _run(self, command: str, input_data: bytes | None) -> str:
+        # Include channel opening in the deadline and send EOF even without input.
+        async with asyncio.timeout(_SSH_COMMAND_TIMEOUT):
+            async with self._client.create_process(
+                command, encoding=None, request_pty=False,
+            ) as process:
+                if input_data:
+                    process.stdin.write(input_data)
+                process.stdin.write_eof()
+                result = await process.wait(check=True)
+        return cast(bytes, result.stdout).decode("utf-8", "replace")
 
     def put_file(
         self,
@@ -606,7 +584,21 @@ class _ParamikoDeviceSshClient(_DeviceSshClient):
         return True
 
     def close(self) -> None:
-        self._client.close()
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._client.close()
+            self._runner.run(self._wait_closed())
+        finally:
+            self._runner.close()
+
+    async def _wait_closed(self) -> None:
+        try:
+            async with asyncio.timeout(_SSH_CONNECT_TIMEOUT):
+                await self._client.wait_closed()
+        except (OSError, self._asyncssh.Error):
+            self._client.abort()
 
 
 def _install_startup_script_sync(

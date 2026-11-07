@@ -22,7 +22,7 @@ TOOL_NAMES = {
     "mypy",
     "numpy",
     "packaging",
-    "paramiko",
+    "asyncssh",
     "pyturbojpeg",
     "pytest",
     "pytest-cov",
@@ -95,7 +95,6 @@ def _check(root: Path) -> list[str]:
                     "dependency-name": "*",
                     "update-types": ["version-update:semver-major"],
                 },
-                {"dependency-name": "paramiko", "versions": [">=4"]},
             ],
         },
         **{

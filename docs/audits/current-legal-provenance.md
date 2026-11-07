@@ -1,7 +1,7 @@
 # Current Legal and Provenance Audit Snapshot
 
-Checked: 2026-11-02. Source line: local integration and native agent `1.9.11`,
-based on `9fc3944` with the local audit changes. This report covers the
+Checked: 2026-11-07. Source line: integration and native agent `2.1.0b2`,
+based on `2ed9d36` with the beta corrections. This report covers the
 repository, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,
@@ -9,7 +9,7 @@ authorship proof, patent clearance, or a current vulnerability assessment.
 
 ## Verified Scope
 
-The local `scripts/check_legal_audit.py` gate passed against 552 tracked files.
+The local `scripts/check_legal_audit.py` gate passed against 621 tracked files.
 It checks forbidden payloads and directories, required license/privacy/security
 documents, runtime dependency declarations, reference markers, and the expected
 project artwork hash. It is a policy check, not a source-similarity detector.
@@ -19,7 +19,7 @@ and non-affiliation notices, and a privacy notice. No tracked firmware images,
 APKs, packet captures, device backups, or native library binaries were found by
 the gate. Builds and device-specific inputs remain outside tracked source.
 
-The prior 1.7.0 snapshot dated 2026-07-05 is superseded; its full text remains in
+The prior 1.9.11 snapshot dated 2026-11-02 is superseded; its full text remains in
 Git history. Its search results and release-artifact checks are not evidence for
 the current code or a future release.
 
@@ -27,8 +27,10 @@ the current code or a future release.
 
 The integration manifest has no mandatory Python requirements. This does not
 mean every optional workflow is dependency-free: the SSH installer explicitly
-requests `paramiko==3.5.1` through Home Assistant's requirement installer when
-that workflow is used. Normal agent operation does not require that installer.
+requests `asyncssh==2.24.1` through Home Assistant on demand;
+Paramiko has been removed from project imports and validation pins. AsyncSSH is
+an external dependency under its own license, not bundled or relicensed by this
+project. Normal agent operation and supported self-updates do not use SSH.
 
 PyAV and the Home Assistant media stack provide media processing. The native
 agent uses system libraries supplied by its runtime, including optional device
@@ -48,8 +50,9 @@ build provenance; it does not certify legal ownership or absence of vulnerabilit
 
 The legacy SSH installer and plaintext local transports have explicitly
 documented limitations in `SECURITY.md`. They are not general security approval
-for externally reachable deployments. No change to the accepted legacy SSH
-compatibility policy was made by this audit.
+for externally reachable deployments. The 2026-11-07 installer follow-up records
+the remaining device-protocol exception as `LEGACY-SSH-001`; changing the client
+does not eliminate the legacy cryptography or host-identity limitation.
 
 `PRIVACY.md` describes the local data flow, bounded RAM-only media cache, Recorder
 exclusions for new memo text entries, and the independent retention of old
@@ -59,7 +62,8 @@ history, exports, recordings, and backups.
 
 - No new internet source-similarity, trademark, patent, or advisory search.
 - No legal clearance for third-party codecs, libraries, or trademarks.
-- No device access, installation, firmware modification, or live load measurement.
+- No full device installation, firmware modification, or live load measurement.
+  A separate read-only C300X login confirmed the replacement SSH client.
 - No final release ZIP, release signatures, or remote attestations checked.
 
 ## Repeatable Checks

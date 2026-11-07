@@ -26,6 +26,10 @@ static void post(struct c300x_callback_job *job)
         job->error = "callback_expired";
         return;
     }
+    if (job->perform != NULL) {
+        job->perform(job);
+        return;
+    }
     if (strncmp(job->url, "https://", 8) == 0) {
         job->ok = c300x_https_post(job->url, C300X_EVENT_TOKEN_HEADER, job->token,
             job->payload, NULL, 0, job->timeout_ms, &job->http_status, &job->error);
@@ -54,7 +58,7 @@ static void *worker(void *context)
         post(job);
         pthread_mutex_lock(&queue->lock);
         if (queue->stopped) {
-            free(job);
+            c300x_callback_job_free(job);
         } else {
             queue->done[queue->done_count++] = job;
             ssize_t written;
@@ -164,7 +168,7 @@ struct c300x_callback_job *c300x_callback_queue_take(struct c300x_callback_queue
 static void discard_pending_locked(struct c300x_callback_queue *queue)
 {
     while (queue->pending_count) {
-        free(queue->pending[--queue->pending_count]);
+        c300x_callback_job_free(queue->pending[--queue->pending_count]);
         queue->outstanding--;
     }
 }
@@ -187,7 +191,7 @@ void c300x_callback_queue_close(struct c300x_callback_queue *queue)
     queue->stopped = 1;
     discard_pending_locked(queue);
     while (queue->done_count) {
-        free(queue->done[--queue->done_count]);
+        c300x_callback_job_free(queue->done[--queue->done_count]);
     }
     close(queue->notify[0]);
     close(queue->notify[1]);
@@ -195,4 +199,12 @@ void c300x_callback_queue_close(struct c300x_callback_queue *queue)
     pthread_mutex_unlock(&queue->lock);
     /* The detached worker owns its remaining request and queue until it exits.
        Shutdown must not wait for a platform DNS resolver; it never owns runtime. */
+}
+
+void c300x_callback_job_free(struct c300x_callback_job *job)
+{
+    if (job != NULL) {
+        free(job->response);
+        free(job);
+    }
 }

@@ -99,6 +99,12 @@ existing token values.
 SSH credentials are used only for explicit install or recovery steps. They are
 not stored by the integration.
 
+From 2.1.0b2 this path uses an on-demand AsyncSSH client instead of Paramiko.
+It needs no SSH tools or add-on on the Home Assistant host. The device still
+requires legacy SSH algorithms. The narrowly scoped
+[accepted bootstrap risk](../SECURITY.md#legacy-ssh-001-rsasha-1-during-bootstrap)
+does not apply to normal agent updates, which use the authenticated agent API.
+
 `noAuth` is a bootstrap state. Disable it after tokens are configured. The
 maintenance switch entities are for temporary recovery, not normal operation.
 

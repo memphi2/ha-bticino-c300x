@@ -211,6 +211,13 @@ feature, the matching entity is not created.
 
 ## Service Reference
 
+Services called by a HA user respect that user's control permissions. Device
+commands require access to the matching enabled entity; configured actions keep
+the caller's identity. Maintenance, explicit stair-light address overrides,
+capture/analysis, notification management and stored-message services are
+admin-only. Trusted context-free automations remain supported. See
+[service permissions](../SECURITY.md#home-assistant-service-permissions).
+
 | Service | Purpose |
 | --- | --- |
 | `bticino_c300x.run_action` | Runs one allowlisted display/dashboard action by action id. |

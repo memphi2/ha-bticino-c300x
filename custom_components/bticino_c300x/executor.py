@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 
 from .action import (
     alarm_service_for_command,
@@ -63,6 +63,9 @@ async def async_execute_action(
     hass: HomeAssistant,
     entry: BticinoC300XConfigEntry,
     action_id: str,
+    *,
+    context: Context | None = None,
+    blocking: bool = False,
 ) -> dict[str, Any]:
     """Execute a configured action by id."""
 
@@ -81,8 +84,9 @@ async def async_execute_action(
         action["domain"],
         action["service"],
         service_data,
-        blocking=False,
+        blocking=blocking,
         target=target or None,
+        context=context,
     )
     hass.bus.async_fire(
         EVENT_ACTION_RECEIVED,
@@ -99,6 +103,7 @@ async def async_execute_alarm_command(
     *,
     force: bool = False,
     check: bool = False,
+    context: Context | None = None,
 ) -> dict[str, Any]:
     """Execute an alarm command against the configured alarm entity."""
 
@@ -182,6 +187,7 @@ async def async_execute_alarm_command(
             service,
             service_data,
             blocking=True,
+            context=context,
         )
     except Exception as err:
         if (

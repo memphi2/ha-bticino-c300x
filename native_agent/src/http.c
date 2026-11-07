@@ -175,6 +175,8 @@ struct agent_runtime {
     int subscription_count;
     unsigned long callback_generation;
     struct c300x_callback_queue *callbacks;
+    struct c300x_callback_queue *display_callbacks;
+    int display_client_fd;
     int home_assistant_connected_this_run;
     time_t home_assistant_last_seen_at;
     int display_bridge_registered;
@@ -263,12 +265,11 @@ static void handle_ui_alarm_command(
     struct agent_runtime *runtime,
     const struct request *request
 );
-static int forward_to_homeassistant(
+static void forward_to_homeassistant(
+    int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
-    const char *body,
-    char *response,
-    size_t response_len
+    const char *body
 );
 static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, time_t now);
 static void handle_display_bridge_post(
@@ -709,30 +710,77 @@ static const char *display_bridge_shared_secret(
     return "";
 }
 
-static int forward_to_homeassistant(
+static void perform_display_callback(struct c300x_callback_job *job)
+{
+    job->ok = c300x_display_post(job->url, job->token, job->timeout_ms,
+        job->payload, job->response, job->response_len);
+}
+
+static void forward_to_homeassistant(
+    int client_fd,
     const struct c300x_config *config,
     struct agent_runtime *runtime,
-    const char *body,
-    char *response,
-    size_t response_len
+    const char *body
 )
 {
-    if (response_len > 0) {
-        response[0] = '\0';
-    }
     if (!runtime_network_online(runtime, time(NULL))) {
-        return 0;
+        send_homeassistant_unavailable(client_fd);
+        return;
     }
-    int ok = c300x_display_post(
-        display_bridge_webhook_url(config, runtime),
-        display_bridge_shared_secret(config, runtime),
-        config->home_assistant_request_timeout_ms,
-        body, response, response_len
-    );
-    if (ok) {
+    /* One outstanding display request, no queued physical actions or retries.
+       Its worker never accesses runtime or a client socket. */
+    if (runtime->display_client_fd >= 0) {
+        send_json(client_fd, 503, "Service Unavailable", "{\"ok\":false,\"error\":\"display_command_pending\"}\n");
+        return;
+    }
+    if (runtime->display_callbacks == NULL) {
+        runtime->display_callbacks = c300x_callback_queue_create();
+    }
+    struct c300x_callback_job *job = calloc(1, sizeof(*job));
+    if (job == NULL) {
+        send_homeassistant_unavailable(client_fd);
+        return;
+    }
+    job->perform = perform_display_callback;
+    job->response_len = C300X_LARGE_RESPONSE_SIZE;
+    job->response = calloc(1, job->response_len);
+    snprintf(job->url, sizeof(job->url), "%s", display_bridge_webhook_url(config, runtime));
+    snprintf(job->token, sizeof(job->token), "%s", display_bridge_shared_secret(config, runtime));
+    job->timeout_ms = config->home_assistant_request_timeout_ms;
+    job->queued_at = c300x_system_metrics_monotonic_ms();
+    if (strlen(body) >= sizeof(job->payload)) {
+        c300x_callback_job_free(job);
+        send_response_too_large(client_fd);
+        return;
+    }
+    snprintf(job->payload, sizeof(job->payload), "%s", body);
+    if (job->response == NULL || !c300x_callback_queue_submit(runtime->display_callbacks, job)) {
+        c300x_callback_job_free(job);
+        send_homeassistant_unavailable(client_fd);
+        return;
+    }
+    runtime->display_client_fd = client_fd;
+}
+
+static void finish_display_callback(struct agent_runtime *runtime)
+{
+    struct c300x_callback_job *job = c300x_callback_queue_take(runtime->display_callbacks);
+    if (job == NULL) {
+        return;
+    }
+    int client_fd = runtime->display_client_fd;
+    runtime->display_client_fd = -1;
+    int current = display_bridge_active(runtime->config, runtime)
+        && strcmp(job->url, display_bridge_webhook_url(runtime->config, runtime)) == 0
+        && strcmp(job->token, display_bridge_shared_secret(runtime->config, runtime)) == 0;
+    if (job->ok && current) {
         mark_home_assistant_callback_seen(runtime, time(NULL));
+        send_json(client_fd, 200, "OK", job->response);
+    } else {
+        send_homeassistant_unavailable(client_fd);
     }
-    return ok;
+    close_agent_socket(client_fd);
+    c300x_callback_job_free(job);
 }
 
 static void mark_home_assistant_callback_seen(struct agent_runtime *runtime, time_t now)
@@ -5583,11 +5631,16 @@ static void handle_udp_event(
     memcpy(msg, buffer + msg_start, (size_t)(msg_end - msg_start));
     msg[msg_end - msg_start] = '\0';
     int confirmed_muted;
-    if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)
-        && c300x_ringer_control_confirm(
-            &runtime->ringer_control, confirmed_muted, apply_gui_ringer_command, runtime
-        )) {
-        return;
+    if (c300x_ringer_muted_from_reply(msg, &confirmed_muted)) {
+        /* A multicast write echo is intent, not completed hardware state. */
+        if (strncmp(msg, "*#8**#33*", sizeof("*#8**#33*") - 1) == 0) {
+            if (runtime->ringer_control.client_fd >= 0) {
+                return;
+            }
+        } else if (c300x_ringer_control_confirm(
+                       &runtime->ringer_control, confirmed_muted)) {
+            return;
+        }
     }
     if (map_openwebnet_event(runtime, msg, type, sizeof(type), data, sizeof(data))) {
         if (
@@ -7060,6 +7113,10 @@ static void handle_ringer_get(
     char body[2048];
     char error[C300X_MAX_ERROR_LEN];
     int muted, volume;
+    if (runtime->ringer_control.client_fd >= 0) {
+        send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_gui_busy\"}\n");
+        return;
+    }
     if (!c300x_ringer_read_json(config, body, sizeof(body), &muted, &volume, error, sizeof(error))) {
         send_device_error(client_fd, error);
         return;
@@ -7116,6 +7173,10 @@ static int handle_ringer_post(
     }
     if (has_volume && (volume < C300X_RINGER_VOLUME_MIN || volume > C300X_RINGER_VOLUME_MAX)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_ringer_volume\"}\n");
+        return 1;
+    }
+    if (!gui_confirmed && runtime->ringer_control.client_fd >= 0) {
+        send_json(client_fd, 409, "Conflict", "{\"ok\":false,\"error\":\"ringer_gui_busy\"}\n");
         return 1;
     }
 
@@ -9846,13 +9907,9 @@ static void handle_agent_update_apply(
     if (installed_truncated) {
         workspace->installed_manifest[0] = '\0';
     }
-    if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest, &summary)) {
+    if (!apply_agent_update_files(config, workspace->manifest, workspace->installed_manifest,
+            &summary, apply_agent_update_firewall_patches)) {
         send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_apply_failed\"}\n");
-        free(workspace);
-        return;
-    }
-    if (!apply_agent_update_firewall_patches(config, &summary)) {
-        send_json(client_fd, 500, "Internal Server Error", "{\"ok\":false,\"error\":\"update_firewall_refresh_failed\"}\n");
         free(workspace);
         return;
     }
@@ -10545,19 +10602,7 @@ static int handle_ui_request(
     }
 
     if (strcmp(request->path, "/ui/state") == 0 || strcmp(request->path, "/ui/alarm/status") == 0) {
-        char payload[128];
-        char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
-        if (response == NULL) {
-            return 1;
-        }
-        snprintf(payload, sizeof(payload), "{\"type\":\"status\"}");
-        if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-            send_homeassistant_unavailable(client_fd);
-            free(response);
-            return 1;
-        }
-        send_json(client_fd, 200, "OK", response);
-        free(response);
+        forward_to_homeassistant(client_fd, config, runtime, "{\"type\":\"status\"}");
         return 1;
     }
 
@@ -10585,12 +10630,7 @@ static void handle_ui_homeassistant(
 )
 {
     enum c300x_ui_homeassistant_payload_result payload_result;
-    char payload[2048];
-    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
-
-    if (response == NULL) {
-        return;
-    }
+    char payload[8192];
 
     payload_result = c300x_ui_homeassistant_build_payload(
         request->query,
@@ -10599,26 +10639,17 @@ static void handle_ui_homeassistant(
     );
     if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_UNSUPPORTED) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"unsupported_dashboard_command\"}\n");
-        free(response);
         return;
     }
     if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_INVALID_ACTION_ID) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_action_id\"}\n");
-        free(response);
         return;
     }
     if (payload_result == C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE) {
         send_response_too_large(client_fd);
-        free(response);
         return;
     }
-    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_homeassistant_unavailable(client_fd);
-        free(response);
-        return;
-    }
-    send_json(client_fd, 200, "OK", response);
-    free(response);
+    forward_to_homeassistant(client_fd, config, runtime, payload);
 }
 
 static void handle_ui_action(
@@ -10630,25 +10661,13 @@ static void handle_ui_action(
 {
     char action_id[128];
     char payload[256];
-    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
-
-    if (response == NULL) {
-        return;
-    }
     query_param_value(request->query, "id", action_id, sizeof(action_id));
     if (action_id[0] == '\0' || !validate_action_id(action_id)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_action_id\"}\n");
-        free(response);
         return;
     }
     snprintf(payload, sizeof(payload), "{\"type\":\"action\",\"action_id\":\"%s\"}", action_id);
-    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_homeassistant_unavailable(client_fd);
-        free(response);
-        return;
-    }
-    send_json(client_fd, 200, "OK", response);
-    free(response);
+    forward_to_homeassistant(client_fd, config, runtime, payload);
 }
 
 static void handle_ui_alarm_command(
@@ -10663,17 +10682,12 @@ static void handle_ui_alarm_command(
     char force_text[8];
     char check_text[8];
     char payload[256];
-    char *response = allocate_response_buffer(client_fd, C300X_LARGE_RESPONSE_SIZE);
     int force = 0;
     int check = 0;
 
-    if (response == NULL) {
-        return;
-    }
     query_param_value(request->query, "command", command, sizeof(command));
     if (!validate_alarm_command(command)) {
         send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_alarm_command\"}\n");
-        free(response);
         return;
     }
     if (query_param_value(request->query, "force", force_text, sizeof(force_text))) {
@@ -10685,7 +10699,6 @@ static void handle_ui_alarm_command(
     if (query_param_value(request->query, "code", code, sizeof(code)) && code[0] != '\0') {
         if (!validate_alarm_code(code)) {
             send_json(client_fd, 400, "Bad Request", "{\"ok\":false,\"error\":\"invalid_alarm_code\"}\n");
-            free(response);
             return;
         }
         snprintf(
@@ -10707,13 +10720,7 @@ static void handle_ui_alarm_command(
             check ? ",\"check\":true" : ""
         );
     }
-    if (!forward_to_homeassistant(config, runtime, payload, response, C300X_LARGE_RESPONSE_SIZE)) {
-        send_homeassistant_unavailable(client_fd);
-        free(response);
-        return;
-    }
-    send_json(client_fd, 200, "OK", response);
-    free(response);
+    forward_to_homeassistant(client_fd, config, runtime, payload);
 }
 
 struct http_context {
@@ -10746,7 +10753,8 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
         close_client = runtime->ringer_control.client_fd != client_fd
             && runtime->maintenance_client_fd != client_fd;
     } else {
-        close_client = handle_ui_request(client_fd, config, runtime, request);
+        close_client = handle_ui_request(client_fd, config, runtime, request)
+            && runtime->display_client_fd != client_fd;
     }
 
 cleanup:
@@ -10768,7 +10776,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 3 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -10800,6 +10808,7 @@ int c300x_run(struct c300x_config *config)
     c300x_ringer_control_init(&runtime->ringer_control);
     c300x_command_job_init(&runtime->maintenance_job);
     runtime->maintenance_client_fd = -1;
+    runtime->display_client_fd = -1;
     c300x_mdns_init(&mdns);
     c300x_mqtt_init(&runtime->mqtt);
     voicemail_init(runtime, config);
@@ -10888,6 +10897,7 @@ int c300x_run(struct c300x_config *config)
         int poll_timeout_ms = -1;
         int http_poll_index;
         int callback_poll_index;
+        int display_poll_index;
         time_t now = time(NULL);
         int network_online = runtime_network_online(runtime, now);
 
@@ -10904,6 +10914,8 @@ int c300x_run(struct c300x_config *config)
             c300x_command_job_prepare(&runtime->maintenance_job, &poll_fds[poll_count++]));
         callback_poll_index = (int)poll_count;
         poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->callbacks), .events = POLLIN};
+        display_poll_index = (int)poll_count;
+        poll_fds[poll_count++] = (struct pollfd){.fd = c300x_callback_queue_fd(runtime->display_callbacks), .events = POLLIN};
         c300x_mdns_open_if_needed(
             &mdns,
             config,
@@ -11032,6 +11044,9 @@ int c300x_run(struct c300x_config *config)
         if (poll_fds[callback_poll_index].revents) {
             apply_callback_results(runtime, time(NULL));
         }
+        if (poll_fds[display_poll_index].revents) {
+            finish_display_callback(runtime);
+        }
         c300x_http_clients_handle(&runtime->http_clients, &poll_fds[http_poll_index], handle_client, &http);
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
@@ -11146,6 +11161,10 @@ cleanup:
     c300x_mdns_close(&mdns);
     if (runtime != NULL) {
         c300x_callback_queue_close(runtime->callbacks);
+        c300x_callback_queue_close(runtime->display_callbacks);
+        if (runtime->display_client_fd >= 0) {
+            close_agent_socket(runtime->display_client_fd);
+        }
         c300x_http_clients_close(&runtime->http_clients);
         c300x_mqtt_close(&runtime->mqtt);
         voicemail_close(&runtime->voicemail);

@@ -30,6 +30,9 @@ from .camera_media.ha_compat import (
     WebRTCError,
     WebRTCSendMessage,
 )
+from .camera_media.ha_compat import (
+    async_get_supported_webrtc_provider as _async_get_supported_webrtc_provider,
+)
 from .camera_media.home_call_ws import (
     async_register_home_call_ws as _async_register_home_call_ws,
 )
@@ -98,6 +101,9 @@ from .entry_types import BticinoC300XConfigEntry
 from .event_payload import agent_event_key
 from .media_status import (
     home_call_payload as _home_call_payload,
+)
+from .media_status import (
+    rtsp_client_count_from_status as _rtsp_client_count_from_status,
 )
 from .media_watchdog import AgentCpuWatchdog, handle_agent_cpu_metrics_changed
 from .value_parsing import (
@@ -170,43 +176,6 @@ def _camera_state_snapshot(camera: C300XDoorbellCamera) -> _CameraStateSnapshot:
         getattr(camera, "_attr_available", True),
         _freeze_state_value(camera.extra_state_attributes),
     )
-
-
-def _rtsp_client_count_from_status(status: Mapping[str, Any] | None) -> int | None:
-    """Return the native RTSP client count if the agent reported it."""
-
-    if status is None:
-        return None
-    bridge = optional_mapping(status.get("bridge"))
-    clients = bridge.get("clients")
-    if clients is None:
-        return None
-    try:
-        return int(clients)
-    except (TypeError, ValueError):
-        return None
-
-
-async def _async_get_supported_webrtc_provider(
-    hass: HomeAssistant,
-    stream_source: str,
-) -> Any:
-    """Return HA's active WebRTC provider without starting C300X media."""
-
-    try:
-        from homeassistant.components.camera.webrtc import (  # noqa: PLC0415
-            DATA_WEBRTC_PROVIDERS,
-        )
-    except ImportError:
-        return None
-
-    providers = hass.data.get(DATA_WEBRTC_PROVIDERS)
-    if not providers or not stream_source:
-        return None
-    for provider in providers:
-        if provider.async_is_supported(stream_source):
-            return provider
-    return None
 
 
 async def async_setup_entry(
@@ -513,7 +482,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         if session_id in self._webrtc_sessions.active:
             await self._async_close_webrtc_session(session_id)
 
-        home_call_started = False
         stream_context = _ProviderWebRTCStreamContext(
             owner=owner,
             session_id=session_id,
@@ -521,11 +489,6 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             wants_backchannel=talkback_requested,
         )
         try:
-            if _owner_is_home_call(owner):
-                await self._runtime_data.api.async_start_home_call(
-                    duration_seconds=duration_seconds
-                )
-                home_call_started = True
             await self._async_handle_provider_webrtc_offer(
                 offer_sdp,
                 session_id,
@@ -534,6 +497,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 wants_audio=wants_audio,
                 talkback_requested=talkback_requested,
                 stream_context=stream_context,
+                duration_seconds=duration_seconds,
             )
         except asyncio.CancelledError:
             self._webrtc_sessions.candidates.pop(session_id, None)
@@ -572,7 +536,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 owner=owner,
                 stream_context=stream_context,
             )
-            if home_call_started:
+            if _owner_is_home_call(owner) and stream_context.media_started:
                 with suppress(Exception):
                     await self._async_stop_unowned_home_call()
             send_message(WebRTCError("bticino_webrtc_unavailable", str(err)))
@@ -593,7 +557,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 owner=owner,
                 stream_context=stream_context,
             )
-            if home_call_started:
+            if _owner_is_home_call(owner) and stream_context.media_started:
                 with suppress(Exception):
                     await self._async_stop_unowned_home_call()
             send_message(WebRTCError("bticino_webrtc_offer_failed", str(err)))
@@ -619,6 +583,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
         wants_audio: bool,
         talkback_requested: bool,
         stream_context: _ProviderWebRTCStreamContext,
+        duration_seconds: int | None = None,
     ) -> None:
         """Delegate one browser WebRTC offer to HA/go2rtc."""
 
@@ -665,7 +630,15 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             stream_context.resource_id = session.resource_id
             stream_context.ring_call = session.ring_call
             stream_context.ring_preview = session.ring_preview
-            self._webrtc_sessions.active[session_id] = session
+            async with self._rtsp_prepare_lock:
+                self._webrtc_sessions.active[session_id] = session
+                if _owner_is_home_call(owner):
+                    # Keep admission and device start indivisible with respect
+                    # to the final close of a previous Home Call session.
+                    stream_context.media_started = True
+                    await self._runtime_data.api.async_start_home_call(
+                        duration_seconds=duration_seconds
+                    )
             await self._async_log_go2rtc_debug(
                 provider,
                 "provider_go2rtc_before_offer",
@@ -1184,6 +1157,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                 # (which take the same lock) so a concurrent new offer cannot
                 # activate media while this stop is still tearing it down.
                 async with self._rtsp_prepare_lock:
+                    if self._has_webrtc_sessions_for_resource(provider_session.resource_id):
+                        return
                     await self._async_wait_for_provider_rtsp_clients_to_drain()
                     await self._async_log_video_status_debug(
                         "provider_agent_stop_before_request",
@@ -1196,6 +1171,8 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                         resource_id=provider_session.resource_id,
                         reason=reason,
                     )
+                    if self._has_webrtc_sessions_for_resource(provider_session.resource_id):
+                        return
                     if provider_session.is_home_call:
                         with suppress(Exception):
                             await self._runtime_data.api.async_stop_home_call()

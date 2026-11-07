@@ -39,7 +39,7 @@ MIN_HOME_ASSISTANT_VERSION = VERSION_CONFIG["min_homeassistant"]
 CURRENT_HOME_ASSISTANT_VERSION = VERSION_CONFIG["current_homeassistant"]
 PYTHON_VERSION = VERSION_CONFIG["python"]
 CURRENT_RELEASE_VERSION = VERSION_CONFIG["integration_version"]
-REQUIRED_PARAMIKO_VERSION = "3.5.1"
+REQUIRED_ASYNCSSH_VERSION = "2.24.1"
 REQUIRED_SPDX_TOOLS_VERSION = "0.8.5"
 NATIVE_AGENT_VERSION_PATH = "native_agent/VERSION"
 NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
@@ -666,16 +666,16 @@ def check_installer_dependency_pins() -> list[str]:
     """Keep optional installer SSH support pinned without blocking HA setup."""
 
     failures: list[str] = []
-    required_pin = f"paramiko=={REQUIRED_PARAMIKO_VERSION}"
+    required_pin = f"asyncssh=={REQUIRED_ASYNCSSH_VERSION}"
     required_spdx_pin = f"spdx-tools=={REQUIRED_SPDX_TOOLS_VERSION}"
     manifest = json.loads(
         (ROOT / "custom_components" / "bticino_c300x" / "manifest.json").read_text(
             encoding="utf-8"
         )
     )
-    if any(str(requirement).startswith("paramiko") for requirement in manifest.get("requirements", [])):
+    if any(str(requirement).startswith("asyncssh") for requirement in manifest.get("requirements", [])):
         failures.append(
-            "manifest.json must not require Paramiko; SSH install processes it on demand"
+            "manifest.json must not require AsyncSSH; SSH install processes it on demand"
         )
     if any(str(requirement).startswith("aiortc") for requirement in manifest.get("requirements", [])):
         failures.append(
@@ -705,14 +705,14 @@ def check_installer_dependency_pins() -> list[str]:
     installer = (
         ROOT / "custom_components" / "bticino_c300x" / "device_installer.py"
     ).read_text(encoding="utf-8")
-    if f'_REQUIRED_PARAMIKO_VERSION = "{REQUIRED_PARAMIKO_VERSION}"' not in installer:
-        failures.append("device_installer.py must hard-code the validated Paramiko pin")
-    if 'INSTALLER_REQUIREMENTS = (f"paramiko=={_REQUIRED_PARAMIKO_VERSION}",)' not in installer:
-        failures.append("device_installer.py must request the pinned Paramiko requirement lazily")
+    if f'_REQUIRED_ASYNCSSH_VERSION = "{REQUIRED_ASYNCSSH_VERSION}"' not in installer:
+        failures.append("device_installer.py must hard-code the validated AsyncSSH pin")
+    if 'INSTALLER_REQUIREMENTS = (f"asyncssh=={_REQUIRED_ASYNCSSH_VERSION}",)' not in installer:
+        failures.append("device_installer.py must request the pinned AsyncSSH requirement lazily")
     if "async_process_requirements(" not in installer or "is_built_in=False" not in installer:
         failures.append("device_installer.py must install optional SSH dependencies on demand")
-    if "_validate_paramiko_version(paramiko)" not in installer:
-        failures.append("device_installer.py must reject unvalidated Paramiko versions")
+    if "_validate_asyncssh_version(asyncssh)" not in installer:
+        failures.append("device_installer.py must reject unvalidated AsyncSSH versions")
 
     sensor = (ROOT / "custom_components" / "bticino_c300x" / "sensor.py").read_text(
         encoding="utf-8"

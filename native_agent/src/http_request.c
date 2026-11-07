@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static void request_path_and_query(
+static int request_path_and_query(
     const char *line_path,
     char *path,
     size_t path_len,
@@ -17,44 +17,19 @@ static void request_path_and_query(
     size_t query_len
 )
 {
-    char copied_path[256];
-    const char *normalized_path = line_path ? line_path : "";
-    const char *query_start;
-    snprintf(copied_path, sizeof(copied_path), "%s", normalized_path);
-    query_start = strchr(copied_path, '?');
-    if (path_len > 0) {
-        path[0] = '\0';
+    const char *query_start = strchr(line_path, '?');
+    size_t path_size = query_start ? (size_t)(query_start - line_path) : strlen(line_path);
+    size_t query_size = query_start ? strlen(query_start + 1) : 0;
+    if (line_path[0] != '/' || path_size >= path_len || query_size >= query_len) {
+        return 0;
     }
-    if (query_len > 0) {
-        query[0] = '\0';
+    memcpy(path, line_path, path_size);
+    path[path_size] = '\0';
+    if (query_start) {
+        memcpy(query, query_start + 1, query_size);
     }
-    if (query_start == NULL) {
-        size_t path_size = strlen(copied_path);
-        if (path_size >= path_len) {
-            path_size = path_len > 0 ? path_len - 1 : 0;
-        }
-        if (path_len > 0) {
-            memcpy(path, copied_path, path_size);
-            path[path_size] = '\0';
-        }
-        return;
-    }
-    if (query_start > copied_path) {
-        size_t path_size = (size_t)(query_start - copied_path);
-        if (path_size >= path_len) {
-            path_size = path_len > 0 ? path_len - 1 : 0;
-        }
-        if (path_len > 0) {
-            memcpy(path, copied_path, path_size);
-            path[path_size] = '\0';
-        }
-    } else if (path_len > 0) {
-        path[0] = '/';
-        path[1] = '\0';
-    }
-    if (query_len > 0) {
-        snprintf(query, query_len, "%s", query_start + 1);
-    }
+    query[query_size] = '\0';
+    return 1;
 }
 
 int parse_request(char *buffer, struct request *request)
@@ -63,6 +38,8 @@ int parse_request(char *buffer, struct request *request)
     char *header_end;
     char *headers_start;
     char *line_path;
+    char *method_end;
+    char *target_end;
 
     memset(request, 0, sizeof(*request));
     line_end = strstr(buffer, "\r\n");
@@ -70,11 +47,23 @@ int parse_request(char *buffer, struct request *request)
         return 0;
     }
     *line_end = '\0';
-    line_path = request->path;
-    if (sscanf(buffer, "%7s %255s", request->method, line_path) != 2) {
+    method_end = strchr(buffer, ' ');
+    if (method_end == NULL || method_end == buffer
+        || (size_t)(method_end - buffer) >= sizeof(request->method)) {
         return 0;
     }
-    request_path_and_query(line_path, request->path, sizeof(request->path), request->query, sizeof(request->query));
+    memcpy(request->method, buffer, (size_t)(method_end - buffer));
+    line_path = method_end + 1;
+    target_end = strchr(line_path, ' ');
+    if (target_end == NULL || target_end == line_path
+        || (size_t)(target_end - line_path) >= C300X_HTTP_TARGET_SIZE
+        || (strcmp(target_end + 1, "HTTP/1.1") != 0 && strcmp(target_end + 1, "HTTP/1.0") != 0)) {
+        return 0;
+    }
+    *target_end = '\0';
+    if (!request_path_and_query(line_path, request->path, sizeof(request->path), request->query, sizeof(request->query))) {
+        return 0;
+    }
     headers_start = line_end + 2;
     header_end = strstr(headers_start, "\r\n\r\n");
     if (header_end == NULL) {

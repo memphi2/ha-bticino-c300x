@@ -567,6 +567,11 @@ Authentication: normal API token.
 Side effects: reads ringer mute state with `*#8**33##` and ringer volume with
 `*#8**41##`.
 
+While a GUI mute/unmute command is pending, returns `409 ringer_gui_busy`
+without querying the hardware. Home Assistant uses the cached `/api/v1/state`
+response during this transition. This prevents an old readback from restoring
+the GUI's previous mute setting.
+
 The response includes `muted` when the mute read can be decoded and `volume`
 when the volume read can be decoded. `volume` is the C300X UI ringtone volume
 on the `0..10` scale. The firmware treats `0` as muted. OpenWebNet `41` stores
@@ -594,13 +599,18 @@ Request fields:
 just like the device button. The API response waits for the matching GUI
 acknowledgment and device readback. Only the GUI sends the mute/unmute device
 command; the agent never overrides its audio-state priorities with a raw write.
-If the GUI has queued its write and readback still differs, the request stays
-pending until a matching device event triggers a fresh readback, within the
-existing five-second command deadline. Expiry returns `409 ringer_not_applied`;
+The GUI acknowledgment alone does not trigger a readback: the stock GUI queues
+its hardware write, and an early read can feed the old mute state back into it.
+A matching device status event triggers verification; multicast write-command
+echoes do not. Matching status received before the GUI acknowledgment is retained
+unless superseded by an opposite status. There is at most one event-triggered
+readback and one final verification at the existing five-second deadline.
+The final verification also handles missing events and already-applied commands.
+If the value still differs, the endpoint returns `409 ringer_not_applied`;
 an undecodable readback returns `502 ringer_readback_failed`. A GUI acknowledgment
-or event alone is not a confirmed device value. There are no retry writes or
-periodic reads while waiting. Clients must allow enough HTTP time for the
-command deadline, device readback and response delivery.
+or event alone is not a confirmed device value. There are no retry writes,
+periodic reads or extra idle wakeups. Clients must allow enough HTTP time for
+the command deadline, device readback and response delivery.
 The core QML hook must be updated and loaded; the optional display bridge
 pages are not required. A missing GUI returns `503 ringer_gui_unavailable`,
 a concurrent command `409 ringer_gui_busy`, and a missing acknowledgment

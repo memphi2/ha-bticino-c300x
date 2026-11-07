@@ -8,6 +8,8 @@
 #define C300X_DASHBOARD_DOMAIN "c300x"
 #define C300X_DASHBOARD_STAIR_LIGHT_ENTITY "stair_light"
 #define C300X_DASHBOARD_ACTION_MAX 288
+/* Up to 255 HA state characters, including four-byte UTF-8 code points. */
+#define C300X_DASHBOARD_OPTION_MAX 1024
 
 static int validate_dashboard_action_id(const char *value)
 {
@@ -108,7 +110,7 @@ static enum c300x_ui_homeassistant_payload_result build_dashboard_action_payload
     if (strcmp(entity_id, C300X_DASHBOARD_STAIR_LIGHT_ENTITY) == 0) {
         written = snprintf(payload, payload_len, "{\"type\":\"stair_light\"}");
     } else if (option[0] != '\0') {
-        char option_json[1024];
+        char option_json[C300X_DASHBOARD_OPTION_MAX * 6 + 3];
 
         if (!json_string(option, option_json, sizeof(option_json))) {
             return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
@@ -143,7 +145,7 @@ enum c300x_ui_homeassistant_payload_result c300x_ui_homeassistant_build_payload(
     char domain[32];
     char service[32];
     char entities[C300X_DASHBOARD_ACTION_MAX + 2];
-    char option[160];
+    char option[C300X_DASHBOARD_OPTION_MAX + 2];
     char revision[48];
     char entity_id[sizeof(entities)];
     char revision_json[128];
@@ -157,7 +159,7 @@ enum c300x_ui_homeassistant_payload_result c300x_ui_homeassistant_build_payload(
     if (!query_param_value(query, "entities", entities, sizeof(entities))) {
         query_param_value(query, "entity_id", entities, sizeof(entities));
     }
-    if (strlen(entities) > C300X_DASHBOARD_ACTION_MAX || strlen(option) == sizeof(option) - 1) {
+    if (strlen(entities) > C300X_DASHBOARD_ACTION_MAX || strlen(option) > C300X_DASHBOARD_OPTION_MAX) {
         return C300X_UI_HOMEASSISTANT_PAYLOAD_TOO_LARGE;
     }
 

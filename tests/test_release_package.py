@@ -461,7 +461,7 @@ def test_sbom_distinguishes_packaged_and_external_runtime_dependencies(tmp_path:
     archive_path = tmp_path / "integration.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr("manifest.json", "{}")
-        archive.writestr("device_installer.py", '_REQUIRED_PARAMIKO_VERSION = "9.8.7"\nimport paramiko\n')
+        archive.writestr("device_installer.py", '_REQUIRED_ASYNCSSH_VERSION = "9.8.7"\nimport asyncssh\n')
         archive.writestr("media.py", "import aiohttp\nimport av\nfrom homeassistant.core import HomeAssistant\n")
         archive.writestr("device_agent/bundle.json", '{"agent_version":"1.9.11"}')
         archive.writestr("device_agent/armhf/c300x-agent-native", b"synthetic-test-agent")
@@ -473,15 +473,15 @@ def test_sbom_distinguishes_packaged_and_external_runtime_dependencies(tmp_path:
     )
     sbom = json.loads((tmp_path / "sbom.spdx.json").read_text())
     packages = {package["name"]: package for package in sbom["packages"]}
-    assert packages["paramiko"]["versionInfo"] == "9.8.7"
-    assert packages["paramiko"]["externalRefs"][0]["referenceLocator"] == "pkg:pypi/paramiko@9.8.7"
+    assert packages["asyncssh"]["versionInfo"] == "9.8.7"
+    assert packages["asyncssh"]["externalRefs"][0]["referenceLocator"] == "pkg:pypi/asyncssh@9.8.7"
     assert packages["c300x-agent-native"]["versionInfo"] == "1.9.11"
     for name in ("av", "aiohttp", "homeassistant", "glibc", "libsrtp", "speex", "curl"):
         assert "versionInfo" not in packages[name]
         assert packages[name]["filesAnalyzed"] is False
         assert packages[name]["licenseDeclared"] == "NOASSERTION"
     assert {
-        "spdxElementId": packages["paramiko"]["SPDXID"],
+        "spdxElementId": packages["asyncssh"]["SPDXID"],
         "relationshipType": "OPTIONAL_DEPENDENCY_OF",
         "relatedSpdxElement": sbom["packages"][0]["SPDXID"],
     } in sbom["relationships"]

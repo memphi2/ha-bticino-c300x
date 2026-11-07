@@ -21,6 +21,10 @@ static void finish(struct c300x_ringer_control *control)
     control->client_fd = -1;
     control->deadline_ms = 0;
     control->gui_confirmed = 0;
+    control->device_confirmed = 0;
+    control->event_verified = 0;
+    control->apply = NULL;
+    control->apply_ctx = NULL;
     control->id[0] = '\0';
 }
 
@@ -63,8 +67,26 @@ int c300x_ringer_control_timeout_ms(const struct c300x_ringer_control *control)
 void c300x_ringer_control_expire(struct c300x_ringer_control *control)
 {
     if (c300x_ringer_control_timeout_ms(control) == 0) {
+        /* Missing UDP and idempotent commands get one final verification. */
+        if (control->gui_confirmed && control->apply != NULL
+            && control->apply(control->client_fd, &control->command, control->apply_ctx)) {
+            finish(control);
+            return;
+        }
         fail(control->client_fd, control->gui_confirmed ? 409 : 504,
              control->gui_confirmed ? "ringer_not_applied" : "ringer_gui_timeout");
+        finish(control);
+    }
+}
+
+static void verify_event(struct c300x_ringer_control *control)
+{
+    if (!control->gui_confirmed || !control->device_confirmed || control->event_verified) {
+        return;
+    }
+    /* Bound duplicate/stale event traffic to one read plus the deadline check. */
+    control->event_verified = 1;
+    if (control->apply(control->client_fd, &control->command, control->apply_ctx)) {
         finish(control);
     }
 }
@@ -98,9 +120,10 @@ int c300x_ringer_control_next(
             finish(control);
         } else {
             control->gui_confirmed = 1;
-            if (apply(control->client_fd, &control->command, ctx)) {
-                finish(control);
-            }
+            control->apply = apply;
+            control->apply_ctx = ctx;
+            /* An early read broadcasts the old mute state back into the GUI. */
+            verify_event(control);
         }
     }
     if (control->gui_fd >= 0 || (control->client_fd >= 0 && !control->gui_confirmed)) {
@@ -113,19 +136,19 @@ int c300x_ringer_control_next(
 }
 
 int c300x_ringer_control_confirm(
-    struct c300x_ringer_control *control, int muted,
-    c300x_ringer_apply_fn apply, void *ctx
+    struct c300x_ringer_control *control, int muted
 )
 {
     c300x_ringer_control_expire(control);
-    if (control->client_fd >= 0 && control->gui_confirmed
-        && muted == control->command.muted) {
-        if (apply(control->client_fd, &control->command, ctx)) {
-            finish(control);
-        }
-        return 1;
+    if (control->client_fd < 0) {
+        return 0;
     }
-    return 0;
+    control->device_confirmed = muted == control->command.muted;
+    if (!control->device_confirmed) {
+        return 0;
+    }
+    verify_event(control);
+    return 1;
 }
 
 void c300x_ringer_control_request(

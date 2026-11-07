@@ -7,6 +7,9 @@
 #define C300X_CALLBACK_CAPACITY 8
 
 struct c300x_callback_job {
+    void (*perform)(struct c300x_callback_job *job);
+    char *response;
+    size_t response_len;
     char url[512];
     char token[C300X_MAX_TOKEN_LEN];
     char subscription_id[48];
@@ -30,5 +33,6 @@ int c300x_callback_queue_submit(struct c300x_callback_queue *queue, struct c300x
 struct c300x_callback_job *c300x_callback_queue_take(struct c300x_callback_queue *queue);
 void c300x_callback_queue_discard_pending(struct c300x_callback_queue *queue);
 void c300x_callback_queue_close(struct c300x_callback_queue *queue);
+void c300x_callback_job_free(struct c300x_callback_job *job);
 
 #endif

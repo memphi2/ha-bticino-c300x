@@ -72,8 +72,9 @@ class RingAnalysisUseCase:
             entry = unlock_entry_provider()
         if entry is None:
             raise service_validation_error("entry_id_required")
-        await DeviceActionsUseCase(self._hass, entry).unlock(lock_id)
-        await async_mark_ring_capture_used(
+        if not await async_mark_ring_capture_used(
             self._hass,
             getattr(decision, "capture_id", None),
-        )
+        ):
+            return
+        await DeviceActionsUseCase(self._hass, entry).unlock(lock_id)

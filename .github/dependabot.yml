@@ -54,11 +54,6 @@ updates:
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-      # Legacy SSH compatibility exception; fixes available only in >=4 need
-      # manual security triage (see SECURITY.md). This does not suppress alerts.
-      - dependency-name: "paramiko"
-        versions:
-          - ">=4"
 
   # Zero disables routine version PRs, not security-update PRs.
   # Keep targets separate so minimum/current pins are resolved independently.

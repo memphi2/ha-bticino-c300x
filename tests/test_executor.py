@@ -109,6 +109,7 @@ class FakeServices:
         blocking: bool,
         target: dict[str, Any] | None = None,
         return_response: bool = False,
+        context: Any = None,
     ) -> Any:
         self.calls.append((domain, service, data, blocking))
         self.targets.append(target)
@@ -2415,6 +2416,7 @@ def test_async_dashboard_payload_weather_uses_daily_forecast_fallback() -> None:
             blocking: bool,
             target: dict[str, Any] | None = None,
             return_response: bool = False,
+            context: Any = None,
         ) -> Any:
             self.calls.append((domain, service, data, blocking))
             self.targets.append(target)

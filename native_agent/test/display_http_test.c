@@ -1,6 +1,7 @@
 /* Exercise the production display callback with a socketpair, not a live HA. */
 #include <assert.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -43,7 +44,6 @@ static ssize_t fragmented_recv(int fd, void *buffer, size_t length, int flags)
 #define connect callback_connect
 #define recv fragmented_recv
 #include "../src/display_callback.c"
-#include "../src/http.c"
 #undef recv
 #undef connect
 #undef socket
@@ -62,35 +62,24 @@ int c300x_https_post(
 
 static void check_response(const char *wire, int success, const char *body)
 {
-    struct agent_runtime *runtime = calloc(1, sizeof(*runtime));
-    struct c300x_config config = {0};
     int pair[2];
     char response[512];
-    assert(runtime != NULL);
-    runtime->network_online = 1;
-    runtime->network_checked_at = time(NULL);
-    runtime->display_bridge_registered = 1;
-    strcpy(runtime->display_bridge_webhook_url, "http://127.0.0.1/callback");
-    strcpy(runtime->display_bridge_shared_secret, "test-secret");
-    config.home_assistant_request_timeout_ms = 100;
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     client_fd = pair[0];
     assert(send_all_bytes(pair[1], wire, strlen(wire)));
     assert(shutdown(pair[1], SHUT_WR) == 0);
     interrupt_next_read = 1;
     assert(response_capacity <= sizeof(response));
-    int ok = forward_to_homeassistant(&config, runtime, "{}", response, response_capacity);
+    int ok = c300x_display_post("http://127.0.0.1/callback", "test-secret", 100,
+        "{}", response, response_capacity);
     if (ok != success) {
         fprintf(stderr, "Unexpected result %d for response: %s\n", ok, wire);
     }
     assert(ok == success);
-    assert(runtime->home_assistant_connected_this_run == success);
-    assert((runtime->home_assistant_last_seen_at != 0) == success);
     if (success) {
         assert(strcmp(response, body) == 0);
     }
     close(pair[1]);
-    free(runtime);
 }
 
 int main(void)

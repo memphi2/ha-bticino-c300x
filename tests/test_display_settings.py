@@ -130,3 +130,28 @@ def test_pages_and_positions_are_applied_without_changing_capabilities():
         for page in pages.values()
         for item in page.get("items", [])
     )
+
+
+@pytest.mark.parametrize(
+    ("secondary", "expected"),
+    [("none", ""), ("entity_id", "light.porch"), ("state", "On")],
+)
+def test_quick_entity_honors_secondary_line_without_overview_selection(secondary, expected):
+    state = SimpleNamespace(state="on", attributes={"friendly_name": "Porch"})
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=lambda entity_id: state if entity_id == "light.porch" else None),
+        config=SimpleNamespace(language="en"),
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={
+            "device_ui_enabled": True,
+            "dashboard_entities": [],
+            "alarm_page_entity_id": "light.porch",
+            "dashboard_entity_display_overrides": {
+                "light.porch": {"secondary": secondary},
+            },
+        },
+    )
+    status = asyncio.run(async_status(hass, entry))
+    assert status["alarm_page_entity"]["state_label"] == expected

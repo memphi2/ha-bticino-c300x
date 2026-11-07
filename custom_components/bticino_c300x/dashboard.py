@@ -259,6 +259,7 @@ def _alarm_page_entity(
         0,
         name_display=dashboard_entity_name_display_override(overrides, entity_id),
         custom_name=dashboard_entity_custom_name_override(overrides, entity_id),
+        secondary_info=dashboard_entity_secondary_info_override(overrides, entity_id),
         language=language,
     )
     if item is None:

@@ -944,7 +944,8 @@ def test_agent_diagnostics_sensor_reports_connection_and_watchdog_state() -> Non
         tripped=True,
         trigger_count=2,
         last_reason="agent_cpu_high_95.0_percent_300s",
-        last_percent=95.0,
+        last_percent=1.0,
+        last_trigger_percent=95.0,
     )
     watchdog_entity = C300XAgentDiagnosticsSensor(watchdog_entry)  # type: ignore[arg-type]
 

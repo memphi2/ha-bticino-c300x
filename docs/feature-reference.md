@@ -12,6 +12,10 @@ Recorder history. Health states, CPU measurements, write counters and watchdog
 triggers retain their normal history behavior. Diagnostic entities remain
 disabled by default.
 
+The diagnostics attribute `media_watchdog_last_percent` records the CPU value
+of the last actual watchdog trigger, not every healthy observation. Use the
+Device CPU sensor for current CPU measurements.
+
 This page is the compact reference for users and maintainers. It describes what
 the integration exposes, where to configure it, and which parts write to the
 C300X only after an explicit user action.

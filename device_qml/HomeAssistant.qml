@@ -9,10 +9,11 @@ Page {
     id: page
     showBackButton: true
     onBackClicked: {
-        if (selectedItem) selectedItem = null
+        if (notificationsOpen) notificationsOpen = false
+        else if (selectedItem) selectedItem = null
         else tabView.activateTab(homePage)
     }
-    headerLabel: (selectedItem ? itemName(selectedItem) : uiText("home_assistant")) + trsl.empty
+    headerLabel: (notificationsOpen ? uiText("notifications") : selectedItem ? itemName(selectedItem) : uiText("home_assistant")) + trsl.empty
 
     property string uiLanguage: trsl.language
     property variant dashboardPages: []
@@ -54,6 +55,21 @@ Page {
     property string pendingEntity: ""
     property bool controlInFlight: false
     property bool interactionActive: false
+    property variant notifications: []
+    property bool notificationsOpen: false
+
+    function notificationAction(item, actionId) {
+        var command = {revision: item.revision, action_id: actionId}
+        Api.dashboardControl({entity_id: "notification." + item.id}, {command: ""}, JSON.stringify(command), status, page)
+    }
+
+    function notificationSymbol(item) {
+        return item.icon === "warning" ? "!" : item.icon === "calendar" ? "\u25a6" : "i"
+    }
+
+    function notificationColor(item) {
+        return item.priority === "urgent" ? "#ff6b6b" : item.priority === "important" ? "#f1c40f" : "white"
+    }
 
     function aboutToShow() {
         pageActive = true
@@ -368,8 +384,73 @@ Page {
     }
 
     Flickable {
+        id: notificationDetails
+        visible: notificationsOpen
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: detailStatus.top
+        anchors.margins: 24
+        clip: true
+        contentWidth: width
+        contentHeight: notificationColumn.height
+        flickableDirection: Flickable.VerticalFlick
+        Column {
+            id: notificationColumn
+            width: notificationDetails.width
+            spacing: 20
+            Repeater {
+                model: notifications
+                Column {
+                    property variant notification: modelData
+                    width: notificationColumn.width
+                    spacing: 10
+                    UbuntuLightText {
+                        width: parent.width
+                        text: notificationSymbol(notification) + "  " + notification.title
+                        textFormat: Text.PlainText
+                        font.pixelSize: 22
+                        color: notificationColor(notification)
+                        wrapMode: Text.Wrap
+                    }
+                    UbuntuLightText {
+                        width: parent.width
+                        text: notification.message
+                        textFormat: Text.PlainText
+                        font.pixelSize: 18
+                        color: "white"
+                        wrapMode: Text.Wrap
+                    }
+                    Flow {
+                        width: parent.width
+                        spacing: 8
+                        enabled: dashboardOnline && pendingEntity.length === 0
+                        Repeater {
+                            model: notification.actions.concat([{action_id: null, label: uiText("dismiss_notification")}])
+                            Item {
+                                width: (notificationColumn.width - 8) / 2
+                                height: 48
+                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                                UbuntuLightText {
+                                    anchors.fill: parent; anchors.margins: 8
+                                    text: modelData.label; textFormat: Text.PlainText
+                                    font.pixelSize: 17; color: "white"
+                                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                                BeepingMouseArea { anchors.fill: parent; onClicked: notificationAction(notification, modelData.action_id) }
+                            }
+                        }
+                    }
+                    Rectangle { width: parent.width; height: 1; color: "#c7d0d9"; opacity: 0.4 }
+                }
+            }
+        }
+    }
+
+    Flickable {
         id: details
-        visible: selectedItem !== null
+        visible: selectedItem !== null && !notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -499,7 +580,7 @@ Page {
 
     UbuntuLightText {
         id: detailStatus
-        visible: selectedItem !== null
+        visible: selectedItem !== null || notificationsOpen
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -513,7 +594,7 @@ Page {
     }
 
     Column {
-        visible: selectedItem === null
+        visible: selectedItem === null && !notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -523,6 +604,22 @@ Page {
         anchors.rightMargin: 36
         anchors.bottomMargin: 18
         spacing: 9
+
+        Item {
+            id: notificationBanner
+            width: parent.width
+            height: notifications.length > 0 ? 44 : 0
+            visible: notifications.length > 0
+            Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+            UbuntuLightText {
+                anchors.fill: parent; anchors.margins: 9
+                text: notifications.length > 0 ? notificationSymbol(notifications[0]) + "  " + notifications[0].title + " (" + notifications.length + ")" : ""
+                textFormat: Text.PlainText; font.pixelSize: 18
+                color: notifications.length > 0 ? notificationColor(notifications[0]) : "white"
+                elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
+            }
+            BeepingMouseArea { anchors.fill: parent; onClicked: notificationsOpen = true }
+        }
 
         Grid {
             id: badgeGrid
@@ -564,7 +661,7 @@ Page {
         Flickable {
             id: scroll
             width: parent.width
-            height: parent.height - badgeGrid.height - pagerRow.height - status.height - 32
+            height: parent.height - notificationBanner.height - (notificationBanner.visible ? 9 : 0) - badgeGrid.height - pagerRow.height - status.height - 32
             contentWidth: width
             contentHeight: contentColumn.height
             clip: true

@@ -113,6 +113,46 @@ the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. These controls require the updated display
 files; device rendering and physical Ring Call interruption remain beta checks.
 
+## Display Notifications
+
+Automations can use `bticino_c300x.show_display_notification` to show a compact
+notice on the native Home Assistant page. Tap it for details. It does not open
+automatically, cover Alarmo PIN entry, interrupt Ring Calls or wake the display.
+
+```yaml
+action: bticino_c300x.show_display_notification
+data:
+  notification_id: front_window
+  title: Front window
+  message: The front window is still open.
+  icon: warning
+  priority: important
+  expires_in: 3600
+```
+
+Use the same ID to replace a message and `bticino_c300x.dismiss_display_notification`
+with that ID to remove it. IDs allow lowercase letters, digits, `_` and `-` (64
+characters maximum). Titles allow 80 characters, text 500, expiry 1 second to
+7 days. Symbols are `info`, `warning` and `calendar`; priorities are `normal`,
+`important` and `urgent`. Specify `entry_id` with multiple C300X integrations.
+
+Up to eight messages are retained in HA memory, highest priority first. When full,
+the oldest message at the lowest priority is replaced; a lower-priority incoming
+message cannot evict a higher-priority one. Restarting HA or reloading the
+integration clears the list. Automations should resend still-relevant conditions.
+No message history or notification files are written to the C300X or Recorder.
+
+Optional `actions` accepts at most two `{action_id: ..., label: ...}` entries from
+the existing display action allowlist. An action never runs merely because a
+notification arrives. **Mark read** only dismisses the message; it does not resolve
+the physical condition or run an action. Updated messages reject stale commands.
+
+The bundled **C300X Calendar display reminder** blueprint selects an existing HA
+calendar, target C300X, lead time, reminder text and expiry. It uses a calendar
+event trigger rather than polling the device or adding a calendar provider.
+For a reliable test, create the event more than 15 minutes in advance, as noted
+in the [Home Assistant calendar documentation](https://www.home-assistant.io/integrations/calendar/#automation).
+
 ## Entity Reference
 
 Entities are capability-gated. If the installed agent does not advertise a

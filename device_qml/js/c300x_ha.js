@@ -117,6 +117,8 @@ function dashboard(statusItem, pageItem) {
             dashboardRevision = String(data.revision)
         }
         var pages = dashboardPages(data)
+        pageItem.notifications = listOrEmpty(data.notifications)
+        if (pageItem.notifications.length === 0) pageItem.notificationsOpen = false
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
         pageItem.dashboardPages = pages
         pageItem.pageCount = pages.length
@@ -139,6 +141,8 @@ function dashboard(statusItem, pageItem) {
         statusItem.text = error
         statusItem.color = "#ff6b6b"
         pageItem.dashboardPages = []
+        pageItem.notifications = []
+        pageItem.notificationsOpen = false
         pageItem.badges = []
         pageItem.items = []
         pageItem.flowItems = []
@@ -166,7 +170,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
     pageItem.pendingEntity = item.entity_id
     pageItem.controlInFlight = true
     var path = "/homeassistant?domain=c300x&service=toggle&entities="
-        + encodeURIComponent(item.entity_id + ":" + control.command)
+        + encodeURIComponent(item.entity_id + (control.command ? ":" + control.command : ""))
     if (value !== null && value !== undefined) path += "&option=" + encodeURIComponent(value)
     getJson(path, function(data) {
         if (generation !== pageItem.runtimeGeneration) return

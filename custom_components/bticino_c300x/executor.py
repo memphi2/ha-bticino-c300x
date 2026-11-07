@@ -291,6 +291,11 @@ async def async_execute_dashboard_action(
 ) -> dict[str, Any]:
     """Execute a dashboard-compatible c300x action id."""
 
+    from .display_notifications import NOTIFICATION_PREFIX, async_notification_action
+
+    if entity_id.startswith(NOTIFICATION_PREFIX):
+        return await async_notification_action(hass, entry, entity_id[len(NOTIFICATION_PREFIX):], option)
+
     if entity_id == DASHBOARD_ENTITY_STAIR_LIGHT:
         return await async_trigger_stair_light(hass, entry)
     if entity_id == DASHBOARD_ENTITY_DOOR_UNLOCK:

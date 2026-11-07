@@ -64,6 +64,7 @@ from .dashboard_labels import (
     _DASHBOARD_STATE_LABELS_EN,
 )
 from .dashboard_weather import async_dashboard_weather_payload
+from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
 
 dt_util: Any
@@ -123,6 +124,7 @@ async def async_status(
             bool(actions)
             or bool(dashboard_entities)
             or configured_weather_entity_id(entry) is not None
+            or bool(notification_payload(entry))
         ),
         "preventReturnToHomepage": configured_dashboard_prevent_return(entry),
         "device_ui_enabled": device_ui_enabled,
@@ -214,6 +216,7 @@ async def async_dashboard_payload(
     return {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
+        "notifications": notification_payload(entry),
         "data": {
             "pages": [
                 _finalize_dashboard_page(page)

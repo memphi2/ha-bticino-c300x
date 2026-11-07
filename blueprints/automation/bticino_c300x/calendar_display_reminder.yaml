@@ -1,0 +1,64 @@
+blueprint:
+  name: C300X Calendar display reminder
+  description: Show a temporary reminder on the native C300X Home Assistant page. Uses an existing HA calendar; does not wake the display or interrupt calls.
+  domain: automation
+  source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/calendar_display_reminder.yaml
+  input:
+    calendar:
+      name: Calendar
+      selector:
+        entity:
+          domain: calendar
+    entry_id:
+      name: C300X integration
+      selector:
+        config_entry:
+          integration: bticino_c300x
+    lead_time:
+      name: Reminder before start
+      default: "-00:15:00"
+      selector:
+        select:
+          options:
+            - {label: At start, value: "00:00:00"}
+            - {label: 5 minutes, value: "-00:05:00"}
+            - {label: 15 minutes, value: "-00:15:00"}
+            - {label: 30 minutes, value: "-00:30:00"}
+            - {label: 1 hour, value: "-01:00:00"}
+            - {label: 1 day, value: "-24:00:00"}
+    reminder_text:
+      name: Reminder text
+      default: "{{ trigger.calendar_event.summary }}\n{{ trigger.calendar_event.start }}"
+      selector:
+        template:
+    expires_in:
+      name: Expires after
+      default: 3600
+      selector:
+        number:
+          min: 60
+          max: 604800
+          unit_of_measurement: s
+          mode: box
+
+mode: queued
+max: 20
+trigger:
+  - platform: calendar
+    entity_id: !input calendar
+    event: start
+    offset: !input lead_time
+variables:
+  reminder_text: !input reminder_text
+  notification_key: >-
+    {{ (trigger.entity_id ~ ':' ~ trigger.calendar_event.start ~ ':' ~ trigger.calendar_event.summary) | sha256 }}
+action:
+  - action: bticino_c300x.show_display_notification
+    data:
+      entry_id: !input entry_id
+      notification_id: "{{ notification_key }}"
+      title: "{{ trigger.calendar_event.summary[:80] }}"
+      message: "{{ reminder_text[:500] }}"
+      icon: calendar
+      priority: normal
+      expires_in: !input expires_in

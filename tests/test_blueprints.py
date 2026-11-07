@@ -45,6 +45,7 @@ def _blueprint(filename: str) -> dict[str, Any]:
 
 def test_blueprints_are_valid_automation_blueprints() -> None:
     expected = {
+        "calendar_display_reminder.yaml",
         "doorbell_notification.yaml",
         "doorbell_call_android.yaml",
         "doorbell_call_ios.yaml",
@@ -58,7 +59,7 @@ def test_blueprints_are_valid_automation_blueprints() -> None:
         data = _blueprint(filename)
         assert data["blueprint"]["domain"] == "automation"
         assert data["blueprint"]["source_url"].endswith(filename)
-        assert data["mode"] in {"restart", "single"}
+        assert data["mode"] in {"restart", "single", "queued"}
 
 
 def test_packaged_blueprints_match_repo_blueprints() -> None:
@@ -70,6 +71,37 @@ def test_packaged_blueprints_match_repo_blueprints() -> None:
         assert (PACKAGED_BLUEPRINT_DIR / filename).read_text(
             encoding="utf-8"
         ) == (BLUEPRINT_DIR / filename).read_text(encoding="utf-8")
+
+
+def test_calendar_blueprint_ha_schema_inputs_and_templates(tmp_path: Path) -> None:
+    import asyncio
+
+    from homeassistant.components.blueprint import BLUEPRINT_SCHEMA
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import config_validation as cv
+    from homeassistant.helpers.template import Template
+    from homeassistant.util import yaml as ha_yaml
+
+    async def run() -> None:
+        source = ha_yaml.load_yaml(str(BLUEPRINT_DIR / "calendar_display_reminder.yaml"))
+        validated = BLUEPRINT_SCHEMA(source)
+        inputs = {key: item["default"] for key, item in validated["blueprint"]["input"].items() if "default" in item}
+        inputs.update(calendar="calendar.home", entry_id="entry")
+        rendered = ha_yaml.substitute(source, inputs)
+        assert cv.time_period(rendered["trigger"][0]["offset"]).total_seconds() == -900
+        assert rendered["mode"] == "queued"
+        hass = HomeAssistant(str(tmp_path))
+        variables = {"trigger": {"entity_id": "calendar.home", "calendar_event": {"summary": "Visit", "start": "2026-11-10T12:00:00+00:00"}}}
+        for key, value in rendered["variables"].items():
+            variables[key] = Template(value, hass).async_render(variables)
+        data = {key: Template(value, hass).async_render(variables) if isinstance(value, str) else value for key, value in rendered["action"][0]["data"].items()}
+        from custom_components.bticino_c300x.display_notifications import SHOW_SCHEMA
+        checked = SHOW_SCHEMA(data)
+        assert len(checked["notification_id"]) == 64
+        assert checked["title"] == "Visit"
+        assert "12:00" in checked["message"]
+
+    asyncio.run(run())
 
 
 def test_doorbell_blueprints_trigger_on_doorbell_event() -> None:

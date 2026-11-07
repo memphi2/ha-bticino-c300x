@@ -363,6 +363,9 @@ patch_home_page() {
             print "    }"
             print ""
             print "    function handleMessageNotificationEvent(event) {"
+            if (dynamic_home_page == "1") {
+                print "        if (event && event.topic === \"notifications\") refreshDisplayBridgeButtons()"
+            }
             print "        if (event && (event.topic === \"memos\" || event.topic === \"answering_machine.messages\")) {"
             print "            refreshMessageNotifications()"
             print "        }"

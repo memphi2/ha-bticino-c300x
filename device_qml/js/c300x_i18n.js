@@ -1,6 +1,8 @@
 .pragma library
 
 var DE = {
+    "notifications": "Hinweise",
+    "dismiss_notification": "Gelesen",
     "action": "Aktion",
     "action_error": "Aktion Fehler",
     "action_sent": "Aktion gesendet",
@@ -60,6 +62,8 @@ var DE = {
 }
 
 var EN = {
+    "notifications": "Notifications",
+    "dismiss_notification": "Mark read",
     "action": "Action",
     "action_error": "Action failed",
     "action_sent": "Action sent",
@@ -119,6 +123,8 @@ var EN = {
 }
 
 var IT = {
+    "notifications": "Avvisi",
+    "dismiss_notification": "Letto",
     "action": "Azione",
     "action_error": "Azione fallita",
     "action_sent": "Azione inviata",
@@ -178,6 +184,8 @@ var IT = {
 }
 
 var FR = {
+    "notifications": "Notifications",
+    "dismiss_notification": "Lu",
     "action": "Action",
     "action_error": "Action echouee",
     "action_sent": "Action envoyee",

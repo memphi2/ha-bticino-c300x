@@ -1,3 +1,69 @@
+show_display_notification:
+  name: Show display notification
+  description: Create or replace a temporary native-display notification. Messages are cleared on HA restart or integration reload; this does not wake the display.
+  fields:
+    entry_id:
+      name: Entry ID
+      selector:
+        text:
+    notification_id:
+      name: Notification ID
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      required: true
+      selector:
+        text:
+    message:
+      name: Message
+      required: true
+      selector:
+        text:
+          multiline: true
+    icon:
+      name: Symbol
+      default: info
+      selector:
+        select:
+          options: [info, warning, calendar]
+    priority:
+      name: Priority
+      default: normal
+      selector:
+        select:
+          options: [normal, important, urgent]
+    expires_in:
+      name: Expires after
+      default: 3600
+      selector:
+        number:
+          min: 1
+          max: 604800
+          mode: box
+          unit_of_measurement: s
+    actions:
+      name: Actions
+      description: At most two configured action_id and label pairs. Only existing allowlisted actions can be run.
+      default: []
+      selector:
+        object:
+
+dismiss_display_notification:
+  name: Dismiss display notification
+  description: Remove a notification by its stable ID. This does not resolve the underlying physical condition.
+  fields:
+    entry_id:
+      name: Entry ID
+      selector:
+        text:
+    notification_id:
+      name: Notification ID
+      required: true
+      selector:
+        text:
+
 run_action:
   name: Run C300X action
   description: Run one configured C300X action by its allowlisted action id.

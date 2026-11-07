@@ -224,10 +224,10 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "546839d12a9aa815eaebf25d6ecf0f71040c8ca0c2e1270dabd6cbbff87da425",
-    "HomeAssistant.qml": "166a69d7c955e2b398d0281f7c41152b1d4e1177b2421365d388a6bf1be416ab",
-    "js/c300x_ha.js": "4863fa3d8df572042deea1b9a913e31275342bb67f1b0344a53c5e0b6a17a883",
-    "js/c300x_i18n.js": "842e42b8537bd6b58d8e5ade531f664b32bd7922eef03fb9fe2b79b4505eeb6c",
+    "Alarm.qml": "8141ddb24c3b6f2851ad7085fbf63ac2c5e6f4078f0418ba35d6cd325897c36f",
+    "HomeAssistant.qml": "0b132eec9cae59edfeb21d24dd999ca90b27b606a742e5989ede735da59fa0bf",
+    "js/c300x_ha.js": "3486ec13307164d4b7e842073fe792f8d0111ed3df943715442f2c1480cf81d2",
+    "js/c300x_i18n.js": "32c80d4a4102b70d59f74fc7ecb8c538cfc25a3b34bd6bc0e6546841326b556a",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 

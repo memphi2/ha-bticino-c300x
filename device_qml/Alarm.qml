@@ -117,7 +117,7 @@ Page {
             clearPin()
             return
         }
-        if (event && (event.topic === "alarm" || event.topic === "display_bridge.state")) {
+        if (event && (event.topic === "alarm" || event.topic === "notifications" || event.topic === "display_bridge.state")) {
             activeFeedbackCommand = ""
             clearCommandFeedback()
             refreshAlarmStatus(true)

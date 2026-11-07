@@ -31,6 +31,9 @@ queue.shift().success(payload("one"));
 assert.equal(queue.length, 1, "one trailing refresh");
 queue.shift().success({not_modified: true});
 assert.equal(p.dashboardOnline, true);
+assert.match(p.itemDetail({kind: "switch", state: false, controls: [
+    {command: "brightness", kind: "number", value: 50, unit: "%"},
+]}), /^Off/);
 p.selectedItem = p.items[0];
 Api.dashboard(p.status, p);
 const beforeCommand = queue.shift();

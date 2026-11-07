@@ -176,6 +176,7 @@ Page {
         if (!dashboardOnline || item.available === false) return uiText("offline")
         if (pendingEntity === item.entity_id) return uiText("sending")
         var values = []
+        if (item.kind === "switch") values.push(item.state ? uiText("on") : uiText("off"))
         if (item.current_temperature !== undefined && item.current_temperature !== null) {
             values.push(String(item.current_temperature) + " " + (item.temperature_unit || ""))
         }

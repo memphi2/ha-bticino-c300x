@@ -23,6 +23,9 @@ from .config_flow_forms import (
     dashboard_entity_name_display_selector as _dashboard_entity_name_display_selector,
 )
 from .config_flow_forms import (
+    dashboard_entity_order_selector as _dashboard_entity_order_selector,
+)
+from .config_flow_forms import (
     dashboard_entity_secondary_info_selector as _dashboard_entity_secondary_info_selector,
 )
 from .config_flow_forms import (
@@ -113,6 +116,19 @@ def _dashboard_entity_custom_name_field(index: int, entity_id: str) -> str:
     return f"{_dashboard_entity_field_label(index, entity_id)}{_DASHBOARD_ENTITY_CUSTOM_NAME_FIELD_SUFFIX}"
 
 
+def _dashboard_entity_layout_field(index: int, entity_id: str, name: str) -> str:
+    return f"{_dashboard_entity_field_label(index, entity_id)} - {name}"
+
+
+def dashboard_display_entity_ids(data: dict[str, Any]) -> list[str]:
+    """Include the optional Alarmo shortcut without adding it to the overview."""
+    entities = dashboard_entity_ids(data.get(CONF_DASHBOARD_ENTITIES, []))
+    quick_entity = alarm_page_entity_id(data.get(CONF_ALARM_PAGE_ENTITY_ID, ""))
+    if quick_entity and quick_entity not in entities:
+        entities.append(quick_entity)
+    return entities
+
+
 def _dashboard_entity_name_display(value: Any) -> str:
     display = str(value or DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME).strip()
     if display not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
@@ -181,6 +197,18 @@ def dashboard_entity_display_overrides_from_fields(
             or ""
         ).strip()
         options: dict[str, str] = {}
+        page = str(user_input.get(
+            _dashboard_entity_layout_field(index, entity_id, "Page"),
+            existing.get(entity_id, {}).get("page", ""),
+        ) or "").strip()
+        order = user_input.get(
+            _dashboard_entity_layout_field(index, entity_id, "Position"),
+            existing.get(entity_id, {}).get("order", str(index * 10)),
+        )
+        if page:
+            options["page"] = page
+        if str(order) not in {str(index * 10), str(float(index * 10))}:
+            options["order"] = str(order)
         if name != DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME:
             options["name"] = name
             if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM and custom_name:
@@ -247,6 +275,7 @@ def dashboard_schema(
 def dashboard_entity_display_schema(
     default_dashboard_entities: Any = None,
     default_dashboard_entity_display_overrides: Any = None,
+    *, layout_entity_ids: Any = None,
 ) -> vol.Schema:
     """Return the per-entity display options schema."""
 
@@ -257,6 +286,15 @@ def dashboard_entity_display_schema(
     fields: dict[Any, Any] = {}
     for index, entity_id in enumerate(dashboard_entities, start=1):
         entity_overrides = dashboard_overrides.get(entity_id, {})
+        if layout_entity_ids is None or entity_id in layout_entity_ids:
+            fields[vol.Optional(
+                _dashboard_entity_layout_field(index, entity_id, "Page"),
+                default=entity_overrides.get("page", ""),
+            )] = _dashboard_entity_custom_name_selector()
+            fields[vol.Optional(
+                _dashboard_entity_layout_field(index, entity_id, "Position"),
+                default=int(entity_overrides.get("order", str(index * 10))),
+            )] = _dashboard_entity_order_selector()
         fields[
             vol.Optional(
                 _dashboard_entity_name_field(index, entity_id),
@@ -325,11 +363,9 @@ def dashboard_input_defaults(
     data[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
         dashboard_entity_display_overrides_from_fields(
             data,
-            data.get(CONF_DASHBOARD_ENTITIES, ()),
-            {} if defaults is None else defaults.get(
-                CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
-                {},
-            ),
+            dashboard_display_entity_ids(data),
+            data.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+                {} if defaults is None else defaults.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})),
         )
     )
     data.setdefault(

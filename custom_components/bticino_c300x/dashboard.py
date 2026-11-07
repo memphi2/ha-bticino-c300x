@@ -198,6 +198,11 @@ async def async_dashboard_payload(
         )
         if dashboard_item is None:
             continue
+        layout = entity_display_overrides.get(entity_id, {})
+        if "page" in layout:
+            dashboard_item["_page"] = layout["page"]
+        if "order" in layout:
+            dashboard_item["_order"] = int(layout["order"])
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
 

@@ -1,6 +1,12 @@
 # Changelog
 
-## v2.1.0b1 - Unreleased
+## v2.1.0b1 - 2026-11-07
+
+### Added
+
+- Configure native display page assignment and per-page entity positions in the
+  existing HA dialogs. The optional Alarmo action can be named independently
+  without adding it to the overview. Existing selections and labels are retained.
 
 - HA-owned native display notifications with stable IDs, bounded priority queue,
   expiry, explicit dismissal and up to two allowlisted actions. Includes a
@@ -10,8 +16,6 @@
   based details, actual select options and bounded number adjustments. Sliders
   send on release; selected entities receive event-driven state updates without
   an Alarmo dependency or periodic device polling.
-
-### Added
 
 - Context-sensitive native Alarmo subpage in the original blue design: the PIN
   keypad appears only when needed, including entry delay. Modes without a PIN
@@ -55,10 +59,10 @@
 ### Upgrade
 
 - Includes a rebuilt native agent `2.1.0b1`. Update the agent and apply the
-  Display patch to use the revised Alarmo page; applying the patch restarts the GUI.
-- This is planned as an opt-in prerelease. The stable release remains `2.0.0`. Advanced
-  light/cover/climate controls, notifications and the calendar blueprint follow
-  in separate pull requests and are not included here yet.
+  Display patch to use the revised native pages; applying the patch restarts the GUI.
+- Opt-in prerelease; the stable release remains `2.0.0`. Native rendering,
+  standby return and interruption by physical Ring Calls need beta confirmation.
+  The visual editor and notification-triggered display wake remain deferred.
 
 ## v2.0.0 - 2026-11-02
 

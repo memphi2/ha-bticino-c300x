@@ -113,6 +113,27 @@ the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. These controls require the updated display
 files; device rendering and physical Ring Call interruption remain beta checks.
 
+## Display Settings
+
+Use **Configure > Display dashboard**, then the entity-display dialog. Choose
+entities and the optional Alarmo quick entity with the normal HA selectors;
+control types come from their actual capabilities, not a manually chosen widget.
+
+Each overview entity has **Page**, **Position**, name and secondary-line settings.
+Use the same page name to group entities; leave it empty for the existing unnamed
+page. Positions run from 0 to 10000, lower first within a page. Existing selections
+keep their original order until you change a position. Named pages follow their
+first occurrence in the selected-entity list, after the HA status/weather page.
+Page names are limited to 60 characters. Missing or unavailable entities retain
+their configuration and show unavailable rather than changing the saved layout.
+
+The optional Alarmo quick entity also gets its name and secondary-line settings,
+even if it is not selected for an overview page. Selecting it does not add it to
+the overview. Leave the quick entity empty to hide it; no stair-light default is
+inserted. Connection/maintenance settings remain separate. Calendar and notification
+logic stays in HA automations. This is a normal configuration dialog, not a visual
+editor, and opening the dialog does not operate a device.
+
 ## Display Notifications
 
 Automations can use `bticino_c300x.show_display_notification` to show a compact

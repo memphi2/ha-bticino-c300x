@@ -5,6 +5,7 @@ import sys
 import types
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import voluptuous as vol
@@ -60,13 +61,18 @@ def test_home_call_ws_get_client_config_and_candidate(monkeypatch: pytest.Monkey
         )
     )
     asyncio.run(
+        registered[1](hass, connection, {
+            "id": 3, "entity_id": "camera.c300x", "offer": "v=0",
+        })
+    )
+    asyncio.run(
         registered[2](
             hass,
             connection,
             {
                 "id": 2,
                 "entity_id": "camera.c300x",
-                "session_id": "session-1",
+                "session_id": "01TEST",
                 "candidate": SimpleNamespace(candidate="candidate"),
             },
         )
@@ -74,7 +80,7 @@ def test_home_call_ws_get_client_config_and_candidate(monkeypatch: pytest.Monkey
 
     assert connection.results == [(1, {"iceServers": []})]
     assert connection.messages[-1] == {"id": 2, "type": "result", "success": True}
-    assert camera.candidates == [("session-1", "candidate")]
+    assert camera.candidates == [("01TEST", "candidate")]
 
 
 def test_home_call_ws_reports_missing_camera(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -223,6 +229,7 @@ class _FakeHomeCallCamera:
 
 class _FakeConnection:
     def __init__(self) -> None:
+        self.user = SimpleNamespace(permissions=SimpleNamespace(check_entity=Mock(return_value=True)))
         self.subscriptions: dict[int, Any] = {}
         self.results: list[tuple[int, Any]] = []
         self.errors: list[tuple[int, str, str]] = []
@@ -236,6 +243,48 @@ class _FakeConnection:
 
     def send_message(self, message: dict[str, Any]) -> None:
         self.messages.append(message)
+
+
+@pytest.mark.parametrize("command", [0, 1, 2])
+def test_home_call_ws_requires_camera_control(monkeypatch, command):
+    camera = _FakeHomeCallCamera()
+    registered = _install_home_call_ws_stubs(monkeypatch, camera)
+    hass = object()
+    async_register_home_call_ws(hass, _FakeHomeCallCamera)
+    connection = _FakeConnection()
+    connection.user.permissions.check_entity.return_value = False
+    asyncio.run(registered[command](hass, connection, {
+        "id": 1, "entity_id": "camera.c300x", "offer": "v=0",
+        "session_id": "01TEST", "candidate": SimpleNamespace(candidate="candidate"),
+    }))
+    assert connection.errors[0][1] == "unauthorized"
+    connection.user.permissions.check_entity.assert_called_once_with("camera.c300x", "control")
+    assert not camera.offers and not camera.candidates and not connection.subscriptions
+
+
+@pytest.mark.parametrize("invalid", ["connection", "entity", "session", "closed", "revoked"])
+def test_home_call_candidates_require_own_live_subscription(monkeypatch, invalid):
+    camera = _FakeHomeCallCamera()
+    registered = _install_home_call_ws_stubs(monkeypatch, camera)
+    hass = object()
+    async_register_home_call_ws(hass, _FakeHomeCallCamera)
+    connection = _FakeConnection()
+    asyncio.run(registered[1](hass, connection, {
+        "id": 1, "entity_id": "camera.c300x", "offer": "v=0",
+    }))
+    if invalid == "connection":
+        connection = _FakeConnection()
+    elif invalid == "closed":
+        connection.subscriptions[1]()
+    elif invalid == "revoked":
+        connection.user.permissions.check_entity.return_value = False
+    asyncio.run(registered[2](hass, connection, {
+        "id": 2, "entity_id": "camera.other" if invalid == "entity" else "camera.c300x",
+        "session_id": "other" if invalid == "session" else "01TEST",
+        "candidate": SimpleNamespace(candidate="candidate"),
+    }))
+    assert connection.errors[-1][1] == "unauthorized"
+    assert not camera.candidates
 
 
 def _install_home_call_ws_stubs(

@@ -1,6 +1,6 @@
 blueprint:
   name: C300X Ring capture and Wyoming transcription
-  description: Capture a ring clip, then transcribe latest.raw.wav with a local Wyoming Whisper service.
+  description: Capture a ring clip, then transcribe that exact recording with a local Wyoming Whisper service.
   domain: automation
   source_url: https://github.com/memphi2/ha-bticino-c300x/blob/main/blueprints/automation/bticino_c300x/ring_capture_wyoming.yaml
   input:
@@ -50,7 +50,8 @@ blueprint:
         text:
     result_path:
       name: Result path
-      default: /config/c300x/analysis/result.json
+      description: Leave empty for an isolated result beside the recording. A custom path must not be shared with another automation.
+      default: ""
       selector:
         text:
 
@@ -84,7 +85,6 @@ variables:
   expected_phrase: !input expected_phrase
   capture_file_dir: !input capture_file_dir
   result_path: !input result_path
-  capture_dir: "{{ capture_file_dir.rstrip('/') }}"
 
 condition:
   - condition: template
@@ -100,12 +100,14 @@ action:
       duration_seconds: !input duration_seconds
       include_audio: true
       wav_output_dir: "{{ capture_file_dir }}"
+    response_variable: capture
   - service: bticino_c300x.run_ring_wyoming_analysis
     data:
       wyoming_host: "{{ wyoming_host }}"
       wyoming_port: !input wyoming_port
-      capture_path: "{{ capture_dir }}/latest.capture.json"
-      wav_path: "{{ capture_dir }}/latest.raw.wav"
+      capture_path: "{{ capture.metadata_path }}"
+      wav_path: "{{ capture.raw_wav_path }}"
       result_path: "{{ result_path }}"
       language: "{{ language }}"
       expected_phrase: "{{ expected_phrase }}"
+    response_variable: analysis

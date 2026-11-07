@@ -183,8 +183,13 @@ def test_shutdown_kills_pending_script_without_waiting(lab):
     pid = int((lab.root / "started").read_text())
     lab.process.terminate()
     assert lab.process.wait(timeout=2) == 0
-    wait_until(lambda: not Path(f"/proc/{pid}").exists()
-               or Path(f"/proc/{pid}/stat").read_text().split()[2] == "Z")
+    def child_has_exited():
+        try:
+            return Path(f"/proc/{pid}/stat").read_text().split()[2] == "Z"
+        except (FileNotFoundError, ProcessLookupError):
+            return True
+
+    wait_until(child_has_exited)
 
 
 def test_completed_jobs_leave_no_fd_timer_or_write_churn(lab):

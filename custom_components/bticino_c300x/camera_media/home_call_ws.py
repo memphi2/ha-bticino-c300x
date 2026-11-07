@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import partial
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
+
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 
 from ..const import MAX_HOME_CALL_DURATION_SECONDS
 from ..schema_compat import vol
@@ -16,6 +18,21 @@ if TYPE_CHECKING:
 _WsCommand = Callable[..., Any]
 _WsCommandDecorator = Callable[[_WsCommand], _WsCommand]
 _WsCommandFactory = Callable[[dict[Any, Any]], _WsCommandDecorator]
+
+
+@dataclass
+class _HomeCallSubscription:
+    """Bind a Home Call to its WebSocket subscription, not a guessed session id."""
+
+    camera: Any
+    entity_id: str
+    session_id: str
+    closed: bool = False
+
+    def __call__(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.camera.close_webrtc_session(self.session_id)
 
 
 def parse_home_call_candidate(value: Any) -> SimpleNamespace:
@@ -69,9 +86,18 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         cast(Any, camera_component).WebRTCError,
     )
 
-    def _home_call_camera(entity_id: str) -> Any | None:
+    def _home_call_camera(connection: Any, msg: dict[str, Any]) -> Any | None:
+        entity_id = msg["entity_id"]
+        if not connection.user.permissions.check_entity(entity_id, POLICY_CONTROL):
+            connection.send_error(msg["id"], "unauthorized", "Camera control permission required")
+            return None
         camera = get_camera_from_entity_id(hass, entity_id)
-        return camera if isinstance(camera, camera_type) else None
+        if isinstance(camera, camera_type):
+            return camera
+        connection.send_error(
+            msg["id"], "home_call_webrtc_not_found", "C300X doorbell camera entity not found",
+        )
+        return None
 
     @websocket_command(
         {
@@ -85,13 +111,8 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         connection: Any,
         msg: dict[str, Any],
     ) -> None:
-        camera = _home_call_camera(msg["entity_id"])
+        camera = _home_call_camera(connection, msg)
         if camera is None:
-            connection.send_error(
-                msg["id"],
-                "home_call_webrtc_not_found",
-                "C300X doorbell camera entity not found",
-            )
             return
         connection.send_result(
             msg["id"],
@@ -115,19 +136,13 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         connection: Any,
         msg: dict[str, Any],
     ) -> None:
-        camera = _home_call_camera(msg["entity_id"])
+        camera = _home_call_camera(connection, msg)
         if camera is None:
-            connection.send_error(
-                msg["id"],
-                "home_call_webrtc_not_found",
-                "C300X doorbell camera entity not found",
-            )
             return
 
         session_id = ulid()
-        connection.subscriptions[msg["id"]] = partial(
-            camera.close_webrtc_session,
-            session_id,
+        connection.subscriptions[msg["id"]] = _HomeCallSubscription(
+            camera, msg["entity_id"], session_id,
         )
         connection.send_message(result_message(msg["id"]))
 
@@ -165,13 +180,18 @@ def async_register_home_call_ws(hass: HomeAssistant, camera_type: type[Any]) -> 
         connection: Any,
         msg: dict[str, Any],
     ) -> None:
-        camera = _home_call_camera(msg["entity_id"])
+        camera = _home_call_camera(connection, msg)
         if camera is None:
-            connection.send_error(
-                msg["id"],
-                "home_call_webrtc_not_found",
-                "C300X doorbell camera entity not found",
-            )
+            return
+        if not any(
+            isinstance(subscription, _HomeCallSubscription)
+            and not subscription.closed
+            and subscription.camera is camera
+            and subscription.entity_id == msg["entity_id"]
+            and subscription.session_id == msg["session_id"]
+            for subscription in connection.subscriptions.values()
+        ):
+            connection.send_error(msg["id"], "unauthorized", "Home Call subscription required")
             return
         await camera.async_on_webrtc_candidate(msg["session_id"], msg["candidate"])
         connection.send_message(result_message(msg["id"]))

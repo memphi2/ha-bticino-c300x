@@ -25,16 +25,16 @@ _CAMERA_SERVICES = {
 }
 
 
-def authorized_service(
+def authorized_service[T](
     hass: HomeAssistant,
     name: str,
-    handler: Callable[[ServiceCall], Awaitable[None]],
+    handler: Callable[[ServiceCall], Awaitable[T]],
     resolve_entry: Callable[[ServiceCall], Any],
-) -> Callable[[ServiceCall], Coroutine[Any, Any, None]]:
+) -> Callable[[ServiceCall], Coroutine[Any, Any, T]]:
     """Fail closed for services without an entity-level authorization contract."""
 
     @wraps(handler)
-    async def checked(call: ServiceCall) -> None:
+    async def checked(call: ServiceCall) -> T:
         context = getattr(call, "context", None)
         if context is not None and context.user_id:
             user = await hass.auth.async_get_user(context.user_id)
@@ -46,7 +46,7 @@ def authorized_service(
                     entity_id, POLICY_CONTROL
                 ):
                     raise Unauthorized(context=context)
-        await handler(call)
+        return await handler(call)
 
     return checked
 

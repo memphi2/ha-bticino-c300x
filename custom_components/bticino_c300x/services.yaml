@@ -232,7 +232,7 @@ capture_doorbell_call:
         text:
     output_path:
       name: Output path
-      description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /media/c300x/doorbell_<timestamp>.mp4.
+      description: Absolute MP4 path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to a unique timestamped file below /media/c300x/. Concurrent writes to the same explicit path are rejected.
       required: false
       selector:
         text:
@@ -255,7 +255,7 @@ capture_doorbell_call:
         boolean:
     wav_output_dir:
       name: Capture file directory
-      description: Optional directory below /media/c300x/, /config/c300x/, or /config/www/c300x/ for latest.raw.wav, latest.processed.wav, frame_01.jpg, frame_02.jpg, frame_03.jpg, and latest.capture.json. Defaults to /config/c300x/. Existing files are overwritten.
+      description: Base directory below /media/c300x/, /config/c300x/, or /config/www/c300x/. Each capture has isolated WAV, frames and metadata below captures/<capture_id>/. Defaults to /config/c300x/. Latest paths remain compatibility pointers; use response_variable for exact paths.
       required: false
       selector:
         text:
@@ -300,7 +300,7 @@ run_ring_wyoming_analysis:
         text:
     result_path:
       name: Result path
-      description: Optional JSON result path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Defaults to /config/c300x/analysis/result.json.
+      description: Optional JSON path below /media/c300x/, /config/c300x/, or /config/www/c300x/. Empty selects analysis/result.json beside the capture metadata, or /config/c300x/analysis/result.json for standalone WAV input. Do not share custom paths between devices.
       required: false
       selector:
         text:

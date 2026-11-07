@@ -33,6 +33,7 @@ class RingAnalysisDecision:
     phrase_match: bool
     decision_path: Path
     capture_id: str | None = None
+    capture_entry_id: str | None = None
 
 
 async def async_evaluate_ring_analysis(
@@ -72,6 +73,7 @@ async def async_evaluate_ring_analysis(
         "capture_guardrail_reasons": guardrail["reasons"],
         "capture_id": guardrail["capture_id"],
         "capture_path": guardrail["capture_path"],
+        "capture_entry_id": guardrail["capture_entry_id"],
         "expected_phrase": expected_phrase or "",
         "transcript": str(payload.get("transcript") or "").strip(),
     }
@@ -81,6 +83,7 @@ async def async_evaluate_ring_analysis(
         phrase_match=phrase_match,
         decision_path=decision,
         capture_id=guardrail["capture_id"] or None,
+        capture_entry_id=guardrail["capture_entry_id"] or None,
     )
 
 
@@ -212,6 +215,7 @@ def _capture_guardrail_result(
         "reasons": reasons,
         "capture_id": result_capture_id,
         "capture_path": str(capture_file or result_capture_path),
+        "capture_entry_id": str((capture_payload or {}).get("entry_id") or ""),
     }
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ..camera_media.session_lifecycle import media_stop_scope
 from ..camera_media.state_machine import (
     MediaState,
     derive_media_state,
@@ -39,14 +40,15 @@ class DoorbellVideoUseCase:
             "prepare_doorbell_video_stop",
             None,
         )
-        was_idle = await _async_agent_already_reports_idle(self._entry)
-        if prepare_stop is not None:
-            await prepare_stop()
-        if was_idle:
-            return
-        await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_stop_doorbell_video()
-        )
+        with media_stop_scope(self._entry.runtime_data.resources, "doorbell"):
+            was_idle = await _async_agent_already_reports_idle(self._entry)
+            if prepare_stop is not None:
+                await prepare_stop()
+            if was_idle:
+                return
+            await raise_agent_command_failed(
+                self._entry.runtime_data.api.async_stop_doorbell_video()
+            )
 
 
 async def _async_agent_already_reports_idle(entry: Any) -> bool:

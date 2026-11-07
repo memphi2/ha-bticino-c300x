@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..camera_media.session_lifecycle import media_stop_scope
 from ..doorstation_audio import async_ensure_doorstation_audio_gain
 from .common import ensure_doorbell_call_supported, raise_agent_command_failed
 
@@ -33,8 +34,9 @@ class RingCallUseCase:
             "prepare_doorbell_video_stop",
             None,
         )
-        if prepare_stop is not None:
-            await prepare_stop()
-        await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_hangup_doorbell_call()
-        )
+        with media_stop_scope(self._entry.runtime_data.resources, "doorbell"):
+            if prepare_stop is not None:
+                await prepare_stop()
+            await raise_agent_command_failed(
+                self._entry.runtime_data.api.async_hangup_doorbell_call()
+            )

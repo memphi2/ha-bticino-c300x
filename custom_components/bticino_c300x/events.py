@@ -89,26 +89,15 @@ def async_request_agent_event_registration(
     if not callable(on_runtime_registration_created):
         on_runtime_registration_created = None
 
-    async def _restart_registration() -> None:
-        if getattr(entry, "runtime_data", None) is not runtime:
-            return
-        active_runtime = cast(Any, runtime)
-        active_runtime.resources.unregister_event_registration = (
-            await async_start_agent_event_registration(
-                hass,
-                entry,
-                api,
-                capabilities,
-                connection_state,
-                on_runtime_registration_created=on_runtime_registration_created,
-            )
-        )
-
-    create_task = getattr(hass, "async_create_task", None)
-    if callable(create_task):
-        create_task(_restart_registration())
-    else:
-        asyncio.create_task(_restart_registration())
+    # Own cleanup before another discovery or unload can replace this registration.
+    runtime.resources.unregister_event_registration = _AgentEventRegistration(
+        hass,
+        entry,
+        api,
+        capabilities,
+        connection_state,
+        on_runtime_registration_created,
+    ).start()
     return True
 
 

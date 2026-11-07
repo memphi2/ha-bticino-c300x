@@ -732,6 +732,44 @@ def test_event_registration_discovery_refresh_does_not_post_when_ram_subscriptio
     assert _active_scheduled_delays() == []
 
 
+@pytest.mark.parametrize("unload_before_start", [False, True])
+def test_repeated_discovery_leaves_no_registration_after_cleanup(
+    unload_before_start: bool,
+) -> None:
+    async def run() -> None:
+        api = _FakeApi([], subscriptions=[{
+            "id": "existing",
+            "callback_url": "http://localhost:8123/webhook/event-hook",
+            "token_fingerprint": event_token_fingerprint("event-token"),
+            "events": ["agent.restarted"],
+        }])
+        hass = _FakeHass()
+        entry = _FakeEntry()
+        resources = C300XRuntimeResources()
+        entry.runtime_data = types.SimpleNamespace(
+            api=api, capabilities={}, connection_state=_FakeConnectionState(),
+            resources=resources,
+        )
+        try:
+            assert async_request_agent_event_registration(hass, entry)
+            assert async_request_agent_event_registration(hass, entry)
+            if not unload_before_start:
+                await _drain_hass_tasks(hass)
+                assert api.list_calls == 1
+            resources.close()
+            await _drain_hass_tasks(hass)
+            assert _active_scheduled_delays() == []
+            assert not any(hass.bus.listeners.values())
+            assert resources.unregister_event_registration is None
+            if unload_before_start:
+                assert api.list_calls == 0
+        finally:
+            resources.close()
+            await _drain_hass_tasks(hass)
+
+    asyncio.run(run())
+
+
 def test_event_registration_discovery_refresh_posts_after_agent_lost_ram_subscription() -> None:
     api = _FakeApi(
         [{"subscription": {"id": "sub-new"}}],

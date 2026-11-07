@@ -75,6 +75,7 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         resources.prepare_home_call_stop = device_action
         resources.on_runtime_registration_created = device_action
         resources.pending_message_refreshes.add("memos")
+        resources.media_stop_counts["doorbell"] = 1
         tasks = []
         for name in task_names:
             task = asyncio.create_task(blocker.wait())
@@ -87,10 +88,11 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         assert all(task.cancelled() for task in tasks)
         assert calls == ["registration", "display", "event-webhook", "webhook"]
         assert not resources.pending_message_refreshes
+        assert not resources.media_stop_counts
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name != "pending_message_refreshes"
+            if item.name not in {"pending_message_refreshes", "media_stop_counts"}
         )
 
     asyncio.run(run())
@@ -109,6 +111,7 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
             unregister_webhook=lambda: calls.append("webhook"),
             startup_sync_task=task,
             pending_message_refreshes={"memos"},
+            media_stop_counts={"home_call": 1},
         )
         with pytest.raises(ExceptionGroup) as error:
             resources.close()
@@ -119,10 +122,11 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
         assert len(error.value.exceptions) == 1
         assert isinstance(error.value.exceptions[0], RuntimeError)
         assert not resources.pending_message_refreshes
+        assert not resources.media_stop_counts
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name != "pending_message_refreshes"
+            if item.name not in {"pending_message_refreshes", "media_stop_counts"}
         )
 
     asyncio.run(run())

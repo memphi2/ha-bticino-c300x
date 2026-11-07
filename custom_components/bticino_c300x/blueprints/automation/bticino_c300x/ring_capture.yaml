@@ -27,7 +27,7 @@ blueprint:
         boolean:
     capture_file_dir:
       name: Capture file directory
-      description: Directory for latest.raw.wav, latest.processed.wav, frames and latest.capture.json. Existing files are overwritten.
+      description: Base directory for isolated recording workspaces. Latest WAV, frame and metadata paths remain pointers to the most recent capture.
       default: /config/c300x
       selector:
         text:

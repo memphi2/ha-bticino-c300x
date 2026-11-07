@@ -26,7 +26,7 @@ from native_agent.test.smoke import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def request(port, path, data=None):
+def request(port, path, data=None, *, headers=None):
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=8)
     try:
         conn.request(
@@ -36,6 +36,7 @@ def request(port, path, data=None):
             headers={
                 "Authorization": f"Bearer {TOKEN}",
                 "Content-Type": "application/json",
+                **(headers or {}),
             },
         )
         response = conn.getresponse()
@@ -65,7 +66,12 @@ def native_binary(tmp_path_factory):
 
 
 @pytest.fixture
-def lab(native_binary, tmp_path):
+def auth_config(request):
+    return getattr(request, "param", {})
+
+
+@pytest.fixture
+def lab(native_binary, tmp_path, auth_config):
     api_port, ui_port = free_tcp_port(), free_tcp_port()
     received, errors = [], []
     held, release = threading.Event(), threading.Event()
@@ -138,6 +144,7 @@ def lab(native_binary, tmp_path):
         "mqtt": {"enabled": False},
         "mdns": {"enabled": False},
     }
+    config.update(auth_config)
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps(config))
     with (tmp_path / "agent.log").open("w") as log:
@@ -165,6 +172,7 @@ def lab(native_binary, tmp_path):
                 received=received,
                 held=held,
                 release=release,
+                config_path=config_path,
             )
         finally:
             release.set()

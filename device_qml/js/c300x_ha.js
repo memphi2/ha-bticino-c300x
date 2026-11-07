@@ -27,6 +27,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         statusItem.color = pageItem.commandPending ? "#f1c40f" : "#58d68d"
         if (data.alarm && data.alarm.state) {
             var previousState = pageItem.alarmRawState
+            var previousCommand = pageItem.selectedCommand
             pageItem.alarmConfigured = true
             pageItem.alarmRawState = data.alarm.state
             if (previousState !== data.alarm.state) {
@@ -46,7 +47,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
             if (previousState !== data.alarm.state && currentCommand && contains(pageItem.alarmCommands, currentCommand)) {
                 pageItem.selectedCommand = currentCommand
             }
-            if (pageItem.statusApplied) pageItem.statusApplied(previousState)
+            if (pageItem.statusApplied) pageItem.statusApplied(previousState, previousCommand)
             alarmStateItem.text = alarmLabel(data.alarm.state, pageItem)
             if (activeSinceItem) {
                 activeSinceItem.text = formatActiveSince(data.alarm.active_since, pageItem) || data.alarm.active_since_label || ""

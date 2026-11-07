@@ -105,4 +105,29 @@ assert.equal(pending.length, 0);
 assert.equal(Api.alarmPageItem(null), null, "no implicit stair light action");
 q.executeAlarmPageItem();
 assert.equal(pending.length, 0);
+
+q.alarmOnline = true;
+q.alarmRawState = "disarmed";
+q.alarmCommandDetails = p.alarmCommandDetails;
+q.selectCommand("arm_away");
+q.appendDigit("3");
+q.alarmCommandDetails = [{command: "disarm", code_required: true}];
+state(q);
+assert.equal(q.pinCode, "", "changing available commands clears a partly entered PIN");
+q.alarmPageItem = {domain: "c300x", entity_id: "switch.porch", kind: "switch"};
+q.executeAlarmPageItem();
+q.executeAlarmPageItem();
+assert.equal(pending.length, 1, "quick action is also single-flight");
+pending.shift().error("offline");
+assert.equal(q.quickActionPending, false);
+
+const events = library("c300x_ha.js");
+let aborted = 0;
+events.connections = [1, 2, 3].map(() => ({readyState: 1,
+    onreadystatechange() { throw Error("cancelled callback ran"); },
+    abort() { aborted++; this.onreadystatechange(); },
+}));
+events.stopDashboardRuntime();
+assert.equal(aborted, 3);
+assert.equal(events.connections.length, 0);
 console.log("Alarm QML production controls passed");

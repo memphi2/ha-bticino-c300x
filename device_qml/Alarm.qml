@@ -259,8 +259,8 @@ Page {
             && (pinRequested || alarmRawState === "pending" || alarmRawState === "triggered")
     }
 
-    function statusApplied(previousState) {
-        if (previousState !== alarmRawState) {
+    function statusApplied(previousState, previousCommand) {
+        if (previousState !== alarmRawState || previousCommand !== selectedCommand) {
             clearPin()
             pinRequested = false
         }
@@ -387,6 +387,7 @@ Page {
 
     function feedbackColor() {
         if (!alarmOnline) return "#f1c40f"
+        if (commandPending) return "#f1c40f"
         if (alarmRawState === "triggered") return "#ff6b6b"
         if (!alarmConfigured || bypassVisible()) return "#ff6b6b"
         if (alarmRawState === "arming" || alarmRawState === "pending") return "#f1c40f"
@@ -527,6 +528,7 @@ Page {
 
             UbuntuLightText {
                 id: alarmState
+                textFormat: Text.PlainText
                 text: "..."
                 color: stateColor()
                 font.pixelSize: 30
@@ -550,6 +552,7 @@ Page {
 
             UbuntuLightText {
                 id: activeSince
+                textFormat: Text.PlainText
                 text: ""
                 color: "#c7d0d9"
                 font.pixelSize: 17
@@ -691,6 +694,7 @@ Page {
 
                     UbuntuLightText {
                         text: alarmPageItemName() + trsl.empty
+                        textFormat: Text.PlainText
                         color: "white"
                         font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20
                         elide: Text.ElideRight
@@ -704,6 +708,7 @@ Page {
 
                     UbuntuLightText {
                         text: alarmPageItemDetail() + trsl.empty
+                        textFormat: Text.PlainText
                         color: alarmPageItemColor()
                         font.pixelSize: 13
                         visible: alarmPageItemDetail().length > 0
@@ -736,6 +741,7 @@ Page {
 
                     UbuntuLightText {
                         text: feedbackTitle() + trsl.empty
+                        textFormat: Text.PlainText
                         color: feedbackColor()
                         font.pixelSize: 15
                         anchors.left: parent.left
@@ -763,6 +769,7 @@ Page {
 
                         UbuntuLightText {
                             id: detailText
+                            textFormat: Text.PlainText
                             width: parent.width
                             text: feedbackDetail() + trsl.empty
                             color: "white"
@@ -800,6 +807,7 @@ Page {
 
                 UbuntuLightText {
                     id: status
+                    textFormat: Text.PlainText
                     text: ""
                     color: "#c7d0d9"
                     font.pixelSize: 16

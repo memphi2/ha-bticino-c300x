@@ -125,7 +125,7 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     assert(link(path, backup) == 0);
     assert(!apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);
-    assert(access(backup, F_OK) == 0);
+    /* Successful removal also proves that the rejected update kept the backup. */
     assert(unlink(backup) == 0);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);

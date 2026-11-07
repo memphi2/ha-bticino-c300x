@@ -225,9 +225,9 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "546839d12a9aa815eaebf25d6ecf0f71040c8ca0c2e1270dabd6cbbff87da425",
-    "HomeAssistant.qml": "9f71af5653da2e90111dacdc9a06ef422fb21980dfa85ac4d7d7fe6ea3661371",
-    "js/c300x_ha.js": "474cb35025f4653eccbb54fb512b795b39f70bec68778ea9bc951c1f2bc059e6",
-    "js/c300x_i18n.js": "0cdbc4c08842839188c8d1ae24a5e413eda2ac9072b0d73b7f5db481d8212a57",
+    "HomeAssistant.qml": "166a69d7c955e2b398d0281f7c41152b1d4e1177b2421365d388a6bf1be416ab",
+    "js/c300x_ha.js": "98b48774556f51bd9dc30a71383b252b867124fbdbd304667288f8208a8a3983",
+    "js/c300x_i18n.js": "842e42b8537bd6b58d8e5ade531f664b32bd7922eef03fb9fe2b79b4505eeb6c",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 
@@ -580,7 +580,7 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
     assert "Flow {" in mixed_items_body
     assert "property int tileWidth: (width - spacing) / 2" in mixed_items_body
     assert (
-        "width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
+        "width: hasControls || isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
         in mixed_items_body
     )
     assert "Loader {" in mixed_items_body

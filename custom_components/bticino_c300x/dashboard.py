@@ -45,6 +45,7 @@ from .dashboard_config import (
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
+from .dashboard_controls import entity_controls
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
@@ -319,6 +320,16 @@ def _dashboard_item_for_entity(
         "_page": _DASHBOARD_ACTION_PAGE,
         "_order": order,
     }
+    if domain in {"light", "cover", "climate", "number", "input_number", "select", "input_select"}:
+        unit = str(getattr(getattr(getattr(hass, "config", None), "units", None), "temperature_unit", ""))
+        item["controls"] = entity_controls(entity_id, state, unit)
+        item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
+        if domain == "climate" and state is not None:
+            item["current_temperature"] = state.attributes.get("current_temperature")
+            item["temperature_unit"] = unit
+        if domain in {"cover", "climate"}:
+            item["_kind"] = "entity"
+            return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"
         item["state"] = _dashboard_state_is_on(state.state if state else None)

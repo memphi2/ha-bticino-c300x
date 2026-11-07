@@ -2,6 +2,11 @@
 
 ## v2.1.0b1 - Unreleased
 
+- Native display controls for lights, covers and climate entities, with capability-
+  based details, actual select options and bounded number adjustments. Sliders
+  send on release; selected entities receive event-driven state updates without
+  an Alarmo dependency or periodic device polling.
+
 ### Added
 
 - Context-sensitive native Alarmo subpage in the original blue design: the PIN

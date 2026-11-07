@@ -358,7 +358,16 @@ function weatherCatalog(languageCode) {
     return WEATHER_EN
 }
 
+var CONTROL_LABELS = {
+    en: {toggle: "On / Off", brightness: "Brightness", color_temp_kelvin: "Color temperature", hue: "Hue", saturation: "Saturation", position: "Position", tilt_position: "Tilt", temperature: "Target", target_temp_low: "Minimum target", target_temp_high: "Maximum target", hvac_mode: "Mode", preset_mode: "Preset", value: "Value", option: "Option"},
+    de: {toggle: "Ein / Aus", brightness: "Helligkeit", color_temp_kelvin: "Farbtemperatur", hue: "Farbton", saturation: "Saettigung", position: "Position", tilt_position: "Neigung", temperature: "Soll", target_temp_low: "Unterer Sollwert", target_temp_high: "Oberer Sollwert", hvac_mode: "Betriebsart", preset_mode: "Voreinstellung", value: "Wert", option: "Auswahl"},
+    fr: {toggle: "Marche / Arret", brightness: "Luminosite", color_temp_kelvin: "Temperature de couleur", hue: "Teinte", saturation: "Saturation", position: "Position", tilt_position: "Inclinaison", temperature: "Consigne", target_temp_low: "Consigne basse", target_temp_high: "Consigne haute", hvac_mode: "Mode", preset_mode: "Prereglage", value: "Valeur", option: "Option"},
+    it: {toggle: "On / Off", brightness: "Luminosita", color_temp_kelvin: "Temperatura colore", hue: "Tonalita", saturation: "Saturazione", position: "Posizione", tilt_position: "Inclinazione", temperature: "Obiettivo", target_temp_low: "Obiettivo minimo", target_temp_high: "Obiettivo massimo", hvac_mode: "Modalita", preset_mode: "Profilo", value: "Valore", option: "Opzione"}
+}
+
 function text(languageCode, key) {
+    var controls = CONTROL_LABELS[language(languageCode)]
+    if (controls[key]) return controls[key]
     var local = catalog(languageCode)
     if (local[key]) {
         return local[key]

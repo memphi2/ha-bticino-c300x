@@ -308,6 +308,7 @@ class BticinoC300XRuntimeData:
     self_test_status: Mapping[str, Any] = field(default_factory=dict)
     self_test_status_updated_at: datetime | None = None
     display_bridge_alarm_notify_pending: bool = False
+    display_bridge_notify_dirty: bool = False
     media_timeline: C300XMediaTimeline = field(default_factory=C300XMediaTimeline)
     agent_update_state: AgentUpdateState | None = None
     resources: C300XRuntimeResources = field(default_factory=C300XRuntimeResources)

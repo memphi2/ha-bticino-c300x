@@ -17,6 +17,8 @@ from .validation_patterns import ENTITY_OBJECT_ID_RE
 DASHBOARD_ENTITY_DOMAINS = (
     "binary_sensor",
     "button",
+    "climate",
+    "cover",
     "fan",
     "input_boolean",
     "input_button",

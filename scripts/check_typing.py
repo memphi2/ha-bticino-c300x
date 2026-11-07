@@ -69,6 +69,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/executor.py",
     "custom_components/bticino_c300x/dashboard.py",
     "custom_components/bticino_c300x/dashboard_config.py",
+    "custom_components/bticino_c300x/dashboard_controls.py",
     "custom_components/bticino_c300x/alarm_state.py",
     "custom_components/bticino_c300x/fingerprint.py",
     "custom_components/bticino_c300x/frontend.py",

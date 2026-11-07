@@ -40,6 +40,7 @@ from .dashboard_config import (
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
 )
+from .dashboard_controls import async_execute_control
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 
@@ -332,7 +333,16 @@ async def _async_execute_dashboard_entity(
     """Execute the default action for a directly selected dashboard entity."""
 
     domain = entity_id.split(".", 1)[0]
-    if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
+    legacy_actions = (
+        _DASHBOARD_SLIDER_ACTIONS if domain in _DASHBOARD_SLIDER_ENTITY_DOMAINS
+        else _DASHBOARD_CHOICE_ACTIONS if domain in _DASHBOARD_CHOICE_ENTITY_DOMAINS
+        else set()
+    )
+    if action in {"increment", "decrement", "next", "previous"} and action not in legacy_actions:
+        raise ValueError("unsupported_dashboard_control")
+    if action and action not in {"increment", "decrement", "next", "previous"}:
+        await async_execute_control(hass, entity_id, action, option)
+    elif domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         await hass.services.async_call(
             domain,
             "toggle",
@@ -476,7 +486,7 @@ def _dashboard_selected_entity_action(action_id: str) -> tuple[str, str | None]:
         return normalized, None
     entity_id, action = raw.rsplit(":", 1)
     normalized_action = action.lower()
-    if normalized_action in _DASHBOARD_SLIDER_ACTIONS | _DASHBOARD_CHOICE_ACTIONS:
+    if entity_id and normalized_action:
         return entity_id.lower(), normalized_action
     return normalized, None
 

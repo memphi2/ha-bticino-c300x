@@ -174,7 +174,7 @@ _DELETE_SERVICE_NAMES = (
     SERVICE_DELETE_LATEST_TEXT_MEMO,
     SERVICE_DELETE_LATEST_VOICE_MEMO,
 )
-type _ServiceHandler = Callable[[ServiceCall], Awaitable[None]]
+type _ServiceHandler = Callable[[ServiceCall], Awaitable[dict[str, Any] | None]]
 type _ServiceSpec = tuple[str, _ServiceHandler, vol.Schema]
 type _EntrySupport = Callable[[Any], bool]
 
@@ -316,11 +316,11 @@ class _C300XServiceHandlers:
         entry = _entry_for_call(self._hass, call)
         await RingCallUseCase(entry).hangup()
 
-    async def async_capture_doorbell_call(self, call: ServiceCall) -> None:
+    async def async_capture_doorbell_call(self, call: ServiceCall) -> dict[str, Any]:
         """Capture a short C300X doorbell ring-call clip on Home Assistant."""
 
         entry = _entry_for_call(self._hass, call)
-        await RingCaptureUseCase(self._hass, entry).capture(
+        return await RingCaptureUseCase(self._hass, entry).capture(
             output_path=call.data.get(_ATTR_OUTPUT_PATH),
             wav_output_dir=call.data.get(_ATTR_WAV_OUTPUT_DIR),
             duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
@@ -328,10 +328,10 @@ class _C300XServiceHandlers:
             announcement_path=call.data.get(_ATTR_ANNOUNCEMENT_PATH),
         )
 
-    async def async_run_ring_wyoming_analysis(self, call: ServiceCall) -> None:
+    async def async_run_ring_wyoming_analysis(self, call: ServiceCall) -> dict[str, Any]:
         """Transcribe the latest C300X ring raw WAV through Wyoming Whisper."""
 
-        await RingAnalysisUseCase(self._hass).transcribe(
+        result = await RingAnalysisUseCase(self._hass).transcribe(
             wyoming_host=call.data[_ATTR_WYOMING_HOST],
             wyoming_port=call.data.get(_ATTR_WYOMING_PORT, 10300),
             capture_path=call.data.get(_ATTR_CAPTURE_PATH),
@@ -340,6 +340,7 @@ class _C300XServiceHandlers:
             language=call.data.get(_ATTR_LANGUAGE),
             expected_phrase=call.data.get(_ATTR_EXPECTED_PHRASE),
         )
+        return {"result_path": str(result)}
 
     async def async_evaluate_ring_analysis(self, call: ServiceCall) -> None:
         """Evaluate a local C300X ring-analysis result and optionally unlock."""
@@ -449,11 +450,18 @@ def _register_base_services(
 ) -> None:
     """Register services that are always part of the integration."""
 
+    from homeassistant.core import SupportsResponse
+
     for service_name, handler, schema in _base_service_specs(handlers):
         hass.services.async_register(
             DOMAIN, service_name,
             authorized_service(hass, service_name, handler, lambda call: _entry_for_call(hass, call)),
             schema=schema,
+            supports_response=(
+                SupportsResponse.OPTIONAL
+                if service_name in {SERVICE_CAPTURE_DOORBELL_CALL, SERVICE_RUN_RING_WYOMING_ANALYSIS}
+                else SupportsResponse.NONE
+            ),
         )
 
 

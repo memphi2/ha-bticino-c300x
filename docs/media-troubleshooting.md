@@ -136,12 +136,16 @@ normal live viewing.
 Check:
 
 1. Close the live card before capture.
-2. Do not run multiple capture automations at once.
+2. Do not run multiple capture automations on the same device at once. Separate
+   devices use isolated workspaces; do not assign the same explicit MP4 path.
 3. Keep output paths below `/media/c300x/`, `/config/c300x/` or
    `/config/www/c300x/`.
 4. Check `/media/c300x/` for the MP4 and `/config/c300x/` for `latest.raw.wav`,
    `latest.processed.wav`, `latest.capture.json`, `frame_01.jpg`,
    `frame_02.jpg` and `frame_03.jpg`.
+   These are latest pointers. For automation use the exact paths returned by the
+   capture service. Per-recording workspaces expire after one hour on the next
+   capture; at most 64 are retained per capture directory.
 
 Use the Ring Capture + Wyoming blueprint only when audio is enabled. The
 blueprint always records audio because transcription needs `latest.raw.wav`.

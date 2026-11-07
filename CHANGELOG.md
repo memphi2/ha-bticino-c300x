@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.1.0b3 - 2026-11-08
+
+### Fixed
+
+- Require the existing maintenance credential for agent configuration changes;
+  the API token cannot enable maintenance or replace its token. Explicit
+  bootstrap and re-enabling maintenance with its own token remain supported.
+  Requires an updated agent.
+- Enforce camera control permission on Home Call WebSocket commands and bind
+  ICE candidates to the originating connection's live subscription.
+- Cancel pending WebRTC offers on stop and media-end events. Block new offers
+  until explicit stopping finishes and discard late provider callbacks.
+- Isolate simultaneous captures and Wyoming results, return exact artifact
+  paths to automations, and reject guarded unlock for another device's capture.
+  Keep latest pointers for compatibility and bound temporary workspaces to 64
+  per directory, expiring after one hour on the next capture.
+- Replace event registrations without leaving orphaned renewal timers or
+  registry listeners after repeated discovery or integration unload.
+- Stop and reap capture subprocesses when their owning task is cancelled.
+
+### Changed
+
+- Consolidate WebRTC session ownership and ICE candidate handling.
+- Update the pinned CodeQL actions to 4.39.3.
+
+### Upgrade
+
+- Includes rebuilt native agent `2.1.0b3`. Install the integration, restart HA
+  and complete the agent-update Repair for the maintenance authorization fix.
+- Existing beta display pages do not need reapplying solely for these changes.
+- Opt-in prerelease; stable remains `2.0.0`.
+
 ## v2.1.0b2 - 2026-11-07
 
 ### Fixed

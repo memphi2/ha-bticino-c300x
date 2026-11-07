@@ -171,6 +171,13 @@ require the maintenance token. They are limited to fixed local actions such as
 SSH state, reboot, firewall port block management, GUI reload, and QML patch
 apply/restore. They do not accept arbitrary shell commands.
 
+Writing `/api/v1/maintenance/auth` requires the existing maintenance token,
+including when maintenance actions are disabled. The API token only permits
+reading this endpoint. Token-free setup requires all three explicit bootstrap
+flags: `api.noAuth`, `maintenance.enabled`, and `maintenance.allowNoAuth`.
+Without an existing maintenance credential or that bootstrap configuration,
+use explicit SSH recovery; an API token cannot create its own administrator.
+
 ## Reporting Issues
 
 Please report security-related issues privately if possible, or through GitHub

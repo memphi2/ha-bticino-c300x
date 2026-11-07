@@ -437,8 +437,9 @@ def test_wyoming_blueprint_captures_then_transcribes_latest_files() -> None:
     ]
     assert "include_audio" not in data["blueprint"]["input"]
     assert capture_data["include_audio"] is True
-    assert analysis_data["capture_path"] == "{{ capture_dir }}/latest.capture.json"
-    assert analysis_data["wav_path"] == "{{ capture_dir }}/latest.raw.wav"
+    assert data["action"][0]["response_variable"] == "capture"
+    assert analysis_data["capture_path"] == "{{ capture.metadata_path }}"
+    assert analysis_data["wav_path"] == "{{ capture.raw_wav_path }}"
     assert analysis_data["result_path"] == "{{ result_path }}"
 
 

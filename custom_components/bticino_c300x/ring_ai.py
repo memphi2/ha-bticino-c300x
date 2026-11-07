@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .capture_artifacts import publish_alias
 from .json_io import async_write_json_file
 from .ring_capture import DEFAULT_RING_CAPTURE_METADATA_GLOB, _safe_c300x_path
 
@@ -44,6 +45,9 @@ async def async_run_wyoming_ring_analysis(
         capture_path=capture_path,
         wav_path=wav_path,
     )
+    automatic_result = not result_path
+    if automatic_result and source.get("capture_path"):
+        result_path = str(Path(source["capture_path"]).parent / "analysis" / "result.json")
     target = _result_path(hass, result_path)
     wav = await _async_read_wav(hass, source["wav_path"])
     transcript = await _async_wyoming_transcribe(
@@ -63,6 +67,12 @@ async def async_run_wyoming_ring_analysis(
             expected_phrase=expected_phrase,
         ),
     )
+    capture_file = source.get("capture_path")
+    if automatic_result and capture_file and Path(capture_file).parent.parent.name == "captures":
+        alias = _safe_c300x_path(
+            hass, Path(capture_file).parents[2], "capture directory",
+        ) / "analysis" / "result.json"
+        await asyncio.to_thread(publish_alias, target, alias)
     return target
 
 
@@ -141,7 +151,7 @@ def _latest_ring_wav_path(hass: Any) -> Path:
         raise HomeAssistantError(
             f"C300X ring analysis found no WAV files matching {DEFAULT_RING_WAV_GLOB}"
         )
-    return _validate_ring_wav(candidates[0])
+    return _validate_ring_wav(_safe_c300x_path(hass, candidates[0], "ring analysis WAV"))
 
 
 def _ring_wav_candidates(hass: Any) -> list[Path]:
@@ -185,7 +195,9 @@ def _latest_ring_capture_metadata_path(hass: Any) -> Path:
             "C300X ring analysis found no capture metadata files matching "
             f"{DEFAULT_RING_CAPTURE_METADATA_GLOB}"
         )
-    return _validate_capture_metadata_path(candidates[0])
+    return _validate_capture_metadata_path(
+        _safe_c300x_path(hass, candidates[0], "ring capture metadata")
+    )
 
 
 def _ring_capture_metadata_candidates(hass: Any) -> list[Path]:
@@ -253,11 +265,10 @@ def _validate_ring_wav(path: Path) -> Path:
 
 
 def _result_path(hass: Any, result_path: str | None) -> Path:
-    target = _safe_c300x_path(
-        hass,
-        Path(result_path or DEFAULT_RING_AI_RESULT_PATH).expanduser(),
-        "ring analysis result",
-    )
+    requested = Path(result_path or DEFAULT_RING_AI_RESULT_PATH).expanduser()
+    _safe_c300x_path(hass, requested, "ring analysis result")
+    # Atomic publication replaces the alias, never a previous run's result.
+    target = _safe_c300x_path(hass, requested.parent, "ring analysis directory") / requested.name
     if target.suffix.lower() != ".json":
         raise HomeAssistantError("C300X ring analysis result path must be a JSON file")
     return target

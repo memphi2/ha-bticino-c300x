@@ -215,6 +215,7 @@ class C300XRuntimeResources:
     close_display_notifications: Callable[[], None] | None = None
     prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
     prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
+    media_stop_counts: dict[str, int] = field(default_factory=dict)
     agent_cpu_watchdog_task: Task[None] | None = None
     answering_machine_messages_refresh_task: Task[None] | None = None
     startup_sync_task: Task[None] | None = None
@@ -245,6 +246,8 @@ class C300XRuntimeResources:
         self.on_runtime_registration_created = None
         self.prepare_doorbell_video_stop = None
         self.prepare_home_call_stop = None
+        # Active stop contexts keep their old counter map until their finally.
+        self.media_stop_counts = {}
         self.memos_refresh_task = None
         self.pending_message_refreshes.clear()
         self.answering_machine_messages_refresh_task = None

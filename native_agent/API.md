@@ -185,7 +185,7 @@ for example `config_error`, `api_token_missing`, `api_bind_failed`,
 | `GET` | `/api/v1/calls/home/status` | API | None. |
 | `POST` | `/api/v1/calls/home/actions/start` | API | Starts a local Home Call. |
 | `POST` | `/api/v1/calls/home/actions/stop` | API | Stops a local Home Call. |
-| `GET` | `/api/v1/maintenance/auth` | maintenance/read | None. |
+| `GET` | `/api/v1/maintenance/auth` | API/maintenance/read or API noAuth | None. |
 | `POST` | `/api/v1/maintenance/auth` | maintenance/write or bootstrap | Writes auth/bootstrap config. |
 | `GET` | `/api/v1/maintenance/ssh` | maintenance | Reads SSH service state. |
 | `POST` | `/api/v1/maintenance/ssh` | maintenance | Starts or stops SSH. |
@@ -908,8 +908,8 @@ Request fields:
 
 ### `GET /api/v1/maintenance/auth`
 
-Authentication: maintenance read authorization. During bootstrap this can be
-available while noAuth maintenance is open.
+Authentication: API token or maintenance token; also readable during API noAuth
+bootstrap. Reading does not authorize configuration changes.
 
 Side effects: none.
 
@@ -927,7 +927,9 @@ Returns auth/bootstrap configuration without token values. Important fields:
 
 ### `POST /api/v1/maintenance/auth`
 
-Authentication: maintenance write authorization, or open bootstrap window.
+Authentication: the existing maintenance token, even if maintenance actions are
+disabled. A normal API token is insufficient. Token-free bootstrap requires
+`api.noAuth`, `maintenance.enabled`, and `maintenance.allowNoAuth` together.
 
 Side effects: writes local agent config.
 

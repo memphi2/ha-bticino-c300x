@@ -33,6 +33,11 @@ from .camera_media.state_machine import (
     derive_media_state,
     media_state_input_from_video_status,
 )
+from .capture_artifacts import (
+    prepare_capture_directory,
+    publish_capture_aliases,
+    reserve_capture_output,
+)
 from .config_audio import AUDIO_GAIN_DB_MAX, AUDIO_GAIN_DB_MIN
 from .const import (
     CONF_AGENT_HOST,
@@ -70,12 +75,23 @@ async def async_capture_doorbell_ring_call(
     duration_seconds: int = 5,
     include_audio: bool = True,
     announcement_path: str | None = None,
-) -> Path:
+) -> dict[str, Any]:
     """Record a short C300X doorbell RTSP clip on Home Assistant."""
 
     duration = _validate_duration(duration_seconds)
     target = _capture_output_path(hass, output_path)
-    work_dir = _capture_work_dir(hass, wav_output_dir)
+    with reserve_capture_output(target):
+        return await _async_capture_to_output(
+            hass, entry, target, wav_output_dir=wav_output_dir, duration=duration,
+            include_audio=include_audio, announcement_path=announcement_path,
+        )
+
+
+async def _async_capture_to_output(
+    hass: Any, entry: Any, target: Path, *, wav_output_dir: str | None,
+    duration: int, include_audio: bool, announcement_path: str | None,
+) -> dict[str, Any]:
+    root = _capture_work_dir(hass, wav_output_dir)
     announcement = await _async_announcement_input_path(hass, announcement_path)
     status = await entry.runtime_data.api.async_doorbell_video_status()
     raise_if_ring_capture_blocked(status)
@@ -84,12 +100,13 @@ async def async_capture_doorbell_ring_call(
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
-    await _async_mkdir(hass, work_dir)
     codec_pcmu = (
         await _async_talkback_codec_is_pcmu(entry, status)
         if include_audio or announcement is not None
         else False
     )
+    capture_id = uuid4().hex
+    work_dir = await asyncio.to_thread(prepare_capture_directory, root, capture_id)
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -125,27 +142,26 @@ async def async_capture_doorbell_ring_call(
                 talkback_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await talkback_task
-        await async_write_json_file(
-            hass,
-            _capture_metadata_path(work_dir),
-            _capture_metadata_payload(
-                capture_id=uuid4().hex,
-                target=target,
-                work_dir=work_dir,
-                rtsp_url=rtsp_url,
-                status=status,
-                duration_seconds=duration,
-                include_audio=include_audio,
-                announcement_used=announcement is not None,
-            ),
+        metadata = _capture_metadata_payload(
+            capture_id=capture_id,
+            target=target,
+            work_dir=work_dir,
+            rtsp_url=rtsp_url,
+            status=status,
+            duration_seconds=duration,
+            include_audio=include_audio,
+            announcement_used=announcement is not None,
         )
+        metadata["entry_id"] = entry.entry_id
+        await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
+        await asyncio.to_thread(publish_capture_aliases, root, work_dir)
     finally:
         talkback_stop.set()
         if talkback_task is not None and not talkback_task.done():
             talkback_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await talkback_task
-    return target
+    return metadata
 
 
 def _normalized_audio_codec(value: Any) -> str | None:
@@ -323,7 +339,7 @@ def _capture_output_path(hass: Any, output_path: str | None) -> Path:
         Path(output_path).expanduser()
         if output_path
         else _default_capture_output_dir(hass)
-        / f"doorbell_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.mp4"
+        / f"doorbell_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex}.mp4"
     )
     resolved = _safe_c300x_path(hass, target, "capture output")
     if resolved.suffix.lower() != ".mp4":
@@ -455,7 +471,7 @@ def _ring_capture_title(file_name: str) -> str:
     if not stem.startswith("doorbell_"):
         return file_name
     try:
-        timestamp = datetime.strptime(stem.removeprefix("doorbell_"), "%Y%m%d_%H%M%S")
+        timestamp = datetime.strptime(stem.removeprefix("doorbell_")[:15], "%Y%m%d_%H%M%S")
     except ValueError:
         return file_name
     return f"Ring capture {timestamp:%Y-%m-%d %H:%M:%S}"
@@ -847,10 +863,13 @@ async def _async_run_ffmpeg_command(
         _, stderr = await asyncio.wait_for(
             process.communicate(), timeout=command_timeout
         )
-    except TimeoutError as err:
-        process.kill()
+    except (TimeoutError, asyncio.CancelledError) as err:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
         await process.communicate()
-        raise HomeAssistantError(f"{error_prefix}: timed out") from err
+        if isinstance(err, TimeoutError):
+            raise HomeAssistantError(f"{error_prefix}: timed out") from err
+        raise
     if process.returncode != 0:
         message = stderr.decode("utf-8", "replace").strip()
         raise HomeAssistantError(f"{error_prefix}{': ' + message if message else ''}")

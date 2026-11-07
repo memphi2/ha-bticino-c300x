@@ -113,7 +113,13 @@ def test_native_agent_maintenance_requires_token_even_in_no_auth_mode() -> None:
     )[1].split("static int maintenance_auth_available", maxsplit=1)[0]
 
     assert "if (config->api_no_auth)" not in maintenance_body
-    assert "config->maintenance_admin_token[0] == '\\0'" in maintenance_body
+    assert "config->api_no_auth && config->maintenance_no_auth_allowed" in maintenance_body
+    assert "has_valid_maintenance_token(config, request)" in maintenance_body
+    token_body = text.split("static int has_valid_maintenance_token", maxsplit=1)[1].split(
+        "static int maintenance_authorized", maxsplit=1,
+    )[0]
+    assert "config->maintenance_admin_token[0] == '\\0'" in token_body
+    assert "constant_time_equal(" in token_body
 
 
 def test_native_agent_device_user_status_does_not_expose_sip_identity() -> None:

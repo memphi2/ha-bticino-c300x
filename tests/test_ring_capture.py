@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
+import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,6 +118,7 @@ class _FakeEntry:
     runtime_data: _FakeRuntimeData
     data: dict[str, Any]
     options: dict[str, Any] = field(default_factory=dict)
+    entry_id: str = "test-entry"
 
 
 async def _never_called_talkback(*_args: Any, **_kwargs: Any) -> None:
@@ -694,14 +696,15 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
         )
     )
 
-    assert result == target
+    assert result["output_path"] == str(target)
+    work_dir = Path(result["metadata_path"]).parent
     assert ("ready", "rtsp://192.0.2.10:6554/doorbell-recorder") in calls
     assert (
         "ffmpeg",
             (
                 "rtsp://192.0.2.10:6554/doorbell-recorder",
                 target,
-                tmp_path / "config" / "c300x",
+                work_dir,
                 4,
                 True,
                 6.0,
@@ -712,17 +715,17 @@ def test_capture_runs_ffmpeg_after_rtsp_ready(monkeypatch: pytest.MonkeyPatch, t
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["capture_id"]
     assert metadata["output_path"] == str(target)
-    assert metadata["metadata_path"] == str(metadata_path)
+    assert metadata["metadata_path"] == str(metadata_path.resolve())
     assert metadata["raw_wav_path"] == str(
-        tmp_path / "config" / "c300x" / "latest.raw.wav"
+        work_dir / "latest.raw.wav"
     )
     assert metadata["processed_wav_path"] == str(
-        tmp_path / "config" / "c300x" / "latest.processed.wav"
+        work_dir / "latest.processed.wav"
     )
     assert metadata["frames"] == [
-        str(tmp_path / "config" / "c300x" / "frame_01.jpg"),
-        str(tmp_path / "config" / "c300x" / "frame_02.jpg"),
-        str(tmp_path / "config" / "c300x" / "frame_03.jpg"),
+        str(work_dir / "frame_01.jpg"),
+        str(work_dir / "frame_02.jpg"),
+        str(work_dir / "frame_03.jpg"),
     ]
 
 
@@ -895,7 +898,7 @@ def test_video_only_capture_shares_ring_preview_without_talkback(
             "rtsp://192.0.2.10:6554/doorbell-recorder",
             target,
             {
-                "work_dir": tmp_path / "config" / "c300x",
+                "work_dir": _capture_metadata_path(tmp_path / "config" / "c300x").resolve().parent,
                 "duration_seconds": 5,
                 "include_audio": False,
                 "audio_gain_db": 6.0,
@@ -1109,6 +1112,66 @@ def test_ffmpeg_command_times_out_and_kills_process(
         )
 
     assert process.killed is True
+
+
+def test_cancelled_ffmpeg_command_reaps_child(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run() -> None:
+        original_create = asyncio.create_subprocess_exec
+        entered = asyncio.Event()
+        children = []
+
+        async def create(*args: Any, **kwargs: Any) -> asyncio.subprocess.Process:
+            process = await original_create(*args, **kwargs)
+            children.append(process)
+            entered.set()
+            return process
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
+        capture = asyncio.create_task(_async_run_ffmpeg_command(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            command_timeout=65, error_prefix="synthetic capture",
+        ))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            capture.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await capture
+            assert children[0].returncode is not None
+        finally:
+            capture.cancel()
+            await asyncio.gather(capture, return_exceptions=True)
+            for child in children:
+                if child.returncode is None:
+                    child.kill()
+                await child.communicate()
+
+    asyncio.run(run())
+
+
+def test_cancelled_ffmpeg_command_reaps_already_exited_child(monkeypatch) -> None:
+    class Process:
+        calls = 0
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            self.calls += 1
+            if self.calls == 1:
+                raise asyncio.CancelledError
+            return b"", b""
+
+        def kill(self) -> None:
+            raise ProcessLookupError
+
+    process = Process()
+
+    async def create(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_async_run_ffmpeg_command(
+            ["ffmpeg"], command_timeout=10, error_prefix="capture",
+        ))
+    assert process.calls == 2
 
 
 def test_announcement_speex_encoder_accepts_runtime_codec_alias() -> None:

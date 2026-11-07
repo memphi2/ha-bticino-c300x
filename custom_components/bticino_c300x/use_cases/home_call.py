@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..camera_media.session_lifecycle import media_stop_scope
 from .common import ensure_home_call_supported, raise_agent_command_failed
 
 
@@ -32,8 +33,9 @@ class HomeCallUseCase:
             "prepare_home_call_stop",
             None,
         )
-        if prepare_stop is not None:
-            await prepare_stop()
-        await raise_agent_command_failed(
-            self._entry.runtime_data.api.async_stop_home_call()
-        )
+        with media_stop_scope(self._entry.runtime_data.resources, "home_call"):
+            if prepare_stop is not None:
+                await prepare_stop()
+            await raise_agent_command_failed(
+                self._entry.runtime_data.api.async_stop_home_call()
+            )

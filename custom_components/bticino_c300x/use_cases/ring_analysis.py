@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from ..exceptions import service_validation_error
 from ..ring_ai import async_run_wyoming_ring_analysis
@@ -29,10 +31,10 @@ class RingAnalysisUseCase:
         result_path: str | None = None,
         language: str | None = None,
         expected_phrase: str | None = None,
-    ) -> None:
+    ) -> Path:
         """Transcribe the latest C300X ring raw WAV through Wyoming Whisper."""
 
-        await async_run_wyoming_ring_analysis(
+        return await async_run_wyoming_ring_analysis(
             self._hass,
             wyoming_host=wyoming_host,
             wyoming_port=wyoming_port,
@@ -72,6 +74,9 @@ class RingAnalysisUseCase:
             entry = unlock_entry_provider()
         if entry is None:
             raise service_validation_error("entry_id_required")
+        capture_entry_id = getattr(decision, "capture_entry_id", None)
+        if capture_entry_id and capture_entry_id != entry.entry_id:
+            raise HomeAssistantError("C300X ring capture belongs to another device")
         if not await async_mark_ring_capture_used(
             self._hass,
             getattr(decision, "capture_id", None),

@@ -79,11 +79,25 @@ notify.mobile_app_your_phone
 For capture and transcription, the default paths are:
 
 - MP4 clips: `/media/c300x/`
-- Latest raw WAV, processed WAV, frames and capture metadata: `/config/c300x/`
-- Wyoming result and decision files: `/config/c300x/analysis/`
+- Raw WAV, processed WAV, frames and metadata for each recording:
+  `/config/c300x/captures/<capture_id>/`
+- Wyoming result: `analysis/result.json` beside that recording's metadata.
+- Compatibility pointers: `/config/c300x/latest.*` and
+  `/config/c300x/analysis/result.json`; these refer to the most recently
+  published capture/result, across all devices.
 
-The capture files below `/config/c300x/` are overwritten on each run so the
-directory does not grow indefinitely.
+Each recording has its own files. At most 64 workspaces are retained per capture
+directory; workspaces older than one hour are removed when the next recording
+starts. MP4 clips are not removed by this cleanup. A full workspace limit rejects
+new captures instead of deleting recent recordings.
+
+The Wyoming blueprint uses the capture service response, not the shared latest
+pointer. Both services support `response_variable`: capture returns `capture_id`,
+`entry_id`, `metadata_path`, `raw_wav_path` (with audio) and `output_path`;
+transcription returns `result_path`. Use those exact paths in subsequent actions.
+Leave the Wyoming result path empty for a per-recording result. Existing custom
+result paths remain supported, but must not be shared between automations/devices.
+Guarded unlock rejects a new capture belonging to a different C300X entry.
 
 ## Custom Notification Actions
 

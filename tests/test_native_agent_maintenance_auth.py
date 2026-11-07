@@ -33,8 +33,9 @@ def test_config_admin_does_not_bypass_maintenance_gate_with_no_auth() -> None:
         maxsplit=1,
     )[0]
 
-    assert "config->api_no_auth" not in body
-    assert "has_valid_bearer(request, config->api_token)" in body
+    assert "has_valid_bearer" not in body
+    assert "has_valid_maintenance_token(config, request)" in body
+    assert "config->api_no_auth && maintenance_authorized(config, request)" in body
     assert "maintenance_authorized(config, request)" in body
 
 
@@ -69,7 +70,8 @@ def test_auth_config_read_remains_available_in_no_auth_bootstrap() -> None:
         maxsplit=1,
     )[1].split("if (!api_request_authorized", maxsplit=1)[0]
 
-    assert "config->api_no_auth || config_admin_authorized(config, request)" in read_body
+    assert "config->api_no_auth || has_valid_bearer(request, config->api_token)" in read_body
+    assert "config_admin_authorized(config, request)" in read_body
     assert "auth_config_read_authorized(config, request)" in route_body
     assert "handle_auth_config_post(client_fd, config, runtime, request)" in route_body
 

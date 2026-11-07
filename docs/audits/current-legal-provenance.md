@@ -1,7 +1,7 @@
 # Current Legal and Provenance Audit Snapshot
 
-Checked: 2026-11-07. Source line: integration and native agent `2.1.0b2`,
-based on `2ed9d36` with the beta corrections. This report covers the
+Checked: 2026-11-08. Source line: integration and native agent `2.1.0b3`,
+based on `v2.1.0b2` with the review corrections. This report covers the
 repository, not a newly published release.
 
 This is a technical provenance and packaging review, not a legal opinion,
@@ -9,7 +9,7 @@ authorship proof, patent clearance, or a current vulnerability assessment.
 
 ## Verified Scope
 
-The local `scripts/check_legal_audit.py` gate passed against 621 tracked files.
+The local `scripts/check_legal_audit.py` gate passed against 626 tracked files.
 It checks forbidden payloads and directories, required license/privacy/security
 documents, runtime dependency declarations, reference markers, and the expected
 project artwork hash. It is a policy check, not a source-similarity detector.

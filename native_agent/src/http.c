@@ -7965,16 +7965,10 @@ static void handle_answering_post(
     send_json(client_fd, 200, "OK", body);
 }
 
-static int maintenance_authorized(const struct c300x_config *config, const struct request *request)
+static int has_valid_maintenance_token(const struct c300x_config *config, const struct request *request)
 {
     char supplied[C300X_MAX_TOKEN_LEN];
 
-    if (!config->maintenance_enabled) {
-        return 0;
-    }
-    if (config->api_no_auth && config->maintenance_no_auth_allowed) {
-        return 1;
-    }
     if (config->maintenance_admin_token[0] == '\0') {
         return 0;
     }
@@ -7988,6 +7982,13 @@ static int maintenance_authorized(const struct c300x_config *config, const struc
     );
 }
 
+static int maintenance_authorized(const struct c300x_config *config, const struct request *request)
+{
+    return config->maintenance_enabled
+        && ((config->api_no_auth && config->maintenance_no_auth_allowed)
+            || has_valid_maintenance_token(config, request));
+}
+
 static int maintenance_auth_available(const struct c300x_config *config)
 {
     return config->maintenance_enabled
@@ -7999,13 +8000,15 @@ static int maintenance_auth_available(const struct c300x_config *config)
 
 static int config_admin_authorized(const struct c300x_config *config, const struct request *request)
 {
-    return has_valid_bearer(request, config->api_token)
-        || maintenance_authorized(config, request);
+    /* The configured admin may re-enable maintenance, but API access cannot. */
+    return has_valid_maintenance_token(config, request)
+        || (config->api_no_auth && maintenance_authorized(config, request));
 }
 
 static int auth_config_read_authorized(const struct c300x_config *config, const struct request *request)
 {
-    return config->api_no_auth || config_admin_authorized(config, request);
+    return config->api_no_auth || has_valid_bearer(request, config->api_token)
+        || config_admin_authorized(config, request);
 }
 
 static int confirm_matches(const struct request *request, const char *expected)

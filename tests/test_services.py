@@ -103,6 +103,7 @@ class _FakeServices:
         self.registered: set[tuple[str, str]] = set()
         self.handlers: dict[tuple[str, str], Any] = {}
         self.schemas: dict[tuple[str, str], Any] = {}
+        self.responses: dict[tuple[str, str], Any] = {}
         self.calls: list[tuple[str, str, dict[str, Any], bool]] = []
 
     def async_register(self, domain: str, service: str, *args: Any, **_kwargs: Any) -> None:
@@ -111,6 +112,7 @@ class _FakeServices:
             self.handlers[(domain, service)] = args[0]
         if "schema" in _kwargs:
             self.schemas[(domain, service)] = _kwargs["schema"]
+        self.responses[(domain, service)] = _kwargs.get("supports_response")
 
     def async_remove(self, domain: str, service: str) -> None:
         self.registered.discard((domain, service))
@@ -1505,14 +1507,17 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
         hass = _FakeHass([entry])
         calls: list[dict[str, Any]] = []
 
-        async def _capture(*args: Any, **kwargs: Any) -> None:
+        captured = {"capture_id": "unique-run", "metadata_path": "/config/c300x/captures/unique-run/latest.capture.json"}
+
+        async def _capture(*args: Any, **kwargs: Any) -> dict[str, Any]:
             calls.append({"args": args, "kwargs": kwargs})
+            return captured
 
         monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", _capture)
 
         await async_setup_services(hass)  # type: ignore[arg-type]
         handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
-        await handler(
+        result = await handler(
             types.SimpleNamespace(
                 data={
                     "output_path": "/media/c300x/test.mp4",
@@ -1536,6 +1541,8 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
                 },
             }
         ]
+        assert result == captured
+        assert hass.services.responses[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)].value == "optional"
         assert api.capture_doorbell_call_calls == 0
         assert api.doorbell_video_status_calls == 3
         assert api.answer_doorbell_call_calls == [True]

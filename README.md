@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/beta-v2.1.0b2-0366d6?style=flat-square)](https://github.com/memphi2/ha-bticino-c300x/releases/tag/v2.1.0b2)
+[![Release](https://img.shields.io/badge/beta-v2.1.0b3-0366d6?style=flat-square)](https://github.com/memphi2/ha-bticino-c300x/releases/tag/v2.1.0b3)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 

@@ -46,7 +46,7 @@ class RingCaptureUseCase:
         duration_seconds: int = 5,
         include_audio: bool = True,
         announcement_path: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Capture a short C300X doorbell ring-call clip on Home Assistant."""
 
         ensure_doorbell_call_supported(self._entry)
@@ -68,7 +68,7 @@ class RingCaptureUseCase:
                     answered_call = True
                     await self._async_wait_for_answered_ring()
 
-                await async_capture_doorbell_ring_call(
+                return await async_capture_doorbell_ring_call(
                     self._hass,
                     self._entry,
                     output_path=output_path,

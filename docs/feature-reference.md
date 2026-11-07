@@ -136,7 +136,8 @@ characters maximum). Titles allow 80 characters, text 500, expiry 1 second to
 7 days. Symbols are `info`, `warning` and `calendar`; priorities are `normal`,
 `important` and `urgent`. Specify `entry_id` with multiple C300X integrations.
 
-Up to eight messages are retained in HA memory, highest priority first. When full,
+Up to eight messages (16 KiB of encoded data) are retained in HA memory, highest
+priority first. When full,
 the oldest message at the lowest priority is replaced; a lower-priority incoming
 message cannot evict a higher-priority one. Restarting HA or reloading the
 integration clears the list. Automations should resend still-relevant conditions.

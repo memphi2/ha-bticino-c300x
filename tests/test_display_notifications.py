@@ -79,6 +79,18 @@ def test_low_priority_cannot_evict_high_priority():
         store.show(data())
 
 
+def test_unicode_payload_is_bounded_for_native_bridge():
+    from custom_components.bticino_c300x.display_notifications import (
+        MAX_NOTIFICATION_BYTES,
+    )
+
+    store = DisplayNotifications(Loop(), lambda: None)
+    for index in range(MAX_NOTIFICATIONS):
+        store.show(data(str(index), message="\U0001f4c5" * 500))
+    assert len(store.payload()) < MAX_NOTIFICATIONS
+    assert len(json.dumps(store.payload())) < MAX_NOTIFICATION_BYTES
+
+
 @pytest.mark.parametrize(
     "extra",
     [

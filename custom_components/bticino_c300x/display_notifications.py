@@ -16,6 +16,7 @@ from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
 
 MAX_NOTIFICATIONS = 8
+MAX_NOTIFICATION_BYTES = 16384
 NOTIFICATION_PREFIX = "notification."
 _PRIORITY = {"normal": 0, "important": 1, "urgent": 2}
 
@@ -89,21 +90,10 @@ class DisplayNotifications:
             raise ValueError("display_notifications_unloaded")
         self._purge()
         key = data["notification_id"]
-        if key not in self._items and len(self._items) >= MAX_NOTIFICATIONS:
-            oldest = min(
-                self._items,
-                key=lambda key: (
-                    _PRIORITY[self._items[key]["priority"]],
-                    self._items[key]["revision"],
-                ),
-            )
-            if _PRIORITY[self._items[oldest]["priority"]] > _PRIORITY[data["priority"]]:
-                raise ValueError("display_notification_queue_full")
-            del self._items[oldest]
-        self._sequence += 1
-        self._items[key] = {
+        candidate = dict(self._items)
+        candidate[key] = {
             "id": key,
-            "revision": self._sequence,
+            "revision": self._sequence + 1,
             "title": data["title"],
             "message": data["message"],
             "icon": data["icon"],
@@ -111,6 +101,30 @@ class DisplayNotifications:
             "actions": [dict(action) for action in data["actions"]],
             "deadline": self._loop.time() + data["expires_in"],
         }
+        # Budget escaped JSON too: Unicode text can expand in the native response.
+        while (
+            len(candidate) > MAX_NOTIFICATIONS
+            or len(json.dumps(list(candidate.values()))) > MAX_NOTIFICATION_BYTES
+        ):
+            victims = [
+                other
+                for other in candidate
+                if other != key
+                and _PRIORITY[candidate[other]["priority"]]
+                <= _PRIORITY[data["priority"]]
+            ]
+            if not victims:
+                raise ValueError("display_notification_queue_full")
+            oldest = min(
+                victims,
+                key=lambda other: (
+                    _PRIORITY[candidate[other]["priority"]],
+                    candidate[other]["revision"],
+                ),
+            )
+            del candidate[oldest]
+        self._sequence += 1
+        self._items = candidate
         self._schedule()
         self._notify()
 

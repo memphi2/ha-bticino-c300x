@@ -907,21 +907,31 @@ def _async_track_display_bridge_updates(
         configured_dashboard_entities,
         configured_weather_entity_id,
     )
+    from .dashboard_updates import dashboard_state_event_changes_display
 
     selected_entity_ids = set(configured_dashboard_entities(entry))
-    for entity_id in (configured_alarm_page_entity_id(entry), configured_weather_entity_id(entry)):
+    projected_entity_ids = selected_entity_ids.copy()
+    alarm_page_entity_id = configured_alarm_page_entity_id(entry)
+    if alarm_page_entity_id:
+        projected_entity_ids.add(alarm_page_entity_id)
+    unfiltered_entity_ids = {str(alarm_entity_id), configured_weather_entity_id(entry)}
+    for entity_id in (alarm_page_entity_id, configured_weather_entity_id(entry)):
         if entity_id:
             selected_entity_ids.add(entity_id)
     for action in configured_actions(entry).values():
         entity_id = _dashboard_state_entity_id(action, action.get("dashboard", {}))
         if entity_id:
             selected_entity_ids.add(entity_id)
-    alarm_sensor_entity_ids = selected_entity_ids | set(_alarmo_sensor_entity_ids(hass))
+            unfiltered_entity_ids.add(entity_id)
+    alarm_only_entity_ids = set(_alarmo_sensor_entity_ids(hass))
+    alarm_sensor_entity_ids = selected_entity_ids | alarm_only_entity_ids
 
     def _refresh_alarm_sensor_entity_ids() -> None:
+        alarm_only_entity_ids.clear()
+        alarm_only_entity_ids.update(_alarmo_sensor_entity_ids(hass))
         alarm_sensor_entity_ids.clear()
         alarm_sensor_entity_ids.update(selected_entity_ids)
-        alarm_sensor_entity_ids.update(_alarmo_sensor_entity_ids(hass))
+        alarm_sensor_entity_ids.update(alarm_only_entity_ids)
 
     @callback
     def _handle_alarm_state_change(event: Any) -> None:
@@ -929,6 +939,14 @@ def _async_track_display_bridge_updates(
             str(alarm_entity_id),
             alarm_sensor_entity_ids,
             event,
+        ):
+            return
+        entity_id = event.data["entity_id"]
+        if (
+            entity_id in projected_entity_ids
+            and entity_id not in unfiltered_entity_ids
+            and entity_id not in alarm_only_entity_ids
+            and not dashboard_state_event_changes_display(hass, entry, event.data)
         ):
             return
         _async_schedule_display_bridge_notify(hass, entry)

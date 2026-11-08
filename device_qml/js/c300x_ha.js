@@ -117,10 +117,10 @@ function dashboard(statusItem, pageItem) {
             dashboardRevision = String(data.revision)
         }
         var pages = dashboardPages(data)
-        pageItem.notifications = listOrEmpty(data.notifications)
+        assignDashboardValue(pageItem, "notifications", listOrEmpty(data.notifications))
         if (pageItem.notifications.length === 0) pageItem.notificationsOpen = false
         pageItem.preventReturnToHomepage = data.preventReturnToHomepage === true
-        pageItem.dashboardPages = pages
+        assignDashboardValue(pageItem, "dashboardPages", pages)
         pageItem.pageCount = pages.length
         if (pageItem.currentPageIndex >= pages.length) {
             pageItem.currentPageIndex = 0
@@ -138,20 +138,8 @@ function dashboard(statusItem, pageItem) {
         pageItem.watchFailed = true
         dashboardRevision = ""
         if (!pageItem.controlInFlight) pageItem.pendingEntity = ""
-        statusItem.text = error
-        statusItem.color = "#ff6b6b"
-        pageItem.dashboardPages = []
-        pageItem.notifications = []
-        pageItem.notificationsOpen = false
-        pageItem.badges = []
-        pageItem.items = []
-        pageItem.flowItems = []
-        pageItem.flowLines = []
-        pageItem.flowVisible = false
-        pageItem.weatherVisible = false
-        pageItem.pageCount = 0
-        pageItem.pageTitle = ""
-        pageItem.pageLabel = ""
+        statusItem.text = uiText(pageItem, "stale_state")
+        statusItem.color = "#f1c40f"
     })
 }
 
@@ -161,33 +149,107 @@ function finishDashboardRefresh(statusItem, pageItem) {
         dashboard(statusItem, pageItem)
     } else if (!pageItem.controlInFlight) {
         pageItem.pendingEntity = ""
+        confirmDashboardFeedback(pageItem)
     }
+}
+
+function setDashboardFeedback(pageItem, entityId, state, expected) {
+    var feedback = listOrEmpty(pageItem.controlFeedback).slice(0)
+    for (var i = feedback.length - 1; i >= 0; i--) {
+        if (feedback[i].entity_id === entityId) feedback.splice(i, 1)
+    }
+    feedback.push({entity_id: entityId, state: state, expected: expected || null})
+    pageItem.controlFeedback = feedback.slice(-32)
+}
+
+function dashboardExpectation(item, control, value) {
+    if (control.command === "toggle" || (!control.command && item.kind === "switch")) {
+        return {command: "toggle", value: !item.state}
+    }
+    if (control.kind === "number" || control.kind === "choice" || control.kind === "boolean") {
+        var expected = {command: control.command, value: value, kind: control.kind}
+        if (item.entity_id.indexOf("light.") === 0 || (item.entity_id.indexOf("fan.") === 0 && control.command === "percentage")) {
+            expected.power = (control.command !== "brightness" && control.command !== "percentage") || Number(value) !== 0
+        }
+        return expected
+    }
+    if (control.command === "open_cover" || control.command === "close_cover" || control.command === "stop_cover") {
+        return {command: control.command}
+    }
+    return null
+}
+
+function dashboardExpectationMatches(item, expected) {
+    if (!item || item.available === false || !expected) return false
+    if (expected.command === "toggle") return item.state === expected.value
+    if (expected.power !== undefined && item.state !== expected.power) return false
+    var activity = item.details ? item.details.activity : ""
+    if (expected.command === "open_cover") return activity === "opening" || (item.details && item.details.position === 100)
+    if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
+    if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
+    var controls = listOrEmpty(item.controls)
+    for (var i = 0; i < controls.length; i++) {
+        var control = controls[i]
+        if (control.command !== expected.command || control.value === null || control.value === undefined) continue
+        if (control.active === false) return false
+        if (expected.kind === "number") {
+            return Math.abs(Number(control.value) - Number(expected.value)) < 0.000001
+        }
+        return String(control.value) === String(expected.value)
+    }
+    return false
+}
+
+function confirmDashboardFeedback(pageItem) {
+    var feedback = listOrEmpty(pageItem.controlFeedback)
+    var updated = feedback.slice(0)
+    var changed = false
+    var pages = listOrEmpty(pageItem.dashboardPages)
+    for (var i = 0; i < feedback.length; i++) {
+        if (feedback[i].state !== "action_sent" || !feedback[i].expected) continue
+        for (var p = 0; p < pages.length; p++) {
+            var items = listOrEmpty(pages[p].items)
+            for (var j = 0; j < items.length; j++) {
+                if (items[j].entity_id === feedback[i].entity_id && dashboardExpectationMatches(items[j], feedback[i].expected)) {
+                    updated[i] = {entity_id: feedback[i].entity_id, state: "state_confirmed", expected: null}
+                    changed = true
+                }
+            }
+        }
+    }
+    if (changed) pageItem.controlFeedback = updated
 }
 
 function dashboardControl(item, control, value, statusItem, pageItem) {
     if (!item || !control || item.available === false || !pageItem.dashboardOnline || pageItem.pendingEntity) return
     var generation = pageItem.runtimeGeneration
+    var commandGeneration = ++pageItem.commandGeneration
+    var expected = dashboardExpectation(item, control, value)
     pageItem.pendingEntity = item.entity_id
     pageItem.controlInFlight = true
-    var path = "/homeassistant?domain=c300x&service=toggle&entities="
+    setDashboardFeedback(pageItem, item.entity_id, "sending", expected)
+    var path = "/homeassistant?domain=" + encodeURIComponent(item.domain || "c300x") + "&service=toggle&entities="
         + encodeURIComponent(item.entity_id + (control.command ? ":" + control.command : ""))
     if (value !== null && value !== undefined) path += "&option=" + encodeURIComponent(value)
     getJson(path, function(data) {
-        if (generation !== pageItem.runtimeGeneration) return
+        if (generation !== pageItem.runtimeGeneration || commandGeneration !== pageItem.commandGeneration) return
         pageItem.controlInFlight = false
         if (!data || data.ok !== true) {
             pageItem.pendingEntity = ""
+            setDashboardFeedback(pageItem, item.entity_id, "action_error")
             statusItem.text = uiText(pageItem, "action_error")
             statusItem.color = "#ff6b6b"
             return
         }
+        setDashboardFeedback(pageItem, item.entity_id, "action_sent", expected)
         dashboard(statusItem, pageItem)
     }, function() {
-        if (generation !== pageItem.runtimeGeneration) return
+        if (generation !== pageItem.runtimeGeneration || commandGeneration !== pageItem.commandGeneration) return
         pageItem.controlInFlight = false
         pageItem.pendingEntity = ""
-        statusItem.text = uiText(pageItem, "action_error")
-        statusItem.color = "#ff6b6b"
+        setDashboardFeedback(pageItem, item.entity_id, "state_unconfirmed")
+        statusItem.text = uiText(pageItem, "state_unconfirmed")
+        statusItem.color = "#f1c40f"
     })
 }
 
@@ -235,33 +297,29 @@ function dashboardAction(item, statusItem, pageItem, refreshDashboard) {
         statusItem.color = "#ff6b6b"
         return
     }
-    var generation = pageItem.runtimeGeneration
-    if (refreshDashboard === false) {
-        if (pageItem.quickActionPending) return
-        pageItem.quickActionPending = true
+    if (refreshDashboard !== false) {
+        dashboardControl(item, {command: ""}, null, statusItem, pageItem)
+        return
     }
+    var generation = pageItem.runtimeGeneration
+    if (pageItem.quickActionPending) return
+    pageItem.quickActionPending = true
     var quickGeneration = pageItem.quickActionGeneration
     var path = "/homeassistant?domain=" + encodeURIComponent(item.domain)
         + "&service=toggle&entities=" + encodeURIComponent(item.entity_id)
     getJson(path, function(data) {
         if (generation !== pageItem.runtimeGeneration) return
-        if (refreshDashboard === false) {
-            if (quickGeneration !== pageItem.quickActionGeneration) return
-            pageItem.quickActionPending = false
-        }
+        if (quickGeneration !== pageItem.quickActionGeneration) return
+        pageItem.quickActionPending = false
         statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
         statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
-        if (refreshDashboard !== false) {
-            dashboard(statusItem, pageItem)
-        } else if (data.ok && pageItem.refreshAlarmStatus) {
+        if (data.ok && pageItem.refreshAlarmStatus) {
             pageItem.refreshAlarmStatus(true)
         }
     }, function(error) {
         if (generation !== pageItem.runtimeGeneration) return
-        if (refreshDashboard === false) {
-            if (quickGeneration !== pageItem.quickActionGeneration) return
-            pageItem.quickActionPending = false
-        }
+        if (quickGeneration !== pageItem.quickActionGeneration) return
+        pageItem.quickActionPending = false
         statusItem.text = error
         statusItem.color = "#ff6b6b"
     })
@@ -273,16 +331,7 @@ function dashboardSliderAction(item, direction, statusItem, pageItem) {
         statusItem.color = "#ff6b6b"
         return
     }
-    var path = "/homeassistant?domain=c300x&service=toggle&entities="
-        + encodeURIComponent(item.entity_id + ":" + direction)
-    getJson(path, function(data) {
-        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
-        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
-        dashboard(statusItem, pageItem)
-    }, function(error) {
-        statusItem.text = error
-        statusItem.color = "#ff6b6b"
-    })
+    dashboardControl(item, {command: direction}, null, statusItem, pageItem)
 }
 
 function dashboardChoiceAction(item, option, statusItem, pageItem) {
@@ -291,17 +340,7 @@ function dashboardChoiceAction(item, option, statusItem, pageItem) {
         statusItem.color = "#ff6b6b"
         return
     }
-    var path = "/homeassistant?domain=c300x&service=toggle&entities="
-        + encodeURIComponent(item.entity_id)
-        + "&option=" + encodeURIComponent(option)
-    getJson(path, function(data) {
-        statusItem.text = data.ok ? uiText(pageItem, "action_sent") : uiText(pageItem, "action_error")
-        statusItem.color = data.ok ? "#58d68d" : "#ff6b6b"
-        dashboard(statusItem, pageItem)
-    }, function(error) {
-        statusItem.text = error
-        statusItem.color = "#ff6b6b"
-    })
+    dashboardControl(item, {command: ""}, option, statusItem, pageItem)
 }
 
 function dashboardChoiceOptionLabel(option) {
@@ -678,16 +717,27 @@ function dashboardPages(data) {
     return data.data.pages
 }
 
+function assignDashboardValue(target, key, value) {
+    var previous = target[key]
+    if (JSON.stringify(previous) === JSON.stringify(value)) return
+    if (isList(previous) && isList(value)) {
+        for (var i = 0; i < Math.min(previous.length, value.length); i++) {
+            if (JSON.stringify(previous[i]) === JSON.stringify(value[i])) value[i] = previous[i]
+        }
+    }
+    target[key] = value
+}
+
 function loadDashboardPage(statusItem, pageItem) {
     var pageData = currentDashboardPage(pageItem)
     var flow = pageData.flow || {}
     var flowItems = listOrEmpty(flow.items)
     var flowLines = listOrEmpty(flow.lines)
-    pageItem.badges = listOrEmpty(pageData.badges)
-    pageItem.items = dashboardMixedItems(pageData.items)
+    assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
+    assignDashboardValue(pageItem, "items", dashboardMixedItems(pageData.items))
     applyWeather(pageItem, pageData.weather)
-    pageItem.flowItems = flowItems
-    pageItem.flowLines = flowLines
+    assignDashboardValue(pageItem, "flowItems", flowItems)
+    assignDashboardValue(pageItem, "flowLines", flowLines)
     pageItem.flowWidth = positiveNumber(flow.width, 0)
     pageItem.flowHeight = positiveNumber(flow.height, 0)
     pageItem.flowColor = flow.color || "transparent"
@@ -731,8 +781,8 @@ function applyWeather(pageItem, source) {
         pageItem.weatherHumidity = ""
         pageItem.weatherWind = ""
         pageItem.weatherForecast = ""
-        pageItem.weatherForecast1 = {}
-        pageItem.weatherForecast2 = {}
+        assignDashboardValue(pageItem, "weatherForecast1", {})
+        assignDashboardValue(pageItem, "weatherForecast2", {})
         pageItem.weatherSun = ""
         pageItem.weatherSunrise = ""
         pageItem.weatherSunset = ""
@@ -748,8 +798,8 @@ function applyWeather(pageItem, source) {
     pageItem.weatherHumidity = source.humidity || ""
     pageItem.weatherWind = source.wind || ""
     pageItem.weatherForecast = source.forecast || ""
-    pageItem.weatherForecast1 = source.forecast_1 || {}
-    pageItem.weatherForecast2 = source.forecast_2 || {}
+    assignDashboardValue(pageItem, "weatherForecast1", source.forecast_1 || {})
+    assignDashboardValue(pageItem, "weatherForecast2", source.forecast_2 || {})
     pageItem.weatherSun = source.sun || ""
     pageItem.weatherSunrise = source.sunrise || ""
     pageItem.weatherSunset = source.sunset || ""
@@ -826,6 +876,51 @@ function dashboardDetailControls(item) {
         var control = controls[j]
         if (cover && (control.command === "open_cover" || control.command === "stop_cover" || control.command === "close_cover")) continue
         if (hasPalette && (control.command === "hue" || control.command === "saturation")) continue
+        result.push(control)
+    }
+    return result
+}
+
+function dashboardControlByCommand(item, command) {
+    var controls = item ? listOrEmpty(item.controls) : []
+    for (var i = 0; i < controls.length; i++) {
+        if (controls[i].command === command) return controls[i]
+    }
+    return null
+}
+
+function dashboardDetailSections(item) {
+    if (!item || !item.details) return []
+    if (item.details.type === "light" && dashboardControlByCommand(item, "color_temp_kelvin") && dashboardControlByCommand(item, "color")) {
+        return ["white_mode", "color_mode"]
+    }
+    if (item.details.type === "climate") {
+        var controls = listOrEmpty(item.controls)
+        for (var i = 0; i < controls.length; i++) {
+            if (!isMainClimateControl(controls[i])) return ["main_controls", "more_controls"]
+        }
+    }
+    return []
+}
+
+function isMainClimateControl(control) {
+    return control.command === "temperature" || control.command === "target_temp_low" || control.command === "target_temp_high" || control.command === "hvac_mode"
+}
+
+function dashboardVisibleControls(item, section) {
+    var controls = dashboardDetailControls(item)
+    var sections = dashboardDetailSections(item)
+    var result = []
+    for (var i = 0; i < controls.length; i++) {
+        var control = controls[i]
+        if (item && item.details && (item.details.type === "light" || item.details.type === "fan") && control.command === "toggle") continue
+        if (sections.length > 0 && item.details.type === "light") {
+            if (section === "color_mode" && control.command === "color_temp_kelvin") continue
+            if (section !== "color_mode" && control.command === "color") continue
+        }
+        if (sections.length > 0 && item.details.type === "climate") {
+            if (isMainClimateControl(control) === (section === "more_controls")) continue
+        }
         result.push(control)
     }
     return result

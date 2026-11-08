@@ -306,11 +306,29 @@ def _dashboard_item_for_entity(
 ) -> dict[str, Any] | None:
     """Return a dashboard item for one directly selected HA entity."""
 
+    return dashboard_item_for_state(
+        hass, entity_id, hass.states.get(entity_id), order,
+        name_display=name_display, custom_name=custom_name,
+        secondary_info=secondary_info, language=language,
+    )
+
+
+def dashboard_item_for_state(
+    hass: HomeAssistant,
+    entity_id: str,
+    state: Any,
+    order: int = 0,
+    *,
+    name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    custom_name: str = "",
+    secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    language: str = "en",
+) -> dict[str, Any] | None:
+    """Render a snapshot without looking up newer state during an event comparison."""
     domain = entity_id.split(".", 1)[0]
     if domain not in _DASHBOARD_SUPPORTED_ENTITY_DOMAINS:
         return None
 
-    state = hass.states.get(entity_id)
     name = _entity_name(
         entity_id,
         state,

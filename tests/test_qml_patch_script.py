@@ -225,9 +225,9 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "8141ddb24c3b6f2851ad7085fbf63ac2c5e6f4078f0418ba35d6cd325897c36f",
-    "HomeAssistant.qml": "98d700e8933c14ef36d7c8342d28854b676840f087598d954bd34b736c2dfe7c",
-    "js/c300x_ha.js": "b08055039ec3afcd6e539560f1a706f13117d624bbba3808ecd0aa645833a6e1",
-    "js/c300x_i18n.js": "eb0491e605db3ca589826e4050407584904fc40676f02123bafce25ad025c1cb",
+    "HomeAssistant.qml": "f45889f6a28a3ddcccce871a00d076fa52e15341b04de7554cf416afc1cab95e",
+    "js/c300x_ha.js": "c136d5b8792206a082562c3dd4145675b91c493c2556655971f92ce60f35534f",
+    "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 
@@ -544,10 +544,11 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
     assert "Api.dashboardChoiceAction" in home_assistant_qml
     assert "Api.dashboardChoiceOptionLabel(modelData)" in home_assistant_qml
     assert "Api.dashboardChoiceOptionValue(modelData)" in home_assistant_qml
-    assert "pageItem.items = dashboardMixedItems(pageData.items)" in dashboard_js
+    assert 'assignDashboardValue(pageItem, "items", dashboardMixedItems(pageData.items))' in dashboard_js
     assert "function dashboardChoiceOptions" in dashboard_js
     assert "+ encodeURIComponent(item.entity_id)" in dashboard_js
-    assert '"&option=" + encodeURIComponent(option)' in dashboard_js
+    assert 'dashboardControl(item, {command: ""}, option, statusItem, pageItem)' in dashboard_js
+    assert '"&option=" + encodeURIComponent(value)' in dashboard_js
     assert 'item.entity_id + ":select:" + option' not in dashboard_js
 
 

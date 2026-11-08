@@ -1219,6 +1219,15 @@ def test_display_bridge_tracking_and_notify_paths(monkeypatch: pytest.MonkeyPatc
     assert len(calls) == before + 3
     state_callbacks[-1](SimpleNamespace(data={"entity_id": "light.unselected"}))
     assert len(calls) == before + 3
+    old = SimpleNamespace(state="on", attributes={"brightness": 128})
+    new = SimpleNamespace(state="on", attributes={"brightness": 128, "linkquality": 45})
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "light.room", "old_state": old, "new_state": new}))
+    assert len(calls) == before + 3, "unrendered changes must not wake the device"
+    new.attributes["brightness"] = 200
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "light.room", "old_state": old, "new_state": new}))
+    assert len(calls) == before + 4
+    state_callbacks[-1](SimpleNamespace(data={"entity_id": "binary_sensor.front_door", "old_state": old, "new_state": old}))
+    assert len(calls) == before + 5, "Alarmo keeps its full event path"
     unsubscribe()
 
 

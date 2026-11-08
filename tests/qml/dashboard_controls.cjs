@@ -10,12 +10,14 @@ function library(name) {
     return ctx;
 }
 const Api = library("c300x_ha.js");
+Api.startEventWatch = () => {};
 const I18n = library("c300x_i18n.js");
 const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "utf8");
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
     interactionActive: false, controlInFlight: false, pendingEntity: "", pageActive: true,
+    commandGeneration: 0, controlFeedback: [],
     currentPageIndex: 0, dashboardPages: [], items: [], selectedItem: null, status: {}});
 p.page = p;
 vm.runInContext(methods, p);
@@ -49,6 +51,7 @@ item.controls[0].value = 20.5;
 queue.shift().success(payload("two"));
 assert.equal(p.pendingEntity, "");
 assert.equal(p.selectedItem.controls[0].value, 20.5, "detail follows confirmed HA state");
+assert.equal(p.feedbackKey(p.selectedItem), "state_confirmed");
 
 Api.dashboard(p.status, p);
 p.interactionActive = true;
@@ -71,7 +74,14 @@ stale.success({ok: true});
 assert.equal(queue.length, 0, "hidden page cannot restart requests");
 assert.equal(p.dashboardOnline, false);
 Api.dashboard(p.status, p);
+const cachedItems = p.items;
+const cachedSelection = p.selectedItem;
 queue.shift().error("offline");
+assert.equal(p.items, cachedItems, "offline keeps the last snapshot");
+assert.equal(p.selectedItem, cachedSelection, "offline keeps navigation and detail state");
+assert.equal(p.feedbackText(p.selectedItem), "Offline - last known state");
+p.adjustControl(p.selectedItem, p.selectedItem.controls[0], 1);
+assert.equal(queue.length, 0, "offline controls cannot send commands");
 assert.equal(p.watchFailed, true);
 assert.equal(Api.dashboardRevision, "");
 Api.dashboard(p.status, p);
@@ -129,8 +139,8 @@ assert.equal(p.detailState(cover), "Opening");
 assert.equal(p.detailState({details: {type: "climate", activity: "idle"}}), "Idle");
 assert.equal(p.detailValue(sensor), "?");
 p.dashboardOnline = false;
-assert.equal(p.detailValue(normalized), "?");
-assert.equal(p.detailState(normalized), "Offline");
+assert.equal(p.detailValue(normalized), "50 %", "last value remains readable, marked stale separately");
+assert.equal(p.detailState(normalized), "Offline - last known state");
 p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
@@ -146,3 +156,83 @@ p.aboutToHide();
 assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 2, "entity details introduce no periodic timers");
 assert.match(qml, /anchors.top: entitySummary.bottom/);
 console.log("Entity detail controls and translations passed");
+
+p.dashboardOnline = true;
+p.pageActive = true;
+Api.dashboard(p.status, p);
+queue.shift().success(payload("feedback-1"));
+const unchangedItems = p.items;
+const unchangedItem = p.items[0];
+const unchangedSelection = p.selectedItem;
+Api.dashboard(p.status, p);
+queue.shift().success({...payload("feedback-2"), notifications: [{id: "notice", title: "Notice"}]});
+assert.equal(p.items, unchangedItems, "notification updates preserve the entity model");
+assert.equal(p.items[0], unchangedItem);
+assert.equal(p.selectedItem, unchangedSelection);
+
+p.adjustControl(p.selectedItem, p.selectedItem.controls[0], 1);
+assert.equal(p.feedbackKey(p.selectedItem), "sending");
+queue.shift().success({ok: true});
+queue.shift().success({not_modified: true});
+assert.equal(p.feedbackKey(p.selectedItem), "action_sent", "ACK is not a state confirmation");
+assert.equal(p.pendingEntity, "", "accepted commands cannot block a later cover stop");
+item.controls[0].value += 0.5;
+Api.dashboard(p.status, p);
+queue.shift().success(payload("feedback-3"));
+assert.equal(p.feedbackKey(p.selectedItem), "state_confirmed");
+
+p.adjustControl(p.selectedItem, p.selectedItem.controls[0], 1);
+queue.shift().success({ok: false});
+assert.equal(p.feedbackKey(p.selectedItem), "action_error");
+Api.dashboard(p.status, p);
+queue.shift().success({not_modified: true});
+assert.equal(p.feedbackKey(p.selectedItem), "action_error", "refresh cannot hide a failed command");
+
+p.adjustControl(p.selectedItem, p.selectedItem.controls[0], 1);
+const timedOut = queue.shift();
+p.expirePendingControl();
+assert.equal(p.feedbackKey(p.selectedItem), "state_unconfirmed");
+assert.equal(p.controlInFlight, false);
+assert.equal(queue.length, 1, "timeout only reads state; it never resends a command");
+timedOut.success({ok: true});
+assert.equal(p.feedbackKey(p.selectedItem), "state_unconfirmed", "late ACK cannot mask a timeout");
+queue.shift().success({not_modified: true});
+p.adjustControl(p.selectedItem, p.selectedItem.controls[0], -1);
+queue.shift().error("disconnected");
+assert.equal(p.feedbackKey(p.selectedItem), "state_unconfirmed");
+assert.equal(queue.length, 0, "ambiguous transport failure is not retried");
+Api.dashboardChoiceAction({entity_id: "select.room", domain: "c300x", kind: "choice"}, "a & b", p.status, p);
+assert.match(queue[0].url, /entities=select.room&option=a%20%26%20b$/);
+queue.shift().success({ok: true});
+queue.shift().success({not_modified: true});
+
+const model = {items: [{entity_id: "one", state: 1}, {entity_id: "two", state: 2}]};
+const second = model.items[1];
+Api.assignDashboardValue(model, "items", [{entity_id: "one", state: 3}, {entity_id: "two", state: 2}]);
+assert.equal(model.items[1], second, "unaffected delegates retain their data object");
+assert.equal(model.items[0].state, 3);
+for (let i = 0; i < 100; i++) Api.setDashboardFeedback(p, "button." + i, "action_sent");
+assert.equal(p.controlFeedback.length, 32, "feedback storage is bounded");
+
+const allLight = {...light, controls: [{command: "toggle", kind: "button"},
+    {command: "brightness", kind: "number"}, {command: "color_temp_kelvin", kind: "number"},
+    ...light.controls]};
+assert.deepEqual(Array.from(Api.dashboardDetailSections(allLight)), ["white_mode", "color_mode"]);
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(allLight, "white_mode"), c => c.command), ["brightness", "color_temp_kelvin"]);
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(allLight, "color_mode"), c => c.command), ["brightness", "color"]);
+const climate = {details: {type: "climate"}, controls: [
+    {command: "temperature"}, {command: "hvac_mode"}, {command: "fan_mode"}, {command: "preset_mode"},
+]};
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(climate, ""), c => c.command), ["temperature", "hvac_mode"]);
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(climate, "more_controls"), c => c.command), ["fan_mode", "preset_mode"]);
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(null, "")), []);
+const brightnessExpected = Api.dashboardExpectation(light, {command: "brightness", kind: "number"}, "50");
+const retainedBrightness = {...light, controls: [{command: "brightness", value: 50}]};
+assert.equal(Api.dashboardExpectationMatches({...retainedBrightness, state: false}, brightnessExpected), false, "retained attributes on an off light do not confirm turn-on");
+assert.equal(Api.dashboardExpectationMatches(retainedBrightness, brightnessExpected), true);
+assert.equal(Api.dashboardExpectationMatches({details: {activity: "open", position: 30}}, {command: "open_cover"}), false, "partly open is not fully open");
+assert.equal(Api.dashboardExpectationMatches({details: {activity: "opening", position: 30}}, {command: "open_cover"}), true);
+assert.match(qml, /model: items.length/);
+assert.match(qml, /model: detailControls.length/);
+assert.match(qml, /checkable: false\s+checked: tileItem.state/, "legacy switch must not overwrite its HA-state binding on press");
+console.log("Feedback, bounded state and incremental display updates passed");

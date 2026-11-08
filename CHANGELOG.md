@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.1.0b5 - 2026-11-08
+
+### Changed
+
+- Show display command feedback at the entity, distinguish accepted commands
+  from HA-confirmed state and retain a clearly marked, read-only last snapshot
+  while offline. Ambiguous failures are not retried automatically.
+- Filter selected-entity notifications by the displayed values and reuse
+  unchanged GUI items. Preserve scrolling and slider updates without adding
+  polling or periodic refresh timers.
+- Compact the blue display details with white/color tabs for lights and
+  primary/additional climate controls. Open details from the overview name and
+  state area, keeping separate direct-action touch targets.
+
+### Upgrade
+
+- Includes rebuilt native agent `2.1.0b5`. Install the integration, restart HA,
+  complete the agent-update Repair and reapply the Display patch. Applying the
+  Display patch restarts the device GUI.
+- Opt-in prerelease; stable remains `2.0.0`.
+
 ## v2.1.0b4 - 2026-11-08
 
 ### Added

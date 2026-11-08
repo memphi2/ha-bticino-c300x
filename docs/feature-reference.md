@@ -98,14 +98,17 @@ need confirmation during beta testing.
 
 Select lights, covers, climate entities, fans and sensors under **Display
 dashboard**. The blue overview provides direct light/fan on/off, cover
-up/stop/down and target-temperature adjustment. The detail button opens the
-remaining supported controls; tap a sensor tile for its read-only details.
+up/stop/down and target-temperature adjustment. Tap the name/state area or the
+chevron to open supported controls; tap a sensor tile for its read-only details.
+The separate quick-action buttons operate the entity without opening details.
 Back returns to the same overview page and scroll position.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
   the Kelvin slider remains available for fine adjustment. Selecting a color
-  sends one command, including both hue and saturation.
+  sends one command, including both hue and saturation. Lights supporting both
+  white temperature and color have separate tabs; brightness stays available
+  in either tab, with the power button in the fixed summary.
 - Covers show their reported position visually, plus opening/closing state.
   Supported up/stop/down buttons stay visible above the scrolling controls.
   Position and tilt are adjusted separately; missing position is not shown as
@@ -113,6 +116,8 @@ Back returns to the same overview page and scroll position.
 - Climate entities separate measured temperature and reported heating/cooling
   activity from the selected HVAC mode. Target temperature, lower/upper target
   range, presets, fan mode and vertical/horizontal swing appear where supported.
+  Target and HVAC mode are on the main tab; presets, fan and swing settings
+  move to a separate settings tab when supported.
 - Fans expose speed, oscillation, presets and direction according to their
   capabilities. Preset names come from the entity itself.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
@@ -124,14 +129,22 @@ Back returns to the same overview page and scroll position.
 
 State changes for selected entities use the existing event bridge, including
 when no Alarmo entity is configured. There is no regular device-state polling.
-Bursts are combined into a notification; the display reloads confirmed HA values.
+Bursts are combined into a notification. Selected-entity changes that do not
+alter the displayed values, availability or controls do not notify the device.
+Alarmo and weather keep their existing event handling. Unchanged GUI items are
+reused, preserving the overview position and active input.
+
+Command feedback distinguishes sending, accepted commands and matching state
+reported by HA. HA state confirmation is not independent physical verification
+for optimistic entities. Errors remain at the affected control; an uncertain
+transport result is not automatically retried. During a connection outage the
+last snapshot stays visible, explicitly marked as stale, with actions disabled.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
-only runs while the page is active. The extended controls are included in
-`2.1.0b4`: install the integration and its bundled agent, then reapply the Display
-patch. Device rendering and physical Ring Call interruption
-remain beta checks. No additional polling, refresh timers or device-file writes
-are introduced by these detail views.
+only runs while the page is active. Display changes require the matching bundled
+agent files and reapplying the Display patch after an update. Device rendering
+and physical Ring Call interruption remain beta checks. No additional polling,
+refresh timers or device-file writes are introduced by these detail views.
 
 ## Display Settings
 

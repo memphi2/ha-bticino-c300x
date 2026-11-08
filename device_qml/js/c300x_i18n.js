@@ -375,6 +375,8 @@ var CONTROL_LABELS = {
 
 var DETAIL_LABELS = {
     en: {
+        stale_state: "Offline - last known state", state_confirmed: "State confirmed by HA", state_unconfirmed: "Not confirmed - check state",
+        white_mode: "White", color_mode: "Color", main_controls: "Controls", more_controls: "Settings",
         current_state: "Current state", current_temperature: "Room temperature", battery_level: "Battery", illuminance: "Illuminance",
         color: "Color", warm_white: "Warm white", neutral_white: "Neutral white", cool_white: "Cool white",
         percentage: "Speed", oscillating: "Oscillation", fan_mode: "Fan", swing_mode: "Swing", swing_horizontal_mode: "Horizontal swing", direction: "Direction",
@@ -385,6 +387,8 @@ var DETAIL_LABELS = {
         mode_low: "Low", mode_medium: "Medium", mode_high: "High", mode_quiet: "Quiet", mode_silent: "Silent", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Both", mode_forward: "Forward", mode_reverse: "Reverse"
     },
     de: {
+        stale_state: "Offline - letzter bekannter Stand", state_confirmed: "Zustand von HA bestaetigt", state_unconfirmed: "Nicht bestaetigt - Zustand pruefen",
+        white_mode: "Weiss", color_mode: "Farbe", main_controls: "Bedienung", more_controls: "Einstellungen",
         current_state: "Aktueller Zustand", current_temperature: "Raumtemperatur", battery_level: "Batterie", illuminance: "Beleuchtungsstaerke",
         color: "Farbe", warm_white: "Warmweiss", neutral_white: "Neutralweiss", cool_white: "Kaltweiss",
         percentage: "Geschwindigkeit", oscillating: "Schwenken", fan_mode: "Luefter", swing_mode: "Schwenken", swing_horizontal_mode: "Horizontal schwenken", direction: "Drehrichtung",
@@ -395,6 +399,8 @@ var DETAIL_LABELS = {
         mode_low: "Niedrig", mode_medium: "Mittel", mode_high: "Hoch", mode_quiet: "Leise", mode_silent: "Leise", mode_vertical: "Vertikal", mode_horizontal: "Horizontal", mode_both: "Beide", mode_forward: "Vorwaerts", mode_reverse: "Rueckwaerts"
     },
     fr: {
+        stale_state: "Hors ligne - dernier etat connu", state_confirmed: "Etat confirme par HA", state_unconfirmed: "Non confirme - verifier l'etat",
+        white_mode: "Blanc", color_mode: "Couleur", main_controls: "Commandes", more_controls: "Reglages",
         current_state: "Etat actuel", current_temperature: "Temperature ambiante", battery_level: "Batterie", illuminance: "Eclairement",
         color: "Couleur", warm_white: "Blanc chaud", neutral_white: "Blanc neutre", cool_white: "Blanc froid",
         percentage: "Vitesse", oscillating: "Oscillation", fan_mode: "Ventilateur", swing_mode: "Oscillation", swing_horizontal_mode: "Oscillation horizontale", direction: "Direction",
@@ -405,6 +411,8 @@ var DETAIL_LABELS = {
         mode_low: "Faible", mode_medium: "Moyen", mode_high: "Fort", mode_quiet: "Silencieux", mode_silent: "Silencieux", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Les deux", mode_forward: "Avant", mode_reverse: "Inverse"
     },
     it: {
+        stale_state: "Offline - ultimo stato noto", state_confirmed: "Stato confermato da HA", state_unconfirmed: "Non confermato - verificare lo stato",
+        white_mode: "Bianco", color_mode: "Colore", main_controls: "Comandi", more_controls: "Impostazioni",
         current_state: "Stato attuale", current_temperature: "Temperatura ambiente", battery_level: "Batteria", illuminance: "Illuminamento",
         color: "Colore", warm_white: "Bianco caldo", neutral_white: "Bianco neutro", cool_white: "Bianco freddo",
         percentage: "Velocita", oscillating: "Oscillazione", fan_mode: "Ventola", swing_mode: "Oscillazione", swing_horizontal_mode: "Oscillazione orizzontale", direction: "Direzione",

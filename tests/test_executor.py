@@ -2909,6 +2909,8 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "name": "Temperature",
             "state": False,
             "state_label": "21.5 C",
+            "available": True,
+            "details": {"type": "sensor", "value": "21.5", "unit": "C", "label": "", "state_label": "21.5 C", "fields": []},
         },
         {
             "domain": "c300x",
@@ -2918,6 +2920,8 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
             "state": True,
             "state_label": "Offen",
             "color": "#ff6b6b",
+            "available": True,
+            "details": {"type": "binary_sensor", "value": "Offen", "unit": "", "label": "", "state_label": "Offen", "fields": []},
         },
         {
             "domain": "c300x",

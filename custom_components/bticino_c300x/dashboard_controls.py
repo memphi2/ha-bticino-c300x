@@ -7,11 +7,59 @@ from typing import Any
 
 from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.cover.const import CoverEntityFeature
+from homeassistant.components.fan.const import FanEntityFeature
 from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
 )
 from homeassistant.core import HomeAssistant
+
+COLOR_PRESETS = {
+    "red": (0, 100, "#ff4545"),
+    "yellow": (60, 100, "#ffe04a"),
+    "green": (120, 100, "#53d96a"),
+    "cyan": (180, 100, "#4ddddd"),
+    "blue": (240, 100, "#557dff"),
+    "violet": (285, 100, "#bc63ee"),
+    "pink": (330, 100, "#f568b0"),
+    "white": (0, 0, "#ffffff"),
+}
+
+
+def _white_presets(control: dict[str, Any] | None, color_mode: Any) -> dict[str, Any] | None:
+    if control is None:
+        return None
+    presets = []
+    seen = set()
+    low, high = math.ceil(control["min"]), math.floor(control["max"])
+    if low >= high:
+        return None
+    control["min"], control["max"] = low, high
+    for label, kelvin in (("warm_white", 2700), ("neutral_white", 4000), ("cool_white", 6500)):
+        value = max(low, min(high, kelvin))
+        if value not in seen:
+            presets.append({"label": label, "value": value})
+            seen.add(value)
+    control["presets"] = presets
+    control["active"] = color_mode is None or color_mode == "color_temp"
+    return control
+
+
+def _color_control(attrs: dict[str, Any]) -> dict[str, Any]:
+    selected = None
+    hs = attrs.get("hs_color")
+    if attrs.get("color_mode") != "color_temp" and isinstance(hs, (list, tuple)) and len(hs) == 2:
+        hue, saturation = map(finite_number, hs)
+        for name, (h, s, _) in COLOR_PRESETS.items():
+            if (hue is not None and saturation is not None and abs(saturation - s) < 1
+                    and (s == 0 or abs((hue - h + 180) % 360 - 180) < 1)):
+                selected = name
+                break
+    return {
+        "command": "color", "kind": "choice", "value": selected,
+        "options": list(COLOR_PRESETS),
+        "swatches": [value[2] for value in COLOR_PRESETS.values()],
+    }
 
 
 def finite_number(value: Any) -> float | None:
@@ -82,16 +130,17 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             )
         if "color_temp" in modes:
             controls.append(
-                _number(
+                _white_presets(_number(
                     "color_temp_kelvin",
                     attrs.get("color_temp_kelvin"),
                     attrs.get("min_color_temp_kelvin"),
                     attrs.get("max_color_temp_kelvin"),
                     1,
                     "K",
-                )
+                ), attrs.get("color_mode"))
             )
         if modes & COLOR_MODES_COLOR:
+            controls.append(_color_control(attrs))
             hs = attrs.get("hs_color")
             hs = hs if isinstance(hs, (list, tuple)) and len(hs) == 2 else (None, None)
             controls.extend(
@@ -149,6 +198,29 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
                     "preset_mode", attrs.get("preset_mode"), attrs.get("preset_modes")
                 )
             )
+        for command, climate_feature in (
+            ("fan_mode", ClimateEntityFeature.FAN_MODE),
+            ("swing_mode", ClimateEntityFeature.SWING_MODE),
+            ("swing_horizontal_mode", ClimateEntityFeature.SWING_HORIZONTAL_MODE),
+        ):
+            if features & climate_feature:
+                controls.append(_choice(command, attrs.get(command), attrs.get(command + "s")))
+    elif domain == "fan":
+        toggle_feature = FanEntityFeature.TURN_OFF if state.state == "on" else FanEntityFeature.TURN_ON
+        if features & toggle_feature:
+            controls.append({"command": "toggle", "kind": "button"})
+        if features & FanEntityFeature.SET_SPEED:
+            controls.append(_number("percentage", attrs.get("percentage"), 0, 100, 1, "%"))
+        if features & FanEntityFeature.OSCILLATE:
+            oscillating = attrs.get("oscillating")
+            controls.append({
+                "command": "oscillating", "kind": "boolean",
+                "value": oscillating if isinstance(oscillating, bool) else None,
+            })
+        if features & FanEntityFeature.PRESET_MODE:
+            controls.append(_choice("preset_mode", attrs.get("preset_mode"), attrs.get("preset_modes")))
+        if features & FanEntityFeature.DIRECTION:
+            controls.append(_choice("direction", attrs.get("direction"), ["forward", "reverse"]))
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -187,6 +259,10 @@ async def async_execute_control(
     elif control["kind"] == "choice":
         if option not in control["options"]:
             raise ValueError("invalid_dashboard_option")
+    elif control["kind"] == "boolean":
+        if option not in {"true", "false"}:
+            raise ValueError("invalid_dashboard_value")
+        value = option == "true"
     elif option not in (None, ""):
         raise ValueError("invalid_dashboard_value")
 
@@ -198,6 +274,8 @@ async def async_execute_control(
             data["brightness_pct"] = value
         elif command == "color_temp_kelvin":
             data[command] = int(value)
+        elif command == "color":
+            data["hs_color"] = list(COLOR_PRESETS[value][:2])
         elif command in {"hue", "saturation"}:
             hs = state.attributes.get("hs_color")
             hs = (
@@ -220,13 +298,11 @@ async def async_execute_control(
         if command in {"position", "tilt_position"}:
             data[command] = int(value)
     elif domain == "climate":
-        service = (
-            "set_hvac_mode"
-            if command == "hvac_mode"
-            else "set_preset_mode"
-            if command == "preset_mode"
-            else "set_temperature"
-        )
+        service = {
+            "hvac_mode": "set_hvac_mode", "preset_mode": "set_preset_mode",
+            "fan_mode": "set_fan_mode", "swing_mode": "set_swing_mode",
+            "swing_horizontal_mode": "set_swing_horizontal_mode",
+        }.get(command, "set_temperature")
         data[command] = value
         if command in {"target_temp_low", "target_temp_high"}:
             other = (
@@ -240,6 +316,14 @@ async def async_execute_control(
                 or data["target_temp_low"] > data["target_temp_high"]
             ):
                 raise ValueError("invalid_dashboard_temperature_range")
+    elif domain == "fan":
+        service = {
+            "toggle": "toggle", "percentage": "set_percentage",
+            "oscillating": "oscillate", "preset_mode": "set_preset_mode",
+            "direction": "set_direction",
+        }[command]
+        if command != "toggle":
+            data[command] = int(value) if command == "percentage" else value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

@@ -800,6 +800,8 @@ function dashboardMixedItems(source) {
             normalized = dashboardItems([source[i]], kind || "entity")
         }
         if (normalized.length > 0) {
+            normalized[0].available = source[i].available !== false
+            if (source[i].details) normalized[0].details = source[i].details
             if (source[i].controls !== undefined) {
                 normalized[0].controls = listOrEmpty(source[i].controls)
                 normalized[0].available = source[i].available !== false
@@ -810,6 +812,35 @@ function dashboardMixedItems(source) {
         }
     }
     return target
+}
+
+function dashboardDetailControls(item) {
+    var controls = item ? listOrEmpty(item.controls) : []
+    var result = []
+    var hasPalette = false
+    var cover = item && item.details && item.details.type === "cover"
+    for (var i = 0; i < controls.length; i++) {
+        if (controls[i].command === "color") hasPalette = true
+    }
+    for (var j = 0; j < controls.length; j++) {
+        var control = controls[j]
+        if (cover && (control.command === "open_cover" || control.command === "stop_cover" || control.command === "close_cover")) continue
+        if (hasPalette && (control.command === "hue" || control.command === "saturation")) continue
+        result.push(control)
+    }
+    return result
+}
+
+function dashboardCoverControls(item) {
+    var controls = item ? listOrEmpty(item.controls) : []
+    var result = []
+    var commands = ["open_cover", "stop_cover", "close_cover"]
+    for (var i = 0; i < commands.length; i++) {
+        for (var j = 0; j < controls.length; j++) {
+            if (controls[j].command === commands[i]) result.push(controls[j])
+        }
+    }
+    return result
 }
 
 function dashboardSliders(source) {

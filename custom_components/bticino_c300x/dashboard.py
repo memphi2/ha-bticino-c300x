@@ -46,6 +46,7 @@ from .dashboard_config import (
     configured_weather_entity_id,
 )
 from .dashboard_controls import entity_controls
+from .dashboard_details import DETAIL_DOMAINS, entity_details
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
@@ -329,8 +330,13 @@ def _dashboard_item_for_entity(
         "_page": _DASHBOARD_ACTION_PAGE,
         "_order": order,
     }
-    if domain in {"light", "cover", "climate", "number", "input_number", "select", "input_select"}:
-        unit = str(getattr(getattr(getattr(hass, "config", None), "units", None), "temperature_unit", ""))
+    unit = str(getattr(getattr(getattr(hass, "config", None), "units", None), "temperature_unit", ""))
+    if domain in DETAIL_DOMAINS:
+        item["details"] = entity_details(
+            entity_id, state, _entity_state_label(state, entity_id=entity_id, language=language), unit,
+        )
+        item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
+    if domain in {"light", "cover", "climate", "fan", "number", "input_number", "select", "input_select"}:
         item["controls"] = entity_controls(entity_id, state, unit)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:

@@ -7,12 +7,18 @@ from typing import Any
 
 from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.cover.const import CoverEntityFeature
-from homeassistant.components.fan.const import FanEntityFeature
+from homeassistant.components.fan import const as fan_const
 from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
 )
 from homeassistant.core import HomeAssistant
+
+HA_FAN_FEATURE_IN_CONST = hasattr(fan_const, "FanEntityFeature")
+if HA_FAN_FEATURE_IN_CONST:
+    from homeassistant.components.fan.const import FanEntityFeature
+else:
+    from homeassistant.components.fan import FanEntityFeature
 
 COLOR_PRESETS = {
     "red": (0, 100, "#ff4545"),

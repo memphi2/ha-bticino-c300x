@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import runpy
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from custom_components.bticino_c300x.dashboard_controls import (
+    FanEntityFeature,
     async_execute_control,
     entity_controls,
     finite_number,
@@ -26,6 +29,25 @@ def hass_for(snapshot):
         services=SimpleNamespace(async_call=AsyncMock()),
         bus=SimpleNamespace(async_fire=lambda *_: None),
     )
+
+
+@pytest.mark.parametrize("in_const", [False, True])
+def test_fan_feature_import_supports_both_ha_layouts(monkeypatch, in_const):
+    from homeassistant.components import fan
+    from homeassistant.components.fan import const as fan_const
+
+    monkeypatch.setattr(fan, "FanEntityFeature", FanEntityFeature, raising=False)
+    if in_const:
+        monkeypatch.setattr(fan_const, "FanEntityFeature", FanEntityFeature, raising=False)
+    else:
+        monkeypatch.delattr(fan_const, "FanEntityFeature", raising=False)
+    module = runpy.run_path(str(Path(__file__).resolve().parents[1] /
+                               "custom_components/bticino_c300x/dashboard_controls.py"))
+    assert module["HA_FAN_FEATURE_IN_CONST"] is in_const
+    assert module["FanEntityFeature"] is FanEntityFeature
+    assert module["entity_controls"]("fan.room", state(supported_features=48)) == [
+        {"command": "toggle", "kind": "button"},
+    ]
 
 
 @pytest.mark.parametrize("value", [None, True, "unknown", "NaN", "inf", "-inf", {}, []])

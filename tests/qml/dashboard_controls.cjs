@@ -102,3 +102,47 @@ queue.shift().success({ok: true});
 queue.shift().success(payload("six"));
 assert.equal(p.notifications.length, 0);
 assert.equal(p.notificationsOpen, false, "expiry/dismissal closes the empty details view");
+
+const light = {domain: "c300x", entity_id: "light.room", kind: "switch", state: true,
+    available: true, details: {type: "light", value: "50", unit: "%", state_label: "On"},
+    controls: [{command: "color", kind: "choice", value: "red", options: ["red", "green"]},
+        {command: "hue", kind: "number"}, {command: "saturation", kind: "number"}]};
+const normalized = Api.dashboardMixedItems([light])[0];
+assert.equal(normalized.details.value, "50");
+assert.deepEqual(Array.from(Api.dashboardDetailControls(normalized), c => c.command), ["color"]);
+assert.equal(Api.dashboardDetailControls({controls: [{command: "hue"}]}).length, 1, "old snapshots retain legacy controls");
+const cover = {details: {type: "cover", activity: "opening"}, controls: [
+    {command: "close_cover", kind: "button"}, {command: "position", kind: "number"},
+    {command: "stop_cover", kind: "button"}, {command: "open_cover", kind: "button"},
+]};
+assert.deepEqual(Array.from(Api.dashboardCoverControls(cover), c => c.command), ["open_cover", "stop_cover", "close_cover"]);
+assert.deepEqual(Array.from(Api.dashboardDetailControls(cover), c => c.command), ["position"]);
+assert.equal(Api.dashboardDetailControls(null).length, 0);
+assert.equal(Api.dashboardCoverControls(null).length, 0);
+assert.equal(Api.dashboardMixedItems([{...light, available: false}])[0].available, false);
+const sensor = Api.dashboardMixedItems([{domain: "c300x", entity_id: "sensor.room", kind: "entity", available: false, details: {type: "sensor", value: "22"}}])[0];
+assert.equal(sensor.available, false, "read-only availability is not conditional on controls");
+assert.equal(sensor.details.value, "22");
+p.dashboardOnline = true;
+assert.equal(p.detailValue(normalized), "50 %");
+assert.equal(p.detailState(cover), "Opening");
+assert.equal(p.detailState({details: {type: "climate", activity: "idle"}}), "Idle");
+assert.equal(p.detailValue(sensor), "?");
+p.dashboardOnline = false;
+assert.equal(p.detailValue(normalized), "?");
+assert.equal(p.detailState(normalized), "Offline");
+p.dashboardOnline = true;
+assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
+assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
+assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+for (const lang of ["de", "fr", "it"]) {
+    assert.deepEqual(Object.keys(I18n.DETAIL_LABELS[lang]).sort(), Object.keys(I18n.DETAIL_LABELS.en).sort());
+    for (const key of Object.keys(I18n.DETAIL_LABELS.en)) assert.notEqual(I18n.text(lang, key), key);
+}
+Api.dashboardControl(normalized, normalized.controls[0], "green", p.status, p);
+assert.equal(queue.length, 1, "a swatch sends one atomic color command");
+assert.match(queue.shift().url, /light.room%3Acolor&option=green$/);
+p.aboutToHide();
+assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 2, "entity details introduce no periodic timers");
+assert.match(qml, /anchors.top: entitySummary.bottom/);
+console.log("Entity detail controls and translations passed");

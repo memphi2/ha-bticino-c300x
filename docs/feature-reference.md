@@ -96,16 +96,29 @@ need confirmation during beta testing.
 
 ## Display Device Controls
 
-Select lights, covers and climate entities under **Display dashboard**. The blue
-overview provides direct light on/off, cover up/stop/down and target-temperature
-adjustment. The detail button opens the remaining supported controls; Back returns
-to the same overview page and scroll position.
+Select lights, covers, climate entities, fans and sensors under **Display
+dashboard**. The blue overview provides direct light/fan on/off, cover
+up/stop/down and target-temperature adjustment. The detail button opens the
+remaining supported controls; tap a sensor tile for its read-only details.
+Back returns to the same overview page and scroll position.
 
-- Lights expose brightness, Kelvin color temperature and hue/saturation only when
-  supported by the entity.
-- Covers expose reported position and supported tilt adjustment.
-- Climate entities show actual and target temperatures, supported modes/presets
-  and, where available, the lower/upper target range.
+- Lights show brightness, eight color swatches and warm/neutral/cool white
+  presets where supported. White presets stay within the light's Kelvin range;
+  the Kelvin slider remains available for fine adjustment. Selecting a color
+  sends one command, including both hue and saturation.
+- Covers show their reported position visually, plus opening/closing state.
+  Supported up/stop/down buttons stay visible above the scrolling controls.
+  Position and tilt are adjusted separately; missing position is not shown as
+  closed.
+- Climate entities separate measured temperature and reported heating/cooling
+  activity from the selected HVAC mode. Target temperature, lower/upper target
+  range, presets, fan mode and vertical/horizontal swing appear where supported.
+- Fans expose speed, oscillation, presets and direction according to their
+  capabilities. Preset names come from the entity itself.
+- Sensor and binary-sensor tiles use larger readings and read-only details.
+  Numeric sensors retain their unit and reported display precision. Details may
+  show the entity's numeric battery level, humidity and illuminance attributes;
+  unrelated attributes and history are not requested or forwarded.
 - Number entities use HA units, bounds and step sizes; select entities show their
   actual options. Sliders send one command on release, not during movement.
 
@@ -114,8 +127,11 @@ when no Alarmo entity is configured. There is no regular device-state polling.
 Bursts are combined into a notification; the display reloads confirmed HA values.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
-only runs while the page is active. These controls require the updated display
-files; device rendering and physical Ring Call interruption remain beta checks.
+only runs while the page is active. The extended controls are included in
+`2.1.0b4`: install the integration and its bundled agent, then reapply the Display
+patch. Device rendering and physical Ring Call interruption
+remain beta checks. No additional polling, refresh timers or device-file writes
+are introduced by these detail views.
 
 ## Display Settings
 

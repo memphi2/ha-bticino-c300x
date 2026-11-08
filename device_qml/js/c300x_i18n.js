@@ -373,7 +373,52 @@ var CONTROL_LABELS = {
     it: {toggle: "On / Off", brightness: "Luminosita", color_temp_kelvin: "Temperatura colore", hue: "Tonalita", saturation: "Saturazione", position: "Posizione", tilt_position: "Inclinazione", temperature: "Obiettivo", target_temp_low: "Obiettivo minimo", target_temp_high: "Obiettivo massimo", hvac_mode: "Modalita", preset_mode: "Profilo", value: "Valore", option: "Opzione"}
 }
 
+var DETAIL_LABELS = {
+    en: {
+        current_state: "Current state", current_temperature: "Room temperature", battery_level: "Battery", illuminance: "Illuminance",
+        color: "Color", warm_white: "Warm white", neutral_white: "Neutral white", cool_white: "Cool white",
+        percentage: "Speed", oscillating: "Oscillation", fan_mode: "Fan", swing_mode: "Swing", swing_horizontal_mode: "Horizontal swing", direction: "Direction",
+        color_red: "Red", color_yellow: "Yellow", color_green: "Green", color_cyan: "Cyan", color_blue: "Blue", color_violet: "Violet", color_pink: "Pink", color_white: "White",
+        activity_off: "Off", activity_idle: "Idle", activity_heating: "Heating", activity_cooling: "Cooling", activity_drying: "Drying", activity_fan: "Ventilating", activity_defrosting: "Defrosting", activity_preheating: "Preheating", activity_unknown: "Activity unknown",
+        activity_opening: "Opening", activity_closing: "Closing", activity_open: "Open", activity_closed: "Closed",
+        mode_off: "Off", mode_on: "On", mode_auto: "Auto", mode_heat: "Heat", mode_cool: "Cool", mode_heat_cool: "Heat / Cool", mode_dry: "Dry", mode_fan_only: "Fan only",
+        mode_low: "Low", mode_medium: "Medium", mode_high: "High", mode_quiet: "Quiet", mode_silent: "Silent", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Both", mode_forward: "Forward", mode_reverse: "Reverse"
+    },
+    de: {
+        current_state: "Aktueller Zustand", current_temperature: "Raumtemperatur", battery_level: "Batterie", illuminance: "Beleuchtungsstaerke",
+        color: "Farbe", warm_white: "Warmweiss", neutral_white: "Neutralweiss", cool_white: "Kaltweiss",
+        percentage: "Geschwindigkeit", oscillating: "Schwenken", fan_mode: "Luefter", swing_mode: "Schwenken", swing_horizontal_mode: "Horizontal schwenken", direction: "Drehrichtung",
+        color_red: "Rot", color_yellow: "Gelb", color_green: "Gruen", color_cyan: "Tuerkis", color_blue: "Blau", color_violet: "Violett", color_pink: "Pink", color_white: "Weiss",
+        activity_off: "Aus", activity_idle: "Bereit", activity_heating: "Heizt", activity_cooling: "Kuehlt", activity_drying: "Entfeuchtet", activity_fan: "Lueftet", activity_defrosting: "Taut ab", activity_preheating: "Heizt vor", activity_unknown: "Aktivitaet unbekannt",
+        activity_opening: "Oeffnet", activity_closing: "Schliesst", activity_open: "Offen", activity_closed: "Geschlossen",
+        mode_off: "Aus", mode_on: "Ein", mode_auto: "Automatisch", mode_heat: "Heizen", mode_cool: "Kuehlen", mode_heat_cool: "Heizen / Kuehlen", mode_dry: "Entfeuchten", mode_fan_only: "Nur Luefter",
+        mode_low: "Niedrig", mode_medium: "Mittel", mode_high: "Hoch", mode_quiet: "Leise", mode_silent: "Leise", mode_vertical: "Vertikal", mode_horizontal: "Horizontal", mode_both: "Beide", mode_forward: "Vorwaerts", mode_reverse: "Rueckwaerts"
+    },
+    fr: {
+        current_state: "Etat actuel", current_temperature: "Temperature ambiante", battery_level: "Batterie", illuminance: "Eclairement",
+        color: "Couleur", warm_white: "Blanc chaud", neutral_white: "Blanc neutre", cool_white: "Blanc froid",
+        percentage: "Vitesse", oscillating: "Oscillation", fan_mode: "Ventilateur", swing_mode: "Oscillation", swing_horizontal_mode: "Oscillation horizontale", direction: "Direction",
+        color_red: "Rouge", color_yellow: "Jaune", color_green: "Vert", color_cyan: "Cyan", color_blue: "Bleu", color_violet: "Violet", color_pink: "Rose", color_white: "Blanc",
+        activity_off: "Arret", activity_idle: "En attente", activity_heating: "Chauffage actif", activity_cooling: "Refroidissement actif", activity_drying: "Deshumidification", activity_fan: "Ventilation", activity_defrosting: "Degivrage", activity_preheating: "Prechauffage", activity_unknown: "Activite inconnue",
+        activity_opening: "Ouverture", activity_closing: "Fermeture", activity_open: "Ouvert", activity_closed: "Ferme",
+        mode_off: "Arret", mode_on: "Marche", mode_auto: "Automatique", mode_heat: "Chauffer", mode_cool: "Refroidir", mode_heat_cool: "Chaud / Froid", mode_dry: "Deshumidifier", mode_fan_only: "Ventilation seule",
+        mode_low: "Faible", mode_medium: "Moyen", mode_high: "Fort", mode_quiet: "Silencieux", mode_silent: "Silencieux", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Les deux", mode_forward: "Avant", mode_reverse: "Inverse"
+    },
+    it: {
+        current_state: "Stato attuale", current_temperature: "Temperatura ambiente", battery_level: "Batteria", illuminance: "Illuminamento",
+        color: "Colore", warm_white: "Bianco caldo", neutral_white: "Bianco neutro", cool_white: "Bianco freddo",
+        percentage: "Velocita", oscillating: "Oscillazione", fan_mode: "Ventola", swing_mode: "Oscillazione", swing_horizontal_mode: "Oscillazione orizzontale", direction: "Direzione",
+        color_red: "Rosso", color_yellow: "Giallo", color_green: "Verde", color_cyan: "Ciano", color_blue: "Blu", color_violet: "Viola", color_pink: "Rosa", color_white: "Bianco",
+        activity_off: "Spento", activity_idle: "In attesa", activity_heating: "Riscaldamento attivo", activity_cooling: "Raffreddamento attivo", activity_drying: "Deumidificazione", activity_fan: "Ventilazione", activity_defrosting: "Sbrinamento", activity_preheating: "Preriscaldamento", activity_unknown: "Attivita sconosciuta",
+        activity_opening: "Apertura", activity_closing: "Chiusura", activity_open: "Aperto", activity_closed: "Chiuso",
+        mode_off: "Spento", mode_on: "Acceso", mode_auto: "Automatico", mode_heat: "Riscaldare", mode_cool: "Raffreddare", mode_heat_cool: "Caldo / Freddo", mode_dry: "Deumidificare", mode_fan_only: "Solo ventola",
+        mode_low: "Bassa", mode_medium: "Media", mode_high: "Alta", mode_quiet: "Silenzioso", mode_silent: "Silenzioso", mode_vertical: "Verticale", mode_horizontal: "Orizzontale", mode_both: "Entrambi", mode_forward: "Avanti", mode_reverse: "Indietro"
+    }
+}
+
 function text(languageCode, key) {
+    var details = DETAIL_LABELS[language(languageCode)]
+    if (details[key]) return details[key]
     var controls = CONTROL_LABELS[language(languageCode)]
     if (controls[key]) return controls[key]
     var local = catalog(languageCode)

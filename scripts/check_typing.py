@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 from homeassistant.components.camera import const as camera_const
+from homeassistant.components.fan import const as fan_const
 from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 
 STRICT_TARGETS = (
@@ -70,6 +71,7 @@ STRICT_TARGETS = (
     "custom_components/bticino_c300x/dashboard.py",
     "custom_components/bticino_c300x/dashboard_config.py",
     "custom_components/bticino_c300x/dashboard_controls.py",
+    "custom_components/bticino_c300x/dashboard_details.py",
     "custom_components/bticino_c300x/display_notifications.py",
     "custom_components/bticino_c300x/alarm_state.py",
     "custom_components/bticino_c300x/fingerprint.py",
@@ -168,6 +170,11 @@ def main() -> int:
         if hasattr(camera_const, "CameraEntityFeature")
         else "--always-false"
     )
+    fan_branch = (
+        "--always-true"
+        if hasattr(fan_const, "FanEntityFeature")
+        else "--always-false"
+    )
     return subprocess.run(
         [
             sys.executable,
@@ -180,6 +187,8 @@ def main() -> int:
             "HA_USES_PROBATIO",
             camera_branch,
             "HA_CAMERA_FEATURE_IN_CONST",
+            fan_branch,
+            "HA_FAN_FEATURE_IN_CONST",
             *STRICT_TARGETS,
         ],
         check=False,

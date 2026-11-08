@@ -9,7 +9,11 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
 - `Alarm.qml`: blue native Alarmo subpage with conditional PIN input, confirmed
   state/readiness feedback, guarded arm/disarm commands and an optional selected
   HA quick entity. No selection means no additional action button.
-- `HomeAssistant.qml`: native dynamic Home Assistant board page backed by the local display bridge. It renders dashboard pages, badges, flow items, images, switches, and buttons without a refresh timer.
+- `HomeAssistant.qml`: native dynamic Home Assistant board page backed by the
+  local display bridge. Includes capability-based light, cover, climate and fan
+  controls, read-only sensor details, dashboard pages, badges, flow items,
+  images, switches and buttons without a refresh timer. See
+  [Display Device Controls](../docs/feature-reference.md#display-device-controls).
 - `C300XRingerControl.qml`: core, page-independent ringer command receiver.
   Uses the same `AudioState` enable/disable calls as the stock mute button.
   One loopback HTTP request waits for work without periodic polling; a timer

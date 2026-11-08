@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.1.0b4 - 2026-11-08
+
+### Added
+
+- Extend the blue native display with light color swatches and bounded white
+  presets, visual cover position with fixed up/stop/down controls, and climate
+  activity distinct from HVAC mode. Add supported climate fan/swing modes and
+  fan speed, oscillation, presets and direction.
+- Give sensors larger overview readings and read-only details with selected
+  supplementary values. Keep confirmed, event-driven state without additional
+  polling or refresh timers.
+
+### Upgrade
+
+- Includes rebuilt native agent `2.1.0b4`. Install the integration, restart HA,
+  complete the agent-update Repair and reapply the Display patch for the new
+  controls. Applying the Display patch restarts the device GUI.
+- Opt-in prerelease; stable remains `2.0.0`.
+
 ## v2.1.0b3 - 2026-11-08
 
 ### Fixed

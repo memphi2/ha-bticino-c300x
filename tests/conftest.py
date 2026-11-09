@@ -69,6 +69,13 @@ def _export_curl_include_path() -> None:
     directory = _curl_include_dir()
     if directory is None:
         return
+    if not os.path.exists(os.path.join(directory, "curl", "curl.h")):
+        # pkg-config answers from libcurl.pc, which can outlive the headers. A
+        # stale answer is usually a plain system directory, and putting one of
+        # those on CPATH makes GCC warn that it is changing the search order for
+        # a system directory and drop it from the system chain - which under the
+        # tests' -Werror would fail every native compile far from the cause.
+        return
     parts = [part for part in os.environ.get("CPATH", "").split(os.pathsep) if part]
     if directory not in parts:
         os.environ["CPATH"] = os.pathsep.join([*parts, directory])

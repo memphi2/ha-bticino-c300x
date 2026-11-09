@@ -9,6 +9,10 @@ Install the compiler, `pkg-config` and libcurl development headers first
 (`libcurl4-openssl-dev` on Debian/Ubuntu). The binary loads `libcurl.so.4`
 dynamically; it is not linked against the build host's TLS libraries.
 
+Without `pkg-config`, or with the headers outside the system include path, set
+`CURL_INCLUDE_DIR` to the directory that contains `curl/curl.h`. The Makefile
+and the Python tests that compile `https_client.c` both honour it.
+
 ```bash
 make -C native_agent
 make -C native_agent check

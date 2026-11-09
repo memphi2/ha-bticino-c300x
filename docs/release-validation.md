@@ -35,6 +35,10 @@ numerically (`b2 < b10 < rc1 < stable`) and restricted to merged older versions.
 Changes to native inputs require an agent version bump and rebuild, including
 between two betas. Integration-only changes may retain the verified agent;
 never relabel an old binary to give it the integration's beta version.
+Display files under `device_qml` ship in the bundle without entering the
+binary: their content is covered by the bundle hash, which the agent-update
+check compares, so a display-only change is delivered to the device on the
+verified agent and does not require a version bump.
 
 Prepare a new version and its dated notes only when that release is intended.
 Adding beta support or creating a development branch does not publish a beta.

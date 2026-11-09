@@ -224,8 +224,8 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "8141ddb24c3b6f2851ad7085fbf63ac2c5e6f4078f0418ba35d6cd325897c36f",
-    "HomeAssistant.qml": "f45889f6a28a3ddcccce871a00d076fa52e15341b04de7554cf416afc1cab95e",
+    "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
+    "HomeAssistant.qml": "268a63ae8f849f5dfcd5d89e0f551b4cfab465af0bf33343b9604f2969c012f0",
     "js/c300x_ha.js": "c136d5b8792206a082562c3dd4145675b91c493c2556655971f92ce60f35534f",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -645,7 +645,9 @@ def test_alarm_quick_action_keeps_label_and_confirmed_state_separate() -> None:
     assert "font.pixelSize: alarmPageItemName().length > 18 ? 17 : 20" in quick_tile_body
     assert "anchors.topMargin: alarmPageItemDetail().length > 0 ? 5 : 13" in quick_tile_body
     assert "textFormat: Text.PlainText" in quick_tile_body
-    assert "visible: alarmPageItem !== null" in alarm_qml
+    # QtQuick 1.1 cannot store JS null in a variant property, so this gate
+    # must stay on truthiness. See tests/test_qml_variant_null_contract.py.
+    assert "visible: alarmPageItem ? true : false" in alarm_qml
 
 
 def test_alarm_quick_action_does_not_refresh_home_assistant_dashboard() -> None:

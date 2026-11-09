@@ -52,6 +52,12 @@ NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "custom_components/bticino_c300x/device_agent/init",
     "scripts/stage_device_agent_bundle.py",
 )
+# Bundle inputs that never reach the agent binary. Their content is carried by
+# the bundle hash (stage_device_agent_bundle.py feeds qml_patch_hash into it),
+# and agent_update compares that hash, so a changed display file is delivered
+# without a new agent version. Requiring a bump here would mean relabelling an
+# unchanged binary with the new version, which release validation forbids.
+NATIVE_AGENT_BUNDLE_CONTENT_ONLY_PATHS = ("device_qml",)
 TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -544,6 +550,7 @@ def _native_agent_version_bump_failures(
         path
         for path in changed_paths
         if _path_is_native_agent_bundle_input(path)
+        and not _path_is_bundle_content_only(path)
         and path != NATIVE_AGENT_VERSION_PATH
     ]
     if not bundle_changes or NATIVE_AGENT_VERSION_PATH in changed_paths:
@@ -571,6 +578,15 @@ def _git_changed_paths(base_ref: str, *paths: str) -> list[str] | None:
     if result.returncode != 0:
         return None
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _path_is_bundle_content_only(path: str) -> bool:
+    """Report whether the path ships in the bundle without entering the binary."""
+
+    return any(
+        path == watched or path.startswith(f"{watched}/")
+        for watched in NATIVE_AGENT_BUNDLE_CONTENT_ONLY_PATHS
+    )
 
 
 def _path_is_native_agent_bundle_input(path: str) -> bool:

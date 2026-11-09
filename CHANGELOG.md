@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.1.0b6 - 2026-11-09
+
+### Fixed
+
+- Restore the native C300X display dashboard, which showed only an empty line
+  with a green "board loaded" status since 2.1.0b1. The dashboard container was
+  gated on `selectedItem === null`, but QtQuick 1.1 cannot store JavaScript
+  `null` in a `variant` property, so the gate never matched and hid badges,
+  weather, flow, tiles and the pager. The same inverted check also left a stray
+  row visible on the alarm page.
+- Keep display detail controls correct when the device reports no value: the
+  slider handle no longer starts at an undefined position, and a switch control
+  without a known state shows "?" and an unknown-state indicator instead of an
+  off-looking box.
+- Size the alarm quick-action tile like the panel below it instead of leaving it
+  short by the width of the hidden keypad.
+
 ## v2.1.0b5 - 2026-11-08
 
 ### Changed

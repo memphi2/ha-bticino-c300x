@@ -2225,15 +2225,29 @@ def free_udp_port() -> int:
         return int(sock.getsockname()[1])
 
 
+# Waiting for a freshly spawned agent to bind its HTTP port. This is process
+# startup, not a request timeout: a loaded CI runner building and starting many
+# agents in sequence needs more than a couple of seconds, and the budget only
+# costs time when the agent genuinely never comes up.
+HEALTH_READY_TIMEOUT = 30.0
+
+
 def wait_for_health(api_port: int) -> None:
-    deadline = time.monotonic() + 5
+    started = time.monotonic()
+    deadline = started + HEALTH_READY_TIMEOUT
+    last_error: Exception | None = None
     while time.monotonic() < deadline:
         try:
             api_get(api_port, "/api/v1/health", authorized=False)
             return
-        except (OSError, urllib.error.URLError):
+        except (OSError, urllib.error.URLError) as error:
+            last_error = error
             time.sleep(0.05)
-    raise AssertionError("native agent health endpoint did not become ready")
+    waited = time.monotonic() - started
+    raise AssertionError(
+        "native agent health endpoint did not become ready on port "
+        f"{api_port} after {waited:.1f}s: {last_error!r}"
+    )
 
 
 def api_get(api_port: int, path: str, *, authorized: bool = True) -> dict[str, Any]:

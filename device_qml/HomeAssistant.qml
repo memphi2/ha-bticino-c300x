@@ -515,7 +515,7 @@ Page {
                             Item {
                                 width: (notificationColumn.width - 8) / 2
                                 height: 48
-                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                                Image { anchors.fill: parent; source: notificationActionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                                 UbuntuLightText {
                                     anchors.fill: parent; anchors.margins: 8
                                     text: modelData.label; textFormat: Text.PlainText
@@ -523,7 +523,7 @@ Page {
                                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight
                                 }
-                                BeepingMouseArea { anchors.fill: parent; onClicked: notificationAction(notification, modelData.action_id) }
+                                BeepingMouseArea { id: notificationActionMouse; anchors.fill: parent; onClicked: notificationAction(notification, modelData.action_id) }
                             }
                         }
                     }
@@ -619,9 +619,10 @@ Page {
                         property variant control: modelData
                         width: (summaryActions.width - 16) / 3; height: 48
                         opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
-                        Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                        Image { anchors.fill: parent; source: coverControlMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                         UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: 26; color: "white" }
                         BeepingMouseArea {
+                            id: coverControlMouse
                             anchors.fill: parent
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
@@ -710,7 +711,7 @@ Page {
                     Image {
                         visible: control.kind === "button"
                         anchors.fill: parent
-                        source: "images/settings/list_btn.svg"
+                        source: controlButtonMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"
                         fillMode: Image.Stretch
                     }
                     UbuntuLightText {
@@ -753,9 +754,9 @@ Page {
                             Item {
                                 width: 52
                                 height: 44
-                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                                Image { anchors.fill: parent; source: adjustMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
                                 UbuntuLightText { anchors.centerIn: parent; text: modelData < 0 ? "-" : "+"; font.pixelSize: 24; color: "white" }
-                                BeepingMouseArea { anchors.fill: parent; onClicked: adjustControl(selectedItem, control, modelData) }
+                                BeepingMouseArea { id: adjustMouse; anchors.fill: parent; onClicked: adjustControl(selectedItem, control, modelData) }
                             }
                         }
                     }
@@ -831,6 +832,7 @@ Page {
                         BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, control, control.value === true ? "false" : "true", status, page) }
                     }
                     BeepingMouseArea {
+                        id: controlButtonMouse
                         visible: control.kind === "button"
                         anchors.fill: parent
                         onClicked: Api.dashboardControl(selectedItem, control, null, status, page)
@@ -887,7 +889,7 @@ Page {
             width: parent.width
             height: notifications.length > 0 ? 44 : 0
             visible: notifications.length > 0
-            Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+            Image { anchors.fill: parent; source: notificationBannerMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
             UbuntuLightText {
                 anchors.fill: parent; anchors.margins: 9
                 text: notifications.length > 0 ? notificationSymbol(notifications[0]) + "  " + notifications[0].title + " (" + notifications.length + ")" : ""
@@ -895,7 +897,7 @@ Page {
                 color: notifications.length > 0 ? notificationColor(notifications[0]) : "white"
                 elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
             }
-            BeepingMouseArea { anchors.fill: parent; onClicked: notificationsOpen = true }
+            BeepingMouseArea { id: notificationBannerMouse; anchors.fill: parent; onClicked: notificationsOpen = true }
         }
 
         Grid {

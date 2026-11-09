@@ -97,11 +97,12 @@ need confirmation during beta testing.
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans and sensors under **Display
-dashboard**. The blue overview provides direct light/fan on/off, cover
-up/stop/down and target-temperature adjustment. Tap the name/state area or the
-chevron to open supported controls; tap a sensor tile for its read-only details.
-The separate quick-action buttons operate the entity without opening details.
-Back returns to the same overview page and scroll position.
+dashboard**. Entities with controls share the two-column overview with sensors.
+A chevron marks every tile that has a submenu: tap anywhere on such a tile to
+open its supported controls, or tap a sensor tile for its read-only details.
+Lights and fans keep an on/off switch on the tile itself. Covers and climate
+entities are operated from their submenu, because neither has a single on/off
+action. Back returns to the same overview page and scroll position.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;

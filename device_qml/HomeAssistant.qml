@@ -209,15 +209,6 @@ Page {
         details.contentY = 0
     }
 
-    function overviewControls(item) {
-        var result = []
-        var controls = item.controls || []
-        for (var i = 0; i < controls.length; i++) {
-            if (controls[i].kind === "button" || controls[i].command === "temperature" || controls[i].command === "value") result.push(controls[i])
-        }
-        return result
-    }
-
     function adjustControl(item, control, direction) {
         if (controlValueUnset(control)) return
         var steps = Math.round((Number(control.value) - control.min) / control.step) + direction
@@ -371,118 +362,83 @@ Page {
         return item && item.time ? item.time : ""
     }
 
+    // One switch look for every on/off toggle: the overview tile, the control
+    // tile and the detail summary all load this style, so they cannot drift apart.
+    Component {
+        id: haSwitchStyle
+        CheckableButtonStyle {
+            defaultImage: "images/ringtones/switch-bg_btn.svg"
+            checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+            defaultIconLeft: "images/ringtones/switch_btn.svg"
+            defaultIconRight: "images/ringtones/disable_icon.svg"
+            checkedIconLeft: "images/ringtones/enable_icon.svg"
+            checkedIconRight: "images/ringtones/switch_btn_p.svg"
+        }
+    }
+
     Component {
         id: controlOverview
         Item {
             property variant tileItem: parent ? parent.tileItem : ({})
+            property bool hasToggle: Api.dashboardControlByCommand(tileItem, "toggle") ? true : false
+            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
             anchors.fill: parent
             Image {
                 anchors.fill: parent
                 source: "images/settings/act_btn.svg"
                 fillMode: Image.Stretch
             }
+            BeepingMouseArea {
+                id: overviewMouse
+                anchors.fill: parent
+                onClicked: openDetails(tileItem)
+            }
             UbuntuLightText {
                 anchors.left: parent.left
-                anchors.right: detailsButton.left
+                anchors.leftMargin: 14
+                anchors.right: overviewToggle.left
+                anchors.rightMargin: 8
                 anchors.top: parent.top
-                anchors.margins: 12
-                text: itemName(tileItem)
+                anchors.topMargin: 9
+                text: itemName(tileItem) + trsl.empty
                 textFormat: Text.PlainText
-                font.pixelSize: 20
+                font.pixelSize: 17
                 color: "white"
                 elide: Text.ElideRight
             }
             UbuntuLightText {
                 anchors.left: parent.left
-                anchors.right: detailsButton.left
-                anchors.top: parent.top
-                anchors.leftMargin: 12
-                anchors.topMargin: 39
-                text: itemDetail(tileItem)
+                anchors.leftMargin: 14
+                anchors.right: overviewToggle.left
+                anchors.rightMargin: 8
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 8
+                text: (feedbackText(tileItem) || itemDetail(tileItem)) + trsl.empty
                 textFormat: Text.PlainText
                 font.pixelSize: 15
-                color: tileItem.available === false ? "#f1c40f" : "#c7d0d9"
+                color: feedbackText(tileItem) ? feedbackColor(tileItem) : (tileItem.available === false ? "#f1c40f" : "#c7d0d9")
                 elide: Text.ElideRight
             }
-            BeepingMouseArea {
-                id: overviewDetailsMouse
-                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                height: 60
-                onClicked: openDetails(tileItem)
-            }
-            Item {
-                id: detailsButton
-                width: 52
-                height: 42
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 8
-                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
-                UbuntuLightText { anchors.centerIn: parent; text: "\u203a"; font.pixelSize: 28; color: "white" }
-                BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
-            }
-            Row {
-                id: quickControls
-                anchors.left: parent.left
-                anchors.bottom: parent.bottom
-                anchors.margins: 8
-                spacing: 8
-                Repeater {
-                    model: overviewControls(tileItem)
-                    Row {
-                        property variant control: modelData
-                        spacing: 8
-                        Repeater {
-                            model: control.kind === "number" ? [-1, 1] : [0]
-                            Item {
-                                width: 52
-                                height: 44
-                                opacity: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
-                                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
-                                Image {
-                                    visible: control.command === "toggle"
-                                    anchors.centerIn: parent; width: 36; height: 36
-                                    source: "images/onoff_button.svg"
-                                    fillMode: Image.PreserveAspectFit
-                                }
-                                Rectangle {
-                                    visible: control.command === "toggle" && tileItem.state
-                                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                                    width: 3; height: 28; color: "#58d68d"
-                                }
-                                UbuntuLightText {
-                                    visible: control.command !== "toggle"
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    text: modelData === -1 ? "-" : modelData === 1 ? "+" : controlLabel(control)
-                                    textFormat: Text.PlainText
-                                    font.pixelSize: 18
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                    color: "white"
-                                }
-                                BeepingMouseArea {
-                                    anchors.fill: parent
-                                    enabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
-                                    onClicked: {
-                                        if (control.kind === "number") adjustControl(tileItem, control, modelData)
-                                        else Api.dashboardControl(tileItem, control, null, status, page)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             UbuntuLightText {
-                anchors.left: quickControls.right; anchors.leftMargin: 12
+                id: overviewChevron
                 anchors.right: parent.right; anchors.rightMargin: 12
-                anchors.bottom: parent.bottom; anchors.bottomMargin: 8
-                height: 44; font.pixelSize: 15
-                text: feedbackText(tileItem); textFormat: Text.PlainText
-                color: feedbackColor(tileItem); wrapMode: Text.Wrap; elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\u203a"; font.pixelSize: 28; color: "white"
+            }
+            BasicButton {
+                id: overviewToggle
+                visible: hasToggle
+                width: hasToggle ? 86 : 0
+                height: 36
+                anchors.right: overviewChevron.left
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                enabled: controlsEnabled
+                opacity: controlsEnabled ? 1 : 0.45
+                checkable: false
+                checked: tileItem.state ? true : false
+                style: haSwitchStyle
+                onTouched: Api.dashboardControl(tileItem, Api.dashboardControlByCommand(tileItem, "toggle"), null, status, page)
             }
         }
     }
@@ -636,23 +592,23 @@ Page {
             height: parent.height
             UbuntuLightText {
                 anchors.top: parent.top; anchors.topMargin: 8
-                width: summaryToggle.visible ? parent.width - 64 : parent.width; height: 64
+                width: summaryToggle.visible ? parent.width - 98 : parent.width; height: 64
                 text: detailState(selectedItem); textFormat: Text.PlainText
                 font.pixelSize: 18; color: detailColor(selectedItem); wrapMode: Text.Wrap; elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
             }
-            Item {
+            BasicButton {
                 id: summaryToggle
-                property variant control: Api.dashboardControlByCommand(selectedItem, "toggle")
-                visible: control ? (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan") : false
-                anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 18
-                width: 52; height: 44
+                property bool hasToggle: Api.dashboardControlByCommand(selectedItem, "toggle") ? true : false
+                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan")
+                anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 22
+                width: 86; height: 36
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
                 opacity: enabled ? 1 : 0.45
-                Image { anchors.fill: parent; source: "images/settings/list_btn.svg"; fillMode: Image.Stretch }
-                Image { anchors.centerIn: parent; width: 36; height: 36; fillMode: Image.PreserveAspectFit; source: "images/onoff_button.svg" }
-                Rectangle { visible: selectedItem && selectedItem.state === true; anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 3; height: 28; color: "#58d68d" }
-                BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, summaryToggle.control, null, status, page) }
+                checkable: false
+                checked: selectedItem && selectedItem.state === true ? true : false
+                style: haSwitchStyle
+                onTouched: Api.dashboardControl(selectedItem, Api.dashboardControlByCommand(selectedItem, "toggle"), null, status, page)
             }
             Row {
                 anchors.top: parent.top; anchors.topMargin: 62; width: parent.width; spacing: 8
@@ -1397,14 +1353,7 @@ Page {
                                 anchors.verticalCenter: parent.verticalCenter
                                 checkable: false
                                 checked: tileItem.state
-                                style: CheckableButtonStyle {
-                                    defaultImage: "images/ringtones/switch-bg_btn.svg"
-                                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
-                                    defaultIconLeft: "images/ringtones/switch_btn.svg"
-                                    defaultIconRight: "images/ringtones/disable_icon.svg"
-                                    checkedIconLeft: "images/ringtones/enable_icon.svg"
-                                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
-                                }
+                                style: haSwitchStyle
                                 onTouched: Api.dashboardAction(tileItem, status, page)
                             }
                         }
@@ -1655,8 +1604,8 @@ Page {
                             property bool isImage: tileItem.kind === "image"
                             property bool hasControls: tileItem.controls !== undefined
                             property bool isSensor: tileItem.details !== undefined && (tileItem.details.type === "sensor" || tileItem.details.type === "binary_sensor")
-                            width: hasControls || isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
-                            height: hasControls ? 112 : isSensor ? 94 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58)))
+                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
+                            height: isSensor ? 94 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (hasControls || isSlider || isButton ? 64 : 58)))
 
                             Loader {
                                 anchors.fill: parent

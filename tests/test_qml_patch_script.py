@@ -225,7 +225,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "268a63ae8f849f5dfcd5d89e0f551b4cfab465af0bf33343b9604f2969c012f0",
+    "HomeAssistant.qml": "747ac9f6657c026de0ca64aab96c3ef0ff22e08c0e1f24317b4eef062b03547f",
     "js/c300x_ha.js": "c136d5b8792206a082562c3dd4145675b91c493c2556655971f92ce60f35534f",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -581,13 +581,76 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
     assert "Flow {" in mixed_items_body
     assert "property int tileWidth: (width - spacing) / 2" in mixed_items_body
     assert (
-        "width: hasControls || isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
+        "width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
         in mixed_items_body
     )
+    # Entities with controls are opened from the tile itself, so they stay in the
+    # two-column grid instead of claiming a full-width row for a quick-control row.
+    assert "hasControls ||" not in mixed_items_body.split("height:")[0]
     assert "Loader {" in mixed_items_body
     assert "sourceComponent:" in mixed_items_body
     assert "visible: mixedTile.is" not in mixed_items_body
     assert "visible: !mixedTile.is" not in mixed_items_body
+
+
+def test_home_assistant_control_tiles_open_from_the_tile_with_a_single_switch() -> None:
+    """Control tiles must not need a separate arrow button to open their detail.
+
+    The tile background carries the open gesture, exactly like a sensor tile, and
+    the only control left on the overview is the on/off switch. A quick-control
+    row would force the tile back to full width.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    overview = home_assistant_qml[
+        home_assistant_qml.index("id: controlOverview") :
+        home_assistant_qml.index("id: sensorOverview")
+    ]
+
+    assert "BeepingMouseArea {" in overview
+    assert "onClicked: openDetails(tileItem)" in overview
+    assert "anchors.fill: parent" in overview
+    # The chevron stays as the "has a submenu" marker, like the sensor tile, but
+    # it is a plain label now: the tile itself carries the open gesture and there
+    # is no separate arrow button and no quick-control repeater.
+    assert overview.count("\\u203a") == 1
+    assert "BasicButton {" in overview
+    assert "Repeater {" not in overview
+    assert overview.count("BeepingMouseArea {") == 1
+    # Exactly one toggle, drawn as the shared firmware switch widget.
+    assert overview.count("onTouched:") == 1
+    assert "style: haSwitchStyle" in overview
+    assert 'dashboardControlByCommand(tileItem, "toggle")' in overview
+    assert "images/onoff_button.svg" not in overview
+
+
+def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
+    """Every on/off toggle must look like the firmware switch.
+
+    The tile overview and the detail summary show the same entity, so they must
+    not disagree on what a toggle looks like. The old icon-on-a-list-button
+    artwork is retired everywhere.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    summary_toggle = home_assistant_qml[
+        home_assistant_qml.index("id: summaryToggle") :
+        home_assistant_qml.index("id: summaryToggle") + 1600
+    ]
+
+    assert "images/onoff_button.svg" not in home_assistant_qml
+    assert "style: haSwitchStyle" in summary_toggle
+    assert 'dashboardControlByCommand(selectedItem, "toggle")' in summary_toggle
+    # The switch renders its own state, so the green state bar is redundant.
+    assert 'color: "#58d68d"' not in summary_toggle
+    # The artwork is declared once and loaded by every switch, so the overview
+    # tile and the detail summary cannot drift apart again.
+    assert home_assistant_qml.count("CheckableButtonStyle {") == 1
+    assert home_assistant_qml.count("style: haSwitchStyle") == 3
 
 
 def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() -> None:

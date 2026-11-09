@@ -870,7 +870,7 @@ Page {
                     Item {
                         visible: control.kind === "boolean"
                         anchors.right: parent.right; width: 124; height: 44
-                        Rectangle { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 30; height: 30; radius: 3; color: control.value === true ? "#58d68d" : "transparent"; border.color: "white"; border.width: 2 }
+                        Rectangle { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 30; height: 30; radius: 3; color: control.value === true ? "#58d68d" : "transparent"; border.color: controlValueUnset(control) ? "#f1c40f" : "white"; border.width: 2 }
                         UbuntuLightText { anchors.left: parent.left; anchors.leftMargin: 44; anchors.verticalCenter: parent.verticalCenter; text: controlValueUnset(control) ? "?" : uiText(control.value ? "on" : "off"); font.pixelSize: 18; color: "white" }
                         BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, control, control.value === true ? "false" : "true", status, page) }
                     }

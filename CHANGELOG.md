@@ -12,7 +12,8 @@
   row visible on the alarm page.
 - Keep display detail controls correct when the device reports no value: the
   slider handle no longer starts at an undefined position, and a switch control
-  without a known state shows "?" instead of claiming "off".
+  without a known state shows "?" and an unknown-state indicator instead of an
+  off-looking box.
 - Size the alarm quick-action tile like the panel below it instead of leaving it
   short by the width of the hidden keypad.
 

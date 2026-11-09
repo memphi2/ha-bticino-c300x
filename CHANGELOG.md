@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Restore the native C300X display dashboard, which showed only an empty line
+  with a green "board loaded" status since 2.1.0b1. The dashboard container was
+  gated on `selectedItem === null`, but QtQuick 1.1 cannot store JavaScript
+  `null` in a `variant` property, so the gate never matched and hid badges,
+  weather, flow, tiles and the pager. The same inverted check also left a stray
+  row visible on the alarm page.
+
 ## v2.1.0b5 - 2026-11-08
 
 ### Changed

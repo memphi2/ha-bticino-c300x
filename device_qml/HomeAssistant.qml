@@ -46,6 +46,7 @@ Page {
     property string weatherUpdated: ""
     property string weatherColor: "#58d68d"
     property variant selectedItem: null
+    property bool detailOpen: selectedItem ? true : false
     property string detailSection: ""
     property variant detailSections: Api.dashboardDetailSections(selectedItem)
     property variant detailControls: Api.dashboardVisibleControls(selectedItem, detailSection)
@@ -574,7 +575,7 @@ Page {
         id: entitySummary
         property variant summary: selectedItem && selectedItem.details ? selectedItem.details : ({})
         property bool isCover: summary.type === "cover"
-        visible: selectedItem !== null && selectedItem.details !== undefined && !notificationsOpen
+        visible: detailOpen && selectedItem.details !== undefined && !notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.leftMargin: 24; anchors.rightMargin: 24
@@ -637,7 +638,7 @@ Page {
             Item {
                 id: summaryToggle
                 property variant control: Api.dashboardControlByCommand(selectedItem, "toggle")
-                visible: control !== null && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan")
+                visible: control ? (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan") : false
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 18
                 width: 52; height: 44
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
@@ -675,7 +676,7 @@ Page {
         anchors.top: entitySummary.bottom
         anchors.left: parent.left; anchors.right: parent.right
         anchors.leftMargin: 24; anchors.rightMargin: 24; anchors.topMargin: visible ? 8 : 0
-        visible: selectedItem !== null && !notificationsOpen && detailSections.length > 0
+        visible: detailOpen && !notificationsOpen && detailSections.length > 0
         height: visible ? 44 : 0
         spacing: 8
         Repeater {
@@ -695,7 +696,7 @@ Page {
 
     Flickable {
         id: details
-        visible: selectedItem !== null && !notificationsOpen
+        visible: detailOpen && !notificationsOpen
         anchors.top: detailTabs.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -715,7 +716,7 @@ Page {
             UbuntuLightText {
                 width: parent.width
                 height: visible ? implicitHeight : 0
-                visible: selectedItem !== null && selectedItem.details === undefined
+                visible: detailOpen && selectedItem.details === undefined
                 text: selectedItem ? itemDetail(selectedItem) : ""
                 textFormat: Text.PlainText
                 font.pixelSize: 18
@@ -892,7 +893,7 @@ Page {
 
     UbuntuLightText {
         id: detailStatus
-        visible: selectedItem !== null || notificationsOpen
+        visible: detailOpen || notificationsOpen
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -908,7 +909,7 @@ Page {
     }
 
     Column {
-        visible: selectedItem === null && !notificationsOpen
+        visible: !detailOpen && !notificationsOpen
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right

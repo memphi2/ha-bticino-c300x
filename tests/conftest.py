@@ -32,16 +32,40 @@ def _curl_include_dir() -> str | None:
     return result.stdout.strip() or None
 
 
+def _compiler_finds_curl_header() -> bool:
+    """Report whether the compiler already resolves curl/curl.h on its own."""
+
+    compiler = shutil.which("cc") or shutil.which("gcc")
+    if compiler is None:
+        return False
+    probe = subprocess.run(
+        [compiler, "-fsyntax-only", "-xc", "-"],
+        input="#include <curl/curl.h>\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
 def _export_curl_include_path() -> None:
     """Let the in-test C compiles find curl/curl.h without a system dev package.
 
-    native_agent/Makefile honours CURL_INCLUDE_DIR, but the tests that compile
-    https_client.c assemble their own command lines and would miss it. CPATH
-    reaches every one of them, present and future, without repeating include
-    flags at each call site. Without a resolvable directory nothing changes, so
-    machines with the headers installed system-wide behave as before.
+    native_agent/Makefile resolves the directory from CURL_INCLUDE_DIR, falling
+    back to pkg-config, but the tests that compile https_client.c assemble their
+    own command lines and would miss it. CPATH reaches every one of them,
+    present and future, without repeating include flags at each call site.
+
+    The Makefile applies the directory with -idirafter, so it only ever acts as
+    a fallback behind the system include path. CPATH instead behaves like -I and
+    would take precedence, which would let the suite validate a different curl
+    ABI than the shipped build compiles against. The probe below keeps the two
+    paths equivalent: when the compiler already finds the header, nothing is
+    exported and the system headers win here too.
     """
 
+    if _compiler_finds_curl_header():
+        return
     directory = _curl_include_dir()
     if directory is None:
         return

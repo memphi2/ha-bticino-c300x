@@ -26,43 +26,105 @@ def _variant_properties(text: str) -> set[str]:
     return set(_VARIANT_DECLARATION.findall(text))
 
 
-def _null_comparisons(line: str, name: str) -> list[str]:
-    """Return the expressions on ``line`` that this contract rejects.
+# The only two spellings that survive the QVariant round trip. Anything else
+# that mentions null is either always true or always false.
+_ACCEPTED_PAIRS = (
+    r"{e}\s*===\s*null\s*\|\|\s*{e}\s*===\s*undefined",
+    r"{e}\s*===\s*undefined\s*\|\|\s*{e}\s*===\s*null",
+    r"{e}\s*!==\s*null\s*&&\s*{e}\s*!==\s*undefined",
+    r"{e}\s*!==\s*undefined\s*&&\s*{e}\s*!==\s*null",
+)
+
+
+def _null_comparisons(line: str, names: set[str]) -> list[str]:
+    """Return the null comparisons on ``line`` that this contract rejects.
 
     Both the property itself and any member read from it go through the same
     QVariant round trip, so ``control.value === null`` is as unsafe as
-    ``selectedItem === null``. Comparing the same expression against
-    ``undefined`` on the same line is the accepted spelling and is allowed.
+    ``selectedItem === null``.
+
+    A comparison is accepted only as part of a complete null-or-undefined
+    check: ``x === null || x === undefined`` or ``x !== null && x !== undefined``
+    in either order. Merely mentioning ``undefined`` somewhere on the line is
+    not enough, because ``x !== null || x !== undefined`` is always true and
+    ``x === null && x === undefined`` is always false - the accepted pairs are
+    removed from the line first, and whatever still compares against null is
+    reported.
     """
 
-    pattern = rf"\b({re.escape(name)}(?:\.\w+)*)\s*(===|!==)\s*null\b"
-    offenders = []
-    for expression, operator in re.findall(pattern, line):
-        guarded = re.search(
-            rf"{re.escape(expression)}\s*(===|!==)\s*undefined\b", line
+    offenders: list[str] = []
+    for name in sorted(names):
+        # Capture the whole dotted chain, including any object qualifier, so
+        # that entitySummary.summary.position is compared as one expression.
+        pattern = (
+            rf"((?:\w+\.)*\b{re.escape(name)}(?:\.\w+)*)\s*(===|!==)\s*null\b"
         )
-        if not guarded:
-            offenders.append(f"{expression} {operator} null")
+        remaining = line
+        for expression, _ in re.findall(pattern, line):
+            escaped = re.escape(expression)
+            for shape in _ACCEPTED_PAIRS:
+                remaining = re.sub(shape.format(e=escaped), "", remaining)
+        offenders.extend(
+            f"{expression} {operator} null"
+            for expression, operator in re.findall(pattern, remaining)
+        )
     return offenders
+
+
+def _declared_variant_properties() -> set[str]:
+    """Collect variant property names across every device QML file.
+
+    A variant read in one file can be declared in another, so the names are
+    pooled rather than checked only against the file that declares them.
+    """
+
+    names: set[str] = set()
+    for path in sorted(QML_DIR.rglob("*.qml")):
+        names |= _variant_properties(path.read_text(encoding="utf-8"))
+    return names
+
+
+def test_null_guard_rejects_incomplete_and_always_true_checks() -> None:
+    names = {"selectedItem", "control"}
+
+    assert _null_comparisons("visible: selectedItem === null", names)
+    assert _null_comparisons("x: control.value !== null", names)
+    # always true
+    assert _null_comparisons(
+        "visible: selectedItem !== null || selectedItem !== undefined", names
+    )
+    # always false
+    assert _null_comparisons(
+        "visible: selectedItem === null && selectedItem === undefined", names
+    )
+    # unrelated expression mentioning undefined does not excuse it
+    assert _null_comparisons(
+        "visible: selectedItem === null && control.value !== undefined", names
+    )
+
+    assert not _null_comparisons(
+        "return control.value === null || control.value === undefined", names
+    )
+    assert not _null_comparisons(
+        "visible: control.value !== null && control.value !== undefined", names
+    )
+    assert not _null_comparisons("visible: !selectedItem && control", names)
 
 
 def test_device_qml_never_compares_variant_properties_to_null() -> None:
     offenders: list[str] = []
     checked = 0
 
-    for path in sorted(QML_DIR.glob("*.qml")):
+    names = _declared_variant_properties()
+    for path in sorted(QML_DIR.rglob("*.qml")):
         text = path.read_text(encoding="utf-8")
-        names = _variant_properties(text)
-        if not names:
-            continue
         checked += 1
         for number, line in enumerate(text.splitlines(), start=1):
-            for name in sorted(names):
-                for comparison in _null_comparisons(line, name):
-                    offenders.append(
-                        f"{path.relative_to(ROOT)}:{number}: {comparison} -> "
-                        "use truthiness, or compare against undefined as well"
-                    )
+            for comparison in _null_comparisons(line, names):
+                offenders.append(
+                    f"{path.relative_to(ROOT)}:{number}: {comparison} -> use "
+                    "truthiness, or a complete null-or-undefined check"
+                )
 
     assert checked, "no QML file with variant properties was inspected"
     assert not offenders, "\n".join(offenders)

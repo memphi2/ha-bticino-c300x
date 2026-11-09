@@ -332,8 +332,26 @@ def test_native_agent_release_gate_requires_version_bump_for_bundle_changes() ->
 
     assert failures == [
         "native-agent bundle inputs changed since v1.8.4 without bumping "
-        "native_agent/VERSION: native_agent/src/http.c, device_qml/HomeAssistant.qml"
+        "native_agent/VERSION: native_agent/src/http.c"
     ]
+
+
+def test_native_agent_release_gate_ignores_display_only_bundle_changes() -> None:
+    """Display files ship by bundle hash, so they need no agent version bump."""
+
+    checker = _load_repo_checker()
+
+    assert (
+        checker._native_agent_version_bump_failures(
+            "v1.8.4",
+            [
+                "device_qml/HomeAssistant.qml",
+                "device_qml/Alarm.qml",
+                "device_qml/js/c300x_ha.js",
+            ],
+        )
+        == []
+    )
 
 
 def test_native_agent_release_gate_accepts_matching_version_bump() -> None:

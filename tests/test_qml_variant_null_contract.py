@@ -26,6 +26,26 @@ def _variant_properties(text: str) -> set[str]:
     return set(_VARIANT_DECLARATION.findall(text))
 
 
+def _null_comparisons(line: str, name: str) -> list[str]:
+    """Return the expressions on ``line`` that this contract rejects.
+
+    Both the property itself and any member read from it go through the same
+    QVariant round trip, so ``control.value === null`` is as unsafe as
+    ``selectedItem === null``. Comparing the same expression against
+    ``undefined`` on the same line is the accepted spelling and is allowed.
+    """
+
+    pattern = rf"\b({re.escape(name)}(?:\.\w+)*)\s*(===|!==)\s*null\b"
+    offenders = []
+    for expression, operator in re.findall(pattern, line):
+        guarded = re.search(
+            rf"{re.escape(expression)}\s*(===|!==)\s*undefined\b", line
+        )
+        if not guarded:
+            offenders.append(f"{expression} {operator} null")
+    return offenders
+
+
 def test_device_qml_never_compares_variant_properties_to_null() -> None:
     offenders: list[str] = []
     checked = 0
@@ -37,13 +57,12 @@ def test_device_qml_never_compares_variant_properties_to_null() -> None:
             continue
         checked += 1
         for number, line in enumerate(text.splitlines(), start=1):
-            for name in names:
-                for operator in ("===", "!=="):
-                    if re.search(rf"\b{re.escape(name)}\s*{re.escape(operator)}\s*null\b", line):
-                        offenders.append(
-                            f"{path.relative_to(ROOT)}:{number}: "
-                            f"{name} {operator} null -> use truthiness instead"
-                        )
+            for name in sorted(names):
+                for comparison in _null_comparisons(line, name):
+                    offenders.append(
+                        f"{path.relative_to(ROOT)}:{number}: {comparison} -> "
+                        "use truthiness, or compare against undefined as well"
+                    )
 
     assert checked, "no QML file with variant properties was inspected"
     assert not offenders, "\n".join(offenders)

@@ -10,6 +10,9 @@
   `null` in a `variant` property, so the gate never matched and hid badges,
   weather, flow, tiles and the pager. The same inverted check also left a stray
   row visible on the alarm page.
+- Keep display detail controls correct when the device reports no value: the
+  slider handle no longer starts at an undefined position, and a switch control
+  without a known state shows "?" instead of claiming "off".
 
 ## v2.1.0b5 - 2026-11-08
 

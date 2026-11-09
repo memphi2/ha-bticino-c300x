@@ -133,8 +133,14 @@ Page {
         return uiText(control.command)
     }
 
+    function controlValueUnset(control) {
+        // A JSON null stored in a variant property reads back as undefined in
+        // QtQuick 1.1, so both spellings mean "no value".
+        return control.value === null || control.value === undefined
+    }
+
     function controlValue(control) {
-        return control.value === null || control.value === undefined ? "?" : String(control.value) + (control.unit ? " " + control.unit : "")
+        return controlValueUnset(control) ? "?" : String(control.value) + (control.unit ? " " + control.unit : "")
     }
 
     function optionLabel(control, option) {
@@ -213,7 +219,7 @@ Page {
     }
 
     function adjustControl(item, control, direction) {
-        if (control.value === null || control.value === undefined) return
+        if (controlValueUnset(control)) return
         var steps = Math.round((Number(control.value) - control.min) / control.step) + direction
         steps = Math.max(0, Math.min(Math.floor((control.max - control.min) / control.step), steps))
         var value = control.min + steps * control.step
@@ -737,9 +743,9 @@ Page {
                     id: controlRow
                     property variant control: detailControls[index]
                     property bool paletteTab: control.command === "color" && detailSections.length > 0
-                    property real preview: control.kind === "number" ? (control.value === null ? control.min : Number(control.value)) : 0
+                    property real preview: control.kind === "number" ? (controlValueUnset(control) ? control.min : Number(control.value)) : 0
                     onControlChanged: {
-                        if (sliderMouse && !sliderMouse.pressed) preview = control.kind === "number" ? (control.value === null ? control.min : Number(control.value)) : 0
+                        if (sliderMouse && !sliderMouse.pressed) preview = control.kind === "number" ? (controlValueUnset(control) ? control.min : Number(control.value)) : 0
                     }
                     width: controlColumn.width
                     height: control.kind === "choice" ? (paletteTab ? 0 : 28) + optionGrid.height : control.kind === "number" ? (control.presets ? 124 : 72) : 44
@@ -865,7 +871,7 @@ Page {
                         visible: control.kind === "boolean"
                         anchors.right: parent.right; width: 124; height: 44
                         Rectangle { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; width: 30; height: 30; radius: 3; color: control.value === true ? "#58d68d" : "transparent"; border.color: "white"; border.width: 2 }
-                        UbuntuLightText { anchors.left: parent.left; anchors.leftMargin: 44; anchors.verticalCenter: parent.verticalCenter; text: control.value === null ? "?" : uiText(control.value ? "on" : "off"); font.pixelSize: 18; color: "white" }
+                        UbuntuLightText { anchors.left: parent.left; anchors.leftMargin: 44; anchors.verticalCenter: parent.verticalCenter; text: controlValueUnset(control) ? "?" : uiText(control.value ? "on" : "off"); font.pixelSize: 18; color: "white" }
                         BeepingMouseArea { anchors.fill: parent; onClicked: Api.dashboardControl(selectedItem, control, control.value === true ? "false" : "true", status, page) }
                     }
                     BeepingMouseArea {

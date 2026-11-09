@@ -1,5 +1,8 @@
 """Keep shared HA validation aliases and exception types stable across tests."""
 
+import os
+import shutil
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -9,6 +12,45 @@ import homeassistant.exceptions  # noqa: F401
 import homeassistant.helpers.aiohttp_client  # noqa: F401
 import homeassistant.helpers.selector  # noqa: F401
 import pytest
+
+
+def _curl_include_dir() -> str | None:
+    """Resolve the libcurl headers exactly as native_agent/Makefile does."""
+
+    configured = os.environ.get("CURL_INCLUDE_DIR", "").strip()
+    if configured:
+        return configured
+    pkg_config = shutil.which("pkg-config")
+    if pkg_config is None:
+        return None
+    result = subprocess.run(
+        [pkg_config, "--variable=includedir", "libcurl"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() or None
+
+
+def _export_curl_include_path() -> None:
+    """Let the in-test C compiles find curl/curl.h without a system dev package.
+
+    native_agent/Makefile honours CURL_INCLUDE_DIR, but the tests that compile
+    https_client.c assemble their own command lines and would miss it. CPATH
+    reaches every one of them, present and future, without repeating include
+    flags at each call site. Without a resolvable directory nothing changes, so
+    machines with the headers installed system-wide behave as before.
+    """
+
+    directory = _curl_include_dir()
+    if directory is None:
+        return
+    parts = [part for part in os.environ.get("CPATH", "").split(os.pathsep) if part]
+    if directory not in parts:
+        os.environ["CPATH"] = os.pathsep.join([*parts, directory])
+
+
+_export_curl_include_path()
 
 _HA_EXCEPTIONS = homeassistant.exceptions
 _ERROR_TYPES = (

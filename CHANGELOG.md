@@ -13,6 +13,8 @@
 - Keep display detail controls correct when the device reports no value: the
   slider handle no longer starts at an undefined position, and a switch control
   without a known state shows "?" instead of claiming "off".
+- Size the alarm quick-action tile like the panel below it instead of leaving it
+  short by the width of the hidden keypad.
 
 ## v2.1.0b5 - 2026-11-08
 

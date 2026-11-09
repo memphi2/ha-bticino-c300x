@@ -681,8 +681,7 @@ Page {
                 spacing: 8
 
                 Item {
-                    width: keypad.visible ? parent.width : parent.width - keypad.width - 20
-                    anchors.right: parent.right
+                    width: parent.width
                     height: visible ? 50 : 0
                     visible: alarmPageItem ? true : false
 

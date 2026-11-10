@@ -108,6 +108,10 @@ The mode is part of the page the Display patch generates, so changing it
 re-applies the patch and restarts the device GUI once. Saving the options
 without touching the setting changes nothing on the device.
 
+New entries start with the setting on. An entry created before the setting
+existed keeps the fixed pair it has been running, recorded once on upgrade, and
+the form shows that state instead of an unrelated default.
+
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans and sensors under **Display

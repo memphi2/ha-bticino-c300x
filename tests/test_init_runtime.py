@@ -70,10 +70,11 @@ def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.Monkey
                 CONF_SHARED_SECRET: "token-32",
                 CONF_EVENT_WEBHOOK_ID: "token-24",
                 CONF_EVENT_WEBHOOK_TOKEN: "token-32",
+                "dashboard_dynamic_homepage": False,
             },
             "options": {},
             "version": 1,
-            "minor_version": 2,
+            "minor_version": 3,
         }
     ]
 
@@ -1926,3 +1927,66 @@ def test_failed_home_page_reapply_still_reloads_the_entry(
     entry.options["dashboard_dynamic_homepage"] = False
     asyncio.run(listener(hass, entry))
     assert calls == ["apply", "entry-1"]
+
+
+def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An absent home-page button mode must stop meaning two different things.
+
+    The dashboard form offered the setting ticked while the Display patch
+    apply read an absent key as off, so an entry that never stored it ran the
+    fixed pair of buttons while the form claimed the dynamic ones. Because the
+    dashboard step always writes the key, opening and saving that step switched
+    the device's home page without anyone choosing it.
+    """
+
+    monkeypatch.setattr(integration.secrets, "token_urlsafe", lambda n: f"token-{n}")
+
+    def migrate(data: dict[str, Any], options: dict[str, Any], minor: int = 1) -> dict[str, Any]:
+        updates: list[dict[str, Any]] = []
+        entry = SimpleNamespace(data=data, options=options, minor_version=minor)
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=lambda _entry, **kwargs: updates.append(kwargs)
+            )
+        )
+        assert asyncio.run(integration.async_migrate_entry(hass, entry)) is True
+        return updates[0] if updates else {}
+
+    # Absent everywhere: pinned to what the apply was already doing.
+    update = migrate({CONF_AGENT_HOST: "192.0.2.60"}, {})
+    assert update["data"]["dashboard_dynamic_homepage"] is False
+    assert update["minor_version"] == 3
+
+    # A stored choice is never overwritten, in setup data or in options.
+    update = migrate(
+        {CONF_AGENT_HOST: "192.0.2.60", "dashboard_dynamic_homepage": True},
+        {},
+    )
+    assert update["data"]["dashboard_dynamic_homepage"] is True
+    update = migrate(
+        {CONF_AGENT_HOST: "192.0.2.60"},
+        {"dashboard_dynamic_homepage": True},
+    )
+    assert "dashboard_dynamic_homepage" not in update["data"]
+    assert update["options"]["dashboard_dynamic_homepage"] is True
+
+
+def test_display_patch_apply_shares_one_home_page_default() -> None:
+    """The form default and the apply fallback must be the same value."""
+
+    from custom_components.bticino_c300x.config_flow_dashboard import (
+        DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+    )
+    from custom_components.bticino_c300x.const import (
+        DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+    )
+
+    assert DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT is DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
+
+    qml_patch_source = (
+        ROOT / "custom_components" / "bticino_c300x" / "qml_patch.py"
+    ).read_text(encoding="utf-8")
+    assert "DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE," in qml_patch_source
+    assert "CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False" not in qml_patch_source

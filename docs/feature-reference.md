@@ -102,7 +102,8 @@ A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.
 Lights and fans keep an on/off switch on the tile itself. Covers and climate
 entities are operated from their submenu, because neither has a single on/off
-action. Back returns to the same overview page and scroll position.
+action. Back returns to the same overview page and scroll position; a state
+refresh that arrives while the list is moving is applied once it settles.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;

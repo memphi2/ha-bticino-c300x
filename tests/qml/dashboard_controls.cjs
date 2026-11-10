@@ -16,7 +16,7 @@ const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "ut
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
-    interactionActive: false, controlInFlight: false, pendingEntity: "", pageActive: true,
+    interactionActive: false, listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
     commandGeneration: 0, controlFeedback: [],
     currentPageIndex: 0, dashboardPages: [], items: [], selectedItem: null, status: {}});
 p.page = p;
@@ -236,3 +236,49 @@ assert.match(qml, /model: items.length/);
 assert.match(qml, /model: detailControls.length/);
 assert.match(qml, /checkable: false\s+checked: tileItem.state/, "legacy switch must not overwrite its HA-state binding on press");
 console.log("Feedback, bounded state and incremental display updates passed");
+
+// A refresh reassigns the whole item list, so it must not land inside a flick.
+// The item object is shared with the payload, so the revision is the only
+// observable that tells an applied snapshot from a deferred one.
+p.dashboardOnline = true;
+p.pageActive = true;
+p.pendingEntity = "";
+p.controlInFlight = false;
+p.dashboardRefreshAgain = false;
+p.listScrolling = false;
+Api.dashboard(p.status, p);
+queue.shift().success(payload("scroll-1"));
+while (queue.length > 0) queue.shift().success({not_modified: true});
+assert.equal(Api.dashboardRevision, "scroll-1");
+
+p.listScrolling = true;
+Api.dashboard(p.status, p);
+assert.equal(queue.length, 0, "no fetches while the list scrolls");
+assert.equal(p.dashboardRefreshAgain, true, "a scrolled-over refresh is remembered");
+p.replayDeferredRefresh();
+assert.equal(queue.length, 0, "scrolling still blocks the replay");
+p.listScrolling = false;
+p.replayDeferredRefresh();
+assert.equal(queue.length, 1, "the deferred refresh runs once the flick settles");
+queue.shift().success(payload("scroll-2"));
+assert.equal(Api.dashboardRevision, "scroll-2", "the replayed refresh still applies state");
+
+// A response that arrives mid-flick waits instead of re-laying out the tiles.
+Api.dashboard(p.status, p);
+const inFlight = queue.shift();
+p.listScrolling = true;
+inFlight.success(payload("scroll-3"));
+assert.equal(Api.dashboardRevision, "scroll-2", "an in-flight payload cannot re-layout a moving list");
+assert.equal(p.dashboardRefreshAgain, true);
+assert.equal(p.dashboardLoading, false, "a deferred payload releases the single-flight lock");
+p.listScrolling = false;
+p.replayDeferredRefresh();
+assert.equal(queue.length, 1);
+queue.shift().success(payload("scroll-4"));
+assert.equal(Api.dashboardRevision, "scroll-4", "the settled list catches up to HA");
+
+p.replayDeferredRefresh();
+assert.equal(queue.length, 0, "a settled list without a pending refresh stays quiet");
+assert.match(qml, /property bool listScrolling: scroll.moving \|\| details.moving/);
+assert.match(qml, /onListScrollingChanged: replayDeferredRefresh\(\)/);
+console.log("Scroll-aware dashboard refresh passed");

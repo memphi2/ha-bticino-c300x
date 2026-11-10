@@ -90,7 +90,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
 
 function dashboard(statusItem, pageItem) {
     var generation = pageItem.runtimeGeneration
-    if (pageItem.dashboardLoading || pageItem.interactionActive) {
+    if (pageItem.dashboardLoading || pageItem.interactionActive || pageItem.listScrolling) {
         pageItem.dashboardRefreshAgain = true
         return
     }
@@ -102,7 +102,7 @@ function dashboard(statusItem, pageItem) {
     getJson(path, function(data) {
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.dashboardLoading = false
-        if (pageItem.interactionActive) {
+        if (pageItem.interactionActive || pageItem.listScrolling) {
             pageItem.dashboardRefreshAgain = true
             return
         }

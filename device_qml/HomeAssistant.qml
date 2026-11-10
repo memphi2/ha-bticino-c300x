@@ -61,6 +61,11 @@ Page {
     property int commandGeneration: 0
     property variant controlFeedback: []
     property bool interactionActive: false
+    // A refresh reassigns the whole item list, so every visible tile re-evaluates
+    // its bindings. Doing that inside a flick drops frames on the device, and the
+    // existing interactionActive gate only covers a dragged slider.
+    property bool listScrolling: scroll.moving || details.moving
+    onListScrollingChanged: replayDeferredRefresh()
     property variant notifications: []
     property bool notificationsOpen: false
 
@@ -193,6 +198,12 @@ Page {
         if (!dashboardOnline || key === "state_unconfirmed" || key === "sending") return "#f1c40f"
         if (key === "action_error") return "#ff6b6b"
         return key === "state_confirmed" ? "#58d68d" : "#c7d0d9"
+    }
+
+    function replayDeferredRefresh() {
+        if (listScrolling || dashboardLoading || !dashboardRefreshAgain) return
+        dashboardRefreshAgain = false
+        Api.dashboard(status, page)
     }
 
     function expirePendingControl() {

@@ -102,7 +102,7 @@ function dashboard(statusItem, pageItem) {
     getJson(path, function(data) {
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.dashboardLoading = false
-        if (pageItem.interactionActive || pageItem.listScrolling) {
+        if (pageItem.interactionActive) {
             pageItem.dashboardRefreshAgain = true
             return
         }

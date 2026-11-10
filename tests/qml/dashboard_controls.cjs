@@ -244,6 +244,7 @@ assert.match(qml, /model: detailControls.length/);
 assert.match(qml, /checkable: false\s+checked: tileItem.state/, "legacy switch must not overwrite its HA-state binding on press");
 console.log("Feedback, bounded state and incremental display updates passed");
 
+const dashboardSource = fs.readFileSync(path.join(root, "device_qml/js/c300x_ha.js"), "utf8");
 // A refresh reassigns the whole item list, so it must not land inside a flick.
 // The item object is shared with the payload, so the revision is the only
 // observable that tells an applied snapshot from a deferred one.
@@ -270,24 +271,37 @@ assert.equal(queue.length, 1, "the deferred refresh runs once the flick settles"
 queue.shift().success(payload("scroll-2"));
 assert.equal(Api.dashboardRevision, "scroll-2", "the replayed refresh still applies state");
 
-// A response that arrives mid-flick waits instead of re-laying out the tiles.
+// Only the request waits. A response already in flight is applied even while the
+// list moves, so command bookkeeping is never stranded behind a long gesture: a
+// deferred payload would leave pendingEntity set, keep every switch dimmed and
+// let the expiry timer report a command that actually succeeded as unconfirmed.
 Api.dashboard(p.status, p);
 const inFlight = queue.shift();
 p.listScrolling = true;
 inFlight.success(payload("scroll-3"));
-assert.equal(Api.dashboardRevision, "scroll-2", "an in-flight payload cannot re-layout a moving list");
-assert.equal(p.dashboardRefreshAgain, true);
-assert.equal(p.dashboardLoading, false, "a deferred payload releases the single-flight lock");
+assert.equal(Api.dashboardRevision, "scroll-3", "an in-flight payload still lands");
+assert.equal(p.dashboardOnline, true, "a mid-flick response still clears the offline state");
+assert.equal(p.pendingEntity, "", "a mid-flick response still finishes the refresh");
+while (queue.length > 0) queue.shift().success({not_modified: true});
 p.listScrolling = false;
-p.replayDeferredRefresh();
-assert.equal(queue.length, 1);
-queue.shift().success(payload("scroll-4"));
-assert.equal(Api.dashboardRevision, "scroll-4", "the settled list catches up to HA");
 
 p.replayDeferredRefresh();
 assert.equal(queue.length, 0, "a settled list without a pending refresh stays quiet");
-assert.match(qml, /property bool listScrolling: scroll.moving \|\| details.moving/);
+assert.match(
+    qml,
+    /property bool listScrolling: scroll.moving \|\| details.moving \|\| notificationDetails.moving/,
+    "every scrollable surface that a refresh re-lays out is covered",
+);
 assert.match(qml, /onListScrollingChanged: replayDeferredRefresh\(\)/);
+const dashboardFetch = dashboardSource.slice(
+    dashboardSource.indexOf("function dashboard("),
+    dashboardSource.indexOf("function finishDashboardRefresh"),
+);
+assert.equal(
+    dashboardFetch.split("listScrolling").length - 1,
+    1,
+    "listScrolling gates the request only, never the response",
+);
 console.log("Scroll-aware dashboard refresh passed");
 
 // Snapshots are compared structurally: an equal payload must not be reassigned
@@ -320,7 +334,6 @@ assert.equal(
     "a difference deep inside a control is detected",
 );
 
-const dashboardSource = fs.readFileSync(path.join(root, "device_qml/js/c300x_ha.js"), "utf8");
 const assignBody = dashboardSource.slice(
     dashboardSource.indexOf("function sameDashboardValue"),
     dashboardSource.indexOf("function loadDashboardPage"),

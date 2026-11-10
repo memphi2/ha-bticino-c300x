@@ -63,8 +63,10 @@ Page {
     property bool interactionActive: false
     // A refresh reassigns the whole item list, so every visible tile re-evaluates
     // its bindings. Doing that inside a flick drops frames on the device, and the
-    // existing interactionActive gate only covers a dragged slider.
-    property bool listScrolling: scroll.moving || details.moving
+    // existing interactionActive gate only covers a dragged slider. This gate
+    // holds back the request only. A response already in flight is applied, so a
+    // command confirmation can never be stranded behind a long gesture.
+    property bool listScrolling: scroll.moving || details.moving || notificationDetails.moving
     onListScrollingChanged: replayDeferredRefresh()
     property variant notifications: []
     property bool notificationsOpen: false

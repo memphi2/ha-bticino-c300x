@@ -386,20 +386,6 @@ Page {
         return item && item.time ? item.time : ""
     }
 
-    // One switch look for every on/off toggle: the overview tile, the control
-    // tile and the detail summary all load this style, so they cannot drift apart.
-    Component {
-        id: haSwitchStyle
-        CheckableButtonStyle {
-            defaultImage: "images/ringtones/switch-bg_btn.svg"
-            checkedImage: "images/ringtones/switch-bg_btn_p.svg"
-            defaultIconLeft: "images/ringtones/switch_btn.svg"
-            defaultIconRight: "images/ringtones/disable_icon.svg"
-            checkedIconLeft: "images/ringtones/enable_icon.svg"
-            checkedIconRight: "images/ringtones/switch_btn_p.svg"
-        }
-    }
-
     Component {
         id: controlOverview
         Item {
@@ -461,7 +447,14 @@ Page {
                 opacity: controlsEnabled ? 1 : 0.45
                 checkable: false
                 checked: tileItem.state ? true : false
-                style: haSwitchStyle
+                style: CheckableButtonStyle {
+                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                }
                 onTouched: Api.dashboardControl(tileItem, Api.dashboardControlByCommand(tileItem, "toggle"), null, status, page)
             }
         }
@@ -631,7 +624,14 @@ Page {
                 opacity: enabled ? 1 : 0.45
                 checkable: false
                 checked: selectedItem && selectedItem.state === true ? true : false
-                style: haSwitchStyle
+                style: CheckableButtonStyle {
+                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                }
                 onTouched: Api.dashboardControl(selectedItem, Api.dashboardControlByCommand(selectedItem, "toggle"), null, status, page)
             }
             Row {
@@ -1379,7 +1379,14 @@ Page {
                                 anchors.verticalCenter: parent.verticalCenter
                                 checkable: false
                                 checked: tileItem.state
-                                style: haSwitchStyle
+                                style: CheckableButtonStyle {
+                                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                                }
                                 onTouched: Api.dashboardAction(tileItem, status, page)
                             }
                         }

@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "native_agent/scripts/qml_patch.sh"
@@ -225,7 +226,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "f210a85f6e1d98c930fbd931dc5034b4b84ebd8732093ac4a1b0b2bef5adf9da",
+    "HomeAssistant.qml": "f1b8850d83fe25b89e96f3ab26fd5c319e80a0badbb40fcb30a14da9496c0283",
     "js/c300x_ha.js": "ec1a0efbc139457506709ddd34515e92dcac8b4d7a2907b9f164b582efbf62ae",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -631,7 +632,7 @@ def test_home_assistant_control_tiles_open_from_the_tile_with_a_single_switch() 
     assert overview.count("BeepingMouseArea {") == 1
     # Exactly one toggle, drawn as the shared firmware switch widget.
     assert overview.count("onTouched:") == 1
-    assert "style: haSwitchStyle" in overview
+    assert "style: CheckableButtonStyle {" in overview
     assert 'dashboardControlByCommand(tileItem, "toggle")' in overview
     assert "images/onoff_button.svg" not in overview
 
@@ -653,14 +654,23 @@ def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
     ]
 
     assert "images/onoff_button.svg" not in home_assistant_qml
-    assert "style: haSwitchStyle" in summary_toggle
+    assert "style: CheckableButtonStyle {" in summary_toggle
     assert 'dashboardControlByCommand(selectedItem, "toggle")' in summary_toggle
     # The switch renders its own state, so the green state bar is redundant.
     assert 'color: "#58d68d"' not in summary_toggle
-    # The artwork is declared once and loaded by every switch, so the overview
-    # tile and the detail summary cannot drift apart again.
-    assert home_assistant_qml.count("CheckableButtonStyle {") == 1
-    assert home_assistant_qml.count("style: haSwitchStyle") == 3
+
+    # Every switch declares the style inline, because the firmware never assigns
+    # a named Component to a style property and CheckableButtonStyle resolves
+    # `control` through the Loader inside BasicButton - untestable off-device.
+    # The three blocks must stay byte-identical so they cannot drift apart.
+    blocks = []
+    for match in re.finditer(
+        r"( *)style: CheckableButtonStyle \{\n(.*?)\n\1\}", home_assistant_qml, re.DOTALL
+    ):
+        blocks.append(dedent(match.group(2)))
+    assert len(blocks) == 3, len(blocks)
+    assert len(set(blocks)) == 1, blocks
+    assert "images/ringtones/switch-bg_btn.svg" in blocks[0]
 
 
 def test_home_assistant_buttons_show_that_a_touch_registered() -> None:

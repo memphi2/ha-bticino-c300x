@@ -195,6 +195,17 @@ Page {
         return key ? uiText(key) : ""
     }
 
+    function readingColor(item) {
+        // A tile line carries the entity reading, so a state_confirmed that is
+        // never cleared must not tint it for the rest of the session. Only
+        // transient states colour the reading.
+        if (!dashboardOnline || item.available === false) return "#f1c40f"
+        var key = feedbackKey(item)
+        if (key === "action_error") return "#ff6b6b"
+        if (key === "sending" || key === "state_unconfirmed") return "#f1c40f"
+        return "#c7d0d9"
+    }
+
     function feedbackColor(item) {
         var key = feedbackKey(item)
         if (!dashboardOnline || key === "state_unconfirmed" || key === "sending") return "#f1c40f"
@@ -426,10 +437,10 @@ Page {
                 anchors.rightMargin: 8
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 8
-                text: (feedbackText(tileItem) || itemDetail(tileItem)) + trsl.empty
+                text: itemDetail(tileItem) + trsl.empty
                 textFormat: Text.PlainText
                 font.pixelSize: 15
-                color: feedbackText(tileItem) ? feedbackColor(tileItem) : (tileItem.available === false ? "#f1c40f" : "#c7d0d9")
+                color: readingColor(tileItem)
                 elide: Text.ElideRight
             }
             UbuntuLightText {

@@ -225,7 +225,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "d939775faf0c941f7596e2caba487ea177248cf60d2f1abe8b893f8decb63701",
+    "HomeAssistant.qml": "f210a85f6e1d98c930fbd931dc5034b4b84ebd8732093ac4a1b0b2bef5adf9da",
     "js/c300x_ha.js": "ec1a0efbc139457506709ddd34515e92dcac8b4d7a2907b9f164b582efbf62ae",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -728,6 +728,25 @@ def test_home_assistant_reads_each_piece_of_state_once() -> None:
     assert "property string feedback: feedbackText(tileItem)" in button_tile
     assert "text: (feedback || itemDetail(tileItem))" in button_tile
     assert "color: feedback ?" in button_tile
+
+    # A control tile shows the entity reading, which command feedback must never
+    # replace: controlFeedback entries are never cleared, so a single toggle
+    # would pin the tile to "state confirmed", and going offline would hide the
+    # retained last-known value. Transient feedback reaches it as colour only.
+    control_tile = home_assistant_qml[
+        home_assistant_qml.index("id: controlOverview") :
+        home_assistant_qml.index("id: sensorOverview")
+    ]
+    assert "text: itemDetail(tileItem) + trsl.empty" in control_tile
+    assert "color: readingColor(tileItem)" in control_tile
+    assert "feedbackText(" not in control_tile
+    reading_color = home_assistant_qml[
+        home_assistant_qml.index("function readingColor") :
+        home_assistant_qml.index("function feedbackColor")
+    ]
+    assert '=== "state_confirmed"' not in reading_color
+    assert '=== "sending"' in reading_color
+    assert '=== "action_error"' in reading_color
 
 
 def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() -> None:

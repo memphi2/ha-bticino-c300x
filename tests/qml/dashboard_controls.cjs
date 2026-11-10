@@ -16,7 +16,7 @@ const qml = fs.readFileSync(path.join(root, "device_qml/HomeAssistant.qml"), "ut
 const methods = [...qml.matchAll(/^    function [\s\S]*?^    }/gm)].map(m => m[0]).join("\n");
 const p = vm.createContext({Api, I18n, Math, uiLanguage: "en", runtimeGeneration: 0,
     dashboardLoading: false, dashboardOnline: false, dashboardRefreshAgain: false,
-    interactionActive: false, controlInFlight: false, pendingEntity: "", pageActive: true,
+    interactionActive: false, listScrolling: false, controlInFlight: false, pendingEntity: "", pageActive: true,
     commandGeneration: 0, controlFeedback: [],
     currentPageIndex: 0, dashboardPages: [], items: [], selectedItem: null, status: {}});
 p.page = p;
@@ -206,10 +206,17 @@ assert.match(queue[0].url, /entities=select.room&option=a%20%26%20b$/);
 queue.shift().success({ok: true});
 queue.shift().success({not_modified: true});
 
+// Delegates keep their data objects because an unchanged snapshot is skipped
+// entirely. Reusing unchanged elements of a *changed* list cannot add to that:
+// items is a QML variant property, and assigning to one converts the whole
+// structure into a QVariant, so element identity is lost on the next read -
+// the same conversion that cannot store a JavaScript null.
 const model = {items: [{entity_id: "one", state: 1}, {entity_id: "two", state: 2}]};
-const second = model.items[1];
+const unchanged = model.items;
+Api.assignDashboardValue(model, "items", [{entity_id: "one", state: 1}, {entity_id: "two", state: 2}]);
+assert.equal(model.items, unchanged, "an unchanged list keeps its data objects");
 Api.assignDashboardValue(model, "items", [{entity_id: "one", state: 3}, {entity_id: "two", state: 2}]);
-assert.equal(model.items[1], second, "unaffected delegates retain their data object");
+assert.notEqual(model.items, unchanged, "a changed list is taken as a whole");
 assert.equal(model.items[0].state, 3);
 for (let i = 0; i < 100; i++) Api.setDashboardFeedback(p, "button." + i, "action_sent");
 assert.equal(p.controlFeedback.length, 32, "feedback storage is bounded");
@@ -236,3 +243,158 @@ assert.match(qml, /model: items.length/);
 assert.match(qml, /model: detailControls.length/);
 assert.match(qml, /checkable: false\s+checked: tileItem.state/, "legacy switch must not overwrite its HA-state binding on press");
 console.log("Feedback, bounded state and incremental display updates passed");
+
+const dashboardSource = fs.readFileSync(path.join(root, "device_qml/js/c300x_ha.js"), "utf8");
+// A refresh reassigns the whole item list, so it must not land inside a flick.
+// The item object is shared with the payload, so the revision is the only
+// observable that tells an applied snapshot from a deferred one.
+p.dashboardOnline = true;
+p.pageActive = true;
+p.pendingEntity = "";
+p.controlInFlight = false;
+p.dashboardRefreshAgain = false;
+p.listScrolling = false;
+Api.dashboard(p.status, p);
+queue.shift().success(payload("scroll-1"));
+while (queue.length > 0) queue.shift().success({not_modified: true});
+assert.equal(Api.dashboardRevision, "scroll-1");
+
+p.listScrolling = true;
+Api.dashboard(p.status, p);
+assert.equal(queue.length, 0, "no fetches while the list scrolls");
+assert.equal(p.dashboardRefreshAgain, true, "a scrolled-over refresh is remembered");
+p.replayDeferredRefresh();
+assert.equal(queue.length, 0, "scrolling still blocks the replay");
+p.listScrolling = false;
+p.replayDeferredRefresh();
+assert.equal(queue.length, 1, "the deferred refresh runs once the flick settles");
+queue.shift().success(payload("scroll-2"));
+assert.equal(Api.dashboardRevision, "scroll-2", "the replayed refresh still applies state");
+
+// Only the request waits. A response already in flight is applied even while the
+// list moves, so command bookkeeping is never stranded behind a long gesture: a
+// deferred payload would leave pendingEntity set, keep every switch dimmed and
+// let the expiry timer report a command that actually succeeded as unconfirmed.
+Api.dashboard(p.status, p);
+const inFlight = queue.shift();
+p.listScrolling = true;
+inFlight.success(payload("scroll-3"));
+assert.equal(Api.dashboardRevision, "scroll-3", "an in-flight payload still lands");
+assert.equal(p.dashboardOnline, true, "a mid-flick response still clears the offline state");
+assert.equal(p.pendingEntity, "", "a mid-flick response still finishes the refresh");
+while (queue.length > 0) queue.shift().success({not_modified: true});
+p.listScrolling = false;
+
+p.replayDeferredRefresh();
+assert.equal(queue.length, 0, "a settled list without a pending refresh stays quiet");
+assert.match(
+    qml,
+    /property bool listScrolling: scroll.moving \|\| details.moving \|\| notificationDetails.moving/,
+    "every scrollable surface that a refresh re-lays out is covered",
+);
+assert.match(qml, /onListScrollingChanged: replayDeferredRefresh\(\)/);
+const dashboardFetch = dashboardSource.slice(
+    dashboardSource.indexOf("function dashboard("),
+    dashboardSource.indexOf("function finishDashboardRefresh"),
+);
+assert.equal(
+    dashboardFetch.split("listScrolling").length - 1,
+    1,
+    "listScrolling gates the request only, never the response",
+);
+console.log("Scroll-aware dashboard refresh passed");
+
+// Snapshots are compared structurally: an equal payload must not be reassigned
+// (that is what keeps tile identity), and a difference at any depth must be seen.
+assert.equal(Api.sameDashboardValue(1, 1), true);
+assert.equal(Api.sameDashboardValue(1, "1"), false, "no type coercion");
+assert.equal(Api.sameDashboardValue("ab", "ab"), true, "strings are values, not lists");
+assert.equal(Api.sameDashboardValue("ab", ["a", "b"]), false);
+assert.equal(Api.sameDashboardValue(null, null), true);
+assert.equal(Api.sameDashboardValue(null, {}), false);
+assert.equal(Api.sameDashboardValue({}, null), false);
+assert.equal(Api.sameDashboardValue([], {}), false, "a list never equals an object");
+assert.equal(Api.sameDashboardValue([1, 2], [1, 2]), true);
+assert.equal(Api.sameDashboardValue([1, 2], [1, 2, 3]), false);
+assert.equal(Api.sameDashboardValue({a: 1}, {a: 1, b: 2}), false, "an added key is a change");
+assert.equal(Api.sameDashboardValue({a: 1, b: 2}, {a: 1}), false, "a removed key is a change");
+assert.equal(
+    Api.sameDashboardValue(
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+    ),
+    true,
+);
+assert.equal(
+    Api.sameDashboardValue(
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+        {items: [{controls: [{command: "brightness", value: 51}]}]},
+    ),
+    false,
+    "a difference deep inside a control is detected",
+);
+
+const assignBody = dashboardSource.slice(
+    dashboardSource.indexOf("function sameDashboardValue"),
+    dashboardSource.indexOf("function loadDashboardPage"),
+);
+assert.equal(assignBody.includes("JSON.stringify("), false, "no snapshot is serialised to compare it");
+console.log("Structural snapshot comparison passed");
+
+// Nothing else ever removes a controlFeedback entry, so an entry is aged where
+// it is read: first into the warning the user can act on, then away, so the
+// tile shows its plain reading again.
+let clock = 1700000000000;
+const realDate = Api.Date;
+Api.Date = {now: () => clock};
+p.controlFeedback = [];
+p.pendingEntity = "";
+p.controlInFlight = false;
+p.dashboardOnline = true;
+const stuck = {entity_id: "light.hall", available: true};
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+const stored = p.controlFeedback;
+clock += 14999;
+assert.equal(p.feedbackKey(stuck), "action_sent", "a command HA may still reflect is left alone");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "an unreflected command reads as a warning");
+assert.equal(p.readingColor(stuck), "#f1c40f", "and the tile reading says so");
+assert.equal(p.controlFeedback, stored, "ageing an entry costs no list reassignment");
+clock += 59999 - 15000;
+assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long enough to read");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
+assert.equal(p.readingColor(stuck), "#c7d0d9");
+
+// A late confirmation still lands, and is stamped again so it reads as fresh.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+p.dashboardPages = [{items: [{entity_id: stuck.entity_id, state: true, available: true}]}];
+clock += 20000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "state_confirmed", "HA reflecting it late still confirms the command");
+clock += 59999;
+assert.equal(p.feedbackKey(stuck), "state_confirmed");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "", "a confirmation is aged from its own stamp, not the command's");
+
+// An entry that has aged out must not come back as a confirmation.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+clock += 60000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "", "a discarded command cannot be revived");
+
+// An entry without an expectation is terminal and is never reconsidered.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_error");
+assert.equal(p.feedbackKey(stuck), "action_error");
+clock += 59999;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "action_error", "a failed action is not confirmed by matching state");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "");
+Api.Date = realDate;
+p.controlFeedback = [];
+p.dashboardPages = [];
+console.log("Feedback ageing passed");

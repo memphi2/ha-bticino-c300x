@@ -1,197 +1,110 @@
 # Changelog
 
-## v2.1.0b6 - 2026-11-09
-
-### Fixed
-
-- Restore the native C300X display dashboard, which showed only an empty line
-  with a green "board loaded" status since 2.1.0b1. The dashboard container was
-  gated on `selectedItem === null`, but QtQuick 1.1 cannot store JavaScript
-  `null` in a `variant` property, so the gate never matched and hid badges,
-  weather, flow, tiles and the pager. The same inverted check also left a stray
-  row visible on the alarm page.
-- Keep display detail controls correct when the device reports no value: the
-  slider handle no longer starts at an undefined position, and a switch control
-  without a known state shows "?" and an unknown-state indicator instead of an
-  off-looking box.
-- Size the alarm quick-action tile like the panel below it instead of leaving it
-  short by the width of the hidden keypad.
-
-## v2.1.0b5 - 2026-11-08
-
-### Changed
-
-- Show display command feedback at the entity, distinguish accepted commands
-  from HA-confirmed state and retain a clearly marked, read-only last snapshot
-  while offline. Ambiguous failures are not retried automatically.
-- Filter selected-entity notifications by the displayed values and reuse
-  unchanged GUI items. Preserve scrolling and slider updates without adding
-  polling or periodic refresh timers.
-- Compact the blue display details with white/color tabs for lights and
-  primary/additional climate controls. Open details from the overview name and
-  state area, keeping separate direct-action touch targets.
-
-### Upgrade
-
-- Includes rebuilt native agent `2.1.0b5`. Install the integration, restart HA,
-  complete the agent-update Repair and reapply the Display patch. Applying the
-  Display patch restarts the device GUI.
-- Opt-in prerelease; stable remains `2.0.0`.
-
-## v2.1.0b4 - 2026-11-08
+## v2.1.0 - 2026-11-10
 
 ### Added
 
-- Extend the blue native display with light color swatches and bounded white
-  presets, visual cover position with fixed up/stop/down controls, and climate
-  activity distinct from HVAC mode. Add supported climate fan/swing modes and
-  fan speed, oscillation, presets and direction.
-- Give sensors larger overview readings and read-only details with selected
-  supplementary values. Keep confirmed, event-driven state without additional
-  polling or refresh timers.
-
-### Upgrade
-
-- Includes rebuilt native agent `2.1.0b4`. Install the integration, restart HA,
-  complete the agent-update Repair and reapply the Display patch for the new
-  controls. Applying the Display patch restarts the device GUI.
-- Opt-in prerelease; stable remains `2.0.0`.
-
-## v2.1.0b3 - 2026-11-08
+- Native C300X display dashboard in the original blue design, with controls for
+  lights, covers, climate entities and fans next to read-only sensors. The
+  two-column overview opens a tile's submenu from anywhere on the tile; lights
+  and fans also keep an on/off switch on the tile itself. Lights offer
+  brightness, color swatches and bounded white presets on separate white and
+  color tabs. Covers show the actual position with fixed up/stop/down controls.
+  Climate entities report activity separately from HVAC mode and expose the
+  supported fan, swing and preset modes. Fans expose speed, oscillation,
+  presets and direction. Sensors get larger readings and selected supplementary
+  values. Sliders send on release, state updates are event-driven without
+  periodic device polling, and command feedback distinguishes sending, accepted
+  commands and state confirmed by HA.
+- Display page assignment and per-page entity positions in the existing Home
+  Assistant dialogs. Existing selections and labels are retained.
+- HA-owned display notifications with stable IDs, a bounded priority queue,
+  expiry, explicit dismissal and up to two allowlisted actions, plus a calendar
+  reminder blueprint. No display wake or overlay during PIN entry or calls.
+- Context-sensitive Alarmo subpage. The PIN keypad appears only when needed,
+  including entry delay; modes without a PIN execute directly and pending
+  commands block repeat taps until the status is refreshed. An optional Alarmo
+  quick entity with confirmed state can be left empty to hide the action.
+- Optional native Home Assistant camera microphone support on HA 2026.11+,
+  disabled by default. Requires the option, HA Labs Two-way audio, WebRTC,
+  HTTPS and microphone permission. Card talkback is unchanged, and no agent
+  update or extra idle polling is required.
+- Opt-in beta and release-candidate support with the same bundled card, agent
+  and release validation as stable versions. Prereleases never replace GitHub
+  Latest, and publication verifies downloads and preserves existing assets.
+- Independent card-editor options to show or hide the Open door and Staircase
+  light buttons. Both remain visible by default.
 
 ### Fixed
 
 - Require the existing maintenance credential for agent configuration changes;
   the API token cannot enable maintenance or replace its token. Explicit
   bootstrap and re-enabling maintenance with its own token remain supported.
-  Requires an updated agent.
-- Enforce camera control permission on Home Call WebSocket commands and bind
-  ICE candidates to the originating connection's live subscription.
-- Cancel pending WebRTC offers on stop and media-end events. Block new offers
-  until explicit stopping finishes and discard late provider callbacks.
+- Enforce camera control permission on Home Call WebSocket commands, bind ICE
+  candidates to the originating connection's live subscription, and enforce HA
+  caller permissions for C300X services while preserving the caller's context.
+- Cancel pending WebRTC offers on stop and media-end events, block new offers
+  until explicit stopping finishes, discard late provider callbacks, and cancel
+  in-flight camera connection setup when the player closes or the camera
+  unloads. Recheck media ownership before stopping a closing camera session and
+  serialize Home Call admission and start with teardown and idle cleanup.
 - Isolate simultaneous captures and Wyoming results, return exact artifact
   paths to automations, and reject guarded unlock for another device's capture.
-  Keep latest pointers for compatibility and bound temporary workspaces to 64
-  per directory, expiring after one hour on the next capture.
-- Replace event registrations without leaving orphaned renewal timers or
-  registry listeners after repeated discovery or integration unload.
-- Stop and reap capture subprocesses when their owning task is cancelled.
+  Bound temporary workspaces to 64 per directory, expiring after one hour.
+- Reserve ring captures atomically before an unlock attempt and keep all used
+  IDs for the freshness window, including across restarts. Corrupt ledgers are
+  rejected instead of allowing a replay.
+- Validate the complete agent update before installation, restore previous
+  files on an apply failure and publish bundle metadata only after successful
+  activation. Rebuild the native agent when its version or build settings
+  change, and reject ABI checks when the verification tool fails.
+- Replace the optional legacy Paramiko installer with current AsyncSSH, keeping
+  device-required legacy algorithms scoped to explicit bootstrap and recovery.
+  Normal agent updates remain SSH-free.
+- Forward display commands asynchronously so HA can call back into the agent
+  without a timeout deadlock, and reject concurrent display commands instead of
+  queueing physical actions. Preserve complete display request targets and
+  options, rejecting oversized requests instead of truncating them.
+- Reject HTTP errors, empty responses and incomplete display callback headers
+  instead of reporting Home Assistant as connected.
+- Defer ringer status verification until device confirmation instead of feeding
+  the previous mute state back into the GUI during a queued change. Guard
+  concurrent status reads and handle missing events with a final verification.
+- Keep notification actions pending until the HA service call finishes, and
+  cancel pending work when the integration unloads. Replace event registrations
+  without leaving orphaned renewal timers or registry listeners, and stop and
+  reap capture subprocesses when their owning task is cancelled.
+- Keep the selected PIN mode across unchanged alarm status updates, clear PINs
+  on page exit, ignore stale replies and show unavailable alarm data as
+  offline.
+- Refresh stored-message metadata again when a newer change arrives during an
+  ongoing fetch, without adding periodic device polling.
+- Do not report temporary agent unavailability as a repairable media setup
+  fault; media setup Repairs now name the failed checks in their title.
+- Record only actual watchdog trigger values in the diagnostics CPU attribute,
+  avoiding duplicate history for healthy CPU observations.
+- Keep card controls in the top footer row when text wraps on narrow cards.
 
 ### Changed
 
-- Consolidate WebRTC session ownership and ICE candidate handling.
+- Consolidate WebRTC session ownership and ICE candidate handling, group camera
+  session ownership, and separate native display callback transport,
+  update-file handling and shared file operations from HTTP orchestration.
+- Scope Home Assistant test mocks to individual tests, removing global module
+  replacements that made combined and isolated test runs behave differently.
 - Update the pinned CodeQL actions to 4.39.3.
 
 ### Upgrade
 
-- Includes rebuilt native agent `2.1.0b3`. Install the integration, restart HA
-  and complete the agent-update Repair for the maintenance authorization fix.
-- Existing beta display pages do not need reapplying solely for these changes.
-- Opt-in prerelease; stable remains `2.0.0`.
-
-## v2.1.0b2 - 2026-11-07
-
-### Fixed
-
-- Replace the optional legacy Paramiko installer with current AsyncSSH, keeping
-  device-required legacy algorithms scoped to explicit bootstrap/recovery.
-  Normal agent updates remain SSH-free; document the residual device risk.
-- Defer ringer status verification until device confirmation instead of feeding
-  the previous mute state back into the GUI during a queued change. Guard
-  concurrent status reads and handle missing events with a final verification.
-  Requires an updated agent.
-- Enforce HA caller permissions for C300X services and preserve the caller's
-  context when invoking configured actions or alarm commands.
-- Reserve ring captures atomically before an unlock attempt. Keep all used IDs
-  for the freshness window, including across restarts; reject corrupt ledgers
-  instead of allowing a replay. Failed or cancelled attempts remain consumed.
-- Forward display commands asynchronously so HA can call back into the agent
-  without a timeout deadlock. Reject concurrent display commands rather than
-  queueing physical actions. Requires an updated agent.
-- Preserve complete display request targets and options; reject oversized
-  requests instead of truncating them. Requires an updated agent.
-- Keep notification actions pending until the HA service call finishes, and
-  cancel pending work when the integration unloads.
-- Recheck media ownership before stopping a closing camera session, and
-  serialize Home Call admission/start with teardown and idle-status cleanup.
-- Validate the complete agent update before installation and restore previous
-  files on an apply failure. Publish bundle metadata only after successful
-  activation. This protection applies to updates performed by the new agent.
-
-### Upgrade
-
-- Includes rebuilt native agent `2.1.0b2`. Install the integration, restart HA
-  and complete the agent-update Repair. Existing 2.1.0b1 display pages do not
-  need reapplying solely for these fixes.
-- Ringer feedback regressions are covered by local tests; confirmation with the
-  corrected agent on affected devices is still needed. Issue #65 remains open.
-- Opt-in prerelease; stable remains `2.0.0`.
-
-## v2.1.0b1 - 2026-11-07
-
-### Added
-
-- Configure native display page assignment and per-page entity positions in the
-  existing HA dialogs. The optional Alarmo action can be named independently
-  without adding it to the overview. Existing selections and labels are retained.
-
-- HA-owned native display notifications with stable IDs, bounded priority queue,
-  expiry, explicit dismissal and up to two allowlisted actions. Includes a
-  calendar reminder blueprint; no display wake or overlay on PIN entry/calls.
-
-- Native display controls for lights, covers and climate entities, with capability-
-  based details, actual select options and bounded number adjustments. Sliders
-  send on release; selected entities receive event-driven state updates without
-  an Alarmo dependency or periodic device polling.
-
-- Context-sensitive native Alarmo subpage in the original blue design: the PIN
-  keypad appears only when needed, including entry delay. Modes without a PIN
-  execute directly; pending commands block repeat taps until status is refreshed.
-- Optional Alarmo quick entity with confirmed state. Leave it empty to hide the
-  action; choose a stair-light button explicitly when wanted.
-- Opt-in beta/RC release support with the same bundled card, agent and release
-  validation as stable versions. Prereleases never replace GitHub Latest;
-  publication verifies downloads and preserves existing release assets.
-- Independent card-editor options to show or hide the Open door and Staircase
-  light buttons. Both remain visible by default.
-- Optional native Home Assistant camera microphone support on HA 2026.11+,
-  disabled by default with prerequisites explained in the integration options.
-  Requires enabling the option and HA Labs Two-way audio, plus WebRTC, HTTPS
-  and microphone permission. Card talkback is unchanged; no agent update or
-  extra idle polling is required.
-
-### Fixed
-
-- Record only actual watchdog trigger values in the diagnostics CPU attribute,
-  avoiding duplicate history for healthy CPU observations.
-- Keep the selected PIN mode across unchanged status updates, clear PINs on page
-  exit, ignore stale replies, and show unavailable alarm data as offline.
-- Do not report temporary agent unavailability as a repairable media setup fault.
-  Media setup Repairs now name the failed checks in their title.
-- Keep card controls in the top footer row when text wraps on narrow cards.
-- Cancel in-flight camera connection setup when the player closes or the camera
-  unloads, and clean up pending WebRTC sessions and Home Call starts.
-- Refresh stored-message metadata again when a newer change arrives during an
-  ongoing fetch, without adding periodic device polling.
-- Reject HTTP errors, empty responses and incomplete display callback headers
-  instead of reporting Home Assistant as connected. Requires an updated agent.
-- Rebuild the native agent when its version or build settings change, and reject
-  ABI checks when the verification tool fails or requirements cannot be read.
-- Scope Home Assistant test mocks to individual tests, removing global module
-  replacements that made combined and isolated test runs behave differently.
-
-### Changed
-
-- Group camera session ownership and separate native display callback transport,
-  update-file handling and shared file operations from HTTP orchestration.
-
-### Upgrade
-
-- Includes a rebuilt native agent `2.1.0b1`. Update the agent and apply the
-  Display patch to use the revised native pages; applying the patch restarts the GUI.
-- Opt-in prerelease; the stable release remains `2.0.0`. Native rendering,
-  standby return and interruption by physical Ring Calls need beta confirmation.
-  The visual editor and notification-triggered display wake remain deferred.
+- Includes a freshly built native agent `2.1.0`. Install the integration,
+  restart Home Assistant, complete the agent-update Repair and apply the
+  **Display patch**. Applying the patch restarts the device GUI.
+- Upgrading from `2.0.0` or from any `2.1.0` beta uses the same steps. The
+  Display patch has to be reapplied in both cases.
+- Home Assistant 2026.7 remains the minimum. Existing integration entries and
+  card configurations can be kept.
+- Ringer feedback corrections are covered by local tests; confirmation with the
+  corrected agent on affected devices is still open (issue #65).
 
 ## v2.0.0 - 2026-11-02
 

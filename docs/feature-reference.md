@@ -97,11 +97,13 @@ need confirmation during beta testing.
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans and sensors under **Display
-dashboard**. The blue overview provides direct light/fan on/off, cover
-up/stop/down and target-temperature adjustment. Tap the name/state area or the
-chevron to open supported controls; tap a sensor tile for its read-only details.
-The separate quick-action buttons operate the entity without opening details.
-Back returns to the same overview page and scroll position.
+dashboard**. Entities with controls share the two-column overview with sensors.
+A chevron marks every tile that has a submenu: tap anywhere on such a tile to
+open its supported controls, or tap a sensor tile for its read-only details.
+Lights and fans keep an on/off switch on the tile itself. Covers and climate
+entities are operated from their submenu, because neither has a single on/off
+action. Back returns to the same overview page and scroll position; a state
+refresh that arrives while the list is moving is applied once it settles.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
@@ -136,8 +138,11 @@ reused, preserving the overview position and active input.
 
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification
-for optimistic entities. Errors remain at the affected control; an uncertain
-transport result is not automatically retried. During a connection outage the
+for optimistic entities. An accepted command that HA never reflects is reported
+as unconfirmed after 15 seconds, and feedback for an entity disappears a minute
+after the last thing happened to it, so a tile returns to showing its plain
+reading. Errors remain at the affected control; an uncertain transport result is
+not automatically retried. During a connection outage the
 last snapshot stays visible, explicitly marked as stale, with actions disabled.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling

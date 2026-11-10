@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "native_agent/scripts/qml_patch.sh"
@@ -225,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "268a63ae8f849f5dfcd5d89e0f551b4cfab465af0bf33343b9604f2969c012f0",
-    "js/c300x_ha.js": "c136d5b8792206a082562c3dd4145675b91c493c2556655971f92ce60f35534f",
+    "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
+    "js/c300x_ha.js": "b18856e47b8f3ace6dcff0a0bc8a61d49753df277db4bc520068cb9dc929b101",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -580,14 +581,182 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
 
     assert "Flow {" in mixed_items_body
     assert "property int tileWidth: (width - spacing) / 2" in mixed_items_body
-    assert (
-        "width: hasControls || isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
-        in mixed_items_body
-    )
+    # An entity can match several keys at once: dashboard.py gives number and
+    # select entities controls as well as a slider/choice kind. Width, height and
+    # the Loader must therefore agree on which key wins, or a tile gets the size
+    # of one component and the content of another.
+    delegate = mixed_items_body[mixed_items_body.index("id: mixedTile") :]
+
+    def _expression(prefix: str) -> str:
+        return delegate.split(prefix)[1].split("\n")[0]
+
+    def _order(expression: str) -> list[str]:
+        keys = ("isSensor", "hasControls", "isImage", "isChoice", "isSlider")
+        return sorted((key for key in keys if key in expression), key=expression.index)
+
+    width_expression = _expression("width: ")
+    assert "itemColumn.tileWidth" in width_expression
+    for expression in (width_expression, _expression("height: "), _expression("sourceComponent: ")):
+        assert _order(expression)[:2] == ["isSensor", "hasControls"], expression
     assert "Loader {" in mixed_items_body
     assert "sourceComponent:" in mixed_items_body
     assert "visible: mixedTile.is" not in mixed_items_body
     assert "visible: !mixedTile.is" not in mixed_items_body
+
+
+def test_home_assistant_control_tiles_open_from_the_tile_with_a_single_switch() -> None:
+    """Control tiles must not need a separate arrow button to open their detail.
+
+    The tile background carries the open gesture, exactly like a sensor tile, and
+    the only control left on the overview is the on/off switch. A quick-control
+    row would force the tile back to full width.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    overview = home_assistant_qml[
+        home_assistant_qml.index("id: controlOverview") :
+        home_assistant_qml.index("id: sensorOverview")
+    ]
+
+    assert "BeepingMouseArea {" in overview
+    assert "onClicked: openDetails(tileItem)" in overview
+    assert "anchors.fill: parent" in overview
+    # The chevron stays as the "has a submenu" marker, like the sensor tile, but
+    # it is a plain label now: the tile itself carries the open gesture and there
+    # is no separate arrow button and no quick-control repeater.
+    assert overview.count("\\u203a") == 1
+    assert "BasicButton {" in overview
+    assert "Repeater {" not in overview
+    assert overview.count("BeepingMouseArea {") == 1
+    # Exactly one toggle, drawn as the shared firmware switch widget.
+    assert overview.count("onTouched:") == 1
+    assert "style: CheckableButtonStyle {" in overview
+    assert 'dashboardControlByCommand(tileItem, "toggle")' in overview
+    assert "images/onoff_button.svg" not in overview
+
+
+def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
+    """Every on/off toggle must look like the firmware switch.
+
+    The tile overview and the detail summary show the same entity, so they must
+    not disagree on what a toggle looks like. The old icon-on-a-list-button
+    artwork is retired everywhere.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    summary_toggle = home_assistant_qml[
+        home_assistant_qml.index("id: summaryToggle") :
+        home_assistant_qml.index("id: summaryToggle") + 1600
+    ]
+
+    assert "images/onoff_button.svg" not in home_assistant_qml
+    assert "style: CheckableButtonStyle {" in summary_toggle
+    assert 'dashboardControlByCommand(selectedItem, "toggle")' in summary_toggle
+    # The switch renders its own state, so the green state bar is redundant.
+    assert 'color: "#58d68d"' not in summary_toggle
+
+    # Every switch declares the style inline, because the firmware never assigns
+    # a named Component to a style property and CheckableButtonStyle resolves
+    # `control` through the Loader inside BasicButton - untestable off-device.
+    # The three blocks must stay byte-identical so they cannot drift apart.
+    blocks = []
+    for match in re.finditer(
+        r"( *)style: CheckableButtonStyle \{\n(.*?)\n\1\}", home_assistant_qml, re.DOTALL
+    ):
+        blocks.append(dedent(match.group(2)))
+    assert len(blocks) == 3, len(blocks)
+    assert len(set(blocks)) == 1, blocks
+    assert "images/ringtones/switch-bg_btn.svg" in blocks[0]
+
+
+def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
+    """Every real button must swap artwork while pressed.
+
+    The device has no haptic feedback, so a button whose image stays put during
+    a touch reads as "not registered" and invites double taps. Sites where the
+    same artwork means "selected" keep their selected/unselected pair instead.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert home_assistant_qml.count('source: "images/settings/list_btn.svg"') == 0
+    assert home_assistant_qml.count("images/settings/list_btn_p.svg") == 5
+    assert (
+        home_assistant_qml.count(
+            '? "images/settings/list_btn.svg" : "images/settings/act_btn.svg"'
+        )
+        == 3
+    )
+    for mouse_id in (
+        "notificationActionMouse",
+        "coverControlMouse",
+        "controlButtonMouse",
+        "adjustMouse",
+        "notificationBannerMouse",
+    ):
+        assert f"id: {mouse_id}" in home_assistant_qml
+        assert f"{mouse_id}.pressed ?" in home_assistant_qml
+
+
+def test_home_assistant_reads_each_piece_of_state_once() -> None:
+    """Hot paths must not re-read variant properties or recompute feedback.
+
+    Reading a QML variant property converts the stored value back into
+    JavaScript, so indexing one inside a loop converts it once per iteration.
+    feedbackText() walks the feedback list, so a tile that asks for it twice -
+    once for its text, once for its colour - walks it twice per refresh.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    feedback_key = home_assistant_qml[
+        home_assistant_qml.index("function feedbackKey") :
+        home_assistant_qml.index("function feedbackText")
+    ]
+    refresh_selected = home_assistant_qml[
+        home_assistant_qml.index("function refreshSelectedItem") :
+        home_assistant_qml.index("function startWatch")
+    ]
+
+    assert "controlFeedback[i]" not in feedback_key
+    assert "controlFeedback.length" not in feedback_key
+    assert "items[i]" not in refresh_selected
+    assert "items.length" not in refresh_selected
+
+    button_tile = home_assistant_qml[
+        home_assistant_qml.index("id: mixedButtonTileComponent") :
+        home_assistant_qml.index("id: mixedSliderTileComponent")
+    ]
+    assert button_tile.count("feedbackText(tileItem)") == 1
+    assert "property string feedback: feedbackText(tileItem)" in button_tile
+    assert "text: (feedback || itemDetail(tileItem))" in button_tile
+    assert "color: feedback ?" in button_tile
+
+    # A control tile shows the entity reading, which command feedback must never
+    # replace: controlFeedback entries are never cleared, so a single toggle
+    # would pin the tile to "state confirmed", and going offline would hide the
+    # retained last-known value. Transient feedback reaches it as colour only.
+    control_tile = home_assistant_qml[
+        home_assistant_qml.index("id: controlOverview") :
+        home_assistant_qml.index("id: sensorOverview")
+    ]
+    assert "text: itemDetail(tileItem) + trsl.empty" in control_tile
+    assert "color: readingColor(tileItem)" in control_tile
+    assert "feedbackText(" not in control_tile
+    reading_color = home_assistant_qml[
+        home_assistant_qml.index("function readingColor") :
+        home_assistant_qml.index("function feedbackColor")
+    ]
+    assert '=== "state_confirmed"' not in reading_color
+    assert '=== "sending"' in reading_color
+    assert '=== "action_error"' in reading_color
 
 
 def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() -> None:
@@ -1061,3 +1230,45 @@ def _js_object_keys(source: str, object_name: str) -> set[str]:
     )
     assert match is not None, object_name
     return set(re.findall(r'^\s+"([^"]+)":', match.group("body"), re.MULTILINE))
+
+
+def test_home_assistant_ages_command_feedback_out() -> None:
+    """Command feedback must not outlive what it says.
+
+    Nothing removes a controlFeedback entry: setDashboardFeedback replaces only
+    the entry for the same entity, and aboutToHide keeps the list so an
+    unconfirmed command is still reported when the page is reopened. A command
+    that Home Assistant accepts but never reflects would therefore keep its
+    tile on "action sent" for the rest of the session. The shipped page has to
+    age the entries where it reads them, because the dashboard deliberately
+    runs no periodic timer.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"expected": expected' not in dashboard_js
+    assert "expected: expected || null, at: Date.now()" in dashboard_js
+    assert "function feedbackState(entry)" in dashboard_js
+    assert "Api.feedbackState(feedback[i])" in home_assistant_qml
+
+    feedback_state = dashboard_js[
+        dashboard_js.index("function feedbackState") :
+        dashboard_js.index("function dashboardExpectation")
+    ]
+    assert "FEEDBACK_DISCARD_MS) return \"\"" in feedback_state
+    assert 'FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"' in feedback_state
+
+    # A confirmation has to be stamped afresh, or it would be discarded on the
+    # command's stamp instead of its own.
+    confirm = dashboard_js[
+        dashboard_js.index("function confirmDashboardFeedback") :
+        dashboard_js.index("function dashboardControl")
+    ]
+    assert 'state: "state_confirmed", expected: null, at: Date.now()' in confirm
+    # An entry that has already aged out must not come back as a confirmation.
+    assert 'feedbackState(feedback[i]) === ""' in confirm

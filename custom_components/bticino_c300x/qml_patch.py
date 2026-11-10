@@ -7,7 +7,10 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from .const import CONF_DASHBOARD_DYNAMIC_HOMEPAGE
+from .const import (
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+    DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+)
 from .entry_config import entry_config_value
 from .entry_locks import entry_lock
 from .entry_types import BticinoC300XConfigEntry
@@ -51,8 +54,17 @@ def _apply_full_patch_action(
     """Return the full Display-patch apply call with configured options."""
 
     return lambda: entry.runtime_data.api.async_apply_qml_patch(
+        # One shared default with the dashboard form. They used to disagree -
+        # ticked in the form, off here - so saving that step silently switched
+        # the device's home page. async_migrate_entry pins the mode an existing
+        # entry is really running, so this fallback only ever applies to an
+        # entry that has not been through the config flow at all.
         dynamic_homepage=bool(
-            entry_config_value(entry, CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False)
+            entry_config_value(
+                entry,
+                CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
+                DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+            )
         )
     )
 

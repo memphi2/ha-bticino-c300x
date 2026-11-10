@@ -23,6 +23,7 @@ p.page = p;
 vm.runInContext(methods, p);
 const queue = [];
 Api.getJson = (url, success, error) => queue.push({url, success, error});
+Api.getJsonShared = Api.getJson;
 const item = {domain: "c300x", entity_id: "climate.room", kind: "entity", available: true,
     controls: [{command: "temperature", kind: "number", value: 20, min: 5, max: 30, step: 0.5, unit: "C"}]};
 function payload(revision) { return {revision, data: {pages: [{items: [item]}]}}; }

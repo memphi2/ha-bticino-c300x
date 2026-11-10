@@ -12,7 +12,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
     var generation = pageItem.runtimeGeneration
     var request = (pageItem.statusGeneration || 0) + 1
     pageItem.statusGeneration = request
-    getJson("/ui/state", function(data) {
+    getJsonShared("/ui/state", function(data) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
         if (!pageItem.commandInFlight) pageItem.commandPending = false
         pageItem.alarmOnline = !!(data.alarm && data.alarm.state
@@ -80,12 +80,23 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         pageItem.pinCode = ""
         alarmStateItem.text = uiText(pageItem, "offline")
         if (activeSinceItem) activeSinceItem.text = ""
-        statusItem.text = error
+        // Every other status goes through uiText. This one used to print the
+        // raw transport string, so the device showed English technical text
+        // such as "API error: 503" in a translated interface. The code stays
+        // visible because it names the cause exactly, but the sentence around
+        // it is the user's language.
+        statusItem.text = statusErrorText(pageItem, error)
         statusItem.color = "#ff6b6b"
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
     })
+}
+
+function statusErrorText(pageItem, error) {
+    var text = uiText(pageItem, "status_error")
+    var code = String(error).replace(/[^0-9]/g, "")
+    return code.length > 0 ? text + " (" + code + ")" : text
 }
 
 function dashboard(statusItem, pageItem) {
@@ -271,7 +282,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
 }
 
 function homeButtons(callback) {
-    getJson("/ui/state", function(data) {
+    getJsonShared("/ui/state", function(data) {
         if (callback) {
             callback(
                 data && data.alarm_configured === true,
@@ -1123,6 +1134,11 @@ function stopEventWatch() {
 
 function stopDashboardRuntime() {
     stopEventWatch()
+    // Before the aborts: an abort completes its request, and a completed
+    // request would otherwise start the next queued one that is being torn
+    // down here.
+    forwardQueue = []
+    forwardActive = null
     while (connections.length > 0) {
         var request = connections.pop()
         request.onreadystatechange = function() {}
@@ -1181,31 +1197,139 @@ function removeConnection(xhr) {
     }
 }
 
+// Every request this function sends is forwarded to Home Assistant by the
+// agent, which keeps exactly one of them in flight: forward_to_homeassistant
+// stores the client socket in display_client_fd and answers a second request
+// with 503 display_command_pending until the first one is done or the Home
+// Assistant timeout expires.
+//
+// That collision is avoidable rather than worth reporting, because this
+// library is its only producer. The four forwarding routes are loopback only,
+// so nothing off the device can take the slot, all of them are reached from
+// here, and QML shares one instance of a .pragma library across the home,
+// alarm and dashboard pages. Waking from standby used to collide reliably: the
+// home page refreshes its dynamic buttons when it becomes visible, and opening
+// the alarm or dashboard page in that window hit the busy slot.
+//
+// The event long poll deliberately does not go through here. It has its own
+// request and its own waiter slots in the agent, and it blocks for seconds by
+// design, so serialising it would stall every other request behind it.
+var FORWARD_QUEUE_LIMIT = 8
+var forwardActive = null
+var forwardQueue = []
+
 function getJson(path, callback, errorCallback) {
+    forwardRequest(path, callback, errorCallback, "")
+}
+
+function getJsonShared(path, callback, errorCallback) {
+    // For an idempotent read only. Such a request answers every caller the
+    // same way, so two pages asking for the same path at the same time share
+    // one round trip instead of taking the slot twice - waking from standby
+    // asks /ui/state from the home page and from the page being opened.
+    // Commands never come through here: folding two of them would execute one
+    // and silently drop the other.
+    if (forwardActive !== null && forwardActive.sharedPath === path) {
+        forwardActive.waiters.push({callback: callback, errorCallback: errorCallback})
+        return
+    }
+    for (var i = 0; i < forwardQueue.length; i++) {
+        if (forwardQueue[i].sharedPath === path) {
+            forwardQueue[i].waiters.push({callback: callback, errorCallback: errorCallback})
+            return
+        }
+    }
+    forwardRequest(path, callback, errorCallback, path)
+}
+
+function forwardRequest(path, callback, errorCallback, sharedPath) {
     cleanupConnections()
+    var entry = {
+        path: path,
+        sharedPath: sharedPath,
+        waiters: [{callback: callback, errorCallback: errorCallback}]
+    }
+    if (forwardActive !== null) {
+        if (forwardQueue.length >= FORWARD_QUEUE_LIMIT) {
+            // Unreachable while each page keeps one request in flight. Report
+            // it rather than drop it, so a pressed button never goes silent.
+            if (errorCallback) errorCallback("queue full")
+            return
+        }
+        forwardQueue.push(entry)
+        return
+    }
+    sendForward(entry)
+}
+
+function sendForward(entry) {
     var xhr = new XMLHttpRequest()
+    xhr.sharedPath = entry.sharedPath
+    xhr.waiters = entry.waiters
+    forwardActive = xhr
     connections.push(xhr)
     xhr.startTime = Date.now()
     xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            removeConnection(xhr)
-            if (xhr.status === 200) {
-                try {
-                    callback(JSON.parse(xhr.responseText))
-                } catch (error) {
-                    if (errorCallback) {
-                        errorCallback("Invalid JSON")
-                    }
-                }
-            } else {
-                if (errorCallback) {
-                    errorCallback("API error: " + xhr.status)
-                }
-            }
+        if (xhr.readyState !== 4) {
+            return
+        }
+        removeConnection(xhr)
+        try {
+            deliverForward(xhr)
+        } finally {
+            // Even a callback that throws has to hand the slot on, or the
+            // whole display would stop talking to the agent.
+            finishForward(xhr)
         }
     }
-    xhr.open("GET", BASE_URL + path)
+    xhr.open("GET", BASE_URL + entry.path)
     xhr.send()
+}
+
+function deliverForward(xhr) {
+    var waiters = xhr.waiters
+    // Taken before the first callback runs: a callback can start the next
+    // request, and an answered read must not still collect waiters.
+    xhr.waiters = []
+    xhr.sharedPath = ""
+    var data = null
+    var failure = ""
+    if (xhr.status === 200) {
+        try {
+            data = JSON.parse(xhr.responseText)
+        } catch (error) {
+            failure = "Invalid JSON"
+        }
+    } else {
+        failure = "API error: " + xhr.status
+    }
+    for (var i = 0; i < waiters.length; i++) {
+        try {
+            if (failure.length === 0) {
+                try {
+                    waiters[i].callback(data)
+                } catch (error) {
+                    if (waiters[i].errorCallback) waiters[i].errorCallback("Invalid JSON")
+                }
+            } else if (waiters[i].errorCallback) {
+                waiters[i].errorCallback(failure)
+            }
+        } catch (error) {
+            // One page's broken handler must not keep the pages sharing this
+            // answer from being told.
+        }
+    }
+}
+
+function finishForward(xhr) {
+    if (forwardActive !== xhr) {
+        return
+    }
+    forwardActive = null
+    if (forwardQueue.length === 0) {
+        return
+    }
+    sendForward(forwardQueue.shift())
 }
 
 function cleanupConnections() {

@@ -227,8 +227,8 @@ PATCH_OUTPUT_SHA256 = {
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
     "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
-    "js/c300x_ha.js": "b18856e47b8f3ace6dcff0a0bc8a61d49753df277db4bc520068cb9dc929b101",
-    "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
+    "js/c300x_ha.js": "4c24b942ec7f20d903429e2e27a763f9fc036caee2ba0300a651c7715df71d33",
+    "js/c300x_i18n.js": "14cac5f6e5e8f20c0dc7a82c9caca4fc32108d35c934481e0701c2b2cd84d9b4",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
 
@@ -1272,3 +1272,107 @@ def test_home_assistant_ages_command_feedback_out() -> None:
     assert 'state: "state_confirmed", expected: null, at: Date.now()' in confirm
     # An entry that has already aged out must not come back as a confirmation.
     assert 'feedbackState(feedback[i]) === ""' in confirm
+
+
+def test_display_requests_cannot_collide_in_the_agent() -> None:
+    """Only one display request may be in flight towards Home Assistant.
+
+    The agent forwards /ui/state, /homeassistant, /ui/action and
+    /ui/alarm/command to Home Assistant and keeps exactly one of them in
+    flight: forward_to_homeassistant stores the client socket in
+    display_client_fd and answers a second request with 503
+    display_command_pending. All four routes are loopback only and every one of
+    them is reached from this library, which QML shares as a single .pragma
+    library instance across the home, alarm and dashboard pages, so the
+    collision is removed by serialising there. The event long poll must stay
+    outside that queue: it blocks for seconds by design and has its own waiter
+    slots in the agent.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "var forwardActive = null" in dashboard_js
+    assert "function finishForward(xhr)" in dashboard_js
+
+    get_json = dashboard_js[
+        dashboard_js.index("function getJson(") :
+        dashboard_js.index("function sendForward(")
+    ]
+    assert "forwardQueue.push(" in get_json
+    assert "new XMLHttpRequest()" not in get_json, "a busy slot must not be bypassed"
+
+    send_forward = dashboard_js[
+        dashboard_js.index("function sendForward(") :
+        dashboard_js.index("function finishForward(")
+    ]
+    # Without the finally, a page callback that throws would keep the slot and
+    # the display would stop talking to the agent for good.
+    assert "} finally {" in send_forward
+    assert "finishForward(xhr)" in send_forward
+
+    # The long poll builds its own request and is never queued behind the rest.
+    next_event = dashboard_js[
+        dashboard_js.index("function requestNextEvent(") :
+        dashboard_js.index("function removeConnection(")
+    ]
+    assert "/ui/events/next" in next_event
+    assert "forwardQueue" not in next_event
+    assert "getJson(" not in next_event
+
+    # The teardown has to drop queued work before the aborts, because an abort
+    # completes its request and a completed request starts the next one.
+    teardown = dashboard_js[
+        dashboard_js.index("function stopDashboardRuntime(") :
+        dashboard_js.index("function requestNextEvent(")
+    ]
+    assert teardown.index("forwardQueue = []") < teardown.index("connections.pop()")
+
+
+def test_only_idempotent_reads_share_a_display_round_trip() -> None:
+    """Two pages asking the same thing must not take the slot twice.
+
+    Waking from standby asks /ui/state twice: the home page refreshes its
+    dynamic buttons when it becomes visible, and the page being opened reads
+    the same state. A read answers every caller the same way, so both are
+    served from one round trip. A command must never be folded that way: it
+    would be executed once and the other caller would be told it succeeded.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    shared = dashboard_js[
+        dashboard_js.index("function getJsonShared(") :
+        dashboard_js.index("function forwardRequest(")
+    ]
+    assert "forwardActive.waiters.push(" in shared
+    assert "forwardQueue[i].waiters.push(" in shared
+    assert "sharedPath === path" in shared
+
+    # getJson stays the unfolded entry point, so every command keeps its own
+    # round trip.
+    plain = dashboard_js[
+        dashboard_js.index("function getJson(") :
+        dashboard_js.index("function getJsonShared(")
+    ]
+    assert 'forwardRequest(path, callback, errorCallback, "")' in plain
+
+    # Exactly the two /ui/state producers opt in: Api.status for the alarm and
+    # dashboard pages, homeButtons for the patched home page.
+    assert dashboard_js.count("getJsonShared(") == 3
+    assert dashboard_js.count('getJsonShared("/ui/state"') == 2
+    for command in ("/ui/alarm/command", "/ui/action"):
+        assert f'getJsonShared("{command}' not in dashboard_js
+
+    # An answered read must not keep collecting waiters, and one page's broken
+    # handler must not silence the pages sharing the same answer.
+    deliver = dashboard_js[
+        dashboard_js.index("function deliverForward(") :
+        dashboard_js.index("function finishForward(")
+    ]
+    assert deliver.index("xhr.waiters = []") < deliver.index("waiters[i].callback(")
+    assert 'xhr.sharedPath = ""' in deliver
+    assert deliver.count("try {") == 3

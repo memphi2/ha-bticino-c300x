@@ -28,6 +28,7 @@ from .const import (
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
     CONF_ALARM_ENTITY_ID,
     CONF_CREATE_HOMEASSISTANT_USER,
+    CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P,
@@ -424,10 +425,74 @@ def _entry_update_listener(
         current = settings(updated)
         if current == previous:
             return
+        was_dynamic_homepage = _dynamic_homepage_setting(previous)
         previous = current
+        # Before the reload: the re-apply needs the runtime data that the
+        # reload replaces.
+        await _async_reapply_display_patch_for_home_page(
+            updated,
+            was_dynamic_homepage=was_dynamic_homepage,
+        )
         await _async_update_listener(hass, updated)
 
     return listener
+
+
+def _dynamic_homepage_setting(settings: tuple[dict[str, Any], dict[str, Any]]) -> bool:
+    """Read the home-page button mode the way the Display patch apply reads it.
+
+    Mirrors entry_config_value: an option overrides setup data, and an absent
+    key means the apply default in qml_patch, so "absent before and after"
+    counts as unchanged.
+    """
+
+    data, options = settings
+    if CONF_DASHBOARD_DYNAMIC_HOMEPAGE in options:
+        return bool(options[CONF_DASHBOARD_DYNAMIC_HOMEPAGE])
+    return bool(data.get(CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False))
+
+
+async def _async_reapply_display_patch_for_home_page(
+    entry: BticinoC300XConfigEntry,
+    *,
+    was_dynamic_homepage: bool,
+) -> None:
+    """Make a changed home-page button mode reach the device.
+
+    The mode is baked into the HomePage.qml that the Display patch generates,
+    and saving options only reloads the entry. Without this, the new mode would
+    appear only after the Display-patch switch had been turned off and on,
+    because Home Assistant never calls turn_on again on a switch that is
+    already on, and there is no other apply action.
+
+    The agent regenerates the page from the pristine backup and reloads the
+    device GUI only when a file actually changed, so a save that leaves the
+    mode alone costs one no-op apply and never restarts the GUI.
+    """
+
+    from .capabilities import qml_patch_status_is_active
+    from .entry_config import entry_config_value
+    from .qml_patch import async_apply_qml_patch_and_confirm
+
+    if bool(entry_config_value(entry, CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False)) == (
+        was_dynamic_homepage
+    ):
+        return
+    runtime_data = getattr(entry, "runtime_data", None)
+    if not qml_patch_status_is_active(
+        getattr(runtime_data, "qml_patch_status", None)
+    ):
+        return
+    try:
+        await async_apply_qml_patch_and_confirm(entry)
+    except C300XAgentApiError:
+        # The entry still has to reload with the saved options; the Display
+        # patch keeps reporting its real state and can be re-applied later.
+        _LOGGER.warning(
+            "Could not re-apply the Display patch for the changed home page "
+            "button mode; the device keeps the previous pages until the "
+            "Display patch is applied again"
+        )
 
 
 async def _async_update_listener(

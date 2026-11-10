@@ -70,10 +70,11 @@ def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.Monkey
                 CONF_SHARED_SECRET: "token-32",
                 CONF_EVENT_WEBHOOK_ID: "token-24",
                 CONF_EVENT_WEBHOOK_TOKEN: "token-32",
+                "dashboard_dynamic_homepage": False,
             },
             "options": {},
             "version": 1,
-            "minor_version": 2,
+            "minor_version": 3,
         }
     ]
 
@@ -1796,3 +1797,196 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == []
+
+
+def test_changed_home_page_button_mode_reapplies_the_display_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A saved home-page button mode must reach the device on its own.
+
+    The mode is baked into the HomePage.qml that the Display patch generates,
+    and saving options only reloads the entry. Home Assistant never calls
+    turn_on again on a switch that is already on, and no other apply action
+    exists, so without this the new mode would appear only after the
+    Display-patch switch had been turned off and on.
+    """
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        return {"patched": True}
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+    listener = _entry_update_listener(entry)
+
+    # An unrelated option must not touch the device.
+    entry.options["video_enabled"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+    # Turning the mode on re-applies before the reload, because the re-apply
+    # needs the runtime data that the reload replaces.
+    calls.clear()
+    entry.options["dashboard_dynamic_homepage"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
+
+    # And turning it off again.
+    calls.clear()
+    entry.options["dashboard_dynamic_homepage"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
+
+    # An absent key means the apply default, so storing that same value is not
+    # a change and must not restart the device GUI.
+    calls.clear()
+    entry.options.pop("dashboard_dynamic_homepage")
+    entry.options["video_enabled"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+
+def test_home_page_button_mode_is_not_applied_without_an_active_display_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing is applied to a device whose Display patch is not active."""
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        return {}
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": False}),
+    )
+    listener = _entry_update_listener(entry)
+    entry.options["dashboard_dynamic_homepage"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+
+def test_failed_home_page_reapply_still_reloads_the_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A device error must not strand the entry on the previous options."""
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiError
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        raise C300XAgentApiError("device unreachable")
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={"dashboard_dynamic_homepage": True},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+    listener = _entry_update_listener(entry)
+    entry.options["dashboard_dynamic_homepage"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
+
+
+def test_migrate_entry_pins_the_home_page_mode_the_device_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An absent home-page button mode must stop meaning two different things.
+
+    The dashboard form offered the setting ticked while the Display patch
+    apply read an absent key as off, so an entry that never stored it ran the
+    fixed pair of buttons while the form claimed the dynamic ones. Because the
+    dashboard step always writes the key, opening and saving that step switched
+    the device's home page without anyone choosing it.
+    """
+
+    monkeypatch.setattr(integration.secrets, "token_urlsafe", lambda n: f"token-{n}")
+
+    def migrate(data: dict[str, Any], options: dict[str, Any], minor: int = 1) -> dict[str, Any]:
+        updates: list[dict[str, Any]] = []
+        entry = SimpleNamespace(data=data, options=options, minor_version=minor)
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=lambda _entry, **kwargs: updates.append(kwargs)
+            )
+        )
+        assert asyncio.run(integration.async_migrate_entry(hass, entry)) is True
+        return updates[0] if updates else {}
+
+    # Absent everywhere: pinned to what the apply was already doing.
+    update = migrate({CONF_AGENT_HOST: "192.0.2.60"}, {})
+    assert update["data"]["dashboard_dynamic_homepage"] is False
+    assert update["minor_version"] == 3
+
+    # A stored choice is never overwritten, in setup data or in options.
+    update = migrate(
+        {CONF_AGENT_HOST: "192.0.2.60", "dashboard_dynamic_homepage": True},
+        {},
+    )
+    assert update["data"]["dashboard_dynamic_homepage"] is True
+    update = migrate(
+        {CONF_AGENT_HOST: "192.0.2.60"},
+        {"dashboard_dynamic_homepage": True},
+    )
+    assert "dashboard_dynamic_homepage" not in update["data"]
+    assert update["options"]["dashboard_dynamic_homepage"] is True
+
+
+def test_display_patch_apply_shares_one_home_page_default() -> None:
+    """The form default and the apply fallback must be the same value."""
+
+    from custom_components.bticino_c300x.config_flow_dashboard import (
+        DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT,
+    )
+    from custom_components.bticino_c300x.const import (
+        DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
+    )
+
+    assert DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT is DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
+
+    qml_patch_source = (
+        ROOT / "custom_components" / "bticino_c300x" / "qml_patch.py"
+    ).read_text(encoding="utf-8")
+    assert "DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE," in qml_patch_source
+    assert "CONF_DASHBOARD_DYNAMIC_HOMEPAGE, False" not in qml_patch_source

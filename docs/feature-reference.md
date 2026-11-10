@@ -94,6 +94,24 @@ is added. Reconnect attempts run only after a failed event connection while the
 page is active. Device rendering and interruption by a physical Ring Call still
 need confirmation during beta testing.
 
+## Display Home Page Buttons
+
+**Use dynamic home page buttons** under **Display dashboard** decides how the
+Alarm and Home Assistant buttons reach the device's home page.
+
+| Setting | Home page |
+| --- | --- |
+| On | Each button is placed on its own and is shown only while it has something to open: Alarm when Alarmo is configured, Home Assistant when a dashboard is available. The firmware arranges them with the stock buttons and wraps to a second row once more than four are visible. |
+| Off | Both buttons sit together in one fixed pair, always visible, next to each other. |
+
+The mode is part of the page the Display patch generates, so changing it
+re-applies the patch and restarts the device GUI once. Saving the options
+without touching the setting changes nothing on the device.
+
+New entries start with the setting on. An entry created before the setting
+existed keeps the fixed pair it has been running, recorded once on upgrade, and
+the form shows that state instead of an unrelated default.
+
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans and sensors under **Display
@@ -135,6 +153,13 @@ Bursts are combined into a notification. Selected-entity changes that do not
 alter the displayed values, availability or controls do not notify the device.
 Alarmo and weather keep their existing event handling. Unchanged GUI items are
 reused, preserving the overview position and active input.
+
+Device requests to Home Assistant are serialised on the device. The agent
+forwards them one at a time and refuses a second one while the first is open,
+so the pages queue instead of colliding: waking from standby no longer shows a
+transport error when the home page refreshes its buttons at the same moment a
+page is opened. Pages asking for the same state at the same time are answered
+from one request; commands always keep their own.
 
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification

@@ -1,5 +1,45 @@
 # Changelog
 
+## v2.1.1 - 2026-11-10
+
+### Fixed
+
+- Serialize the display's requests to Home Assistant. The agent keeps one
+  forwarded request in flight and answers a second one with
+  `display_command_pending`, so a page opened while the home page was still
+  refreshing its buttons could show a red `API error: 503` once. Requests now
+  queue instead of competing, and an overflowing queue reports the reason
+  instead of dropping the request silently.
+- Show the alarm page's status error in the configured language. The status
+  error was the only message that bypassed the display translations and printed
+  the raw English transport string; the numeric code is kept in brackets.
+- Let a changed home page button mode reach the device. The mode is part of the
+  page the Display patch generates, so changing it now re-applies the patch
+  when the patch is active, instead of requiring the Display patch switch to be
+  turned off and on again.
+- Stop an absent home page button mode from meaning two things. The dashboard
+  form offered the dynamic buttons while applying the patch read a missing
+  setting as the fixed pair, so opening and saving the dashboard step could
+  switch the device's home page without anyone choosing it. Existing entries
+  keep the buttons they are running, recorded once on upgrade, and the form
+  shows that state.
+
+### Changed
+
+- Answer display pages asking for the same state from a single request, so the
+  home page buttons and a page's own status no longer cost two round trips.
+
+### Upgrade
+
+- The native agent stays at `2.1.0`; only its bundle changes, because the
+  display files ship with it. The agent-update Repair offers the update, and
+  the integration re-applies an active Display patch itself, which restarts the
+  device GUI once.
+- Home Assistant 2026.7 remains the minimum. Existing integration entries and
+  card configurations can be kept.
+- Upgrading records the home page button mode an entry is running. Nothing on
+  the device changes; the dashboard options simply show the mode that is active.
+
 ## v2.1.0 - 2026-11-10
 
 ### Added

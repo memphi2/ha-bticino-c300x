@@ -340,3 +340,61 @@ const assignBody = dashboardSource.slice(
 );
 assert.equal(assignBody.includes("JSON.stringify("), false, "no snapshot is serialised to compare it");
 console.log("Structural snapshot comparison passed");
+
+// Nothing else ever removes a controlFeedback entry, so an entry is aged where
+// it is read: first into the warning the user can act on, then away, so the
+// tile shows its plain reading again.
+let clock = 1700000000000;
+const realDate = Api.Date;
+Api.Date = {now: () => clock};
+p.controlFeedback = [];
+p.pendingEntity = "";
+p.controlInFlight = false;
+p.dashboardOnline = true;
+const stuck = {entity_id: "light.hall", available: true};
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+const stored = p.controlFeedback;
+clock += 14999;
+assert.equal(p.feedbackKey(stuck), "action_sent", "a command HA may still reflect is left alone");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "an unreflected command reads as a warning");
+assert.equal(p.readingColor(stuck), "#f1c40f", "and the tile reading says so");
+assert.equal(p.controlFeedback, stored, "ageing an entry costs no list reassignment");
+clock += 59999 - 15000;
+assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long enough to read");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
+assert.equal(p.readingColor(stuck), "#c7d0d9");
+
+// A late confirmation still lands, and is stamped again so it reads as fresh.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+p.dashboardPages = [{items: [{entity_id: stuck.entity_id, state: true, available: true}]}];
+clock += 20000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "state_confirmed", "HA reflecting it late still confirms the command");
+clock += 59999;
+assert.equal(p.feedbackKey(stuck), "state_confirmed");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "", "a confirmation is aged from its own stamp, not the command's");
+
+// An entry that has aged out must not come back as a confirmation.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "toggle", value: true});
+clock += 60000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "", "a discarded command cannot be revived");
+
+// An entry without an expectation is terminal and is never reconsidered.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_error");
+assert.equal(p.feedbackKey(stuck), "action_error");
+clock += 59999;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "action_error", "a failed action is not confirmed by matching state");
+clock += 1;
+assert.equal(p.feedbackKey(stuck), "");
+Api.Date = realDate;
+p.controlFeedback = [];
+p.dashboardPages = [];
+console.log("Feedback ageing passed");

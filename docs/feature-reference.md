@@ -138,8 +138,11 @@ reused, preserving the overview position and active input.
 
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification
-for optimistic entities. Errors remain at the affected control; an uncertain
-transport result is not automatically retried. During a connection outage the
+for optimistic entities. An accepted command that HA never reflects is reported
+as unconfirmed after 15 seconds, and feedback for an entity disappears a minute
+after the last thing happened to it, so a tile returns to showing its plain
+reading. Errors remain at the affected control; an uncertain transport result is
+not automatically retried. During a connection outage the
 last snapshot stays visible, explicitly marked as stale, with actions disabled.
 Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling

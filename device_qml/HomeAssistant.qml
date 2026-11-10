@@ -186,7 +186,7 @@ Page {
         if (pendingEntity === item.entity_id && controlInFlight) return "sending"
         var feedback = controlFeedback
         for (var i = feedback.length - 1; i >= 0; i--) {
-            if (feedback[i].entity_id === item.entity_id) return feedback[i].state
+            if (feedback[i].entity_id === item.entity_id) return Api.feedbackState(feedback[i])
         }
         return ""
     }
@@ -198,9 +198,9 @@ Page {
     }
 
     function readingColor(item) {
-        // A tile line carries the entity reading, so a state_confirmed that is
-        // never cleared must not tint it for the rest of the session. Only
-        // transient states colour the reading.
+        // A tile line carries the entity reading, so a state_confirmed must not
+        // tint it for as long as the entry lives. Only transient states colour
+        // the reading.
         if (!dashboardOnline || item.available === false) return "#f1c40f"
         var key = feedbackKey(item)
         if (key === "action_error") return "#ff6b6b"

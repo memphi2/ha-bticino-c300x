@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "0a072a721c80d97edd3a105b78fde883da030491f3f0ed76daeb82c4690a1578",
-    "js/c300x_ha.js": "118c70b98457ce36ab41d1ef481d3c066a1daee36669f143277c6233a08cac87",
+    "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
+    "js/c300x_ha.js": "b18856e47b8f3ace6dcff0a0bc8a61d49753df277db4bc520068cb9dc929b101",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -1230,3 +1230,45 @@ def _js_object_keys(source: str, object_name: str) -> set[str]:
     )
     assert match is not None, object_name
     return set(re.findall(r'^\s+"([^"]+)":', match.group("body"), re.MULTILINE))
+
+
+def test_home_assistant_ages_command_feedback_out() -> None:
+    """Command feedback must not outlive what it says.
+
+    Nothing removes a controlFeedback entry: setDashboardFeedback replaces only
+    the entry for the same entity, and aboutToHide keeps the list so an
+    unconfirmed command is still reported when the page is reopened. A command
+    that Home Assistant accepts but never reflects would therefore keep its
+    tile on "action sent" for the rest of the session. The shipped page has to
+    age the entries where it reads them, because the dashboard deliberately
+    runs no periodic timer.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"expected": expected' not in dashboard_js
+    assert "expected: expected || null, at: Date.now()" in dashboard_js
+    assert "function feedbackState(entry)" in dashboard_js
+    assert "Api.feedbackState(feedback[i])" in home_assistant_qml
+
+    feedback_state = dashboard_js[
+        dashboard_js.index("function feedbackState") :
+        dashboard_js.index("function dashboardExpectation")
+    ]
+    assert "FEEDBACK_DISCARD_MS) return \"\"" in feedback_state
+    assert 'FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"' in feedback_state
+
+    # A confirmation has to be stamped afresh, or it would be discarded on the
+    # command's stamp instead of its own.
+    confirm = dashboard_js[
+        dashboard_js.index("function confirmDashboardFeedback") :
+        dashboard_js.index("function dashboardControl")
+    ]
+    assert 'state: "state_confirmed", expected: null, at: Date.now()' in confirm
+    # An entry that has already aged out must not come back as a confirmation.
+    assert 'feedbackState(feedback[i]) === ""' in confirm

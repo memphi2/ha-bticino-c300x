@@ -153,13 +153,30 @@ function finishDashboardRefresh(statusItem, pageItem) {
     }
 }
 
+// Nothing ever removes a feedback entry: setDashboardFeedback only replaces the
+// one for the same entity and aboutToHide keeps the list so a warning survives
+// until the user comes back. So a command that HA accepts but never reflects
+// would keep its tile on "action sent" for the rest of the session. Entries are
+// stamped and aged where they are read, which needs no periodic sweep and
+// cannot drop information a late confirmation still wants.
+var FEEDBACK_UNCONFIRMED_MS = 15000
+var FEEDBACK_DISCARD_MS = 60000
+
 function setDashboardFeedback(pageItem, entityId, state, expected) {
     var feedback = listOrEmpty(pageItem.controlFeedback).slice(0)
     for (var i = feedback.length - 1; i >= 0; i--) {
         if (feedback[i].entity_id === entityId) feedback.splice(i, 1)
     }
-    feedback.push({entity_id: entityId, state: state, expected: expected || null})
+    feedback.push({entity_id: entityId, state: state, expected: expected || null, at: Date.now()})
     pageItem.controlFeedback = feedback.slice(-32)
+}
+
+function feedbackState(entry) {
+    if (!entry) return ""
+    var age = Date.now() - (entry.at || 0)
+    if (age >= FEEDBACK_DISCARD_MS) return ""
+    if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
+    return entry.state
 }
 
 function dashboardExpectation(item, control, value) {
@@ -206,12 +223,12 @@ function confirmDashboardFeedback(pageItem) {
     var changed = false
     var pages = listOrEmpty(pageItem.dashboardPages)
     for (var i = 0; i < feedback.length; i++) {
-        if (feedback[i].state !== "action_sent" || !feedback[i].expected) continue
+        if (!feedback[i].expected || feedbackState(feedback[i]) === "") continue
         for (var p = 0; p < pages.length; p++) {
             var items = listOrEmpty(pages[p].items)
             for (var j = 0; j < items.length; j++) {
                 if (items[j].entity_id === feedback[i].entity_id && dashboardExpectationMatches(items[j], feedback[i].expected)) {
-                    updated[i] = {entity_id: feedback[i].entity_id, state: "state_confirmed", expected: null}
+                    updated[i] = {entity_id: feedback[i].entity_id, state: "state_confirmed", expected: null, at: Date.now()}
                     changed = true
                 }
             }

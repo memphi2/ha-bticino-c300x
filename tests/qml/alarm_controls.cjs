@@ -101,6 +101,19 @@ pending.shift().error("offline");
 assert.equal(q.alarmOnline, false);
 assert.equal(q.watchFailed, true, "status failure schedules recovery even with a healthy event watch");
 assert.equal(q.alarmState.text, "Offline");
+// The status line is the only one that used to print the raw transport string,
+// so a translated interface showed English technical text. The sentence is now
+// localised and the transport code is kept, because it names the cause exactly.
+assert.equal(q.status.text, I18n.text("en", "status_error"));
+assert.notEqual(q.status.text, "offline", "no raw transport string reaches the display");
+assert.equal(q.status.color, "#ff6b6b");
+Api.status(q.status, q, q.alarmState, q.activeSince);
+pending.shift().error("API error: 503");
+assert.equal(q.status.text, I18n.text("en", "status_error") + " (503)");
+for (const lang of ["de", "fr", "it"]) {
+    assert.notEqual(I18n.text(lang, "status_error"), "status_error", lang);
+    assert.notEqual(I18n.text(lang, "status_error"), I18n.text("en", "status_error"), lang);
+}
 q.selectCommand("arm_home");
 assert.equal(pending.length, 0);
 assert.equal(Api.alarmPageItem(null), null, "no implicit stair light action");

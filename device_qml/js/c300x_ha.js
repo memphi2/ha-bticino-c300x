@@ -80,12 +80,23 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         pageItem.pinCode = ""
         alarmStateItem.text = uiText(pageItem, "offline")
         if (activeSinceItem) activeSinceItem.text = ""
-        statusItem.text = error
+        // Every other status goes through uiText. This one used to print the
+        // raw transport string, so the device showed English technical text
+        // such as "API error: 503" in a translated interface. The code stays
+        // visible because it names the cause exactly, but the sentence around
+        // it is the user's language.
+        statusItem.text = statusErrorText(pageItem, error)
         statusItem.color = "#ff6b6b"
         if (pageItem.setAlarmDelayRemaining) {
             pageItem.setAlarmDelayRemaining(0)
         }
     })
+}
+
+function statusErrorText(pageItem, error) {
+    var text = uiText(pageItem, "status_error")
+    var code = String(error).replace(/[^0-9]/g, "")
+    return code.length > 0 ? text + " (" + code + ")" : text
 }
 
 function dashboard(statusItem, pageItem) {

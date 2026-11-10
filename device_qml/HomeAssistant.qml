@@ -1617,8 +1617,12 @@ Page {
                             property bool isImage: tileItem.kind === "image"
                             property bool hasControls: tileItem.controls !== undefined
                             property bool isSensor: tileItem.details !== undefined && (tileItem.details.type === "sensor" || tileItem.details.type === "binary_sensor")
-                            width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth
-                            height: isSensor ? 94 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (hasControls || isSlider || isButton ? 64 : 58)))
+                            // Geometry must test the same keys in the same order as the
+                            // Loader below, because an entity can carry several: dashboard.py
+                            // gives number/select entities controls as well as a slider/choice
+                            // kind, and hasControls decides which component renders.
+                            width: isSensor || hasControls ? itemColumn.tileWidth : (isImage || isChoice || isSlider ? itemColumn.width : itemColumn.tileWidth)
+                            height: isSensor ? 94 : (hasControls ? 64 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))))
 
                             Loader {
                                 anchors.fill: parent

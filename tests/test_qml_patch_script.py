@@ -225,7 +225,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "f7e2dc88253e2d235f9277456725759c6d0c856cbf0fb5582015e1d11d971941",
+    "HomeAssistant.qml": "4b68f5ec02df42e54e6881bff003087f56b4efb155d16383103562c7cc2a9d60",
     "js/c300x_ha.js": "ec1a0efbc139457506709ddd34515e92dcac8b4d7a2907b9f164b582efbf62ae",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -580,13 +580,23 @@ def test_home_assistant_mixed_dashboard_uses_two_columns_for_standard_tiles() ->
 
     assert "Flow {" in mixed_items_body
     assert "property int tileWidth: (width - spacing) / 2" in mixed_items_body
-    assert (
-        "width: isChoice || isImage || isSlider ? itemColumn.width : itemColumn.tileWidth"
-        in mixed_items_body
-    )
-    # Entities with controls are opened from the tile itself, so they stay in the
-    # two-column grid instead of claiming a full-width row for a quick-control row.
-    assert "hasControls ||" not in mixed_items_body.split("height:")[0]
+    # An entity can match several keys at once: dashboard.py gives number and
+    # select entities controls as well as a slider/choice kind. Width, height and
+    # the Loader must therefore agree on which key wins, or a tile gets the size
+    # of one component and the content of another.
+    delegate = mixed_items_body[mixed_items_body.index("id: mixedTile") :]
+
+    def _expression(prefix: str) -> str:
+        return delegate.split(prefix)[1].split("\n")[0]
+
+    def _order(expression: str) -> list[str]:
+        keys = ("isSensor", "hasControls", "isImage", "isChoice", "isSlider")
+        return sorted((key for key in keys if key in expression), key=expression.index)
+
+    width_expression = _expression("width: ")
+    assert "itemColumn.tileWidth" in width_expression
+    for expression in (width_expression, _expression("height: "), _expression("sourceComponent: ")):
+        assert _order(expression)[:2] == ["isSensor", "hasControls"], expression
     assert "Loader {" in mixed_items_body
     assert "sourceComponent:" in mixed_items_body
     assert "visible: mixedTile.is" not in mixed_items_body

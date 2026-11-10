@@ -225,7 +225,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "4b68f5ec02df42e54e6881bff003087f56b4efb155d16383103562c7cc2a9d60",
+    "HomeAssistant.qml": "d939775faf0c941f7596e2caba487ea177248cf60d2f1abe8b893f8decb63701",
     "js/c300x_ha.js": "ec1a0efbc139457506709ddd34515e92dcac8b4d7a2907b9f164b582efbf62ae",
     "js/c300x_i18n.js": "5b6f381ca8102a2ece0cd65b85d61a686da134dc3bf60042dc341a056f799837",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -692,6 +692,42 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     ):
         assert f"id: {mouse_id}" in home_assistant_qml
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
+
+
+def test_home_assistant_reads_each_piece_of_state_once() -> None:
+    """Hot paths must not re-read variant properties or recompute feedback.
+
+    Reading a QML variant property converts the stored value back into
+    JavaScript, so indexing one inside a loop converts it once per iteration.
+    feedbackText() walks the feedback list, so a tile that asks for it twice -
+    once for its text, once for its colour - walks it twice per refresh.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    feedback_key = home_assistant_qml[
+        home_assistant_qml.index("function feedbackKey") :
+        home_assistant_qml.index("function feedbackText")
+    ]
+    refresh_selected = home_assistant_qml[
+        home_assistant_qml.index("function refreshSelectedItem") :
+        home_assistant_qml.index("function startWatch")
+    ]
+
+    assert "controlFeedback[i]" not in feedback_key
+    assert "controlFeedback.length" not in feedback_key
+    assert "items[i]" not in refresh_selected
+    assert "items.length" not in refresh_selected
+
+    button_tile = home_assistant_qml[
+        home_assistant_qml.index("id: mixedButtonTileComponent") :
+        home_assistant_qml.index("id: mixedSliderTileComponent")
+    ]
+    assert button_tile.count("feedbackText(tileItem)") == 1
+    assert "property string feedback: feedbackText(tileItem)" in button_tile
+    assert "text: (feedback || itemDetail(tileItem))" in button_tile
+    assert "color: feedback ?" in button_tile
 
 
 def test_display_bridge_js_connection_cleanup_does_not_keep_stale_longpolls() -> None:

@@ -122,9 +122,10 @@ Page {
 
     function refreshSelectedItem() {
         if (!selectedItem) return
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].entity_id === selectedItem.entity_id) {
-                selectedItem = items[i]
+        var current = items
+        for (var i = 0; i < current.length; i++) {
+            if (current[i].entity_id === selectedItem.entity_id) {
+                selectedItem = current[i]
                 return
             }
         }
@@ -181,8 +182,9 @@ Page {
     function feedbackKey(item) {
         if (!item) return ""
         if (pendingEntity === item.entity_id && controlInFlight) return "sending"
-        for (var i = controlFeedback.length - 1; i >= 0; i--) {
-            if (controlFeedback[i].entity_id === item.entity_id) return controlFeedback[i].state
+        var feedback = controlFeedback
+        for (var i = feedback.length - 1; i >= 0; i--) {
+            if (feedback[i].entity_id === item.entity_id) return feedback[i].state
         }
         return ""
     }
@@ -1377,6 +1379,7 @@ Page {
 
                         Item {
                             property variant tileItem: parent ? parent.tileItem : ({})
+                            property string feedback: feedbackText(tileItem)
                             anchors.fill: parent
 
                             Image {
@@ -1399,8 +1402,8 @@ Page {
                             }
 
                             UbuntuLightText {
-                                text: (feedbackText(tileItem) || itemDetail(tileItem)) + trsl.empty
-                                color: feedbackText(tileItem) ? feedbackColor(tileItem) : itemColor(tileItem)
+                                text: (feedback || itemDetail(tileItem)) + trsl.empty
+                                color: feedback ? feedbackColor(tileItem) : itemColor(tileItem)
                                 font.pixelSize: 15
                                 elide: Text.ElideRight
                                 anchors.left: parent.left

@@ -1796,3 +1796,133 @@ def test_remove_stale_gui_entities_leaves_patch_backed_buttons_alone(monkeypatch
     runtime_manager._async_remove_stale_gui_dependent_entities(hass, entry)
 
     assert registry.removed == []
+
+
+def test_changed_home_page_button_mode_reapplies_the_display_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A saved home-page button mode must reach the device on its own.
+
+    The mode is baked into the HomePage.qml that the Display patch generates,
+    and saving options only reloads the entry. Home Assistant never calls
+    turn_on again on a switch that is already on, and no other apply action
+    exists, so without this the new mode would appear only after the
+    Display-patch switch had been turned off and on.
+    """
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        return {"patched": True}
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+    listener = _entry_update_listener(entry)
+
+    # An unrelated option must not touch the device.
+    entry.options["video_enabled"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+    # Turning the mode on re-applies before the reload, because the re-apply
+    # needs the runtime data that the reload replaces.
+    calls.clear()
+    entry.options["dashboard_dynamic_homepage"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
+
+    # And turning it off again.
+    calls.clear()
+    entry.options["dashboard_dynamic_homepage"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]
+
+    # An absent key means the apply default, so storing that same value is not
+    # a change and must not restart the device GUI.
+    calls.clear()
+    entry.options.pop("dashboard_dynamic_homepage")
+    entry.options["video_enabled"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+
+def test_home_page_button_mode_is_not_applied_without_an_active_display_patch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing is applied to a device whose Display patch is not active."""
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        return {}
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": False}),
+    )
+    listener = _entry_update_listener(entry)
+    entry.options["dashboard_dynamic_homepage"] = True
+    asyncio.run(listener(hass, entry))
+    assert calls == ["entry-1"]
+
+
+def test_failed_home_page_reapply_still_reloads_the_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A device error must not strand the entry on the previous options."""
+
+    import custom_components.bticino_c300x.qml_patch as qml_patch
+    from custom_components.bticino_c300x.api_errors import C300XAgentApiError
+    from custom_components.bticino_c300x.runtime_manager import _entry_update_listener
+
+    calls: list[str] = []
+
+    async def reload(entry_id: str) -> None:
+        calls.append(entry_id)
+
+    async def apply_patch(entry: object) -> dict[str, object]:
+        calls.append("apply")
+        raise C300XAgentApiError("device unreachable")
+
+    monkeypatch.setattr(qml_patch, "async_apply_qml_patch_and_confirm", apply_patch)
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_reload=reload)
+    )
+    entry = types.SimpleNamespace(
+        entry_id="entry-1",
+        data={"agent_host": "test"},
+        options={"dashboard_dynamic_homepage": True},
+        runtime_data=types.SimpleNamespace(qml_patch_status={"patched": True}),
+    )
+    listener = _entry_update_listener(entry)
+    entry.options["dashboard_dynamic_homepage"] = False
+    asyncio.run(listener(hass, entry))
+    assert calls == ["apply", "entry-1"]

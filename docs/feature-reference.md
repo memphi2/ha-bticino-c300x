@@ -94,6 +94,20 @@ is added. Reconnect attempts run only after a failed event connection while the
 page is active. Device rendering and interruption by a physical Ring Call still
 need confirmation during beta testing.
 
+## Display Home Page Buttons
+
+**Use dynamic home page buttons** under **Display dashboard** decides how the
+Alarm and Home Assistant buttons reach the device's home page.
+
+| Setting | Home page |
+| --- | --- |
+| On | Each button is placed on its own and is shown only while it has something to open: Alarm when Alarmo is configured, Home Assistant when a dashboard is available. The firmware arranges them with the stock buttons and wraps to a second row once more than four are visible. |
+| Off | Both buttons sit together in one fixed pair, always visible, next to each other. |
+
+The mode is part of the page the Display patch generates, so changing it
+re-applies the patch and restarts the device GUI once. Saving the options
+without touching the setting changes nothing on the device.
+
 ## Display Device Controls
 
 Select lights, covers, climate entities, fans and sensors under **Display

@@ -150,6 +150,12 @@ alter the displayed values, availability or controls do not notify the device.
 Alarmo and weather keep their existing event handling. Unchanged GUI items are
 reused, preserving the overview position and active input.
 
+Device requests to Home Assistant are serialised on the device. The agent
+forwards them one at a time and refuses a second one while the first is open,
+so the pages queue instead of colliding: waking from standby no longer shows a
+transport error when the home page refreshes its buttons at the same moment a
+page is opened.
+
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification
 for optimistic entities. An accepted command that HA never reflects is reported

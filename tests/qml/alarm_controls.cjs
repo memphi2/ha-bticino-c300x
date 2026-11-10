@@ -144,4 +144,93 @@ events.connections = [1, 2, 3].map(() => ({readyState: 1,
 events.stopDashboardRuntime();
 assert.equal(aborted, 3);
 assert.equal(events.connections.length, 0);
+
+// The agent forwards each of these requests to Home Assistant and keeps one in
+// flight, answering a second one with 503 display_command_pending. This
+// library is the only producer, so the collision is removed by serialising
+// here instead of reporting or retrying it.
+function forwardLibrary() {
+    const context = library("c300x_ha.js");
+    const sent = [];
+    context.XMLHttpRequest = function () {
+        const xhr = this;
+        sent.push(xhr);
+        xhr.readyState = 1;
+        xhr.status = 0;
+        xhr.responseText = "";
+        xhr.open = (method, url) => { xhr.url = url; };
+        xhr.send = () => {};
+        xhr.abort = () => { xhr.readyState = 4; xhr.onreadystatechange(); };
+        xhr.finish = (status, body) => {
+            xhr.readyState = 4;
+            xhr.status = status;
+            xhr.responseText = body;
+            xhr.onreadystatechange();
+        };
+    };
+    return [context, sent];
+}
+
+const [forward, sent] = forwardLibrary();
+const seen = [];
+forward.getJson("/ui/state", () => seen.push("state"), () => seen.push("state-error"));
+forward.getJson("/homeassistant", () => seen.push("dashboard"), () => seen.push("dashboard-error"));
+forward.getJson("/ui/alarm/command?command=disarm", () => seen.push("command"), null);
+assert.equal(sent.length, 1, "only one request may hold the agent's display slot");
+assert.match(sent[0].url, /\/ui\/state$/);
+sent[0].finish(200, '{"ok":true}');
+assert.equal(sent.length, 2, "the queued request starts once the slot is free");
+assert.match(sent[1].url, /\/homeassistant$/);
+sent[1].finish(200, '{"ok":true}');
+assert.match(sent[2].url, /\/ui\/alarm\/command/);
+sent[2].finish(200, '{"ok":true}');
+assert.deepEqual(seen, ["state", "dashboard", "command"], "order is preserved");
+assert.equal(forward.forwardActive, null);
+assert.equal(forward.forwardQueue.length, 0);
+assert.equal(forward.connections.length, 0, "no request is left registered");
+
+// A failing request must hand the slot on, or the display would stop talking
+// to the agent after the first error.
+const [failing, failingSent] = forwardLibrary();
+const errors = [];
+failing.getJson("/ui/state", () => {}, error => errors.push(error));
+failing.getJson("/homeassistant", () => errors.push("dashboard"), null);
+failingSent[0].finish(503, "");
+assert.deepEqual(errors, ["API error: 503"]);
+assert.equal(failingSent.length, 2, "a refused request still releases the slot");
+failingSent[1].finish(200, "{}");
+assert.deepEqual(errors, ["API error: 503", "dashboard"]);
+
+// Not even a throwing page callback may keep the slot.
+const [throwing, throwingSent] = forwardLibrary();
+let ran = false;
+throwing.getJson("/ui/state", () => { throw Error("page bug"); }, () => { throw Error("handler bug"); });
+throwing.getJson("/homeassistant", () => { ran = true; }, null);
+assert.throws(() => throwingSent[0].finish(200, "{}"), /handler bug/);
+assert.equal(throwingSent.length, 2, "the slot is released through finally");
+throwingSent[1].finish(200, "{}");
+assert.equal(ran, true);
+
+// The queue is bounded, and an overflow is reported rather than dropped so a
+// pressed button never goes silent.
+const [bounded, boundedSent] = forwardLibrary();
+const refused = [];
+for (let i = 0; i < 1 + bounded.FORWARD_QUEUE_LIMIT; i++) {
+    bounded.getJson("/ui/state?i=" + i, () => {}, error => refused.push(error));
+}
+assert.equal(bounded.forwardQueue.length, bounded.FORWARD_QUEUE_LIMIT);
+assert.deepEqual(refused, []);
+bounded.getJson("/ui/state?over", () => {}, error => refused.push(error));
+assert.deepEqual(refused, ["queue full"]);
+assert.equal(boundedSent.length, 1);
+
+// Tearing the runtime down must not start what it is tearing down.
+const [stopped, stoppedSent] = forwardLibrary();
+stopped.getJson("/ui/state", () => {}, null);
+stopped.getJson("/homeassistant", () => { throw Error("torn down request ran"); }, null);
+stopped.stopDashboardRuntime();
+assert.equal(stopped.forwardQueue.length, 0);
+assert.equal(stopped.forwardActive, null);
+assert.equal(stoppedSent.length, 1, "no queued request is started by the teardown");
+assert.equal(stopped.connections.length, 0);
 console.log("Alarm QML production controls passed");

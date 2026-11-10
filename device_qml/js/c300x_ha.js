@@ -1134,6 +1134,11 @@ function stopEventWatch() {
 
 function stopDashboardRuntime() {
     stopEventWatch()
+    // Before the aborts: an abort completes its request, and a completed
+    // request would otherwise start the next queued one that is being torn
+    // down here.
+    forwardQueue = []
+    forwardActive = null
     while (connections.length > 0) {
         var request = connections.pop()
         request.onreadystatechange = function() {}
@@ -1192,14 +1197,53 @@ function removeConnection(xhr) {
     }
 }
 
+// Every request this function sends is forwarded to Home Assistant by the
+// agent, which keeps exactly one of them in flight: forward_to_homeassistant
+// stores the client socket in display_client_fd and answers a second request
+// with 503 display_command_pending until the first one is done or the Home
+// Assistant timeout expires.
+//
+// That collision is avoidable rather than worth reporting, because this
+// library is its only producer. The four forwarding routes are loopback only,
+// so nothing off the device can take the slot, all of them are reached from
+// here, and QML shares one instance of a .pragma library across the home,
+// alarm and dashboard pages. Waking from standby used to collide reliably: the
+// home page refreshes its dynamic buttons when it becomes visible, and opening
+// the alarm or dashboard page in that window hit the busy slot.
+//
+// The event long poll deliberately does not go through here. It has its own
+// request and its own waiter slots in the agent, and it blocks for seconds by
+// design, so serialising it would stall every other request behind it.
+var FORWARD_QUEUE_LIMIT = 8
+var forwardActive = null
+var forwardQueue = []
+
 function getJson(path, callback, errorCallback) {
     cleanupConnections()
+    if (forwardActive !== null) {
+        if (forwardQueue.length >= FORWARD_QUEUE_LIMIT) {
+            // Unreachable while each page keeps one request in flight. Report
+            // it rather than drop it, so a pressed button never goes silent.
+            if (errorCallback) errorCallback("queue full")
+            return
+        }
+        forwardQueue.push({path: path, callback: callback, errorCallback: errorCallback})
+        return
+    }
+    sendForward(path, callback, errorCallback)
+}
+
+function sendForward(path, callback, errorCallback) {
     var xhr = new XMLHttpRequest()
+    forwardActive = xhr
     connections.push(xhr)
     xhr.startTime = Date.now()
     xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            removeConnection(xhr)
+        if (xhr.readyState !== 4) {
+            return
+        }
+        removeConnection(xhr)
+        try {
             if (xhr.status === 200) {
                 try {
                     callback(JSON.parse(xhr.responseText))
@@ -1213,10 +1257,26 @@ function getJson(path, callback, errorCallback) {
                     errorCallback("API error: " + xhr.status)
                 }
             }
+        } finally {
+            // Even a callback that throws has to hand the slot on, or the
+            // whole display would stop talking to the agent.
+            finishForward(xhr)
         }
     }
     xhr.open("GET", BASE_URL + path)
     xhr.send()
+}
+
+function finishForward(xhr) {
+    if (forwardActive !== xhr) {
+        return
+    }
+    forwardActive = null
+    if (forwardQueue.length === 0) {
+        return
+    }
+    var next = forwardQueue.shift()
+    sendForward(next.path, next.callback, next.errorCallback)
 }
 
 function cleanupConnections() {

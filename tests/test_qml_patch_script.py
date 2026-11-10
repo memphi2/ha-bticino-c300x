@@ -227,7 +227,7 @@ PATCH_OUTPUT_SHA256 = {
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
     "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
-    "js/c300x_ha.js": "540e6c71dfbb455d60f1fadc25f4331aabaa712a5b0aa369abbb4e0b1994bbc5",
+    "js/c300x_ha.js": "77a5dbf73479c73eb83e06d644a0d35af4c01b87ea667a44e320b1721f84972c",
     "js/c300x_i18n.js": "14cac5f6e5e8f20c0dc7a82c9caca4fc32108d35c934481e0701c2b2cd84d9b4",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -1272,3 +1272,59 @@ def test_home_assistant_ages_command_feedback_out() -> None:
     assert 'state: "state_confirmed", expected: null, at: Date.now()' in confirm
     # An entry that has already aged out must not come back as a confirmation.
     assert 'feedbackState(feedback[i]) === ""' in confirm
+
+
+def test_display_requests_cannot_collide_in_the_agent() -> None:
+    """Only one display request may be in flight towards Home Assistant.
+
+    The agent forwards /ui/state, /homeassistant, /ui/action and
+    /ui/alarm/command to Home Assistant and keeps exactly one of them in
+    flight: forward_to_homeassistant stores the client socket in
+    display_client_fd and answers a second request with 503
+    display_command_pending. All four routes are loopback only and every one of
+    them is reached from this library, which QML shares as a single .pragma
+    library instance across the home, alarm and dashboard pages, so the
+    collision is removed by serialising there. The event long poll must stay
+    outside that queue: it blocks for seconds by design and has its own waiter
+    slots in the agent.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "var forwardActive = null" in dashboard_js
+    assert "function finishForward(xhr)" in dashboard_js
+
+    get_json = dashboard_js[
+        dashboard_js.index("function getJson(") :
+        dashboard_js.index("function sendForward(")
+    ]
+    assert "forwardQueue.push(" in get_json
+    assert "new XMLHttpRequest()" not in get_json, "a busy slot must not be bypassed"
+
+    send_forward = dashboard_js[
+        dashboard_js.index("function sendForward(") :
+        dashboard_js.index("function finishForward(")
+    ]
+    # Without the finally, a page callback that throws would keep the slot and
+    # the display would stop talking to the agent for good.
+    assert "} finally {" in send_forward
+    assert "finishForward(xhr)" in send_forward
+
+    # The long poll builds its own request and is never queued behind the rest.
+    next_event = dashboard_js[
+        dashboard_js.index("function requestNextEvent(") :
+        dashboard_js.index("function removeConnection(")
+    ]
+    assert "/ui/events/next" in next_event
+    assert "forwardQueue" not in next_event
+    assert "getJson(" not in next_event
+
+    # The teardown has to drop queued work before the aborts, because an abort
+    # completes its request and a completed request starts the next one.
+    teardown = dashboard_js[
+        dashboard_js.index("function stopDashboardRuntime(") :
+        dashboard_js.index("function requestNextEvent(")
+    ]
+    assert teardown.index("forwardQueue = []") < teardown.index("connections.pop()")

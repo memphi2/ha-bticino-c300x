@@ -227,7 +227,7 @@ PATCH_OUTPUT_SHA256 = {
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
     "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
-    "js/c300x_ha.js": "77a5dbf73479c73eb83e06d644a0d35af4c01b87ea667a44e320b1721f84972c",
+    "js/c300x_ha.js": "4c24b942ec7f20d903429e2e27a763f9fc036caee2ba0300a651c7715df71d33",
     "js/c300x_i18n.js": "14cac5f6e5e8f20c0dc7a82c9caca4fc32108d35c934481e0701c2b2cd84d9b4",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -1328,3 +1328,51 @@ def test_display_requests_cannot_collide_in_the_agent() -> None:
         dashboard_js.index("function requestNextEvent(")
     ]
     assert teardown.index("forwardQueue = []") < teardown.index("connections.pop()")
+
+
+def test_only_idempotent_reads_share_a_display_round_trip() -> None:
+    """Two pages asking the same thing must not take the slot twice.
+
+    Waking from standby asks /ui/state twice: the home page refreshes its
+    dynamic buttons when it becomes visible, and the page being opened reads
+    the same state. A read answers every caller the same way, so both are
+    served from one round trip. A command must never be folded that way: it
+    would be executed once and the other caller would be told it succeeded.
+    """
+
+    dashboard_js = (ROOT / "device_qml" / "js" / "c300x_ha.js").read_text(
+        encoding="utf-8"
+    )
+
+    shared = dashboard_js[
+        dashboard_js.index("function getJsonShared(") :
+        dashboard_js.index("function forwardRequest(")
+    ]
+    assert "forwardActive.waiters.push(" in shared
+    assert "forwardQueue[i].waiters.push(" in shared
+    assert "sharedPath === path" in shared
+
+    # getJson stays the unfolded entry point, so every command keeps its own
+    # round trip.
+    plain = dashboard_js[
+        dashboard_js.index("function getJson(") :
+        dashboard_js.index("function getJsonShared(")
+    ]
+    assert 'forwardRequest(path, callback, errorCallback, "")' in plain
+
+    # Exactly the two /ui/state producers opt in: Api.status for the alarm and
+    # dashboard pages, homeButtons for the patched home page.
+    assert dashboard_js.count("getJsonShared(") == 3
+    assert dashboard_js.count('getJsonShared("/ui/state"') == 2
+    for command in ("/ui/alarm/command", "/ui/action"):
+        assert f'getJsonShared("{command}' not in dashboard_js
+
+    # An answered read must not keep collecting waiters, and one page's broken
+    # handler must not silence the pages sharing the same answer.
+    deliver = dashboard_js[
+        dashboard_js.index("function deliverForward(") :
+        dashboard_js.index("function finishForward(")
+    ]
+    assert deliver.index("xhr.waiters = []") < deliver.index("waiters[i].callback(")
+    assert 'xhr.sharedPath = ""' in deliver
+    assert deliver.count("try {") == 3

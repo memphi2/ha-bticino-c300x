@@ -12,7 +12,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
     var generation = pageItem.runtimeGeneration
     var request = (pageItem.statusGeneration || 0) + 1
     pageItem.statusGeneration = request
-    getJson("/ui/state", function(data) {
+    getJsonShared("/ui/state", function(data) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
         if (!pageItem.commandInFlight) pageItem.commandPending = false
         pageItem.alarmOnline = !!(data.alarm && data.alarm.state
@@ -282,7 +282,7 @@ function dashboardControl(item, control, value, statusItem, pageItem) {
 }
 
 function homeButtons(callback) {
-    getJson("/ui/state", function(data) {
+    getJsonShared("/ui/state", function(data) {
         if (callback) {
             callback(
                 data && data.alarm_configured === true,
@@ -1219,7 +1219,36 @@ var forwardActive = null
 var forwardQueue = []
 
 function getJson(path, callback, errorCallback) {
+    forwardRequest(path, callback, errorCallback, "")
+}
+
+function getJsonShared(path, callback, errorCallback) {
+    // For an idempotent read only. Such a request answers every caller the
+    // same way, so two pages asking for the same path at the same time share
+    // one round trip instead of taking the slot twice - waking from standby
+    // asks /ui/state from the home page and from the page being opened.
+    // Commands never come through here: folding two of them would execute one
+    // and silently drop the other.
+    if (forwardActive !== null && forwardActive.sharedPath === path) {
+        forwardActive.waiters.push({callback: callback, errorCallback: errorCallback})
+        return
+    }
+    for (var i = 0; i < forwardQueue.length; i++) {
+        if (forwardQueue[i].sharedPath === path) {
+            forwardQueue[i].waiters.push({callback: callback, errorCallback: errorCallback})
+            return
+        }
+    }
+    forwardRequest(path, callback, errorCallback, path)
+}
+
+function forwardRequest(path, callback, errorCallback, sharedPath) {
     cleanupConnections()
+    var entry = {
+        path: path,
+        sharedPath: sharedPath,
+        waiters: [{callback: callback, errorCallback: errorCallback}]
+    }
     if (forwardActive !== null) {
         if (forwardQueue.length >= FORWARD_QUEUE_LIMIT) {
             // Unreachable while each page keeps one request in flight. Report
@@ -1227,14 +1256,16 @@ function getJson(path, callback, errorCallback) {
             if (errorCallback) errorCallback("queue full")
             return
         }
-        forwardQueue.push({path: path, callback: callback, errorCallback: errorCallback})
+        forwardQueue.push(entry)
         return
     }
-    sendForward(path, callback, errorCallback)
+    sendForward(entry)
 }
 
-function sendForward(path, callback, errorCallback) {
+function sendForward(entry) {
     var xhr = new XMLHttpRequest()
+    xhr.sharedPath = entry.sharedPath
+    xhr.waiters = entry.waiters
     forwardActive = xhr
     connections.push(xhr)
     xhr.startTime = Date.now()
@@ -1244,27 +1275,50 @@ function sendForward(path, callback, errorCallback) {
         }
         removeConnection(xhr)
         try {
-            if (xhr.status === 200) {
-                try {
-                    callback(JSON.parse(xhr.responseText))
-                } catch (error) {
-                    if (errorCallback) {
-                        errorCallback("Invalid JSON")
-                    }
-                }
-            } else {
-                if (errorCallback) {
-                    errorCallback("API error: " + xhr.status)
-                }
-            }
+            deliverForward(xhr)
         } finally {
             // Even a callback that throws has to hand the slot on, or the
             // whole display would stop talking to the agent.
             finishForward(xhr)
         }
     }
-    xhr.open("GET", BASE_URL + path)
+    xhr.open("GET", BASE_URL + entry.path)
     xhr.send()
+}
+
+function deliverForward(xhr) {
+    var waiters = xhr.waiters
+    // Taken before the first callback runs: a callback can start the next
+    // request, and an answered read must not still collect waiters.
+    xhr.waiters = []
+    xhr.sharedPath = ""
+    var data = null
+    var failure = ""
+    if (xhr.status === 200) {
+        try {
+            data = JSON.parse(xhr.responseText)
+        } catch (error) {
+            failure = "Invalid JSON"
+        }
+    } else {
+        failure = "API error: " + xhr.status
+    }
+    for (var i = 0; i < waiters.length; i++) {
+        try {
+            if (failure.length === 0) {
+                try {
+                    waiters[i].callback(data)
+                } catch (error) {
+                    if (waiters[i].errorCallback) waiters[i].errorCallback("Invalid JSON")
+                }
+            } else if (waiters[i].errorCallback) {
+                waiters[i].errorCallback(failure)
+            }
+        } catch (error) {
+            // One page's broken handler must not keep the pages sharing this
+            // answer from being told.
+        }
+    }
 }
 
 function finishForward(xhr) {
@@ -1275,8 +1329,7 @@ function finishForward(xhr) {
     if (forwardQueue.length === 0) {
         return
     }
-    var next = forwardQueue.shift()
-    sendForward(next.path, next.callback, next.errorCallback)
+    sendForward(forwardQueue.shift())
 }
 
 function cleanupConnections() {

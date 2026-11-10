@@ -133,6 +133,11 @@ Api.getJson = function(path, callback, errorCallback) {{
   callback(clone(response));
 }};
 
+// The library has a second entry point for idempotent reads, which share one
+// round trip between the pages asking for the same path. The simulation drives
+// one page at a time, so it answers both the same way.
+Api.getJsonShared = Api.getJson;
+
 function command(command, state, options) {{
   options = options || {{}};
   const payload = {{

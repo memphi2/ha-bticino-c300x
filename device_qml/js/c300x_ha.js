@@ -717,14 +717,44 @@ function dashboardPages(data) {
     return data.data.pages
 }
 
-function assignDashboardValue(target, key, value) {
-    var previous = target[key]
-    if (JSON.stringify(previous) === JSON.stringify(value)) return
-    if (isList(previous) && isList(value)) {
-        for (var i = 0; i < Math.min(previous.length, value.length); i++) {
-            if (JSON.stringify(previous[i]) === JSON.stringify(value[i])) value[i] = previous[i]
+function sameDashboardValue(previous, value) {
+    if (previous === value) return true
+    if (previous === null || value === null) return false
+    var kind = typeof previous
+    if (kind !== typeof value) return false
+    // Strings carry a length too, so primitives must be settled before isList.
+    if (kind !== "object") return false
+    var previousIsList = isList(previous)
+    if (previousIsList !== isList(value)) return false
+    if (previousIsList) {
+        if (previous.length !== value.length) return false
+        for (var i = 0; i < previous.length; i++) {
+            if (!sameDashboardValue(previous[i], value[i])) return false
         }
+        return true
     }
+    var surplus = 0
+    for (var previousKey in previous) {
+        if (!sameDashboardValue(previous[previousKey], value[previousKey])) return false
+        surplus++
+    }
+    for (var valueKey in value) {
+        surplus--
+    }
+    return surplus === 0
+}
+
+function assignDashboardValue(target, key, value) {
+    // target[key] is a QML variant: reading it converts the stored value back
+    // into JavaScript, so read it once. Comparing structurally stops at the
+    // first difference, where JSON.stringify had to build two complete strings
+    // of the whole dashboard on every event-driven refresh.
+    //
+    // Reusing unchanged elements of a changed list used to happen here. It
+    // cannot work: assigning to a variant property copies the whole structure
+    // into a QVariant, so element identity is lost anyway. Skipping an
+    // unchanged value entirely, below, is what actually preserves identity.
+    if (sameDashboardValue(target[key], value)) return
     target[key] = value
 }
 

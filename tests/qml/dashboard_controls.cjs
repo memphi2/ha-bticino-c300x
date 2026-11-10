@@ -206,10 +206,17 @@ assert.match(queue[0].url, /entities=select.room&option=a%20%26%20b$/);
 queue.shift().success({ok: true});
 queue.shift().success({not_modified: true});
 
+// Delegates keep their data objects because an unchanged snapshot is skipped
+// entirely. Reusing unchanged elements of a *changed* list cannot add to that:
+// items is a QML variant property, and assigning to one converts the whole
+// structure into a QVariant, so element identity is lost on the next read -
+// the same conversion that cannot store a JavaScript null.
 const model = {items: [{entity_id: "one", state: 1}, {entity_id: "two", state: 2}]};
-const second = model.items[1];
+const unchanged = model.items;
+Api.assignDashboardValue(model, "items", [{entity_id: "one", state: 1}, {entity_id: "two", state: 2}]);
+assert.equal(model.items, unchanged, "an unchanged list keeps its data objects");
 Api.assignDashboardValue(model, "items", [{entity_id: "one", state: 3}, {entity_id: "two", state: 2}]);
-assert.equal(model.items[1], second, "unaffected delegates retain their data object");
+assert.notEqual(model.items, unchanged, "a changed list is taken as a whole");
 assert.equal(model.items[0].state, 3);
 for (let i = 0; i < 100; i++) Api.setDashboardFeedback(p, "button." + i, "action_sent");
 assert.equal(p.controlFeedback.length, 32, "feedback storage is bounded");
@@ -282,3 +289,41 @@ assert.equal(queue.length, 0, "a settled list without a pending refresh stays qu
 assert.match(qml, /property bool listScrolling: scroll.moving \|\| details.moving/);
 assert.match(qml, /onListScrollingChanged: replayDeferredRefresh\(\)/);
 console.log("Scroll-aware dashboard refresh passed");
+
+// Snapshots are compared structurally: an equal payload must not be reassigned
+// (that is what keeps tile identity), and a difference at any depth must be seen.
+assert.equal(Api.sameDashboardValue(1, 1), true);
+assert.equal(Api.sameDashboardValue(1, "1"), false, "no type coercion");
+assert.equal(Api.sameDashboardValue("ab", "ab"), true, "strings are values, not lists");
+assert.equal(Api.sameDashboardValue("ab", ["a", "b"]), false);
+assert.equal(Api.sameDashboardValue(null, null), true);
+assert.equal(Api.sameDashboardValue(null, {}), false);
+assert.equal(Api.sameDashboardValue({}, null), false);
+assert.equal(Api.sameDashboardValue([], {}), false, "a list never equals an object");
+assert.equal(Api.sameDashboardValue([1, 2], [1, 2]), true);
+assert.equal(Api.sameDashboardValue([1, 2], [1, 2, 3]), false);
+assert.equal(Api.sameDashboardValue({a: 1}, {a: 1, b: 2}), false, "an added key is a change");
+assert.equal(Api.sameDashboardValue({a: 1, b: 2}, {a: 1}), false, "a removed key is a change");
+assert.equal(
+    Api.sameDashboardValue(
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+    ),
+    true,
+);
+assert.equal(
+    Api.sameDashboardValue(
+        {items: [{controls: [{command: "brightness", value: 50}]}]},
+        {items: [{controls: [{command: "brightness", value: 51}]}]},
+    ),
+    false,
+    "a difference deep inside a control is detected",
+);
+
+const dashboardSource = fs.readFileSync(path.join(root, "device_qml/js/c300x_ha.js"), "utf8");
+const assignBody = dashboardSource.slice(
+    dashboardSource.indexOf("function sameDashboardValue"),
+    dashboardSource.indexOf("function loadDashboardPage"),
+);
+assert.equal(assignBody.includes("JSON.stringify("), false, "no snapshot is serialised to compare it");
+console.log("Structural snapshot comparison passed");

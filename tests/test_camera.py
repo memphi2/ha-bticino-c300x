@@ -1236,7 +1236,8 @@ def test_doorbell_camera_ha_webrtc_close_stops_home_call_media() -> None:
     assert api.stop_calls == 0
 
 
-def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning() -> None:
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning(wrapped) -> None:
     async def _run() -> tuple[
         _FakeApi,
         _FakeWebRTCProvider,
@@ -1248,8 +1249,19 @@ def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning() -> None:
         camera = C300XDoorbellCamera(entry)  # type: ignore[arg-type]
         provider = _FakeWebRTCProvider()
         events: list[str] = []
+        started, release = asyncio.Event(), asyncio.Event()
+
+        class Socket(_FakeGo2RtcWsClient):
+            async def close(self):
+                started.set()
+                await release.wait()
+                await super().close()
+
+        socket = Socket(events)
         provider._sessions = {  # type: ignore[attr-defined]
-            "doorbell-session": _FakeGo2RtcWsClient(events)
+            "doorbell-session": (
+                SimpleNamespace(ws_client=socket, camera=camera) if wrapped else socket
+            )
         }
         tasks: list[asyncio.Task[None]] = []
         camera.hass = SimpleNamespace(
@@ -1266,6 +1278,10 @@ def test_doorbell_camera_awaits_go2rtc_ws_close_before_returning() -> None:
         )
 
         camera.close_webrtc_session("doorbell-session")
+        await asyncio.wait_for(started.wait(), 1)
+        assert not tasks[0].done()
+        assert not events
+        release.set()
         await asyncio.gather(*tasks)
         return api, provider, events, tasks
 
@@ -1371,7 +1387,8 @@ def test_remove_cancels_reconcile_without_touching_replacement_runtime() -> None
     asyncio.run(run())
 
 
-def test_remove_finishes_an_interrupted_provider_websocket_close() -> None:
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_remove_finishes_an_interrupted_provider_websocket_close(wrapped) -> None:
     async def run():
         started = asyncio.Event()
         closes = []
@@ -1388,12 +1405,15 @@ def test_remove_finishes_an_interrupted_provider_websocket_close() -> None:
         tasks = []
         camera.hass = SimpleNamespace(async_create_task=lambda coro: _record_task(tasks, coro))
         provider = _FakeWebRTCProvider()
-        provider._sessions = {"s": Socket()}
+        socket = Socket()
+        provider._sessions = {
+            "s": SimpleNamespace(ws_client=socket, camera=camera) if wrapped else socket
+        }
         session = _ready_doorbell_session()
         session.provider = provider
         camera._webrtc_sessions.active["s"] = session
         camera.close_webrtc_session("s")
-        await started.wait()
+        await asyncio.wait_for(started.wait(), 1)
         assert camera._webrtc_session_ids() == []
         assert provider._sessions == {}
         await camera.async_will_remove_from_hass()

@@ -44,7 +44,7 @@ export class C300XCardActions {
   async handlePrimaryAction() {
     const card = this._card;
     const lifecycle = card._lifecycle;
-    if (card._disposed || lifecycle.answeringDoorbell || lifecycle.hangupInProgress) {
+    if (card._disposed || lifecycle.hangupInProgress) {
       return;
     }
     if (!card._isHomeCallMode()) {
@@ -57,6 +57,11 @@ export class C300XCardActions {
       }
       if (action === "hang_up") {
         await this.hangupDoorstation();
+        return;
+      }
+      // A pending microphone prompt must not prevent the user from hanging up.
+      // Keep repeated answer/start actions coalesced after handling cancellation.
+      if (lifecycle.answeringDoorbell) {
         return;
       }
       if (action === "answer") {

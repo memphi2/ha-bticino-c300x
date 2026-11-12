@@ -1055,3 +1055,59 @@ test("doorbell card coalesces unchanged hass updates into one animation frame", 
 
   assert.equal(renderCalls, 2);
 });
+
+test("primary hangup remains available while ring answer waits for microphone permission", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?primary-hangup-pending-microphone");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const card = new Card();
+  let grant;
+  let acknowledge;
+  let answering;
+  try {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
+      mediaDevices: { getUserMedia: () => new Promise((resolve) => { grant = resolve; }) },
+    } });
+    card._ensureDoorbellPreview = async () => {};
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+    const cameraEntity = { state: "idle", attributes: {
+      media_primary_action: "answer_ring", media_state: "ring_pending",
+    } };
+    const hass = fakeHass({ cameraEntity });
+    const calls = [];
+    hass.callService = async (_domain, service) => {
+      calls.push(service);
+      if (service === "answer_doorbell_call") {
+        await new Promise((resolve) => { acknowledge = resolve; });
+      }
+    };
+    card.hass = hass;
+    card._webrtc.start = async () => {};
+
+    answering = card._actions.handlePrimaryAction();
+    await card._actions.handlePrimaryAction();
+    assert.deepEqual(calls, ["answer_doorbell_call"], "answer taps remain coalesced");
+    acknowledge();
+    await new Promise(setImmediate);
+    assert.equal(typeof grant, "function");
+    assert.equal(card._lifecycle.answeringDoorbell, true);
+
+    cameraEntity.attributes.media_state = "ring_active";
+    cameraEntity.attributes.media_primary_action = "hangup";
+    card.hass = hass;
+    assert.equal(card._doorstationView().action, "hang_up");
+    assert.equal(card._actionButtonEl.disabled, false);
+    await card._actionButtonEl.dispatch("click");
+    assert.deepEqual(calls, [
+      "answer_doorbell_call", "hangup_doorbell_call", "stop_doorbell_video",
+    ]);
+  } finally {
+    card.disconnectedCallback();
+    acknowledge?.();
+    grant?.({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] });
+    await answering;
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor);
+    else delete globalThis.navigator;
+  }
+});

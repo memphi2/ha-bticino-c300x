@@ -519,6 +519,12 @@
     },
     "voice_memo_not_available": {
       "message": "No C300X voice memo is available."
+    },
+    "capture_announcement_requires_ring": {
+      "message": "Announcements are only available in ring capture mode. Remove announcement_path for an on-demand recording."
+    },
+    "on_demand_capture_busy": {
+      "message": "On-demand capture requires idle media. Close other camera streams or calls and try again."
     }
   },
   "issues": {
@@ -679,6 +685,26 @@
         },
         "abort": {
           "entry_not_loaded": "The BTicino C300X entry is not loaded."
+        }
+      }
+    }
+  },
+  "selector": {
+    "capture_mode": {
+      "options": {
+        "ring": "Ring call",
+        "on_demand": "Live recording without ringing"
+      }
+    }
+  },
+  "services": {
+    "capture_doorbell_call": {
+      "name": "Capture C300X doorbell video",
+      "description": "Record a short video on Home Assistant from an incoming ring call or an idle on-demand stream.",
+      "fields": {
+        "capture_mode": {
+          "name": "Capture mode",
+          "description": "Ring records an incoming call. On-demand records without ringing when no other media session is active."
         }
       }
     }

@@ -1533,6 +1533,7 @@ def test_capture_doorbell_call_service_records_on_home_assistant(monkeypatch) ->
             {
                 "args": (hass, entry),
                 "kwargs": {
+                    "capture_mode": "ring",
                     "output_path": "/media/c300x/test.mp4",
                     "wav_output_dir": "/config/c300x",
                     "duration_seconds": 3,
@@ -1604,6 +1605,10 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
         await async_setup_services(hass)  # type: ignore[arg-type]
 
         capture_schema = hass.services.schemas[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        assert capture_schema({})["capture_mode"] == "ring"
+        assert capture_schema({"capture_mode": "on_demand"})["capture_mode"] == "on_demand"
+        with pytest.raises(service_module.vol.Invalid):
+            capture_schema({"capture_mode": "auto"})
         assert capture_schema(
             {
                 "output_path": "/media/c300x/test.mp4",
@@ -1613,6 +1618,7 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
                 "announcement_path": "/config/www/c300x/announce.wav",
             }
         ) == {
+            "capture_mode": "ring",
             "output_path": "/media/c300x/test.mp4",
             "duration_seconds": 3,
             "include_audio": True,
@@ -1661,6 +1667,31 @@ def test_ring_capture_and_analysis_service_schemas_accept_documented_fields() ->
         }
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize("include_audio", [False, True])
+def test_capture_service_routes_on_demand_without_ring_capability(monkeypatch, include_audio):
+    async def run():
+        api = _FakeApi()
+        entry = _FakeEntry(
+            _FakeRuntimeData(api=api, capabilities={"doorbell_video": {"supported": True}}),
+            data={CONF_VIDEO_ENABLED: True},
+        )
+        hass = _FakeHass([entry])
+        capture = AsyncMock(return_value={"capture_id": "on-demand", "capture_mode": "on_demand"})
+        monkeypatch.setattr(ring_capture_use_cases, "async_capture_doorbell_ring_call", capture)
+        await async_setup_services(hass)
+        schema = hass.services.schemas[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        handler = hass.services.handlers[(DOMAIN, SERVICE_CAPTURE_DOORBELL_CALL)]
+        result = await handler(types.SimpleNamespace(data=schema({"capture_mode": "on_demand", "include_audio": include_audio})))
+        assert result["capture_mode"] == "on_demand"
+        assert capture.await_args.kwargs["capture_mode"] == "on_demand"
+        assert api.activate_video_calls == [include_audio]
+        assert api.answer_doorbell_call_calls == []
+        assert api.hangup_doorbell_call_calls == 0
+        assert api.stop_video_calls == 0
+
+    asyncio.run(run())
 
 
 def test_capture_doorbell_call_service_rejects_busy_rtsp_client(monkeypatch) -> None:  # noqa: ANN001
@@ -1867,6 +1898,7 @@ def test_capture_doorbell_call_service_video_only_keeps_ring_available(
             {
                 "args": (hass, entry),
                 "kwargs": {
+                    "capture_mode": "ring",
                     "output_path": None,
                     "wav_output_dir": None,
                     "duration_seconds": 5,
@@ -2255,6 +2287,7 @@ def test_capture_doorbell_call_service_answers_announcement_without_capture_audi
             {
                 "args": (hass, entry),
                 "kwargs": {
+                    "capture_mode": "ring",
                     "output_path": None,
                     "wav_output_dir": None,
                     "duration_seconds": 5,

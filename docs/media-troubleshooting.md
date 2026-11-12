@@ -128,14 +128,26 @@ Check:
 4. If the next on-demand stream fails after a Home Call, stop media once and
    re-check Readiness.
 
-## Ring Call Capture Fails
+## Ring or On-demand Capture Fails
 
-Capture is exclusive. It is meant for short automation/analysis clips, not for
-normal live viewing.
+Capture is intended for short automation/analysis clips. The default
+`capture_mode: ring` uses an active Ring Call; `capture_mode: on_demand` starts
+an idle live view without a doorbell press. See the
+[capture example](feature-reference.md#capture-modes).
+
+The message **"The C300X device-agent command failed or is not supported by the
+installed agent"** is a general agent-command failure. In `ring` mode,
+`include_audio: true` (the default) attempts to answer the Ring Call. Calling it
+without a current ring can therefore produce this message even with a compatible
+agent. Select `capture_mode: on_demand` for an idle recording. An
+`announcement_path` requires `ring` mode and is rejected for on-demand capture
+before media starts.
 
 Check:
 
-1. Close the live card before capture.
+1. Select the mode that matches the intended capture. On-demand capture requires
+   an idle media path; close your live viewer first. A busy, unknown or externally
+   owned session is not taken over.
 2. Do not run multiple capture automations on the same device at once. Separate
    devices use isolated workspaces; do not assign the same explicit MP4 path.
 3. Keep output paths below `/media/c300x/`, `/config/c300x/` or
@@ -147,8 +159,9 @@ Check:
    capture service. Per-recording workspaces expire after one hour on the next
    capture; at most 64 are retained per capture directory.
 
-Use the Ring Capture + Wyoming blueprint only when audio is enabled. The
-blueprint always records audio because transcription needs `latest.raw.wav`.
+Ring Capture blueprints retain the default `ring` mode. Use the Ring Capture +
+Wyoming blueprint only when audio is enabled. The blueprint always records audio
+because transcription needs `latest.raw.wav`.
 
 ## Common Log Clues
 

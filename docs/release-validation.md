@@ -116,8 +116,12 @@ device interoperability tests.
 | Ring Call Answer | Preview transitions to answered call without losing media. |
 | Ring Call Hangup | Card returns to idle and the device call ends. |
 | Two browser Ring preview | Supported preview viewers do not break the answered flow. |
-| Ring capture while idle | Capture writes MP4/WAV/JPEG/JSON to allowed paths. |
-| Ring capture while busy | Capture fails cleanly instead of stealing the live session. |
+| Ring capture during a real Ring Call | Omitted `capture_mode` and explicit `ring` preserve the existing answer/record/hangup flow. Capture writes MP4, audio when requested, JPEG frames and JSON metadata to allowed paths. |
+| Ring capture without a Ring Call | With `include_audio: true`, the default `ring` mode fails cleanly and does not silently start an on-demand session. Existing blueprints keep this mode. |
+| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with native agent 2.1.0. |
+| Capture while busy or ownership is unclear | Capture rejects conflicting live, Home Call or external sessions without taking them over. |
+| On-demand capture completion, failure and cancellation | Its recording client closes after success, ffmpeg failure or cancellation, including before RTSP startup. Other or replacement sessions remain intact; a subsequent capture can start. |
+| On-demand capture with an announcement | `announcement_path` is rejected before media starts; Ring Call announcements retain their existing behavior. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
 

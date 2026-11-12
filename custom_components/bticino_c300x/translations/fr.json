@@ -537,6 +537,12 @@
     },
     "voice_memo_not_available": {
       "message": "Aucun memo vocal C300X n'est disponible."
+    },
+    "capture_announcement_requires_ring": {
+      "message": "Les annonces sont disponibles uniquement en mode sonnette. Supprimez announcement_path pour enregistrer sans sonnerie."
+    },
+    "on_demand_capture_busy": {
+      "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     }
   },
   "issues": {
@@ -697,6 +703,26 @@
         },
         "abort": {
           "entry_not_loaded": "L'entree BTicino C300X n'est pas chargee."
+        }
+      }
+    }
+  },
+  "selector": {
+    "capture_mode": {
+      "options": {
+        "ring": "Appel de sonnette",
+        "on_demand": "Enregistrement sans sonnerie"
+      }
+    }
+  },
+  "services": {
+    "capture_doorbell_call": {
+      "name": "Enregistrer la vidéo C300X",
+      "description": "Enregistre une courte vidéo dans Home Assistant depuis un appel entrant ou à la demande lorsque les médias sont libres.",
+      "fields": {
+        "capture_mode": {
+          "name": "Mode d’enregistrement",
+          "description": "Le mode sonnette enregistre un appel entrant. Le mode à la demande enregistre sans sonnerie si aucune autre session média n’est active."
         }
       }
     }

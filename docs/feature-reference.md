@@ -288,7 +288,7 @@ admin-only. Trusted context-free automations remain supported. See
 | `bticino_c300x.stop_doorbell_video` | Stops an active agent-owned on-demand media session. |
 | `bticino_c300x.answer_doorbell_call` | Answers the active Ring Call. |
 | `bticino_c300x.hangup_doorbell_call` | Hangs up the active Ring Call. |
-| `bticino_c300x.capture_doorbell_call` | Records a short local MP4 and optional WAV/JPEG capture files. |
+| `bticino_c300x.capture_doorbell_call` | Records a 1–15 second MP4 from a Ring Call (`ring`, default) or idle live view (`on_demand`), with optional audio and local capture artifacts. |
 | `bticino_c300x.run_ring_wyoming_analysis` | Transcribes an existing Ring Capture WAV through a local Wyoming Whisper service. |
 | `bticino_c300x.evaluate_ring_analysis` | Evaluates a local transcription JSON and optionally unlocks only on strict phrase match. |
 | `bticino_c300x.start_home_call` | Starts an audio-only Home Call to the C300X display. |
@@ -301,6 +301,43 @@ admin-only. Trusted context-free automations remain supported. See
 | `bticino_c300x.delete_latest_video_message` | Deletes the latest video message when supported. |
 | `bticino_c300x.delete_latest_text_memo` | Deletes the latest text memo when supported. |
 | `bticino_c300x.delete_latest_voice_memo` | Deletes the latest voice memo when supported. |
+
+### Capture Modes
+
+`capture_doorbell_call` defaults to `capture_mode: ring`. Existing Ring Capture
+automations and blueprints keep their behavior: audio or an announcement answers
+the active Ring Call before recording. To record without ringing the doorbell,
+explicitly select `capture_mode: on_demand`. This starts an idle doorstation live
+view and records video with optional audio; it does not answer a Ring Call.
+
+Example action for a script or automation; replace `YOUR_C300X_ENTRY_ID` with the
+integration entry id:
+
+```yaml
+- action: bticino_c300x.capture_doorbell_call
+  data:
+    entry_id: YOUR_C300X_ENTRY_ID
+    capture_mode: on_demand
+    duration_seconds: 5
+    include_audio: true
+  response_variable: capture
+```
+
+Set `include_audio: false` for video only. Both modes accept durations from
+`1` to `15` seconds. MP4 files default to `/media/c300x/`; WAV audio, JPEG frames
+and JSON metadata use the existing capture workspace under `/config/c300x/`
+unless configured otherwise. Metadata records the capture mode. The optional
+`response_variable` provides the exact per-recording paths, such as
+`{{ capture.output_path }}` and `{{ capture.metadata_path }}`; use these in
+follow-up actions instead of the mutable `latest` pointers.
+
+On-demand capture requires an idle, available media path. It rejects a busy or
+unclear state and does not take over another live session. Completion or failure
+closes its own recording client. `announcement_path` is supported only in
+`ring` mode and is rejected before starting an on-demand capture.
+
+Use an integration build that includes `capture_mode`. Native agent **2.1.0**
+already provides the required media API; this feature needs no agent update.
 
 ## Device Activations
 

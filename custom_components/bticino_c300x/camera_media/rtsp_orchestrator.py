@@ -188,8 +188,10 @@ class CameraRtspOrchestrator:
         """Activate video and return a URL only after RTSP answers."""
 
         async with self._owner._rtsp_prepare_lock:
+            self._raise_if_capture_active()
             self.raise_if_rtsp_cooling_down(cooldown_scope="doorbell")
             status = await self._owner._async_refresh_video_status_or_none()
+            self._raise_if_capture_active()
             decision = (
                 self._owner._derive_media_decision(status)
                 if status is not None
@@ -261,11 +263,20 @@ class CameraRtspOrchestrator:
         """Return the audio-only RTSP source for an active Home Call."""
 
         async with self._owner._rtsp_prepare_lock:
+            self._raise_if_capture_active()
             self.raise_if_rtsp_cooling_down(cooldown_scope="home_call")
             await self.async_wait_for_home_call_active()
             stream_url = self._owner._build_stream_url(audio=True)
             await self.async_wait_for_rtsp_ready(stream_url, cooldown_scope="home_call")
             return stream_url
+
+    def _raise_if_capture_active(self) -> None:
+        """Recheck capture admission after waiting for another prepare owner."""
+
+        from .session_lifecycle import raise_if_on_demand_capture_active
+
+        runtime = getattr(self._owner._entry, "runtime_data", None)
+        raise_if_on_demand_capture_active(getattr(runtime, "resources", None))
 
     async def async_wait_for_home_call_active(
         self,

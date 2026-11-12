@@ -221,9 +221,20 @@ hangup_doorbell_call:
         text:
 
 capture_doorbell_call:
-  name: Capture C300X doorbell call
-  description: Record a short MP4 from the C300X doorbell RTSP stream on Home Assistant. The MP4 defaults to /media/c300x/; optional WAV and JPEG capture files default to /config/c300x/.
+  name: Capture C300X doorbell video
+  description: Record a short MP4 on Home Assistant. Ring mode requires an incoming doorbell call; on-demand mode records without ringing when media is idle. The MP4 defaults to /media/c300x/; optional WAV and JPEG files default to /config/c300x/.
   fields:
+    capture_mode:
+      name: Capture mode
+      description: Ring records an incoming call. On-demand starts a live recording without ringing and requires no other active camera or call.
+      required: false
+      default: ring
+      selector:
+        select:
+          options:
+            - ring
+            - on_demand
+          translation_key: capture_mode
     entry_id:
       name: Entry ID
       description: Optional config entry id when more than one C300X entry exists.
@@ -261,7 +272,7 @@ capture_doorbell_call:
         text:
     announcement_path:
       name: Announcement path
-      description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing.
+      description: Optional HA-local audio file below /media/c300x/, /config/c300x/, or /config/www/c300x/ to play through C300X talkback while capturing. Available only in ring mode.
       required: false
       selector:
         text:

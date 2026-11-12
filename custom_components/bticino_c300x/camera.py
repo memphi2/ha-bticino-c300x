@@ -1427,10 +1427,17 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
 
         self._reconcile_in_flight = True
         try:
-            # Admission and native activation use this lock too. An idle
-            # reply captured before a new stream started must never close
-            # that stream once its provider has become ready.
+            # Provider work continues after stream_source releases this lock.
+            # Judge only sessions which had finished opening before this status
+            # request, never an offer which becomes ready while it is in flight.
             async with self._rtsp_prepare_lock:
+                sessions = [
+                    (sid, session)
+                    for sid, session in self._webrtc_sessions.active.items()
+                    if session.ready
+                    and sid not in self._webrtc_sessions.offers
+                    and _owner_is_doorbell_media(session.owner)
+                ]
                 status = await self._async_refresh_video_status_or_none()
                 if status is not None and status_reports_agent_idle(
                     status,
@@ -1438,11 +1445,9 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
                     cached_video_window_available=self._video_window_available,
                     cached_external_media_active=self._external_media_active,
                 ):
-                    for session_id in [
-                        sid
-                        for sid, session in list(self._webrtc_sessions.active.items())
-                        if session.ready and _owner_is_doorbell_media(session.owner)
-                    ]:
+                    for session_id, session in sessions:
+                        if self._webrtc_sessions.active.get(session_id) is not session:
+                            continue
                         await self._async_close_webrtc_session(
                             session_id,
                             stop_media=False,

@@ -1,7 +1,7 @@
 import {
   C300X_TRANSLATIONS,
   c300xLocalize,
-} from "./c300x-translations.js?v=8711b123d97c0e01";
+} from "./c300x-translations.js?v=99e63d62d540ca95";
 import {
   C300X_AUDIO_CODEC_OBJECT_ID,
   C300X_CAMERA_OBJECT_ID,
@@ -15,23 +15,23 @@ import {
   c300xObjectSuffix,
   c300xRelatedEntity,
   c300xResolveEntity,
-} from "./c300x-entity-resolver.js?v=8711b123d97c0e01";
+} from "./c300x-entity-resolver.js?v=99e63d62d540ca95";
 import {
   C300X_CARD_EDITOR_TAG,
   c300xDoorbellCardStubConfig,
-} from "./c300x-card-editor.js?v=8711b123d97c0e01";
-import { C300XCardActions } from "./c300x-card-actions.js?v=8711b123d97c0e01";
-import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=8711b123d97c0e01";
-import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=8711b123d97c0e01";
+} from "./c300x-card-editor.js?v=99e63d62d540ca95";
+import { C300XCardActions } from "./c300x-card-actions.js?v=99e63d62d540ca95";
+import { C300XCardLifecycleState } from "./c300x-card-lifecycle.js?v=99e63d62d540ca95";
+import { C300X_DOORBELL_CARD_TEMPLATE } from "./c300x-card-template.js?v=99e63d62d540ca95";
 import {
   c300xCardViewModel,
   c300xIsHomeCallActive,
   c300xMediaReadinessHasRepair,
   c300xMediaReadinessLabelKey,
   c300xMediaState,
-} from "./c300x-state-model.js?v=8711b123d97c0e01";
-import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=8711b123d97c0e01";
-import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=8711b123d97c0e01";
+} from "./c300x-state-model.js?v=99e63d62d540ca95";
+import { C300XRingbackTone } from "./c300x-ringback-tone.js?v=99e63d62d540ca95";
+import { C300XWebrtcClient } from "./c300x-webrtc-client.js?v=99e63d62d540ca95";
 
 const C300X_NOTICE_TIMEOUT_MS = 2000;
 const C300X_RING_ANSWER_LAUNCH_PARAM = "c300x_ring_answer";
@@ -533,6 +533,10 @@ class C300XDoorbellCallCard extends HTMLElement {
     this._clearNotice();
 
     try {
+      this._updateState();
+      if (generation !== this._mediaGeneration) {
+        return false;
+      }
       if (microphone) {
         await this._prepareMicrophone();
       } else {
@@ -1121,7 +1125,10 @@ class C300XDoorbellCallCard extends HTMLElement {
       return;
     }
     const label = this._label(homeView.actionLabelKey);
-    const blockedByDoorstation = doorstationActive && homeView.action !== "hang_up";
+    const doorstationStarting = !this._lifecycle.activeHomeCallSession
+      && (this._talkbackStarting || this._lifecycle.answeringDoorbell || !!this._transitionWebrtc);
+    const blockedByDoorstation = (doorstationActive || doorstationStarting)
+      && homeView.action !== "hang_up";
     this._homeActionButtonEl.classList.toggle("hidden", !visible);
     this._homeActionButtonEl.classList.toggle("active", homeView.actionActive);
     this._homeActionButtonEl.classList.toggle("dialing", homeView.actionDialing);

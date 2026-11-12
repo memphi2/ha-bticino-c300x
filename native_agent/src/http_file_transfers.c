@@ -111,18 +111,18 @@ void c300x_http_file_transfers_handle(struct c300x_http_file_transfers *transfer
         if (transfer->fd < 0) {
             continue;
         }
-        if (transfer->deadline <= now) {
+        int polled = fds[i].fd == transfer->fd;
+        if (polled && (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL))) {
             clear_transfer(transfer);
             continue;
         }
-        if (fds[i].fd != transfer->fd) {
-            continue;
-        }
-        if (fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            clear_transfer(transfer);
-            continue;
-        }
-        if (!(fds[i].revents & POLLOUT)) {
+        if (!polled || !(fds[i].revents & POLLOUT)) {
+            /* The idle deadline only judges a client that cannot take data.
+             * A writable socket after a late loop iteration is the loop's
+             * delay, not the client's, and must not cost it the download. */
+            if (transfer->deadline <= now) {
+                clear_transfer(transfer);
+            }
             continue;
         }
         /* A ready download must not monopolize call events or other clients. */

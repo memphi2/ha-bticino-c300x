@@ -59,7 +59,7 @@ class DeviceActionsUseCase:
         """Forward one alarm command to the configured HA alarm entity."""
 
         try:
-            await async_execute_alarm_command(
+            result = await async_execute_alarm_command(
                 self._hass,
                 self._entry,
                 command,
@@ -71,6 +71,16 @@ class DeviceActionsUseCase:
             raise service_validation_error("invalid_alarm_command") from err
         except ValueError as err:
             raise service_validation_error("alarm_not_configured") from err
+
+        # The display bridge consumes structured errors. HA service callers need
+        # an exception so rejected commands also stop dependent automation steps.
+        if result.get("ok") is not True:
+            error_key = {
+                "not_ready_to_arm": "alarm_not_ready",
+                "invalid_code": "alarm_invalid_code",
+                "alarm_state_unchanged": "alarm_state_unconfirmed",
+            }.get(str(result.get("error") or ""), "alarm_command_rejected")
+            raise service_validation_error(error_key)
 
     async def stair_light(self, address: str | None) -> None:
         """Trigger the configured stair-light command."""

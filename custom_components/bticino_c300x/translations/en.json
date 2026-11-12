@@ -537,6 +537,18 @@
     },
     "voice_memo_not_available": {
       "message": "No C300X voice memo is available."
+    },
+    "alarm_not_ready": {
+      "message": "The alarm cannot be armed because one or more sensors are blocking it."
+    },
+    "alarm_invalid_code": {
+      "message": "The alarm code was rejected."
+    },
+    "alarm_state_unconfirmed": {
+      "message": "The requested alarm state was not confirmed. Check the alarm state before trying again."
+    },
+    "alarm_command_rejected": {
+      "message": "The alarm command was rejected. Check the alarm state and its integration for details."
     }
   },
   "issues": {

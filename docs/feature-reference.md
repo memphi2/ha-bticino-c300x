@@ -326,15 +326,19 @@ integration entry id:
 Set `include_audio: false` for video only. Both modes accept durations from
 `1` to `15` seconds. MP4 files default to `/media/c300x/`; WAV audio, JPEG frames
 and JSON metadata use the existing capture workspace under `/config/c300x/`
-unless configured otherwise. Metadata records the capture mode. The optional
+unless configured otherwise. The metadata field `capture_mode` records the
+requested mode; native media ownership is not continuously verified. The optional
 `response_variable` provides the exact per-recording paths, such as
 `{{ capture.output_path }}` and `{{ capture.metadata_path }}`; use these in
 follow-up actions instead of the mutable `latest` pointers.
 
-On-demand capture requires an idle, available media path. It rejects a busy or
-unclear state and does not take over another live session. Completion or failure
-closes its own recording client. `announcement_path` is supported only in
-`ring` mode and is rejected before starting an on-demand capture.
+On-demand capture checks for idle media before opening its recording client and
+rejects a reported busy or unclear state. The native API does not reserve the
+media owner across this check and RTSP setup. A physical call that begins during
+setup can change the stream, so the recording may fail or include Ring video.
+On-demand capture does not answer or hang up a Ring Call. Completion, failure or
+cancellation closes its own recording client. `announcement_path` is supported
+only in `ring` mode and is rejected before starting an on-demand capture.
 
 Use an integration build that includes `capture_mode`. Native agent **2.1.0**
 already provides the required media API; this feature needs no agent update.

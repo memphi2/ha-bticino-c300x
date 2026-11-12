@@ -143,11 +143,19 @@ agent. Select `capture_mode: on_demand` for an idle recording. An
 `announcement_path` requires `ring` mode and is rejected for on-demand capture
 before media starts.
 
+If a call begins while an on-demand recording connects, the native RTSP route can
+change after the idle check. The recording may then fail or include Ring video.
+This is a limitation of native media routing: the idle check does not lock the media
+owner through connection setup. The metadata field `capture_mode` records the
+requested mode; it does not continuously verify the native owner. On-demand capture
+does not answer or hang up the Ring Call and closes its own recording client on
+completion, failure or cancellation.
+
 Check:
 
 1. Select the mode that matches the intended capture. On-demand capture requires
-   an idle media path; close your live viewer first. A busy, unknown or externally
-   owned session is not taken over.
+   an idle media path; close your live viewer first. A reported busy, unknown or
+   externally owned state is rejected before the recording client opens.
 2. Do not run multiple capture automations on the same device at once. Separate
    devices use isolated workspaces; do not assign the same explicit MP4 path.
 3. Keep output paths below `/media/c300x/`, `/config/c300x/` or

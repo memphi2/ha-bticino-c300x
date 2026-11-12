@@ -92,6 +92,35 @@ class ProviderWebRTCSession(_OwnedSession):
     pending_candidates: list[Any] = field(default_factory=list)
 
 
+async def _async_retry_failed_provider_close(
+    provider: Any,
+    sessions: MutableMapping[Any, Any],
+    session_id: str,
+    session_entry: Any,
+) -> None:
+    """Give a failed websocket close one retry, then drop its entry.
+
+    Nothing calls this close a second time: the camera has already forgotten
+    the session. An entry left behind for "a later retry" would therefore stay
+    in the provider for good. A session that replaced ours is never touched.
+    """
+
+    if sessions.get(session_id) is not session_entry:
+        return
+    close_session = getattr(provider, "async_close_session", None)
+    if callable(close_session):
+        try:
+            result = close_session(session_id)
+            if inspect.isawaitable(result):
+                await result
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - the entry is dropped below either way
+            pass
+    if sessions.get(session_id) is session_entry:
+        sessions.pop(session_id, None)
+
+
 async def async_close_provider_session(
     provider: Any,
     session_id: str,
@@ -126,6 +155,9 @@ async def async_close_provider_session(
                     session_id=session_id,
                     provider=str(getattr(provider, "domain", type(provider).__name__)),
                     error_type=type(err).__name__,
+                )
+                await _async_retry_failed_provider_close(
+                    provider, sessions, session_id, session_entry
                 )
                 return "go2rtc_ws_failed"
         # Unknown private layouts belong to the provider's public close API.

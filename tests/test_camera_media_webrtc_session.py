@@ -70,22 +70,40 @@ def test_cancelled_provider_close_restores_wrapper_without_replacing_new_session
 
 
 @pytest.mark.parametrize("replaced", [False, True])
-def test_failed_provider_close_keeps_entry_for_retry_without_replacing_new_session(replaced):
+@pytest.mark.parametrize("public_close", ["missing", "works", "fails"])
+def test_failed_provider_close_retries_once_and_never_leaves_its_entry(replaced, public_close):
+    """The camera forgets the session after this call, so nothing retries later."""
+
     async def run():
         replacement = object()
         provider = SimpleNamespace(_sessions={})
+        retries = []
 
         async def close():
             if replaced:
                 provider._sessions["s"] = replacement
             raise RuntimeError("close failed")
 
+        async def async_close_session(session_id):
+            retries.append(provider._sessions.get(session_id))
+            if public_close == "fails":
+                raise RuntimeError("public close failed")
+            provider._sessions.pop(session_id, None)
+
+        if public_close != "missing":
+            provider.async_close_session = async_close_session
         original = SimpleNamespace(ws_client=SimpleNamespace(close=close), camera=object())
         provider._sessions["s"] = original
         log = Mock()
 
         assert await async_close_provider_session(provider, "s", log) == "go2rtc_ws_failed"
-        assert provider._sessions["s"] is (replacement if replaced else original)
+        if replaced:
+            # A new session under the same id is neither retried nor removed.
+            assert provider._sessions["s"] is replacement
+            assert retries == []
+        else:
+            assert "s" not in provider._sessions
+            assert retries == ([] if public_close == "missing" else [original])
         log.assert_called_once()
 
     asyncio.run(run())

@@ -116,8 +116,13 @@ device interoperability tests.
 | Ring Call Answer | Preview transitions to answered call without losing media. |
 | Ring Call Hangup | Card returns to idle and the device call ends. |
 | Two browser Ring preview | Supported preview viewers do not break the answered flow. |
-| Ring capture while idle | Capture writes MP4/WAV/JPEG/JSON to allowed paths. |
-| Ring capture while busy | Capture fails cleanly instead of stealing the live session. |
+| Ring capture during a real Ring Call | Omitted `capture_mode` and explicit `ring` preserve the existing answer/record/hangup flow. Capture writes MP4, audio when requested, JPEG frames and JSON metadata to allowed paths. |
+| Ring capture without a Ring Call | With `include_audio: true`, the default `ring` mode fails cleanly and does not silently start an on-demand session. Existing blueprints keep this mode. |
+| On-demand capture from idle | Explicit `capture_mode: on_demand` records without ringing. Test `include_audio: true` and `false`, durations of 1, 5 and 15 seconds, exact response paths and capture-mode metadata with native agent 2.1.0. |
+| On-demand capture when admission reports busy or unclear ownership | Reported live, Ring, Home Call or external sessions cause rejection before recording begins. |
+| Ring begins during on-demand connection setup (hardware) | Begin an on-demand capture from idle and ring the doorbell during RTSP setup, with audio enabled and disabled. Record whether capture fails or receives Ring video through the existing native route. Verify that capture sends no Ring answer/hangup or global stop and that closing its recording client leaves the Ring intact. Successful metadata retains `capture_mode: on_demand` as the requested mode. |
+| On-demand capture completion, failure and cancellation | Its recording client closes after success, ffmpeg failure or cancellation, including before RTSP startup. Other or replacement sessions remain intact; a subsequent capture can start. |
+| On-demand capture with an announcement | `announcement_path` is rejected before media starts; Ring Call announcements retain their existing behavior. |
 | Home Call start/stop | Display rings, state updates, hangup cleans up. |
 | On-demand after Home Call | First stream attempt works after Home Call cleanup. |
 

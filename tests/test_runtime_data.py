@@ -75,6 +75,8 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         resources.prepare_home_call_stop = device_action
         resources.on_runtime_registration_created = device_action
         resources.pending_message_refreshes.add("memos")
+        resources.on_demand_capture_active = True
+        resources.media_session_count = lambda: 1
         resources.media_stop_counts["doorbell"] = 1
         tasks = []
         for name in task_names:
@@ -89,10 +91,11 @@ def test_runtime_resources_close_cancels_all_tasks_and_is_idempotent():
         assert calls == ["registration", "display", "event-webhook", "webhook"]
         assert not resources.pending_message_refreshes
         assert not resources.media_stop_counts
+        assert not resources.on_demand_capture_active
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"pending_message_refreshes", "media_stop_counts"}
+            if item.name not in {"pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
         )
 
     asyncio.run(run())
@@ -123,10 +126,11 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
         assert isinstance(error.value.exceptions[0], RuntimeError)
         assert not resources.pending_message_refreshes
         assert not resources.media_stop_counts
+        assert not resources.on_demand_capture_active
         assert all(
             getattr(resources, item.name) is None
             for item in fields(resources)
-            if item.name not in {"pending_message_refreshes", "media_stop_counts"}
+            if item.name not in {"pending_message_refreshes", "media_stop_counts", "on_demand_capture_active"}
         )
 
     asyncio.run(run())

@@ -508,6 +508,12 @@
     "ring_capture_busy": {
       "message": "La registrazione della chiamata C300X è occupata perché un altro client video è già connesso."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Gli annunci sono disponibili solo nella modalità campanello. Rimuovi announcement_path per registrare senza suonare."
+    },
+    "on_demand_capture_busy": {
+      "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
+    },
     "entry_id_required": {
       "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
     },
@@ -709,6 +715,26 @@
         },
         "abort": {
           "entry_not_loaded": "La voce BTicino C300X non e caricata."
+        }
+      }
+    }
+  },
+  "selector": {
+    "capture_mode": {
+      "options": {
+        "ring": "Chiamata del campanello",
+        "on_demand": "Registrazione senza suonare"
+      }
+    }
+  },
+  "services": {
+    "capture_doorbell_call": {
+      "name": "Registra il video C300X",
+      "description": "Registra un breve video in Home Assistant da una chiamata in arrivo o a richiesta quando le risorse multimediali sono libere.",
+      "fields": {
+        "capture_mode": {
+          "name": "Modalità di registrazione",
+          "description": "Campanello registra una chiamata in arrivo. A richiesta registra senza suonare quando nessun’altra sessione multimediale è attiva."
         }
       }
     }

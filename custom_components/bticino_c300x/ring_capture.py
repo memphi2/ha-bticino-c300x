@@ -16,6 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .camera_media.rtsp_policy import (
     RtspConsumer,
+    RtspSessionOwner,
     decide_rtsp_admission,
     rtsp_resource_snapshot_from_status,
 )
@@ -30,8 +31,10 @@ from .camera_media.rtsp_url import (
     normalize_rtsp_path as _normalize_rtsp_path_value,
 )
 from .camera_media.state_machine import (
+    MediaState,
     derive_media_state,
     media_state_input_from_video_status,
+    status_reports_agent_idle,
 )
 from .capture_artifacts import (
     prepare_capture_directory,
@@ -75,6 +78,7 @@ async def async_capture_doorbell_ring_call(
     duration_seconds: int = 5,
     include_audio: bool = True,
     announcement_path: str | None = None,
+    capture_mode: str = "ring",
 ) -> dict[str, Any]:
     """Record a short C300X doorbell RTSP clip on Home Assistant."""
 
@@ -84,29 +88,52 @@ async def async_capture_doorbell_ring_call(
         return await _async_capture_to_output(
             hass, entry, target, wav_output_dir=wav_output_dir, duration=duration,
             include_audio=include_audio, announcement_path=announcement_path,
+            capture_mode=capture_mode,
         )
 
 
 async def _async_capture_to_output(
     hass: Any, entry: Any, target: Path, *, wav_output_dir: str | None,
     duration: int, include_audio: bool, announcement_path: str | None,
+    capture_mode: str = "ring",
 ) -> dict[str, Any]:
+    if capture_mode not in {"ring", "on_demand"}:
+        raise ValueError("Invalid C300X capture mode")
+    on_demand = capture_mode == "on_demand"
+    if on_demand and announcement_path is not None:
+        raise HomeAssistantError("C300X announcements require ring capture mode")
+    runtime = entry.runtime_data
     root = _capture_work_dir(hass, wav_output_dir)
     announcement = await _async_announcement_input_path(hass, announcement_path)
-    status = await entry.runtime_data.api.async_doorbell_video_status()
-    raise_if_ring_capture_blocked(status)
-    rtsp_url = _rtsp_url_from_status(entry, status, include_audio=include_audio)
+    if on_demand:
+        ensure_on_demand_capture_runtime(entry, runtime)
+    status = await runtime.api.async_doorbell_video_status()
+    if on_demand:
+        ensure_on_demand_capture_runtime(entry, runtime)
+        raise_if_on_demand_capture_blocked(entry, status)
+    else:
+        raise_if_ring_capture_blocked(status)
+    rtsp_url = _rtsp_url_from_status(
+        entry, status, include_audio=include_audio, capture_mode=capture_mode
+    )
     audio_gain_db = _capture_audio_gain_db(entry)
 
     await _async_wait_rtsp_ready(rtsp_url)
     await _async_mkdir(hass, target.parent)
     codec_pcmu = (
         await _async_talkback_codec_is_pcmu(entry, status)
-        if include_audio or announcement is not None
+        if not on_demand and (include_audio or announcement is not None)
         else False
     )
     capture_id = uuid4().hex
     work_dir = await asyncio.to_thread(prepare_capture_directory, root, capture_id)
+    if on_demand:
+        # OPTIONS only checks the listener. Media begins with FFmpeg's PLAY;
+        # recheck admission after readiness/filesystem awaits, before that PLAY.
+        ensure_on_demand_capture_runtime(entry, runtime)
+        status = await runtime.api.async_doorbell_video_status()
+        ensure_on_demand_capture_runtime(entry, runtime)
+        raise_if_on_demand_capture_blocked(entry, status)
     capture_task = asyncio.create_task(
         _async_run_ffmpeg(
             rtsp_url,
@@ -119,7 +146,7 @@ async def _async_capture_to_output(
     )
     talkback_stop = threading.Event()
     talkback_task: asyncio.Task[None] | None = None
-    if include_audio or announcement is not None:
+    if not on_demand and (include_audio or announcement is not None):
         talkback_task = asyncio.create_task(
             _async_keep_talkback_alive_when_ready(
                 entry,
@@ -151,6 +178,7 @@ async def _async_capture_to_output(
             duration_seconds=duration,
             include_audio=include_audio,
             announcement_used=announcement is not None,
+            capture_mode=capture_mode,
         )
         metadata["entry_id"] = entry.entry_id
         await async_write_json_file(hass, _capture_metadata_path(work_dir), metadata)
@@ -273,12 +301,14 @@ def _capture_metadata_payload(
     duration_seconds: int,
     include_audio: bool,
     announcement_used: bool,
+    capture_mode: str = "ring",
 ) -> dict[str, Any]:
     bridge_status = optional_mapping(status.get("bridge"))
     payload: dict[str, Any] = {
         "capture_id": capture_id,
         "created_at": datetime.now(UTC).isoformat(),
         "kind": "doorbell_ring_capture",
+        "capture_mode": capture_mode,
         "output_path": str(target),
         "metadata_path": str(_capture_metadata_path(work_dir)),
         "duration_seconds": duration_seconds,
@@ -322,6 +352,40 @@ def raise_if_ring_capture_blocked(status: Mapping[str, Any]) -> None:
         else decision.reason
     )
     raise HomeAssistantError(f"C300X ring capture busy: {reason}")
+
+
+def ensure_on_demand_capture_runtime(entry: Any, runtime: Any) -> None:
+    """Reject continuation after unload or replacement of our reservation."""
+
+    if (
+        entry.runtime_data is not runtime
+        or not runtime.resources.on_demand_capture_active
+        or runtime.resources.on_demand_capture_task is not asyncio.current_task()
+    ):
+        raise HomeAssistantError("C300X on-demand capture was cancelled or the integration reloaded")
+
+
+def raise_if_on_demand_capture_blocked(entry: Any, status: Mapping[str, Any]) -> None:
+    """Require positively idle native media and no local session or offer."""
+
+    resources = getattr(entry.runtime_data, "resources", None)
+    session_count = getattr(resources, "media_session_count", None)
+    local_sessions = session_count() if callable(session_count) else 0
+    snapshot = rtsp_resource_snapshot_from_status(status, local_sessions=local_sessions)
+    state = derive_media_state(
+        media_state_input_from_video_status(status, local_sessions=local_sessions)
+    )
+    if (
+        snapshot.owner is RtspSessionOwner.IDLE
+        and snapshot.rtsp_clients == 0
+        and not local_sessions
+        and not any(getattr(resources, "media_stop_counts", {}).values())
+        and status_reports_agent_idle(status)
+        and state.state is MediaState.IDLE
+        and decide_rtsp_admission(RtspConsumer.CAPTURE, snapshot).allowed
+    ):
+        return
+    raise HomeAssistantError("C300X on-demand capture requires idle media with no other clients")
 
 
 def _validate_duration(value: Any) -> int:
@@ -582,13 +646,16 @@ def _rtsp_url_from_status(
     status: Mapping[str, Any],
     *,
     include_audio: bool = False,
+    capture_mode: str = "ring",
 ) -> str:
     host = _agent_host_for_url(_agent_host(entry))
     try:
         port = int(entry_config_value(entry, CONF_VIDEO_PORT, DEFAULT_VIDEO_PORT))
     except (TypeError, ValueError) as err:
         raise HomeAssistantError("C300X RTSP port is invalid") from err
-    path = _capture_stream_path(entry, status, include_audio=include_audio)
+    path = _capture_stream_path(
+        entry, status, include_audio=include_audio, capture_mode=capture_mode
+    )
     return f"rtsp://{host}:{port}{path}"
 
 
@@ -628,7 +695,16 @@ def _capture_stream_path(
     status: Mapping[str, Any],
     *,
     include_audio: bool = False,
+    capture_mode: str = "ring",
 ) -> str:
+    if capture_mode == "on_demand":
+        # Recorder is ring-only. Missing paths must not silently capture a
+        # different media route or discard a requested audio track.
+        key = "audio_stream_path" if include_audio else "stream_path"
+        value = status.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise HomeAssistantError(f"C300X on-demand capture requires {key}")
+        return _normalize_rtsp_path(value)
     keys = (
         ("audio_stream_path", "recorder_stream_path", "stream_path")
         if include_audio

@@ -72,6 +72,17 @@ int main(void)
     c300x_http_file_transfers_handle(&transfers, fds, now);
     assert(!c300x_http_file_transfers_owns(&transfers, pair[0]));
     close(pair[1]);
+    /* A loop iteration that arrives after the idle deadline must not drop a
+     * client whose socket is writable: the delay was ours, not the client's. */
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    assert(c300x_http_file_transfers_start(&transfers, pair[0], path, NULL));
+    now = transfers.slots[0].deadline + 5000;
+    c300x_http_file_transfers_prepare(&transfers, fds, now);
+    assert(poll(fds, C300X_HTTP_MAX_FILE_TRANSFERS, 100) > 0);
+    c300x_http_file_transfers_handle(&transfers, fds, now);
+    assert(c300x_http_file_transfers_owns(&transfers, pair[0]));
+    assert(transfers.slots[0].deadline == now + C300X_HTTP_FILE_IDLE_TIMEOUT_MS);
+    close(pair[1]);
     c300x_http_file_transfers_close(&transfers);
     assert(c300x_http_file_transfers_prepare(&transfers, fds, now) == -1);
     unlink(path);

@@ -1,7 +1,7 @@
 import {
   c300xRingLifecycleActive,
   c300xShouldResetRingPreviewSuppression,
-} from "./c300x-ring-preview-state.js?v=95cf4cdc072597f2";
+} from "./c300x-ring-preview-state.js?v=8711b123d97c0e01";
 
 const C300X_EXPLICIT_RING_PREVIEW_STOP_REASONS = new Set([
   "agent_cpu_watchdog",
@@ -78,6 +78,10 @@ export class C300XCardLifecycleState {
   }
 
   clearPeer(clearStatus) {
+    this.startingCall = false;
+    this.previewStarting = false;
+    this.answeringDoorbell = false;
+    this.hangupInProgress = false;
     this.ringPreviewActive = false;
     this.activeHomeCallSession = false;
     this.passiveAnsweredPreviewStarted = false;

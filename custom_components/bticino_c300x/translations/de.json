@@ -508,6 +508,12 @@
     "ring_capture_busy": {
       "message": "Die C300X-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Ansagen sind nur im Aufnahmemodus Klingelruf verfügbar. Entferne announcement_path für eine Liveaufnahme ohne Klingeln."
+    },
+    "on_demand_capture_busy": {
+      "message": "Die Liveaufnahme benötigt freie Medien. Schließe andere Kamerastreams oder Anrufe und versuche es erneut."
+    },
     "entry_id_required": {
       "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Eintraege existieren."
     },
@@ -537,12 +543,6 @@
     },
     "voice_memo_not_available": {
       "message": "Es ist kein C300X-Sprach-Memo verfuegbar."
-    },
-    "capture_announcement_requires_ring": {
-      "message": "Ansagen sind nur im Aufnahmemodus Klingelruf verfügbar. Entferne announcement_path für eine Liveaufnahme ohne Klingeln."
-    },
-    "on_demand_capture_busy": {
-      "message": "Die Liveaufnahme benötigt freie Medien. Schließe andere Kamerastreams oder Anrufe und versuche es erneut."
     }
   },
   "issues": {

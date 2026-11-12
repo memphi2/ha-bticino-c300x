@@ -508,6 +508,12 @@
     "ring_capture_busy": {
       "message": "La registrazione della chiamata C300X è occupata perché un altro client video è già connesso."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Gli annunci sono disponibili solo nella modalità campanello. Rimuovi announcement_path per registrare senza suonare."
+    },
+    "on_demand_capture_busy": {
+      "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
+    },
     "entry_id_required": {
       "message": "L'ID della voce è richiesto quando esistono più voci BTicino C300X."
     },
@@ -537,12 +543,6 @@
     },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale C300X."
-    },
-    "capture_announcement_requires_ring": {
-      "message": "Gli annunci sono disponibili solo nella modalità campanello. Rimuovi announcement_path per registrare senza suonare."
-    },
-    "on_demand_capture_busy": {
-      "message": "La registrazione a richiesta richiede risorse multimediali libere. Chiudi gli altri flussi video o chiamate e riprova."
     }
   },
   "issues": {

@@ -508,6 +508,12 @@
     "ring_capture_busy": {
       "message": "La capture d'appel C300X est occupee, car un autre client video est deja connecte."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Les annonces sont disponibles uniquement en mode sonnette. Supprimez announcement_path pour enregistrer sans sonnerie."
+    },
+    "on_demand_capture_busy": {
+      "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
+    },
     "entry_id_required": {
       "message": "L'ID d'entree est requis quand plusieurs entrees BTicino C300X existent."
     },
@@ -537,12 +543,6 @@
     },
     "voice_memo_not_available": {
       "message": "Aucun memo vocal C300X n'est disponible."
-    },
-    "capture_announcement_requires_ring": {
-      "message": "Les annonces sont disponibles uniquement en mode sonnette. Supprimez announcement_path pour enregistrer sans sonnerie."
-    },
-    "on_demand_capture_busy": {
-      "message": "L’enregistrement à la demande nécessite des médias libres. Fermez les autres flux vidéo ou appels, puis réessayez."
     }
   },
   "issues": {

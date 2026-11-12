@@ -490,6 +490,12 @@
     "ring_capture_busy": {
       "message": "C300X ring capture is busy because another video client is already connected."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Announcements are only available in ring capture mode. Remove announcement_path for an on-demand recording."
+    },
+    "on_demand_capture_busy": {
+      "message": "On-demand capture requires idle media. Close other camera streams or calls and try again."
+    },
     "entry_id_required": {
       "message": "Entry ID is required when more than one BTicino C300X entry exists."
     },
@@ -519,12 +525,6 @@
     },
     "voice_memo_not_available": {
       "message": "No C300X voice memo is available."
-    },
-    "capture_announcement_requires_ring": {
-      "message": "Announcements are only available in ring capture mode. Remove announcement_path for an on-demand recording."
-    },
-    "on_demand_capture_busy": {
-      "message": "On-demand capture requires idle media. Close other camera streams or calls and try again."
     }
   },
   "issues": {

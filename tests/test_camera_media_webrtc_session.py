@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+
 from custom_components.bticino_c300x.camera_media.webrtc_session import (
+    async_close_provider_session,
     webrtc_message_is_error,
 )
 
@@ -30,3 +37,89 @@ def test_webrtc_message_error_detection_accepts_provider_message_shapes() -> Non
     assert webrtc_message_is_error(_AsDictMessage("not-a-dict")) is False
     assert webrtc_message_is_error(_BrokenAsDictMessage()) is False
     assert webrtc_message_is_error(WebRTCError()) is True
+
+
+@pytest.mark.parametrize("replaced", [False, True])
+def test_cancelled_provider_close_restores_wrapper_without_replacing_new_session(replaced):
+    async def run():
+        started = asyncio.Event()
+
+        async def close():
+            started.set()
+            await asyncio.Future()
+
+        original = SimpleNamespace(ws_client=SimpleNamespace(close=close), camera=object())
+        replacement = object()
+        provider = SimpleNamespace(_sessions={"s": original})
+        task = asyncio.create_task(async_close_provider_session(provider, "s", Mock()))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            assert not provider._sessions
+            if replaced:
+                provider._sessions["s"] = replacement
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert provider._sessions["s"] is (replacement if replaced else original)
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("replaced", [False, True])
+def test_failed_provider_close_keeps_entry_for_retry_without_replacing_new_session(replaced):
+    async def run():
+        replacement = object()
+        provider = SimpleNamespace(_sessions={})
+
+        async def close():
+            if replaced:
+                provider._sessions["s"] = replacement
+            raise RuntimeError("close failed")
+
+        original = SimpleNamespace(ws_client=SimpleNamespace(close=close), camera=object())
+        provider._sessions["s"] = original
+        log = Mock()
+
+        assert await async_close_provider_session(provider, "s", log) == "go2rtc_ws_failed"
+        assert provider._sessions["s"] is (replacement if replaced else original)
+        log.assert_called_once()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("awaitable", [False, True])
+def test_unknown_provider_session_layout_delegates_to_public_close(awaitable):
+    async def run():
+        original = object()
+        provider = SimpleNamespace(_sessions={"s": original})
+        closed = []
+
+        def close(session_id):
+            # The public API must still be able to find its own private entry.
+            assert provider._sessions.pop(session_id) is original
+            closed.append(session_id)
+
+        async def async_close(session_id):
+            await asyncio.sleep(0)
+            close(session_id)
+
+        provider.async_close_session = async_close if awaitable else close
+        await async_close_provider_session(provider, "s", Mock())
+        assert closed == ["s"]
+        assert not provider._sessions
+
+    asyncio.run(run())
+
+
+def test_unknown_provider_session_without_close_api_keeps_entry():
+    original = object()
+    provider = SimpleNamespace(_sessions={"s": original})
+
+    result = asyncio.run(async_close_provider_session(provider, "s", Mock()))
+
+    assert result == "provider_close_missing"
+    assert provider._sessions["s"] is original

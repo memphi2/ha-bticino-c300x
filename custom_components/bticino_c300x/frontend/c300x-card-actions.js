@@ -8,9 +8,17 @@ export class C300XCardActions {
     return this._pendingDeviceActions.has(key);
   }
 
+  _currentAction() {
+    const card = this._card;
+    const generation = card._resourceGeneration;
+    const lifecycle = card._lifecycle;
+    return () => !card._disposed && card._resourceGeneration === generation
+      && card._lifecycle === lifecycle;
+  }
+
   async handleDeviceAction(key) {
     const card = this._card;
-    if (card._config?.[`show_${key}`] === false) {
+    if (card._disposed || card._config?.[`show_${key}`] === false) {
       return;
     }
     const entityId = card._deviceActionEntity(key);
@@ -19,21 +27,26 @@ export class C300XCardActions {
       return;
     }
     this._pendingDeviceActions.add(key);
+    const isCurrent = this._currentAction();
     card._error = "";
     card._clearNotice();
     card._updateState();
     try {
       await card._hass.callService("button", "press", { entity_id: entityId });
     } catch (err) {
-      card._error = err?.message || `${err}`;
+      if (isCurrent()) card._error = err?.message || `${err}`;
     } finally {
       this._pendingDeviceActions.delete(key);
-      card._updateState();
+      if (isCurrent()) card._updateState();
     }
   }
 
   async handlePrimaryAction() {
     const card = this._card;
+    const lifecycle = card._lifecycle;
+    if (card._disposed || lifecycle.answeringDoorbell || lifecycle.hangupInProgress) {
+      return;
+    }
     if (!card._isHomeCallMode()) {
       if (card._lifecycle.activeHomeCallSession) {
         return;
@@ -47,20 +60,22 @@ export class C300XCardActions {
         return;
       }
       if (action === "answer") {
-        card._lifecycle.answeringDoorbell = true;
+        const isCurrent = this._currentAction();
+        lifecycle.answeringDoorbell = true;
         try {
           await this.answerDoorbellCall();
-          card._lifecycle.doorbellAnswered = true;
-          if (card._lifecycle.ringPreviewActive && card._webrtc.pc) {
+          if (!isCurrent()) return;
+          lifecycle.doorbellAnswered = true;
+          if (lifecycle.ringPreviewActive && card._webrtc.pc) {
             await card._startAnsweredDoorbellStream();
           } else {
             await card._startTalkback();
           }
         } catch (err) {
-          card._error = err?.message || `${err}`;
+          if (isCurrent()) card._error = err?.message || `${err}`;
         } finally {
-          card._lifecycle.answeringDoorbell = false;
-          card._updateState();
+          lifecycle.answeringDoorbell = false;
+          if (isCurrent()) card._updateState();
         }
         return;
       }
@@ -76,7 +91,7 @@ export class C300XCardActions {
 
   async handleHomeCallAction() {
     const card = this._card;
-    if (!card._isAutoMode()) {
+    if (card._disposed || !card._isAutoMode() || card._lifecycle.hangupInProgress) {
       return;
     }
     if (
@@ -92,7 +107,9 @@ export class C300XCardActions {
 
   async startHomeCallAudio() {
     const card = this._card;
-    if (card._webrtc.running || card._lifecycle.startingCall) {
+    const lifecycle = card._lifecycle;
+    const isCurrent = this._currentAction();
+    if (card._disposed || card._webrtc.running || lifecycle.startingCall) {
       return;
     }
     card._lifecycle.startingCall = true;
@@ -103,37 +120,39 @@ export class C300XCardActions {
     try {
       await card._startTalkback({ homeCall: true });
     } finally {
-      card._lifecycle.startingCall = false;
-      card._updateState();
+      lifecycle.startingCall = false;
+      if (isCurrent()) card._updateState();
     }
   }
 
   async _withHangupGuard(run) {
     const card = this._card;
-    if (card._lifecycle.hangupInProgress) {
+    const lifecycle = card._lifecycle;
+    const isCurrent = this._currentAction();
+    if (card._disposed || lifecycle.hangupInProgress) {
       return;
     }
-    card._lifecycle.hangupInProgress = true;
-    card._lifecycle.startingCall = false;
+    lifecycle.hangupInProgress = true;
+    lifecycle.startingCall = false;
     let ok = true;
     try {
-      ok = await run();
+      ok = await run(isCurrent);
     } finally {
-      card._lifecycle.hangupInProgress = false;
-      card._closePeer(ok);
+      lifecycle.hangupInProgress = false;
+      if (isCurrent()) card._closePeer(ok);
     }
   }
 
   async hangup() {
     const card = this._card;
     const homeCallMode = card._lifecycle.activeHomeCallSession || card._isHomeCallMode();
-    await this._withHangupGuard(async () => {
+    await this._withHangupGuard(async (isCurrent) => {
       try {
         await (homeCallMode ? this.stopHomeCall() : this.stopDoorbellVideo());
         return true;
       } catch (err) {
         console.error("C300X hangup failed", err);
-        card._error = err?.message || `${err}`;
+        if (isCurrent()) card._error = err?.message || `${err}`;
         return false;
       }
     });
@@ -142,22 +161,25 @@ export class C300XCardActions {
   async hangupDoorstation() {
     const card = this._card;
     const hadDoorbellRingCallSession = this.hasDoorbellRingCallSession();
-    await this._withHangupGuard(async () => {
+    await this._withHangupGuard(async (isCurrent) => {
       let ok = true;
       try {
+        // Finish this hangup on its original device even if the editor replaces
+        // the card configuration while the ring-call service is pending.
+        const target = card._hass ? { hass: card._hass, data: card._serviceData() } : null;
         if (hadDoorbellRingCallSession) {
           try {
-            ok = await this.hangupDoorbellCall({ closePeer: false }) && ok;
+            ok = await this.hangupDoorbellCall({ closePeer: false, target }) && ok;
           } catch (err) {
             console.error("C300X ring-call hangup failed", err);
-            card._error = err?.message || `${err}`;
+            if (isCurrent()) card._error = err?.message || `${err}`;
             ok = false;
           }
         }
-        await this.stopDoorbellVideo();
+        await this.stopDoorbellVideo(target);
       } catch (err) {
         console.error("C300X doorbell video stop failed", err);
-        card._error = err?.message || `${err}`;
+        if (isCurrent()) card._error = err?.message || `${err}`;
         ok = false;
       }
       return ok;
@@ -178,24 +200,25 @@ export class C300XCardActions {
 
   async hangupHomeCall() {
     const card = this._card;
-    await this._withHangupGuard(async () => {
+    await this._withHangupGuard(async (isCurrent) => {
       try {
         await this.stopHomeCall();
         return true;
       } catch (err) {
         console.error("C300X home-call hangup failed", err);
-        card._error = err?.message || `${err}`;
+        if (isCurrent()) card._error = err?.message || `${err}`;
         return false;
       }
     });
   }
 
-  async stopDoorbellVideo() {
+  async stopDoorbellVideo(target) {
     const card = this._card;
-    if (!card._hass) {
+    const hass = target === undefined ? card._hass : target?.hass;
+    if (!hass) {
       return;
     }
-    await card._hass.callService("bticino_c300x", "stop_doorbell_video", card._serviceData());
+    await hass.callService("bticino_c300x", "stop_doorbell_video", target?.data || card._serviceData());
   }
 
   async answerDoorbellCall() {
@@ -210,20 +233,22 @@ export class C300XCardActions {
     );
   }
 
-  async hangupDoorbellCall({ closePeer = true } = {}) {
+  async hangupDoorbellCall({ closePeer = true, target } = {}) {
     const card = this._card;
-    if (!card._hass) {
+    const isCurrent = this._currentAction();
+    const hass = target === undefined ? card._hass : target?.hass;
+    if (!hass) {
       return false;
     }
     let ok = true;
     try {
-      await card._hass.callService("bticino_c300x", "hangup_doorbell_call", card._serviceData());
+      await hass.callService("bticino_c300x", "hangup_doorbell_call", target?.data || card._serviceData());
     } catch (err) {
       console.error("C300X ring-call hangup failed", err);
-      card._error = err?.message || `${err}`;
+      if (isCurrent()) card._error = err?.message || `${err}`;
       ok = false;
     } finally {
-      if (closePeer) {
+      if (closePeer && isCurrent()) {
         card._closePeer(ok);
       }
     }

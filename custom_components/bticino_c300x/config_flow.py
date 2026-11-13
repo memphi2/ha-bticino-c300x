@@ -60,6 +60,9 @@ from .config_flow_dashboard import (
     dashboard_entity_display_form_complete as _dashboard_entity_display_form_complete,
 )
 from .config_flow_dashboard import (
+    dashboard_entity_display_has_fields as _dashboard_entity_display_has_fields,
+)
+from .config_flow_dashboard import (
     dashboard_entity_display_input as _dashboard_entity_display_input,
 )
 from .config_flow_dashboard import (
@@ -712,7 +715,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._setup_dashboard_input = _dashboard_input_defaults(user_input)
             if (
                 self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_display_entity_ids(self._setup_dashboard_input)
+                and _dashboard_entity_display_has_fields(self._setup_dashboard_input)
             ):
                 return self._async_show_user_dashboard_entity_display_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
@@ -1068,7 +1071,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             if (
                 self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_display_entity_ids(self._reconfigure_dashboard_input)
+                and _dashboard_entity_display_has_fields(self._reconfigure_dashboard_input)
             ):
                 return await self._async_show_reconfigure_dashboard_entity_display_form(
                     None,
@@ -1453,7 +1456,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             )
             if (
                 self._dashboard_options[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_display_entity_ids(self._dashboard_options)
+                and _dashboard_entity_display_has_fields(self._dashboard_options)
             ):
                 return await self._async_show_options_dashboard_entity_display_form(
                     None,

@@ -398,6 +398,16 @@ def dashboard_entity_display_form(
     )
 
 
+def dashboard_entity_display_has_fields(dashboard_input: dict[str, Any]) -> bool:
+    """Return whether the entity-display form has anything to set.
+
+    Besides the tiles and the quick entity, a weather entity alone brings the
+    fields that place its card.
+    """
+
+    return bool(dashboard_entity_display_form(dashboard_input).schema)
+
+
 def dashboard_entity_display_input(
     dashboard_input: dict[str, Any],
     user_input: dict[str, Any],

@@ -70,8 +70,9 @@ def entity_details(
         details["playing"] = state.state == "playing"
         # What is playing is the reading; without a title the state stands.
         title = attrs.get("media_title")
-        if isinstance(title, str) and title.strip() and state.state in {"playing", "paused", "buffering"}:
-            details.update(value=title.strip()[:60])
+        title = " ".join(title.split()) if isinstance(title, str) else ""
+        if title and state.state in {"playing", "paused", "buffering"}:
+            details.update(value=title[:60])
     elif domain in {"sensor", "binary_sensor"}:
         if domain == "sensor" and finite_number(state.state) is not None:
             details.update(

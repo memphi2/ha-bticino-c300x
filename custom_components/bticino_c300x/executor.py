@@ -236,7 +236,6 @@ async def async_execute_alarm_command(
             command,
             alarm_entity_id,
             _current_alarm_state(hass, alarm_entity_id),
-            code=code,
         )
     return {
         "ok": True,
@@ -529,19 +528,11 @@ def _alarm_state_unchanged_response(
     command: str,
     entity_id: str,
     current_state: str | None,
-    *,
-    code: str | None = None,
 ) -> dict[str, Any]:
     """Return a structured alarm command failure without surfacing a HTTP error."""
 
-    if code:
-        return {
-            "ok": False,
-            "error": "invalid_code",
-            "command": command,
-            "entity_id": entity_id,
-            "state": current_state,
-        }
+    # A missing state confirmation does not prove that a supplied PIN was bad.
+    # Only an explicit service rejection can identify an invalid code.
     return {
         "ok": False,
         "error": "alarm_state_unchanged",

@@ -662,6 +662,13 @@ Side effects: returns the selected video-message media stream.
 
 The id is path-bounded by `C300X_MAX_VOICEMAIL_ID_LEN`.
 
+Video-message and voice-memo downloads share four bounded transfer slots. The
+agent streams each file through its event loop without waiting on a slow reader,
+so call events and API controls remain responsive. A fifth concurrent download
+returns `503` with `media_transfers_busy`. A transfer with no socket-write
+progress for two seconds is closed; disconnected clients and agent shutdown also
+release the socket and file.
+
 ### `POST /api/v1/answering-machine/messages/actions/delete`
 
 Authentication: normal API token.

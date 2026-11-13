@@ -505,6 +505,52 @@ def test_display_bridge_command_handlers_forward_payloads(monkeypatch) -> None: 
     ]
 
 
+@pytest.mark.parametrize(
+    ("code", "error", "expected"),
+    [
+        ("1234", "alarm_state_unchanged", "invalid_code"),
+        (None, "alarm_state_unchanged", "alarm_state_unchanged"),
+        ("1234", "not_ready_to_arm", "not_ready_to_arm"),
+        ("1234", "alarm_command_rejected", "alarm_command_rejected"),
+    ],
+)
+def test_display_keypad_keeps_wrong_pin_hint_for_silent_providers(
+    monkeypatch, code, error, expected  # noqa: ANN001
+) -> None:
+    """Only an unchanged state after a typed PIN reads as a wrong PIN."""
+
+    hass = _FakeHass()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="C300X",
+        data={CONF_SHARED_SECRET: "shared-secret"},
+        options={},
+    )
+
+    async def _alarm_command(*args: object, **kwargs: object) -> dict:
+        return {"ok": False, "error": error, "command": "disarm", "state": "armed_away"}
+
+    monkeypatch.setattr(webhook_module, "async_execute_alarm_command", _alarm_command)
+    payload = {"type": "alarm_command", "command": "disarm"}
+    if code is not None:
+        payload["code"] = code
+    response = asyncio.run(
+        _async_handle_webhook(
+            hass,  # type: ignore[arg-type]
+            entry,  # type: ignore[arg-type]
+            _FakeRequest(
+                "",
+                payload,
+                extra_headers={HEADER_SHARED_SECRET: "shared-secret"},
+            ),  # type: ignore[arg-type]
+        )
+    )
+
+    body = json.loads(response.text)
+    assert body["error"] == expected
+    assert body["state"] == "armed_away"
+
+
 def test_display_bridge_command_errors_are_contained(monkeypatch) -> None:  # noqa: ANN001
     hass = _FakeHass()
     entry = SimpleNamespace(

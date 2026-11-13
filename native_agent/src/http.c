@@ -13,6 +13,7 @@
 #include "http_request.h"
 #include "http_response.h"
 #include "http_clients.h"
+#include "http_file_transfers.h"
 #include "http_callback.h"
 #include "https_client.h"
 #include "json_util.h"
@@ -205,6 +206,7 @@ struct agent_runtime {
     unsigned long long memos_last_signature;
     struct c300x_ui_events ui_events;
     struct c300x_http_clients http_clients;
+    struct c300x_http_file_transfers file_transfers;
     struct c300x_ringer_control ringer_control;
     struct c300x_command_job maintenance_job;
     int maintenance_client_fd;
@@ -361,7 +363,7 @@ static void system_metrics_dispatch_now(
 static void handle_answering_messages_get(int client_fd, struct agent_runtime *runtime);
 static void handle_answering_message_video_get(
     int client_fd,
-    const struct agent_runtime *runtime,
+    struct agent_runtime *runtime,
     const char *message_id
 );
 static void handle_answering_message_delete(
@@ -385,7 +387,7 @@ static void handle_text_memo_create(
 );
 static void handle_memo_audio_get(
     int client_fd,
-    const struct agent_runtime *runtime,
+    struct agent_runtime *runtime,
     const char *memo_entry_name
 );
 static void handle_activations_get(
@@ -7473,7 +7475,7 @@ static void handle_answering_messages_get(int client_fd, struct agent_runtime *r
 
 static void handle_answering_message_video_get(
     int client_fd,
-    const struct agent_runtime *runtime,
+    struct agent_runtime *runtime,
     const char *message_id
 )
 {
@@ -7497,7 +7499,7 @@ static void handle_answering_message_video_get(
         return;
     }
     (void)size;
-    send_file_response(client_fd, video_path, content_type, "no-store");
+    (void)c300x_http_file_transfers_start(&runtime->file_transfers, client_fd, video_path, content_type);
 }
 
 static void handle_answering_message_delete(
@@ -7730,7 +7732,7 @@ static void handle_memos_get(int client_fd, const struct agent_runtime *runtime)
 
 static void handle_memo_audio_get(
     int client_fd,
-    const struct agent_runtime *runtime,
+    struct agent_runtime *runtime,
     const char *memo_entry_name
 )
 {
@@ -7754,7 +7756,7 @@ static void handle_memo_audio_get(
         return;
     }
     (void)size;
-    send_file_response(client_fd, audio_path, content_type, "no-store");
+    (void)c300x_http_file_transfers_start(&runtime->file_transfers, client_fd, audio_path, content_type);
 }
 
 static void handle_text_memo_create(
@@ -10754,7 +10756,8 @@ static void handle_client(int client_fd, int kind, char *buffer, void *context)
     if (kind == LISTENER_API) {
         handle_api_request(client_fd, config, runtime, request);
         close_client = runtime->ringer_control.client_fd != client_fd
-            && runtime->maintenance_client_fd != client_fd;
+            && runtime->maintenance_client_fd != client_fd
+            && !c300x_http_file_transfers_owns(&runtime->file_transfers, client_fd);
     } else {
         close_client = handle_ui_request(client_fd, config, runtime, request)
             && runtime->display_client_fd != client_fd;
@@ -10779,7 +10782,7 @@ static int agent_has_home_assistant_connection(
 int c300x_run(struct c300x_config *config)
 {
     struct listener listeners[2];
-    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
+    struct pollfd poll_fds[2 + 1 + 1 + 1 + 1 + 1 + 4 + C300X_HTTP_MAX_CLIENTS + C300X_HTTP_MAX_FILE_TRANSFERS + C300X_UI_EVENT_MAX_WAITERS + C300X_RINGER_CONTROL_POLL_FDS + C300X_VIDEO_MAX_POLL_FDS];
     nfds_t listener_count = 0;
     int udp_fd = -1;
     struct c300x_mdns mdns;
@@ -10805,6 +10808,7 @@ int c300x_run(struct c300x_config *config)
     runtime->config = config;
     struct http_context http = {.config = config, .runtime = runtime};
     c300x_http_clients_init(&runtime->http_clients);
+    c300x_http_file_transfers_init(&runtime->file_transfers);
     runtime->start_monotonic_ms = c300x_monotonic_ms();
     init_audio_codec_running_state(runtime);
     c300x_ui_events_init(&runtime->ui_events);
@@ -10899,6 +10903,7 @@ int c300x_run(struct c300x_config *config)
         int video_poll_index = -1, video_poll_count = 0;
         int poll_timeout_ms = -1;
         int http_poll_index;
+        int file_poll_index;
         int callback_poll_index;
         int display_poll_index;
         time_t now = time(NULL);
@@ -10913,6 +10918,11 @@ int c300x_run(struct c300x_config *config)
         poll_timeout_ms = c300x_http_clients_prepare(
             &runtime->http_clients, &poll_fds[poll_count], c300x_system_metrics_monotonic_ms());
         poll_count += C300X_HTTP_MAX_CLIENTS;
+        file_poll_index = (int)poll_count;
+        poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
+            c300x_http_file_transfers_prepare(&runtime->file_transfers,
+                &poll_fds[poll_count], c300x_system_metrics_monotonic_ms()));
+        poll_count += C300X_HTTP_MAX_FILE_TRANSFERS;
         poll_timeout_ms = min_timeout_ms(poll_timeout_ms,
             c300x_command_job_prepare(&runtime->maintenance_job, &poll_fds[poll_count++]));
         callback_poll_index = (int)poll_count;
@@ -11050,6 +11060,8 @@ int c300x_run(struct c300x_config *config)
         if (poll_fds[display_poll_index].revents) {
             finish_display_callback(runtime);
         }
+        c300x_http_file_transfers_handle(&runtime->file_transfers,
+            &poll_fds[file_poll_index], c300x_system_metrics_monotonic_ms());
         c300x_http_clients_handle(&runtime->http_clients, &poll_fds[http_poll_index], handle_client, &http);
         for (index = 0; index < listener_count; index++) {
             if ((poll_fds[index].revents & POLLIN) != 0) {
@@ -11169,6 +11181,7 @@ cleanup:
             close_agent_socket(runtime->display_client_fd);
         }
         c300x_http_clients_close(&runtime->http_clients);
+        c300x_http_file_transfers_close(&runtime->file_transfers);
         c300x_mqtt_close(&runtime->mqtt);
         voicemail_close(&runtime->voicemail);
         voicemail_close(&runtime->text_memos);

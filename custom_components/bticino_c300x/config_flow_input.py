@@ -26,6 +26,9 @@ from .config_flow_dashboard import (
 from .config_flow_dashboard import (
     dashboard_entity_ids as _dashboard_entity_ids,
 )
+from .config_flow_dashboard import (
+    dashboard_pages as _dashboard_pages,
+)
 from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_flow_forms import password_selector as _password_selector
 from .config_schemas import stair_light_n as _stair_light_n
@@ -47,6 +50,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -337,6 +341,7 @@ def _dashboard_feature_input(
     alarm_page_entity_id = ""
     weather_entity_id = ""
     dashboard_entities: list[str] = []
+    dashboard_pages: list[dict[str, Any]] = []
     dashboard_entity_display_overrides: dict[str, dict[str, str]] = {}
     dashboard_dynamic_homepage = _DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
     actions: dict[str, dict[str, Any]] = {}
@@ -368,6 +373,10 @@ def _dashboard_feature_input(
         except vol.Invalid:
             errors[CONF_DASHBOARD_ENTITIES] = "invalid_dashboard_entities"
         try:
+            dashboard_pages = _dashboard_pages(user_input.get(CONF_DASHBOARD_PAGES, []))
+        except vol.Invalid:
+            errors["base"] = "invalid_dashboard_pages"
+        try:
             dashboard_entity_display_overrides = _dashboard_entity_display_overrides(
                 user_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, "")
             )
@@ -386,6 +395,7 @@ def _dashboard_feature_input(
         CONF_ALARM_PAGE_ENTITY_ID: alarm_page_entity_id,
         CONF_WEATHER_ENTITY_ID: weather_entity_id,
         CONF_DASHBOARD_ENTITIES: dashboard_entities,
+        CONF_DASHBOARD_PAGES: dashboard_pages,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard_dynamic_homepage,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard_entity_display_overrides,
         CONF_ACTIONS: actions,
@@ -473,6 +483,7 @@ def _feature_input(
             CONF_ALARM_PAGE_ENTITY_ID: dashboard[CONF_ALARM_PAGE_ENTITY_ID],
             CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],
             CONF_DASHBOARD_ENTITIES: dashboard[CONF_DASHBOARD_ENTITIES],
+            CONF_DASHBOARD_PAGES: dashboard[CONF_DASHBOARD_PAGES],
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: dashboard[CONF_DASHBOARD_DYNAMIC_HOMEPAGE],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: dashboard[
                 CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES

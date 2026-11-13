@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.1.3 - 2026-11-13
+
+### Added
+
+- A pages dialog for the native display. Set up to 8 pages, the status page
+  included, each with a name, a position and its entities. Pages are shown by
+  position, so the status page can be moved as well; the entities of a page
+  appear in the order they are picked and can be dragged into a new order. An
+  entity can be on one page only, and the name `C300X` is kept for the status
+  page. Existing entries open the dialog with their current pages.
+
+### Changed
+
+- The entity-display dialog no longer has **Page** and **Position**; it sets
+  tile size, name and secondary line. The page and position fields of each
+  entity moved to the pages dialog.
+- The weather card always heads the status page. **Weather - Page** and
+  **Weather - Position** are gone, and a placement saved with 2.1.2 is
+  dropped.
+
+### Fixed
+
+- Entities without a page name no longer end up on a separate untitled page
+  that the user cannot name or order: every page is set up in the pages
+  dialog, and pages no longer follow the order their names first appear in.
+
 ## v2.1.2 - 2026-11-13
 
 ### Added

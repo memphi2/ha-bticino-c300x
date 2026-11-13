@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Affichage des entites dashboard",
-        "description": "Definissez la page, la position, la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. Avec une entite meteo selectionnee, Weather - Page et Weather - Position placent la carte meteo parmi les tuiles. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
       },
       "reconfigure": {
         "title": "Reconfigurer BTicino C300X",
@@ -158,7 +158,145 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Affichage des entites dashboard",
-        "description": "Definissez la page, la position, la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. Avec une entite meteo selectionnee, Weather - Page et Weather - Position placent la carte meteo parmi les tuiles. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+      },
+      "user_dashboard_pages": {
+        "title": "Pages de l'ecran",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "sections": {
+          "page_1": {
+            "name": "Page d'etat",
+            "data": {
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          }
+        }
+      },
+      "reconfigure_dashboard_pages": {
+        "title": "Pages de l'ecran",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "sections": {
+          "page_1": {
+            "name": "Page d'etat",
+            "data": {
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          }
+        }
       }
     },
     "abort": {
@@ -182,7 +320,12 @@
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
-      "required": "Ce champ est obligatoire."
+      "required": "Ce champ est obligatoire.",
+      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'etat ; choisissez un autre nom de page.",
+      "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
+      "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
+      "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
+      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
     }
   },
   "options": {
@@ -253,7 +396,76 @@
       },
       "dashboard_entity_display": {
         "title": "Affichage des entites dashboard",
-        "description": "Definissez la page, la position, la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. Avec une entite meteo selectionnee, Weather - Page et Weather - Position placent la carte meteo parmi les tuiles. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+        "description": "Definissez la largeur et la hauteur de la tuile, le nom et la ligne secondaire des entites des pages de l'ecran. La pleine hauteur affiche les boutons de l'entite sur la tuile ; Automatique conserve la taille du type. L'action Alarmo facultative a son propre nom, sans ajout a la vue d'ensemble."
+      },
+      "dashboard_pages": {
+        "title": "Pages de l'ecran",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "sections": {
+          "page_1": {
+            "name": "Page d'etat",
+            "data": {
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Nom",
+              "position": "Position",
+              "entities": "Entites"
+            }
+          }
+        }
       }
     },
     "error": {
@@ -266,7 +478,12 @@
       "invalid_weather_entity": "Selectionnez une entite meteo ou laissez vide.",
       "invalid_audio_gain": "Choisissez un gain audio entre -20 dB et +20 dB.",
       "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
-      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99."
+      "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
+      "dashboard_page_name_reserved": "C300X est le nom interne de la page d'etat ; choisissez un autre nom de page.",
+      "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
+      "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
+      "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
+      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
     }
   },
   "entity": {

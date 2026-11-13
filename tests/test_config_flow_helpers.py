@@ -77,6 +77,7 @@ from custom_components.bticino_c300x.const import (  # noqa: E402
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_FLOW_ACTION,
     CONF_DEVICE_ACTIVATION_ITEM_ADDRESS,
@@ -1003,7 +1004,7 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
-    entity_display_form = asyncio.run(
+    pages_form = asyncio.run(
         flow.async_step_user_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
@@ -1011,8 +1012,12 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
                 CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
                 CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
                 CONF_WEATHER_ENTITY_ID: "weather.home",
-                CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
             }
+        )
+    )
+    entity_display_form = asyncio.run(
+        flow.async_step_user_dashboard_pages(
+            {"page_1": {"entities": ["sensor.temperature"]}}
         )
     )
     result = asyncio.run(
@@ -1029,6 +1034,7 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
     assert feature_form["step_id"] == "user_features"
     assert activation_form["step_id"] == "user_device_activations"
     assert dashboard_form["step_id"] == "user_dashboard"
+    assert pages_form["step_id"] == "user_dashboard_pages"
     assert entity_display_form["step_id"] == "user_dashboard_entity_display"
     assert result["type"] == "create_entry"
     assert result["title"] == "Door"
@@ -1042,8 +1048,10 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             "name": "custom",
             "custom_name": "Outside",
             "secondary": "none",
+            "page": "C300X",
         }
     }
+    assert result["options"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 0}]
     assert calls == [
         "unique:bticino_c300x:c300x.local:8091",
         "abort_check",
@@ -1780,7 +1788,7 @@ def test_feature_schemas_keep_gui_patch_on_dashboard_page() -> None:
     assert CONF_ALARM_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_ALARM_PAGE_ENTITY_ID in _schema_key_names(dashboard_schema)
     assert CONF_WEATHER_ENTITY_ID in _schema_key_names(dashboard_schema)
-    assert CONF_DASHBOARD_ENTITIES in _schema_key_names(dashboard_schema)
+    assert CONF_DASHBOARD_ENTITIES not in _schema_key_names(dashboard_schema)
     assert CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES not in _schema_key_names(
         dashboard_schema
     )
@@ -1999,14 +2007,13 @@ def test_dashboard_schema_keeps_dashboard_fields_on_own_page() -> None:
         {
             CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
             CONF_WEATHER_ENTITY_ID: "weather.home",
-            CONF_DASHBOARD_ENTITIES: ["switch.entry"],
             CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
         }
     )
 
     assert result[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
     assert result[CONF_WEATHER_ENTITY_ID] == "weather.home"
-    assert result[CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
+    assert CONF_DASHBOARD_ENTITIES not in result
     assert result[CONF_ACTIONS_JSON] == '{"standby":{"domain":"button","service":"press"}}'
     assert result[CONF_DEVICE_UI_ENABLED] is True
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is False
@@ -2383,17 +2390,21 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
-    entity_options_form = asyncio.run(
+    pages_form = asyncio.run(
         flow.async_step_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
                 CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
                 CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
                 CONF_WEATHER_ENTITY_ID: "weather.home",
-                CONF_DASHBOARD_ENTITIES: ["switch.entry"],
                 CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
                 CONF_DASHBOARD_PREVENT_RETURN: True,
             }
+        )
+    )
+    entity_options_form = asyncio.run(
+        flow.async_step_dashboard_pages(
+            {"page_1": {}, "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]}}
         )
     )
     result = asyncio.run(
@@ -2411,6 +2422,7 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     assert activation_item_form["step_id"] == "device_activation_item"
     assert activation_manage_form["step_id"] == "device_activations"
     assert dashboard_form["step_id"] == "dashboard"
+    assert pages_form["step_id"] == "dashboard_pages"
     assert entity_options_form["step_id"] == "dashboard_entity_display"
     assert result["type"] == "create_entry"
     assert result["data"][CONF_AGENT_HOST] == "agent.local"
@@ -2438,8 +2450,12 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
     assert result["data"][CONF_DASHBOARD_ENTITIES] == ["switch.entry"]
     assert result["data"][CONF_DASHBOARD_PREVENT_RETURN] is True
     assert result["data"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
-        "switch.entry": {"name": "custom", "custom_name": "Entry"}
+        "switch.entry": {"name": "custom", "custom_name": "Entry", "page": "Doors"}
     }
+    assert result["data"][CONF_DASHBOARD_PAGES] == [
+        {"name": "C300X", "order": 0},
+        {"name": "Doors", "order": 5},
+    ]
     assert result["data"][CONF_ACTIONS] == {
         "standby": {
             "data": {},
@@ -2558,7 +2574,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
     )
-    entity_display_form = asyncio.run(
+    pages_form = asyncio.run(
         flow.async_step_reconfigure_dashboard(
             {
                 CONF_DEVICE_UI_ENABLED: True,
@@ -2566,10 +2582,14 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
                 CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
                 CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
                 CONF_WEATHER_ENTITY_ID: "weather.home",
-                CONF_DASHBOARD_ENTITIES: ["select.forwarding"],
                 CONF_ACTIONS_JSON: "",
                 CONF_DASHBOARD_PREVENT_RETURN: True,
             }
+        )
+    )
+    entity_display_form = asyncio.run(
+        flow.async_step_reconfigure_dashboard_pages(
+            {"page_1": {"entities": ["select.forwarding"]}}
         )
     )
     result = asyncio.run(
@@ -2587,6 +2607,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert activation_item_form["step_id"] == "reconfigure_device_activation_item"
     assert activation_manage_form["step_id"] == "reconfigure_device_activations"
     assert dashboard_form["step_id"] == "reconfigure_dashboard"
+    assert pages_form["step_id"] == "reconfigure_dashboard_pages"
     assert entity_display_form["step_id"] == "reconfigure_dashboard_entity_display"
     assert result["type"] == "abort"
     assert result["data_updates"][CONF_AGENT_HOST] == "agent.local"
@@ -2609,8 +2630,11 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
     assert result["data_updates"][CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] == {
         "select.forwarding": {
             "secondary": "last_changed",
+            "page": "C300X",
         }
     }
+    assert result["data_updates"][CONF_DASHBOARD_ENTITIES] == ["select.forwarding"]
+    assert result["data_updates"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 0}]
     assert calls == ["unique:c300x-stable-id", "mismatch_check", "update"]
 
 

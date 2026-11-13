@@ -224,36 +224,36 @@ detail views.
 
 ## Display Settings
 
-Use **Configure > Display dashboard**, then the entity-display dialog. Choose
-entities and the optional Alarmo quick entity with the normal HA selectors;
-control types come from their actual capabilities, not a manually chosen widget.
+Use **Configure > Display dashboard**, then the pages dialog and the
+entity-display dialog. Choose entities and the optional Alarmo quick entity with
+the normal HA selectors; control types come from their actual capabilities, not
+a manually chosen widget.
 
-Each overview entity has **Page**, **Position**, **Width**, **Height**, name and
-secondary-line settings.
-Use the same page name to group entities; leave it empty for the existing unnamed
-page. Positions run from 0 to 10000, lower first within a page. Existing selections
-keep their original order until you change a position; an emptied position
-returns to the entity's place in the selection. Named pages follow their
-first occurrence in the selected-entity list, after the HA status/weather page.
-Page names are limited to 60 characters; a longer one is cut, and a position
-is rounded to a whole number. A custom name left empty shows the Home Assistant
-name. Missing or unavailable entities retain
-their configuration and show unavailable rather than changing the saved layout.
+The pages dialog has up to 8 pages, one section each:
 
-The first page is the status page: it carries the HA, alarm and time badges
-and, unless placed elsewhere, the weather card. Its internal name is `C300X`,
-and the display shows no title for it. Entities without a page name go to a
-separate unnamed page after it. Give entities the page name `C300X` to put
-their tiles on the status page as well.
+| Field | Meaning |
+| --- | --- |
+| **Name** | Title of the page. The status page has none. |
+| **Position** | Order of the pages, 0 to 10000, lowest first. An emptied position returns to the place of its section (0, 10, 20, ...). |
+| **Entities** | Tiles of the page, in the order they are picked; drag them to reorder. |
 
-With a weather entity selected, the dialog also offers **Weather - Page** and
-**Weather - Position**. Left empty and at 0, the card stays at the top of the
-status page. A position sorts it among the tiles of its page exactly like an
-entity's position, so 15 places it between tiles at 10 and 20. A page name
-moves the card to that page without changing the order of the pages; a page
-that no entity or action uses is created after theirs. The unnamed page cannot
-take the card, because an empty **Weather - Page** means the status page. The
-card always spans the full width.
+The first section is the status page: it carries the HA, alarm and time badges
+and the weather card, at its top. Its internal name is `C300X`, which another
+page cannot use, and the display shows no title for it. Like any other page it
+can be moved with its position. A page needs a name or entities; an entity and
+a page name can each be used once. Page names are limited to 60 characters; a
+longer one is cut and a position is rounded to a whole number. Pages that only
+configured actions use follow the configured pages.
+
+An entry saved before the pages dialog opens it with its existing pages: the
+status page first, then the others in the order their names first appeared,
+10 apart. Entities without a page name keep their untitled page until it is
+given a name or emptied.
+
+The entity-display dialog sets **Width**, **Height**, name and secondary line
+of each tile. A custom name left empty shows the Home Assistant name. Missing or
+unavailable entities retain their configuration and show unavailable rather than
+changing the saved layout.
 
 The optional Alarmo quick entity also gets its name and secondary-line settings,
 even if it is not selected for an overview page. Selecting it does not add it to

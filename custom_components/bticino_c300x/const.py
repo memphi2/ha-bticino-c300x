@@ -23,6 +23,7 @@ CONF_HOMEASSISTANT_MEDIA_USER_BOOTSTRAPPED = "homeassistant_media_user_bootstrap
 CONF_DASHBOARD_PREVENT_RETURN = "dashboard_prevent_return"
 CONF_DASHBOARD_ENTITIES = "dashboard_entities"
 CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES = "dashboard_entity_display_overrides"
+CONF_DASHBOARD_PAGES = "dashboard_pages"
 CONF_DASHBOARD_DYNAMIC_HOMEPAGE = "dashboard_dynamic_homepage"
 CONF_DEVICE_ACTIVATION_MODE = "device_activation_mode"
 CONF_DEVICE_ACTIVATION_FLOW_ACTION = "device_activation_flow_action"

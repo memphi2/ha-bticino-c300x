@@ -14,13 +14,16 @@ from .const import (
     CONF_ALARM_PAGE_ENTITY_ID,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_WEATHER_ENTITY_ID,
 )
 from .dashboard_entities import (
     DASHBOARD_ENTITY_DOMAIN_SET,
+    DashboardPage,
     normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
+    normalize_dashboard_pages,
 )
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
@@ -96,6 +99,16 @@ def configured_dashboard_entities(entry: BticinoC300XConfigEntry) -> tuple[str, 
     """Return selected standard HA entities for the C300X dashboard."""
 
     return _dashboard_entity_ids(entry_config_value(entry, CONF_DASHBOARD_ENTITIES, []))
+
+
+def configured_dashboard_pages(entry: BticinoC300XConfigEntry) -> tuple[DashboardPage, ...]:
+    """Return the configured display pages in display order, or none.
+
+    An entry saved before pages could be set up has none; its pages then
+    follow the first occurrence of their names, as they always did.
+    """
+
+    return normalize_dashboard_pages(entry_config_value(entry, CONF_DASHBOARD_PAGES, []))
 
 
 def configured_dashboard_entity_display_overrides(

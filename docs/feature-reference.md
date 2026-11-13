@@ -210,6 +210,19 @@ first occurrence in the selected-entity list, after the HA status/weather page.
 Page names are limited to 60 characters. Missing or unavailable entities retain
 their configuration and show unavailable rather than changing the saved layout.
 
+The first page is the status page: it carries the HA, alarm and time badges
+and, unless placed elsewhere, the weather card. Its internal name is `C300X`,
+and the display shows no title for it. Entities without a page name go to a
+separate unnamed page after it. Give entities the page name `C300X` to put
+their tiles on the status page as well.
+
+With a weather entity selected, the dialog also offers **Weather - Page** and
+**Weather - Position**. Left empty and at 0, the card stays at the top of the
+status page. A position sorts it among the tiles of its page exactly like an
+entity's position, so 15 places it between tiles at 10 and 20. A page name
+moves the card to that page; the page is created if no entity uses it yet.
+The card always spans the full width.
+
 The optional Alarmo quick entity also gets its name and secondary-line settings,
 even if it is not selected for an overview page. Selecting it does not add it to
 the overview. Leave the quick entity empty to hide it; no stair-light default is

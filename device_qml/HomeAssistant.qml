@@ -1145,10 +1145,98 @@ Page {
                 }
 
                 Item {
-                    id: weatherCard
                     width: parent.width
-                    height: weatherVisible ? 166 : 0
-                    visible: weatherVisible
+                    height: flowVisible ? safeNumber(flowHeight, 0) : 0
+                    visible: flowVisible
+
+                    Rectangle {
+                        id: flowWrapper
+                        width: flowWidth > 0 ? flowWidth : parent.width
+                        height: flowHeight > 0 ? flowHeight : parent.height
+                        color: flowColor
+
+                        Repeater {
+                            id: flowLineRepeater
+                            model: flowLines
+
+                            PathView {
+                                id: pathView
+                                visible: true
+                                property variant line: modelData
+                                property variant lineColor: modelData.lineColor || modelData.color || "#58d68d"
+                                model: safeNumber(modelData.numberOfDots, 0)
+                                path: Path {
+                                    startX: safeNumber(pathView.line.startX, 0)
+                                    startY: safeNumber(pathView.line.startY, 0)
+                                    PathQuad {
+                                        x: safeNumber(pathView.line.x, 0)
+                                        y: safeNumber(pathView.line.y, 0)
+                                        controlX: safeNumber(pathView.line.controlX, 0)
+                                        controlY: safeNumber(pathView.line.controlY, 0)
+                                    }
+                                }
+                                delegate: Rectangle {
+                                    width: safeNumber(pathView.line.dotWidth, 2)
+                                    height: safeNumber(pathView.line.dotHeight, 2)
+                                    color: pathView.lineColor
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: flowItems
+
+                            Rectangle {
+                                x: safeNumber(modelData.leftMargin, safeNumber(modelData.x, 0))
+                                y: safeNumber(modelData.topMargin, safeNumber(modelData.y, 0))
+                                width: safeNumber(modelData.width, 100)
+                                height: safeNumber(modelData.height, 100)
+                                radius: safeNumber(modelData.radius, 50)
+                                color: modelData.backgroundColor || "transparent"
+                                border.color: modelData.borderColor || "transparent"
+                                border.width: safeNumber(modelData.borderWidth, 2)
+
+                                UbuntuLightText {
+                                    text: (modelData.labelText || modelData.label || "") + trsl.empty
+                                    font.pixelSize: safeNumber(modelData.labelSize, 14)
+                                    font.bold: true
+                                    color: modelData.labelColor || "#8d98a3"
+                                    anchors.top: parent.top
+                                    anchors.topMargin: safeNumber(modelData.labelTopMargin, -20)
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                UbuntuLightText {
+                                    text: (modelData.state || modelData.text || "") + trsl.empty
+                                    font.pixelSize: safeNumber(modelData.textSize, 16)
+                                    font.bold: modelData.textBold === false ? false : true
+                                    color: modelData.textColor || "white"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    anchors.rightMargin: 6
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Flow {
+                    id: itemColumn
+                    width: parent.width
+                    spacing: 10
+                    visible: items.length > 0
+                    height: visible ? implicitHeight : 0
+                    property int tileWidth: (width - spacing) / 2
+
+                    Component {
+                        id: weatherTileComponent
+
+                Item {
+                    id: weatherCard
+                    anchors.fill: parent
                     property int tileSpacing: 10
                     property int tileLeft: 18
                     property int tileWidth: (width - (tileLeft * 2) - (tileSpacing * 2)) / 3
@@ -1355,93 +1443,7 @@ Page {
                         elide: Text.ElideRight
                     }
                 }
-
-                Item {
-                    width: parent.width
-                    height: flowVisible ? safeNumber(flowHeight, 0) : 0
-                    visible: flowVisible
-
-                    Rectangle {
-                        id: flowWrapper
-                        width: flowWidth > 0 ? flowWidth : parent.width
-                        height: flowHeight > 0 ? flowHeight : parent.height
-                        color: flowColor
-
-                        Repeater {
-                            id: flowLineRepeater
-                            model: flowLines
-
-                            PathView {
-                                id: pathView
-                                visible: true
-                                property variant line: modelData
-                                property variant lineColor: modelData.lineColor || modelData.color || "#58d68d"
-                                model: safeNumber(modelData.numberOfDots, 0)
-                                path: Path {
-                                    startX: safeNumber(pathView.line.startX, 0)
-                                    startY: safeNumber(pathView.line.startY, 0)
-                                    PathQuad {
-                                        x: safeNumber(pathView.line.x, 0)
-                                        y: safeNumber(pathView.line.y, 0)
-                                        controlX: safeNumber(pathView.line.controlX, 0)
-                                        controlY: safeNumber(pathView.line.controlY, 0)
-                                    }
-                                }
-                                delegate: Rectangle {
-                                    width: safeNumber(pathView.line.dotWidth, 2)
-                                    height: safeNumber(pathView.line.dotHeight, 2)
-                                    color: pathView.lineColor
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: flowItems
-
-                            Rectangle {
-                                x: safeNumber(modelData.leftMargin, safeNumber(modelData.x, 0))
-                                y: safeNumber(modelData.topMargin, safeNumber(modelData.y, 0))
-                                width: safeNumber(modelData.width, 100)
-                                height: safeNumber(modelData.height, 100)
-                                radius: safeNumber(modelData.radius, 50)
-                                color: modelData.backgroundColor || "transparent"
-                                border.color: modelData.borderColor || "transparent"
-                                border.width: safeNumber(modelData.borderWidth, 2)
-
-                                UbuntuLightText {
-                                    text: (modelData.labelText || modelData.label || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.labelSize, 14)
-                                    font.bold: true
-                                    color: modelData.labelColor || "#8d98a3"
-                                    anchors.top: parent.top
-                                    anchors.topMargin: safeNumber(modelData.labelTopMargin, -20)
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-
-                                UbuntuLightText {
-                                    text: (modelData.state || modelData.text || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.textSize, 16)
-                                    font.bold: modelData.textBold === false ? false : true
-                                    color: modelData.textColor || "white"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 6
-                                    anchors.rightMargin: 6
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
                     }
-                }
-
-                Flow {
-                    id: itemColumn
-                    width: parent.width
-                    spacing: 10
-                    visible: items.length > 0
-                    height: visible ? implicitHeight : 0
-                    property int tileWidth: (width - spacing) / 2
 
                     Component {
                         id: mixedImageTileComponent
@@ -1795,6 +1797,7 @@ Page {
                             property bool isSlider: tileItem.kind === "slider"
                             property bool isChoice: tileItem.kind === "choice"
                             property bool isImage: tileItem.kind === "image"
+                            property bool isWeather: tileItem.kind === "weather"
                             property bool hasControls: tileItem.controls !== undefined
                             property bool isSensor: tileItem.details !== undefined && (tileItem.details.type === "sensor" || tileItem.details.type === "binary_sensor")
                             // Geometry must test the same keys in the same order as the
@@ -1804,15 +1807,15 @@ Page {
                             property string sizeW: tileItem.tile_width || ""
                             property string sizeH: tileItem.tile_height || ""
                             property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
-                            width: isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
-                            height: isSensor || hasControls ? (tall ? 94 : 64) : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58))))
+                            width: isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            height: isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {
                                 anchors.fill: parent
-                                enabled: mixedTile.hasControls || mixedTile.isSensor || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
+                                enabled: mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
                                 opacity: enabled ? 1 : 0.45
                                 property variant tileItem: mixedTile.tileItem
-                                sourceComponent: mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
+                                sourceComponent: mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isWeather ? weatherTileComponent : mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
                             }
                         }
                     }

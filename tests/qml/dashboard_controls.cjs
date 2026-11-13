@@ -452,4 +452,28 @@ assert.equal(sized[0].tile_width, "full"); assert.equal(sized[0].tile_height, "f
 assert.equal(sized[1].tile_width, undefined, "automatic adds no key");
 p.controlFeedback = [];
 console.log("Tile controls passed");
+// The weather card is one ordered item of its page.
+const kinds = list => Array.from(list, i => i.kind + (i.entity_id ? ":" + i.entity_id : ""));
+const sw = id => ({kind: "switch", domain: "c300x", entity_id: id});
+const weatherData = {available: true, temperature: "12 C"};
+assert.deepEqual(kinds(Api.dashboardMixedItems([sw("switch.a"), {kind: "weather"}, sw("switch.b")])),
+    ["switch:switch.a", "weather", "switch:switch.b"], "a weather item keeps its configured place");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([sw("switch.a"), {kind: "weather"}]), weatherData)),
+    ["switch:switch.a", "weather"]);
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([sw("switch.a")]), weatherData)),
+    ["weather", "switch:switch.a"], "an older Home Assistant without the item still shows the card on top");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([{kind: "weather"}, sw("switch.a")]), null)),
+    ["switch:switch.a"], "no weather data leaves no empty card");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([{kind: "weather"}, {kind: "weather"}]), weatherData)),
+    ["weather"], "the card is never shown twice");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced([], undefined)), []);
+p.dashboardPages = [{items: [sw("switch.a"), {kind: "weather"}], weather: weatherData}];
+p.currentPageIndex = 0; p.pageCount = 1;
+Api.loadDashboardPage(p.status, p);
+assert.deepEqual(kinds(p.items), ["switch:switch.a", "weather"]);
+assert.equal(p.weatherVisible, true);
+p.refreshSelectedItem();
+p.dashboardPages = []; p.items = [];
+console.log("Weather placement passed");
+
 

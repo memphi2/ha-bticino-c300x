@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "6c18d458c594495f37e10dc8a58b8e1bb1ff64f6998f03fc8296e660098298c4",
-    "js/c300x_ha.js": "86fba2a408d0568740fcb6eafbfec6f71aa47a01e748ae33aed189b002175dff",
+    "HomeAssistant.qml": "91b0c6f03ade16cc124311951e4042217085720fa286d6775e098e553b0dbeb9",
+    "js/c300x_ha.js": "c33401157e158260d415ae9b49e1ac95ae4c513e0b66e2962d5e0ad17222aedf",
     "js/c300x_i18n.js": "14cac5f6e5e8f20c0dc7a82c9caca4fc32108d35c934481e0701c2b2cd84d9b4",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -545,7 +545,7 @@ def test_home_assistant_qml_renders_select_entities_as_choices() -> None:
     assert "Api.dashboardChoiceAction" in home_assistant_qml
     assert "Api.dashboardChoiceOptionLabel(modelData)" in home_assistant_qml
     assert "Api.dashboardChoiceOptionValue(modelData)" in home_assistant_qml
-    assert 'assignDashboardValue(pageItem, "items", dashboardMixedItems(pageData.items))' in dashboard_js
+    assert 'assignDashboardValue(pageItem, "items", dashboardWeatherPlaced(dashboardMixedItems(pageData.items), pageData.weather))' in dashboard_js
     assert "function dashboardChoiceOptions" in dashboard_js
     assert "+ encodeURIComponent(item.entity_id)" in dashboard_js
     assert 'dashboardControl(item, {command: ""}, option, statusItem, pageItem)' in dashboard_js
@@ -663,7 +663,7 @@ def test_home_assistant_tile_size_is_configurable_per_entity() -> None:
     )
     assert height.startswith("isSensor || hasControls ? (tall ? 94 : 64)")
     # Plain switch, button and entity tiles keep 58/64 px unless configured.
-    assert height.endswith('(tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58))))')
+    assert height.endswith('(tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))')
     assert "mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview)" in source
     assert "mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview)" in source
 
@@ -703,6 +703,30 @@ def test_home_assistant_full_height_control_tile_carries_its_buttons() -> None:
     assert "onClicked: openDetails(tileItem)" in compact
     assert "text: itemDetail(tileItem)" in compact
     assert "color: detailColor(tileItem)" in compact
+
+
+def test_home_assistant_weather_card_is_an_ordered_tile() -> None:
+    """The weather card sorts with the tiles instead of sitting above them."""
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    flow = home_assistant_qml[home_assistant_qml.index("id: itemColumn") :]
+    column_head = home_assistant_qml[
+        home_assistant_qml.index("id: contentColumn") : home_assistant_qml.index("id: itemColumn")
+    ]
+    delegate = flow[flow.index("id: mixedTile") :]
+
+    # Exactly one card, and it lives in the flow as a component.
+    assert home_assistant_qml.count("id: weatherCard") == 1
+    assert "id: weatherCard" not in column_head
+    assert flow.index("id: weatherTileComponent") < flow.index("id: weatherCard")
+    assert flow.index("id: weatherCard") < flow.index("id: mixedImageTileComponent")
+    assert 'property bool isWeather: tileItem.kind === "weather"' in delegate
+    assert "isWeather ? 166" in delegate.split("height: ")[1].split("\n")[0]
+    assert "mixedTile.isWeather ? weatherTileComponent" in delegate
+    # A read-only card must not dim while a command is pending.
+    assert "mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline" in delegate
 
 
 def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:

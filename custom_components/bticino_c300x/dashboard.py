@@ -51,6 +51,7 @@ from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
+    dashboard_weather_layout,
 )
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
@@ -171,11 +172,23 @@ async def async_dashboard_payload(
         configured_weather_entity_id(entry),
         language,
     )
-    if weather is not None:
-        main_page["weather"] = weather
-
     main_page["badges"] = badges
     entity_display_overrides = configured_dashboard_entity_display_overrides(entry)
+    if weather is not None:
+        # The card is an ordinary item of its page, so it sorts with the tiles.
+        # Position 0 on the main page is where it has always been.
+        weather_layout = dashboard_weather_layout(
+            entity_display_overrides, configured_weather_entity_id(entry)
+        )
+        weather_page = (
+            _dashboard_page(pages, weather_layout["page"])
+            if "page" in weather_layout
+            else main_page
+        )
+        weather_page["weather"] = weather
+        weather_page["items"].append(
+            {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
+        )
     for index, entity_id in enumerate(configured_dashboard_entities(entry), start=1):
         dashboard_item = _dashboard_item_for_entity(
             hass,

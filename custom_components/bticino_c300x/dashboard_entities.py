@@ -73,7 +73,12 @@ def normalize_dashboard_entity_display_overrides(
 
     result: DashboardEntityDisplayOverrides = {}
     for raw_entity_id, raw_options in value.items():
-        entity_id = _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
+        weather_layout = _is_weather_entity_id(raw_entity_id)
+        entity_id = (
+            str(raw_entity_id).strip().lower()
+            if weather_layout
+            else _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
+        )
         if entity_id is None:
             continue
         if not isinstance(raw_options, dict):
@@ -106,6 +111,12 @@ def normalize_dashboard_entity_display_overrides(
             except (TypeError, ValueError, OverflowError):
                 if strict:
                     raise ValueError("invalid dashboard order") from None
+        if weather_layout:
+            # The weather card has a place on the display, nothing else: its
+            # size and texts are its own.
+            if options:
+                result[entity_id] = options
+            continue
         for size_key in DASHBOARD_TILE_SIZE_KEYS:
             size = str(raw_options.get(size_key, "") or "").strip()
             if not size or size == DASHBOARD_TILE_SIZE_AUTO:
@@ -164,6 +175,25 @@ def dashboard_entity_custom_name_override(
     """Return the custom display name for one entity."""
 
     return overrides.get(entity_id, {}).get("custom_name", "")
+
+
+def _is_weather_entity_id(value: Any) -> bool:
+    """Return whether a display-override key names a weather entity."""
+
+    entity_id = str(value or "").strip().lower()
+    domain, _, object_id = entity_id.partition(".")
+    return domain == "weather" and bool(ENTITY_OBJECT_ID_RE.fullmatch(object_id))
+
+
+def dashboard_weather_layout(
+    overrides: DashboardEntityDisplayOverrides,
+    weather_entity_id: str | None,
+) -> dict[str, str]:
+    """Return the configured page and position of the weather card."""
+
+    if not weather_entity_id:
+        return {}
+    return overrides.get(weather_entity_id.strip().lower(), {})
 
 
 def _iter_dashboard_entity_values(value: Any, *, strict: bool) -> tuple[Any, ...]:

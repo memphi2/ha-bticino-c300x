@@ -72,6 +72,8 @@ _DASHBOARD_ENTITY_NAME_FIELD_SUFFIX = " - Name"
 _DASHBOARD_ENTITY_CUSTOM_NAME_FIELD_SUFFIX = " - Custom name"
 _DASHBOARD_ENTITY_SECONDARY_FIELD_SUFFIX = " - Secondary line"
 _DASHBOARD_ENTITY_SIZE_FIELDS = (("width", "Width"), ("height", "Height"))
+_DASHBOARD_WEATHER_PAGE_FIELD = "Weather - Page"
+_DASHBOARD_WEATHER_POSITION_FIELD = "Weather - Position"
 
 
 def dashboard_entity_ids(value: Any) -> list[str]:
@@ -167,16 +169,39 @@ def dashboard_entity_display_form_complete(
     )
 
 
+def _weather_layout_from_fields(
+    user_input: dict[str, Any],
+    existing: dict[str, str],
+) -> dict[str, str]:
+    """Return the weather card's page and position; top of the main page stores nothing."""
+
+    layout: dict[str, str] = {}
+    page = str(user_input.get(_DASHBOARD_WEATHER_PAGE_FIELD, existing.get("page", "")) or "").strip()
+    order = user_input.get(_DASHBOARD_WEATHER_POSITION_FIELD, existing.get("order", "0"))
+    if page:
+        layout["page"] = page
+    if str(order) not in {"0", "0.0"}:
+        layout["order"] = str(order)
+    return layout
+
+
 def dashboard_entity_display_overrides_from_fields(
     user_input: dict[str, Any],
     entity_ids: Any,
     defaults: Any = None,
+    *,
+    weather_entity_id: str = "",
 ) -> dict[str, dict[str, str]]:
     """Build per-entity display overrides from rendered form controls."""
 
     entities = dashboard_entity_ids(entity_ids)
     existing = normalize_dashboard_entity_display_overrides(defaults)
     result: dict[str, dict[str, str]] = {}
+    weather_key = str(weather_entity_id or "").strip().lower()
+    if weather_key:
+        weather_layout = _weather_layout_from_fields(user_input, existing.get(weather_key, {}))
+        if weather_layout:
+            result[weather_key] = weather_layout
     for index, entity_id in enumerate(entities, start=1):
         name = _dashboard_entity_name_display(
             user_input.get(
@@ -290,6 +315,7 @@ def dashboard_entity_display_schema(
     default_dashboard_entities: Any = None,
     default_dashboard_entity_display_overrides: Any = None,
     *, layout_entity_ids: Any = None,
+    weather_entity_id: str = "",
 ) -> vol.Schema:
     """Return the per-entity display options schema."""
 
@@ -298,6 +324,17 @@ def dashboard_entity_display_schema(
         default_dashboard_entity_display_overrides
     )
     fields: dict[Any, Any] = {}
+    weather_key = str(weather_entity_id or "").strip().lower()
+    if weather_key:
+        weather_layout = dashboard_overrides.get(weather_key, {})
+        fields[vol.Optional(
+            _DASHBOARD_WEATHER_PAGE_FIELD,
+            default=weather_layout.get("page", ""),
+        )] = _dashboard_entity_custom_name_selector()
+        fields[vol.Optional(
+            _DASHBOARD_WEATHER_POSITION_FIELD,
+            default=int(weather_layout.get("order", "0")),
+        )] = _dashboard_entity_order_selector()
     for index, entity_id in enumerate(dashboard_entities, start=1):
         entity_overrides = dashboard_overrides.get(entity_id, {})
         if layout_entity_ids is None or entity_id in layout_entity_ids:
@@ -385,6 +422,7 @@ def dashboard_input_defaults(
             dashboard_display_entity_ids(data),
             data.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
                 {} if defaults is None else defaults.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})),
+            weather_entity_id=str(data.get(CONF_WEATHER_ENTITY_ID) or ""),
         )
     )
     data.setdefault(

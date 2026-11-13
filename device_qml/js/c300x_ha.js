@@ -792,7 +792,7 @@ function loadDashboardPage(statusItem, pageItem) {
     var flowItems = listOrEmpty(flow.items)
     var flowLines = listOrEmpty(flow.lines)
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
-    assignDashboardValue(pageItem, "items", dashboardMixedItems(pageData.items))
+    assignDashboardValue(pageItem, "items", dashboardWeatherPlaced(dashboardMixedItems(pageData.items), pageData.weather))
     applyWeather(pageItem, pageData.weather)
     assignDashboardValue(pageItem, "flowItems", flowItems)
     assignDashboardValue(pageItem, "flowLines", flowLines)
@@ -809,6 +809,22 @@ function loadDashboardPage(statusItem, pageItem) {
         statusItem.text = uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + " " + uiText(pageItem, "status_loaded")
         statusItem.color = "#58d68d"
     }
+}
+
+function dashboardWeatherPlaced(items, weather) {
+    var present = weather && weather.available !== undefined
+    var result = []
+    var placed = false
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].kind !== "weather") {
+            result.push(items[i])
+        } else if (present && !placed) {
+            result.push(items[i])
+            placed = true
+        }
+    }
+    if (present && !placed) result.unshift({kind: "weather"})
+    return result
 }
 
 function currentDashboardPage(pageItem) {
@@ -904,6 +920,8 @@ function dashboardMixedItems(source) {
             normalized = dashboardChoices([source[i]])
         } else if (kind === "image") {
             normalized = dashboardImages([source[i]])
+        } else if (kind === "weather") {
+            normalized = [{kind: "weather"}]
         } else {
             normalized = dashboardItems([source[i]], kind || "entity")
         }

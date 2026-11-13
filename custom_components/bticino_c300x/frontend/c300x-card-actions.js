@@ -8,12 +8,14 @@ export class C300XCardActions {
     return this._pendingDeviceActions.has(key);
   }
 
-  _currentAction() {
+  _currentAction(includeMedia = false) {
     const card = this._card;
     const generation = card._resourceGeneration;
     const lifecycle = card._lifecycle;
+    const mediaGeneration = card._mediaGeneration;
     return () => !card._disposed && card._resourceGeneration === generation
-      && card._lifecycle === lifecycle;
+      && card._lifecycle === lifecycle
+      && (!includeMedia || card._mediaGeneration === mediaGeneration);
   }
 
   async handleDeviceAction(key) {
@@ -65,7 +67,7 @@ export class C300XCardActions {
         return;
       }
       if (action === "answer") {
-        const isCurrent = this._currentAction();
+        const isCurrent = this._currentAction(true);
         lifecycle.answeringDoorbell = true;
         try {
           await this.answerDoorbellCall();
@@ -79,8 +81,10 @@ export class C300XCardActions {
         } catch (err) {
           if (isCurrent()) card._error = err?.message || `${err}`;
         } finally {
-          lifecycle.answeringDoorbell = false;
-          if (isCurrent()) card._updateState();
+          if (isCurrent()) {
+            lifecycle.answeringDoorbell = false;
+            card._updateState();
+          }
         }
         return;
       }
@@ -113,8 +117,10 @@ export class C300XCardActions {
   async startHomeCallAudio() {
     const card = this._card;
     const lifecycle = card._lifecycle;
-    const isCurrent = this._currentAction();
-    if (card._disposed || card._webrtc.running || lifecycle.startingCall) {
+    const isCurrent = this._currentAction(true);
+    if (card._disposed || card._webrtc.running || card._talkbackStarting
+      || card._transitionWebrtc || lifecycle.answeringDoorbell
+      || lifecycle.hangupInProgress || lifecycle.startingCall) {
       return;
     }
     card._lifecycle.startingCall = true;
@@ -125,26 +131,31 @@ export class C300XCardActions {
     try {
       await card._startTalkback({ homeCall: true });
     } finally {
-      lifecycle.startingCall = false;
-      if (isCurrent()) card._updateState();
+      if (isCurrent()) {
+        lifecycle.startingCall = false;
+        card._updateState();
+      }
     }
   }
 
   async _withHangupGuard(run) {
     const card = this._card;
     const lifecycle = card._lifecycle;
-    const isCurrent = this._currentAction();
     if (card._disposed || lifecycle.hangupInProgress) {
       return;
     }
+    card._cancelPendingMediaStart?.();
+    const isCurrent = this._currentAction(true);
     lifecycle.hangupInProgress = true;
     lifecycle.startingCall = false;
     let ok = true;
     try {
       ok = await run(isCurrent);
     } finally {
-      lifecycle.hangupInProgress = false;
-      if (isCurrent()) card._closePeer(ok);
+      if (isCurrent()) {
+        lifecycle.hangupInProgress = false;
+        card._closePeer(ok);
+      }
     }
   }
 
@@ -180,6 +191,18 @@ export class C300XCardActions {
             if (isCurrent()) card._error = err?.message || `${err}`;
             ok = false;
           }
+        }
+        if (!isCurrent()) {
+          // A replacement session on this device must not inherit the old
+          // session's stop command. Only continue cleanup when the card now
+          // belongs to a different device and the old target is still distinct.
+          let currentTarget;
+          try {
+            currentTarget = card._serviceData();
+          } catch (_error) {
+            return ok;
+          }
+          if (currentTarget.entry_id === target?.data.entry_id) return ok;
         }
         await this.stopDoorbellVideo(target);
       } catch (err) {
@@ -240,7 +263,7 @@ export class C300XCardActions {
 
   async hangupDoorbellCall({ closePeer = true, target } = {}) {
     const card = this._card;
-    const isCurrent = this._currentAction();
+    const isCurrent = this._currentAction(true);
     const hass = target === undefined ? card._hass : target?.hass;
     if (!hass) {
       return false;

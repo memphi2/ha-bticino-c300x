@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.helpers import selector
+
 from .config_flow_forms import (
     actions_json as _actions_json,
 )
@@ -157,14 +159,17 @@ def dashboard_entity_display_form_complete(
     user_input: dict[str, Any] | None,
     entity_ids: Any,
 ) -> bool:
-    """Return whether the per-entity display controls were rendered and posted."""
+    """Return whether the per-entity display controls were rendered and posted.
+
+    The custom name is a text field that Home Assistant leaves out when it is
+    empty, so only the two selects show that the controls were posted.
+    """
 
     if user_input is None:
         return True
     entities = dashboard_entity_ids(entity_ids)
     return all(
         _dashboard_entity_name_field(index, entity_id) in user_input
-        and _dashboard_entity_custom_name_field(index, entity_id) in user_input
         and _dashboard_entity_secondary_field(index, entity_id) in user_input
         for index, entity_id in enumerate(entities, start=1)
     )
@@ -328,9 +333,9 @@ def dashboard_entity_display_schema(
     weather_key = str(weather_entity_id or "").strip().lower()
     if weather_key:
         weather_layout = dashboard_overrides.get(weather_key, {})
-        fields[vol.Optional(
+        fields[_optional_suggested(
             _DASHBOARD_WEATHER_PAGE_FIELD,
-            default=weather_layout.get("page", ""),
+            weather_layout.get("page", ""),
         )] = _dashboard_entity_custom_name_selector()
         fields[vol.Optional(
             _DASHBOARD_WEATHER_POSITION_FIELD,
@@ -339,9 +344,9 @@ def dashboard_entity_display_schema(
     for index, entity_id in enumerate(dashboard_entities, start=1):
         entity_overrides = dashboard_overrides.get(entity_id, {})
         if layout_entity_ids is None or entity_id in layout_entity_ids:
-            fields[vol.Optional(
+            fields[_optional_suggested(
                 _dashboard_entity_layout_field(index, entity_id, "Page"),
-                default=entity_overrides.get("page", ""),
+                entity_overrides.get("page", ""),
             )] = _dashboard_entity_custom_name_selector()
             fields[vol.Optional(
                 _dashboard_entity_layout_field(index, entity_id, "Position"),
@@ -362,9 +367,9 @@ def dashboard_entity_display_schema(
             )
         ] = _dashboard_entity_name_display_selector()
         fields[
-            vol.Optional(
+            _optional_suggested(
                 _dashboard_entity_custom_name_field(index, entity_id),
-                default=entity_overrides.get("custom_name", ""),
+                entity_overrides.get("custom_name", ""),
             )
         ] = _dashboard_entity_custom_name_selector()
         fields[
@@ -377,6 +382,38 @@ def dashboard_entity_display_schema(
             )
         ] = _dashboard_entity_secondary_info_selector()
     return vol.Schema(fields)
+
+
+def dashboard_entity_display_form(
+    dashboard_input: dict[str, Any],
+    overrides: Any = None,
+) -> vol.Schema:
+    """Return the entity-display form for the chosen dashboard settings."""
+
+    return dashboard_entity_display_schema(
+        dashboard_display_entity_ids(dashboard_input),
+        overrides,
+        layout_entity_ids=dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
+        weather_entity_id=str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or ""),
+    )
+
+
+def dashboard_entity_display_input(
+    dashboard_input: dict[str, Any],
+    user_input: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge a posted entity-display form into the dashboard settings.
+
+    Home Assistant's form leaves out a text field the user emptied, so a text
+    field the form showed and the post lacks is stored empty.
+    """
+
+    cleared = {
+        str(key): ""
+        for key, field in dashboard_entity_display_form(dashboard_input).schema.items()
+        if isinstance(field, selector.TextSelector) and str(key) not in user_input
+    }
+    return {**dashboard_input, **cleared, **user_input}
 
 
 def dashboard_input_defaults(

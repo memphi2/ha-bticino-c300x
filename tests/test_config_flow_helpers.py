@@ -2057,9 +2057,12 @@ def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -
     )
 
     result = schema({})
+    custom_name = next(key for key in schema.schema if key == "1. Temperature - Custom name")
 
     assert result["1. Temperature - Name"] == "custom"
-    assert result["1. Temperature - Custom name"] == "Outside"
+    # A suggested value prefills the field and still lets the user empty it.
+    assert "1. Temperature - Custom name" not in result
+    assert custom_name.description == {"suggested_value": "Outside"}
     assert result["1. Temperature - Secondary line"] == "none"
 
 
@@ -2073,6 +2076,15 @@ def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields(
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
             "1. Temperature - Name": "friendly_name",
             "1. Temperature - Custom name": "",
+            "1. Temperature - Secondary line": "state",
+        },
+        ["sensor.temperature"],
+    )
+    # Home Assistant leaves an empty custom name out of the post.
+    assert _dashboard_entity_display_form_complete(
+        {
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            "1. Temperature - Name": "friendly_name",
             "1. Temperature - Secondary line": "state",
         },
         ["sensor.temperature"],

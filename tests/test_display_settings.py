@@ -5,8 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from custom_components.bticino_c300x.config_flow import (
+    BticinoC300XConfigFlow,
+    BticinoC300XOptionsFlow,
+)
 from custom_components.bticino_c300x.config_flow_dashboard import (
     dashboard_display_entity_ids,
+    dashboard_entity_display_form,
+    dashboard_entity_display_form_complete,
+    dashboard_entity_display_input,
     dashboard_entity_display_overrides_from_fields,
     dashboard_entity_display_schema,
     dashboard_input_defaults,
@@ -18,6 +25,25 @@ from custom_components.bticino_c300x.dashboard import (
 from custom_components.bticino_c300x.dashboard_entities import (
     normalize_dashboard_entity_display_overrides,
 )
+from custom_components.bticino_c300x.schema_compat import vol
+
+
+def post_like_home_assistant(schema, changes=None):
+    """Post a form the way Home Assistant's frontend and flow manager do.
+
+    The frontend prefills suggested values and defaults, leaves out every empty
+    field, and the flow manager validates the rest against the schema.
+    """
+
+    data = {}
+    for key in schema.schema:
+        suggested = (key.description or {}).get("suggested_value")
+        if suggested is not None:
+            data[str(key)] = suggested
+        elif key.default is not vol.UNDEFINED:
+            data[str(key)] = key.default()
+    data.update(changes or {})
+    return schema({name: value for name, value in data.items() if value not in (None, "")})
 
 
 def test_layout_fields_roundtrip_and_clear_without_losing_names():
@@ -30,18 +56,106 @@ def test_layout_fields_roundtrip_and_clear_without_losing_names():
             "order": "5",
         }
     }
-    schema = dashboard_entity_display_schema(["light.room"], old)
-    posted = schema({})
+    settings = {
+        "device_ui_enabled": True,
+        "dashboard_entities": ["light.room"],
+        "dashboard_entity_display_overrides": old,
+    }
+    schema = dashboard_entity_display_form(settings, old)
+    posted = post_like_home_assistant(schema)
     assert posted["1. Room - Page"] == "Study"
     assert posted["1. Room - Position"] == 5
-    result = dashboard_entity_display_overrides_from_fields(posted, ["light.room"], old)
-    assert normalize_dashboard_entity_display_overrides(result, strict=True) == old
-    posted["1. Room - Page"] = ""
-    posted["1. Room - Position"] = 10
-    result = dashboard_entity_display_overrides_from_fields(posted, ["light.room"], old)
-    assert result == {
+    result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
+    overrides = result["dashboard_entity_display_overrides"]
+    assert normalize_dashboard_entity_display_overrides(overrides, strict=True) == old
+    posted = post_like_home_assistant(schema, {"1. Room - Page": "", "1. Room - Position": 10})
+    result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
+    assert result["dashboard_entity_display_overrides"] == {
         "light.room": {"name": "custom", "custom_name": "Desk", "secondary": "none"}
     }
+
+
+def test_emptied_text_fields_are_stored_empty():
+    # Home Assistant's frontend leaves an emptied field out of the post, so the
+    # saved value must not come back as a default.
+    saved = {
+        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
+        "weather.home": {"page": "Outside"},
+    }
+    settings = {
+        "device_ui_enabled": True,
+        "weather_entity_id": "weather.home",
+        "dashboard_entities": ["light.room"],
+        "dashboard_entity_display_overrides": saved,
+    }
+    schema = dashboard_entity_display_form(settings, saved)
+    emptied = {"Weather - Page": "", "1. Room - Page": "", "1. Room - Custom name": ""}
+    posted = post_like_home_assistant(schema, emptied)
+    assert not set(emptied) & set(posted)
+    assert dashboard_entity_display_form_complete(posted, ["light.room"])
+
+    result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
+
+    assert result["dashboard_entity_display_overrides"] == {"light.room": {"name": "custom"}}
+    # Untouched, the same form keeps everything.
+    kept = dashboard_input_defaults(
+        dashboard_entity_display_input(settings, post_like_home_assistant(schema))
+    )
+    assert kept["dashboard_entity_display_overrides"] == saved
+
+
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
+    saved = {
+        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
+        "weather.home": {"page": "Outside"},
+    }
+    dashboard = {
+        "device_ui_enabled": True,
+        "weather_entity_id": "weather.home",
+        "dashboard_entities": ["light.room"],
+    }
+    entry = SimpleNamespace(
+        data={**dashboard, "dashboard_entity_display_overrides": saved},
+        options={},
+        runtime_data=None,
+    )
+
+    async def placeholders(_entry):
+        return {}
+
+    async def finish(*_args):
+        return {"type": "finished"}
+
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.config_flow._async_qml_patch_description_placeholders",
+        placeholders,
+    )
+    if flow_kind == "options":
+        flow = BticinoC300XOptionsFlow(entry)
+        flow._feature_options = {"video_enabled": False}
+        flow._async_create_options_entry_from_dashboard = finish
+        dashboard_step = flow.async_step_dashboard
+        display_step = flow.async_step_dashboard_entity_display
+    else:
+        flow = BticinoC300XConfigFlow()
+        flow._get_reconfigure_entry = lambda: entry
+        flow._reconfigure_feature_data = {"video_enabled": False}
+        flow._async_finish_reconfigure_from_dashboard = finish
+        dashboard_step = flow.async_step_reconfigure_dashboard
+        display_step = flow.async_step_reconfigure_dashboard_entity_display
+    flow.async_show_form = lambda **kwargs: kwargs
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_like_home_assistant(
+        form["data_schema"],
+        {"Weather - Page": "", "1. Room - Page": "", "1. Room - Custom name": ""},
+    )
+    result = asyncio.run(display_step(posted))
+
+    stored = flow._dashboard_options if flow_kind == "options" else flow._reconfigure_dashboard_input
+    assert result == {"type": "finished"}
+    assert stored["dashboard_entity_display_overrides"] == {"light.room": {"name": "custom"}}
 
 
 @pytest.mark.parametrize(
@@ -320,8 +434,8 @@ def test_placing_the_weather_card_keeps_the_order_of_the_pages():
 
 def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
     schema = dashboard_entity_display_schema(["light.one"], {}, weather_entity_id="weather.home")
-    posted = schema({})
-    assert posted["Weather - Page"] == ""
+    posted = post_like_home_assistant(schema)
+    assert "Weather - Page" not in posted
     assert posted["Weather - Position"] == 0
     assert dashboard_entity_display_overrides_from_fields(
         posted, ["light.one"], {}, weather_entity_id="weather.home"
@@ -334,7 +448,9 @@ def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
     )
     assert saved == {"weather.home": {"page": "Outside", "order": "25"}}
     assert normalize_dashboard_entity_display_overrides(saved, strict=True) == saved
-    reopened = dashboard_entity_display_schema(["light.one"], saved, weather_entity_id="weather.home")({})
+    reopened = post_like_home_assistant(
+        dashboard_entity_display_schema(["light.one"], saved, weather_entity_id="weather.home")
+    )
     assert (reopened["Weather - Page"], reopened["Weather - Position"]) == ("Outside", 25)
 
     # No weather entity: no fields, and a layout saved for an old one is dropped.
@@ -360,7 +476,6 @@ def test_media_player_is_a_display_tile_but_not_an_alarm_quick_action():
         alarm_page_entity_id,
         dashboard_entity_ids,
     )
-    from custom_components.bticino_c300x.schema_compat import vol
 
     assert dashboard_entity_ids(["media_player.kitchen"]) == ["media_player.kitchen"]
     with pytest.raises(vol.Invalid):

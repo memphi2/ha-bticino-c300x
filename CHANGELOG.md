@@ -49,6 +49,9 @@
 - Fan speed minus/plus moves to the fan's next speed. It stepped by one
   percent, and a fan rounds a percentage up to its next speed, so on a fan with
   few speeds minus never lowered it.
+- Emptying a page name or a custom name in the entity-display dialog clears it.
+  Home Assistant leaves an emptied field out of the form it sends, so the saved
+  value came back.
 - A delayed status answer during camera reconciliation can no longer close a
   doorbell session that is just starting. Closing a go2rtc session also closes
   its websocket on current Home Assistant versions, which wrap it.

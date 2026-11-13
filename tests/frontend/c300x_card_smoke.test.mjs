@@ -561,6 +561,71 @@ test("microphone permission resolving after disposal cannot restart media", asyn
   }
 });
 
+test("a pending ring answer cannot start media on a reconfigured camera", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-answer-reconfigure");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card._ensureDoorbellPreview = async () => {};
+  const hass = fakeHass({ cameraEntity: { state: "idle", attributes: {
+    media_primary_action: "answer_ring", media_state: "ring_pending",
+  } } });
+  hass.entities["camera.second"] = { device_id: "device-2", platform: "bticino_c300x" };
+  hass.devices["device-2"] = { config_entry_id: "entry-2" };
+  hass.states["camera.second"] = { state: "idle", attributes: { media_state: "idle" } };
+  let answer;
+  const calls = [];
+  hass.callService = (domain, service, data) => {
+    calls.push([service, data.entry_id]);
+    return new Promise((resolve) => { answer = resolve; });
+  };
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = hass;
+  const answering = card._actions.handlePrimaryAction();
+  card.setConfig({ entity: "camera.second" });
+  const starts = [];
+  card._startTalkback = async () => { starts.push(card._resolvedCameraEntityId()); };
+  answer();
+  await answering;
+
+  assert.deepEqual(calls, [["answer_doorbell_call", "entry-1"]]);
+  assert.deepEqual(starts, []);
+  assert.equal(card._lifecycle.doorbellAnswered, false);
+  card.disconnectedCallback();
+});
+
+test("a pending ring hangup cannot stop or close a reconfigured camera", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-hangup-reconfigure");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  const hass = fakeHass();
+  hass.entities["camera.second"] = { device_id: "device-2", platform: "bticino_c300x" };
+  hass.devices["device-2"] = { config_entry_id: "entry-2" };
+  hass.states["camera.second"] = { state: "idle", attributes: { media_state: "idle" } };
+  let hangup;
+  const calls = [];
+  hass.callService = async (domain, service, data) => {
+    calls.push([service, data.entry_id]);
+    if (service === "hangup_doorbell_call") await new Promise((resolve) => { hangup = resolve; });
+  };
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  card.hass = hass;
+  card._lifecycle.doorbellAnswered = true;
+  const hangingUp = card._actions.hangupDoorstation();
+  card.setConfig({ entity: "camera.second" });
+  let closes = 0;
+  card._webrtc.close = () => { closes++; };
+  hangup();
+  await hangingUp;
+
+  assert.deepEqual(calls, [
+    ["hangup_doorbell_call", "entry-1"], ["stop_doorbell_video", "entry-1"],
+  ]);
+  assert.equal(closes, 0);
+  card.disconnectedCallback();
+});
+
 test("doorbell answer transition promotes when the cloud session receives video", async () => {
   const registry = installFakeDom();
 
@@ -989,4 +1054,60 @@ test("doorbell card coalesces unchanged hass updates into one animation frame", 
   frames.shift()();
 
   assert.equal(renderCalls, 2);
+});
+
+test("primary hangup remains available while ring answer waits for microphone permission", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?primary-hangup-pending-microphone");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const card = new Card();
+  let grant;
+  let acknowledge;
+  let answering;
+  try {
+    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
+      mediaDevices: { getUserMedia: () => new Promise((resolve) => { grant = resolve; }) },
+    } });
+    card._ensureDoorbellPreview = async () => {};
+    card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+    const cameraEntity = { state: "idle", attributes: {
+      media_primary_action: "answer_ring", media_state: "ring_pending",
+    } };
+    const hass = fakeHass({ cameraEntity });
+    const calls = [];
+    hass.callService = async (_domain, service) => {
+      calls.push(service);
+      if (service === "answer_doorbell_call") {
+        await new Promise((resolve) => { acknowledge = resolve; });
+      }
+    };
+    card.hass = hass;
+    card._webrtc.start = async () => {};
+
+    answering = card._actions.handlePrimaryAction();
+    await card._actions.handlePrimaryAction();
+    assert.deepEqual(calls, ["answer_doorbell_call"], "answer taps remain coalesced");
+    acknowledge();
+    await new Promise(setImmediate);
+    assert.equal(typeof grant, "function");
+    assert.equal(card._lifecycle.answeringDoorbell, true);
+
+    cameraEntity.attributes.media_state = "ring_active";
+    cameraEntity.attributes.media_primary_action = "hangup";
+    card.hass = hass;
+    assert.equal(card._doorstationView().action, "hang_up");
+    assert.equal(card._actionButtonEl.disabled, false);
+    await card._actionButtonEl.dispatch("click");
+    assert.deepEqual(calls, [
+      "answer_doorbell_call", "hangup_doorbell_call", "stop_doorbell_video",
+    ]);
+  } finally {
+    card.disconnectedCallback();
+    acknowledge?.();
+    grant?.({ getTracks: () => [{ stop() {} }], getAudioTracks: () => [] });
+    await answering;
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor);
+    else delete globalThis.navigator;
+  }
 });

@@ -186,6 +186,7 @@ function feedbackState(entry) {
     if (!entry) return ""
     var age = Date.now() - (entry.at || 0)
     if (age >= FEEDBACK_DISCARD_MS) return ""
+    if (entry.expected && entry.expected.stateless) return entry.state
     if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
     return entry.state
 }
@@ -204,18 +205,26 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "open_cover" || control.command === "close_cover" || control.command === "stop_cover") {
         return {command: control.command}
     }
+    if (control.command === "media_play_pause") {
+        return {command: control.command, playing: control.playing !== true}
+    }
+    if (control.command === "media_previous_track" || control.command === "media_next_track") {
+        return {command: control.command, stateless: true}
+    }
     return null
 }
 
 function dashboardExpectationMatches(item, expected) {
-    if (!item || item.available === false || !expected) return false
+    if (!item || item.available === false || !expected || expected.stateless) return false
     if (expected.command === "toggle") return item.state === expected.value
     if (expected.power !== undefined && item.state !== expected.power) return false
+    if (expected.power === false) return true
     var activity = item.details ? item.details.activity : ""
     if (expected.command === "open_cover") return activity === "opening" || (item.details && item.details.position === 100)
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
+    if (expected.playing !== undefined) return Boolean(item.details) && item.details.playing === expected.playing
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
         if (control.command !== expected.command || control.value === null || control.value === undefined) continue
@@ -792,7 +801,7 @@ function loadDashboardPage(statusItem, pageItem) {
     var flowItems = listOrEmpty(flow.items)
     var flowLines = listOrEmpty(flow.lines)
     assignDashboardValue(pageItem, "badges", listOrEmpty(pageData.badges))
-    assignDashboardValue(pageItem, "items", dashboardMixedItems(pageData.items))
+    assignDashboardValue(pageItem, "items", dashboardWeatherPlaced(dashboardMixedItems(pageData.items), pageData.weather))
     applyWeather(pageItem, pageData.weather)
     assignDashboardValue(pageItem, "flowItems", flowItems)
     assignDashboardValue(pageItem, "flowLines", flowLines)
@@ -809,6 +818,22 @@ function loadDashboardPage(statusItem, pageItem) {
         statusItem.text = uiText(pageItem, "page") + " " + (pageItem.currentPageIndex + 1) + " " + uiText(pageItem, "status_loaded")
         statusItem.color = "#58d68d"
     }
+}
+
+function dashboardWeatherPlaced(items, weather) {
+    var present = weather && weather.available !== undefined
+    var result = []
+    var placed = false
+    for (var i = 0; i < items.length; i++) {
+        if (items[i].kind !== "weather") {
+            result.push(items[i])
+        } else if (present && !placed) {
+            result.push(items[i])
+            placed = true
+        }
+    }
+    if (present && !placed) result.unshift({kind: "weather"})
+    return result
 }
 
 function currentDashboardPage(pageItem) {
@@ -904,11 +929,15 @@ function dashboardMixedItems(source) {
             normalized = dashboardChoices([source[i]])
         } else if (kind === "image") {
             normalized = dashboardImages([source[i]])
+        } else if (kind === "weather") {
+            normalized = [{kind: "weather"}]
         } else {
             normalized = dashboardItems([source[i]], kind || "entity")
         }
         if (normalized.length > 0) {
             normalized[0].available = source[i].available !== false
+            if (source[i].tile_width) normalized[0].tile_width = source[i].tile_width
+            if (source[i].tile_height) normalized[0].tile_height = source[i].tile_height
             if (source[i].details) normalized[0].details = source[i].details
             if (source[i].controls !== undefined) {
                 normalized[0].controls = listOrEmpty(source[i].controls)
@@ -971,7 +1000,7 @@ function dashboardVisibleControls(item, section) {
     var result = []
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
-        if (item && item.details && (item.details.type === "light" || item.details.type === "fan") && control.command === "toggle") continue
+        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player") && control.command === "toggle") continue
         if (sections.length > 0 && item.details.type === "light") {
             if (section === "color_mode" && control.command === "color_temp_kelvin") continue
             if (section !== "color_mode" && control.command === "color") continue
@@ -994,6 +1023,46 @@ function dashboardCoverControls(item) {
         }
     }
     return result
+}
+
+var QUICK_PAIR_COMMANDS = ["temperature", "brightness", "percentage", "value", "option"]
+var QUICK_MEDIA_COMMANDS = ["media_previous_track", "media_play_pause", "media_next_track"]
+
+function dashboardQuickControls(item) {
+    var result = []
+    var covers = dashboardCoverControls(item)
+    for (var c = 0; c < covers.length; c++) {
+        result.push({command: covers[c].command, kind: "button", steps: 0})
+    }
+    for (var m = 0; m < QUICK_MEDIA_COMMANDS.length; m++) {
+        if (dashboardControlByCommand(item, QUICK_MEDIA_COMMANDS[m])) {
+            result.push({command: QUICK_MEDIA_COMMANDS[m], kind: "button", steps: 0})
+        }
+    }
+    if (result.length > 0) return result
+    for (var i = 0; i < QUICK_PAIR_COMMANDS.length; i++) {
+        var control = dashboardControlByCommand(item, QUICK_PAIR_COMMANDS[i])
+        if (!control) continue
+        var steps = 1
+        if (control.command === "brightness" || control.command === "percentage") {
+            steps = Math.max(1, Math.round(10 / positiveNumber(control.step, 1)))
+        }
+        result.push({command: control.command, kind: control.kind, steps: -steps})
+        result.push({command: control.command, kind: control.kind, steps: steps})
+        return result
+    }
+    return result
+}
+
+function dashboardCycleOption(control, direction) {
+    var options = control ? listOrEmpty(control.options) : []
+    if (options.length === 0) return null
+    var current = -1
+    for (var i = 0; i < options.length; i++) {
+        if (String(options[i]) === String(control.value)) current = i
+    }
+    var next = current < 0 ? (direction > 0 ? 0 : options.length - 1) : (current + direction + options.length) % options.length
+    return String(options[next])
 }
 
 function dashboardSliders(source) {

@@ -70,7 +70,7 @@ def _ring_dual_rtsp_flow(*, teardown_before_full_play: bool = False) -> str:
 def _on_demand_flow(
     *,
     play_response: str = "200 OK",
-    bt_av_reply: str = "*#*1##",
+    device_media_reply: str = "*#*1##",
     media_closed_before_play_response: bool = False,
     rtp_before_play_response: bool = False,
 ) -> str:
@@ -121,7 +121,7 @@ def _on_demand_flow(
         "2026-06-12 18:00:01.100000 IP 192.0.2.20.40000 > 192.0.2.60.30007: TCP, length 27\n"
         "*7*300#127#0#0#1#10002#0*##\n"
         "2026-06-12 18:00:01.120000 IP 192.0.2.60.30007 > 192.0.2.20.40000: TCP, length 6\n"
-        f"{bt_av_reply}\n"
+        f"{device_media_reply}\n"
         "2026-06-12 18:00:01.300000 IP 198.51.100.20.2 > 192.0.2.60.6554: RTSP, length 80\n"
         "PLAY rtsp://192.0.2.60:6554/doorbell/ RTSP/1.0\r\n"
         + media_closed
@@ -237,11 +237,11 @@ def test_single_on_demand_pcap_check_accepts_media_without_full_stop_sequence() 
     assert failed == []
 
 
-def test_on_demand_pcap_check_rejects_play_500_and_bt_av_nack() -> None:
+def test_on_demand_pcap_check_rejects_play_500_and_device_media_nack() -> None:
     module = _script_module()
     text = _on_demand_flow(
         play_response="500 Error",
-        bt_av_reply="*#*0##",
+        device_media_reply="*#*0##",
         media_closed_before_play_response=True,
     )
 
@@ -256,7 +256,7 @@ def test_on_demand_pcap_check_rejects_play_500_and_bt_av_nack() -> None:
 
     assert "pcap.on_demand.rtsp_play_response_200" in failed
     assert "pcap.on_demand.no_media_closed_before_play_200" in failed
-    assert "pcap.on_demand.bt_av_custom_start_ack" in failed
+    assert "pcap.on_demand.device_media_custom_start_ack" in failed
 
 
 def test_on_demand_pcap_check_rejects_rtp_before_play_200() -> None:

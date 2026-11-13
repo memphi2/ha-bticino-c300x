@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime
 from typing import Any, cast
 
@@ -45,12 +47,13 @@ from .dashboard_config import (
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
-from .dashboard_controls import entity_controls
+from .dashboard_controls import choice_options, entity_controls
 from .dashboard_details import DETAIL_DOMAINS, entity_details
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
+    dashboard_weather_layout,
 )
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
@@ -67,6 +70,15 @@ from .dashboard_labels import (
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
+
+# The agent reads the display's answer, headers included, into one 32 KiB
+# buffer, and an answer that does not fit shows every page as Home Assistant
+# unavailable. The rest of the buffer is left for the headers.
+DASHBOARD_RESPONSE_MAX_BYTES = 30 * 1024
+_DASHBOARD_CHOICE_TRIM_LIMITS = (25, 12, 6, 3, 1)
+_OVERSIZED_DASHBOARDS: set[str] = set()
 
 dt_util: Any
 
@@ -171,9 +183,6 @@ async def async_dashboard_payload(
         configured_weather_entity_id(entry),
         language,
     )
-    if weather is not None:
-        main_page["weather"] = weather
-
     main_page["badges"] = badges
     entity_display_overrides = configured_dashboard_entity_display_overrides(entry)
     for index, entity_id in enumerate(configured_dashboard_entities(entry), start=1):
@@ -204,6 +213,11 @@ async def async_dashboard_payload(
             dashboard_item["_page"] = layout["page"]
         if "order" in layout:
             dashboard_item["_order"] = int(layout["order"])
+        # Absent keys mean "automatic": the display keeps the type's own size.
+        if "width" in layout:
+            dashboard_item["tile_width"] = layout["width"]
+        if "height" in layout:
+            dashboard_item["tile_height"] = layout["height"]
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
 
@@ -219,7 +233,25 @@ async def async_dashboard_payload(
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
 
-    return {
+    if weather is not None:
+        # The card is an ordinary item of its page, so it sorts with the tiles.
+        # Position 0 on the main page is where it has always been. Placed after
+        # the entities and actions, a page only the card uses cannot overtake
+        # theirs.
+        weather_layout = dashboard_weather_layout(
+            entity_display_overrides, configured_weather_entity_id(entry)
+        )
+        weather_page = (
+            _dashboard_page(pages, weather_layout["page"])
+            if "page" in weather_layout
+            else main_page
+        )
+        weather_page["weather"] = weather
+        weather_page["items"].append(
+            {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
+        )
+
+    return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
         "notifications": notification_payload(entry),
@@ -230,7 +262,60 @@ async def async_dashboard_payload(
                 if _dashboard_page_has_content(page)
             ]
         },
-    }
+    })
+
+
+def _fit_dashboard_response(
+    entry: BticinoC300XConfigEntry, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Shorten choice lists, longest first, until the dashboard fits the display.
+
+    Each list is limited on its own, yet several players sharing one long
+    favourites list still add up. A shortened list keeps its first options,
+    all of which the executor still accepts.
+    """
+
+    size = len(json.dumps(payload))
+    if size > DASHBOARD_RESPONSE_MAX_BYTES:
+        lists = [
+            holder
+            for page in payload["data"]["pages"]
+            for item in page.get("items", [])
+            for holder in (item, *item.get("controls", []))
+            if holder.get("kind") == "choice"
+            and isinstance(holder.get("options"), list)
+            and "swatches" not in holder
+        ]
+        # The longest lists go first and the cutting stops as soon as the
+        # answer fits, so a thermostat's modes and a select's few options
+        # stay whole next to a player's favourites.
+        lists.sort(key=lambda holder: len(json.dumps(holder["options"])), reverse=True)
+        for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
+            for holder in lists:
+                if len(holder["options"]) <= limit:
+                    continue
+                before = len(json.dumps(holder["options"]))
+                holder["options"] = holder["options"][:limit]
+                size -= before - len(json.dumps(holder["options"]))
+                if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+                    break
+            if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+                break
+        size = len(json.dumps(payload))
+    if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+        _OVERSIZED_DASHBOARDS.discard(entry.entry_id)
+        return payload
+    if entry.entry_id not in _OVERSIZED_DASHBOARDS:
+        _OVERSIZED_DASHBOARDS.add(entry.entry_id)
+        _LOGGER.warning(
+            "The display dashboard of %s takes %d bytes, more than the %d the "
+            "device can read, so the display shows Home Assistant as "
+            "unavailable; remove entities, actions or messages from it",
+            entry.title,
+            size,
+            DASHBOARD_RESPONSE_MAX_BYTES,
+        )
+    return payload
 
 
 def _dashboard_alarm_state(state: Any, language: str) -> str:
@@ -354,7 +439,10 @@ def dashboard_item_for_state(
             entity_id, state, _entity_state_label(state, entity_id=entity_id, language=language), unit,
         )
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
-    if domain in {"light", "cover", "climate", "fan", "number", "input_number", "select", "input_select"}:
+    if domain in {
+        "light", "cover", "climate", "fan", "media_player",
+        "number", "input_number", "select", "input_select",
+    }:
         item["controls"] = entity_controls(entity_id, state, unit)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
@@ -362,6 +450,16 @@ def dashboard_item_for_state(
             item["temperature_unit"] = unit
         if domain in {"cover", "climate"}:
             item["_kind"] = "entity"
+            return item
+        if domain == "media_player":
+            item["_kind"] = "entity"
+            # Idle and paused are switched on; only off and standby are not.
+            item["state"] = state is not None and state.state not in {
+                "off", "standby", "unknown", "unavailable",
+            }
+            if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
+                # The tile shows its state line; for a player that is what is playing.
+                item["state_label"] = item["details"]["value"]
             return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"
@@ -766,6 +864,7 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
     if not isinstance(raw_options, list):
         raw_options = []
     value = "" if state is None else str(state.state or "")
+    # The tile offers the first options of its submenu's list, within its limits.
     return {
         "value": value,
         "options": [
@@ -773,8 +872,8 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
                 "label": _dashboard_text(option, "", 80),
                 "value": option,
             }
-            for option in raw_options
-            if isinstance(option, str) and option.strip()
+            for option in choice_options(raw_options)
+            if option.strip()
         ][:12],
     }
 

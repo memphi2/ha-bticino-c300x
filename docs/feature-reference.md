@@ -88,11 +88,11 @@ action is inserted automatically. Buttons, switches, scenes and scripts can be
 operated directly; other supported selections remain read-only on this page.
 The selected entity's name is used, including an existing display-name override.
 
-The revised page is included in `2.1.0b1`. Update the bundled agent and apply
-the Display patch to install it. No new background polling or device-file history
-is added. Reconnect attempts run only after a failed event connection while the
-page is active. Device rendering and interruption by a physical Ring Call still
-need confirmation during beta testing.
+The revised page is part of 2.1.0 and later. Update the bundled agent and
+apply the Display patch to install it. No new background polling or device-file
+history is added. Reconnect attempts run only after a failed event connection
+while the page is active. Device rendering and interruption by a physical Ring
+Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
@@ -114,14 +114,42 @@ the form shows that state instead of an unrelated default.
 
 ## Display Device Controls
 
-Select lights, covers, climate entities, fans and sensors under **Display
-dashboard**. Entities with controls share the two-column overview with sensors.
+Select lights, covers, climate entities, fans, media players and sensors under
+**Display dashboard**. Entities with controls share the two-column overview
+with sensors.
 A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.
-Lights and fans keep an on/off switch on the tile itself. Covers and climate
-entities are operated from their submenu, because neither has a single on/off
-action. Back returns to the same overview page and scroll position; a state
-refresh that arrives while the list is moving is applied once it settles.
+Lights, fans and media players keep an on/off switch on the tile itself where
+the entity supports one. Covers and climate entities have none, because neither
+has a single on/off action: a full-height tile carries their buttons, and a
+compact one leaves them to the submenu. Back returns to the same overview page
+and scroll position; a state refresh that arrives while the list is moving is
+applied once it settles.
+
+Each tile's size is set per entity in the entity-display dialog. **Width** is
+half or full. **Height** is half, the compact 64 px tile, or full, a 94 px tile
+like a sensor's. A full-height tile carries the entity's own buttons, so the
+common action needs no submenu:
+
+| Entity | Buttons on a full-height tile |
+| --- | --- |
+| Cover | up, stop, down (those it supports) |
+| Climate | target temperature minus/plus, by the entity's step |
+| Light | on/off switch, brightness minus/plus in 10 % steps |
+| Fan | on/off switch, speed minus/plus by about 10 %, at least one of the fan's speeds |
+| Number | minus/plus, by the entity's step |
+| Select | previous/next option, wrapping at either end |
+| Media player | on/off switch, previous, play/pause, next (those it supports) |
+
+A fan's tile shows its speed next to on/off, as a light's shows its brightness.
+Minus/plus are dimmed while there is no value to step from, such as the
+brightness of a light that is off or a thermostat without a target; tapping them
+then opens the submenu. A press while the previous command is still on its way
+is ignored. The tile background still opens the submenu, and every other control
+stays there. **Automatic** keeps the size of the type, at half width: sensors
+full height, switches their slimmer 58 px tile, which **Half** raises to 64 px,
+and all other entities the 64 px half height. A dashboard configured before
+these settings existed therefore looks the same until a size is chosen.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
@@ -140,12 +168,28 @@ refresh that arrives while the list is moving is applied once it settles.
   move to a separate settings tab when supported.
 - Fans expose speed, oscillation, presets and direction according to their
   capabilities. Preset names come from the entity itself.
+- Media players show what is playing, or their state when nothing is. On a
+  tile this is the state line, so another secondary-line choice replaces it.
+  The submenu has previous, play/pause and next, a volume slider, mute, source and
+  sound mode, each only where the player reports the feature. The on/off switch
+  and play/pause appear only when the player reports the step its current state
+  needs, and send that explicit service: turn on or off, play or pause. A
+  media player cannot be chosen as the alarm page's quick entity.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
   Numeric sensors retain their unit and reported display precision. Details may
   show the entity's numeric battery level, humidity and illuminance attributes;
   unrelated attributes and history are not requested or forwarded.
 - Number entities use HA units, bounds and step sizes; select entities show their
   actual options. Sliders send one command on release, not during movement.
+- A choice, such as a select's options or a player's sources, offers its
+  first options: at most 50, and only as many as fit into 2 kB of the answer
+  to the display, where a character outside ASCII counts six bytes and an
+  emoji twelve. An option taking more than 1 kB there is left out. If the
+  dashboard would still be too large for the display to read, the longest
+  choice lists are shortened further, one after another, until it fits; short
+  lists such as a thermostat's modes are cut last. A dashboard too large even then, for example
+  because of very many entities, shows Home Assistant as unavailable, and
+  Home Assistant logs a warning.
 
 State changes for selected entities use the existing event bridge, including
 when no Alarmo entity is configured. There is no regular device-state polling.
@@ -164,7 +208,8 @@ from one request; commands always keep their own.
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification
 for optimistic entities. An accepted command that HA never reflects is reported
-as unconfirmed after 15 seconds, and feedback for an entity disappears a minute
+as unconfirmed after 15 seconds; a track skip, which changes no state HA
+reports, stays accepted. Feedback for an entity disappears a minute
 after the last thing happened to it, so a tile returns to showing its plain
 reading. Errors remain at the affected control; an uncertain transport result is
 not automatically retried. During a connection outage the
@@ -173,8 +218,9 @@ Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. Display changes require the matching bundled
 agent files and reapplying the Display patch after an update. Device rendering
-and physical Ring Call interruption remain beta checks. No additional polling,
-refresh timers or device-file writes are introduced by these detail views.
+and physical Ring Call interruption are not yet confirmed on hardware. No
+additional polling, refresh timers or device-file writes are introduced by these
+detail views.
 
 ## Display Settings
 
@@ -182,13 +228,32 @@ Use **Configure > Display dashboard**, then the entity-display dialog. Choose
 entities and the optional Alarmo quick entity with the normal HA selectors;
 control types come from their actual capabilities, not a manually chosen widget.
 
-Each overview entity has **Page**, **Position**, name and secondary-line settings.
+Each overview entity has **Page**, **Position**, **Width**, **Height**, name and
+secondary-line settings.
 Use the same page name to group entities; leave it empty for the existing unnamed
 page. Positions run from 0 to 10000, lower first within a page. Existing selections
-keep their original order until you change a position. Named pages follow their
+keep their original order until you change a position; an emptied position
+returns to the entity's place in the selection. Named pages follow their
 first occurrence in the selected-entity list, after the HA status/weather page.
-Page names are limited to 60 characters. Missing or unavailable entities retain
+Page names are limited to 60 characters; a longer one is cut, and a position
+is rounded to a whole number. A custom name left empty shows the Home Assistant
+name. Missing or unavailable entities retain
 their configuration and show unavailable rather than changing the saved layout.
+
+The first page is the status page: it carries the HA, alarm and time badges
+and, unless placed elsewhere, the weather card. Its internal name is `C300X`,
+and the display shows no title for it. Entities without a page name go to a
+separate unnamed page after it. Give entities the page name `C300X` to put
+their tiles on the status page as well.
+
+With a weather entity selected, the dialog also offers **Weather - Page** and
+**Weather - Position**. Left empty and at 0, the card stays at the top of the
+status page. A position sorts it among the tiles of its page exactly like an
+entity's position, so 15 places it between tiles at 10 and 20. A page name
+moves the card to that page without changing the order of the pages; a page
+that no entity or action uses is created after theirs. The unnamed page cannot
+take the card, because an empty **Weather - Page** means the status page. The
+card always spans the full width.
 
 The optional Alarmo quick entity also gets its name and secondary-line settings,
 even if it is not selected for an overview page. Selecting it does not add it to

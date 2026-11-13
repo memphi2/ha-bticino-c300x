@@ -14,7 +14,11 @@ from .const import (
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     WEATHER_DOMAIN,
 )
-from .dashboard_entities import DASHBOARD_ENTITY_DOMAINS
+from .dashboard_entities import (
+    ALARM_PAGE_ENTITY_DOMAINS,
+    DASHBOARD_ENTITY_DOMAINS,
+    DASHBOARD_POSITION_MAX,
+)
 from .schema_compat import vol
 
 
@@ -63,7 +67,7 @@ def alarm_page_entity_selector() -> Any:
     """Return a single-entity selector for the alarm page quick tile."""
 
     return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain=list(DASHBOARD_ENTITY_DOMAINS)),
+        selector.EntitySelectorConfig(domain=list(ALARM_PAGE_ENTITY_DOMAINS)),
     )
 
 
@@ -91,8 +95,23 @@ def dashboard_entity_custom_name_selector() -> Any:
 def dashboard_entity_order_selector() -> Any:
     """Return a bounded position input for a native display page."""
     return selector.NumberSelector(selector.NumberSelectorConfig(
-        min=0, max=10000, step=1, mode=selector.NumberSelectorMode.BOX,
+        min=0, max=DASHBOARD_POSITION_MAX, step=1, mode=selector.NumberSelectorMode.BOX,
     ))
+
+
+def dashboard_entity_tile_size_selector() -> Any:
+    """Return the width or height choice for one native display tile."""
+
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value="auto", label="Automatic"),
+                SelectOptionDict(value="half", label="Half"),
+                SelectOptionDict(value="full", label="Full"),
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
 
 
 def dashboard_entity_secondary_info_selector() -> Any:

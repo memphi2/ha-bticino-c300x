@@ -212,7 +212,7 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
 
 def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     media_bridge = _read_media_bridge()
-    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+    device_media = (ROOT / "native_agent" / "src" / "device_media.c").read_text(
         encoding="utf-8"
     )
     setup_body = media_bridge[
@@ -257,37 +257,37 @@ def test_native_agent_ring_mode_is_separate_from_on_demand_streaming() -> None:
     assert setup_body.count('"a=crypto:2 AES_CM_128_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:3 AEAD_AES_256_GCM inline:%s\\r\\n"') >= 2
     assert setup_body.count('"a=crypto:4 AES_256_CM_HMAC_SHA1_80 inline:%s\\r\\n"') >= 2
-    assert "c300x_media_bt_av_start(bridge->config)" in media_bridge
-    assert "c300x_media_bt_av_takeover(bridge->config)" in start_body
+    assert "c300x_device_media_start(bridge->config)" in media_bridge
+    assert "c300x_device_media_takeover(bridge->config)" in start_body
     assert start_body.index("if (!start_talkback_proxy(bridge))") < start_body.index(
-        "if (!c300x_media_bt_av_takeover(bridge->config))"
+        "if (!c300x_device_media_takeover(bridge->config))"
     )
     ondemand_media_body = media_bridge[
         media_bridge.index("static void *ondemand_media_thread") :
         media_bridge.index("static bool send_sip_setup")
     ]
-    assert "c300x_media_bt_av_stop();" not in ondemand_media_body
-    assert "c300x_media_bt_av_takeover" not in ondemand_media_body
-    takeover_body = media_bt_av[
-        media_bt_av.index("bool c300x_media_bt_av_takeover") :
+    assert "c300x_device_media_stop();" not in ondemand_media_body
+    assert "c300x_device_media_takeover" not in ondemand_media_body
+    takeover_body = device_media[
+        device_media.index("bool c300x_device_media_takeover") :
     ]
-    assert "#define BT_AV_TAKEOVER_SETTLE_MS 800" in media_bt_av
-    assert "c300x_media_bt_av_stop();" not in takeover_body
-    assert takeover_body.count("c300x_media_bt_av_start(config)") == 2
-    assert takeover_body.index("bool started = c300x_media_bt_av_start(config);") < takeover_body.index(
-        "sleep_ms(BT_AV_TAKEOVER_SETTLE_MS);"
+    assert "#define DEVICE_MEDIA_TAKEOVER_SETTLE_MS 800" in device_media
+    assert "c300x_device_media_stop();" not in takeover_body
+    assert takeover_body.count("c300x_device_media_start(config)") == 2
+    assert takeover_body.index("bool started = c300x_device_media_start(config);") < takeover_body.index(
+        "sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);"
     )
-    assert takeover_body.index("sleep_ms(BT_AV_TAKEOVER_SETTLE_MS);") < takeover_body.rindex(
-        "c300x_media_bt_av_start(config)"
+    assert takeover_body.index("sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);") < takeover_body.rindex(
+        "c300x_device_media_start(config)"
     )
-    assert "return c300x_media_bt_av_start(config) || started;" in takeover_body
+    assert "return c300x_device_media_start(config) || started;" in takeover_body
     assert '#include "media_base64.h"' in media_bridge
     assert '#include "time_util.h"' in media_bridge
     assert "static bool base64_encode(" not in media_bridge
     assert "static long long monotonic_ms" not in media_bridge
     assert stop_body.index("send_sip_bye(") < stop_body.index("if (relay_started)")
     assert stop_body.index("send_sip_bye(") < stop_body.index(
-        "c300x_media_bt_av_stop(g_bridge.config);"
+        "c300x_device_media_stop(g_bridge.config);"
     )
     assert "request_ring_answer_if_active" not in start_body
     assert "sdp_audio_video" in rtsp_body
@@ -475,8 +475,8 @@ def test_native_agent_home_call_tracks_flexisip_rtp_proxy_without_video_mode() -
     assert "send_media_audio_silence_payload_type(" in home_call_body
     assert "talkback_output_payload_type(bridge, MEDIA_AUDIO_PAYLOAD_TYPE)" in home_call_body
     assert "send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1" in home_call_body
-    assert "c300x_media_bt_av_start" not in home_call_body
-    assert "c300x_media_bt_av_takeover" not in home_call_body
+    assert "c300x_device_media_start" not in home_call_body
+    assert "c300x_device_media_takeover" not in home_call_body
     assert "bridge->home_call_srtp_state = &srtp;" in home_call_thread
     assert "start_talkback_proxy(bridge)" in home_call_thread
     assert "home_call_talkback_recent_locked(bridge, now)" in home_call_thread

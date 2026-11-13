@@ -26,6 +26,7 @@ DASHBOARD_ENTITY_DOMAINS = (
     "input_number",
     "input_select",
     "light",
+    "media_player",
     "number",
     "select",
     "script",
@@ -34,6 +35,17 @@ DASHBOARD_ENTITY_DOMAINS = (
     "switch",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
+# The alarm page has room for one plain action tile, not for a player.
+ALARM_PAGE_ENTITY_DOMAINS = tuple(
+    domain for domain in DASHBOARD_ENTITY_DOMAINS if domain != "media_player"
+)
+# A tile is half or full in each direction. "auto" is never stored: an entity
+# without the key keeps the size its type has always had on the display.
+DASHBOARD_TILE_SIZE_AUTO = "auto"
+DASHBOARD_TILE_SIZES = ("half", "full")
+DASHBOARD_TILE_SIZE_KEYS = ("width", "height")
+DASHBOARD_PAGE_NAME_MAX_LENGTH = 60
+DASHBOARD_POSITION_MAX = 10000
 DashboardEntityDisplayOverrides = dict[str, dict[str, str]]
 
 
@@ -68,7 +80,12 @@ def normalize_dashboard_entity_display_overrides(
 
     result: DashboardEntityDisplayOverrides = {}
     for raw_entity_id, raw_options in value.items():
-        entity_id = _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
+        weather_layout = _is_weather_entity_id(raw_entity_id)
+        entity_id = (
+            str(raw_entity_id).strip().lower()
+            if weather_layout
+            else _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
+        )
         if entity_id is None:
             continue
         if not isinstance(raw_options, dict):
@@ -87,7 +104,7 @@ def normalize_dashboard_entity_display_overrides(
         custom_name = str(raw_options.get("custom_name", "") or "").strip()
         page = str(raw_options.get("page", "") or "").strip()
         if page:
-            if len(page) > 60 or any(ord(char) < 32 for char in page):
+            if len(page) > DASHBOARD_PAGE_NAME_MAX_LENGTH or any(ord(char) < 32 for char in page):
                 if strict:
                     raise ValueError("invalid dashboard page name")
             else:
@@ -95,12 +112,27 @@ def normalize_dashboard_entity_display_overrides(
         if "order" in raw_options:
             try:
                 order = float(raw_options["order"])
-                if isinstance(raw_options["order"], bool) or not math.isfinite(order) or not order.is_integer() or not 0 <= order <= 10000:
+                if isinstance(raw_options["order"], bool) or not math.isfinite(order) or not order.is_integer() or not 0 <= order <= DASHBOARD_POSITION_MAX:
                     raise ValueError("invalid dashboard order")
                 options["order"] = str(int(order))
             except (TypeError, ValueError, OverflowError):
                 if strict:
                     raise ValueError("invalid dashboard order") from None
+        if weather_layout:
+            # The weather card has a place on the display, nothing else: its
+            # size and texts are its own.
+            if options:
+                result[entity_id] = options
+            continue
+        for size_key in DASHBOARD_TILE_SIZE_KEYS:
+            size = str(raw_options.get(size_key, "") or "").strip()
+            if not size or size == DASHBOARD_TILE_SIZE_AUTO:
+                continue
+            if size not in DASHBOARD_TILE_SIZES:
+                if strict:
+                    raise ValueError("invalid dashboard tile size")
+                continue
+            options[size_key] = size
         if name:
             if name not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
                 if strict:
@@ -150,6 +182,25 @@ def dashboard_entity_custom_name_override(
     """Return the custom display name for one entity."""
 
     return overrides.get(entity_id, {}).get("custom_name", "")
+
+
+def _is_weather_entity_id(value: Any) -> bool:
+    """Return whether a display-override key names a weather entity."""
+
+    entity_id = str(value or "").strip().lower()
+    domain, _, object_id = entity_id.partition(".")
+    return domain == "weather" and bool(ENTITY_OBJECT_ID_RE.fullmatch(object_id))
+
+
+def dashboard_weather_layout(
+    overrides: DashboardEntityDisplayOverrides,
+    weather_entity_id: str | None,
+) -> dict[str, str]:
+    """Return the configured page and position of the weather card."""
+
+    if not weather_entity_id:
+        return {}
+    return overrides.get(weather_entity_id.strip().lower(), {})
 
 
 def _iter_dashboard_entity_values(value: Any, *, strict: bool) -> tuple[Any, ...]:

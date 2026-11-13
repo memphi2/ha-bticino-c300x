@@ -1,5 +1,110 @@
 # Changelog
 
+## v2.1.2 - 2026-11-13
+
+### Added
+
+- Choose width and height for each entity tile on the native display. Width is
+  half or full; height is half (the compact tile) or full. A full-height tile
+  carries the entity's own buttons: up/stop/down for a cover, minus/plus for a
+  thermostat target, light brightness, fan speed or number, and previous/next
+  for a select. Brightness steps by ten percent on the tile, fan speed by
+  about ten percent and at least one of the fan's own speeds. A fan's tile
+  shows its speed next to on/off, as a light's shows its brightness.
+  Sensors, switches and buttons can be resized the same way. Automatic keeps
+  the size each type had before, so existing dashboards do not change.
+  Requires updated display files on the device.
+- Media players on the native display. A tile shows what is playing; at full
+  height it carries previous, play/pause and next. The submenu adds volume,
+  mute, source and sound mode. Only features the player reports are offered,
+  and no command can start arbitrary media. Requires updated display files on
+  the device.
+- Place the weather card on the native display: **Weather - Page** and
+  **Weather - Position** in the entity-display dialog move it to a named page
+  and sort it among that page's tiles; the unnamed page of entities without a
+  page name cannot take it. Unplaced, it stays at the top of the status page.
+- Record the doorstation without a ring: `capture_doorbell_call` gains
+  `capture_mode: on_demand`, which captures video with or without audio while
+  media is idle and no other camera client is active. Until the capture ends,
+  new camera clients are turned away. `ring` stays the default, so existing
+  automations do not change; announcements remain available in ring mode only.
+
+### Changed
+
+- Write the display's QML and JavaScript files to the device without comments,
+  blank lines and indentation. The installed files are about 30 % smaller
+  (roughly 140 kB instead of 200 kB); their behaviour is unchanged. The first
+  update rewrites the display files once because their content hash changes.
+- The agent reports a failed takeover of the device's media service as
+  `media_takeover_failed`, and its log lines about the device media service
+  start with `device-media:`. Nothing in Home Assistant evaluates either; they
+  only appear in the agent's last error and log.
+- Alarm service calls fail with a translated error when the alarm rejects the
+  command or does not confirm the new state, instead of reporting success.
+  Only an explicit code rejection is reported as a wrong PIN; a missing
+  confirmation is reported as `alarm_state_unconfirmed`. Automations that call
+  the alarm services against a slow alarm can now see that error.
+
+### Fixed
+
+- Fan speed minus/plus moves to the fan's next speed. It stepped by one
+  percent, and a fan rounds a percentage up to its next speed, so on a fan with
+  few speeds minus never lowered it.
+- On a number with a fractional step, such as 0.05 to 1 in steps of 0.05, the
+  slider reaches the top of the range and plus at the top no longer lowers the
+  value.
+- Setting a light's brightness or a fan's speed to 0 on the display is
+  confirmed once it is off, instead of ending as unconfirmed.
+- A choice on the display, such as a select's options or a media player's
+  sources, offers its first options, at most 50 and at most 2 kB of the
+  display's answer, and the longest choice lists are shortened further, one
+  after another, when the dashboard would still not fit. A list of hundreds of entries, or several
+  players sharing a long favourites list, made the dashboard larger than the
+  agent reads in one response, and every page then showed Home Assistant as
+  unavailable. A dashboard too large for other reasons is logged as a warning.
+- Emptying a page name in the entity-display dialog clears it, emptying a
+  custom name shows the Home Assistant name again, and an emptied position
+  returns to the automatic one. Home Assistant leaves an emptied field out of
+  the form it sends, so the saved value came back.
+- Emptying the weather entity, the alarm entity, the alarm page entity or the
+  action list in the dashboard settings of an existing entry removes it. The
+  saved value came back for the same reason.
+- The entity-display dialog cuts a page name to 60 characters and rounds a
+  position to a whole number. Such a value used to send the user back to the
+  dashboard settings without a message, and the dialog's changes were lost.
+- A delayed status answer during camera reconciliation can no longer close a
+  doorbell session that is just starting. Closing a go2rtc session also closes
+  its websocket on current Home Assistant versions, which wrap it.
+- Overlapping event registrations no longer let an older event selection
+  overwrite a newer one or leave several renewal timers running.
+- A card action still in flight when the card is reconfigured finishes against
+  the camera it started on and reports only to the card that started it. While
+  an answer is pending, a second Answer press is ignored and Hang Up still
+  works.
+- Hanging up, a closed connection or a replaced card cancels a microphone start
+  that is still waiting for permission, so a late permission cannot restart
+  the call. A Home Call can no longer take over a doorstation answer that is
+  still waiting for the microphone.
+- The native agent measures its call, media, command and ringer deadlines on
+  the monotonic clock, so setting or correcting the device clock no longer
+  shortens or extends them. Its MQTT reconnect and keepalive timers, the
+  network recheck, mDNS announcements and the display's long-poll waits still
+  follow the device clock.
+- Voicemail and memo downloads no longer block the agent. They are sent in
+  small steps from its poll loop, at most four at a time; a fifth is answered
+  with `503 media_transfers_busy`. A download that makes no progress for two
+  seconds is closed.
+
+### Upgrade
+
+- The native agent moves to `2.1.2`. The agent-update Repair offers the
+  update, the new display files come with it, and the integration re-applies
+  an active Display patch itself, which restarts the device GUI once. Tile
+  sizes, media player tiles and the placed weather card need these display
+  files.
+- Home Assistant 2026.7 remains the minimum. Existing integration entries and
+  card configurations can be kept.
+
 ## v2.1.1 - 2026-11-10
 
 ### Fixed
@@ -277,7 +382,7 @@ Includes all changes from the withdrawn v1.9.8 release.
 - Remove the on-demand teardown settle window introduced in 1.9.7. Hardware
   testing showed it did not prevent the PCMU reboot while delaying reconnects
   by up to 8 seconds. SIP-setup failure reasons remain available.
-- Tear an on-demand session down by removing only the agent's own BT-AV UDP
+- Tear an on-demand session down by removing only the agent's own media-service UDP
   clients instead of issuing a global pipeline stop. Log unacknowledged
   removals, distinguishing a NACK from a missing ACK; a NACK can occur after
   SIP BYE has already removed the pipeline.

@@ -6,7 +6,9 @@ from typing import Any
 
 from .dashboard_controls import finite_number
 
-DETAIL_DOMAINS = frozenset({"light", "cover", "climate", "fan", "sensor", "binary_sensor"})
+DETAIL_DOMAINS = frozenset({
+    "light", "cover", "climate", "fan", "sensor", "binary_sensor", "media_player",
+})
 _CLIMATE_ACTIVITIES = frozenset({
     "off", "idle", "heating", "cooling", "drying", "fan", "defrosting", "preheating",
 })
@@ -62,6 +64,15 @@ def entity_details(
             if domain == "light":
                 value = round(max(0, min(255, value)) * 100 / 255)
             details.update(value=_display_number(value), unit="%", label="brightness" if domain == "light" else "percentage")
+    elif domain == "media_player":
+        # Play/pause is confirmed on this; its button comes and goes with the
+        # features a player reports in each state.
+        details["playing"] = state.state == "playing"
+        # What is playing is the reading; without a title the state stands.
+        title = attrs.get("media_title")
+        title = " ".join(title.split()) if isinstance(title, str) else ""
+        if title and state.state in {"playing", "paused", "buffering"}:
+            details.update(value=title[:60])
     elif domain in {"sensor", "binary_sensor"}:
         if domain == "sensor" and finite_number(state.state) is not None:
             details.update(

@@ -481,7 +481,7 @@ def test_dashboard_entity_ids_accept_supported_entities() -> None:
     ]
 
 
-@pytest.mark.parametrize("value", ["media_player.tv", "sensor.", "bad"])
+@pytest.mark.parametrize("value", ["camera.tv", "sensor.", "bad"])
 def test_dashboard_entity_ids_reject_unsupported_entities(value: str) -> None:
     with pytest.raises(vol.Invalid):
         _dashboard_entity_ids(value)
@@ -513,7 +513,7 @@ def test_dashboard_entity_display_overrides_accepts_valid_mapping() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        {"media_player.tv": {"name": "entity_id"}},
+        {"camera.tv": {"name": "entity_id"}},
         {"sensor.temperature": {"name": "bad"}},
         {"sensor.temperature": {"name": "custom"}},
         {"sensor.temperature": {"secondary": "bad"}},
@@ -761,9 +761,9 @@ def test_feature_input_collects_activation_and_dashboard_errors() -> None:
             CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "100",
             CONF_ACTIONS_JSON: "{bad-json",
             CONF_ALARM_ENTITY_ID: "light.entry",
-            CONF_ALARM_PAGE_ENTITY_ID: "media_player.tv",
+            CONF_ALARM_PAGE_ENTITY_ID: "camera.tv",
             CONF_WEATHER_ENTITY_ID: "sensor.outdoor",
-            CONF_DASHBOARD_ENTITIES: ["media_player.tv"],
+            CONF_DASHBOARD_ENTITIES: ["camera.tv"],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {
                 "sensor.temperature": {"name": "bad"}
             },
@@ -847,7 +847,7 @@ def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
     _data, errors = _feature_input(
         {
             CONF_DEVICE_UI_ENABLED: True,
-            CONF_ALARM_PAGE_ENTITY_ID: "media_player.tv",
+            CONF_ALARM_PAGE_ENTITY_ID: "camera.tv",
         }
     )
 
@@ -2057,9 +2057,12 @@ def test_dashboard_entity_display_schema_adds_controls_for_selected_entities() -
     )
 
     result = schema({})
+    custom_name = next(key for key in schema.schema if key == "1. Temperature - Custom name")
 
     assert result["1. Temperature - Name"] == "custom"
-    assert result["1. Temperature - Custom name"] == "Outside"
+    # A suggested value prefills the field and still lets the user empty it.
+    assert "1. Temperature - Custom name" not in result
+    assert custom_name.description == {"suggested_value": "Outside"}
     assert result["1. Temperature - Secondary line"] == "none"
 
 
@@ -2073,6 +2076,15 @@ def test_dashboard_entity_display_form_complete_requires_rendered_entity_fields(
             CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
             "1. Temperature - Name": "friendly_name",
             "1. Temperature - Custom name": "",
+            "1. Temperature - Secondary line": "state",
+        },
+        ["sensor.temperature"],
+    )
+    # Home Assistant leaves an empty custom name out of the post.
+    assert _dashboard_entity_display_form_complete(
+        {
+            CONF_DASHBOARD_ENTITIES: ["sensor.temperature"],
+            "1. Temperature - Name": "friendly_name",
             "1. Temperature - Secondary line": "state",
         },
         ["sensor.temperature"],

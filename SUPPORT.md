@@ -2,8 +2,8 @@
 
 ## Supported Release Line
 
-- `2.0.x`: current stable
-- `2.1.x`: opt-in beta, starting with `2.1.0b1`
+- `2.1.x`: current stable
+- `2.0.x` and older: no longer maintained; update to `2.1.x`
 
 ## Compatibility Baseline
 
@@ -29,3 +29,4 @@ A native-agent rebuild is required when any of these paths change:
 - `device_qml`
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
+- `scripts/device_file_strip.py`

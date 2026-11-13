@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
@@ -158,7 +158,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
       }
     },
     "abort": {
@@ -253,7 +253,7 @@
       },
       "dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
       }
     },
     "error": {

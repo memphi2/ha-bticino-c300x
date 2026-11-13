@@ -2,7 +2,7 @@
 
 [![Validate](https://img.shields.io/badge/checks-local%20%2B%20CI-2ea44f?style=flat-square)](.github/workflows/validate.yml)
 [![Quality](https://img.shields.io/badge/Quality-HA%20QS%20Platinum%20Track-0366d6?style=flat-square)](custom_components/bticino_c300x/quality_scale.yaml)
-[![Release](https://img.shields.io/badge/release-v2.1.1-0366d6?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v2.1.2-0366d6?style=flat-square)](CHANGELOG.md)
 [![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5?style=flat-square)](https://contributors.home-assistant.io/marketplace/)
 [![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -33,8 +33,8 @@ forwarding controls, messages and optional display pages.
 - Stored video messages, voice memos and text memos when the agent reports
   those capabilities.
 - Optional C300X display pages for Alarmo, weather and selected Home Assistant
-  entities, with light/cover/climate controls and HA-driven notifications in the
-  [2.1 beta](docs/advanced-maintenance.md#beta-versions).
+  entities, with controls for lights, covers, climate, fans and media players,
+  and HA-driven notifications.
 - Media readiness diagnostics with guided Repairs for the common setup problems.
 - Optional automation blueprints for notifications, Ring Capture, local Wyoming
   transcription and strict phrase decisions.

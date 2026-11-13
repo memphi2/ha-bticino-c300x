@@ -222,6 +222,7 @@ when any of these paths change:
 - `device_qml`
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
+- `scripts/device_file_strip.py`
 
 The release workflow enforces this list before accepting a reused agent asset.
 When a fresh ARMHF agent build is required, release metadata records sanitized

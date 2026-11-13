@@ -138,6 +138,9 @@ Page {
         if (control.command === "open_cover") return "\u2191"
         if (control.command === "stop_cover") return "\u25a0"
         if (control.command === "close_cover") return "\u2193"
+        if (control.command === "media_previous_track") return "\u00ab"
+        if (control.command === "media_next_track") return "\u00bb"
+        if (control.command === "media_play_pause") return control.playing === true ? "||" : ">"
         return uiText(control.command)
     }
 
@@ -148,11 +151,16 @@ Page {
     }
 
     function controlValue(control) {
-        return controlValueUnset(control) ? "?" : String(control.value) + (control.unit ? " " + control.unit : "")
+        return controlValueUnset(control) ? "?" : numberText(control, control.value)
+    }
+
+    function numberText(control, value) {
+        var shown = control.command === "percentage" ? Math.floor(Number(value) + 0.0001) : value
+        return String(shown) + (control.unit ? " " + control.unit : "")
     }
 
     function optionLabel(control, option) {
-        if (control.command === "option" || control.command === "preset_mode") return String(option)
+        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
         return label === key ? String(option) : label
@@ -235,12 +243,39 @@ Page {
         details.contentY = 0
     }
 
+    function controlLastStep(control) {
+        return Math.floor((control.max - control.min) / control.step + 0.000000001)
+    }
+
     function adjustControl(item, control, direction) {
         if (controlValueUnset(control)) return
         var steps = Math.round((Number(control.value) - control.min) / control.step) + direction
-        steps = Math.max(0, Math.min(Math.floor((control.max - control.min) / control.step), steps))
+        steps = Math.max(0, Math.min(controlLastStep(control), steps))
         var value = control.min + steps * control.step
         Api.dashboardControl(item, control, String(Number(value.toFixed(6))), status, page)
+    }
+
+    function quickLabel(quick, control) {
+        if (quick.steps < 0) return quick.kind === "choice" ? "\u2039" : "-"
+        if (quick.steps > 0) return quick.kind === "choice" ? "\u203a" : "+"
+        return control ? controlLabel(control) : ""
+    }
+
+    function quickUsable(quick, control) {
+        return control ? quick.kind !== "number" || !controlValueUnset(control) : false
+    }
+
+    function quickAction(item, quick) {
+        var control = Api.dashboardControlByCommand(item, quick.command)
+        if (!control) return
+        if (quick.kind === "number") {
+            adjustControl(item, control, quick.steps)
+        } else if (quick.kind === "choice") {
+            var option = Api.dashboardCycleOption(control, quick.steps)
+            if (option !== null) Api.dashboardControl(item, control, option, status, page)
+        } else {
+            Api.dashboardControl(item, control, null, status, page)
+        }
     }
 
     Timer {
@@ -273,7 +308,7 @@ Page {
         }
         var controls = item.controls || []
         for (var i = 0; i < controls.length; i++) {
-            if (controls[i].command === "temperature" || controls[i].command === "brightness" || controls[i].command === "position") {
+            if (controls[i].command === "temperature" || controls[i].command === "brightness" || controls[i].command === "position" || controls[i].command === "percentage") {
                 values.push(controlLabel(controls[i]) + ": " + controlValue(controls[i]))
             }
         }
@@ -487,6 +522,145 @@ Page {
         }
     }
 
+    Component {
+        id: compactSensorOverview
+        Item {
+            property variant tileItem: parent ? parent.tileItem : ({})
+            anchors.fill: parent
+            Image { anchors.fill: parent; source: "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+            UbuntuLightText {
+                anchors.left: parent.left; anchors.leftMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 32
+                anchors.top: parent.top; anchors.topMargin: 9
+                text: itemName(tileItem); textFormat: Text.PlainText
+                font.pixelSize: 17; color: "white"; elide: Text.ElideRight
+            }
+            UbuntuLightText {
+                anchors.left: parent.left; anchors.leftMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 32
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 7
+                text: itemDetail(tileItem); textFormat: Text.PlainText
+                font.pixelSize: text.length > 20 ? 15 : 19
+                color: detailColor(tileItem); elide: Text.ElideRight
+            }
+            UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
+            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+        }
+    }
+
+    Component {
+        id: tallControlOverview
+        Item {
+            id: tallTile
+            property variant tileItem: parent ? parent.tileItem : ({})
+            property bool hasToggle: Api.dashboardControlByCommand(tileItem, "toggle") ? true : false
+            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
+            property variant quickButtons: Api.dashboardQuickControls(tileItem)
+            anchors.fill: parent
+            Image {
+                anchors.fill: parent
+                source: "images/settings/act_btn.svg"
+                fillMode: Image.Stretch
+            }
+            BeepingMouseArea {
+                anchors.fill: parent
+                onClicked: openDetails(tallTile.tileItem)
+            }
+            UbuntuLightText {
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.right: tallToggle.left
+                anchors.rightMargin: 8
+                anchors.top: parent.top
+                anchors.topMargin: 11
+                text: itemName(tallTile.tileItem) + trsl.empty
+                textFormat: Text.PlainText
+                font.pixelSize: 17
+                color: "white"
+                elide: Text.ElideRight
+            }
+            UbuntuLightText {
+                id: tallChevron
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.top: parent.top; anchors.topMargin: 5
+                text: "\u203a"; font.pixelSize: 28; color: "white"
+            }
+            BasicButton {
+                id: tallToggle
+                visible: tallTile.hasToggle
+                width: tallTile.hasToggle ? 86 : 0
+                height: 36
+                anchors.right: tallChevron.left
+                anchors.rightMargin: 10
+                anchors.top: parent.top
+                anchors.topMargin: 6
+                enabled: tallTile.controlsEnabled
+                opacity: tallTile.controlsEnabled ? 1 : 0.45
+                checkable: false
+                checked: tallTile.tileItem.state ? true : false
+                style: CheckableButtonStyle {
+                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                }
+                onTouched: Api.dashboardControl(tallTile.tileItem, Api.dashboardControlByCommand(tallTile.tileItem, "toggle"), null, status, page)
+            }
+            Row {
+                id: tallQuickRow
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 7
+                height: 40
+                spacing: 6
+                Repeater {
+                    model: tallTile.quickButtons.length
+                    Item {
+                        property variant quick: tallTile.quickButtons[index] || ({})
+                        property variant control: Api.dashboardControlByCommand(tallTile.tileItem, quick.command)
+                        property bool usable: tallTile.controlsEnabled && quickUsable(quick, control)
+                        width: 48
+                        height: 40
+                        opacity: usable ? 1 : 0.45
+                        Image {
+                            anchors.fill: parent
+                            source: quickMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                            fillMode: Image.Stretch
+                        }
+                        UbuntuLightText {
+                            anchors.centerIn: parent
+                            text: quickLabel(quick, control)
+                            textFormat: Text.PlainText
+                            font.pixelSize: 22
+                            color: "white"
+                        }
+                        BeepingMouseArea {
+                            id: quickMouse
+                            anchors.fill: parent
+                            enabled: quickUsable(quick, control)
+                            onClicked: if (usable) quickAction(tallTile.tileItem, quick)
+                        }
+                    }
+                }
+            }
+            UbuntuLightText {
+                anchors.left: tallQuickRow.right
+                anchors.leftMargin: tallTile.quickButtons.length > 0 ? 10 : 4
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: tallQuickRow.verticalCenter
+                text: itemDetail(tallTile.tileItem) + trsl.empty
+                textFormat: Text.PlainText
+                font.pixelSize: 15
+                color: readingColor(tallTile.tileItem)
+                elide: Text.ElideRight
+            }
+        }
+    }
+
     Flickable {
         id: notificationDetails
         visible: notificationsOpen
@@ -619,7 +793,7 @@ Page {
             BasicButton {
                 id: summaryToggle
                 property bool hasToggle: Api.dashboardControlByCommand(selectedItem, "toggle") ? true : false
-                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan")
+                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 22
                 width: 86; height: 36
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
@@ -744,7 +918,7 @@ Page {
                         visible: !controlRow.paletteTab
                         width: parent.width
                         height: 24
-                        text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? preview + " " + (control.unit || "") : controlValue(control)) : "")
+                        text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? numberText(control, preview) : controlValue(control)) : "")
                         textFormat: Text.PlainText
                         font.pixelSize: 18
                         color: "white"
@@ -806,7 +980,7 @@ Page {
                             anchors.fill: parent
                             function updatePreview(x) {
                                 var ratio = Math.max(0, Math.min(1, x / width))
-                                var steps = Math.min(Math.floor((control.max - control.min) / control.step), Math.round(ratio * (control.max - control.min) / control.step))
+                                var steps = Math.min(controlLastStep(control), Math.round(ratio * (control.max - control.min) / control.step))
                                 preview = Number((control.min + steps * control.step).toFixed(6))
                             }
                             onPressed: { interactionActive = true; updatePreview(mouse.x) }
@@ -988,10 +1162,98 @@ Page {
                 }
 
                 Item {
-                    id: weatherCard
                     width: parent.width
-                    height: weatherVisible ? 166 : 0
-                    visible: weatherVisible
+                    height: flowVisible ? safeNumber(flowHeight, 0) : 0
+                    visible: flowVisible
+
+                    Rectangle {
+                        id: flowWrapper
+                        width: flowWidth > 0 ? flowWidth : parent.width
+                        height: flowHeight > 0 ? flowHeight : parent.height
+                        color: flowColor
+
+                        Repeater {
+                            id: flowLineRepeater
+                            model: flowLines
+
+                            PathView {
+                                id: pathView
+                                visible: true
+                                property variant line: modelData
+                                property variant lineColor: modelData.lineColor || modelData.color || "#58d68d"
+                                model: safeNumber(modelData.numberOfDots, 0)
+                                path: Path {
+                                    startX: safeNumber(pathView.line.startX, 0)
+                                    startY: safeNumber(pathView.line.startY, 0)
+                                    PathQuad {
+                                        x: safeNumber(pathView.line.x, 0)
+                                        y: safeNumber(pathView.line.y, 0)
+                                        controlX: safeNumber(pathView.line.controlX, 0)
+                                        controlY: safeNumber(pathView.line.controlY, 0)
+                                    }
+                                }
+                                delegate: Rectangle {
+                                    width: safeNumber(pathView.line.dotWidth, 2)
+                                    height: safeNumber(pathView.line.dotHeight, 2)
+                                    color: pathView.lineColor
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: flowItems
+
+                            Rectangle {
+                                x: safeNumber(modelData.leftMargin, safeNumber(modelData.x, 0))
+                                y: safeNumber(modelData.topMargin, safeNumber(modelData.y, 0))
+                                width: safeNumber(modelData.width, 100)
+                                height: safeNumber(modelData.height, 100)
+                                radius: safeNumber(modelData.radius, 50)
+                                color: modelData.backgroundColor || "transparent"
+                                border.color: modelData.borderColor || "transparent"
+                                border.width: safeNumber(modelData.borderWidth, 2)
+
+                                UbuntuLightText {
+                                    text: (modelData.labelText || modelData.label || "") + trsl.empty
+                                    font.pixelSize: safeNumber(modelData.labelSize, 14)
+                                    font.bold: true
+                                    color: modelData.labelColor || "#8d98a3"
+                                    anchors.top: parent.top
+                                    anchors.topMargin: safeNumber(modelData.labelTopMargin, -20)
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                UbuntuLightText {
+                                    text: (modelData.state || modelData.text || "") + trsl.empty
+                                    font.pixelSize: safeNumber(modelData.textSize, 16)
+                                    font.bold: modelData.textBold === false ? false : true
+                                    color: modelData.textColor || "white"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    anchors.rightMargin: 6
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Flow {
+                    id: itemColumn
+                    width: parent.width
+                    spacing: 10
+                    visible: items.length > 0
+                    height: visible ? implicitHeight : 0
+                    property int tileWidth: (width - spacing) / 2
+
+                    Component {
+                        id: weatherTileComponent
+
+                Item {
+                    id: weatherCard
+                    anchors.fill: parent
                     property int tileSpacing: 10
                     property int tileLeft: 18
                     property int tileWidth: (width - (tileLeft * 2) - (tileSpacing * 2)) / 3
@@ -1198,93 +1460,7 @@ Page {
                         elide: Text.ElideRight
                     }
                 }
-
-                Item {
-                    width: parent.width
-                    height: flowVisible ? safeNumber(flowHeight, 0) : 0
-                    visible: flowVisible
-
-                    Rectangle {
-                        id: flowWrapper
-                        width: flowWidth > 0 ? flowWidth : parent.width
-                        height: flowHeight > 0 ? flowHeight : parent.height
-                        color: flowColor
-
-                        Repeater {
-                            id: flowLineRepeater
-                            model: flowLines
-
-                            PathView {
-                                id: pathView
-                                visible: true
-                                property variant line: modelData
-                                property variant lineColor: modelData.lineColor || modelData.color || "#58d68d"
-                                model: safeNumber(modelData.numberOfDots, 0)
-                                path: Path {
-                                    startX: safeNumber(pathView.line.startX, 0)
-                                    startY: safeNumber(pathView.line.startY, 0)
-                                    PathQuad {
-                                        x: safeNumber(pathView.line.x, 0)
-                                        y: safeNumber(pathView.line.y, 0)
-                                        controlX: safeNumber(pathView.line.controlX, 0)
-                                        controlY: safeNumber(pathView.line.controlY, 0)
-                                    }
-                                }
-                                delegate: Rectangle {
-                                    width: safeNumber(pathView.line.dotWidth, 2)
-                                    height: safeNumber(pathView.line.dotHeight, 2)
-                                    color: pathView.lineColor
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: flowItems
-
-                            Rectangle {
-                                x: safeNumber(modelData.leftMargin, safeNumber(modelData.x, 0))
-                                y: safeNumber(modelData.topMargin, safeNumber(modelData.y, 0))
-                                width: safeNumber(modelData.width, 100)
-                                height: safeNumber(modelData.height, 100)
-                                radius: safeNumber(modelData.radius, 50)
-                                color: modelData.backgroundColor || "transparent"
-                                border.color: modelData.borderColor || "transparent"
-                                border.width: safeNumber(modelData.borderWidth, 2)
-
-                                UbuntuLightText {
-                                    text: (modelData.labelText || modelData.label || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.labelSize, 14)
-                                    font.bold: true
-                                    color: modelData.labelColor || "#8d98a3"
-                                    anchors.top: parent.top
-                                    anchors.topMargin: safeNumber(modelData.labelTopMargin, -20)
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-
-                                UbuntuLightText {
-                                    text: (modelData.state || modelData.text || "") + trsl.empty
-                                    font.pixelSize: safeNumber(modelData.textSize, 16)
-                                    font.bold: modelData.textBold === false ? false : true
-                                    color: modelData.textColor || "white"
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 6
-                                    anchors.rightMargin: 6
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
                     }
-                }
-
-                Flow {
-                    id: itemColumn
-                    width: parent.width
-                    spacing: 10
-                    visible: items.length > 0
-                    height: visible ? implicitHeight : 0
-                    property int tileWidth: (width - spacing) / 2
 
                     Component {
                         id: mixedImageTileComponent
@@ -1638,21 +1814,25 @@ Page {
                             property bool isSlider: tileItem.kind === "slider"
                             property bool isChoice: tileItem.kind === "choice"
                             property bool isImage: tileItem.kind === "image"
+                            property bool isWeather: tileItem.kind === "weather"
                             property bool hasControls: tileItem.controls !== undefined
                             property bool isSensor: tileItem.details !== undefined && (tileItem.details.type === "sensor" || tileItem.details.type === "binary_sensor")
                             // Geometry must test the same keys in the same order as the
                             // Loader below, because an entity can carry several: dashboard.py
                             // gives number/select entities controls as well as a slider/choice
                             // kind, and hasControls decides which component renders.
-                            width: isSensor || hasControls ? itemColumn.tileWidth : (isImage || isChoice || isSlider ? itemColumn.width : itemColumn.tileWidth)
-                            height: isSensor ? 94 : (hasControls ? 64 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))))
+                            property string sizeW: tileItem.tile_width || ""
+                            property string sizeH: tileItem.tile_height || ""
+                            property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
+                            width: isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isWeather || isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            height: isSensor || hasControls ? (tall ? 94 : 64) : (isWeather ? 166 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58)))))
 
                             Loader {
                                 anchors.fill: parent
-                                enabled: mixedTile.hasControls || mixedTile.isSensor || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
+                                enabled: mixedTile.hasControls || mixedTile.isSensor || mixedTile.isWeather || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
                                 opacity: enabled ? 1 : 0.45
                                 property variant tileItem: mixedTile.tileItem
-                                sourceComponent: mixedTile.isSensor ? sensorOverview : mixedTile.hasControls ? controlOverview : (mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
+                                sourceComponent: mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isWeather ? weatherTileComponent : mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
                             }
                         }
                     }

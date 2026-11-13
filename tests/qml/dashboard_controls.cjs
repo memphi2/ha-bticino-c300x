@@ -3,9 +3,10 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
+const jsRoot = process.env.C300X_DEVICE_JS_ROOT || path.join(root, "device_qml/js");
 function library(name) {
     const ctx = vm.createContext({Date, JSON, Math, XMLHttpRequest() {}});
-    vm.runInContext(fs.readFileSync(path.join(root, "device_qml/js", name), "utf8")
+    vm.runInContext(fs.readFileSync(path.join(jsRoot, name), "utf8")
         .replace(/^\.pragma library\s*/, ""), ctx);
     return ctx;
 }
@@ -238,6 +239,15 @@ const brightnessExpected = Api.dashboardExpectation(light, {command: "brightness
 const retainedBrightness = {...light, controls: [{command: "brightness", value: 50}]};
 assert.equal(Api.dashboardExpectationMatches({...retainedBrightness, state: false}, brightnessExpected), false, "retained attributes on an off light do not confirm turn-on");
 assert.equal(Api.dashboardExpectationMatches(retainedBrightness, brightnessExpected), true);
+const offExpected = Api.dashboardExpectation(light, {command: "brightness", kind: "number"}, "0");
+assert.equal(offExpected.power, false);
+assert.equal(Api.dashboardExpectationMatches({...light, state: false, controls: [{command: "brightness", value: null}]}, offExpected), true,
+    "brightness 0 turns the light off, and an off light has no brightness to compare");
+assert.equal(Api.dashboardExpectationMatches({...light, controls: [{command: "brightness", value: 10}]}, offExpected), false,
+    "a light that is still on does not confirm 0");
+const fanOffExpected = Api.dashboardExpectation({entity_id: "fan.room", state: true}, {command: "percentage", kind: "number"}, "0");
+assert.equal(Api.dashboardExpectationMatches({entity_id: "fan.room", available: true, state: false,
+    controls: [{command: "percentage", value: null}]}, fanOffExpected), true, "speed 0 is confirmed by the fan being off");
 assert.equal(Api.dashboardExpectationMatches({details: {activity: "open", position: 30}}, {command: "open_cover"}), false, "partly open is not fully open");
 assert.equal(Api.dashboardExpectationMatches({details: {activity: "opening", position: 30}}, {command: "open_cover"}), true);
 assert.match(qml, /model: items.length/);
@@ -395,7 +405,220 @@ Api.confirmDashboardFeedback(p);
 assert.equal(p.feedbackKey(stuck), "action_error", "a failed action is not confirmed by matching state");
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "");
+
+// A track skip has no state to confirm, so it stays sent instead of turning into a warning.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "media_next_track", stateless: true});
+p.dashboardPages = [{items: [{entity_id: stuck.entity_id, state: true, available: true}]}];
+clock += 15000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "action_sent", "a command without a state is never reported as unconfirmed");
+clock += 45000;
+assert.equal(p.feedbackKey(stuck), "", "and settles like any other entry");
 Api.Date = realDate;
 p.controlFeedback = [];
 p.dashboardPages = [];
 console.log("Feedback ageing passed");
+// Full-height tiles carry their own buttons.
+const commands = list => Array.from(list, q => q.command + ":" + q.steps);
+const coverItem = {entity_id: "cover.shade", controls: [
+    {command: "close_cover", kind: "button"}, {command: "open_cover", kind: "button"},
+    {command: "stop_cover", kind: "button"},
+    {command: "position", kind: "number", value: 40, min: 0, max: 100, step: 1}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(coverItem)),
+    ["open_cover:0", "stop_cover:0", "close_cover:0"], "a cover shows up/stop/down, not its position pair");
+const lightItem = {entity_id: "light.desk", domain: "c300x", available: true, state: true, controls: [
+    {command: "toggle", kind: "button"},
+    {command: "brightness", kind: "number", value: 95, min: 0, max: 100, step: 1, unit: "%"}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(lightItem)), ["brightness:-10", "brightness:10"],
+    "one-percent controls step by ten on the tile");
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
+    {command: "temperature", kind: "number", value: 20, min: 5, max: 30, step: 0.5},
+    {command: "hvac_mode", kind: "choice", value: "heat", options: ["off", "heat"]}]})),
+    ["temperature:-1", "temperature:1"], "a thermostat steps by its own step");
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [{command: "toggle", kind: "button"}]})), [],
+    "a plain on/off entity has only its switch");
+assert.deepEqual(commands(Api.dashboardQuickControls(null)), []);
+const selectControl = {command: "option", kind: "choice", value: "b", options: ["a", "b", "c"]};
+assert.equal(Api.dashboardCycleOption(selectControl, 1), "c");
+assert.equal(Api.dashboardCycleOption(selectControl, -1), "a");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: "b"}, 1), "a", "wraps forwards");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: "a"}, -1), "b", "wraps backwards");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: null}, 1), "a", "unknown starts at the first");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"]}, -1), "b", "unknown starts at the last");
+assert.equal(Api.dashboardCycleOption({options: []}, 1), null);
+assert.equal(p.quickLabel({steps: -10, kind: "number"}, null), "-");
+assert.equal(p.quickLabel({steps: 1, kind: "choice"}, null), "›");
+assert.equal(p.quickLabel({steps: 0, kind: "button"}, {command: "stop_cover"}), "■");
+assert.equal(p.quickLabel({}, undefined), "", "a delegate outliving its entry renders nothing");
+const brightnessStep = {command: "brightness", kind: "number", steps: 10};
+assert.equal(p.quickUsable(brightnessStep, lightItem.controls[1]), true);
+assert.equal(p.quickUsable(brightnessStep, {command: "brightness", kind: "number", value: null, min: 0, max: 100, step: 1}), false,
+    "minus/plus without a value would send nothing, so the tile dims them");
+assert.equal(p.quickUsable({command: "temperature", kind: "number", steps: 1}, {command: "temperature", kind: "number", min: 5, max: 30, step: 0.5}), false,
+    "a thermostat without a target has nothing to step from");
+assert.equal(p.quickUsable({command: "option", kind: "choice", steps: 1}, {command: "option", kind: "choice", value: null, options: ["a"]}), true,
+    "a select without a current option still steps to the first");
+assert.equal(p.quickUsable({command: "stop_cover", kind: "button", steps: 0}, {command: "stop_cover", kind: "button"}), true);
+assert.equal(p.quickUsable({command: "missing", kind: "number", steps: 1}, undefined), false);
+p.dashboardOnline = true; p.pendingEntity = ""; queue.length = 0;
+p.quickAction(lightItem, {command: "brightness", kind: "number", steps: 10});
+assert.match(queue[0].url, /light.desk%3Abrightness&option=100$/, "the tile step is clamped to the control range");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction({entity_id: "select.mode", domain: "c300x", available: true, controls: [selectControl]},
+    {command: "option", kind: "choice", steps: 1});
+assert.match(queue[0].url, /select.mode%3Aoption&option=c$/);
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction(Object.assign({domain: "c300x", available: true}, coverItem), {command: "stop_cover", kind: "button", steps: 0});
+assert.match(queue[0].url, /cover.shade%3Astop_cover$/, "a plain button sends no option");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction(lightItem, {command: "missing", kind: "number", steps: 1});
+assert.equal(queue.length, 0, "a control the entity no longer offers sends nothing");
+const sized = Api.dashboardMixedItems([
+    {kind: "switch", domain: "c300x", entity_id: "switch.a", tile_width: "full", tile_height: "full"},
+    {kind: "switch", domain: "c300x", entity_id: "switch.b"}]);
+assert.equal(sized[0].tile_width, "full"); assert.equal(sized[0].tile_height, "full");
+assert.equal(sized[1].tile_width, undefined, "automatic adds no key");
+p.controlFeedback = [];
+console.log("Tile controls passed");
+// The weather card is one ordered item of its page.
+const kinds = list => Array.from(list, i => i.kind + (i.entity_id ? ":" + i.entity_id : ""));
+const sw = id => ({kind: "switch", domain: "c300x", entity_id: id});
+const weatherData = {available: true, temperature: "12 C"};
+assert.deepEqual(kinds(Api.dashboardMixedItems([sw("switch.a"), {kind: "weather"}, sw("switch.b")])),
+    ["switch:switch.a", "weather", "switch:switch.b"], "a weather item keeps its configured place");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([sw("switch.a"), {kind: "weather"}]), weatherData)),
+    ["switch:switch.a", "weather"]);
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([sw("switch.a")]), weatherData)),
+    ["weather", "switch:switch.a"], "an older Home Assistant without the item still shows the card on top");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([{kind: "weather"}, sw("switch.a")]), null)),
+    ["switch:switch.a"], "no weather data leaves no empty card");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced(Api.dashboardMixedItems([{kind: "weather"}, {kind: "weather"}]), weatherData)),
+    ["weather"], "the card is never shown twice");
+assert.deepEqual(kinds(Api.dashboardWeatherPlaced([], undefined)), []);
+p.dashboardPages = [{items: [sw("switch.a"), {kind: "weather"}], weather: weatherData}];
+p.currentPageIndex = 0; p.pageCount = 1;
+Api.loadDashboardPage(p.status, p);
+assert.deepEqual(kinds(p.items), ["switch:switch.a", "weather"]);
+assert.equal(p.weatherVisible, true);
+p.refreshSelectedItem();
+p.dashboardPages = []; p.items = [];
+console.log("Weather placement passed");
+// A media player tile carries transport buttons and confirms play/pause.
+const playerItem = {entity_id: "media_player.kitchen", domain: "c300x", available: true, state: true,
+    details: {type: "media_player", playing: true}, controls: [
+    {command: "toggle", kind: "button"},
+    {command: "media_previous_track", kind: "button"},
+    {command: "media_play_pause", kind: "button", playing: true},
+    {command: "media_next_track", kind: "button"},
+    {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1, unit: "%"},
+    {command: "volume_mute", kind: "boolean", value: false},
+    {command: "source", kind: "choice", value: "Radio", options: ["Radio", "TV"]}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(playerItem)),
+    ["media_previous_track:0", "media_play_pause:0", "media_next_track:0"]);
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
+    {command: "media_play_pause", kind: "button", playing: false},
+    {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1}]})),
+    ["media_play_pause:0"], "a player without track buttons shows what it has, not a volume pair");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "||");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), ">");
+assert.equal(p.controlLabel({command: "media_play_pause"}), ">", "an unknown state offers play");
+assert.equal(p.controlLabel({command: "media_previous_track"}), "«");
+assert.equal(p.controlLabel({command: "media_next_track"}), "»");
+assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c.command),
+    ["media_previous_track", "media_play_pause", "media_next_track", "volume_level", "volume_mute", "source"],
+    "the power switch lives in the summary, not in the control list");
+const pauseExpected = Api.dashboardExpectation(playerItem, playerItem.controls[2], null);
+assert.equal(pauseExpected.playing, false);
+assert.equal(Api.dashboardExpectationMatches(playerItem, pauseExpected), false, "still playing is not a confirmation");
+const pausedItem = JSON.parse(JSON.stringify(playerItem));
+pausedItem.controls[2].playing = false; pausedItem.details.playing = false;
+assert.equal(Api.dashboardExpectationMatches(pausedItem, pauseExpected), true);
+const withoutPlayButton = JSON.parse(JSON.stringify(pausedItem)); withoutPlayButton.controls.splice(2, 1);
+assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, pauseExpected), true,
+    "a player that cannot play loses the button once paused, and HA reports it paused");
+const playExpected = Api.dashboardExpectation(pausedItem, pausedItem.controls[2], null);
+assert.equal(playExpected.playing, true);
+assert.equal(Api.dashboardExpectationMatches(pausedItem, playExpected), false, "still paused is not a confirmation");
+const withoutPauseButton = JSON.parse(JSON.stringify(playerItem)); withoutPauseButton.controls.splice(2, 1);
+assert.equal(Api.dashboardExpectationMatches(withoutPauseButton, playExpected), true,
+    "a player that cannot pause loses the button once playing, and HA reports it playing");
+assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, playExpected), false,
+    "a lost button is no confirmation: a cast player whose session ended is not playing");
+const switchedOff = JSON.parse(JSON.stringify(withoutPlayButton)); switchedOff.state = false;
+assert.equal(Api.dashboardExpectationMatches(switchedOff, playExpected), false, "a player switched off is not playing");
+assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPauseButton, {details: {type: "media_player"}}), playExpected), false,
+    "without the reported playback state nothing is confirmed");
+assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPlayButton, {available: false}), pauseExpected), false,
+    "an unavailable player confirms nothing");
+for (const skip of [playerItem.controls[1], playerItem.controls[3]]) {
+    const skipExpected = Api.dashboardExpectation(playerItem, skip, null);
+    assert.deepEqual(JSON.parse(JSON.stringify(skipExpected)), {command: skip.command, stateless: true},
+        "a track skip has no state to confirm");
+    assert.equal(Api.dashboardExpectationMatches(playerItem, skipExpected), false, "so no state confirms it");
+}
+p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
+p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0});
+assert.match(queue[0].url, /media_player.kitchen%3Amedia_next_track$/);
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+const everyPlayerControl = playerItem.controls.concat([{command: "sound_mode", kind: "choice", value: "Movie", options: ["Movie"]}]);
+for (const language of ["en", "de", "fr", "it"]) {
+    p.uiLanguage = language;
+    for (const control of everyPlayerControl) {
+        assert.notEqual(p.controlLabel(control), control.command, language + " label for " + control.command);
+    }
+    for (const key of ["media_previous_track", "media_play_pause", "media_next_track"]) {
+        assert.equal(I18n.text(language, key), key, "the " + key + " button draws a symbol, so no text ships for it");
+    }
+}
+p.uiLanguage = "en";
+console.log("Media player controls passed");
+
+
+
+// A fan steps by one of its speeds: HA sends the speed grid, rounded down.
+const fanItem = {entity_id: "fan.three", domain: "c300x", available: true, state: true, details: {type: "fan"},
+    controls: [{command: "percentage", kind: "number", value: 66.666666, min: 0, max: 100, step: 33.333333, unit: "%"}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(fanItem)), ["percentage:-1", "percentage:1"],
+    "a three-speed fan moves one speed per tile press");
+assert.equal(p.controlValue(fanItem.controls[0]), "66 %", "the speed reads like HA's own percentage");
+// A fan is a switch-kind item; its tile shows the speed its minus and plus step.
+const fanTile = Object.assign(JSON.parse(JSON.stringify(fanItem)), {kind: "switch"});
+assert.equal(p.itemDetail(fanTile), "On   Speed: 66 %", "a fan tile reads the speed it steps");
+const offFanTile = JSON.parse(JSON.stringify(fanTile)); offFanTile.state = false; offFanTile.controls[0].value = 0;
+assert.equal(p.itemDetail(offFanTile), "Off   Speed: 0 %", "an off fan reads speed 0");
+for (const language of ["en", "de", "fr", "it"]) {
+    p.uiLanguage = language;
+    assert.equal(p.itemDetail(fanTile), p.uiText("on") + "   " + p.uiText("percentage") + ": 66 %", language + " fan tile reading");
+    assert.notEqual(p.uiText("percentage"), "percentage", language + " names the fan speed");
+}
+p.uiLanguage = "en";
+assert.equal(p.controlValue({command: "percentage", value: 99.999999, unit: "%"}), "100 %");
+assert.equal(p.controlValue({command: "temperature", value: 20.5, unit: "C"}), "20.5 C", "other numbers are shown as sent");
+p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
+p.adjustControl(fanItem, fanItem.controls[0], 1);
+assert.match(queue[0].url, /fan.three%3Apercentage&option=99.999999$/, "plus reaches the top speed");
+const topExpected = Api.dashboardExpectation(fanItem, fanItem.controls[0], "99.999999");
+const topItem = JSON.parse(JSON.stringify(fanItem)); topItem.controls[0].value = 99.999999;
+assert.equal(Api.dashboardExpectationMatches(topItem, topExpected), true, "HA's next state confirms the press");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.adjustControl(fanItem, fanItem.controls[0], -1);
+assert.match(queue[0].url, /fan.three%3Apercentage&option=33.333333$/, "minus leaves the current speed");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+console.log("Fan speed steps passed");
+// A fractional step can leave the range's quotient just under a whole number.
+for (const [min, max, step, top] of [[0.05, 1, 0.05, "1"], [-0.7, 0.7, 0.1, "0.7"], [0.1, 0.7, 0.1, "0.7"]]) {
+    const ranged = {entity_id: "number.mix", domain: "c300x", available: true,
+        controls: [{command: "value", kind: "number", value: Number(top), min, max, step}]};
+    p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+    p.adjustControl(ranged, ranged.controls[0], 1);
+    assert.match(queue[0].url, new RegExp("number.mix%3Avalue&option=" + top.replace(".", "\\.") + "$"),
+        "plus at the top of " + min + ".." + max + " stays at the top");
+}
+assert.equal(p.controlLastStep({min: -0.7, max: 0.7, step: 0.1}), 14);
+assert.equal(p.controlLastStep({min: 7, max: 35, step: 0.5}), 56);
+assert.equal(p.controlLastStep({min: 0, max: 100, step: 33.333333}), 3, "a fan keeps its own speeds");
+assert.equal(p.controlLastStep({min: 0, max: 1, step: 0.3}), 3, "a range off the grid ends at its last whole step");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+console.log("Fractional ranges passed");

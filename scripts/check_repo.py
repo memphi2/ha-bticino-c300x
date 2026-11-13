@@ -51,13 +51,14 @@ NATIVE_AGENT_BUNDLE_INPUT_PATHS = (
     "device_qml",
     "custom_components/bticino_c300x/device_agent/init",
     "scripts/stage_device_agent_bundle.py",
+    "scripts/device_file_strip.py",
 )
 # Bundle inputs that never reach the agent binary. Their content is carried by
 # the bundle hash (stage_device_agent_bundle.py feeds qml_patch_hash into it),
 # and agent_update compares that hash, so a changed display file is delivered
 # without a new agent version. Requiring a bump here would mean relabelling an
 # unchanged binary with the new version, which release validation forbids.
-NATIVE_AGENT_BUNDLE_CONTENT_ONLY_PATHS = ("device_qml",)
+NATIVE_AGENT_BUNDLE_CONTENT_ONLY_PATHS = ("device_qml", "scripts/device_file_strip.py")
 TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -867,17 +868,7 @@ def check_hacs_metadata() -> list[str]:
     native_agent_docs = (ROOT / "docs" / "native-agent.md").read_text(
         encoding="utf-8"
     )
-    reuse_paths = (
-        "native_agent/src",
-        "native_agent/scripts",
-        "native_agent/VERSION",
-        "native_agent/Makefile",
-        "native_agent/config.example.json",
-        "device_qml",
-        "custom_components/bticino_c300x/device_agent/init",
-        "scripts/stage_device_agent_bundle.py",
-    )
-    for path in reuse_paths:
+    for path in NATIVE_AGENT_BUNDLE_INPUT_PATHS:
         if path not in release_workflow:
             failures.append(f"release workflow must gate agent reuse on {path}")
         if path not in release_validation:

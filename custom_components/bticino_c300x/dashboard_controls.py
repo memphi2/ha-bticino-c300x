@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -12,7 +13,12 @@ from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
 )
+from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.core import HomeAssistant
+from homeassistant.util.percentage import (
+    percentage_to_ranged_value,
+    ranged_value_to_percentage,
+)
 
 HA_FAN_FEATURE_IN_CONST = hasattr(fan_const, "FanEntityFeature")
 if HA_FAN_FEATURE_IN_CONST:
@@ -30,6 +36,17 @@ COLOR_PRESETS = {
     "pink": (330, 100, "#f568b0"),
     "white": (0, 0, "#ffffff"),
 }
+# Plain state strings: the media player state enum deprecates members between
+# HA versions, and merely reading a deprecated one is reported.
+_MEDIA_PLAYER_OFF_STATES = frozenset({"off", "standby"})
+# The display reads the whole dashboard in one response of at most 32 KiB, so
+# one list of hundreds of favourites must not push every other tile out. The
+# response escapes every non-ASCII character to six bytes, so options are
+# measured in the bytes they are sent as. Escaped, an option is never shorter
+# than the UTF-8 the agent accepts back, which is at most 1024 bytes.
+CHOICE_MAX_OPTIONS = 50
+CHOICE_MAX_OPTION_BYTES = 1024
+CHOICE_MAX_BYTES = 2048
 
 
 def _white_presets(control: dict[str, Any] | None, color_mode: Any) -> dict[str, Any] | None:
@@ -102,12 +119,85 @@ def _number(
     }
 
 
-def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
-    if not isinstance(options, (list, tuple)):
+def _fan_speed_count(attrs: Any) -> int | None:
+    """Return how many speeds the fan has, when that is fewer than 100."""
+
+    step = finite_number(attrs.get("percentage_step"))
+    if step is None or not 1 < step <= 100:
         return None
-    values = [item for item in options if isinstance(item, str) and item]
+    count = round(100 / step)
+    return count if 1 <= count < 100 else None
+
+
+def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
+    """Offer a fan's speed in percent, on the grid of its own speeds.
+
+    A fan rounds a requested percentage up to its next speed and reports a
+    speed truncated (2 of 3 is 66 %), so neither 1 % steps nor the reported
+    value step it reliably. With fewer than 100 speeds the step is one speed
+    and the value is the current speed on that grid. The step is rounded down
+    to six decimals because the display finds the last step as
+    floor(100 / step), which the exact quotient misses for some fans.
+    """
+
+    percentage = finite_number(attrs.get("percentage"))
+    count = _fan_speed_count(attrs)
+    if count is None:
+        return _number("percentage", percentage, 0, 100, 1, "%")
+    step = math.floor(100 / count * 1_000_000) / 1_000_000
+    value = None
+    if percentage is not None and 0 <= percentage <= 100:
+        speed = (
+            math.ceil(percentage_to_ranged_value((1, count), percentage))
+            if percentage
+            else 0
+        )
+        value = round(speed * step, 6)
+    return _number("percentage", value, 0, 100, step, "%")
+
+
+def _fan_percentage(attrs: Any, value: float) -> int:
+    """Return the percentage Home Assistant itself uses for the chosen speed."""
+
+    count = _fan_speed_count(attrs)
+    if count is None:
+        return int(value)
+    speed = round(value * count / 100)
+    return ranged_value_to_percentage((1, count), speed) if speed else 0
+
+
+def choice_options(options: Any) -> list[str]:
+    """Return the first options of a list that fit the display's response.
+
+    An option the display could not send back is skipped, not cut, because a
+    cut name is not an option Home Assistant accepts; the executor checks a
+    command against this same list. The list ends before it would take more
+    than CHOICE_MAX_BYTES of the response, separators included.
+    """
+    if not isinstance(options, (list, tuple)):
+        return []
+    values: list[str] = []
+    size = 0
+    for item in options:
+        if not isinstance(item, str) or not item:
+            continue
+        item_size = len(json.dumps(item))
+        if item_size > CHOICE_MAX_OPTION_BYTES:
+            continue
+        size += item_size + 2
+        if len(values) == CHOICE_MAX_OPTIONS or size > CHOICE_MAX_BYTES:
+            break
+        values.append(item)
+    return values
+
+
+def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
+    values = choice_options(options)
     if not values:
         return None
+    # The display only compares the value with the offered options.
+    if not isinstance(value, (str, int, float)) or str(value) not in values:
+        value = None
     return {"command": command, "kind": "choice", "value": value, "options": values}
 
 
@@ -216,7 +306,7 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         if features & toggle_feature:
             controls.append({"command": "toggle", "kind": "button"})
         if features & FanEntityFeature.SET_SPEED:
-            controls.append(_number("percentage", attrs.get("percentage"), 0, 100, 1, "%"))
+            controls.append(_fan_speed_control(attrs))
         if features & FanEntityFeature.OSCILLATE:
             oscillating = attrs.get("oscillating")
             controls.append({
@@ -227,6 +317,45 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append(_choice("preset_mode", attrs.get("preset_mode"), attrs.get("preset_modes")))
         if features & FanEntityFeature.DIRECTION:
             controls.append(_choice("direction", attrs.get("direction"), ["forward", "reverse"]))
+    elif domain == "media_player":
+        # Each button is offered only with the feature its next step needs.
+        powered = state.state not in _MEDIA_PLAYER_OFF_STATES
+        power_feature = (
+            MediaPlayerEntityFeature.TURN_OFF if powered else MediaPlayerEntityFeature.TURN_ON
+        )
+        if features & power_feature:
+            controls.append({"command": "toggle", "kind": "button"})
+        if features & MediaPlayerEntityFeature.PREVIOUS_TRACK:
+            controls.append({"command": "media_previous_track", "kind": "button"})
+        playing = state.state == "playing"
+        play_feature = (
+            MediaPlayerEntityFeature.PAUSE if playing else MediaPlayerEntityFeature.PLAY
+        )
+        if features & play_feature:
+            controls.append({
+                "command": "media_play_pause", "kind": "button", "playing": playing,
+            })
+        if features & MediaPlayerEntityFeature.NEXT_TRACK:
+            controls.append({"command": "media_next_track", "kind": "button"})
+        if features & MediaPlayerEntityFeature.VOLUME_SET:
+            volume = finite_number(attrs.get("volume_level"))
+            controls.append(_number(
+                "volume_level",
+                None if volume is None or not 0 <= volume <= 1 else round(volume * 100),
+                0, 100, 1, "%",
+            ))
+        if features & MediaPlayerEntityFeature.VOLUME_MUTE:
+            muted = attrs.get("is_volume_muted")
+            controls.append({
+                "command": "volume_mute", "kind": "boolean",
+                "value": muted if isinstance(muted, bool) else None,
+            })
+        if features & MediaPlayerEntityFeature.SELECT_SOURCE:
+            controls.append(_choice("source", attrs.get("source"), attrs.get("source_list")))
+        if features & MediaPlayerEntityFeature.SELECT_SOUND_MODE:
+            controls.append(
+                _choice("sound_mode", attrs.get("sound_mode"), attrs.get("sound_mode_list"))
+            )
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -329,7 +458,29 @@ async def async_execute_control(
             "direction": "set_direction",
         }[command]
         if command != "toggle":
-            data[command] = int(value) if command == "percentage" else value
+            data[command] = (
+                _fan_percentage(state.attributes, value)
+                if command == "percentage"
+                else value
+            )
+    elif domain == "media_player":
+        service = {
+            "volume_level": "volume_set", "volume_mute": "volume_mute",
+            "source": "select_source", "sound_mode": "select_sound_mode",
+        }.get(command, command)
+        # Home Assistant's toggle and play/pause services demand both features
+        # of their pair; the explicit service for the current state needs only
+        # the one feature the control was offered for.
+        if command == "toggle":
+            service = "turn_on" if state.state in _MEDIA_PLAYER_OFF_STATES else "turn_off"
+        elif command == "media_play_pause":
+            service = "media_pause" if control.get("playing") else "media_play"
+        elif command == "volume_level":
+            data["volume_level"] = value / 100
+        elif command == "volume_mute":
+            data["is_volume_muted"] = value
+        elif command in {"source", "sound_mode"}:
+            data[command] = value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

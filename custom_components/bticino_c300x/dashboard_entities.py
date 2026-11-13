@@ -46,7 +46,63 @@ DASHBOARD_TILE_SIZES = ("half", "full")
 DASHBOARD_TILE_SIZE_KEYS = ("width", "height")
 DASHBOARD_PAGE_NAME_MAX_LENGTH = 60
 DASHBOARD_POSITION_MAX = 10000
+# The status page carries the badges and the weather card. Its internal name
+# is the title the display hides; the other pages are named by the user.
+DASHBOARD_STATUS_PAGE = "C300X"
+DASHBOARD_PAGE_MAX_COUNT = 8
 DashboardEntityDisplayOverrides = dict[str, dict[str, str]]
+DashboardPage = dict[str, Any]
+
+
+def normalize_dashboard_page_name(value: Any) -> str:
+    """Return a page name with its whitespace collapsed, cut to the limit."""
+
+    return " ".join(str(value or "").split())[:DASHBOARD_PAGE_NAME_MAX_LENGTH]
+
+
+def normalize_dashboard_pages(value: Any, *, strict: bool = False) -> tuple[DashboardPage, ...]:
+    """Return the configured display pages, ordered as the display shows them.
+
+    Each page has a name and a position; the status page is named
+    ``DASHBOARD_STATUS_PAGE`` and an empty name is the page without a title.
+    Pages sort by position, then by the order they were stored in. A name
+    appears once and there are at most ``DASHBOARD_PAGE_MAX_COUNT`` pages.
+    """
+
+    if value in (None, ""):
+        return ()
+    if not isinstance(value, (list, tuple)):
+        if strict:
+            raise ValueError("invalid dashboard pages")
+        return ()
+    pages: list[tuple[int, int, DashboardPage]] = []
+    seen: set[str] = set()
+    for index, raw_page in enumerate(value):
+        if not isinstance(raw_page, dict):
+            if strict:
+                raise ValueError("invalid dashboard page")
+            continue
+        name = normalize_dashboard_page_name(raw_page.get("name"))
+        if name in seen or any(ord(char) < 32 for char in name):
+            if strict:
+                raise ValueError("invalid dashboard page name")
+            continue
+        try:
+            order = float(raw_page.get("order", 0))
+            if isinstance(raw_page.get("order"), bool) or not math.isfinite(order):
+                raise ValueError("invalid dashboard page order")
+        except (TypeError, ValueError, OverflowError):
+            if strict:
+                raise ValueError("invalid dashboard page order") from None
+            order = 0.0
+        position = int(min(float(DASHBOARD_POSITION_MAX), max(0.0, order)) + 0.5)
+        seen.add(name)
+        pages.append((position, index, {"name": name, "order": position}))
+    if len(pages) > DASHBOARD_PAGE_MAX_COUNT:
+        if strict:
+            raise ValueError("too many dashboard pages")
+        pages = pages[:DASHBOARD_PAGE_MAX_COUNT]
+    return tuple(page for _, _, page in sorted(pages, key=lambda entry: entry[:2]))
 
 
 def normalize_dashboard_entity_ids(value: Any, *, strict: bool = False) -> tuple[str, ...]:
@@ -80,12 +136,11 @@ def normalize_dashboard_entity_display_overrides(
 
     result: DashboardEntityDisplayOverrides = {}
     for raw_entity_id, raw_options in value.items():
-        weather_layout = _is_weather_entity_id(raw_entity_id)
-        entity_id = (
-            str(raw_entity_id).strip().lower()
-            if weather_layout
-            else _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
-        )
+        if _is_weather_entity_id(raw_entity_id):
+            # Releases before pages placed the weather card from here; it now
+            # heads the status page, so a stored placement is dropped.
+            continue
+        entity_id = _normalize_dashboard_entity_id(raw_entity_id, strict=strict)
         if entity_id is None:
             continue
         if not isinstance(raw_options, dict):
@@ -118,12 +173,6 @@ def normalize_dashboard_entity_display_overrides(
             except (TypeError, ValueError, OverflowError):
                 if strict:
                     raise ValueError("invalid dashboard order") from None
-        if weather_layout:
-            # The weather card has a place on the display, nothing else: its
-            # size and texts are its own.
-            if options:
-                result[entity_id] = options
-            continue
         for size_key in DASHBOARD_TILE_SIZE_KEYS:
             size = str(raw_options.get(size_key, "") or "").strip()
             if not size or size == DASHBOARD_TILE_SIZE_AUTO:
@@ -190,17 +239,6 @@ def _is_weather_entity_id(value: Any) -> bool:
     entity_id = str(value or "").strip().lower()
     domain, _, object_id = entity_id.partition(".")
     return domain == "weather" and bool(ENTITY_OBJECT_ID_RE.fullmatch(object_id))
-
-
-def dashboard_weather_layout(
-    overrides: DashboardEntityDisplayOverrides,
-    weather_entity_id: str | None,
-) -> dict[str, str]:
-    """Return the configured page and position of the weather card."""
-
-    if not weather_entity_id:
-        return {}
-    return overrides.get(weather_entity_id.strip().lower(), {})
 
 
 def _iter_dashboard_entity_values(value: Any, *, strict: bool) -> tuple[Any, ...]:

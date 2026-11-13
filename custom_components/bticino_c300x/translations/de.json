@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
       },
       "reconfigure": {
         "title": "BTicino C300X neu konfigurieren",
@@ -158,7 +158,145 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+      },
+      "user_dashboard_pages": {
+        "title": "Display-Seiten",
+        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "sections": {
+          "page_1": {
+            "name": "Statusseite",
+            "data": {
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_2": {
+            "name": "Seite 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_3": {
+            "name": "Seite 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_4": {
+            "name": "Seite 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_5": {
+            "name": "Seite 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_6": {
+            "name": "Seite 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_7": {
+            "name": "Seite 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_8": {
+            "name": "Seite 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          }
+        }
+      },
+      "reconfigure_dashboard_pages": {
+        "title": "Display-Seiten",
+        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "sections": {
+          "page_1": {
+            "name": "Statusseite",
+            "data": {
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_2": {
+            "name": "Seite 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_3": {
+            "name": "Seite 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_4": {
+            "name": "Seite 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_5": {
+            "name": "Seite 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_6": {
+            "name": "Seite 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_7": {
+            "name": "Seite 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_8": {
+            "name": "Seite 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          }
+        }
       }
     },
     "abort": {
@@ -182,7 +320,12 @@
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
-      "required": "Dieses Feld ist erforderlich."
+      "required": "Dieses Feld ist erforderlich.",
+      "dashboard_page_name_reserved": "C300X ist der interne Name der Statusseite; waehle einen anderen Seitennamen.",
+      "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
+      "dashboard_entity_on_several_pages": "Eine Entitaet ist auf mehreren Seiten gewaehlt; lass sie auf einer Seite.",
+      "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungueltig; richte die Seiten neu ein.",
+      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden."
     }
   },
   "options": {
@@ -253,7 +396,76 @@
       },
       "dashboard_entity_display": {
         "title": "Dashboard-Entitaeten anzeigen",
-        "description": "Lege Seite, Position, Kachelbreite und -hoehe, Name und Zusatzzeile der ausgewaehlten Entitaeten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Ist eine Wetter-Entitaet gewaehlt, legen Weather - Page und Weather - Position die Wetterkarte zwischen die Kacheln. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+        "description": "Lege Kachelbreite und -hoehe, Name und Zusatzzeile der Entitaeten auf den Display-Seiten fest. Volle Hoehe zeigt die eigenen Tasten einer Entitaet direkt auf der Kachel; Automatisch behaelt die Groesse des Typs. Die optionale Alarmo-Aktion hat einen eigenen Anzeigenamen und wird nicht zur Uebersicht hinzugefuegt."
+      },
+      "dashboard_pages": {
+        "title": "Display-Seiten",
+        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "sections": {
+          "page_1": {
+            "name": "Statusseite",
+            "data": {
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_2": {
+            "name": "Seite 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_3": {
+            "name": "Seite 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_4": {
+            "name": "Seite 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_5": {
+            "name": "Seite 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_6": {
+            "name": "Seite 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_7": {
+            "name": "Seite 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          },
+          "page_8": {
+            "name": "Seite 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entitaeten"
+            }
+          }
+        }
       }
     },
     "error": {
@@ -266,7 +478,12 @@
       "invalid_weather_entity": "Waehle eine Wetter-Entitaet oder lasse das Feld leer.",
       "invalid_audio_gain": "Waehle eine Audioverstaerkung zwischen -20 dB und +20 dB.",
       "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
-      "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein."
+      "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
+      "dashboard_page_name_reserved": "C300X ist der interne Name der Statusseite; waehle einen anderen Seitennamen.",
+      "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
+      "dashboard_entity_on_several_pages": "Eine Entitaet ist auf mehreren Seiten gewaehlt; lass sie auf einer Seite.",
+      "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungueltig; richte die Seiten neu ein.",
+      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden."
     }
   },
   "entity": {

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from homeassistant.helpers import selector
@@ -26,13 +25,7 @@ from .config_flow_forms import (
     dashboard_entity_name_display_selector as _dashboard_entity_name_display_selector,
 )
 from .config_flow_forms import (
-    dashboard_entity_order_selector as _dashboard_entity_order_selector,
-)
-from .config_flow_forms import (
     dashboard_entity_secondary_info_selector as _dashboard_entity_secondary_info_selector,
-)
-from .config_flow_forms import (
-    dashboard_entity_selector as _dashboard_entity_selector,
 )
 from .config_flow_forms import (
     dashboard_entity_tile_size_selector as _dashboard_entity_tile_size_selector,
@@ -51,6 +44,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_UI_ENABLED,
     CONF_WEATHER_ENTITY_ID,
@@ -63,12 +57,11 @@ from .const import (
 )
 from .dashboard_entities import (
     ALARM_PAGE_ENTITY_DOMAINS,
-    DASHBOARD_PAGE_NAME_MAX_LENGTH,
-    DASHBOARD_POSITION_MAX,
     DASHBOARD_TILE_SIZE_AUTO,
     DASHBOARD_TILE_SIZES,
     normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
+    normalize_dashboard_pages,
 )
 from .schema_compat import vol
 
@@ -78,8 +71,6 @@ _DASHBOARD_ENTITY_NAME_FIELD_SUFFIX = " - Name"
 _DASHBOARD_ENTITY_CUSTOM_NAME_FIELD_SUFFIX = " - Custom name"
 _DASHBOARD_ENTITY_SECONDARY_FIELD_SUFFIX = " - Secondary line"
 _DASHBOARD_ENTITY_SIZE_FIELDS = (("width", "Width"), ("height", "Height"))
-_DASHBOARD_WEATHER_PAGE_FIELD = "Weather - Page"
-_DASHBOARD_WEATHER_POSITION_FIELD = "Weather - Position"
 
 
 def dashboard_entity_ids(value: Any) -> list[str]:
@@ -100,6 +91,15 @@ def alarm_page_entity_id(value: Any) -> str:
     if not entities or entities[0].split(".", 1)[0] not in ALARM_PAGE_ENTITY_DOMAINS:
         raise vol.Invalid("invalid alarm page entity")
     return entities[0]
+
+
+def dashboard_pages(value: Any) -> list[dict[str, Any]]:
+    """Validate the configured display pages."""
+
+    try:
+        return list(normalize_dashboard_pages(value, strict=True))
+    except ValueError as err:
+        raise vol.Invalid("invalid dashboard pages") from err
 
 
 def dashboard_entity_display_overrides(value: Any) -> dict[str, dict[str, str]]:
@@ -178,62 +178,16 @@ def dashboard_entity_display_form_complete(
     )
 
 
-def _dashboard_page_name(value: Any) -> str:
-    """Return a page name the display keeps.
-
-    The text field takes control characters and any length, which the stored
-    settings refuse; storing them would bounce the whole dialog.
-    """
-
-    page = "".join(char for char in str(value or "") if ord(char) >= 32).strip()
-    return page[:DASHBOARD_PAGE_NAME_MAX_LENGTH].rstrip()
-
-
-def _dashboard_position(value: Any, default: int) -> int:
-    """Return a whole position on a page; the number box does not enforce its step."""
-
-    try:
-        position = float(value)
-    except (TypeError, ValueError):
-        return default
-    if not math.isfinite(position):
-        return default
-    return int(min(float(DASHBOARD_POSITION_MAX), max(0.0, position)) + 0.5)
-
-
-def _weather_layout_from_fields(
-    user_input: dict[str, Any],
-    existing: dict[str, str],
-) -> dict[str, str]:
-    """Return the weather card's page and position; top of the main page stores nothing."""
-
-    layout: dict[str, str] = {}
-    page = _dashboard_page_name(user_input.get(_DASHBOARD_WEATHER_PAGE_FIELD, existing.get("page", "")))
-    order = _dashboard_position(user_input.get(_DASHBOARD_WEATHER_POSITION_FIELD, existing.get("order", "0")), 0)
-    if page:
-        layout["page"] = page
-    if order:
-        layout["order"] = str(order)
-    return layout
-
-
 def dashboard_entity_display_overrides_from_fields(
     user_input: dict[str, Any],
     entity_ids: Any,
     defaults: Any = None,
-    *,
-    weather_entity_id: str = "",
 ) -> dict[str, dict[str, str]]:
     """Build per-entity display overrides from rendered form controls."""
 
     entities = dashboard_entity_ids(entity_ids)
     existing = normalize_dashboard_entity_display_overrides(defaults)
     result: dict[str, dict[str, str]] = {}
-    weather_key = str(weather_entity_id or "").strip().lower()
-    if weather_key:
-        weather_layout = _weather_layout_from_fields(user_input, existing.get(weather_key, {}))
-        if weather_layout:
-            result[weather_key] = weather_layout
     for index, entity_id in enumerate(entities, start=1):
         name = _dashboard_entity_name_display(
             user_input.get(
@@ -260,19 +214,13 @@ def dashboard_entity_display_overrides_from_fields(
             )
             or ""
         ).strip()
-        options: dict[str, str] = {}
-        page = _dashboard_page_name(user_input.get(
-            _dashboard_entity_layout_field(index, entity_id, "Page"),
-            existing.get(entity_id, {}).get("page", ""),
-        ))
-        order = _dashboard_position(user_input.get(
-            _dashboard_entity_layout_field(index, entity_id, "Position"),
-            existing.get(entity_id, {}).get("order", str(index * 10)),
-        ), index * 10)
-        if page:
-            options["page"] = page
-        if order != index * 10:
-            options["order"] = str(order)
+        # The page comes from the pages step; an order is only left from an
+        # entry saved before pages could be set up.
+        options: dict[str, str] = {
+            key: existing[entity_id][key]
+            for key in ("page", "order")
+            if key in existing.get(entity_id, {})
+        }
         for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
             size = str(user_input.get(
                 _dashboard_entity_layout_field(index, entity_id, size_label),
@@ -306,9 +254,13 @@ def dashboard_schema(
     *,
     default_device_ui_enabled: bool = False,
 ) -> vol.Schema:
-    """Return the display dashboard schema."""
+    """Return the display dashboard schema.
 
-    dashboard_entities = dashboard_entity_ids(default_dashboard_entities or [])
+    The entities are chosen per page in the pages step; the saved ones are
+    kept here so the step can show them.
+    """
+
+    del default_dashboard_entities, default_dashboard_entity_display_overrides
     fields: dict[Any, Any] = {
             vol.Optional(
                 CONF_DEVICE_UI_ENABLED,
@@ -335,10 +287,6 @@ def dashboard_schema(
                 default_weather_entity,
             ): _weather_entity_selector(),
             _optional_suggested(
-                CONF_DASHBOARD_ENTITIES,
-                dashboard_entities,
-            ): _dashboard_entity_selector(),
-            _optional_suggested(
                 CONF_ACTIONS_JSON,
                 default_actions_json,
             ): _actions_json_field(),
@@ -350,7 +298,6 @@ def dashboard_entity_display_schema(
     default_dashboard_entities: Any = None,
     default_dashboard_entity_display_overrides: Any = None,
     *, layout_entity_ids: Any = None,
-    weather_entity_id: str = "",
 ) -> vol.Schema:
     """Return the per-entity display options schema."""
 
@@ -359,28 +306,9 @@ def dashboard_entity_display_schema(
         default_dashboard_entity_display_overrides
     )
     fields: dict[Any, Any] = {}
-    weather_key = str(weather_entity_id or "").strip().lower()
-    if weather_key:
-        weather_layout = dashboard_overrides.get(weather_key, {})
-        fields[_optional_suggested(
-            _DASHBOARD_WEATHER_PAGE_FIELD,
-            weather_layout.get("page", ""),
-        )] = _dashboard_entity_custom_name_selector()
-        fields[_optional_suggested(
-            _DASHBOARD_WEATHER_POSITION_FIELD,
-            int(weather_layout.get("order", "0")),
-        )] = _dashboard_entity_order_selector()
     for index, entity_id in enumerate(dashboard_entities, start=1):
         entity_overrides = dashboard_overrides.get(entity_id, {})
         if layout_entity_ids is None or entity_id in layout_entity_ids:
-            fields[_optional_suggested(
-                _dashboard_entity_layout_field(index, entity_id, "Page"),
-                entity_overrides.get("page", ""),
-            )] = _dashboard_entity_custom_name_selector()
-            fields[_optional_suggested(
-                _dashboard_entity_layout_field(index, entity_id, "Position"),
-                int(entity_overrides.get("order", str(index * 10))),
-            )] = _dashboard_entity_order_selector()
             for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
                 fields[vol.Optional(
                     _dashboard_entity_layout_field(index, entity_id, size_label),
@@ -423,16 +351,11 @@ def dashboard_entity_display_form(
         dashboard_display_entity_ids(dashboard_input),
         overrides,
         layout_entity_ids=dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
-        weather_entity_id=str(dashboard_input.get(CONF_WEATHER_ENTITY_ID) or ""),
     )
 
 
 def dashboard_entity_display_has_fields(dashboard_input: dict[str, Any]) -> bool:
-    """Return whether the entity-display form has anything to set.
-
-    Besides the tiles and the quick entity, a weather entity alone brings the
-    fields that place its card.
-    """
+    """Return whether the entity-display form has anything to set."""
 
     return bool(dashboard_entity_display_form(dashboard_input).schema)
 
@@ -501,6 +424,10 @@ def dashboard_input_defaults(
         [] if defaults is None else defaults.get(CONF_DASHBOARD_ENTITIES, []),
     )
     data.setdefault(
+        CONF_DASHBOARD_PAGES,
+        [] if defaults is None else defaults.get(CONF_DASHBOARD_PAGES, []),
+    )
+    data.setdefault(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         (
             DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT
@@ -517,7 +444,6 @@ def dashboard_input_defaults(
             dashboard_display_entity_ids(data),
             data.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
                 {} if defaults is None else defaults.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})),
-            weather_entity_id=str(data.get(CONF_WEATHER_ENTITY_ID) or ""),
         )
     )
     data.setdefault(

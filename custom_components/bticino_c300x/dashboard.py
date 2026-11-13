@@ -44,6 +44,7 @@ from .dashboard_config import (
     configured_alarm_page_entity_id,
     configured_dashboard_entities,
     configured_dashboard_entity_display_overrides,
+    configured_dashboard_pages,
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
@@ -53,7 +54,6 @@ from .dashboard_entities import (
     dashboard_entity_custom_name_override,
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
-    dashboard_weather_layout,
 )
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
@@ -234,22 +234,9 @@ async def async_dashboard_payload(
         page["items"].append(dashboard_item)
 
     if weather is not None:
-        # The card is an ordinary item of its page, so it sorts with the tiles.
-        # Position 0 on the main page is where it has always been. Placed after
-        # the entities and actions, a page only the card uses cannot overtake
-        # theirs.
-        weather_layout = dashboard_weather_layout(
-            entity_display_overrides, configured_weather_entity_id(entry)
-        )
-        weather_page = (
-            _dashboard_page(pages, weather_layout["page"])
-            if "page" in weather_layout
-            else main_page
-        )
-        weather_page["weather"] = weather
-        weather_page["items"].append(
-            {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
-        )
+        # The card heads the status page, wherever that page is placed.
+        main_page["weather"] = weather
+        main_page["items"].append({"_kind": "weather", "_order": 0})
 
     return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
@@ -258,11 +245,27 @@ async def async_dashboard_payload(
         "data": {
             "pages": [
                 _finalize_dashboard_page(page)
-                for page in pages.values()
+                for page in _ordered_dashboard_pages(pages, configured_dashboard_pages(entry))
                 if _dashboard_page_has_content(page)
             ]
         },
     })
+
+
+def _ordered_dashboard_pages(
+    pages: dict[str, dict[str, Any]], configured: tuple[dict[str, Any], ...]
+) -> list[dict[str, Any]]:
+    """Return the pages in their configured order.
+
+    Configured pages come first, by position. A page that is not configured,
+    such as one only an action names, follows in the order it first appeared.
+    Without configured pages every page keeps that order, the status page
+    first.
+    """
+
+    ordered = [pages[page["name"]] for page in configured if page["name"] in pages]
+    placed = {id(page) for page in ordered}
+    return ordered + [page for page in pages.values() if id(page) not in placed]
 
 
 def _fit_dashboard_response(

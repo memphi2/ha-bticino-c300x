@@ -18,12 +18,16 @@ from custom_components.bticino_c300x.config_flow_dashboard import (
     dashboard_entity_display_schema,
     dashboard_input_defaults,
 )
+from custom_components.bticino_c300x.config_flow_dashboard_pages import (
+    dashboard_page_layout,
+)
 from custom_components.bticino_c300x.dashboard import (
     async_dashboard_payload,
     async_status,
 )
 from custom_components.bticino_c300x.dashboard_entities import (
     normalize_dashboard_entity_display_overrides,
+    normalize_dashboard_pages,
 )
 from custom_components.bticino_c300x.schema_compat import vol
 
@@ -46,7 +50,28 @@ def post_like_home_assistant(schema, changes=None):
     return schema({name: value for name, value in data.items() if value not in (None, "")})
 
 
-def test_layout_fields_roundtrip_and_clear_without_losing_names():
+def post_pages_like_home_assistant(schema, changes=None):
+    """Post the pages form the way Home Assistant's frontend does.
+
+    Each section is posted as its own dict with the suggested values filled in
+    and every empty field left out. ``changes`` maps a section to its changes.
+    """
+
+    data = {}
+    for key, page_section in schema.schema.items():
+        values = {}
+        for field in page_section.schema.schema:
+            suggested = (field.description or {}).get("suggested_value")
+            if suggested is not None:
+                values[str(field)] = suggested
+        values.update((changes or {}).get(str(key), {}))
+        data[str(key)] = {
+            name: value for name, value in values.items() if value not in (None, "", [])
+        }
+    return schema(data)
+
+
+def test_entity_display_dialog_keeps_the_page_and_position_of_each_entity():
     old = {
         "light.room": {
             "name": "custom",
@@ -62,34 +87,29 @@ def test_layout_fields_roundtrip_and_clear_without_losing_names():
         "dashboard_entity_display_overrides": old,
     }
     schema = dashboard_entity_display_form(settings, old)
+    assert not [str(key) for key in schema.schema if str(key).endswith(("Page", "Position"))]
     posted = post_like_home_assistant(schema)
-    assert posted["1. Room - Page"] == "Study"
-    assert posted["1. Room - Position"] == 5
     result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
     overrides = result["dashboard_entity_display_overrides"]
     assert normalize_dashboard_entity_display_overrides(overrides, strict=True) == old
-    posted = post_like_home_assistant(schema, {"1. Room - Page": "", "1. Room - Position": 10})
+    posted = post_like_home_assistant(schema, {"1. Room - Name": "friendly_name"})
     result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
     assert result["dashboard_entity_display_overrides"] == {
-        "light.room": {"name": "custom", "custom_name": "Desk", "secondary": "none"}
+        "light.room": {"secondary": "none", "page": "Study", "order": "5"}
     }
 
 
 def test_emptied_text_fields_are_stored_empty():
     # Home Assistant's frontend leaves an emptied field out of the post, so the
     # saved value must not come back as a default.
-    saved = {
-        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
-        "weather.home": {"page": "Outside"},
-    }
+    saved = {"light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"}}
     settings = {
         "device_ui_enabled": True,
-        "weather_entity_id": "weather.home",
         "dashboard_entities": ["light.room"],
         "dashboard_entity_display_overrides": saved,
     }
     schema = dashboard_entity_display_form(settings, saved)
-    emptied = {"Weather - Page": "", "1. Room - Page": "", "1. Room - Custom name": ""}
+    emptied = {"1. Room - Custom name": ""}
     posted = post_like_home_assistant(schema, emptied)
     assert not set(emptied) & set(posted)
     assert dashboard_entity_display_form_complete(posted, ["light.room"])
@@ -97,7 +117,7 @@ def test_emptied_text_fields_are_stored_empty():
     result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
 
     # Without its text a custom name leaves the Home Assistant name.
-    assert result["dashboard_entity_display_overrides"] == {}
+    assert result["dashboard_entity_display_overrides"] == {"light.room": {"page": "Study"}}
     # Untouched, the same form keeps everything.
     kept = dashboard_input_defaults(
         dashboard_entity_display_input(settings, post_like_home_assistant(schema))
@@ -106,7 +126,7 @@ def test_emptied_text_fields_are_stored_empty():
 
 
 def _display_flow(monkeypatch, flow_kind, entry):
-    """Return a flow's dashboard step and entity-display step.
+    """Return a flow's dashboard, pages and entity-display steps.
 
     Only the final hand-over is replaced, so the flow still validates what it
     stores and turns invalid settings back to a form.
@@ -127,7 +147,11 @@ def _display_flow(monkeypatch, flow_kind, entry):
         flow._feature_options = {"video_enabled": False}
         flow._connection_options = {}
         flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
-        steps = (flow.async_step_dashboard, flow.async_step_dashboard_entity_display)
+        steps = (
+            flow.async_step_dashboard,
+            flow.async_step_dashboard_pages,
+            flow.async_step_dashboard_entity_display,
+        )
     elif flow_kind == "reconfigure":
         flow = BticinoC300XConfigFlow()
         flow._get_reconfigure_entry = lambda: entry
@@ -135,84 +159,164 @@ def _display_flow(monkeypatch, flow_kind, entry):
         flow._async_finish_reconfigure = finish
         steps = (
             flow.async_step_reconfigure_dashboard,
+            flow.async_step_reconfigure_dashboard_pages,
             flow.async_step_reconfigure_dashboard_entity_display,
         )
     else:
         flow = BticinoC300XConfigFlow()
         flow._setup_feature_data = {"video_enabled": False}
         flow._async_create_setup_entry = finish
-        steps = (flow.async_step_user_dashboard, flow.async_step_user_dashboard_entity_display)
+        steps = (
+            flow.async_step_user_dashboard,
+            flow.async_step_user_dashboard_pages,
+            flow.async_step_user_dashboard_entity_display,
+        )
     flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
+    flow.add_suggested_values_to_schema = lambda schema, _values: schema
     return steps
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
 def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
-    saved = {
-        "light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"},
-        "weather.home": {"page": "Outside"},
-    }
-    dashboard = {
-        "device_ui_enabled": True,
-        "weather_entity_id": "weather.home",
-        "dashboard_entities": ["light.room"],
-    }
+    saved = {"light.room": {"name": "custom", "custom_name": "Desk", "page": "Study"}}
+    dashboard = {"device_ui_enabled": True, "dashboard_entities": ["light.room"]}
     entry = SimpleNamespace(
         data={**dashboard, "dashboard_entity_display_overrides": saved},
         options={},
         runtime_data=None,
     )
-    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
-    form = asyncio.run(dashboard_step(dict(dashboard)))
-    posted = post_like_home_assistant(
-        form["data_schema"],
-        {"Weather - Page": "", "1. Room - Page": "", "1. Room - Custom name": ""},
-    )
+    form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
+    assert form["step_id"].endswith("dashboard_pages")
+    form = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
+    posted = post_like_home_assistant(form["data_schema"], {"1. Room - Custom name": ""})
     result = asyncio.run(display_step(posted))
 
     assert result["type"] == "finished", result.get("errors")
-    assert result["data"]["dashboard_entity_display_overrides"] == {}
+    assert result["data"]["dashboard_entity_display_overrides"] == {"light.room": {"page": "Study"}}
+    assert result["data"]["dashboard_pages"] == [
+        {"name": "C300X", "order": 0},
+        {"name": "Study", "order": 10},
+    ]
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
-def test_an_emptied_position_returns_to_the_automatic_one(monkeypatch, flow_kind):
-    """Home Assistant leaves an emptied number box out of the form it sends.
-
-    A position with a default came back as the saved one; empty means the
-    entity's place in the selection and the top of the page for the card.
-    """
-
-    saved = {"light.room": {"order": "5"}, "weather.home": {"page": "Outside", "order": "15"}}
-    dashboard = {
-        "device_ui_enabled": True,
-        "weather_entity_id": "weather.home",
-        "dashboard_entities": ["light.room"],
-    }
-    entry = SimpleNamespace(
-        data={**dashboard, "dashboard_entity_display_overrides": saved},
-        options={},
-        runtime_data=None,
-    )
-    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
+    dashboard = {"device_ui_enabled": True, "weather_entity_id": "weather.home"}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(dict(dashboard)))
-    if flow_kind != "setup":
-        prefilled = post_like_home_assistant(form["data_schema"])
-        assert prefilled["Weather - Position"] == 15
-        assert prefilled["1. Room - Position"] == 5
-    posted = post_like_home_assistant(
-        form["data_schema"],
-        {"Weather - Page": "Outside", "Weather - Position": None, "1. Room - Position": None},
-    )
-    assert "Weather - Position" not in posted
-    assert "1. Room - Position" not in posted
-    result = asyncio.run(display_step(posted))
+    assert form["step_id"].endswith("dashboard_pages")
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"position": 20, "entities": ["sensor.temp"]},
+        "page_2": {"name": "  Living\troom ", "position": 30, "entities": ["light.two", "light.one"]},
+        "page_4": {"name": "Garden", "position": 5, "entities": ["cover.shade"]},
+    })
+    form = asyncio.run(pages_step(posted))
+    result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"])))
 
     assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_pages"] == [
+        {"name": "Garden", "order": 5},
+        {"name": "C300X", "order": 20},
+        {"name": "Living room", "order": 30},
+    ]
+    assert result["data"]["dashboard_entities"] == [
+        "cover.shade", "sensor.temp", "light.two", "light.one",
+    ]
     assert result["data"]["dashboard_entity_display_overrides"] == {
-        "weather.home": {"page": "Outside"},
+        "cover.shade": {"page": "Garden"},
+        "sensor.temp": {"page": "C300X"},
+        "light.two": {"page": "Living room"},
+        "light.one": {"page": "Living room"},
     }
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+@pytest.mark.parametrize(
+    ("changes", "errors"),
+    [
+        ({"page_2": {"name": "c300x"}}, {"page_2": "dashboard_page_name_reserved"}),
+        (
+            {"page_2": {"name": "Room"}, "page_3": {"name": "Room"}},
+            {"page_3": "dashboard_page_name_duplicate"},
+        ),
+        (
+            {"page_1": {"entities": ["light.one"]}, "page_2": {"name": "Room", "entities": ["light.one"]}},
+            {"page_2": "dashboard_entity_on_several_pages"},
+        ),
+        ({"page_2": {"entities": ["camera.door"]}}, {"page_2": "invalid_dashboard_entities"}),
+    ],
+)
+def test_the_pages_form_rejects_what_the_display_cannot_show(
+    monkeypatch, flow_kind, changes, errors
+):
+    saved = {"device_ui_enabled": True, "dashboard_entities": ["light.two"]}
+    entry = SimpleNamespace(data=dict(saved), options={}, runtime_data=None)
+    dashboard_step, pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
+    data = {key: dict(value) for key, value in post_pages_like_home_assistant(form["data_schema"]).items()}
+    for key, value in changes.items():
+        data[key] = {**data.get(key, {}), **value}
+    result = asyncio.run(pages_step(data))
+
+    assert result["type"] == "form"
+    assert result["step_id"].endswith("dashboard_pages")
+    assert result["errors"] == errors
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_an_emptied_page_position_returns_to_the_place_of_its_section(monkeypatch, flow_kind):
+    """Home Assistant leaves an emptied number box out of the form it sends."""
+
+    dashboard = {"device_ui_enabled": True}
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    posted = post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"position": None},
+        "page_3": {"name": "Room", "position": None},
+    })
+    assert "position" not in posted["page_1"]
+    result = asyncio.run(pages_step(posted))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_pages"] == [
+        {"name": "C300X", "order": 0},
+        {"name": "Room", "order": 20},
+    ]
+
+
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+def test_emptying_the_entities_of_every_page_stores_none(monkeypatch, flow_kind):
+    saved = {
+        "device_ui_enabled": True,
+        "dashboard_entities": ["light.one", "light.two"],
+        "dashboard_entity_display_overrides": {
+            "light.one": {"page": "C300X"},
+            "light.two": {"page": "Room", "width": "full"},
+        },
+    }
+    entry = SimpleNamespace(data=dict(saved), options={}, runtime_data=None)
+    dashboard_step, pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
+    prefilled = post_pages_like_home_assistant(form["data_schema"])
+    assert prefilled["page_1"]["entities"] == ["light.one"]
+    assert (prefilled["page_2"]["name"], prefilled["page_2"]["entities"]) == ("Room", ["light.two"])
+    result = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"], {
+        "page_1": {"entities": []},
+        "page_2": {"name": "", "entities": []},
+    })))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_entities"] == []
+    assert result["data"]["dashboard_entity_display_overrides"] == {}
+    assert result["data"]["dashboard_pages"] == [{"name": "C300X", "order": 0}]
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
@@ -226,7 +330,6 @@ def test_an_emptied_position_returns_to_the_automatic_one(monkeypatch, flow_kind
         "actions",
         {},
     ),
-    ("dashboard_entities", {"dashboard_entities": ["light.room"]}, "dashboard_entities", []),
 ])
 def test_emptying_a_dashboard_field_stores_it_empty(
     monkeypatch, flow_kind, field, saved, stored, empty
@@ -234,19 +337,21 @@ def test_emptying_a_dashboard_field_stores_it_empty(
     """An emptied picker or action list must not bring the saved value back.
 
     Home Assistant's form leaves an emptied picker or text field out of what it
-    sends; an emptied entity list arrives as an empty list.
+    sends.
     """
 
     entry = SimpleNamespace(
         data={"device_ui_enabled": True, **saved}, options={}, runtime_data=None
     )
-    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(None))
     assert post_like_home_assistant(form["data_schema"])[field]
     result = asyncio.run(dashboard_step(post_like_home_assistant(
         form["data_schema"], {field: [] if isinstance(empty, list) else ""},
     )))
+    assert result["step_id"].endswith("dashboard_pages")
+    result = asyncio.run(pages_step(post_pages_like_home_assistant(result["data_schema"])))
     if result["type"] == "form":
         assert result["step_id"].endswith("dashboard_entity_display")
         result = asyncio.run(display_step(post_like_home_assistant(result["data_schema"])))
@@ -257,27 +362,21 @@ def test_emptying_a_dashboard_field_stores_it_empty(
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
-def test_a_weather_entity_alone_opens_the_entity_display_dialog(monkeypatch, flow_kind):
-    dashboard = {"device_ui_enabled": True, "weather_entity_id": "weather.home", "dashboard_entities": []}
+def test_a_weather_entity_needs_no_entity_display_dialog(monkeypatch, flow_kind):
+    dashboard = {"device_ui_enabled": True, "weather_entity_id": "weather.home"}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
-    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(dict(dashboard)))
-    assert form.get("step_id", "").endswith("dashboard_entity_display")
-    assert [str(key) for key in form["data_schema"].schema] == ["Weather - Page", "Weather - Position"]
-    posted = post_like_home_assistant(
-        form["data_schema"], {"Weather - Page": "Outside", "Weather - Position": 5}
-    )
-    result = asyncio.run(display_step(posted))
+    result = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
 
     assert result["type"] == "finished", result.get("errors")
-    assert result["data"]["dashboard_entity_display_overrides"] == {
-        "weather.home": {"page": "Outside", "order": "5"}
-    }
+    assert result["data"]["weather_entity_id"] == "weather.home"
+    assert result["data"]["dashboard_entity_display_overrides"] == {}
 
-    # Without a weather entity and without tiles there is nothing to place.
-    dashboard_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
-    assert asyncio.run(dashboard_step({**dashboard, "weather_entity_id": ""}))["type"] == "finished"
+    # Without the device UI there are no pages to set up.
+    dashboard_step, _pages_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+    assert asyncio.run(dashboard_step({**dashboard, "device_ui_enabled": False}))["type"] == "finished"
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
@@ -287,32 +386,28 @@ def test_a_weather_entity_alone_opens_the_entity_display_dialog(monkeypatch, flo
         # A custom name without its text leaves the Home Assistant name.
         ({"1. Room - Name": "custom", "1. Room - Custom name": ""}, {}),
         ({"1. Room - Name": "custom", "1. Room - Custom name": "   "}, {}),
-        # The text fields and the position box do not enforce the stored
-        # limits, so the dialog keeps what the display can use.
-        ({"1. Room - Page": "Garden\tShed"}, {"light.room": {"page": "GardenShed"}}),
-        ({"1. Room - Position": 7.4}, {"light.room": {"order": "7"}}),
-        ({"Weather - Page": "x" * 70}, {"weather.home": {"page": "x" * 60}}),
-        ({"Weather - Position": 5.5}, {"weather.home": {"order": "6"}}),
+        ({"1. Room - Name": "custom", "1. Room - Custom name": "Desk"}, {"name": "custom", "custom_name": "Desk"}),
     ],
 )
 def test_the_entity_display_dialog_stores_only_what_the_display_accepts(
     monkeypatch, flow_kind, changes, stored
 ):
-    dashboard = {
-        "device_ui_enabled": True,
-        "weather_entity_id": "weather.home",
-        "dashboard_entities": ["light.room"],
-    }
+    dashboard = {"device_ui_enabled": True}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
-    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, pages_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(dict(dashboard)))
+    form = asyncio.run(pages_step(post_pages_like_home_assistant(
+        form["data_schema"], {"page_2": {"name": "x" * 70, "entities": ["light.room"]}}
+    )))
     result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"], changes)))
 
     # A rejected value would send the user back to the dashboard form without
     # a message and drop every change made in the dialog.
     assert result["type"] == "finished", result.get("errors")
-    assert result["data"]["dashboard_entity_display_overrides"] == stored
+    assert result["data"]["dashboard_entity_display_overrides"] == {
+        "light.room": {**stored, "page": "x" * 60}
+    }
 
 
 @pytest.mark.parametrize(
@@ -545,53 +640,42 @@ def test_weather_card_stays_on_the_status_page_until_placed():
     assert _kinds(pages[""]) == ["light.one", "light.two"]
 
 
-def test_weather_card_takes_a_position_among_the_tiles_and_a_page():
-    # Tiles join the status page by its name; the card then sorts with them.
-    shared = {
-        "light.one": {"page": "C300X"},
-        "light.two": {"page": "C300X"},
-        "weather.home": {"order": "15"},
-    }
+def test_weather_card_heads_the_status_page_wherever_it_is_placed():
+    shared = {"light.one": {"page": "C300X"}, "light.two": {"page": "C300X", "order": "0"}}
     payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(shared)))
     pages = payload["data"]["pages"]
     assert [page["title"] for page in pages] == ["C300X"]
-    assert _kinds(pages[0]) == ["light.one", "weather", "light.two"]
+    assert _kinds(pages[0]) == ["weather", "light.two", "light.one"]
 
+    # A placement saved by an older release is dropped.
     moved = {"weather.home": {"page": "Outside", "order": "5"}, "light.two": {"page": "Outside"}}
-    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(moved)))
+    entry = _weather_entry(moved)
+    entry.options["dashboard_pages"] = [{"name": "Outside", "order": 0}, {"name": "C300X", "order": 10}]
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), entry))
     pages = {page["title"]: page for page in payload["data"]["pages"]}
-    assert "weather" not in pages["C300X"]
-    assert "items" not in pages["C300X"]
-    assert "weather" in pages["Outside"]
-    assert _kinds(pages["Outside"]) == ["weather", "light.two"]
-    assert _kinds(pages[""]) == ["light.one"]
+    assert list(pages) == ["Outside", "C300X", ""]
+    assert "weather" in pages["C300X"]
+    assert "weather" not in pages["Outside"]
+    assert _kinds(pages["Outside"]) == ["light.two"]
 
 
-def test_placing_the_weather_card_keeps_the_order_of_the_pages():
-    """Named pages follow their first entity; the card cannot pull one ahead."""
-
+def test_pages_follow_their_configured_positions():
     pages_of = {"light.one": {"page": "Living"}, "light.two": {"page": "Garden"}}
-    unplaced = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(pages_of)))
-    assert [page["title"] for page in unplaced["data"]["pages"]] == ["C300X", "Living", "Garden"]
+    unordered = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(pages_of)))
+    # Without configured pages they keep the order their names first appear in.
+    assert [page["title"] for page in unordered["data"]["pages"]] == ["C300X", "Living", "Garden"]
 
-    on_garden = {**pages_of, "weather.home": {"page": "Garden", "order": "5"}}
-    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(on_garden)))
-    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", "Garden"]
-    assert _kinds(payload["data"]["pages"][2]) == ["weather", "light.two"]
-
-    unnamed = {"light.one": {"page": "Living"}, "weather.home": {"page": "Living"}}
-    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(unnamed)))
-    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", ""]
-
-    # A page only the card uses comes after the pages of the entities.
-    own_page = {**pages_of, "weather.home": {"page": "Outside"}}
-    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(own_page)))
-    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", "Garden", "Outside"]
+    entry = _weather_entry(pages_of)
+    entry.options["dashboard_pages"] = [
+        {"name": "C300X", "order": 20},
+        {"name": "Living", "order": 30},
+        {"name": "Garden", "order": 10},
+    ]
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), entry))
+    assert [page["title"] for page in payload["data"]["pages"]] == ["Garden", "C300X", "Living"]
 
 
-def test_placing_the_weather_card_keeps_the_order_of_action_pages():
-    """Pages that only configured actions use keep their order as well."""
-
+def test_pages_only_actions_use_follow_the_configured_pages():
     states = {
         "weather.home": SimpleNamespace(
             state="sunny", attributes={"temperature": 12, "temperature_unit": "C"}
@@ -613,54 +697,90 @@ def test_placing_the_weather_card_keeps_the_order_of_action_pages():
                  "target": {"entity_id": "switch.gate"}, "dashboard": {"page": "Garden"}},
     }
 
-    def titles(overrides):
-        entry = _weather_entry(overrides)
+    def titles(pages):
+        entry = _weather_entry({"light.one": {"page": "Garden"}, "light.two": {"page": "C300X"}})
         entry.options["actions"] = actions
+        entry.options["dashboard_pages"] = pages
         payload = asyncio.run(async_dashboard_payload(hass, entry))
         return [page["title"] for page in payload["data"]["pages"]]
 
-    assert titles({}) == ["C300X", "", "Lights", "Garden"]
-    assert titles({"weather.home": {"page": "Garden"}}) == ["C300X", "", "Lights", "Garden"]
-    assert titles({"weather.home": {"page": "Outside"}}) == ["C300X", "", "Lights", "Garden", "Outside"]
+    assert titles([]) == ["C300X", "Garden", "Lights"]
+    assert titles([{"name": "Garden", "order": 0}, {"name": "C300X", "order": 5}]) == [
+        "Garden", "C300X", "Lights",
+    ]
 
 
-def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
-    schema = dashboard_entity_display_schema(["light.one"], {}, weather_entity_id="weather.home")
-    posted = post_like_home_assistant(schema)
-    assert "Weather - Page" not in posted
-    assert posted["Weather - Position"] == 0
-    assert dashboard_entity_display_overrides_from_fields(
-        posted, ["light.one"], {}, weather_entity_id="weather.home"
-    ) == {}
-
-    posted["Weather - Page"] = "Outside"
-    posted["Weather - Position"] = 25
-    saved = dashboard_entity_display_overrides_from_fields(
-        posted, ["light.one"], {}, weather_entity_id="weather.home"
-    )
-    assert saved == {"weather.home": {"page": "Outside", "order": "25"}}
-    assert normalize_dashboard_entity_display_overrides(saved, strict=True) == saved
-    reopened = post_like_home_assistant(
-        dashboard_entity_display_schema(["light.one"], saved, weather_entity_id="weather.home")
-    )
-    assert (reopened["Weather - Page"], reopened["Weather - Position"]) == ("Outside", 25)
-
-    # No weather entity: no fields, and a layout saved for an old one is dropped.
-    assert "Weather - Page" not in dashboard_entity_display_schema(["light.one"], saved)({})
-    assert dashboard_entity_display_overrides_from_fields({}, ["light.one"], saved) == {}
-
-
-def test_weather_layout_key_carries_a_place_and_nothing_else():
+def test_weather_entity_keys_are_dropped_from_the_display_settings():
     cleaned = normalize_dashboard_entity_display_overrides(
-        {"weather.home": {"page": "Outside", "order": 5, "width": "full", "name": "custom", "custom_name": "x"}},
+        {"weather.home": {"page": "Outside", "order": 5}, "light.room": {"page": "Room"}},
         strict=True,
     )
-    assert cleaned == {"weather.home": {"page": "Outside", "order": "5"}}
-    with pytest.raises(ValueError):
-        normalize_dashboard_entity_display_overrides({"weather.home": {"order": -1}}, strict=True)
-    # Only a weather entity may be a non-dashboard key.
+    assert cleaned == {"light.room": {"page": "Room"}}
+    # Only a dashboard entity may have display settings.
     with pytest.raises(ValueError):
         normalize_dashboard_entity_display_overrides({"camera.door": {"page": "x"}}, strict=True)
+
+
+@pytest.mark.parametrize(
+    ("pages", "expected"),
+    [
+        (None, ()),
+        ([], ()),
+        (
+            [{"name": "Room", "order": 20}, {"name": "C300X", "order": 20}, {"name": " Hall ", "order": 5}],
+            ({"name": "Hall", "order": 5}, {"name": "Room", "order": 20}, {"name": "C300X", "order": 20}),
+        ),
+        ([{"name": "Room", "order": 7.6}], ({"name": "Room", "order": 8},)),
+    ],
+)
+def test_configured_pages_are_ordered_by_position(pages, expected):
+    assert normalize_dashboard_pages(pages, strict=True) == expected
+
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        "Room",
+        [["Room", 1]],
+        [{"name": "Room", "order": 1}, {"name": "Room", "order": 2}],
+        [{"name": "a\x07b", "order": 1}],
+        [{"name": "Room", "order": "NaN"}],
+        [{"name": "Room", "order": True}],
+        [{"name": f"Page {index}", "order": index} for index in range(9)],
+    ],
+)
+def test_invalid_pages_rejected_without_corrupting_saved_data(pages):
+    with pytest.raises(ValueError):
+        normalize_dashboard_pages(pages, strict=True)
+    assert len(normalize_dashboard_pages(pages)) <= 8
+
+
+def test_legacy_entries_open_the_pages_form_with_their_pages():
+    """An entry saved before pages keeps its display when the form opens."""
+
+    settings = {
+        "dashboard_entities": ["light.a", "light.b", "light.c", "light.d"],
+        "dashboard_entity_display_overrides": {
+            "light.b": {"page": "Room", "order": "30"},
+            "light.c": {"page": "Room", "order": "5"},
+            "light.d": {"page": "C300X"},
+        },
+    }
+    assert dashboard_page_layout(settings) == [
+        {"name": "C300X", "order": 0, "entities": ["light.d"]},
+        {"name": "", "order": 10, "entities": ["light.a"]},
+        {"name": "Room", "order": 20, "entities": ["light.c", "light.b"]},
+    ]
+
+    many = {
+        "dashboard_entities": [f"light.l{index}" for index in range(10)],
+        "dashboard_entity_display_overrides": {
+            f"light.l{index}": {"page": f"P{index}"} for index in range(10)
+        },
+    }
+    layout = dashboard_page_layout(many)
+    assert len(layout) == 8
+    assert layout[-1]["entities"] == ["light.l6", "light.l7", "light.l8", "light.l9"]
 
 
 def test_media_player_is_a_display_tile_but_not_an_alarm_quick_action():
@@ -760,3 +880,36 @@ def test_unavailable_media_player_is_offline_without_controls():
     assert item["available"] is False
     assert item["state"] is False
     assert item["controls"] == []
+
+
+def test_the_pages_form_reaches_the_frontend_as_sections():
+    from homeassistant.helpers import config_validation as cv
+
+    from custom_components.bticino_c300x.config_flow_dashboard_pages import (
+        dashboard_pages_schema,
+    )
+    from custom_components.bticino_c300x.schema_compat import HA_USES_PROBATIO
+
+    if HA_USES_PROBATIO:
+        import probatio
+
+        convert = probatio.to_field_list
+    else:
+        import voluptuous_serialize
+
+        convert = voluptuous_serialize.convert
+    schema = dashboard_pages_schema({
+        "dashboard_entities": ["light.a"],
+        "dashboard_entity_display_overrides": {"light.a": {"page": "Room"}},
+    })
+
+    fields = convert(schema, custom_serializer=cv.custom_serializer)
+
+    assert [(field["name"], field["type"]) for field in fields] == [
+        (f"page_{slot}", "expandable") for slot in range(1, 9)
+    ]
+    # Used pages are open, the free ones collapsed.
+    assert [field["expanded"] for field in fields] == [True, True] + [False] * 6
+    assert [item["name"] for item in fields[0]["schema"]] == ["position", "entities"]
+    assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
+    assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}

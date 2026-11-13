@@ -38,6 +38,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -64,6 +65,7 @@ from .const import (
     DEVICE_ACTIVATION_MODE_AUTO,
     WEBRTC_ICE_POLICIES,
 )
+from .dashboard_entities import normalize_dashboard_pages
 from .entry_config import entry_config_value
 from .entry_types import BticinoC300XConfigEntry
 from .schema_compat import vol
@@ -214,6 +216,9 @@ def current_feature_options(
         CONF_DASHBOARD_ENTITIES: _dashboard_entity_ids(
             _config_default(config_entry, CONF_DASHBOARD_ENTITIES, [])
         ),
+        CONF_DASHBOARD_PAGES: list(normalize_dashboard_pages(
+            _config_default(config_entry, CONF_DASHBOARD_PAGES, [])
+        )),
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: _dashboard_entity_display_overrides(
             _config_default(config_entry, CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, {})
         ),
@@ -402,6 +407,7 @@ def feature_input_defaults(
     data.setdefault(CONF_ALARM_PAGE_ENTITY_ID, defaults.get(CONF_ALARM_PAGE_ENTITY_ID, ""))
     data.setdefault(CONF_WEATHER_ENTITY_ID, defaults[CONF_WEATHER_ENTITY_ID])
     data.setdefault(CONF_DASHBOARD_ENTITIES, defaults.get(CONF_DASHBOARD_ENTITIES, []))
+    data.setdefault(CONF_DASHBOARD_PAGES, defaults.get(CONF_DASHBOARD_PAGES, []))
     data.setdefault(
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         defaults.get(

@@ -74,6 +74,12 @@ from .config_flow_dashboard import (
 from .config_flow_dashboard import (
     dashboard_schema as _dashboard_schema,
 )
+from .config_flow_dashboard_pages import (
+    dashboard_pages_input as _dashboard_pages_input,
+)
+from .config_flow_dashboard_pages import (
+    dashboard_pages_schema as _dashboard_pages_schema,
+)
 from .config_flow_features import (
     current_connection_options as _current_connection_options,
 )
@@ -140,6 +146,7 @@ from .const import (
     CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
     CONF_DASHBOARD_ENTITIES,
     CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+    CONF_DASHBOARD_PAGES,
     CONF_DASHBOARD_PREVENT_RETURN,
     CONF_DEVICE_ACTIVATION_MODE,
     CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N,
@@ -212,6 +219,7 @@ _RECONFIGURED_OPTION_KEYS = frozenset(
         CONF_DASHBOARD_ENTITIES,
         CONF_DASHBOARD_DYNAMIC_HOMEPAGE,
         CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES,
+        CONF_DASHBOARD_PAGES,
         CONF_DASHBOARD_PREVENT_RETURN,
         CONF_DEVICE_ACTIVATION_MODE,
         CONF_DEVICE_ACTIVATIONS,
@@ -716,14 +724,48 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._setup_dashboard_input = _dashboard_input_defaults(user_input)
-            if (
-                self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_entity_display_has_fields(self._setup_dashboard_input)
-            ):
-                return self._async_show_user_dashboard_entity_display_form(None, errors)
+            if self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]:
+                return self._async_show_user_dashboard_pages_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
 
         return self._async_show_user_dashboard_form(user_input, errors)
+
+    async def async_step_user_dashboard_pages(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Collect the pages of the initial C300X display dashboard."""
+
+        if not self._setup_dashboard_input:
+            return await self.async_step_user_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input, errors = _dashboard_pages_input(
+                self._setup_dashboard_input, user_input
+            )
+            if errors:
+                return self._async_show_user_dashboard_pages_form(user_input, errors)
+            self._setup_dashboard_input = dashboard_input
+            if _dashboard_entity_display_has_fields(self._setup_dashboard_input):
+                return self._async_show_user_dashboard_entity_display_form(None, errors)
+            return await self._async_create_setup_entry_from_dashboard(errors)
+        return self._async_show_user_dashboard_pages_form(None, errors)
+
+    def _async_show_user_dashboard_pages_form(
+        self,
+        user_input: dict[str, Any] | None,
+        errors: dict[str, str],
+    ) -> FlowResult:
+        """Show the pages of the initial C300X display dashboard."""
+
+        schema = _dashboard_pages_schema(self._setup_dashboard_input)
+        if user_input is not None:
+            schema = self.add_suggested_values_to_schema(schema, user_input)
+        return self.async_show_form(
+            step_id="user_dashboard_pages",
+            data_schema=schema,
+            errors=errors,
+        )
 
     async def async_step_user_dashboard_entity_display(
         self,
@@ -871,6 +913,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DASHBOARD_PREVENT_RETURN
                 ],
                 CONF_DASHBOARD_ENTITIES: feature_data[CONF_DASHBOARD_ENTITIES],
+                CONF_DASHBOARD_PAGES: feature_data[CONF_DASHBOARD_PAGES],
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE: feature_data[
                     CONF_DASHBOARD_DYNAMIC_HOMEPAGE
                 ],
@@ -1072,15 +1115,8 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            if (
-                self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_entity_display_has_fields(self._reconfigure_dashboard_input)
-            ):
-                return await self._async_show_reconfigure_dashboard_entity_display_form(
-                    None,
-                    feature_defaults,
-                    errors,
-                )
+            if self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]:
+                return self._async_show_reconfigure_dashboard_pages_form(None, errors)
             return await self._async_finish_reconfigure_from_dashboard(
                 feature_defaults,
                 errors,
@@ -1090,6 +1126,52 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input,
             feature_defaults,
             errors,
+        )
+
+    async def async_step_reconfigure_dashboard_pages(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Reconfigure the pages of the C300X display dashboard."""
+
+        entry = self._get_reconfigure_entry()
+        feature_defaults = _current_feature_options(entry)
+        if not self._reconfigure_dashboard_input:
+            return await self.async_step_reconfigure_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input, errors = _dashboard_pages_input(
+                self._reconfigure_dashboard_input, user_input
+            )
+            if errors:
+                return self._async_show_reconfigure_dashboard_pages_form(user_input, errors)
+            self._reconfigure_dashboard_input = dashboard_input
+            if _dashboard_entity_display_has_fields(self._reconfigure_dashboard_input):
+                return await self._async_show_reconfigure_dashboard_entity_display_form(
+                    None,
+                    feature_defaults,
+                    errors,
+                )
+            return await self._async_finish_reconfigure_from_dashboard(
+                feature_defaults,
+                errors,
+            )
+        return self._async_show_reconfigure_dashboard_pages_form(None, errors)
+
+    def _async_show_reconfigure_dashboard_pages_form(
+        self,
+        user_input: dict[str, Any] | None,
+        errors: dict[str, str],
+    ) -> FlowResult:
+        """Show the pages of the C300X display dashboard for reconfigure."""
+
+        schema = _dashboard_pages_schema(self._reconfigure_dashboard_input)
+        if user_input is not None:
+            schema = self.add_suggested_values_to_schema(schema, user_input)
+        return self.async_show_form(
+            step_id="reconfigure_dashboard_pages",
+            data_schema=schema,
+            errors=errors,
         )
 
     async def async_step_reconfigure_dashboard_entity_display(
@@ -1457,15 +1539,8 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            if (
-                self._dashboard_options[CONF_DEVICE_UI_ENABLED]
-                and _dashboard_entity_display_has_fields(self._dashboard_options)
-            ):
-                return await self._async_show_options_dashboard_entity_display_form(
-                    None,
-                    feature_defaults,
-                    errors,
-                )
+            if self._dashboard_options[CONF_DEVICE_UI_ENABLED]:
+                return self._async_show_options_dashboard_pages_form(None, errors)
             return await self._async_create_options_entry_from_dashboard(
                 feature_defaults,
                 errors,
@@ -1475,6 +1550,51 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             user_input,
             feature_defaults,
             errors,
+        )
+
+    async def async_step_dashboard_pages(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage the pages of the C300X display dashboard."""
+
+        feature_defaults = _current_feature_options(self._config_entry)
+        if not self._dashboard_options:
+            return await self.async_step_dashboard()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            dashboard_input, errors = _dashboard_pages_input(
+                self._dashboard_options, user_input
+            )
+            if errors:
+                return self._async_show_options_dashboard_pages_form(user_input, errors)
+            self._dashboard_options = dashboard_input
+            if _dashboard_entity_display_has_fields(self._dashboard_options):
+                return await self._async_show_options_dashboard_entity_display_form(
+                    None,
+                    feature_defaults,
+                    errors,
+                )
+            return await self._async_create_options_entry_from_dashboard(
+                feature_defaults,
+                errors,
+            )
+        return self._async_show_options_dashboard_pages_form(None, errors)
+
+    def _async_show_options_dashboard_pages_form(
+        self,
+        user_input: dict[str, Any] | None,
+        errors: dict[str, str],
+    ) -> FlowResult:
+        """Show the pages of the C300X display dashboard options."""
+
+        schema = _dashboard_pages_schema(self._dashboard_options)
+        if user_input is not None:
+            schema = self.add_suggested_values_to_schema(schema, user_input)
+        return self.async_show_form(
+            step_id="dashboard_pages",
+            data_schema=schema,
+            errors=errors,
         )
 
     async def async_step_dashboard_entity_display(

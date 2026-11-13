@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. Con un'entita meteo selezionata, Weather - Page e Weather - Position collocano la scheda meteo tra i riquadri. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
@@ -158,7 +158,145 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. Con un'entita meteo selezionata, Weather - Page e Weather - Position collocano la scheda meteo tra i riquadri. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+      },
+      "user_dashboard_pages": {
+        "title": "Pagine del display",
+        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "sections": {
+          "page_1": {
+            "name": "Pagina di stato",
+            "data": {
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_2": {
+            "name": "Pagina 2",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_3": {
+            "name": "Pagina 3",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_4": {
+            "name": "Pagina 4",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_5": {
+            "name": "Pagina 5",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_6": {
+            "name": "Pagina 6",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_7": {
+            "name": "Pagina 7",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_8": {
+            "name": "Pagina 8",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          }
+        }
+      },
+      "reconfigure_dashboard_pages": {
+        "title": "Pagine del display",
+        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "sections": {
+          "page_1": {
+            "name": "Pagina di stato",
+            "data": {
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_2": {
+            "name": "Pagina 2",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_3": {
+            "name": "Pagina 3",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_4": {
+            "name": "Pagina 4",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_5": {
+            "name": "Pagina 5",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_6": {
+            "name": "Pagina 6",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_7": {
+            "name": "Pagina 7",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_8": {
+            "name": "Pagina 8",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          }
+        }
       }
     },
     "abort": {
@@ -182,7 +320,12 @@
       "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
       "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalita luce scale manuale riserva gia stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
-      "required": "Questo campo è obbligatorio."
+      "required": "Questo campo è obbligatorio.",
+      "dashboard_page_name_reserved": "C300X e il nome interno della pagina di stato; scegli un altro nome di pagina.",
+      "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
+      "dashboard_entity_on_several_pages": "Un'entita e scelta su piu pagine; lasciala su una sola pagina.",
+      "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
+      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display."
     }
   },
   "options": {
@@ -253,7 +396,76 @@
       },
       "dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. Con un'entita meteo selezionata, Weather - Page e Weather - Position collocano la scheda meteo tra i riquadri. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta larghezza e altezza del riquadro, nome e riga secondaria delle entita delle pagine del display. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+      },
+      "dashboard_pages": {
+        "title": "Pagine del display",
+        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "sections": {
+          "page_1": {
+            "name": "Pagina di stato",
+            "data": {
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_2": {
+            "name": "Pagina 2",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_3": {
+            "name": "Pagina 3",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_4": {
+            "name": "Pagina 4",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_5": {
+            "name": "Pagina 5",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_6": {
+            "name": "Pagina 6",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_7": {
+            "name": "Pagina 7",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          },
+          "page_8": {
+            "name": "Pagina 8",
+            "data": {
+              "name": "Nome",
+              "position": "Posizione",
+              "entities": "Entita"
+            }
+          }
+        }
       }
     },
     "error": {
@@ -266,7 +478,12 @@
       "invalid_weather_entity": "Seleziona un'entità meteo oppure lascia vuoto il campo.",
       "invalid_audio_gain": "Scegli un guadagno audio tra -20 dB e +20 dB.",
       "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalita luce scale manuale riserva gia stair_light.",
-      "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99."
+      "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
+      "dashboard_page_name_reserved": "C300X e il nome interno della pagina di stato; scegli un altro nome di pagina.",
+      "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
+      "dashboard_entity_on_several_pages": "Un'entita e scelta su piu pagine; lasciala su una sola pagina.",
+      "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
+      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display."
     }
   },
   "entity": {

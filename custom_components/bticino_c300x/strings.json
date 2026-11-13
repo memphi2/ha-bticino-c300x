@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
@@ -158,7 +158,145 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+      },
+      "user_dashboard_pages": {
+        "title": "Display pages",
+        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "sections": {
+          "page_1": {
+            "name": "Status page",
+            "data": {
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          }
+        }
+      },
+      "reconfigure_dashboard_pages": {
+        "title": "Display pages",
+        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "sections": {
+          "page_1": {
+            "name": "Status page",
+            "data": {
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          }
+        }
       }
     },
     "abort": {
@@ -182,7 +320,12 @@
       "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
-      "required": "This field is required."
+      "required": "This field is required.",
+      "dashboard_page_name_reserved": "C300X is the internal name of the status page; choose another page name.",
+      "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
+      "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
+      "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
+      "invalid_dashboard_entities": "An entity cannot be shown on the display."
     }
   },
   "options": {
@@ -253,7 +396,76 @@
       },
       "dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set tile width and height, name and secondary line for the entities on the display pages. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+      },
+      "dashboard_pages": {
+        "title": "Display pages",
+        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "sections": {
+          "page_1": {
+            "name": "Status page",
+            "data": {
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_2": {
+            "name": "Page 2",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_3": {
+            "name": "Page 3",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_4": {
+            "name": "Page 4",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_5": {
+            "name": "Page 5",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_6": {
+            "name": "Page 6",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_7": {
+            "name": "Page 7",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          },
+          "page_8": {
+            "name": "Page 8",
+            "data": {
+              "name": "Name",
+              "position": "Position",
+              "entities": "Entities"
+            }
+          }
+        }
       }
     },
     "error": {
@@ -266,7 +478,12 @@
       "invalid_weather_entity": "Select a weather entity or leave the field empty.",
       "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
-      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99."
+      "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
+      "dashboard_page_name_reserved": "C300X is the internal name of the status page; choose another page name.",
+      "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
+      "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
+      "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
+      "invalid_dashboard_entities": "An entity cannot be shown on the display."
     }
   },
   "entity": {

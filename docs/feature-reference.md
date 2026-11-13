@@ -163,10 +163,10 @@ settings existed therefore looks the same until a size is chosen.
   capabilities. Preset names come from the entity itself.
 - Media players show what is playing, or their state when nothing is. The
   submenu has previous, play/pause and next, a volume slider, mute, source and
-  sound mode, each only where the player reports the feature. Players that can
-  be switched on and off keep the on/off switch. Play/pause sends the explicit
-  play or pause service for the current state. A media player cannot be chosen
-  as the alarm page's quick entity.
+  sound mode, each only where the player reports the feature. The on/off switch
+  and play/pause appear only when the player reports the step its current state
+  needs, and send that explicit service: turn on or off, play or pause. A
+  media player cannot be chosen as the alarm page's quick entity.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
   Numeric sensors retain their unit and reported display precision. Details may
   show the entity's numeric battery level, humidity and illuminance attributes;

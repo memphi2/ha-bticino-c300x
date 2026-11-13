@@ -31,6 +31,9 @@ COLOR_PRESETS = {
     "pink": (330, 100, "#f568b0"),
     "white": (0, 0, "#ffffff"),
 }
+# Plain state strings: the media player state enum deprecates members between
+# HA versions, and merely reading a deprecated one is reported.
+_MEDIA_PLAYER_OFF_STATES = frozenset({"off", "standby"})
 
 
 def _white_presets(control: dict[str, Any] | None, color_mode: Any) -> dict[str, Any] | None:
@@ -229,9 +232,8 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         if features & FanEntityFeature.DIRECTION:
             controls.append(_choice("direction", attrs.get("direction"), ["forward", "reverse"]))
     elif domain == "media_player":
-        # Plain state strings: the state enum deprecates members between HA
-        # versions, and merely reading a deprecated one is reported.
-        powered = state.state not in {"off", "standby"}
+        # Each button is offered only with the feature its next step needs.
+        powered = state.state not in _MEDIA_PLAYER_OFF_STATES
         power_feature = (
             MediaPlayerEntityFeature.TURN_OFF if powered else MediaPlayerEntityFeature.TURN_ON
         )
@@ -239,10 +241,13 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append({"command": "toggle", "kind": "button"})
         if features & MediaPlayerEntityFeature.PREVIOUS_TRACK:
             controls.append({"command": "media_previous_track", "kind": "button"})
-        if features & (MediaPlayerEntityFeature.PLAY | MediaPlayerEntityFeature.PAUSE):
+        playing = state.state == "playing"
+        play_feature = (
+            MediaPlayerEntityFeature.PAUSE if playing else MediaPlayerEntityFeature.PLAY
+        )
+        if features & play_feature:
             controls.append({
-                "command": "media_play_pause", "kind": "button",
-                "playing": state.state == "playing",
+                "command": "media_play_pause", "kind": "button", "playing": playing,
             })
         if features & MediaPlayerEntityFeature.NEXT_TRACK:
             controls.append({"command": "media_next_track", "kind": "button"})
@@ -373,9 +378,12 @@ async def async_execute_control(
             "volume_level": "volume_set", "volume_mute": "volume_mute",
             "source": "select_source", "sound_mode": "select_sound_mode",
         }.get(command, command)
-        if command == "media_play_pause":
-            # Not every player implements the combined service; the explicit
-            # one for its current state is the one its features promise.
+        # Home Assistant's toggle and play/pause services demand both features
+        # of their pair; the explicit service for the current state needs only
+        # the one feature the control was offered for.
+        if command == "toggle":
+            service = "turn_on" if state.state in _MEDIA_PLAYER_OFF_STATES else "turn_off"
+        elif command == "media_play_pause":
             service = "media_pause" if control.get("playing") else "media_play"
         elif command == "volume_level":
             data["volume_level"] = value / 100

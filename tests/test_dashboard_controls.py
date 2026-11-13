@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -484,7 +485,10 @@ def test_palette_cannot_bypass_color_capabilities(attrs, value):
 # SELECT_SOUND_MODE 65536.
 @pytest.mark.parametrize("value,features,commands", [
     ("playing", 1 | 16 | 32 | 16384, ["media_previous_track", "media_play_pause", "media_next_track"]),
-    ("playing", 16384, ["media_play_pause"]),
+    ("playing", 1, ["media_play_pause"]),
+    ("playing", 16384, []),
+    ("paused", 16384, ["media_play_pause"]),
+    ("paused", 1, []),
     ("playing", 128 | 256, ["toggle"]),
     ("off", 128, ["toggle"]),
     ("off", 256, []),
@@ -532,9 +536,13 @@ def test_media_player_controls_carry_bounded_values():
     ("playing", {"supported_features": 1 | 16384}, "media_play_pause", None, "media_pause", {}),
     ("paused", {"supported_features": 1 | 16384}, "media_play_pause", None, "media_play", {}),
     ("idle", {"supported_features": 16384}, "media_play_pause", None, "media_play", {}),
+    ("playing", {"supported_features": 1}, "media_play_pause", None, "media_pause", {}),
     ("playing", {"supported_features": 16}, "media_previous_track", None, "media_previous_track", {}),
     ("playing", {"supported_features": 32}, "media_next_track", None, "media_next_track", {}),
-    ("playing", {"supported_features": 256}, "toggle", None, "toggle", {}),
+    ("playing", {"supported_features": 256}, "toggle", None, "turn_off", {}),
+    ("idle", {"supported_features": 128 | 256}, "toggle", None, "turn_off", {}),
+    ("off", {"supported_features": 128}, "toggle", None, "turn_on", {}),
+    ("standby", {"supported_features": 128 | 256}, "toggle", None, "turn_on", {}),
     ("playing", {"supported_features": 4}, "volume_level", "35", "volume_set", {"volume_level": 0.35}),
     ("playing", {"supported_features": 4}, "volume_level", "0", "volume_set", {"volume_level": 0.0}),
     ("playing", {"supported_features": 8}, "volume_mute", "true", "volume_mute", {"is_volume_muted": True}),
@@ -547,6 +555,48 @@ def test_media_player_control_makes_one_explicit_service_call(value, attrs, comm
     hass.services.async_call.assert_awaited_once_with(
         "media_player", service, {"entity_id": "media_player.room", **data}, blocking=True,
     )
+
+
+# Home Assistant's media_player service registration: a call is accepted only
+# when the entity supports every feature of at least one listed set.
+HA_MEDIA_SERVICE_FEATURES = {
+    "turn_on": [128], "turn_off": [256], "toggle": [128 | 256],
+    "media_play": [16384], "media_pause": [1], "media_play_pause": [1 | 16384],
+    "media_previous_track": [16], "media_next_track": [32],
+}
+
+
+def test_media_player_buttons_only_call_services_home_assistant_accepts():
+    """A button the display offers must never end in ServiceNotSupported.
+
+    Toggle and play/pause need both features of their pair in Home Assistant,
+    while a player may report only the one its current state needs.
+    """
+
+    pair_features = (1, 16, 32, 128, 256, 16384)
+    calls = []
+
+    async def press_every_button():
+        for value in ("off", "standby", "idle", "on", "playing", "paused", "buffering"):
+            for count in range(len(pair_features) + 1):
+                for combo in itertools.combinations(pair_features, count):
+                    features = sum(combo)
+                    snapshot = state(value, supported_features=features)
+                    for control in entity_controls("media_player.room", snapshot):
+                        hass = hass_for(snapshot)
+                        await async_execute_control(
+                            hass, "media_player.room", control["command"], None,
+                        )
+                        service = hass.services.async_call.await_args.args[1]
+                        calls.append((value, features, control["command"], service))
+
+    asyncio.run(press_every_button())
+    assert calls
+    rejected = [
+        call for call in calls
+        if not any(call[1] & needed == needed for needed in HA_MEDIA_SERVICE_FEATURES[call[3]])
+    ]
+    assert rejected == []
 
 
 @pytest.mark.parametrize("command,option", [

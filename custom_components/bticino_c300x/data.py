@@ -215,6 +215,9 @@ class C300XRuntimeResources:
     close_display_notifications: Callable[[], None] | None = None
     prepare_doorbell_video_stop: Callable[[], Awaitable[None]] | None = None
     prepare_home_call_stop: Callable[[], Awaitable[None]] | None = None
+    media_session_count: Callable[[], int] | None = None
+    on_demand_capture_active: bool = False
+    on_demand_capture_task: Task[Any] | None = None
     media_stop_counts: dict[str, int] = field(default_factory=dict)
     agent_cpu_watchdog_task: Task[None] | None = None
     answering_machine_messages_refresh_task: Task[None] | None = None
@@ -233,6 +236,7 @@ class C300XRuntimeResources:
             self.unregister_webhook,
         )
         tasks = (
+            self.on_demand_capture_task,
             self.memos_refresh_task,
             self.answering_machine_messages_refresh_task,
             self.startup_sync_task,
@@ -246,6 +250,9 @@ class C300XRuntimeResources:
         self.on_runtime_registration_created = None
         self.prepare_doorbell_video_stop = None
         self.prepare_home_call_stop = None
+        self.media_session_count = None
+        self.on_demand_capture_active = False
+        self.on_demand_capture_task = None
         # Active stop contexts keep their old counter map until their finally.
         self.media_stop_counts = {}
         self.memos_refresh_task = None

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from ..camera_media.session_lifecycle import media_stop_scope
@@ -21,12 +21,17 @@ class DoorbellVideoUseCase:
     def __init__(self, entry: Any) -> None:
         self._entry = entry
 
-    async def activate(self, *, audio: bool = True) -> None:
+    async def activate(
+        self, *, audio: bool = True, status: Mapping[str, Any] | None = None,
+        before_activate: Callable[[], None] | None = None,
+    ) -> None:
         """Activate or renew the C300X doorbell video session."""
 
         ensure_doorbell_video_supported(self._entry)
         if audio:
-            await async_ensure_doorstation_audio_gain(self._entry)
+            await async_ensure_doorstation_audio_gain(self._entry, status=status)
+        if before_activate is not None:
+            before_activate()
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_activate_doorbell_video(audio=audio)
         )

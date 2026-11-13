@@ -70,6 +70,9 @@ from .service_schema import (
     ATTR_AUDIO as _ATTR_AUDIO,
 )
 from .service_schema import (
+    ATTR_CAPTURE_MODE as _ATTR_CAPTURE_MODE,
+)
+from .service_schema import (
     ATTR_CAPTURE_PATH as _ATTR_CAPTURE_PATH,
 )
 from .service_schema import (
@@ -321,6 +324,7 @@ class _C300XServiceHandlers:
 
         entry = _entry_for_call(self._hass, call)
         return await RingCaptureUseCase(self._hass, entry).capture(
+            capture_mode=call.data.get(_ATTR_CAPTURE_MODE, "ring"),
             output_path=call.data.get(_ATTR_OUTPUT_PATH),
             wav_output_dir=call.data.get(_ATTR_WAV_OUTPUT_DIR),
             duration_seconds=call.data.get(_ATTR_DURATION_SECONDS, 5),
@@ -574,6 +578,7 @@ def _doorbell_media_service_specs(
                 {
                     vol.Optional(_ATTR_ENTRY_ID): cv.string,
                     vol.Optional(_ATTR_OUTPUT_PATH): cv.string,
+                    vol.Optional(_ATTR_CAPTURE_MODE, default="ring"): vol.In(("ring", "on_demand")),
                     vol.Optional(_ATTR_DURATION_SECONDS, default=5): _capture_duration_seconds,
                     vol.Optional(_ATTR_INCLUDE_AUDIO, default=True): _boolean_service_value,
                     vol.Optional(_ATTR_WAV_OUTPUT_DIR): cv.string,

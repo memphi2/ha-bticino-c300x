@@ -8,11 +8,20 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any
 
+from homeassistant.exceptions import HomeAssistantError
+
 from .background_tasks import CameraBackgroundTasks
 from .webrtc_session import ProviderWebRTCSession
 
 MAX_PRESESSION_WEBRTC_SESSIONS = 16
 MAX_PRESESSION_WEBRTC_CANDIDATES = 64
+
+
+def raise_if_on_demand_capture_active(resources: Any) -> None:
+    """Keep new camera consumers out of a reserved on-demand capture."""
+
+    if getattr(resources, "on_demand_capture_active", False):
+        raise HomeAssistantError("C300X on-demand capture is active")
 
 
 def media_owner_stopping(resources: Any, owner: str) -> bool:

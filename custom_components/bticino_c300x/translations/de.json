@@ -508,6 +508,12 @@
     "ring_capture_busy": {
       "message": "Die C300X-Ring-Aufnahme ist belegt, weil bereits ein anderer Video-Client verbunden ist."
     },
+    "capture_announcement_requires_ring": {
+      "message": "Ansagen sind nur im Aufnahmemodus Klingelruf verfügbar. Entferne announcement_path für eine Liveaufnahme ohne Klingeln."
+    },
+    "on_demand_capture_busy": {
+      "message": "Die Liveaufnahme benötigt freie Medien. Schließe andere Kamerastreams oder Anrufe und versuche es erneut."
+    },
     "entry_id_required": {
       "message": "Eine Entry-ID ist erforderlich, wenn mehrere BTicino-C300X-Eintraege existieren."
     },
@@ -709,6 +715,26 @@
         },
         "abort": {
           "entry_not_loaded": "Der BTicino-C300X-Eintrag ist nicht geladen."
+        }
+      }
+    }
+  },
+  "selector": {
+    "capture_mode": {
+      "options": {
+        "ring": "Klingelruf",
+        "on_demand": "Liveaufnahme ohne Klingeln"
+      }
+    }
+  },
+  "services": {
+    "capture_doorbell_call": {
+      "name": "C300X-Türvideo aufnehmen",
+      "description": "Nimmt ein kurzes Video in Home Assistant auf: von einem eingehenden Klingelruf oder ohne Klingeln bei freiem Medienkanal.",
+      "fields": {
+        "capture_mode": {
+          "name": "Aufnahmemodus",
+          "description": "Klingelruf nimmt einen eingehenden Ruf auf. Liveaufnahme startet ohne Klingeln, wenn keine andere Mediensitzung aktiv ist."
         }
       }
     }

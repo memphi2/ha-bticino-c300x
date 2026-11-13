@@ -331,3 +331,68 @@ def test_weather_layout_key_carries_a_place_and_nothing_else():
     # Only a weather entity may be a non-dashboard key.
     with pytest.raises(ValueError):
         normalize_dashboard_entity_display_overrides({"camera.door": {"page": "x"}}, strict=True)
+
+
+def test_media_player_is_a_display_tile_but_not_an_alarm_quick_action():
+    from custom_components.bticino_c300x.config_flow_dashboard import (
+        alarm_page_entity_id,
+        dashboard_entity_ids,
+    )
+    from custom_components.bticino_c300x.schema_compat import vol
+
+    assert dashboard_entity_ids(["media_player.kitchen"]) == ["media_player.kitchen"]
+    with pytest.raises(vol.Invalid):
+        alarm_page_entity_id("media_player.kitchen")
+    assert alarm_page_entity_id("light.porch") == "light.porch"
+
+
+@pytest.mark.parametrize(
+    ("player_state", "attributes", "is_on", "reading"),
+    [
+        ("playing", {"media_title": "  Evening news  "}, True, "Evening news"),
+        ("paused", {"media_title": "x" * 80}, True, "x" * 60),
+        ("idle", {"media_title": "Stale title"}, True, "Ready"),
+        ("off", {}, False, "Off"),
+        ("standby", {}, False, "Standby"),
+    ],
+)
+def test_media_player_item_reports_power_and_what_is_playing(player_state, attributes, is_on, reading):
+    states = {
+        "media_player.kitchen": SimpleNamespace(
+            state=player_state,
+            attributes={"supported_features": 1 | 4 | 256 | 16384, "volume_level": 0.5, **attributes},
+        )
+    }
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={"device_ui_enabled": True, "dashboard_entities": ["media_player.kitchen"]},
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(
+        item for page in payload["data"]["pages"] for item in page.get("items", [])
+    )
+    assert item["kind"] == "entity"
+    assert item["state"] is is_on
+    assert item["available"] is True
+    assert item["details"]["type"] == "media_player"
+    assert item["details"]["value"] == reading
+    assert "media_play_pause" in [control["command"] for control in item["controls"]]
+
+
+def test_unavailable_media_player_is_offline_without_controls():
+    states = {"media_player.kitchen": SimpleNamespace(state="unavailable", attributes={})}
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={"device_ui_enabled": True, "dashboard_entities": ["media_player.kitchen"]},
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    assert item["available"] is False
+    assert item["state"] is False
+    assert item["controls"] == []

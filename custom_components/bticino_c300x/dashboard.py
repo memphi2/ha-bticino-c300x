@@ -372,7 +372,10 @@ def dashboard_item_for_state(
             entity_id, state, _entity_state_label(state, entity_id=entity_id, language=language), unit,
         )
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
-    if domain in {"light", "cover", "climate", "fan", "number", "input_number", "select", "input_select"}:
+    if domain in {
+        "light", "cover", "climate", "fan", "media_player",
+        "number", "input_number", "select", "input_select",
+    }:
         item["controls"] = entity_controls(entity_id, state, unit)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
@@ -380,6 +383,13 @@ def dashboard_item_for_state(
             item["temperature_unit"] = unit
         if domain in {"cover", "climate"}:
             item["_kind"] = "entity"
+            return item
+        if domain == "media_player":
+            item["_kind"] = "entity"
+            # Idle and paused are switched on; only off and standby are not.
+            item["state"] = state is not None and state.state not in {
+                "off", "standby", "unknown", "unavailable",
+            }
             return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"

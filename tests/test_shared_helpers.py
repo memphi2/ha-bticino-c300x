@@ -65,7 +65,7 @@ def test_dashboard_entity_display_overrides_drop_invalid_lenient_values() -> Non
     assert normalize_dashboard_entity_display_overrides("bad") == {}
     assert normalize_dashboard_entity_display_overrides(
         {
-            "media_player.tv": {"name": "entity_id"},
+            "camera.tv": {"name": "entity_id"},
             "sensor.temperature": "bad",
             "sensor.humidity": {"name": "bad", "secondary": "bad"},
         }
@@ -77,7 +77,7 @@ def test_dashboard_entity_display_overrides_reject_invalid_strict_values() -> No
         normalize_dashboard_entity_display_overrides("bad", strict=True)
     with pytest.raises(ValueError, match="invalid dashboard entity"):
         normalize_dashboard_entity_display_overrides(
-            {"media_player.tv": {"name": "entity_id"}},
+            {"camera.tv": {"name": "entity_id"}},
             strict=True,
         )
     with pytest.raises(ValueError, match="invalid dashboard entity display override"):
@@ -152,7 +152,7 @@ def test_normalize_dashboard_entity_ids_deduplicates_and_normalizes() -> None:
 
 
 def test_normalize_dashboard_entity_ids_drops_invalid_values_in_lenient_mode() -> None:
-    assert normalize_dashboard_entity_ids(["media_player.tv", "switch.valid", "bad"]) == (
+    assert normalize_dashboard_entity_ids(["camera.tv", "switch.valid", "bad"]) == (
         "switch.valid",
     )
     assert normalize_dashboard_entity_ids(object()) == ()
@@ -161,7 +161,7 @@ def test_normalize_dashboard_entity_ids_drops_invalid_values_in_lenient_mode() -
 
 def test_normalize_dashboard_entity_ids_rejects_invalid_values_in_strict_mode() -> None:
     with pytest.raises(ValueError):
-        normalize_dashboard_entity_ids("media_player.tv", strict=True)
+        normalize_dashboard_entity_ids("camera.tv", strict=True)
     with pytest.raises(ValueError):
         normalize_dashboard_entity_ids(object(), strict=True)
 

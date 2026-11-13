@@ -26,6 +26,7 @@ DASHBOARD_ENTITY_DOMAINS = (
     "input_number",
     "input_select",
     "light",
+    "media_player",
     "number",
     "select",
     "script",
@@ -34,6 +35,10 @@ DASHBOARD_ENTITY_DOMAINS = (
     "switch",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
+# The alarm page has room for one plain action tile, not for a player.
+ALARM_PAGE_ENTITY_DOMAINS = tuple(
+    domain for domain in DASHBOARD_ENTITY_DOMAINS if domain != "media_player"
+)
 # A tile is half or full in each direction. "auto" is never stored: an entity
 # without the key keeps the size its type has always had on the display.
 DASHBOARD_TILE_SIZE_AUTO = "auto"

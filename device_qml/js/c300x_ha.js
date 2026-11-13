@@ -204,6 +204,9 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "open_cover" || control.command === "close_cover" || control.command === "stop_cover") {
         return {command: control.command}
     }
+    if (control.command === "media_play_pause") {
+        return {command: control.command, playing: control.playing !== true}
+    }
     return null
 }
 
@@ -216,6 +219,10 @@ function dashboardExpectationMatches(item, expected) {
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
+    if (expected.playing !== undefined) {
+        var player = dashboardControlByCommand(item, expected.command)
+        return player ? (player.playing === true) === expected.playing : false
+    }
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
         if (control.command !== expected.command || control.value === null || control.value === undefined) continue
@@ -991,7 +998,7 @@ function dashboardVisibleControls(item, section) {
     var result = []
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
-        if (item && item.details && (item.details.type === "light" || item.details.type === "fan") && control.command === "toggle") continue
+        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player") && control.command === "toggle") continue
         if (sections.length > 0 && item.details.type === "light") {
             if (section === "color_mode" && control.command === "color_temp_kelvin") continue
             if (section !== "color_mode" && control.command === "color") continue
@@ -1017,12 +1024,18 @@ function dashboardCoverControls(item) {
 }
 
 var QUICK_PAIR_COMMANDS = ["temperature", "brightness", "percentage", "value", "option"]
+var QUICK_MEDIA_COMMANDS = ["media_previous_track", "media_play_pause", "media_next_track"]
 
 function dashboardQuickControls(item) {
     var result = []
     var covers = dashboardCoverControls(item)
     for (var c = 0; c < covers.length; c++) {
         result.push({command: covers[c].command, kind: "button", steps: 0})
+    }
+    for (var m = 0; m < QUICK_MEDIA_COMMANDS.length; m++) {
+        if (dashboardControlByCommand(item, QUICK_MEDIA_COMMANDS[m])) {
+            result.push({command: QUICK_MEDIA_COMMANDS[m], kind: "button", steps: 0})
+        }
     }
     if (result.length > 0) return result
     for (var i = 0; i < QUICK_PAIR_COMMANDS.length; i++) {

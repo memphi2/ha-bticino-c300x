@@ -14,7 +14,7 @@ from .const import (
     DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
     WEATHER_DOMAIN,
 )
-from .dashboard_entities import DASHBOARD_ENTITY_DOMAINS
+from .dashboard_entities import ALARM_PAGE_ENTITY_DOMAINS, DASHBOARD_ENTITY_DOMAINS
 from .schema_compat import vol
 
 
@@ -63,7 +63,7 @@ def alarm_page_entity_selector() -> Any:
     """Return a single-entity selector for the alarm page quick tile."""
 
     return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain=list(DASHBOARD_ENTITY_DOMAINS)),
+        selector.EntitySelectorConfig(domain=list(ALARM_PAGE_ENTITY_DOMAINS)),
     )
 
 

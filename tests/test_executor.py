@@ -917,7 +917,7 @@ def test_configured_dashboard_entities_normalizes_supported_entities() -> None:
                 " Switch.Entry ",
                 "sensor.temperature",
                 "switch.entry",
-                "media_player.tv",
+                "camera.tv",
                 "bad",
             ]
         },

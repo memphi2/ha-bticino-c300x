@@ -5484,7 +5484,7 @@ static bool start_media_session(media_bridge_t *bridge) {
         return false;
     }
     if (!c300x_media_bt_av_takeover(bridge->config)) {
-        c300x_video_bridge_set_error(bridge->video, "bt_av_media_start_failed");
+        c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
         stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
         return false;

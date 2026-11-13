@@ -3134,8 +3134,8 @@ static void handle_audio_codec_action(
     if (status.changed) {
         record_agent_write(config, runtime, "audio_codec", action);
     }
-    /* The codec change only takes effect after a reboot (bt_av_media, linphone
-     * and the agent all read their config at start). Chain it by default so the
+    /* The codec change only takes effect after a reboot (the device's media
+     * service, linphone and the agent all read their config at start). Chain it by default so the
      * one action lands the device in the new mode; gate on the reboot
      * capability and let "reboot": false defer it. */
     {

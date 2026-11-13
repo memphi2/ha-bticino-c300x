@@ -237,8 +237,8 @@ class C300XAudioCodecSelect(C300XEntity, SelectEntity):
 
     def _apply_action_result(self, target: str, status: Mapping[str, Any]) -> None:
         # apply/restore patch the config files, which the status reports as the
-        # target codec immediately -- but bt_av_media, linphone and the agent
-        # only adopt it on reboot. Until the codec is actually live, keep
+        # target codec immediately -- but the device's media service, linphone
+        # and the agent only adopt it on reboot. Until the codec is actually live, keep
         # reporting the running codec (the card keys its gain path off this
         # entity) and surface the change as pending. It resolves when the agent
         # actually restarts: the connection drops and comes back, and we then

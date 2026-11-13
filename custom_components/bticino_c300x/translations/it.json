@@ -543,6 +543,18 @@
     },
     "voice_memo_not_available": {
       "message": "Non e disponibile alcun memo vocale C300X."
+    },
+    "alarm_not_ready": {
+      "message": "L'allarme non può essere inserito perché uno o più sensori lo impediscono."
+    },
+    "alarm_invalid_code": {
+      "message": "Il codice dell'allarme è stato rifiutato."
+    },
+    "alarm_state_unconfirmed": {
+      "message": "Lo stato richiesto dell'allarme non è stato confermato. Verifica lo stato prima di riprovare."
+    },
+    "alarm_command_rejected": {
+      "message": "Il comando dell'allarme è stato rifiutato. Verifica lo stato e la relativa integrazione per ulteriori informazioni."
     }
   },
   "issues": {

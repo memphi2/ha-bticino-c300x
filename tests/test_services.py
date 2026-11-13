@@ -716,8 +716,9 @@ def test_base_executor_services_call_expected_helpers(monkeypatch) -> None:  # n
     async def _action(*args: Any, **kwargs: Any) -> None:
         calls.append(("action", args, kwargs))
 
-    async def _alarm(*args: Any, **kwargs: Any) -> None:
+    async def _alarm(*args: Any, **kwargs: Any) -> dict[str, bool]:
         calls.append(("alarm", args, kwargs))
+        return {"ok": True}
 
     async def _stair(*args: Any, **kwargs: Any) -> None:
         calls.append(("stair", args, kwargs))

@@ -102,6 +102,43 @@ test("answering fails visibly without sending an unscoped service or starting me
   assert.equal(card._lifecycle.doorbellAnswered, false);
 });
 
+test("answering a ring call is single-flight while the service is pending", async () => {
+  let answer;
+  const { calls, card } = fakeCard({
+    _doorstationView: () => ({ action: "answer" }),
+    _hass: { callService() {
+      calls.push(["answer"]);
+      return new Promise((resolve) => { answer = resolve; });
+    } },
+  });
+  const actions = new C300XCardActions(card);
+  const first = actions.handlePrimaryAction();
+  await actions.handlePrimaryAction();
+  assert.deepEqual(calls, [["answer"]]);
+  answer();
+  await first;
+  assert.equal(calls.filter(([kind]) => kind === "talkback").length, 1);
+});
+
+test("a stale device-action error cannot overwrite a replacement card's feedback", async () => {
+  let fail;
+  const { calls, card } = fakeCard({
+    _deviceActionEntity: () => "button.door_unlock",
+    _hass: { callService() {
+      return new Promise((resolve, reject) => { fail = reject; });
+    } },
+  });
+  const actions = new C300XCardActions(card);
+  const action = actions.handleDeviceAction("door_unlock");
+  card._resourceGeneration = 1;
+  card._lifecycle = { ...card._lifecycle };
+  card._error = "New camera feedback";
+  fail(new Error("Old camera error"));
+  await action;
+  assert.equal(card._error, "New camera feedback");
+  assert.deepEqual(calls, [["clear_notice"], ["update_state"]]);
+});
+
 test("action controller stops doorstation media before closing the local peer", async () => {
   const { calls, card } = fakeCard({
     _doorstationView() {

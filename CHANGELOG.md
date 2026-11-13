@@ -57,8 +57,8 @@
   confirmed once it is off, instead of ending as unconfirmed.
 - A choice on the display, such as a select's options or a media player's
   sources, offers its first options, at most 50 and at most 2 kB of the
-  display's answer, and every choice list is shortened further when the
-  dashboard would still not fit. A list of hundreds of entries, or several
+  display's answer, and the longest choice lists are shortened further, one
+  after another, when the dashboard would still not fit. A list of hundreds of entries, or several
   players sharing a long favourites list, made the dashboard larger than the
   agent reads in one response, and every page then showed Home Assistant as
   unavailable. A dashboard too large for other reasons is logged as a warning.

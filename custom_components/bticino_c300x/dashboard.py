@@ -268,7 +268,7 @@ async def async_dashboard_payload(
 def _fit_dashboard_response(
     entry: BticinoC300XConfigEntry, payload: dict[str, Any]
 ) -> dict[str, Any]:
-    """Shorten every choice list until the dashboard fits the display's answer.
+    """Shorten choice lists, longest first, until the dashboard fits the display.
 
     Each list is limited on its own, yet several players sharing one long
     favourites list still add up. A shortened list keeps its first options,
@@ -286,12 +286,22 @@ def _fit_dashboard_response(
             and isinstance(holder.get("options"), list)
             and "swatches" not in holder
         ]
+        # The longest lists go first and the cutting stops as soon as the
+        # answer fits, so a thermostat's modes and a select's few options
+        # stay whole next to a player's favourites.
+        lists.sort(key=lambda holder: len(json.dumps(holder["options"])), reverse=True)
         for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
             for holder in lists:
+                if len(holder["options"]) <= limit:
+                    continue
+                before = len(json.dumps(holder["options"]))
                 holder["options"] = holder["options"][:limit]
-            size = len(json.dumps(payload))
+                size -= before - len(json.dumps(holder["options"]))
+                if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+                    break
             if size <= DASHBOARD_RESPONSE_MAX_BYTES:
                 break
+        size = len(json.dumps(payload))
     if size <= DASHBOARD_RESPONSE_MAX_BYTES:
         _OVERSIZED_DASHBOARDS.discard(entry.entry_id)
         return payload

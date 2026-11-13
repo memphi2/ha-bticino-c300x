@@ -814,6 +814,44 @@ def test_choice_lists_never_push_the_dashboard_past_the_display(states, notifica
         asyncio.run(async_execute_control(hass, entity_id, command, options[-1]))
 
 
+@pytest.mark.parametrize("lights", [23])
+def test_shortening_starts_with_the_longest_lists(lights):
+    """A thermostat's modes and a select's options are what the user operates.
+
+    Favourites lists are what overflows, so the cap is applied to the longest
+    list first and only goes on to a shorter one when the answer still does
+    not fit.
+    """
+
+    states = {f"media_player.p{n}": _player(n, _ASCII) for n in range(2)}
+    states |= {f"light.l{n}": _light(n) for n in range(lights)}
+    states["climate.living"] = state(
+        "heat", friendly_name="Living", supported_features=1 | 16 | 32,
+        hvac_modes=["off", "heat", "cool", "heat_cool", "auto", "dry", "fan_only"],
+        preset_modes=["none", "eco", "away", "boost", "comfort", "home", "sleep", "activity"],
+        temperature=20, min_temp=5, max_temp=30, target_temp_step=0.5,
+        current_temperature=19, preset_mode="none",
+    )
+    states["select.mode"] = state(
+        "Normal", friendly_name="Mode",
+        options=["Normal", "Away", "Night", "Vacation", "Guest", "Party", "Movie", "Dinner"],
+    )
+    payload = _dashboard(states)
+    assert _sent_bytes(payload) + 1024 < _agent_response_buffer()
+    lengths = {(entity, command): len(options) for entity, command, options in _choice_lists(payload)}
+    assert lengths[("climate.living", "hvac_mode")] == 7
+    assert lengths[("climate.living", "preset_mode")] == 8
+    assert lengths[("select.mode", "option")] == 8
+    assert all(
+        length < CHOICE_MAX_OPTIONS for (entity, _), length in lengths.items() if entity.startswith("media_player.")
+    )
+    tile = next(
+        item for page in payload["data"]["pages"] for item in page.get("items", [])
+        if item.get("entity_id") == "select.mode"
+    )
+    assert len(tile["options"]) == 8
+
+
 def test_a_dashboard_that_fits_keeps_its_lists_whole():
     names = [f"Station {number}" for number in range(CHOICE_MAX_OPTIONS)]
     payload = _dashboard({f"media_player.p{n}": _player(n, names) for n in range(2)})

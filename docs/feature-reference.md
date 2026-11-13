@@ -185,8 +185,9 @@ these settings existed therefore looks the same until a size is chosen.
   first options: at most 50, and only as many as fit into 2 kB of the answer
   to the display, where a character outside ASCII counts six bytes and an
   emoji twelve. An option taking more than 1 kB there is left out. If the
-  dashboard would still be too large for the display to read, every choice
-  list is shortened further. A dashboard too large even then, for example
+  dashboard would still be too large for the display to read, the longest
+  choice lists are shortened further, one after another, until it fits; short
+  lists such as a thermostat's modes are cut last. A dashboard too large even then, for example
   because of very many entities, shows Home Assistant as unavailable, and
   Home Assistant logs a warning.
 

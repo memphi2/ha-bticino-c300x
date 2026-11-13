@@ -54,9 +54,12 @@
   value.
 - Setting a light's brightness or a fan's speed to 0 on the display is
   confirmed once it is off, instead of ending as unconfirmed.
-- Emptying a page name or a custom name in the entity-display dialog clears it.
-  Home Assistant leaves an emptied field out of the form it sends, so the saved
-  value came back.
+- Emptying a page name in the entity-display dialog clears it, and emptying a
+  custom name shows the Home Assistant name again. Home Assistant leaves an
+  emptied field out of the form it sends, so the saved value came back.
+- The entity-display dialog cuts a page name to 60 characters and rounds a
+  position to a whole number. Such a value used to send the user back to the
+  dashboard settings without a message, and the dialog's changes were lost.
 - A delayed status answer during camera reconciliation can no longer close a
   doorbell session that is just starting. Closing a go2rtc session also closes
   its websocket on current Home Assistant versions, which wrap it.

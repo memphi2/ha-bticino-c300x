@@ -96,7 +96,8 @@ def test_emptied_text_fields_are_stored_empty():
 
     result = dashboard_input_defaults(dashboard_entity_display_input(settings, posted))
 
-    assert result["dashboard_entity_display_overrides"] == {"light.room": {"name": "custom"}}
+    # Without its text a custom name leaves the Home Assistant name.
+    assert result["dashboard_entity_display_overrides"] == {}
     # Untouched, the same form keeps everything.
     kept = dashboard_input_defaults(
         dashboard_entity_display_input(settings, post_like_home_assistant(schema))
@@ -105,13 +106,17 @@ def test_emptied_text_fields_are_stored_empty():
 
 
 def _display_flow(monkeypatch, flow_kind, entry):
-    """Return a flow at its dashboard step, its two display steps and its settings."""
+    """Return a flow's dashboard step and entity-display step.
+
+    Only the final hand-over is replaced, so the flow still validates what it
+    stores and turns invalid settings back to a form.
+    """
 
     async def placeholders(_entry):
         return {}
 
-    async def finish(*_args):
-        return {"type": "finished"}
+    async def finish(feature_data):
+        return {"type": "finished", "data": feature_data}
 
     monkeypatch.setattr(
         "custom_components.bticino_c300x.config_flow._async_qml_patch_description_placeholders",
@@ -120,27 +125,25 @@ def _display_flow(monkeypatch, flow_kind, entry):
     if flow_kind == "options":
         flow = BticinoC300XOptionsFlow(entry)
         flow._feature_options = {"video_enabled": False}
-        flow._async_create_options_entry_from_dashboard = finish
+        flow._connection_options = {}
+        flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
         steps = (flow.async_step_dashboard, flow.async_step_dashboard_entity_display)
-        settings = lambda: flow._dashboard_options  # noqa: E731
     elif flow_kind == "reconfigure":
         flow = BticinoC300XConfigFlow()
         flow._get_reconfigure_entry = lambda: entry
         flow._reconfigure_feature_data = {"video_enabled": False}
-        flow._async_finish_reconfigure_from_dashboard = finish
+        flow._async_finish_reconfigure = finish
         steps = (
             flow.async_step_reconfigure_dashboard,
             flow.async_step_reconfigure_dashboard_entity_display,
         )
-        settings = lambda: flow._reconfigure_dashboard_input  # noqa: E731
     else:
         flow = BticinoC300XConfigFlow()
         flow._setup_feature_data = {"video_enabled": False}
-        flow._async_create_setup_entry_from_dashboard = finish
+        flow._async_create_setup_entry = finish
         steps = (flow.async_step_user_dashboard, flow.async_step_user_dashboard_entity_display)
-        settings = lambda: flow._setup_dashboard_input  # noqa: E731
-    flow.async_show_form = lambda **kwargs: kwargs
-    return (*steps, settings)
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
+    return steps
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
@@ -159,7 +162,7 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
         options={},
         runtime_data=None,
     )
-    dashboard_step, display_step, settings = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(dict(dashboard)))
     posted = post_like_home_assistant(
@@ -168,15 +171,15 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     )
     result = asyncio.run(display_step(posted))
 
-    assert result == {"type": "finished"}
-    assert settings()["dashboard_entity_display_overrides"] == {"light.room": {"name": "custom"}}
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_entity_display_overrides"] == {}
 
 
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
 def test_a_weather_entity_alone_opens_the_entity_display_dialog(monkeypatch, flow_kind):
     dashboard = {"device_ui_enabled": True, "weather_entity_id": "weather.home", "dashboard_entities": []}
     entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
-    dashboard_step, display_step, settings = _display_flow(monkeypatch, flow_kind, entry)
+    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
 
     form = asyncio.run(dashboard_step(dict(dashboard)))
     assert form.get("step_id", "").endswith("dashboard_entity_display")
@@ -186,14 +189,49 @@ def test_a_weather_entity_alone_opens_the_entity_display_dialog(monkeypatch, flo
     )
     result = asyncio.run(display_step(posted))
 
-    assert result == {"type": "finished"}
-    assert normalize_dashboard_entity_display_overrides(
-        settings()["dashboard_entity_display_overrides"], strict=True
-    ) == {"weather.home": {"page": "Outside", "order": "5"}}
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_entity_display_overrides"] == {
+        "weather.home": {"page": "Outside", "order": "5"}
+    }
 
     # Without a weather entity and without tiles there is nothing to place.
-    dashboard_step, _display_step, _settings = _display_flow(monkeypatch, flow_kind, entry)
-    assert asyncio.run(dashboard_step({**dashboard, "weather_entity_id": ""})) == {"type": "finished"}
+    dashboard_step, _display_step = _display_flow(monkeypatch, flow_kind, entry)
+    assert asyncio.run(dashboard_step({**dashboard, "weather_entity_id": ""}))["type"] == "finished"
+
+
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+@pytest.mark.parametrize(
+    ("changes", "stored"),
+    [
+        # A custom name without its text leaves the Home Assistant name.
+        ({"1. Room - Name": "custom", "1. Room - Custom name": ""}, {}),
+        ({"1. Room - Name": "custom", "1. Room - Custom name": "   "}, {}),
+        # The text fields and the position box do not enforce the stored
+        # limits, so the dialog keeps what the display can use.
+        ({"1. Room - Page": "Garden\tShed"}, {"light.room": {"page": "GardenShed"}}),
+        ({"1. Room - Position": 7.4}, {"light.room": {"order": "7"}}),
+        ({"Weather - Page": "x" * 70}, {"weather.home": {"page": "x" * 60}}),
+        ({"Weather - Position": 5.5}, {"weather.home": {"order": "6"}}),
+    ],
+)
+def test_the_entity_display_dialog_stores_only_what_the_display_accepts(
+    monkeypatch, flow_kind, changes, stored
+):
+    dashboard = {
+        "device_ui_enabled": True,
+        "weather_entity_id": "weather.home",
+        "dashboard_entities": ["light.room"],
+    }
+    entry = SimpleNamespace(data=dict(dashboard), options={}, runtime_data=None)
+    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"], changes)))
+
+    # A rejected value would send the user back to the dashboard form without
+    # a message and drop every change made in the dialog.
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_entity_display_overrides"] == stored
 
 
 @pytest.mark.parametrize(

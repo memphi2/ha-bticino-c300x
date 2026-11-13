@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from homeassistant.helpers import selector
@@ -62,6 +63,8 @@ from .const import (
 )
 from .dashboard_entities import (
     ALARM_PAGE_ENTITY_DOMAINS,
+    DASHBOARD_PAGE_NAME_MAX_LENGTH,
+    DASHBOARD_POSITION_MAX,
     DASHBOARD_TILE_SIZE_AUTO,
     DASHBOARD_TILE_SIZES,
     normalize_dashboard_entity_display_overrides,
@@ -175,6 +178,29 @@ def dashboard_entity_display_form_complete(
     )
 
 
+def _dashboard_page_name(value: Any) -> str:
+    """Return a page name the display keeps.
+
+    The text field takes control characters and any length, which the stored
+    settings refuse; storing them would bounce the whole dialog.
+    """
+
+    page = "".join(char for char in str(value or "") if ord(char) >= 32).strip()
+    return page[:DASHBOARD_PAGE_NAME_MAX_LENGTH].rstrip()
+
+
+def _dashboard_position(value: Any, default: int) -> int:
+    """Return a whole position on a page; the number box does not enforce its step."""
+
+    try:
+        position = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(position):
+        return default
+    return int(min(float(DASHBOARD_POSITION_MAX), max(0.0, position)) + 0.5)
+
+
 def _weather_layout_from_fields(
     user_input: dict[str, Any],
     existing: dict[str, str],
@@ -182,11 +208,11 @@ def _weather_layout_from_fields(
     """Return the weather card's page and position; top of the main page stores nothing."""
 
     layout: dict[str, str] = {}
-    page = str(user_input.get(_DASHBOARD_WEATHER_PAGE_FIELD, existing.get("page", "")) or "").strip()
-    order = user_input.get(_DASHBOARD_WEATHER_POSITION_FIELD, existing.get("order", "0"))
+    page = _dashboard_page_name(user_input.get(_DASHBOARD_WEATHER_PAGE_FIELD, existing.get("page", "")))
+    order = _dashboard_position(user_input.get(_DASHBOARD_WEATHER_POSITION_FIELD, existing.get("order", "0")), 0)
     if page:
         layout["page"] = page
-    if str(order) not in {"0", "0.0"}:
+    if order:
         layout["order"] = str(order)
     return layout
 
@@ -235,17 +261,17 @@ def dashboard_entity_display_overrides_from_fields(
             or ""
         ).strip()
         options: dict[str, str] = {}
-        page = str(user_input.get(
+        page = _dashboard_page_name(user_input.get(
             _dashboard_entity_layout_field(index, entity_id, "Page"),
             existing.get(entity_id, {}).get("page", ""),
-        ) or "").strip()
-        order = user_input.get(
+        ))
+        order = _dashboard_position(user_input.get(
             _dashboard_entity_layout_field(index, entity_id, "Position"),
             existing.get(entity_id, {}).get("order", str(index * 10)),
-        )
+        ), index * 10)
         if page:
             options["page"] = page
-        if str(order) not in {str(index * 10), str(float(index * 10))}:
+        if order != index * 10:
             options["order"] = str(order)
         for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
             size = str(user_input.get(
@@ -254,9 +280,12 @@ def dashboard_entity_display_overrides_from_fields(
             ) or "").strip()
             if size in DASHBOARD_TILE_SIZES:
                 options[size_key] = size
+        if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM and not custom_name:
+            # A custom name without its text leaves the Home Assistant name.
+            name = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME
         if name != DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME:
             options["name"] = name
-            if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM and custom_name:
+            if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM:
                 options["custom_name"] = custom_name
         if secondary != DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
             options["secondary"] = secondary

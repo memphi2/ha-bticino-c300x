@@ -221,7 +221,9 @@ Use the same page name to group entities; leave it empty for the existing unname
 page. Positions run from 0 to 10000, lower first within a page. Existing selections
 keep their original order until you change a position. Named pages follow their
 first occurrence in the selected-entity list, after the HA status/weather page.
-Page names are limited to 60 characters. Missing or unavailable entities retain
+Page names are limited to 60 characters; a longer one is cut, and a position
+is rounded to a whole number. A custom name left empty shows the Home Assistant
+name. Missing or unavailable entities retain
 their configuration and show unavailable rather than changing the saved layout.
 
 The first page is the status page: it carries the HA, alarm and time badges

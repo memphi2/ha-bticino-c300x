@@ -44,6 +44,8 @@ ALARM_PAGE_ENTITY_DOMAINS = tuple(
 DASHBOARD_TILE_SIZE_AUTO = "auto"
 DASHBOARD_TILE_SIZES = ("half", "full")
 DASHBOARD_TILE_SIZE_KEYS = ("width", "height")
+DASHBOARD_PAGE_NAME_MAX_LENGTH = 60
+DASHBOARD_POSITION_MAX = 10000
 DashboardEntityDisplayOverrides = dict[str, dict[str, str]]
 
 
@@ -102,7 +104,7 @@ def normalize_dashboard_entity_display_overrides(
         custom_name = str(raw_options.get("custom_name", "") or "").strip()
         page = str(raw_options.get("page", "") or "").strip()
         if page:
-            if len(page) > 60 or any(ord(char) < 32 for char in page):
+            if len(page) > DASHBOARD_PAGE_NAME_MAX_LENGTH or any(ord(char) < 32 for char in page):
                 if strict:
                     raise ValueError("invalid dashboard page name")
             else:
@@ -110,7 +112,7 @@ def normalize_dashboard_entity_display_overrides(
         if "order" in raw_options:
             try:
                 order = float(raw_options["order"])
-                if isinstance(raw_options["order"], bool) or not math.isfinite(order) or not order.is_integer() or not 0 <= order <= 10000:
+                if isinstance(raw_options["order"], bool) or not math.isfinite(order) or not order.is_integer() or not 0 <= order <= DASHBOARD_POSITION_MAX:
                     raise ValueError("invalid dashboard order")
                 options["order"] = str(int(order))
             except (TypeError, ValueError, OverflowError):

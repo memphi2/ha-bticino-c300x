@@ -310,10 +310,10 @@ def assert_audio_codec_patch_roundtrip(binary: Path) -> None:
     """
 
     stock_stack = (
-        "<bt_av_media>\n"
+        "<media>\n"
         "<enable_speex>1</enable_speex>\n"
         "<audio_compression>1</audio_compression>\n"
-        "</bt_av_media>\n"
+        "</media>\n"
     )
     stock_linphone = (
         "[sound]\nrtp_io=1\nrtp_ptnum=110\nrtp_map=speex/8000/1\n"
@@ -400,7 +400,7 @@ def assert_audio_codec_partial_state_detection(binary: Path) -> None:
     flags are still stock-speex; strict detection must not call this pcmu.
     """
 
-    stack_pcmu_side = "<bt_av_media>\n<enable_speex>0</enable_speex>\n</bt_av_media>\n"
+    stack_pcmu_side = "<media>\n<enable_speex>0</enable_speex>\n</media>\n"
     linphone_inconsistent = (
         "[sound]\nrtp_ptnum=0\nrtp_map=PCMU/8000/1\n\n"
         "[audio_codec_0]\nmime=PCMU\nrate=8000\nchannels=1\nenabled=0\n\n"
@@ -437,9 +437,9 @@ def assert_audio_codec_apply_rejects_unpatchable_target(binary: Path) -> None:
     """Apply must not report success unless the resulting config is fully PCMU."""
 
     unpatchable_stack = (
-        "<bt_av_media>\n"
+        "<media>\n"
         "<enable_speex>unexpected</enable_speex>\n"
-        "</bt_av_media>\n"
+        "</media>\n"
     )
     stock_linphone = (
         "[sound]\nrtp_ptnum=110\nrtp_map=speex/8000/1\n\n"
@@ -511,7 +511,7 @@ def run_smoke(
         audio_linphone = temp_path / "linphone.conf"
         audio_backup_dir = temp_path / "audio-backup"
         audio_stack_open.write_text(
-            "<bt_av_media>\n<enable_speex>1</enable_speex>\n</bt_av_media>\n",
+            "<media>\n<enable_speex>1</enable_speex>\n</media>\n",
             encoding="utf-8",
         )
         audio_linphone.write_text(

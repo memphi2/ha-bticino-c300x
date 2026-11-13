@@ -28,6 +28,9 @@
   blank lines and indentation. The installed files are about 30 % smaller
   (roughly 140 kB instead of 200 kB); their behaviour is unchanged. The first
   update rewrites the display files once because their content hash changes.
+- The agent reports a failed takeover of the device's media service as
+  `media_takeover_failed`. Nothing in Home Assistant evaluates this code; it
+  only appears in the agent's last error.
 
 ## v2.1.1 - 2026-11-10
 

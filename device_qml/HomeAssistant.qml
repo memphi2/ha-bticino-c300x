@@ -257,6 +257,10 @@ Page {
         return control ? controlLabel(control) : ""
     }
 
+    function quickUsable(quick, control) {
+        return control ? quick.kind !== "number" || !controlValueUnset(control) : false
+    }
+
     function quickAction(item, quick) {
         var control = Api.dashboardControlByCommand(item, quick.command)
         if (!control) return
@@ -613,9 +617,10 @@ Page {
                     Item {
                         property variant quick: tallTile.quickButtons[index] || ({})
                         property variant control: Api.dashboardControlByCommand(tallTile.tileItem, quick.command)
+                        property bool usable: tallTile.controlsEnabled && quickUsable(quick, control)
                         width: 48
                         height: 40
-                        opacity: tallTile.controlsEnabled ? 1 : 0.45
+                        opacity: usable ? 1 : 0.45
                         Image {
                             anchors.fill: parent
                             source: quickMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
@@ -631,7 +636,7 @@ Page {
                         BeepingMouseArea {
                             id: quickMouse
                             anchors.fill: parent
-                            enabled: tallTile.controlsEnabled
+                            enabled: usable
                             onClicked: quickAction(tallTile.tileItem, quick)
                         }
                     }

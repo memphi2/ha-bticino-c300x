@@ -442,6 +442,16 @@ assert.equal(p.quickLabel({steps: -10, kind: "number"}, null), "-");
 assert.equal(p.quickLabel({steps: 1, kind: "choice"}, null), "›");
 assert.equal(p.quickLabel({steps: 0, kind: "button"}, {command: "stop_cover"}), "■");
 assert.equal(p.quickLabel({}, undefined), "", "a delegate outliving its entry renders nothing");
+const brightnessStep = {command: "brightness", kind: "number", steps: 10};
+assert.equal(p.quickUsable(brightnessStep, lightItem.controls[1]), true);
+assert.equal(p.quickUsable(brightnessStep, {command: "brightness", kind: "number", value: null, min: 0, max: 100, step: 1}), false,
+    "minus/plus without a value would send nothing, so the tile dims them");
+assert.equal(p.quickUsable({command: "temperature", kind: "number", steps: 1}, {command: "temperature", kind: "number", min: 5, max: 30, step: 0.5}), false,
+    "a thermostat without a target has nothing to step from");
+assert.equal(p.quickUsable({command: "option", kind: "choice", steps: 1}, {command: "option", kind: "choice", value: null, options: ["a"]}), true,
+    "a select without a current option still steps to the first");
+assert.equal(p.quickUsable({command: "stop_cover", kind: "button", steps: 0}, {command: "stop_cover", kind: "button"}), true);
+assert.equal(p.quickUsable({command: "missing", kind: "number", steps: 1}, undefined), false);
 p.dashboardOnline = true; p.pendingEntity = ""; queue.length = 0;
 p.quickAction(lightItem, {command: "brightness", kind: "number", steps: 10});
 assert.match(queue[0].url, /light.desk%3Abrightness&option=100$/, "the tile step is clamped to the control range");

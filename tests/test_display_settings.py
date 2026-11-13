@@ -175,6 +175,47 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert result["data"]["dashboard_entity_display_overrides"] == {}
 
 
+@pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
+@pytest.mark.parametrize("field,saved,stored,empty", [
+    ("alarm_entity_id", {"alarm_entity_id": "alarm_control_panel.home"}, "alarm_entity_id", ""),
+    ("alarm_page_entity_id", {"alarm_page_entity_id": "switch.porch"}, "alarm_page_entity_id", ""),
+    ("weather_entity_id", {"weather_entity_id": "weather.home"}, "weather_entity_id", ""),
+    (
+        "actions_json",
+        {"actions": {"standby": {"domain": "button", "service": "press"}}},
+        "actions",
+        {},
+    ),
+    ("dashboard_entities", {"dashboard_entities": ["light.room"]}, "dashboard_entities", []),
+])
+def test_emptying_a_dashboard_field_stores_it_empty(
+    monkeypatch, flow_kind, field, saved, stored, empty
+):
+    """An emptied picker or action list must not bring the saved value back.
+
+    Home Assistant's form leaves an emptied picker or text field out of what it
+    sends; an emptied entity list arrives as an empty list.
+    """
+
+    entry = SimpleNamespace(
+        data={"device_ui_enabled": True, **saved}, options={}, runtime_data=None
+    )
+    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(None))
+    assert post_like_home_assistant(form["data_schema"])[field]
+    result = asyncio.run(dashboard_step(post_like_home_assistant(
+        form["data_schema"], {field: [] if isinstance(empty, list) else ""},
+    )))
+    if result["type"] == "form":
+        assert result["step_id"].endswith("dashboard_entity_display")
+        result = asyncio.run(display_step(post_like_home_assistant(result["data_schema"])))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"][stored] == empty
+    assert result["data"]["device_ui_enabled"] is True
+
+
 @pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
 def test_a_weather_entity_alone_opens_the_entity_display_dialog(monkeypatch, flow_kind):
     dashboard = {"device_ui_enabled": True, "weather_entity_id": "weather.home", "dashboard_entities": []}

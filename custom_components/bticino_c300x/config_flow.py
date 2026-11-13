@@ -66,6 +66,9 @@ from .config_flow_dashboard import (
     dashboard_entity_display_input as _dashboard_entity_display_input,
 )
 from .config_flow_dashboard import (
+    dashboard_form_input as _dashboard_form_input,
+)
+from .config_flow_dashboard import (
     dashboard_input_defaults as _dashboard_input_defaults,
 )
 from .config_flow_dashboard import (
@@ -1066,7 +1069,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._reconfigure_dashboard_input = _dashboard_input_defaults(
-                user_input,
+                _dashboard_form_input(user_input),
                 feature_defaults,
             )
             if (
@@ -1451,7 +1454,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._dashboard_options = _dashboard_input_defaults(
-                user_input,
+                _dashboard_form_input(user_input),
                 feature_defaults,
             )
             if (

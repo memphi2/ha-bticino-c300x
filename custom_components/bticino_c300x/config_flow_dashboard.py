@@ -455,6 +455,22 @@ def dashboard_entity_display_input(
     return {**dashboard_input, **cleared, **user_input}
 
 
+def dashboard_form_input(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Return a posted dashboard form with each field the user emptied.
+
+    Home Assistant's form leaves out a picker or text field the user emptied.
+    Such a field has no default, so one the form showed and the post lacks is
+    stored empty instead of falling back to the saved value.
+    """
+
+    cleared = {
+        str(key): [] if field.config.get("multiple") else ""
+        for key, field in dashboard_schema("", "").schema.items()
+        if key.default is vol.UNDEFINED and str(key) not in user_input
+    }
+    return {**cleared, **user_input}
+
+
 def dashboard_input_defaults(
     user_input: dict[str, Any],
     defaults: dict[str, Any] | None = None,

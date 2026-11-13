@@ -63,6 +63,9 @@
 - Emptying a page name in the entity-display dialog clears it, and emptying a
   custom name shows the Home Assistant name again. Home Assistant leaves an
   emptied field out of the form it sends, so the saved value came back.
+- Emptying the weather entity, the alarm entity, the alarm page entity or the
+  action list in the dashboard settings of an existing entry removes it. The
+  saved value came back for the same reason.
 - The entity-display dialog cuts a page name to 60 characters and rounds a
   position to a whole number. Such a value used to send the user back to the
   dashboard settings without a message, and the dialog's changes were lost.

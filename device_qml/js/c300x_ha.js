@@ -909,6 +909,8 @@ function dashboardMixedItems(source) {
         }
         if (normalized.length > 0) {
             normalized[0].available = source[i].available !== false
+            if (source[i].tile_width) normalized[0].tile_width = source[i].tile_width
+            if (source[i].tile_height) normalized[0].tile_height = source[i].tile_height
             if (source[i].details) normalized[0].details = source[i].details
             if (source[i].controls !== undefined) {
                 normalized[0].controls = listOrEmpty(source[i].controls)
@@ -994,6 +996,40 @@ function dashboardCoverControls(item) {
         }
     }
     return result
+}
+
+var QUICK_PAIR_COMMANDS = ["temperature", "brightness", "percentage", "value", "option"]
+
+function dashboardQuickControls(item) {
+    var result = []
+    var covers = dashboardCoverControls(item)
+    for (var c = 0; c < covers.length; c++) {
+        result.push({command: covers[c].command, kind: "button", steps: 0})
+    }
+    if (result.length > 0) return result
+    for (var i = 0; i < QUICK_PAIR_COMMANDS.length; i++) {
+        var control = dashboardControlByCommand(item, QUICK_PAIR_COMMANDS[i])
+        if (!control) continue
+        var steps = 1
+        if (control.command === "brightness" || control.command === "percentage") {
+            steps = Math.max(1, Math.round(10 / positiveNumber(control.step, 1)))
+        }
+        result.push({command: control.command, kind: control.kind, steps: -steps})
+        result.push({command: control.command, kind: control.kind, steps: steps})
+        return result
+    }
+    return result
+}
+
+function dashboardCycleOption(control, direction) {
+    var options = control ? listOrEmpty(control.options) : []
+    if (options.length === 0) return null
+    var current = -1
+    for (var i = 0; i < options.length; i++) {
+        if (String(options[i]) === String(control.value)) current = i
+    }
+    var next = current < 0 ? (direction > 0 ? 0 : options.length - 1) : (current + direction + options.length) % options.length
+    return String(options[next])
 }
 
 function dashboardSliders(source) {

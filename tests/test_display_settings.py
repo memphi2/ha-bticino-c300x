@@ -155,3 +155,76 @@ def test_quick_entity_honors_secondary_line_without_overview_selection(secondary
     )
     status = asyncio.run(async_status(hass, entry))
     assert status["alarm_page_entity"]["state_label"] == expected
+
+
+def test_tile_size_fields_roundtrip_and_automatic_stores_nothing():
+    schema = dashboard_entity_display_schema(["cover.shade"], {})
+    posted = schema({})
+    # A form that was never touched must not start writing sizes.
+    assert posted["1. Shade - Width"] == "auto"
+    assert posted["1. Shade - Height"] == "auto"
+    assert dashboard_entity_display_overrides_from_fields(posted, ["cover.shade"], {}) == {}
+
+    posted["1. Shade - Width"] = "full"
+    posted["1. Shade - Height"] = "full"
+    saved = dashboard_entity_display_overrides_from_fields(posted, ["cover.shade"], {})
+    assert saved == {"cover.shade": {"width": "full", "height": "full"}}
+    assert normalize_dashboard_entity_display_overrides(saved, strict=True) == saved
+
+    reopened = dashboard_entity_display_schema(["cover.shade"], saved)({})
+    assert reopened["1. Shade - Width"] == "full"
+    reopened["1. Shade - Width"] = "auto"
+    reopened["1. Shade - Height"] = "half"
+    assert dashboard_entity_display_overrides_from_fields(
+        reopened, ["cover.shade"], saved
+    ) == {"cover.shade": {"height": "half"}}
+
+
+def test_a_form_without_size_fields_keeps_the_saved_sizes():
+    """An older or partial post must not silently reset a configured tile."""
+
+    saved = {"cover.shade": {"width": "full", "height": "full"}}
+    assert dashboard_entity_display_overrides_from_fields({}, ["cover.shade"], saved) == saved
+
+
+@pytest.mark.parametrize("options", [{"width": "wide"}, {"height": "2"}, {"height": 94}])
+def test_invalid_tile_size_rejected_without_corrupting_saved_data(options):
+    with pytest.raises(ValueError):
+        normalize_dashboard_entity_display_overrides({"light.room": options}, strict=True)
+    assert normalize_dashboard_entity_display_overrides({"light.room": options}) == {}
+
+
+def test_tile_sizes_reach_the_display_only_when_configured():
+    states = {
+        "cover.shade": SimpleNamespace(state="closed", attributes={"supported_features": 15}),
+        "light.one": SimpleNamespace(state="on", attributes={"supported_color_modes": ["onoff"]}),
+        "sensor.temp": SimpleNamespace(state="21.5", attributes={}),
+    }
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
+    )
+    entry = SimpleNamespace(
+        entry_id="entry",
+        title="Door",
+        data={},
+        options={
+            "device_ui_enabled": True,
+            "dashboard_entities": ["cover.shade", "light.one", "sensor.temp"],
+            "dashboard_entity_display_overrides": {
+                "cover.shade": {"width": "full", "height": "full"},
+                "sensor.temp": {"height": "half"},
+            },
+        },
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    items = {
+        item["entity_id"]: item
+        for page in payload["data"]["pages"]
+        for item in page.get("items", [])
+    }
+    assert (items["cover.shade"]["tile_width"], items["cover.shade"]["tile_height"]) == ("full", "full")
+    assert items["sensor.temp"]["tile_height"] == "half"
+    assert "tile_width" not in items["sensor.temp"]
+    # Automatic sends nothing, so an unconfigured dashboard payload is unchanged.
+    assert "tile_width" not in items["light.one"]
+    assert "tile_height" not in items["light.one"]

@@ -123,6 +123,25 @@ entities are operated from their submenu, because neither has a single on/off
 action. Back returns to the same overview page and scroll position; a state
 refresh that arrives while the list is moving is applied once it settles.
 
+Each tile's size is set per entity in the entity-display dialog. **Width** is
+half or full. **Height** is half, the compact 64 px tile, or full, a 94 px tile
+like a sensor's. A full-height tile carries the entity's own buttons, so the
+common action needs no submenu:
+
+| Entity | Buttons on a full-height tile |
+| --- | --- |
+| Cover | up, stop, down (those it supports) |
+| Climate | target temperature minus/plus, by the entity's step |
+| Light | on/off switch, brightness minus/plus in 10 % steps |
+| Fan | on/off switch, speed minus/plus in 10 % steps |
+| Number | minus/plus, by the entity's step |
+| Select | previous/next option, wrapping at either end |
+
+The tile background still opens the submenu, and every other control stays
+there. **Automatic** keeps the size of the type: sensors full height, all other
+entities half height, both half width. A dashboard configured before these
+settings existed therefore looks the same until a size is chosen.
+
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
   the Kelvin slider remains available for fine adjustment. Selecting a color
@@ -182,7 +201,8 @@ Use **Configure > Display dashboard**, then the entity-display dialog. Choose
 entities and the optional Alarmo quick entity with the normal HA selectors;
 control types come from their actual capabilities, not a manually chosen widget.
 
-Each overview entity has **Page**, **Position**, name and secondary-line settings.
+Each overview entity has **Page**, **Position**, **Width**, **Height**, name and
+secondary-line settings.
 Use the same page name to group entities; leave it empty for the existing unnamed
 page. Positions run from 0 to 10000, lower first within a page. Existing selections
 keep their original order until you change a position. Named pages follow their

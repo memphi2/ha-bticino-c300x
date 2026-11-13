@@ -399,3 +399,56 @@ Api.Date = realDate;
 p.controlFeedback = [];
 p.dashboardPages = [];
 console.log("Feedback ageing passed");
+// Full-height tiles carry their own buttons.
+const commands = list => Array.from(list, q => q.command + ":" + q.steps);
+const coverItem = {entity_id: "cover.shade", controls: [
+    {command: "close_cover", kind: "button"}, {command: "open_cover", kind: "button"},
+    {command: "stop_cover", kind: "button"},
+    {command: "position", kind: "number", value: 40, min: 0, max: 100, step: 1}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(coverItem)),
+    ["open_cover:0", "stop_cover:0", "close_cover:0"], "a cover shows up/stop/down, not its position pair");
+const lightItem = {entity_id: "light.desk", domain: "c300x", available: true, state: true, controls: [
+    {command: "toggle", kind: "button"},
+    {command: "brightness", kind: "number", value: 95, min: 0, max: 100, step: 1, unit: "%"}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(lightItem)), ["brightness:-10", "brightness:10"],
+    "one-percent controls step by ten on the tile");
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
+    {command: "temperature", kind: "number", value: 20, min: 5, max: 30, step: 0.5},
+    {command: "hvac_mode", kind: "choice", value: "heat", options: ["off", "heat"]}]})),
+    ["temperature:-1", "temperature:1"], "a thermostat steps by its own step");
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [{command: "toggle", kind: "button"}]})), [],
+    "a plain on/off entity has only its switch");
+assert.deepEqual(commands(Api.dashboardQuickControls(null)), []);
+const selectControl = {command: "option", kind: "choice", value: "b", options: ["a", "b", "c"]};
+assert.equal(Api.dashboardCycleOption(selectControl, 1), "c");
+assert.equal(Api.dashboardCycleOption(selectControl, -1), "a");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: "b"}, 1), "a", "wraps forwards");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: "a"}, -1), "b", "wraps backwards");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"], value: null}, 1), "a", "unknown starts at the first");
+assert.equal(Api.dashboardCycleOption({options: ["a", "b"]}, -1), "b", "unknown starts at the last");
+assert.equal(Api.dashboardCycleOption({options: []}, 1), null);
+assert.equal(p.quickLabel({steps: -10, kind: "number"}, null), "-");
+assert.equal(p.quickLabel({steps: 1, kind: "choice"}, null), "›");
+assert.equal(p.quickLabel({steps: 0, kind: "button"}, {command: "stop_cover"}), "■");
+assert.equal(p.quickLabel({}, undefined), "", "a delegate outliving its entry renders nothing");
+p.dashboardOnline = true; p.pendingEntity = ""; queue.length = 0;
+p.quickAction(lightItem, {command: "brightness", kind: "number", steps: 10});
+assert.match(queue[0].url, /light.desk%3Abrightness&option=100$/, "the tile step is clamped to the control range");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction({entity_id: "select.mode", domain: "c300x", available: true, controls: [selectControl]},
+    {command: "option", kind: "choice", steps: 1});
+assert.match(queue[0].url, /select.mode%3Aoption&option=c$/);
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction(Object.assign({domain: "c300x", available: true}, coverItem), {command: "stop_cover", kind: "button", steps: 0});
+assert.match(queue[0].url, /cover.shade%3Astop_cover$/, "a plain button sends no option");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.quickAction(lightItem, {command: "missing", kind: "number", steps: 1});
+assert.equal(queue.length, 0, "a control the entity no longer offers sends nothing");
+const sized = Api.dashboardMixedItems([
+    {kind: "switch", domain: "c300x", entity_id: "switch.a", tile_width: "full", tile_height: "full"},
+    {kind: "switch", domain: "c300x", entity_id: "switch.b"}]);
+assert.equal(sized[0].tile_width, "full"); assert.equal(sized[0].tile_height, "full");
+assert.equal(sized[1].tile_width, undefined, "automatic adds no key");
+p.controlFeedback = [];
+console.log("Tile controls passed");
+

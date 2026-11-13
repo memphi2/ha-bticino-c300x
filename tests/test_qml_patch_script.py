@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "76dfd646365e74815bdfc624661ca246fbc4328db8f83fd9aa5db76c7710b9b3",
-    "js/c300x_ha.js": "4c24b942ec7f20d903429e2e27a763f9fc036caee2ba0300a651c7715df71d33",
+    "HomeAssistant.qml": "6c18d458c594495f37e10dc8a58b8e1bb1ff64f6998f03fc8296e660098298c4",
+    "js/c300x_ha.js": "86fba2a408d0568740fcb6eafbfec6f71aa47a01e748ae33aed189b002175dff",
     "js/c300x_i18n.js": "14cac5f6e5e8f20c0dc7a82c9caca4fc32108d35c934481e0701c2b2cd84d9b4",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -608,8 +608,9 @@ def test_home_assistant_control_tiles_open_from_the_tile_with_a_single_switch() 
     """Control tiles must not need a separate arrow button to open their detail.
 
     The tile background carries the open gesture, exactly like a sensor tile, and
-    the only control left on the overview is the on/off switch. A quick-control
-    row would force the tile back to full width.
+    the only control on the half-height tile is the on/off switch. Tiles that
+    carry their own buttons are the separate full-height component, so this
+    one stays as small as it is.
     """
 
     home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
@@ -637,6 +638,73 @@ def test_home_assistant_control_tiles_open_from_the_tile_with_a_single_switch() 
     assert "images/onoff_button.svg" not in overview
 
 
+def test_home_assistant_tile_size_is_configurable_per_entity() -> None:
+    """Width and height come from the entity's settings, defaulting to its type.
+
+    Nothing here can execute QtQuick, so the contract is checked on the source:
+    an unconfigured tile must keep the exact size it had before the setting
+    existed, and each size must load the component that was laid out for it.
+    """
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    delegate = home_assistant_qml[home_assistant_qml.index("id: mixedTile") :]
+
+    assert 'property string sizeW: tileItem.tile_width || ""' in delegate
+    assert 'property string sizeH: tileItem.tile_height || ""' in delegate
+    # Automatic height: sensors stay tall, everything else stays short.
+    assert 'property bool tall: sizeH === "full" || (sizeH === "" && isSensor)' in delegate
+    width = delegate.split("width: ")[1].split("\n")[0]
+    height = delegate.split("height: ")[1].split("\n")[0]
+    source = delegate.split("sourceComponent: ")[1].split("\n")[0]
+    assert width.startswith(
+        'isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth)'
+    )
+    assert height.startswith("isSensor || hasControls ? (tall ? 94 : 64)")
+    # Plain switch, button and entity tiles keep 58/64 px unless configured.
+    assert height.endswith('(tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58))))')
+    assert "mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview)" in source
+    assert "mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview)" in source
+
+
+def test_home_assistant_full_height_control_tile_carries_its_buttons() -> None:
+    """The full-height tile adds the entity's buttons without losing the submenu."""
+
+    home_assistant_qml = (ROOT / "device_qml" / "HomeAssistant.qml").read_text(
+        encoding="utf-8"
+    )
+    tall = home_assistant_qml[
+        home_assistant_qml.index("id: tallControlOverview") :
+        home_assistant_qml.index("id: notificationDetails")
+    ]
+    compact = home_assistant_qml[
+        home_assistant_qml.index("id: compactSensorOverview") :
+        home_assistant_qml.index("id: tallControlOverview")
+    ]
+
+    # The background still opens the submenu and is declared before the
+    # buttons, so they sit above it and take their own touches.
+    assert tall.index("onClicked: openDetails(tallTile.tileItem)") < tall.index("Repeater {")
+    assert "property variant quickButtons: Api.dashboardQuickControls(tileItem)" in tall
+    assert "model: tallTile.quickButtons.length" in tall
+    assert "property variant quick: tallTile.quickButtons[index] || ({})" in tall
+    assert "onClicked: quickAction(tallTile.tileItem, quick)" in tall
+    # Buttons obey the same gate as the switch and show a registered touch.
+    assert tall.count("enabled: tallTile.controlsEnabled") == 2
+    assert "quickMouse.pressed ?" in tall
+    # The reading stays a reading: feedback reaches it as colour only.
+    assert "text: itemDetail(tallTile.tileItem) + trsl.empty" in tall
+    assert "color: readingColor(tallTile.tileItem)" in tall
+    assert "feedbackText(" not in tall
+    assert tall.count("onTouched:") == 1
+    assert tall.count("\\u203a") == 1
+
+    assert "onClicked: openDetails(tileItem)" in compact
+    assert "text: itemDetail(tileItem)" in compact
+    assert "color: detailColor(tileItem)" in compact
+
+
 def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
     """Every on/off toggle must look like the firmware switch.
 
@@ -662,13 +730,14 @@ def test_home_assistant_toggles_use_the_firmware_switch_widget() -> None:
     # Every switch declares the style inline, because the firmware never assigns
     # a named Component to a style property and CheckableButtonStyle resolves
     # `control` through the Loader inside BasicButton - untestable off-device.
-    # The three blocks must stay byte-identical so they cannot drift apart.
+    # The four blocks (switch tile, half- and full-height control tile, detail
+    # summary) must stay byte-identical so they cannot drift apart.
     blocks = []
     for match in re.finditer(
         r"( *)style: CheckableButtonStyle \{\n(.*?)\n\1\}", home_assistant_qml, re.DOTALL
     ):
         blocks.append(dedent(match.group(2)))
-    assert len(blocks) == 3, len(blocks)
+    assert len(blocks) == 4, len(blocks)
     assert len(set(blocks)) == 1, blocks
     assert "images/ringtones/switch-bg_btn.svg" in blocks[0]
 

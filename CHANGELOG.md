@@ -15,7 +15,8 @@
 - Media players on the native display. A tile shows what is playing; at full
   height it carries previous, play/pause and next. The submenu adds volume,
   mute, source and sound mode. Only features the player reports are offered,
-  and no command can start arbitrary media.
+  and no command can start arbitrary media. Requires updated display files on
+  the device.
 - Place the weather card on the native display: **Weather - Page** and
   **Weather - Position** in the entity-display dialog move it to any page and
   sort it among that page's tiles. Unplaced, it stays at the top of the status

@@ -92,6 +92,35 @@ class ProviderWebRTCSession(_OwnedSession):
     pending_candidates: list[Any] = field(default_factory=list)
 
 
+async def _async_retry_failed_provider_close(
+    provider: Any,
+    sessions: MutableMapping[Any, Any],
+    session_id: str,
+    session_entry: Any,
+) -> None:
+    """Give a failed websocket close one retry, then drop its entry.
+
+    Nothing calls this close a second time: the camera has already forgotten
+    the session. An entry left behind for "a later retry" would therefore stay
+    in the provider for good. A session that replaced ours is never touched.
+    """
+
+    if sessions.get(session_id) is not session_entry:
+        return
+    close_session = getattr(provider, "async_close_session", None)
+    if callable(close_session):
+        try:
+            result = close_session(session_id)
+            if inspect.isawaitable(result):
+                await result
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - the entry is dropped below either way
+            pass
+    if sessions.get(session_id) is session_entry:
+        sessions.pop(session_id, None)
+
+
 async def async_close_provider_session(
     provider: Any,
     session_id: str,
@@ -101,29 +130,38 @@ async def async_close_provider_session(
 
     sessions = getattr(provider, "_sessions", None)
     if isinstance(sessions, MutableMapping):
-        ws_client = sessions.pop(session_id, None)
-        if ws_client is None:
+        session_entry = sessions.get(session_id)
+        if session_entry is None:
             return "go2rtc_ws_missing"
+        # HA providers may store a websocket directly or wrap it with camera
+        # metadata. Keep the original value for retry after an interrupted close.
+        ws_client = getattr(session_entry, "ws_client", session_entry)
         close = getattr(ws_client, "close", None)
-        if not callable(close):
-            return "go2rtc_ws_close_missing"
-        try:
-            result = close()
-            if inspect.isawaitable(result):
-                await result
-                return "go2rtc_ws_awaited"
-            return "go2rtc_ws_sync"
-        except asyncio.CancelledError:
-            sessions.setdefault(session_id, ws_client)
-            raise
-        except Exception as err:  # noqa: BLE001 - close cleanup must continue
-            log_debug(
-                "provider_go2rtc_ws_close_failed",
-                session_id=session_id,
-                provider=str(getattr(provider, "domain", type(provider).__name__)),
-                error_type=type(err).__name__,
-            )
-            return "go2rtc_ws_failed"
+        if callable(close):
+            sessions.pop(session_id)
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+                    return "go2rtc_ws_awaited"
+                return "go2rtc_ws_sync"
+            except asyncio.CancelledError:
+                sessions.setdefault(session_id, session_entry)
+                raise
+            except Exception as err:  # noqa: BLE001 - close cleanup must continue
+                sessions.setdefault(session_id, session_entry)
+                log_debug(
+                    "provider_go2rtc_ws_close_failed",
+                    session_id=session_id,
+                    provider=str(getattr(provider, "domain", type(provider).__name__)),
+                    error_type=type(err).__name__,
+                )
+                await _async_retry_failed_provider_close(
+                    provider, sessions, session_id, session_entry
+                )
+                return "go2rtc_ws_failed"
+        # Unknown private layouts belong to the provider's public close API.
+        # Leave its session entry present so that API can find it.
 
     close_session = getattr(provider, "async_close_session", None)
     if not callable(close_session):

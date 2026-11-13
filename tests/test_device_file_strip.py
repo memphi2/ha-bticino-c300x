@@ -79,6 +79,28 @@ def test_strip_refuses_what_a_line_based_pass_cannot_judge(source: str) -> None:
         strip.strip_device_source(source, name="probe.js")
 
 
+@pytest.mark.parametrize(
+    "character",
+    ["\x00", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x1f", "\x7f", "\x85", "\u2028", "\u2029"],
+)
+def test_strip_refuses_control_characters(character: str) -> None:
+    """Splitting lines must not break a string literal at a character JS keeps.
+
+    Python's splitlines() also ends a line at vertical tab, form feed, the
+    separators 0x1c-0x1e, NEL and the Unicode line separators. None belongs
+    in a display file, so the strip refuses them with the line they are on.
+    """
+
+    source = f'var a = 1\nvar b = "x{character}y"\n'
+    with pytest.raises(strip.DeviceFileStripError, match=r"^probe\.js:2: control character U\+"):
+        strip.strip_device_source(source, name="probe.js")
+
+
+def test_strip_keeps_tabs_and_accepts_any_line_ending() -> None:
+    source = 'var a = "x\ty"\r\nvar b = 2\rvar c = 3\n'
+    assert strip.strip_device_source(source) == 'var a = "x\ty"\nvar b = 2\nvar c = 3\n'
+
+
 @pytest.mark.parametrize("relative", strip.DEVICE_SOURCE_FILES)
 def test_every_display_file_keeps_exactly_its_code_lines(relative: str) -> None:
     source = (SOURCE_DIR / relative).read_text(encoding="utf-8")

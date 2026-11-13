@@ -19,11 +19,15 @@ line break, and such a literal makes this strip refuse the file.
 A ``//`` after code is left alone: telling it apart from the same characters
 inside a string or a regular expression needs a tokenizer, and a wrong guess
 would silently change what the display runs.
+
+Control characters other than tab and the line endings are refused too. Python
+ends a line at some that JavaScript keeps inside a string, such as form feed.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -38,6 +42,7 @@ DEVICE_SOURCE_FILES = (
     "js/c300x_memos.js",
 )
 STRIPPED_SUFFIXES = frozenset({".qml", ".js"})
+_CONTROL_CHARACTER = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]")
 
 
 class DeviceFileStripError(ValueError):
@@ -47,6 +52,13 @@ class DeviceFileStripError(ValueError):
 def strip_device_source(text: str, *, name: str = "<source>") -> str:
     """Return ``text`` without comment-only lines, blank lines and line padding."""
 
+    control = _CONTROL_CHARACTER.search(text)
+    if control is not None:
+        number = text.count("\n", 0, control.start()) + 1
+        raise DeviceFileStripError(
+            f"{name}:{number}: control character U+{ord(control.group()):04X}"
+            " is not supported in device files"
+        )
     kept: list[str] = []
     for number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.rstrip()

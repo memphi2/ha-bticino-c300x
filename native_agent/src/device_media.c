@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "media_bt_av.h"
+#include "device_media.h"
 
 #include "c300x_agent.h"
 
@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #define DEVICE_MEDIA_PORT 30007
-#define BT_AV_TAKEOVER_SETTLE_MS 800
+#define DEVICE_MEDIA_TAKEOVER_SETTLE_MS 800
 
 static int video_rtp_port(const struct c300x_config *config) {
     return (int)config->video_rtp_port_start + 2;
@@ -96,7 +96,7 @@ static void sleep_ms(long milliseconds) {
     (void)nanosleep(&delay, NULL);
 }
 
-bool c300x_media_bt_av_start(const struct c300x_config *config) {
+bool c300x_device_media_start(const struct c300x_config *config) {
     if (config == NULL) {
         return false;
     }
@@ -126,7 +126,7 @@ bool c300x_media_bt_av_start(const struct c300x_config *config) {
     return true;
 }
 
-void c300x_media_bt_av_stop(const struct c300x_config *config) {
+void c300x_device_media_stop(const struct c300x_config *config) {
     if (config == NULL) {
         return;
     }
@@ -144,7 +144,7 @@ void c300x_media_bt_av_stop(const struct c300x_config *config) {
     /* Detach our own clients. A NACK can also mean SIP BYE already removed the
        pipeline; neither an ACK nor a NACK establishes device teardown health. */
     if (!send_device_media_command(command, reply, sizeof(reply))) {
-        fprintf(stderr, "bt-av: audio client removal not acknowledged (port %d, %s)\n",
+        fprintf(stderr, "device-media: audio client removal not acknowledged (port %d, %s)\n",
                 audio_rtp_port(config), strstr(reply, "*#*0##") != NULL ? "NACK" : "no ACK");
     }
 
@@ -156,19 +156,19 @@ void c300x_media_bt_av_stop(const struct c300x_config *config) {
         quality
     );
     if (!send_device_media_command(command, reply, sizeof(reply))) {
-        fprintf(stderr, "bt-av: video client removal not acknowledged (port %d, %s)\n",
+        fprintf(stderr, "device-media: video client removal not acknowledged (port %d, %s)\n",
                 video_rtp_port(config), strstr(reply, "*#*0##") != NULL ? "NACK" : "no ACK");
     }
 }
 
-bool c300x_media_bt_av_takeover(const struct c300x_config *config) {
+bool c300x_device_media_takeover(const struct c300x_config *config) {
     if (config == NULL) {
         return false;
     }
-    bool started = c300x_media_bt_av_start(config);
-    sleep_ms(BT_AV_TAKEOVER_SETTLE_MS);
-    /* SIP setup queues stock BT-AV fanout ports asynchronously. Do not send a
-       media stop here: it tears down the just-opened media window and makes
-       the following custom-port start return a BT-AV NACK. */
-    return c300x_media_bt_av_start(config) || started;
+    bool started = c300x_device_media_start(config);
+    sleep_ms(DEVICE_MEDIA_TAKEOVER_SETTLE_MS);
+    /* SIP setup queues stock media-service fanout ports asynchronously. Do not
+       send a media stop here: it tears down the just-opened media window and
+       makes the following custom-port start return a media-service NACK. */
+    return c300x_device_media_start(config) || started;
 }

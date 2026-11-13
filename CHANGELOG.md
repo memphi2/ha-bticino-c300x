@@ -29,8 +29,9 @@
   (roughly 140 kB instead of 200 kB); their behaviour is unchanged. The first
   update rewrites the display files once because their content hash changes.
 - The agent reports a failed takeover of the device's media service as
-  `media_takeover_failed`. Nothing in Home Assistant evaluates this code; it
-  only appears in the agent's last error.
+  `media_takeover_failed`, and its log lines about the device media service
+  start with `device-media:`. Nothing in Home Assistant evaluates either; they
+  only appear in the agent's last error and log.
 
 ## v2.1.1 - 2026-11-10
 
@@ -309,7 +310,7 @@ Includes all changes from the withdrawn v1.9.8 release.
 - Remove the on-demand teardown settle window introduced in 1.9.7. Hardware
   testing showed it did not prevent the PCMU reboot while delaying reconnects
   by up to 8 seconds. SIP-setup failure reasons remain available.
-- Tear an on-demand session down by removing only the agent's own BT-AV UDP
+- Tear an on-demand session down by removing only the agent's own media-service UDP
   clients instead of issuing a global pipeline stop. Log unacknowledged
   removals, distinguishing a NACK from a missing ACK; a NACK can occur after
   SIP BYE has already removed the pipeline.

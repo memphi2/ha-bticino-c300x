@@ -34,7 +34,7 @@ RTSP_PATH_RE = re.compile(
     r"(?:rtsp://[^/\s]+)?(/[A-Za-z0-9._~/-]+)"
 )
 RTSP_STATUS_RE = re.compile(r"RTSP/1\.0\s+(?P<code>[0-9]{3})\b")
-BT_AV_START_RE = re.compile(
+DEVICE_MEDIA_START_RE = re.compile(
     r"\*7\*300#127#0#0#1#(?P<port>\d+)#(?P<mode>\d+)\*##"
 )
 
@@ -1009,12 +1009,12 @@ def _on_demand_runtime_pcap_checks(packets: list[Packet]) -> list[Check]:
         play_responses,
         "doorbell.media.closed",
     )
-    bt_av_seen = any(
-        "30007" in packet.text or BT_AV_START_RE.search(packet.text)
+    device_media_seen = any(
+        "30007" in packet.text or DEVICE_MEDIA_START_RE.search(packet.text)
         for packet in packets
     )
-    custom_starts = _bt_av_custom_start_packets(packets)
-    custom_start_failures = _bt_av_custom_start_keys_without_ack(
+    custom_starts = _device_media_custom_start_packets(packets)
+    custom_start_failures = _device_media_custom_start_keys_without_ack(
         packets,
         custom_starts,
     )
@@ -1052,11 +1052,11 @@ def _on_demand_runtime_pcap_checks(packets: list[Packet]) -> list[Check]:
             ),
         ),
         Check(
-            "pcap.on_demand.bt_av_custom_start_seen",
-            not bt_av_seen or bool(custom_starts),
+            "pcap.on_demand.device_media_custom_start_seen",
+            not device_media_seen or bool(custom_starts),
         ),
         Check(
-            "pcap.on_demand.bt_av_custom_start_ack",
+            "pcap.on_demand.device_media_custom_start_ack",
             not custom_start_failures,
             detail=_diff_detail(
                 custom_start_failures,
@@ -1297,10 +1297,10 @@ def _looks_like_rtsp_server_payload(packet: Packet) -> bool:
     return RTSP_STATUS_RE.search(packet.text) is None
 
 
-def _bt_av_custom_start_packets(packets: list[Packet]) -> list[Packet]:
+def _device_media_custom_start_packets(packets: list[Packet]) -> list[Packet]:
     custom: list[Packet] = []
     for packet in packets:
-        for match in BT_AV_START_RE.finditer(packet.text):
+        for match in DEVICE_MEDIA_START_RE.finditer(packet.text):
             port = int(match.group("port"))
             mode = match.group("mode")
             if port >= 10000 and mode in {"0", "1", "2"}:
@@ -1309,13 +1309,13 @@ def _bt_av_custom_start_packets(packets: list[Packet]) -> list[Packet]:
     return custom
 
 
-def _bt_av_custom_start_keys_without_ack(
+def _device_media_custom_start_keys_without_ack(
     packets: list[Packet],
     starts: list[Packet],
 ) -> list[str]:
     seen: dict[str, bool] = {}
     for packet in starts:
-        match = BT_AV_START_RE.search(packet.text)
+        match = DEVICE_MEDIA_START_RE.search(packet.text)
         if match is None:
             continue
         key = f"{match.group('port')}#{match.group('mode')}"

@@ -1295,13 +1295,13 @@ request has a monotonic five-second deadline. Diagnostics expose
 | --- | --- | --- | --- |
 | 1.9.10 | 1.1 | 1.7.x | Waits for device events and verified readback after a GUI-confirmed ringer write remains queued; no retry writes or idle polling. |
 | 1.9.9 | 1.1 | 1.7.x | Installs the required ringer GUI component and advertises self-update file set 2. Older self-updaters install the executable first, then finish the payload using the new updater and existing maintenance token. |
-| 1.9.8 (withdrawn) | 1.1 | 1.7.x | Changes are included in 1.9.9: GUI-confirmed ringer mute/unmute, corrected core call-end notification port and opt-in verified HTTPS callbacks. Removes the ineffective teardown settle window, limits cleanup to owned BT-AV clients, aligns PCMU negotiation and bounds SIP/TCP framing. Ringer and HTTPS operation are confirmed with 1.9.9; the PCMU reboot remains unresolved. |
+| 1.9.8 (withdrawn) | 1.1 | 1.7.x | Changes are included in 1.9.9: GUI-confirmed ringer mute/unmute, corrected core call-end notification port and opt-in verified HTTPS callbacks. Removes the ineffective teardown settle window, limits cleanup to owned media-service clients, aligns PCMU negotiation and bounds SIP/TCP framing. Ringer and HTTPS operation are confirmed with 1.9.9; the PCMU reboot remains unresolved. |
 | 1.9.7 | 1.1 | 1.7.x | Removes the media teardown drain patch: the audio codec no longer applies or depends on it (hardware testing showed it did not stop the device reboots). Switch to speex before updating; a device still carrying the patch keeps it harmlessly. |
 | 1.9.6 | 1.1 | 1.7.x | Couples PCMU to the verified media teardown patch. Reports literal `device_user_present` as diagnostic information in self-test and device-user status, not a media-readiness prerequisite (#56). |
 | 1.9.5 | 1.1 | 1.7.x | Reports a missing device-side C300X SIP user as its own self-test failure (`device_sip_user_missing`) instead of passing media-identity on a domain fallback. |
 | 1.9.2 | 1.1 | 1.7.x | Names the missing half of the media identity in the self-test and answers rejected RTSP pulls instead of closing the connection unexplained. |
 | 1.9.0 | 1.1 | 1.7.x | Adds the v1.9.0 native media and update-path fixes while reporting the matching packaged agent version. |
-| 1.8.3 | 1.1 | 1.7.x | Keeps on-demand BT-AV takeover from closing the device media window during startup. |
+| 1.8.3 | 1.1 | 1.7.x | Keeps the on-demand media-service takeover from closing the device media window during startup. |
 | 1.8.1 | 1.1 | 1.7.x | Adds experimental native audio-codec maintenance actions and keeps parked RTSP clients from consuming live capacity. |
 | 1.7.6 | 1.1 | 1.7.x | Stops explicit doorbell media through the native path before closing local WebRTC sessions. |
 | 1.7.5 | 1.1 | 1.7.x | Keeps self-test and readiness refresh on stable local state after reload. |

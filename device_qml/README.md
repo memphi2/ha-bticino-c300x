@@ -26,6 +26,22 @@ It intentionally does not embed Lovelace. The C300X GUI runs QtQuick/QML and can
   repository. The native agent patch script transforms the original files
   already present on the device and keeps a one-time original backup there.
 
+## Packaging
+
+These sources are not written to the device as they stand. Packaging
+(`scripts/stage_device_agent_bundle.py`) and the development installer
+(`scripts/install_c300x_device.sh`) pass every `.qml` and `.js` file through
+`scripts/device_file_strip.py`, which drops comment-only lines, blank lines and
+indentation. That makes the installed display files about 30 % smaller, so
+comments here cost nothing on the device.
+
+The strip is line based on purpose. Keep it valid: no `/* */` block comments
+and no string literal continued over a line break with a backslash; packaging
+fails on either. A `//` comment after code on the same line is kept as is, so
+put comments on their own line. Line numbers in a device log refer to the
+stripped file; `scripts/device_file_strip.py --out <dir>` writes the same files
+locally for comparison.
+
 ## Safety
 
 - Apply the device UI only through the native agent QML maintenance API. It

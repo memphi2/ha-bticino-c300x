@@ -3,10 +3,11 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
+const jsRoot = process.env.C300X_DEVICE_JS_ROOT || path.join(root, "device_qml/js");
 
 function library(name) {
     const context = vm.createContext({Date, JSON, Math, XMLHttpRequest() {}});
-    vm.runInContext(fs.readFileSync(path.join(root, "device_qml/js", name), "utf8")
+    vm.runInContext(fs.readFileSync(path.join(jsRoot, name), "utf8")
         .replace(/^\.pragma library\s*/, ""), context);
     return context;
 }

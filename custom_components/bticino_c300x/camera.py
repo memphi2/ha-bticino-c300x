@@ -1427,24 +1427,33 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
 
         self._reconcile_in_flight = True
         try:
-            status = await self._async_refresh_video_status_or_none()
-            if status is not None and status_reports_agent_idle(
-                status,
-                cached_video_owner=self._video_owner,
-                cached_video_window_available=self._video_window_available,
-                cached_external_media_active=self._external_media_active,
-            ):
-                for session_id in [
-                    sid
-                    for sid, session in list(self._webrtc_sessions.active.items())
-                    if session.ready and _owner_is_doorbell_media(session.owner)
-                ]:
-                    await self._async_close_webrtc_session(
-                        session_id,
-                        stop_media=False,
-                        notify_client=True,
-                        reason="agent_idle_reconcile",
-                    )
+            # Provider work continues after stream_source releases this lock.
+            # Judge only sessions which had finished opening before this status
+            # request, never an offer which becomes ready while it is in flight.
+            async with self._rtsp_prepare_lock:
+                sessions = [
+                    (sid, session)
+                    for sid, session in self._webrtc_sessions.active.items()
+                    if session.ready
+                    and sid not in self._webrtc_sessions.offers
+                    and _owner_is_doorbell_media(session.owner)
+                ]
+                status = await self._async_refresh_video_status_or_none()
+                if status is not None and status_reports_agent_idle(
+                    status,
+                    cached_video_owner=self._video_owner,
+                    cached_video_window_available=self._video_window_available,
+                    cached_external_media_active=self._external_media_active,
+                ):
+                    for session_id, session in sessions:
+                        if self._webrtc_sessions.active.get(session_id) is not session:
+                            continue
+                        await self._async_close_webrtc_session(
+                            session_id,
+                            stop_media=False,
+                            notify_client=True,
+                            reason="agent_idle_reconcile",
+                        )
             # Home Call is a separate status path: reconcile any held home-call
             # session against async_home_call_status() so a missed end event does
             # not leave it churning the heartbeat forever.

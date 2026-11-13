@@ -32,6 +32,9 @@ from .config_flow_forms import (
     dashboard_entity_selector as _dashboard_entity_selector,
 )
 from .config_flow_forms import (
+    dashboard_entity_tile_size_selector as _dashboard_entity_tile_size_selector,
+)
+from .config_flow_forms import (
     optional_suggested as _optional_suggested,
 )
 from .config_flow_forms import (
@@ -56,6 +59,8 @@ from .const import (
     DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
 )
 from .dashboard_entities import (
+    DASHBOARD_TILE_SIZE_AUTO,
+    DASHBOARD_TILE_SIZES,
     normalize_dashboard_entity_display_overrides,
     normalize_dashboard_entity_ids,
 )
@@ -66,6 +71,7 @@ DASHBOARD_DYNAMIC_HOMEPAGE_DEFAULT = DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE
 _DASHBOARD_ENTITY_NAME_FIELD_SUFFIX = " - Name"
 _DASHBOARD_ENTITY_CUSTOM_NAME_FIELD_SUFFIX = " - Custom name"
 _DASHBOARD_ENTITY_SECONDARY_FIELD_SUFFIX = " - Secondary line"
+_DASHBOARD_ENTITY_SIZE_FIELDS = (("width", "Width"), ("height", "Height"))
 
 
 def dashboard_entity_ids(value: Any) -> list[str]:
@@ -210,6 +216,13 @@ def dashboard_entity_display_overrides_from_fields(
             options["page"] = page
         if str(order) not in {str(index * 10), str(float(index * 10))}:
             options["order"] = str(order)
+        for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
+            size = str(user_input.get(
+                _dashboard_entity_layout_field(index, entity_id, size_label),
+                existing.get(entity_id, {}).get(size_key, DASHBOARD_TILE_SIZE_AUTO),
+            ) or "").strip()
+            if size in DASHBOARD_TILE_SIZES:
+                options[size_key] = size
         if name != DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME:
             options["name"] = name
             if name == DASHBOARD_ENTITY_NAME_DISPLAY_CUSTOM and custom_name:
@@ -296,6 +309,11 @@ def dashboard_entity_display_schema(
                 _dashboard_entity_layout_field(index, entity_id, "Position"),
                 default=int(entity_overrides.get("order", str(index * 10))),
             )] = _dashboard_entity_order_selector()
+            for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
+                fields[vol.Optional(
+                    _dashboard_entity_layout_field(index, entity_id, size_label),
+                    default=entity_overrides.get(size_key, DASHBOARD_TILE_SIZE_AUTO),
+                )] = _dashboard_entity_tile_size_selector()
         fields[
             vol.Optional(
                 _dashboard_entity_name_field(index, entity_id),

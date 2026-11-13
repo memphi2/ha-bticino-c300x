@@ -34,6 +34,11 @@ DASHBOARD_ENTITY_DOMAINS = (
     "switch",
 )
 DASHBOARD_ENTITY_DOMAIN_SET = frozenset(DASHBOARD_ENTITY_DOMAINS)
+# A tile is half or full in each direction. "auto" is never stored: an entity
+# without the key keeps the size its type has always had on the display.
+DASHBOARD_TILE_SIZE_AUTO = "auto"
+DASHBOARD_TILE_SIZES = ("half", "full")
+DASHBOARD_TILE_SIZE_KEYS = ("width", "height")
 DashboardEntityDisplayOverrides = dict[str, dict[str, str]]
 
 
@@ -101,6 +106,15 @@ def normalize_dashboard_entity_display_overrides(
             except (TypeError, ValueError, OverflowError):
                 if strict:
                     raise ValueError("invalid dashboard order") from None
+        for size_key in DASHBOARD_TILE_SIZE_KEYS:
+            size = str(raw_options.get(size_key, "") or "").strip()
+            if not size or size == DASHBOARD_TILE_SIZE_AUTO:
+                continue
+            if size not in DASHBOARD_TILE_SIZES:
+                if strict:
+                    raise ValueError("invalid dashboard tile size")
+                continue
+            options[size_key] = size
         if name:
             if name not in DASHBOARD_ENTITY_NAME_DISPLAY_OPTIONS:
                 if strict:

@@ -204,6 +204,11 @@ async def async_dashboard_payload(
             dashboard_item["_page"] = layout["page"]
         if "order" in layout:
             dashboard_item["_order"] = int(layout["order"])
+        # Absent keys mean "automatic": the display keeps the type's own size.
+        if "width" in layout:
+            dashboard_item["tile_width"] = layout["width"]
+        if "height" in layout:
+            dashboard_item["tile_height"] = layout["height"]
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
 

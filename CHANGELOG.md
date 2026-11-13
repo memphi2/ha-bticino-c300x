@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Choose width and height for each entity tile on the native display. Width is
+  half or full; height is half (the compact tile) or full. A full-height tile
+  carries the entity's own buttons: up/stop/down for a cover, minus/plus for a
+  thermostat target, light brightness, fan speed or number, and previous/next
+  for a select. Brightness and fan speed step by ten percent on the tile.
+  Sensors, switches and buttons can be resized the same way. Automatic keeps
+  the size each type had before, so existing dashboards do not change.
+  Requires updated display files on the device.
+
 ## v2.1.1 - 2026-11-10
 
 ### Fixed

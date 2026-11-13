@@ -243,6 +243,25 @@ Page {
         Api.dashboardControl(item, control, String(Number(value.toFixed(6))), status, page)
     }
 
+    function quickLabel(quick, control) {
+        if (quick.steps < 0) return quick.kind === "choice" ? "\u2039" : "-"
+        if (quick.steps > 0) return quick.kind === "choice" ? "\u203a" : "+"
+        return control ? controlLabel(control) : ""
+    }
+
+    function quickAction(item, quick) {
+        var control = Api.dashboardControlByCommand(item, quick.command)
+        if (!control) return
+        if (quick.kind === "number") {
+            adjustControl(item, control, quick.steps)
+        } else if (quick.kind === "choice") {
+            var option = Api.dashboardCycleOption(control, quick.steps)
+            if (option !== null) Api.dashboardControl(item, control, option, status, page)
+        } else {
+            Api.dashboardControl(item, control, null, status, page)
+        }
+    }
+
     Timer {
         interval: 5000
         repeat: false
@@ -484,6 +503,144 @@ Page {
             }
             UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
             BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+        }
+    }
+
+    Component {
+        id: compactSensorOverview
+        Item {
+            property variant tileItem: parent ? parent.tileItem : ({})
+            anchors.fill: parent
+            Image { anchors.fill: parent; source: "images/settings/act_btn.svg"; fillMode: Image.Stretch }
+            UbuntuLightText {
+                anchors.left: parent.left; anchors.leftMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 32
+                anchors.top: parent.top; anchors.topMargin: 9
+                text: itemName(tileItem); textFormat: Text.PlainText
+                font.pixelSize: 17; color: "white"; elide: Text.ElideRight
+            }
+            UbuntuLightText {
+                anchors.left: parent.left; anchors.leftMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 32
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 7
+                text: itemDetail(tileItem); textFormat: Text.PlainText
+                font.pixelSize: text.length > 20 ? 15 : 19
+                color: detailColor(tileItem); elide: Text.ElideRight
+            }
+            UbuntuLightText { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "\u203a"; font.pixelSize: 28; color: "white" }
+            BeepingMouseArea { anchors.fill: parent; onClicked: openDetails(tileItem) }
+        }
+    }
+
+    Component {
+        id: tallControlOverview
+        Item {
+            id: tallTile
+            property variant tileItem: parent ? parent.tileItem : ({})
+            property bool hasToggle: Api.dashboardControlByCommand(tileItem, "toggle") ? true : false
+            property bool controlsEnabled: dashboardOnline && tileItem.available !== false && pendingEntity.length === 0
+            property variant quickButtons: Api.dashboardQuickControls(tileItem)
+            anchors.fill: parent
+            Image {
+                anchors.fill: parent
+                source: "images/settings/act_btn.svg"
+                fillMode: Image.Stretch
+            }
+            BeepingMouseArea {
+                anchors.fill: parent
+                onClicked: openDetails(tallTile.tileItem)
+            }
+            UbuntuLightText {
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.right: tallToggle.left
+                anchors.rightMargin: 8
+                anchors.top: parent.top
+                anchors.topMargin: 11
+                text: itemName(tallTile.tileItem) + trsl.empty
+                textFormat: Text.PlainText
+                font.pixelSize: 17
+                color: "white"
+                elide: Text.ElideRight
+            }
+            UbuntuLightText {
+                id: tallChevron
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.top: parent.top; anchors.topMargin: 5
+                text: "\u203a"; font.pixelSize: 28; color: "white"
+            }
+            BasicButton {
+                id: tallToggle
+                visible: tallTile.hasToggle
+                width: tallTile.hasToggle ? 86 : 0
+                height: 36
+                anchors.right: tallChevron.left
+                anchors.rightMargin: 10
+                anchors.top: parent.top
+                anchors.topMargin: 6
+                enabled: tallTile.controlsEnabled
+                opacity: tallTile.controlsEnabled ? 1 : 0.45
+                checkable: false
+                checked: tallTile.tileItem.state ? true : false
+                style: CheckableButtonStyle {
+                    defaultImage: "images/ringtones/switch-bg_btn.svg"
+                    checkedImage: "images/ringtones/switch-bg_btn_p.svg"
+                    defaultIconLeft: "images/ringtones/switch_btn.svg"
+                    defaultIconRight: "images/ringtones/disable_icon.svg"
+                    checkedIconLeft: "images/ringtones/enable_icon.svg"
+                    checkedIconRight: "images/ringtones/switch_btn_p.svg"
+                }
+                onTouched: Api.dashboardControl(tallTile.tileItem, Api.dashboardControlByCommand(tallTile.tileItem, "toggle"), null, status, page)
+            }
+            Row {
+                id: tallQuickRow
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 7
+                height: 40
+                spacing: 6
+                Repeater {
+                    model: tallTile.quickButtons.length
+                    Item {
+                        property variant quick: tallTile.quickButtons[index] || ({})
+                        property variant control: Api.dashboardControlByCommand(tallTile.tileItem, quick.command)
+                        width: 48
+                        height: 40
+                        opacity: tallTile.controlsEnabled ? 1 : 0.45
+                        Image {
+                            anchors.fill: parent
+                            source: quickMouse.pressed ? "images/first_configuration/list_btn_p.svg" : "images/first_configuration/list_btn.svg"
+                            fillMode: Image.Stretch
+                        }
+                        UbuntuLightText {
+                            anchors.centerIn: parent
+                            text: quickLabel(quick, control)
+                            textFormat: Text.PlainText
+                            font.pixelSize: 22
+                            color: "white"
+                        }
+                        BeepingMouseArea {
+                            id: quickMouse
+                            anchors.fill: parent
+                            enabled: tallTile.controlsEnabled
+                            onClicked: quickAction(tallTile.tileItem, quick)
+                        }
+                    }
+                }
+            }
+            UbuntuLightText {
+                anchors.left: tallQuickRow.right
+                anchors.leftMargin: tallTile.quickButtons.length > 0 ? 10 : 4
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: tallQuickRow.verticalCenter
+                text: itemDetail(tallTile.tileItem) + trsl.empty
+                textFormat: Text.PlainText
+                font.pixelSize: 15
+                color: readingColor(tallTile.tileItem)
+                elide: Text.ElideRight
+            }
         }
     }
 
@@ -1644,15 +1801,18 @@ Page {
                             // Loader below, because an entity can carry several: dashboard.py
                             // gives number/select entities controls as well as a slider/choice
                             // kind, and hasControls decides which component renders.
-                            width: isSensor || hasControls ? itemColumn.tileWidth : (isImage || isChoice || isSlider ? itemColumn.width : itemColumn.tileWidth)
-                            height: isSensor ? 94 : (hasControls ? 64 : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (isSlider || isButton ? 64 : 58))))
+                            property string sizeW: tileItem.tile_width || ""
+                            property string sizeH: tileItem.tile_height || ""
+                            property bool tall: sizeH === "full" || (sizeH === "" && isSensor)
+                            width: isSensor || hasControls ? (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth) : (isImage || isChoice || isSlider ? itemColumn.width : (sizeW === "full" ? itemColumn.width : itemColumn.tileWidth))
+                            height: isSensor || hasControls ? (tall ? 94 : 64) : (isImage ? safeNumber(tileItem.height, 120) : (isChoice ? 64 + Math.ceil((tileItem.options ? tileItem.options.length : 0) / 3) * 42 : (tall ? 94 : (sizeH === "half" || isSlider || isButton ? 64 : 58))))
 
                             Loader {
                                 anchors.fill: parent
                                 enabled: mixedTile.hasControls || mixedTile.isSensor || (dashboardOnline && mixedTile.tileItem.available !== false && pendingEntity.length === 0)
                                 opacity: enabled ? 1 : 0.45
                                 property variant tileItem: mixedTile.tileItem
-                                sourceComponent: mixedTile.isSensor ? sensorOverview : mixedTile.hasControls ? controlOverview : (mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
+                                sourceComponent: mixedTile.isSensor ? (mixedTile.tall ? sensorOverview : compactSensorOverview) : mixedTile.hasControls ? (mixedTile.tall ? tallControlOverview : controlOverview) : (mixedTile.isImage ? mixedImageTileComponent : (mixedTile.isChoice ? mixedChoiceTileComponent : (mixedTile.isSlider ? mixedSliderTileComponent : (mixedTile.isSwitch ? mixedSwitchTileComponent : (mixedTile.isButton ? mixedButtonTileComponent : mixedEntityTileComponent)))))
                             }
                         }
                     }

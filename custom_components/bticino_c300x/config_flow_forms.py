@@ -95,6 +95,21 @@ def dashboard_entity_order_selector() -> Any:
     ))
 
 
+def dashboard_entity_tile_size_selector() -> Any:
+    """Return the width or height choice for one native display tile."""
+
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value="auto", label="Automatic"),
+                SelectOptionDict(value="half", label="Half"),
+                SelectOptionDict(value="full", label="Full"),
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
 def dashboard_entity_secondary_info_selector() -> Any:
     """Return the selector for one dashboard entity secondary text."""
 

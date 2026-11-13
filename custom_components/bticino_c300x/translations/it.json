@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, nome e riga secondaria delle entita. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
       },
       "reconfigure": {
         "title": "Riconfigura BTicino C300X",
@@ -158,7 +158,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, nome e riga secondaria delle entita. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
       }
     },
     "abort": {
@@ -253,7 +253,7 @@
       },
       "dashboard_entity_display": {
         "title": "Visualizzazione entita dashboard",
-        "description": "Imposta pagina, posizione, nome e riga secondaria delle entita. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
+        "description": "Imposta pagina, posizione, larghezza e altezza del riquadro, nome e riga secondaria delle entita. L'altezza piena mostra i tasti dell'entita sul riquadro; Automatico mantiene la dimensione del tipo. L'azione Alarmo opzionale ha un nome proprio e non viene aggiunta alla panoramica."
       }
     },
     "error": {

@@ -296,6 +296,28 @@ def test_weather_card_takes_a_position_among_the_tiles_and_a_page():
     assert _kinds(pages[""]) == ["light.one"]
 
 
+def test_placing_the_weather_card_keeps_the_order_of_the_pages():
+    """Named pages follow their first entity; the card cannot pull one ahead."""
+
+    pages_of = {"light.one": {"page": "Living"}, "light.two": {"page": "Garden"}}
+    unplaced = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(pages_of)))
+    assert [page["title"] for page in unplaced["data"]["pages"]] == ["C300X", "Living", "Garden"]
+
+    on_garden = {**pages_of, "weather.home": {"page": "Garden", "order": "5"}}
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(on_garden)))
+    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", "Garden"]
+    assert _kinds(payload["data"]["pages"][2]) == ["weather", "light.two"]
+
+    unnamed = {"light.one": {"page": "Living"}, "weather.home": {"page": "Living"}}
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(unnamed)))
+    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", ""]
+
+    # A page only the card uses comes after the pages of the entities.
+    own_page = {**pages_of, "weather.home": {"page": "Outside"}}
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(own_page)))
+    assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", "Garden", "Outside"]
+
+
 def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
     schema = dashboard_entity_display_schema(["light.one"], {}, weather_entity_id="weather.home")
     posted = schema({})

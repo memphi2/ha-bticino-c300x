@@ -174,21 +174,6 @@ async def async_dashboard_payload(
     )
     main_page["badges"] = badges
     entity_display_overrides = configured_dashboard_entity_display_overrides(entry)
-    if weather is not None:
-        # The card is an ordinary item of its page, so it sorts with the tiles.
-        # Position 0 on the main page is where it has always been.
-        weather_layout = dashboard_weather_layout(
-            entity_display_overrides, configured_weather_entity_id(entry)
-        )
-        weather_page = (
-            _dashboard_page(pages, weather_layout["page"])
-            if "page" in weather_layout
-            else main_page
-        )
-        weather_page["weather"] = weather
-        weather_page["items"].append(
-            {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
-        )
     for index, entity_id in enumerate(configured_dashboard_entities(entry), start=1):
         dashboard_item = _dashboard_item_for_entity(
             hass,
@@ -224,6 +209,23 @@ async def async_dashboard_payload(
             dashboard_item["tile_height"] = layout["height"]
         page = _dashboard_page(pages, dashboard_item.get("_page"))
         page["items"].append(dashboard_item)
+
+    if weather is not None:
+        # The card is an ordinary item of its page, so it sorts with the tiles.
+        # Position 0 on the main page is where it has always been. Placed after
+        # the entities, a page only the card uses cannot overtake theirs.
+        weather_layout = dashboard_weather_layout(
+            entity_display_overrides, configured_weather_entity_id(entry)
+        )
+        weather_page = (
+            _dashboard_page(pages, weather_layout["page"])
+            if "page" in weather_layout
+            else main_page
+        )
+        weather_page["weather"] = weather
+        weather_page["items"].append(
+            {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
+        )
 
     for action_id, action in configured_actions(entry).items():
         dashboard_item = _dashboard_item_for_action(

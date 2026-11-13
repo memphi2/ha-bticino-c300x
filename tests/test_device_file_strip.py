@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -100,12 +99,13 @@ def test_strip_refuses_control_characters(character: str) -> None:
 def test_the_refused_characters_are_the_ones_the_range_list_named() -> None:
     """The check by category refuses exactly what the former character class did."""
 
-    former = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]")
+    former = (
+        {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), *range(0x7F, 0xA0), 0x2028, 0x2029}
+    )
     for code in range(0x110000):
         if 0xD800 <= code <= 0xDFFF:
             continue
-        character = chr(code)
-        assert strip._is_unsupported_character(character) == (former.match(character) is not None), hex(code)
+        assert strip._is_unsupported_character(chr(code)) == (code in former), hex(code)
 
 
 def test_strip_keeps_tabs_and_accepts_any_line_ending() -> None:

@@ -175,6 +175,46 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert result["data"]["dashboard_entity_display_overrides"] == {}
 
 
+@pytest.mark.parametrize("flow_kind", ["setup", "options", "reconfigure"])
+def test_an_emptied_position_returns_to_the_automatic_one(monkeypatch, flow_kind):
+    """Home Assistant leaves an emptied number box out of the form it sends.
+
+    A position with a default came back as the saved one; empty means the
+    entity's place in the selection and the top of the page for the card.
+    """
+
+    saved = {"light.room": {"order": "5"}, "weather.home": {"page": "Outside", "order": "15"}}
+    dashboard = {
+        "device_ui_enabled": True,
+        "weather_entity_id": "weather.home",
+        "dashboard_entities": ["light.room"],
+    }
+    entry = SimpleNamespace(
+        data={**dashboard, "dashboard_entity_display_overrides": saved},
+        options={},
+        runtime_data=None,
+    )
+    dashboard_step, display_step = _display_flow(monkeypatch, flow_kind, entry)
+
+    form = asyncio.run(dashboard_step(dict(dashboard)))
+    if flow_kind != "setup":
+        prefilled = post_like_home_assistant(form["data_schema"])
+        assert prefilled["Weather - Position"] == 15
+        assert prefilled["1. Room - Position"] == 5
+    posted = post_like_home_assistant(
+        form["data_schema"],
+        {"Weather - Page": "Outside", "Weather - Position": None, "1. Room - Position": None},
+    )
+    assert "Weather - Position" not in posted
+    assert "1. Room - Position" not in posted
+    result = asyncio.run(display_step(posted))
+
+    assert result["type"] == "finished", result.get("errors")
+    assert result["data"]["dashboard_entity_display_overrides"] == {
+        "weather.home": {"page": "Outside"},
+    }
+
+
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
 @pytest.mark.parametrize("field,saved,stored,empty", [
     ("alarm_entity_id", {"alarm_entity_id": "alarm_control_panel.home"}, "alarm_entity_id", ""),

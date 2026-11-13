@@ -366,9 +366,9 @@ def dashboard_entity_display_schema(
             _DASHBOARD_WEATHER_PAGE_FIELD,
             weather_layout.get("page", ""),
         )] = _dashboard_entity_custom_name_selector()
-        fields[vol.Optional(
+        fields[_optional_suggested(
             _DASHBOARD_WEATHER_POSITION_FIELD,
-            default=int(weather_layout.get("order", "0")),
+            int(weather_layout.get("order", "0")),
         )] = _dashboard_entity_order_selector()
     for index, entity_id in enumerate(dashboard_entities, start=1):
         entity_overrides = dashboard_overrides.get(entity_id, {})
@@ -377,9 +377,9 @@ def dashboard_entity_display_schema(
                 _dashboard_entity_layout_field(index, entity_id, "Page"),
                 entity_overrides.get("page", ""),
             )] = _dashboard_entity_custom_name_selector()
-            fields[vol.Optional(
+            fields[_optional_suggested(
                 _dashboard_entity_layout_field(index, entity_id, "Position"),
-                default=int(entity_overrides.get("order", str(index * 10))),
+                int(entity_overrides.get("order", str(index * 10))),
             )] = _dashboard_entity_order_selector()
             for size_key, size_label in _DASHBOARD_ENTITY_SIZE_FIELDS:
                 fields[vol.Optional(
@@ -443,14 +443,16 @@ def dashboard_entity_display_input(
 ) -> dict[str, Any]:
     """Merge a posted entity-display form into the dashboard settings.
 
-    Home Assistant's form leaves out a text field the user emptied, so a text
-    field the form showed and the post lacks is stored empty.
+    Home Assistant's form leaves out a text or number field the user emptied,
+    so such a field the form showed and the post lacks is stored empty; an
+    emptied position returns to the automatic one.
     """
 
     cleared = {
         str(key): ""
         for key, field in dashboard_entity_display_form(dashboard_input).schema.items()
-        if isinstance(field, selector.TextSelector) and str(key) not in user_input
+        if isinstance(field, (selector.TextSelector, selector.NumberSelector))
+        and str(key) not in user_input
     }
     return {**dashboard_input, **cleared, **user_input}
 

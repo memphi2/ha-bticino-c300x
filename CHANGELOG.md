@@ -62,9 +62,10 @@
   players sharing a long favourites list, made the dashboard larger than the
   agent reads in one response, and every page then showed Home Assistant as
   unavailable. A dashboard too large for other reasons is logged as a warning.
-- Emptying a page name in the entity-display dialog clears it, and emptying a
-  custom name shows the Home Assistant name again. Home Assistant leaves an
-  emptied field out of the form it sends, so the saved value came back.
+- Emptying a page name in the entity-display dialog clears it, emptying a
+  custom name shows the Home Assistant name again, and an emptied position
+  returns to the automatic one. Home Assistant leaves an emptied field out of
+  the form it sends, so the saved value came back.
 - Emptying the weather entity, the alarm entity, the alarm page entity or the
   action list in the dashboard settings of an existing entry removes it. The
   saved value came back for the same reason.

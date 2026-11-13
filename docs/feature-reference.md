@@ -227,7 +227,8 @@ Each overview entity has **Page**, **Position**, **Width**, **Height**, name and
 secondary-line settings.
 Use the same page name to group entities; leave it empty for the existing unnamed
 page. Positions run from 0 to 10000, lower first within a page. Existing selections
-keep their original order until you change a position. Named pages follow their
+keep their original order until you change a position; an emptied position
+returns to the entity's place in the selection. Named pages follow their
 first occurrence in the selected-entity list, after the HA status/weather page.
 Page names are limited to 60 characters; a longer one is cut, and a position
 is rounded to a whole number. A custom name left empty shows the Home Assistant

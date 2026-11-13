@@ -475,5 +475,47 @@ assert.equal(p.weatherVisible, true);
 p.refreshSelectedItem();
 p.dashboardPages = []; p.items = [];
 console.log("Weather placement passed");
+// A media player tile carries transport buttons and confirms play/pause.
+const playerItem = {entity_id: "media_player.kitchen", domain: "c300x", available: true, state: true,
+    details: {type: "media_player"}, controls: [
+    {command: "toggle", kind: "button"},
+    {command: "media_previous_track", kind: "button"},
+    {command: "media_play_pause", kind: "button", playing: true},
+    {command: "media_next_track", kind: "button"},
+    {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1, unit: "%"},
+    {command: "volume_mute", kind: "boolean", value: false},
+    {command: "source", kind: "choice", value: "Radio", options: ["Radio", "TV"]}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(playerItem)),
+    ["media_previous_track:0", "media_play_pause:0", "media_next_track:0"]);
+assert.deepEqual(commands(Api.dashboardQuickControls({controls: [
+    {command: "media_play_pause", kind: "button", playing: false},
+    {command: "volume_level", kind: "number", value: 40, min: 0, max: 100, step: 1}]})),
+    ["media_play_pause:0"], "a player without track buttons shows what it has, not a volume pair");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: true}), "||");
+assert.equal(p.controlLabel({command: "media_play_pause", playing: false}), ">");
+assert.equal(p.controlLabel({command: "media_play_pause"}), ">", "an unknown state offers play");
+assert.equal(p.controlLabel({command: "media_previous_track"}), "«");
+assert.equal(p.controlLabel({command: "media_next_track"}), "»");
+assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c.command),
+    ["media_previous_track", "media_play_pause", "media_next_track", "volume_level", "volume_mute", "source"],
+    "the power switch lives in the summary, not in the control list");
+const pauseExpected = Api.dashboardExpectation(playerItem, playerItem.controls[2], null);
+assert.equal(pauseExpected.playing, false);
+assert.equal(Api.dashboardExpectationMatches(playerItem, pauseExpected), false, "still playing is not a confirmation");
+const pausedItem = JSON.parse(JSON.stringify(playerItem)); pausedItem.controls[2].playing = false;
+assert.equal(Api.dashboardExpectationMatches(pausedItem, pauseExpected), true);
+assert.equal(Api.dashboardExpectation(playerItem, playerItem.controls[3], null), null, "a track skip has no state to confirm");
+p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
+p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0});
+assert.match(queue[0].url, /media_player.kitchen%3Amedia_next_track$/);
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+for (const key of ["volume_level", "volume_mute", "source", "sound_mode", "media_previous_track", "media_play_pause", "media_next_track"]) {
+    for (const language of ["en", "de", "fr", "it"]) {
+        assert.notEqual(I18n.text(language, key), key, language + " label for " + key);
+    }
+}
+console.log("Media player controls passed");
+
 
 

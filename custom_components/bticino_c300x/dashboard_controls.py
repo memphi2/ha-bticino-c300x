@@ -12,6 +12,7 @@ from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
 )
+from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.core import HomeAssistant
 
 HA_FAN_FEATURE_IN_CONST = hasattr(fan_const, "FanEntityFeature")
@@ -227,6 +228,43 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append(_choice("preset_mode", attrs.get("preset_mode"), attrs.get("preset_modes")))
         if features & FanEntityFeature.DIRECTION:
             controls.append(_choice("direction", attrs.get("direction"), ["forward", "reverse"]))
+    elif domain == "media_player":
+        # Plain state strings: the state enum deprecates members between HA
+        # versions, and merely reading a deprecated one is reported.
+        powered = state.state not in {"off", "standby"}
+        power_feature = (
+            MediaPlayerEntityFeature.TURN_OFF if powered else MediaPlayerEntityFeature.TURN_ON
+        )
+        if features & power_feature:
+            controls.append({"command": "toggle", "kind": "button"})
+        if features & MediaPlayerEntityFeature.PREVIOUS_TRACK:
+            controls.append({"command": "media_previous_track", "kind": "button"})
+        if features & (MediaPlayerEntityFeature.PLAY | MediaPlayerEntityFeature.PAUSE):
+            controls.append({
+                "command": "media_play_pause", "kind": "button",
+                "playing": state.state == "playing",
+            })
+        if features & MediaPlayerEntityFeature.NEXT_TRACK:
+            controls.append({"command": "media_next_track", "kind": "button"})
+        if features & MediaPlayerEntityFeature.VOLUME_SET:
+            volume = finite_number(attrs.get("volume_level"))
+            controls.append(_number(
+                "volume_level",
+                None if volume is None or not 0 <= volume <= 1 else round(volume * 100),
+                0, 100, 1, "%",
+            ))
+        if features & MediaPlayerEntityFeature.VOLUME_MUTE:
+            muted = attrs.get("is_volume_muted")
+            controls.append({
+                "command": "volume_mute", "kind": "boolean",
+                "value": muted if isinstance(muted, bool) else None,
+            })
+        if features & MediaPlayerEntityFeature.SELECT_SOURCE:
+            controls.append(_choice("source", attrs.get("source"), attrs.get("source_list")))
+        if features & MediaPlayerEntityFeature.SELECT_SOUND_MODE:
+            controls.append(
+                _choice("sound_mode", attrs.get("sound_mode"), attrs.get("sound_mode_list"))
+            )
     elif domain in {"number", "input_number"}:
         controls.append(
             _number(
@@ -330,6 +368,21 @@ async def async_execute_control(
         }[command]
         if command != "toggle":
             data[command] = int(value) if command == "percentage" else value
+    elif domain == "media_player":
+        service = {
+            "volume_level": "volume_set", "volume_mute": "volume_mute",
+            "source": "select_source", "sound_mode": "select_sound_mode",
+        }.get(command, command)
+        if command == "media_play_pause":
+            # Not every player implements the combined service; the explicit
+            # one for its current state is the one its features promise.
+            service = "media_pause" if control.get("playing") else "media_play"
+        elif command == "volume_level":
+            data["volume_level"] = value / 100
+        elif command == "volume_mute":
+            data["is_volume_muted"] = value
+        elif command in {"source", "sound_mode"}:
+            data[command] = value
     elif domain in {"number", "input_number"}:
         service = "set_value"
         data["value"] = value

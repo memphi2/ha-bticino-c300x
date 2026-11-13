@@ -58,3 +58,31 @@ def test_configured_timestamp_is_not_filtered():
 
 def test_missing_event_snapshots_fail_open():
     assert dashboard_state_event_changes_display(None, None, {"entity_id": "light.room"})
+
+
+def test_playing_media_player_does_not_notify_the_display_every_second():
+    """A player updates its position constantly; the display shows none of it."""
+
+    entity = "media_player.room"
+    attrs = {
+        "supported_features": 1 | 4 | 8 | 16384,
+        "volume_level": 0.4,
+        "is_volume_muted": False,
+        "media_title": "Evening news",
+        "media_position": 12,
+        "media_position_updated_at": "2026-11-13T10:00:00+00:00",
+        "media_duration": 300,
+        "entity_picture": "/api/media_player_proxy/media_player.room?token=a",
+    }
+    before = State(entity, "playing", attrs)
+    for noise in (
+        {"media_position": 13},
+        {"media_position_updated_at": "2026-11-13T10:00:01+00:00"},
+        {"media_duration": 301},
+        {"entity_picture": "/api/media_player_proxy/media_player.room?token=b"},
+        {"volume_level": 0.401},
+    ):
+        assert not changed(entity, before, State(entity, "playing", {**attrs, **noise})), noise
+    for visible in ({"volume_level": 0.5}, {"is_volume_muted": True}, {"media_title": "Weather"}):
+        assert changed(entity, before, State(entity, "playing", {**attrs, **visible})), visible
+    assert changed(entity, before, State(entity, "paused", attrs))

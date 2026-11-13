@@ -138,6 +138,9 @@ Page {
         if (control.command === "open_cover") return "\u2191"
         if (control.command === "stop_cover") return "\u25a0"
         if (control.command === "close_cover") return "\u2193"
+        if (control.command === "media_previous_track") return "\u00ab"
+        if (control.command === "media_next_track") return "\u00bb"
+        if (control.command === "media_play_pause") return control.playing === true ? "||" : ">"
         return uiText(control.command)
     }
 
@@ -152,7 +155,7 @@ Page {
     }
 
     function optionLabel(control, option) {
-        if (control.command === "option" || control.command === "preset_mode") return String(option)
+        if (control.command === "option" || control.command === "preset_mode" || control.command === "source" || control.command === "sound_mode") return String(option)
         var key = (control.command === "color" ? "color_" : "mode_") + String(option)
         var label = uiText(key)
         return label === key ? String(option) : label
@@ -776,7 +779,7 @@ Page {
             BasicButton {
                 id: summaryToggle
                 property bool hasToggle: Api.dashboardControlByCommand(selectedItem, "toggle") ? true : false
-                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan")
+                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 22
                 width: 86; height: 36
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0

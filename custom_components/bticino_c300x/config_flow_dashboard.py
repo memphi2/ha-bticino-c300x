@@ -59,6 +59,7 @@ from .const import (
     DEFAULT_DASHBOARD_DYNAMIC_HOMEPAGE,
 )
 from .dashboard_entities import (
+    ALARM_PAGE_ENTITY_DOMAINS,
     DASHBOARD_TILE_SIZE_AUTO,
     DASHBOARD_TILE_SIZES,
     normalize_dashboard_entity_display_overrides,
@@ -91,7 +92,7 @@ def alarm_page_entity_id(value: Any) -> str:
     if value in (None, ""):
         return ""
     entities = dashboard_entity_ids([value])
-    if not entities:
+    if not entities or entities[0].split(".", 1)[0] not in ALARM_PAGE_ENTITY_DOMAINS:
         raise vol.Invalid("invalid alarm page entity")
     return entities[0]
 

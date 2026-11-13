@@ -114,8 +114,9 @@ the form shows that state instead of an unrelated default.
 
 ## Display Device Controls
 
-Select lights, covers, climate entities, fans and sensors under **Display
-dashboard**. Entities with controls share the two-column overview with sensors.
+Select lights, covers, climate entities, fans, media players and sensors under
+**Display dashboard**. Entities with controls share the two-column overview
+with sensors.
 A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.
 Lights and fans keep an on/off switch on the tile itself. Covers and climate
@@ -136,6 +137,7 @@ common action needs no submenu:
 | Fan | on/off switch, speed minus/plus in 10 % steps |
 | Number | minus/plus, by the entity's step |
 | Select | previous/next option, wrapping at either end |
+| Media player | on/off switch, previous, play/pause, next (those it supports) |
 
 The tile background still opens the submenu, and every other control stays
 there. **Automatic** keeps the size of the type: sensors full height, all other
@@ -159,6 +161,12 @@ settings existed therefore looks the same until a size is chosen.
   move to a separate settings tab when supported.
 - Fans expose speed, oscillation, presets and direction according to their
   capabilities. Preset names come from the entity itself.
+- Media players show what is playing, or their state when nothing is. The
+  submenu has previous, play/pause and next, a volume slider, mute, source and
+  sound mode, each only where the player reports the feature. Players that can
+  be switched on and off keep the on/off switch. Play/pause sends the explicit
+  play or pause service for the current state. A media player cannot be chosen
+  as the alarm page's quick entity.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
   Numeric sensors retain their unit and reported display precision. Details may
   show the entity's numeric battery level, humidity and illuminance attributes;

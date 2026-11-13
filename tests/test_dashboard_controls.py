@@ -477,3 +477,107 @@ def test_palette_cannot_bypass_color_capabilities(attrs, value):
     with pytest.raises(ValueError):
         asyncio.run(async_execute_control(hass, "light.room", "color", value))
     hass.services.async_call.assert_not_awaited()
+
+
+# MediaPlayerEntityFeature: PAUSE 1, VOLUME_SET 4, VOLUME_MUTE 8, PREVIOUS 16,
+# NEXT 32, TURN_ON 128, TURN_OFF 256, SELECT_SOURCE 2048, PLAY 16384,
+# SELECT_SOUND_MODE 65536.
+@pytest.mark.parametrize("value,features,commands", [
+    ("playing", 1 | 16 | 32 | 16384, ["media_previous_track", "media_play_pause", "media_next_track"]),
+    ("playing", 16384, ["media_play_pause"]),
+    ("playing", 128 | 256, ["toggle"]),
+    ("off", 128, ["toggle"]),
+    ("off", 256, []),
+    ("standby", 256, []),
+    ("idle", 256, ["toggle"]),
+    ("playing", 4 | 8, ["volume_level", "volume_mute"]),
+    ("playing", 0, []),
+])
+def test_media_player_exposes_only_reported_features(value, features, commands):
+    controls = entity_controls("media_player.room", state(value, supported_features=features))
+    assert [control["command"] for control in controls] == commands
+
+
+def test_media_player_controls_carry_bounded_values():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", state(
+            "paused", supported_features=1 | 4 | 8 | 2048 | 16384 | 65536,
+            volume_level=0.374, is_volume_muted=False,
+            source="Radio", source_list=["Radio", "TV", 7, ""],
+            sound_mode="Movie", sound_mode_list=["Movie", "Music"],
+        ))
+    }
+    assert controls["media_play_pause"] == {
+        "command": "media_play_pause", "kind": "button", "playing": False,
+    }
+    assert controls["volume_level"] == {
+        "command": "volume_level", "kind": "number", "value": 37,
+        "min": 0.0, "max": 100.0, "step": 1.0, "unit": "%",
+    }
+    assert controls["volume_mute"]["value"] is False
+    assert controls["source"]["options"] == ["Radio", "TV"]
+    assert controls["sound_mode"]["value"] == "Movie"
+    # A missing or impossible volume is unknown, never silent.
+    for volume in (None, "loud", 1.5, -0.1):
+        unknown = entity_controls(
+            "media_player.room", state("playing", supported_features=4, volume_level=volume)
+        )
+        assert unknown[0]["value"] is None
+    # No source list means no source control instead of an empty picker.
+    assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
+
+
+@pytest.mark.parametrize("value,attrs,command,option,service,data", [
+    ("playing", {"supported_features": 1 | 16384}, "media_play_pause", None, "media_pause", {}),
+    ("paused", {"supported_features": 1 | 16384}, "media_play_pause", None, "media_play", {}),
+    ("idle", {"supported_features": 16384}, "media_play_pause", None, "media_play", {}),
+    ("playing", {"supported_features": 16}, "media_previous_track", None, "media_previous_track", {}),
+    ("playing", {"supported_features": 32}, "media_next_track", None, "media_next_track", {}),
+    ("playing", {"supported_features": 256}, "toggle", None, "toggle", {}),
+    ("playing", {"supported_features": 4}, "volume_level", "35", "volume_set", {"volume_level": 0.35}),
+    ("playing", {"supported_features": 4}, "volume_level", "0", "volume_set", {"volume_level": 0.0}),
+    ("playing", {"supported_features": 8}, "volume_mute", "true", "volume_mute", {"is_volume_muted": True}),
+    ("playing", {"supported_features": 2048, "source_list": ["Radio", "TV"]}, "source", "TV", "select_source", {"source": "TV"}),
+    ("playing", {"supported_features": 65536, "sound_mode_list": ["Movie"]}, "sound_mode", "Movie", "select_sound_mode", {"sound_mode": "Movie"}),
+])
+def test_media_player_control_makes_one_explicit_service_call(value, attrs, command, option, service, data):
+    hass = hass_for(state(value, **attrs))
+    asyncio.run(async_execute_control(hass, "media_player.room", command, option))
+    hass.services.async_call.assert_awaited_once_with(
+        "media_player", service, {"entity_id": "media_player.room", **data}, blocking=True,
+    )
+
+
+@pytest.mark.parametrize("command,option", [
+    ("volume_level", "101"), ("volume_level", "-1"), ("volume_level", "12.5"), ("volume_level", "NaN"),
+    ("volume_mute", "yes"), ("volume_mute", None),
+    ("source", "HDMI 9"), ("sound_mode", "Movie"),
+    ("media_next_track", None), ("media_play_pause", "now"),
+    ("play_media", "http://example.invalid/a.mp3"), ("media_seek", "10"),
+])
+def test_media_player_rejects_unsupported_or_invalid_commands(command, option):
+    """Only advertised controls run; nothing can play arbitrary media."""
+
+    hass = hass_for(state(
+        "playing", supported_features=1 | 4 | 8 | 2048 | 16384, source_list=["Radio", "TV"],
+    ))
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "media_player.room", command, option))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_media_player_states_are_compared_as_strings():
+    """Reading a deprecated state enum member is reported by Home Assistant.
+
+    That report needs a running instance, so a unit test only trips over it
+    when another test happened to create one. The source must not use the enum.
+    """
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/bticino_c300x/dashboard_controls.py"
+    ).read_text(encoding="utf-8")
+    assert "MediaPlayerState" not in source
+    off = entity_controls("media_player.room", state("standby", supported_features=128 | 256))
+    assert [control["command"] for control in off] == ["toggle"]

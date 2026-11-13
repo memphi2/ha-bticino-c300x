@@ -13,6 +13,13 @@
   the size each type had before, so existing dashboards do not change.
   Requires updated display files on the device.
 
+### Changed
+
+- Write the display's QML and JavaScript files to the device without comments,
+  blank lines and indentation. The installed files are about 30 % smaller
+  (roughly 140 kB instead of 200 kB); their behaviour is unchanged. The first
+  update rewrites the display files once because their content hash changes.
+
 ## v2.1.1 - 2026-11-10
 
 ### Fixed

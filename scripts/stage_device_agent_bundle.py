@@ -16,6 +16,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from device_file_strip import (
+    DEVICE_SOURCE_FILES,
+    DeviceFileStripError,
+    strip_device_file,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN = "bticino_c300x"
 COMPONENT_SRC = ROOT / "custom_components" / DOMAIN
@@ -102,29 +108,18 @@ def stage_bundle(
     qml_files: list[Path] = []
     script_files: list[Path] = []
     runtime_files: list[Path] = []
-    alarm_qml = _copy(
-        ROOT / "device_qml" / "Alarm.qml",
-        component_dir / "device_agent/qml/Alarm.qml",
-    )
-    qml_files.append(alarm_qml)
-    _copy(
-        ROOT / "device_qml" / "HomeAssistant.qml",
-        component_dir / "device_agent/qml/HomeAssistant.qml",
-    )
-    qml_files.append(component_dir / "device_agent/qml/HomeAssistant.qml")
-    qml_files.append(
-        _copy(
-            ROOT / "device_qml" / "C300XRingerControl.qml",
-            component_dir / "device_agent/qml/C300XRingerControl.qml",
-        )
-    )
-    for name in ("c300x_ha.js", "c300x_i18n.js", "c300x_memos.js"):
-        qml_files.append(
-            _copy(
-                ROOT / "device_qml" / "js" / name,
-                component_dir / "device_agent/qml/js" / name,
+    # Display files are written to the device as staged, so they are staged
+    # without comments, blank lines and indentation; device_qml/ keeps them.
+    for relative in DEVICE_SOURCE_FILES:
+        source = ROOT / "device_qml" / relative
+        if not source.exists():
+            raise BundleStageError(f"Missing native-agent bundle source: {source}")
+        try:
+            qml_files.append(
+                strip_device_file(source, component_dir / "device_agent/qml" / relative)
             )
-        )
+        except DeviceFileStripError as err:
+            raise BundleStageError(str(err)) from err
     qml_patch_script = _copy(
         ROOT / "native_agent" / "scripts" / "qml_patch.sh",
         component_dir / "device_agent/scripts/qml_patch.sh",

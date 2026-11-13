@@ -90,16 +90,21 @@ fi
 
 ssh_cmd "mkdir -p '$REMOTE_DIR/qml/js'"
 
+# The device gets the same stripped display files as a packaged release.
+QML_STAGE_DIR="$(mktemp -d)"
+trap 'rm -rf "$QML_STAGE_DIR"' EXIT
+"$ROOT_DIR/scripts/device_file_strip.py" --out "$QML_STAGE_DIR" >/dev/null
+
 scp_cmd \
-    "$ROOT_DIR/device_qml/Alarm.qml" \
-    "$ROOT_DIR/device_qml/HomeAssistant.qml" \
-    "$ROOT_DIR/device_qml/C300XRingerControl.qml" \
+    "$QML_STAGE_DIR/Alarm.qml" \
+    "$QML_STAGE_DIR/HomeAssistant.qml" \
+    "$QML_STAGE_DIR/C300XRingerControl.qml" \
     "$REMOTE:$REMOTE_DIR/qml/"
 
 scp_cmd \
-    "$ROOT_DIR/device_qml/js/c300x_ha.js" \
-    "$ROOT_DIR/device_qml/js/c300x_i18n.js" \
-    "$ROOT_DIR/device_qml/js/c300x_memos.js" \
+    "$QML_STAGE_DIR/js/c300x_ha.js" \
+    "$QML_STAGE_DIR/js/c300x_i18n.js" \
+    "$QML_STAGE_DIR/js/c300x_memos.js" \
     "$REMOTE:$REMOTE_DIR/qml/js/"
 
 scp_cmd "$ROOT_DIR/native_agent/scripts/qml_patch.sh" "$REMOTE:$REMOTE_DIR/qml_patch.sh"

@@ -227,7 +227,7 @@ PATCH_OUTPUT_SHA256 = {
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
     "HomeAssistant.qml": "a58297094169cc6aac62b934d21eed74e2d45a99689db6e9f6db71750d170455",
-    "js/c300x_ha.js": "dfb356c5d0a36ce0b49fd5323a7121d3dbacac946ab8be973441b27e325d88d6",
+    "js/c300x_ha.js": "cb3d71b7d545e6da52a1d40316e89bf0f62d5ec688664ad27d0331c3104cc7e9",
     "js/c300x_i18n.js": "237efa044aa942a6299a950289ac5939336aa30290a70466b315a1afe561f55f",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }

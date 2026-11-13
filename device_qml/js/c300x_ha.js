@@ -218,6 +218,7 @@ function dashboardExpectationMatches(item, expected) {
     if (!item || item.available === false || !expected || expected.stateless) return false
     if (expected.command === "toggle") return item.state === expected.value
     if (expected.power !== undefined && item.state !== expected.power) return false
+    if (expected.power === false) return true
     var activity = item.details ? item.details.activity : ""
     if (expected.command === "open_cover") return activity === "opening" || (item.details && item.details.position === 100)
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"

@@ -239,6 +239,15 @@ const brightnessExpected = Api.dashboardExpectation(light, {command: "brightness
 const retainedBrightness = {...light, controls: [{command: "brightness", value: 50}]};
 assert.equal(Api.dashboardExpectationMatches({...retainedBrightness, state: false}, brightnessExpected), false, "retained attributes on an off light do not confirm turn-on");
 assert.equal(Api.dashboardExpectationMatches(retainedBrightness, brightnessExpected), true);
+const offExpected = Api.dashboardExpectation(light, {command: "brightness", kind: "number"}, "0");
+assert.equal(offExpected.power, false);
+assert.equal(Api.dashboardExpectationMatches({...light, state: false, controls: [{command: "brightness", value: null}]}, offExpected), true,
+    "brightness 0 turns the light off, and an off light has no brightness to compare");
+assert.equal(Api.dashboardExpectationMatches({...light, controls: [{command: "brightness", value: 10}]}, offExpected), false,
+    "a light that is still on does not confirm 0");
+const fanOffExpected = Api.dashboardExpectation({entity_id: "fan.room", state: true}, {command: "percentage", kind: "number"}, "0");
+assert.equal(Api.dashboardExpectationMatches({entity_id: "fan.room", available: true, state: false,
+    controls: [{command: "percentage", value: null}]}, fanOffExpected), true, "speed 0 is confirmed by the fan being off");
 assert.equal(Api.dashboardExpectationMatches({details: {activity: "open", position: 30}}, {command: "open_cover"}), false, "partly open is not fully open");
 assert.equal(Api.dashboardExpectationMatches({details: {activity: "opening", position: 30}}, {command: "open_cover"}), true);
 assert.match(qml, /model: items.length/);

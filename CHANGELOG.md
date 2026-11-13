@@ -49,6 +49,8 @@
 - Fan speed minus/plus moves to the fan's next speed. It stepped by one
   percent, and a fan rounds a percentage up to its next speed, so on a fan with
   few speeds minus never lowered it.
+- Setting a light's brightness or a fan's speed to 0 on the display is
+  confirmed once it is off, instead of ending as unconfirmed.
 - Emptying a page name or a custom name in the entity-display dialog clears it.
   Home Assistant leaves an emptied field out of the form it sends, so the saved
   value came back.

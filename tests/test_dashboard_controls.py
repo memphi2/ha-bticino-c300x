@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import logging
 import math
 import re
 import runpy
@@ -13,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from aiohttp import web
 from homeassistant.util.percentage import (
     percentage_to_ordered_list_item,
     percentage_to_ranged_value,
@@ -21,7 +23,8 @@ from homeassistant.util.percentage import (
 
 from custom_components.bticino_c300x.dashboard import async_dashboard_payload
 from custom_components.bticino_c300x.dashboard_controls import (
-    CHOICE_MAX_OPTION_LENGTH,
+    CHOICE_MAX_BYTES,
+    CHOICE_MAX_OPTION_BYTES,
     CHOICE_MAX_OPTIONS,
     FanEntityFeature,
     async_execute_control,
@@ -622,16 +625,17 @@ def test_media_player_controls_carry_bounded_values():
     assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
 
 
-def test_a_choice_offers_its_first_options_that_fit_a_button():
+def test_a_choice_offers_its_first_options_that_fit_the_response():
     """A list of hundreds of favourites is cut to its first options.
 
-    A name too long for a button is skipped, not cut, because a cut name is not
-    an option Home Assistant accepts. The executor checks against the same list,
-    so an option the display was not offered does not run either.
+    An option larger than the display can carry is skipped, not cut, because a
+    cut name is not an option Home Assistant accepts. The executor checks
+    against the same list, so an option the display was not offered does not
+    run either.
     """
 
-    at_limit = "y" * CHOICE_MAX_OPTION_LENGTH
-    names = ["x" * (CHOICE_MAX_OPTION_LENGTH + 1), at_limit] + [
+    at_limit = "y" * (CHOICE_MAX_OPTION_BYTES - 2)
+    names = ["x" * (CHOICE_MAX_OPTION_BYTES - 1), at_limit] + [
         f"Station {number}" for number in range(400)
     ]
     offered = [at_limit] + [f"Station {number}" for number in range(CHOICE_MAX_OPTIONS - 1)]
@@ -665,34 +669,169 @@ def test_a_choice_offers_its_first_options_that_fit_a_button():
     )
 
 
-def test_one_long_source_list_leaves_the_dashboard_readable():
-    """The display reads the whole dashboard in one response the agent buffers.
+@pytest.mark.parametrize("name", [
+    "Радиостанция номер",
+    "ラジオ局の名前です",
+    "🎵🎶 Lieblingsplaylist",
+])
+def test_a_choice_counts_the_bytes_its_options_are_sent_as(name):
+    """The display's response sends a character outside ASCII as a six-byte
+    escape and an emoji as twelve, so a list is measured as it is sent."""
 
-    A larger response shows every page as Home Assistant unavailable, so one
-    player with thousands of favourites must stay a small part of it.
-    """
+    names = [f"{name} {number}" for number in range(CHOICE_MAX_OPTIONS)]
+    assert len(json.dumps(names)) > CHOICE_MAX_BYTES
+    options = entity_controls("select.station", state(names[0], options=names))[0]["options"]
+    assert options == names[: len(options)]
+    assert len(json.dumps(options)) <= CHOICE_MAX_BYTES
+    assert len(json.dumps(names[: len(options) + 1])) > CHOICE_MAX_BYTES
 
-    agent = (Path(__file__).resolve().parents[1] / "native_agent/src/http.c").read_text(
-        encoding="utf-8"
+
+def test_a_choice_sends_its_value_only_when_it_is_offered():
+    """The display only compares the value with the offered options, so a
+    value no option equals is left out instead of sent at any size."""
+
+    def source(value):
+        return entity_controls("media_player.room", state(
+            "playing", supported_features=2048, source=value, source_list=["Radio", "TV"],
+        ))[0]["value"]
+
+    assert source("TV") == "TV"
+    assert source("Radio " * 5000) is None
+    assert source({"name": "TV"}) is None
+    fan_modes = entity_controls(
+        "climate.room", state("heat", supported_features=8, fan_mode=2, fan_modes=["1", "2"]),
     )
-    buffer = int(re.search(r"#define C300X_LARGE_RESPONSE_SIZE (\d+)", agent).group(1))
-    favourites = [f"Favourite radio station {number:04d}" for number in range(2000)]
-    player = state(
-        "playing", supported_features=2048 | 65536, friendly_name="Living room",
-        source=favourites[0], source_list=favourites, sound_mode_list=favourites,
-    )
+    assert next(c for c in fan_modes if c["command"] == "fan_mode")["value"] == 2
+
+
+def test_a_select_tile_offers_the_first_options_of_its_submenu():
+    long_names = [f"{'Станция' * 14} {number}" for number in range(12)]
+    snapshot = state(long_names[0], options=long_names, friendly_name="Station")
+    submenu = entity_controls("select.station", snapshot)[0]["options"]
     hass = SimpleNamespace(
-        states=SimpleNamespace(get={"media_player.room": player}.get),
+        states=SimpleNamespace(get={"select.station": snapshot}.get),
         config=SimpleNamespace(language="en"),
     )
     entry = SimpleNamespace(
         entry_id="entry", title="Door", data={},
-        options={"device_ui_enabled": True, "dashboard_entities": ["media_player.room"]},
+        options={"device_ui_enabled": True, "dashboard_entities": ["select.station"]},
     )
     payload = asyncio.run(async_dashboard_payload(hass, entry))
-    items = [item for page in payload["data"]["pages"] for item in page.get("items", [])]
-    assert [item["entity_id"] for item in items] == ["media_player.room"]
-    assert len(json.dumps(payload)) < buffer // 4
+    tile = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    assert len(submenu) < len(long_names)
+    assert [option["value"] for option in tile["options"]] == submenu
+
+
+def _light(number):
+    return state(
+        "on", friendly_name=f"Light {number}", supported_color_modes=["color_temp", "hs"],
+        brightness=128, color_temp_kelvin=3000, min_color_temp_kelvin=2000,
+        max_color_temp_kelvin=6500, hs_color=[30, 50], color_mode="hs",
+    )
+
+
+def _player(number, names):
+    return state(
+        "playing", friendly_name=f"Player {number}", supported_features=2048 | 65536,
+        source=names[0], source_list=names, sound_mode=names[0], sound_mode_list=names,
+    )
+
+
+def _dashboard(states, *, notifications=()):
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en"),
+    )
+    store = SimpleNamespace(payload=lambda: list(notifications))
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        runtime_data=SimpleNamespace(display_notifications=store),
+        options={"device_ui_enabled": True, "dashboard_entities": list(states)},
+    )
+    return asyncio.run(async_dashboard_payload(hass, entry))
+
+
+def _agent_response_buffer():
+    agent = (Path(__file__).resolve().parents[1] / "native_agent/src/http.c").read_text(
+        encoding="utf-8"
+    )
+    return int(re.search(r"#define C300X_LARGE_RESPONSE_SIZE (\d+)", agent).group(1))
+
+
+def _sent_bytes(payload):
+    """Return the body the webhook sends: aiohttp's json_response default."""
+
+    return len(web.json_response({**payload, "revision": "0" * 16}).body)
+
+
+def _choice_lists(payload):
+    for page in payload["data"]["pages"]:
+        for item in page.get("items", []):
+            for control in item.get("controls", []):
+                if control["kind"] == "choice" and "swatches" not in control:
+                    yield item["entity_id"], control["command"], control["options"]
+
+
+_JAPANESE = [f"お気に入りのラジオ局 第{number:02d}番 夜の音楽番組" for number in range(50)]
+_CYRILLIC = [f"Любимая радиостанция номер {number:02d} с ночной музыкой и новостями" for number in range(50)]
+_ASCII = [f"Favourite radio station number {number:02d} xx" for number in range(50)]
+_MESSAGE = {
+    "id": "m", "title": "Note", "message": "x" * 1900, "severity": "info", "actions": [],
+}
+
+
+@pytest.mark.parametrize("states,notifications", [
+    ({f"media_player.p{n}": _player(n, _JAPANESE) for n in range(4)}, ()),
+    ({"media_player.p0": _player(0, _CYRILLIC)} | {f"light.l{n}": _light(n) for n in range(10)}, ()),
+    ({f"media_player.p{n}": _player(n, _ASCII) for n in range(10)}, ()),
+    ({f"media_player.p{n}": _player(n, _ASCII) for n in range(4)}, [
+        {**_MESSAGE, "id": f"m{n}"} for n in range(8)
+    ]),
+    ({"media_player.p0": _player(0, [f"Favourite radio station {n:04d}" for n in range(2000)])}, ()),
+], ids=["4 players, Japanese", "1 player, Cyrillic, 10 lights", "10 players, ASCII",
+        "4 players and 8 messages", "2000 favourites"])
+def test_choice_lists_never_push_the_dashboard_past_the_display(states, notifications):
+    """The display reads the whole dashboard in one response the agent buffers.
+
+    A larger response shows every page as Home Assistant unavailable, so long
+    choice lists, alone or added up over several players, are shortened until
+    the response fits. A shortened list keeps its first options, all of which
+    the executor still accepts.
+    """
+
+    payload = _dashboard(states, notifications=notifications)
+    assert _sent_bytes(payload) + 1024 < _agent_response_buffer()
+    lists = list(_choice_lists(payload))
+    assert len(lists) == 2 * sum(entity.startswith("media_player.") for entity in states)
+    for entity_id, command, options in lists:
+        assert options
+        full = next(
+            control["options"]
+            for control in entity_controls(entity_id, states[entity_id])
+            if control["command"] == command
+        )
+        assert options == full[: len(options)]
+        hass = hass_for(states[entity_id])
+        asyncio.run(async_execute_control(hass, entity_id, command, options[-1]))
+
+
+def test_a_dashboard_that_fits_keeps_its_lists_whole():
+    names = [f"Station {number}" for number in range(CHOICE_MAX_OPTIONS)]
+    payload = _dashboard({f"media_player.p{n}": _player(n, names) for n in range(2)})
+    assert [len(options) for _, _, options in _choice_lists(payload)] == [CHOICE_MAX_OPTIONS] * 4
+
+
+def test_a_dashboard_too_large_without_lists_is_logged_once(caplog):
+    many = {f"light.l{n}": _light(n) for n in range(40)}
+    caplog.set_level(logging.WARNING, logger="custom_components.bticino_c300x.dashboard")
+    for _ in range(2):
+        payload = _dashboard(many)
+    assert len(payload["data"]["pages"][1]["items"]) == 40
+    warnings = [record for record in caplog.records if "display dashboard" in record.getMessage()]
+    assert len(warnings) == 1
+    _dashboard({"light.l0": _light(0)})
+    caplog.clear()
+    _dashboard(many)
+    assert [record for record in caplog.records if "display dashboard" in record.getMessage()]
 
 
 @pytest.mark.parametrize("value,attrs,command,option,service,data", [

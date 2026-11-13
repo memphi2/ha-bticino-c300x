@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime
 from typing import Any, cast
 
@@ -45,7 +47,7 @@ from .dashboard_config import (
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
-from .dashboard_controls import entity_controls
+from .dashboard_controls import choice_options, entity_controls
 from .dashboard_details import DETAIL_DOMAINS, entity_details
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
@@ -68,6 +70,15 @@ from .dashboard_labels import (
 from .dashboard_weather import async_dashboard_weather_payload
 from .display_notifications import notification_payload
 from .entry_types import BticinoC300XConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
+
+# The agent reads the display's answer, headers included, into one 32 KiB
+# buffer, and an answer that does not fit shows every page as Home Assistant
+# unavailable. The rest of the buffer is left for the headers.
+DASHBOARD_RESPONSE_MAX_BYTES = 30 * 1024
+_DASHBOARD_CHOICE_TRIM_LIMITS = (25, 12, 6, 3, 1)
+_OVERSIZED_DASHBOARDS: set[str] = set()
 
 dt_util: Any
 
@@ -240,7 +251,7 @@ async def async_dashboard_payload(
             {"_kind": "weather", "_order": int(weather_layout.get("order", "0"))}
         )
 
-    return {
+    return _fit_dashboard_response(entry, {
         "preventReturnToHomepage": prevent_return,
         "refreshInterval": 0,
         "notifications": notification_payload(entry),
@@ -251,7 +262,50 @@ async def async_dashboard_payload(
                 if _dashboard_page_has_content(page)
             ]
         },
-    }
+    })
+
+
+def _fit_dashboard_response(
+    entry: BticinoC300XConfigEntry, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Shorten every choice list until the dashboard fits the display's answer.
+
+    Each list is limited on its own, yet several players sharing one long
+    favourites list still add up. A shortened list keeps its first options,
+    all of which the executor still accepts.
+    """
+
+    size = len(json.dumps(payload))
+    if size > DASHBOARD_RESPONSE_MAX_BYTES:
+        lists = [
+            holder
+            for page in payload["data"]["pages"]
+            for item in page.get("items", [])
+            for holder in (item, *item.get("controls", []))
+            if holder.get("kind") == "choice"
+            and isinstance(holder.get("options"), list)
+            and "swatches" not in holder
+        ]
+        for limit in _DASHBOARD_CHOICE_TRIM_LIMITS:
+            for holder in lists:
+                holder["options"] = holder["options"][:limit]
+            size = len(json.dumps(payload))
+            if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+                break
+    if size <= DASHBOARD_RESPONSE_MAX_BYTES:
+        _OVERSIZED_DASHBOARDS.discard(entry.entry_id)
+        return payload
+    if entry.entry_id not in _OVERSIZED_DASHBOARDS:
+        _OVERSIZED_DASHBOARDS.add(entry.entry_id)
+        _LOGGER.warning(
+            "The display dashboard of %s takes %d bytes, more than the %d the "
+            "device can read, so the display shows Home Assistant as "
+            "unavailable; remove entities, actions or messages from it",
+            entry.title,
+            size,
+            DASHBOARD_RESPONSE_MAX_BYTES,
+        )
+    return payload
 
 
 def _dashboard_alarm_state(state: Any, language: str) -> str:
@@ -800,6 +854,7 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
     if not isinstance(raw_options, list):
         raw_options = []
     value = "" if state is None else str(state.state or "")
+    # The tile offers the first options of its submenu's list, within its limits.
     return {
         "value": value,
         "options": [
@@ -807,8 +862,8 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
                 "label": _dashboard_text(option, "", 80),
                 "value": option,
             }
-            for option in raw_options
-            if isinstance(option, str) and option.strip()
+            for option in choice_options(raw_options)
+            if option.strip()
         ][:12],
     }
 

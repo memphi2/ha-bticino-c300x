@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -39,9 +40,13 @@ COLOR_PRESETS = {
 # HA versions, and merely reading a deprecated one is reported.
 _MEDIA_PLAYER_OFF_STATES = frozenset({"off", "standby"})
 # The display reads the whole dashboard in one response of at most 32 KiB, so
-# one list of hundreds of favourites must not push every other tile out.
+# one list of hundreds of favourites must not push every other tile out. The
+# response escapes every non-ASCII character to six bytes, so options are
+# measured in the bytes they are sent as. Escaped, an option is never shorter
+# than the UTF-8 the agent accepts back, which is at most 1024 bytes.
 CHOICE_MAX_OPTIONS = 50
-CHOICE_MAX_OPTION_LENGTH = 100
+CHOICE_MAX_OPTION_BYTES = 1024
+CHOICE_MAX_BYTES = 2048
 
 
 def _white_presets(control: dict[str, Any] | None, color_mode: Any) -> dict[str, Any] | None:
@@ -161,21 +166,38 @@ def _fan_percentage(attrs: Any, value: float) -> int:
     return ranged_value_to_percentage((1, count), speed) if speed else 0
 
 
-def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
-    """Offer the first options of a list, skipping names too long for a button.
+def choice_options(options: Any) -> list[str]:
+    """Return the first options of a list that fit the display's response.
 
-    A skipped name is not cut, because a cut name is not an option Home
-    Assistant accepts; the executor checks a command against this same list.
+    An option the display could not send back is skipped, not cut, because a
+    cut name is not an option Home Assistant accepts; the executor checks a
+    command against this same list. The list ends before it would take more
+    than CHOICE_MAX_BYTES of the response, separators included.
     """
     if not isinstance(options, (list, tuple)):
-        return None
-    values = [
-        item
-        for item in options
-        if isinstance(item, str) and 0 < len(item) <= CHOICE_MAX_OPTION_LENGTH
-    ][:CHOICE_MAX_OPTIONS]
+        return []
+    values: list[str] = []
+    size = 0
+    for item in options:
+        if not isinstance(item, str) or not item:
+            continue
+        item_size = len(json.dumps(item))
+        if item_size > CHOICE_MAX_OPTION_BYTES:
+            continue
+        size += item_size + 2
+        if len(values) == CHOICE_MAX_OPTIONS or size > CHOICE_MAX_BYTES:
+            break
+        values.append(item)
+    return values
+
+
+def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
+    values = choice_options(options)
     if not values:
         return None
+    # The display only compares the value with the offered options.
+    if not isinstance(value, (str, int, float)) or str(value) not in values:
+        value = None
     return {"command": command, "kind": "choice", "value": value, "options": values}
 
 

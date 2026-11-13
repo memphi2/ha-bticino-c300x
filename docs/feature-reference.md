@@ -177,9 +177,14 @@ settings existed therefore looks the same until a size is chosen.
   unrelated attributes and history are not requested or forwarded.
 - Number entities use HA units, bounds and step sizes; select entities show their
   actual options. Sliders send one command on release, not during movement.
-- A choice, such as a select's options or a player's sources, offers at most
-  its first 50 options and leaves out options longer than 100 characters, so
-  one long list cannot make the dashboard too large for the display to read.
+- A choice, such as a select's options or a player's sources, offers its
+  first options: at most 50, and only as many as fit into 2 kB of the answer
+  to the display, where a character outside ASCII counts six bytes and an
+  emoji twelve. An option taking more than 1 kB there is left out. If the
+  dashboard would still be too large for the display to read, every choice
+  list is shortened further. A dashboard too large even then, for example
+  because of very many entities, shows Home Assistant as unavailable, and
+  Home Assistant logs a warning.
 
 State changes for selected entities use the existing event bridge, including
 when no Alarmo entity is configured. There is no regular device-state polling.

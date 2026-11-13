@@ -192,7 +192,8 @@ from one request; commands always keep their own.
 Command feedback distinguishes sending, accepted commands and matching state
 reported by HA. HA state confirmation is not independent physical verification
 for optimistic entities. An accepted command that HA never reflects is reported
-as unconfirmed after 15 seconds, and feedback for an entity disappears a minute
+as unconfirmed after 15 seconds; a track skip, which changes no state HA
+reports, stays accepted. Feedback for an entity disappears a minute
 after the last thing happened to it, so a tile returns to showing its plain
 reading. Errors remain at the affected control; an uncertain transport result is
 not automatically retried. During a connection outage the

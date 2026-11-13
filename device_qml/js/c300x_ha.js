@@ -186,6 +186,7 @@ function feedbackState(entry) {
     if (!entry) return ""
     var age = Date.now() - (entry.at || 0)
     if (age >= FEEDBACK_DISCARD_MS) return ""
+    if (entry.expected && entry.expected.stateless) return entry.state
     if (entry.state === "action_sent" && age >= FEEDBACK_UNCONFIRMED_MS) return "state_unconfirmed"
     return entry.state
 }
@@ -207,11 +208,14 @@ function dashboardExpectation(item, control, value) {
     if (control.command === "media_play_pause") {
         return {command: control.command, playing: control.playing !== true}
     }
+    if (control.command === "media_previous_track" || control.command === "media_next_track") {
+        return {command: control.command, stateless: true}
+    }
     return null
 }
 
 function dashboardExpectationMatches(item, expected) {
-    if (!item || item.available === false || !expected) return false
+    if (!item || item.available === false || !expected || expected.stateless) return false
     if (expected.command === "toggle") return item.state === expected.value
     if (expected.power !== undefined && item.state !== expected.power) return false
     var activity = item.details ? item.details.activity : ""

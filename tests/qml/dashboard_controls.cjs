@@ -396,6 +396,16 @@ Api.confirmDashboardFeedback(p);
 assert.equal(p.feedbackKey(stuck), "action_error", "a failed action is not confirmed by matching state");
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "");
+
+// A track skip has no state to confirm, so it stays sent instead of turning into a warning.
+p.controlFeedback = [];
+Api.setDashboardFeedback(p, stuck.entity_id, "action_sent", {command: "media_next_track", stateless: true});
+p.dashboardPages = [{items: [{entity_id: stuck.entity_id, state: true, available: true}]}];
+clock += 15000;
+Api.confirmDashboardFeedback(p);
+assert.equal(p.feedbackKey(stuck), "action_sent", "a command without a state is never reported as unconfirmed");
+clock += 45000;
+assert.equal(p.feedbackKey(stuck), "", "and settles like any other entry");
 Api.Date = realDate;
 p.controlFeedback = [];
 p.dashboardPages = [];
@@ -515,7 +525,12 @@ assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, playExpected), t
     "a player that cannot pause loses the button once playing, which confirms the play");
 assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPlayButton, {available: false}), pauseExpected), false,
     "an unavailable player confirms nothing");
-assert.equal(Api.dashboardExpectation(playerItem, playerItem.controls[3], null), null, "a track skip has no state to confirm");
+for (const skip of [playerItem.controls[1], playerItem.controls[3]]) {
+    const skipExpected = Api.dashboardExpectation(playerItem, skip, null);
+    assert.deepEqual(JSON.parse(JSON.stringify(skipExpected)), {command: skip.command, stateless: true},
+        "a track skip has no state to confirm");
+    assert.equal(Api.dashboardExpectationMatches(playerItem, skipExpected), false, "so no state confirms it");
+}
 p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
 p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0});
 assert.match(queue[0].url, /media_player.kitchen%3Amedia_next_track$/);

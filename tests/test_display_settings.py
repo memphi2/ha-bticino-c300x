@@ -554,7 +554,33 @@ def test_media_player_item_reports_power_and_what_is_playing(player_state, attri
     assert item["available"] is True
     assert item["details"]["type"] == "media_player"
     assert item["details"]["value"] == reading
+    # The tile shows its state line, so that line carries what is playing.
+    assert item["state_label"] == reading
     assert "media_play_pause" in [control["command"] for control in item["controls"]]
+
+
+@pytest.mark.parametrize(("secondary", "line"), [("none", ""), ("entity_id", "media_player.kitchen")])
+def test_media_player_title_respects_another_secondary_line(secondary, line):
+    states = {
+        "media_player.kitchen": SimpleNamespace(
+            state="playing", attributes={"supported_features": 16384, "media_title": "Evening news"}
+        )
+    }
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get), config=SimpleNamespace(language="en")
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={
+            "device_ui_enabled": True,
+            "dashboard_entities": ["media_player.kitchen"],
+            "dashboard_entity_display_overrides": {"media_player.kitchen": {"secondary": secondary}},
+        },
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page.get("items", []))
+    assert item["state_label"] == line
+    assert item["details"]["value"] == "Evening news"
 
 
 def test_unavailable_media_player_is_offline_without_controls():

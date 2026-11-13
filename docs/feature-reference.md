@@ -161,8 +161,9 @@ settings existed therefore looks the same until a size is chosen.
   move to a separate settings tab when supported.
 - Fans expose speed, oscillation, presets and direction according to their
   capabilities. Preset names come from the entity itself.
-- Media players show what is playing, or their state when nothing is. The
-  submenu has previous, play/pause and next, a volume slider, mute, source and
+- Media players show what is playing, or their state when nothing is. On a
+  tile this is the state line, so another secondary-line choice replaces it.
+  The submenu has previous, play/pause and next, a volume slider, mute, source and
   sound mode, each only where the player reports the feature. The on/off switch
   and play/pause appear only when the player reports the step its current state
   needs, and send that explicit service: turn on or off, play or pause. A

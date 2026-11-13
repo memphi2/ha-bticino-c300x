@@ -392,6 +392,9 @@ def dashboard_item_for_state(
             item["state"] = state is not None and state.state not in {
                 "off", "standby", "unknown", "unavailable",
             }
+            if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
+                # The tile shows its state line; for a player that is what is playing.
+                item["state_label"] = item["details"]["value"]
             return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"

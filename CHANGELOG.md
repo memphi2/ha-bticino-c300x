@@ -54,6 +54,11 @@
   value.
 - Setting a light's brightness or a fan's speed to 0 on the display is
   confirmed once it is off, instead of ending as unconfirmed.
+- A choice on the display, such as a select's options or a media player's
+  sources, offers its first 50 options and leaves out options longer than 100
+  characters. A list of hundreds of entries made the dashboard larger than the
+  agent reads in one response, and every page then showed Home Assistant as
+  unavailable.
 - Emptying a page name in the entity-display dialog clears it, and emptying a
   custom name shows the Home Assistant name again. Home Assistant leaves an
   emptied field out of the form it sends, so the saved value came back.

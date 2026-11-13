@@ -38,6 +38,10 @@ COLOR_PRESETS = {
 # Plain state strings: the media player state enum deprecates members between
 # HA versions, and merely reading a deprecated one is reported.
 _MEDIA_PLAYER_OFF_STATES = frozenset({"off", "standby"})
+# The display reads the whole dashboard in one response of at most 32 KiB, so
+# one list of hundreds of favourites must not push every other tile out.
+CHOICE_MAX_OPTIONS = 50
+CHOICE_MAX_OPTION_LENGTH = 100
 
 
 def _white_presets(control: dict[str, Any] | None, color_mode: Any) -> dict[str, Any] | None:
@@ -158,9 +162,18 @@ def _fan_percentage(attrs: Any, value: float) -> int:
 
 
 def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
+    """Offer the first options of a list, skipping names too long for a button.
+
+    A skipped name is not cut, because a cut name is not an option Home
+    Assistant accepts; the executor checks a command against this same list.
+    """
     if not isinstance(options, (list, tuple)):
         return None
-    values = [item for item in options if isinstance(item, str) and item]
+    values = [
+        item
+        for item in options
+        if isinstance(item, str) and 0 < len(item) <= CHOICE_MAX_OPTION_LENGTH
+    ][:CHOICE_MAX_OPTIONS]
     if not values:
         return None
     return {"command": command, "kind": "choice", "value": value, "options": values}

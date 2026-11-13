@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import json
 import math
+import re
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +19,10 @@ from homeassistant.util.percentage import (
     ranged_value_to_percentage,
 )
 
+from custom_components.bticino_c300x.dashboard import async_dashboard_payload
 from custom_components.bticino_c300x.dashboard_controls import (
+    CHOICE_MAX_OPTION_LENGTH,
+    CHOICE_MAX_OPTIONS,
     FanEntityFeature,
     async_execute_control,
     entity_controls,
@@ -615,6 +620,79 @@ def test_media_player_controls_carry_bounded_values():
         assert unknown[0]["value"] is None
     # No source list means no source control instead of an empty picker.
     assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
+
+
+def test_a_choice_offers_its_first_options_that_fit_a_button():
+    """A list of hundreds of favourites is cut to its first options.
+
+    A name too long for a button is skipped, not cut, because a cut name is not
+    an option Home Assistant accepts. The executor checks against the same list,
+    so an option the display was not offered does not run either.
+    """
+
+    at_limit = "y" * CHOICE_MAX_OPTION_LENGTH
+    names = ["x" * (CHOICE_MAX_OPTION_LENGTH + 1), at_limit] + [
+        f"Station {number}" for number in range(400)
+    ]
+    offered = [at_limit] + [f"Station {number}" for number in range(CHOICE_MAX_OPTIONS - 1)]
+    snapshot = state(
+        "playing", supported_features=2048 | 65536,
+        source="Station 0", source_list=names, sound_mode_list=names,
+    )
+    controls = {
+        control["command"]: control
+        for control in entity_controls("media_player.room", snapshot)
+    }
+    assert controls["source"]["options"] == offered
+    assert controls["sound_mode"]["options"] == offered
+    assert controls["source"]["value"] == "Station 0"
+    select = entity_controls("select.station", state("Station 0", options=names))
+    assert select[0]["options"] == offered
+    climate = entity_controls(
+        "climate.room", state("heat", supported_features=16, preset_modes=names)
+    )
+    assert next(c for c in climate if c["command"] == "preset_mode")["options"] == offered
+    hass = hass_for(snapshot)
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(
+            hass, "media_player.room", "source", f"Station {CHOICE_MAX_OPTIONS}",
+        ))
+    hass.services.async_call.assert_not_awaited()
+    asyncio.run(async_execute_control(hass, "media_player.room", "source", at_limit))
+    hass.services.async_call.assert_awaited_once_with(
+        "media_player", "select_source",
+        {"entity_id": "media_player.room", "source": at_limit}, blocking=True,
+    )
+
+
+def test_one_long_source_list_leaves_the_dashboard_readable():
+    """The display reads the whole dashboard in one response the agent buffers.
+
+    A larger response shows every page as Home Assistant unavailable, so one
+    player with thousands of favourites must stay a small part of it.
+    """
+
+    agent = (Path(__file__).resolve().parents[1] / "native_agent/src/http.c").read_text(
+        encoding="utf-8"
+    )
+    buffer = int(re.search(r"#define C300X_LARGE_RESPONSE_SIZE (\d+)", agent).group(1))
+    favourites = [f"Favourite radio station {number:04d}" for number in range(2000)]
+    player = state(
+        "playing", supported_features=2048 | 65536, friendly_name="Living room",
+        source=favourites[0], source_list=favourites, sound_mode_list=favourites,
+    )
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get={"media_player.room": player}.get),
+        config=SimpleNamespace(language="en"),
+    )
+    entry = SimpleNamespace(
+        entry_id="entry", title="Door", data={},
+        options={"device_ui_enabled": True, "dashboard_entities": ["media_player.room"]},
+    )
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    items = [item for page in payload["data"]["pages"] for item in page.get("items", [])]
+    assert [item["entity_id"] for item in items] == ["media_player.room"]
+    assert len(json.dumps(payload)) < buffer // 4
 
 
 @pytest.mark.parametrize("value,attrs,command,option,service,data", [

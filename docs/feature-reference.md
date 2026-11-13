@@ -177,6 +177,9 @@ settings existed therefore looks the same until a size is chosen.
   unrelated attributes and history are not requested or forwarded.
 - Number entities use HA units, bounds and step sizes; select entities show their
   actual options. Sliders send one command on release, not during movement.
+- A choice, such as a select's options or a player's sources, offers at most
+  its first 50 options and leaves out options longer than 100 characters, so
+  one long list cannot make the dashboard too large for the display to read.
 
 State changes for selected entities use the existing event bridge, including
 when no Alarmo entity is configured. There is no regular device-state polling.

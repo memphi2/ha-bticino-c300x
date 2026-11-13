@@ -335,7 +335,7 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     device_user = (ROOT / "native_agent" / "src" / "device_user.c").read_text(
         encoding="utf-8"
     )
-    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+    device_media = (ROOT / "native_agent" / "src" / "device_media.c").read_text(
         encoding="utf-8"
     )
     setup_body = media_bridge[
@@ -365,15 +365,15 @@ def test_native_agent_sip_uses_media_identity_from_local_flexisip() -> None:
     assert "MEDIA_VIDEO_RTCP_PORT 28773" in media_bridge
     assert "generate_sdes_key(audio_key_raw" in setup_body
     assert "memcpy(bridge->ondemand_audio_srtp_key, audio_key_raw" in setup_body
-    assert "c300x_media_bt_av_takeover(bridge->config)" in media_bridge
-    assert "c300x_media_bt_av_start(bridge->config)" in media_bridge
-    assert '"*7*300#127#0#0#1#%d#%d*##"' in media_bt_av
-    assert "BT_AV_TAKEOVER_SETTLE_MS" in media_bt_av
-    takeover_body = media_bt_av[
-        media_bt_av.index("bool c300x_media_bt_av_takeover") :
+    assert "c300x_device_media_takeover(bridge->config)" in media_bridge
+    assert "c300x_device_media_start(bridge->config)" in media_bridge
+    assert '"*7*300#127#0#0#1#%d#%d*##"' in device_media
+    assert "DEVICE_MEDIA_TAKEOVER_SETTLE_MS" in device_media
+    takeover_body = device_media[
+        device_media.index("bool c300x_device_media_takeover") :
     ]
-    assert "c300x_media_bt_av_stop();" not in takeover_body
-    assert "return c300x_media_bt_av_start(config) || started;" in takeover_body
+    assert "c300x_device_media_stop();" not in takeover_body
+    assert "return c300x_device_media_start(config) || started;" in takeover_body
     assert "MEDIA_RENEW_SECONDS" in media_bridge
     assert '"sip:webrtc@' not in media_bridge
     assert "dummykey" not in media_bridge
@@ -450,25 +450,25 @@ def test_native_agent_app_stream_uses_authenticated_reverse_media() -> None:
     assert "send_rtcp_pli(" not in media_bridge
 
 
-def test_native_agent_bt_av_stop_removes_only_owned_udp_clients() -> None:
-    media_bt_av = (ROOT / "native_agent" / "src" / "media_bt_av.c").read_text(
+def test_native_agent_device_media_stop_removes_only_owned_udp_clients() -> None:
+    device_media = (ROOT / "native_agent" / "src" / "device_media.c").read_text(
         encoding="utf-8"
     )
-    header = (ROOT / "native_agent" / "src" / "media_bt_av.h").read_text(
+    header = (ROOT / "native_agent" / "src" / "device_media.h").read_text(
         encoding="utf-8"
     )
     media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
         encoding="utf-8"
     )
 
-    stop_body = media_bt_av[
-        media_bt_av.index("void c300x_media_bt_av_stop") :
-        media_bt_av.index("bool c300x_media_bt_av_takeover")
+    stop_body = device_media[
+        device_media.index("void c300x_device_media_stop") :
+        device_media.index("bool c300x_device_media_takeover")
     ]
 
-    assert "void c300x_media_bt_av_stop(const struct c300x_config *config);" in header
+    assert "void c300x_device_media_stop(const struct c300x_config *config);" in header
     assert '"*7*0*##"' not in stop_body
     assert stop_body.count('"*7*301#127#0#0#1#%d#') == 2
     assert "audio_rtp_port(config)" in stop_body
     assert "video_rtp_port(config)" in stop_body
-    assert "c300x_media_bt_av_stop(g_bridge.config);" in media_bridge
+    assert "c300x_device_media_stop(g_bridge.config);" in media_bridge

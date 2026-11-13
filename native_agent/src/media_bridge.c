@@ -5,7 +5,7 @@
 #include "media_audio.h"
 #include "media_base64.h"
 #include "media_bridge.h"
-#include "media_bt_av.h"
+#include "device_media.h"
 #include "media_rtsp_clients.h"
 #include "media_session_guard.h"
 #include "media_sip.h"
@@ -3818,7 +3818,7 @@ static void *ondemand_media_thread(void *arg) {
     long long next_audio_rtp = 0;
     long long next_rtcp = 0;
     long long next_sip_keepalive = 0;
-    long long next_bt_av_renew = c300x_monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
+    long long next_device_media_renew = c300x_monotonic_ms() + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
 
     memset(&srtp, 0, sizeof(srtp));
     pthread_mutex_lock(&bridge->mutex);
@@ -3981,9 +3981,9 @@ static void *ondemand_media_thread(void *arg) {
             }
             next_sip_keepalive = now + ((long long)MEDIA_SIP_KEEPALIVE_SECONDS * 1000LL);
         }
-        if (next_bt_av_renew == 0 || now >= next_bt_av_renew) {
-            (void)c300x_media_bt_av_start(bridge->config);
-            next_bt_av_renew = now + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
+        if (next_device_media_renew == 0 || now >= next_device_media_renew) {
+            (void)c300x_device_media_start(bridge->config);
+            next_device_media_renew = now + ((long long)MEDIA_RENEW_SECONDS * 1000LL);
         }
     }
 
@@ -5483,7 +5483,7 @@ static bool start_media_session(media_bridge_t *bridge) {
         c300x_video_bridge_media_stopped(bridge->video);
         return false;
     }
-    if (!c300x_media_bt_av_takeover(bridge->config)) {
+    if (!c300x_device_media_takeover(bridge->config)) {
         c300x_video_bridge_set_error(bridge->video, "media_takeover_failed");
         stop_media_session(false, false);
         c300x_video_bridge_media_stopped(bridge->video);
@@ -5632,7 +5632,7 @@ static void stop_media_session(bool close_client, bool explicit_stop) {
         close(sip_fd);
     }
     if (send_media_stop) {
-        c300x_media_bt_av_stop(g_bridge.config);
+        c300x_device_media_stop(g_bridge.config);
     }
 
     pthread_mutex_lock(&g_bridge.mutex);

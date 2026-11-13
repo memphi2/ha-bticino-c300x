@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.1.2 - 2026-11-13
 
 ### Added
 
@@ -21,6 +21,11 @@
   **Weather - Position** in the entity-display dialog move it to any page and
   sort it among that page's tiles. Unplaced, it stays at the top of the status
   page. A display that has not been updated yet keeps showing it on top.
+- Record the doorstation without a ring: `capture_doorbell_call` gains
+  `capture_mode: on_demand`, which captures video with or without audio while
+  media is idle and no other camera client is active. Until the capture ends,
+  new camera clients are turned away. `ring` stays the default, so existing
+  automations do not change; announcements remain available in ring mode only.
 
 ### Changed
 
@@ -32,6 +37,43 @@
   `media_takeover_failed`, and its log lines about the device media service
   start with `device-media:`. Nothing in Home Assistant evaluates either; they
   only appear in the agent's last error and log.
+- Alarm service calls fail with a translated error when the alarm rejects the
+  command or does not confirm the new state, instead of reporting success.
+  Only an explicit code rejection is reported as a wrong PIN; a missing
+  confirmation is reported as `alarm_state_unconfirmed`. Automations that call
+  the alarm services against a slow alarm can now see that error.
+
+### Fixed
+
+- A delayed status answer during camera reconciliation can no longer close a
+  doorbell session that is just starting. Closing a go2rtc session also closes
+  its websocket on current Home Assistant versions, which wrap it.
+- Overlapping event registrations no longer let an older event selection
+  overwrite a newer one or leave several renewal timers running.
+- A card action still in flight when the card is reconfigured finishes against
+  the camera it started on and reports only to the card that started it. While
+  an answer is pending, a second Answer press is ignored and Hang Up still
+  works.
+- Hanging up, a closed connection or a replaced card cancels a microphone start
+  that is still waiting for permission, so a late permission cannot restart
+  the call. A Home Call can no longer take over a doorstation answer that is
+  still waiting for the microphone.
+- Native agent deadlines, retries and grace windows use the monotonic clock, so
+  setting or correcting the device clock no longer shortens or extends them.
+- Voicemail and memo downloads no longer block the agent. They are sent in
+  small steps from its poll loop, at most four at a time; a fifth is answered
+  with `503 media_transfers_busy`. A download that makes no progress for two
+  seconds is closed.
+
+### Upgrade
+
+- The native agent moves to `2.1.2`. The agent-update Repair offers the
+  update, the new display files come with it, and the integration re-applies
+  an active Display patch itself, which restarts the device GUI once. Tile
+  sizes, media player tiles and the placed weather card need these display
+  files.
+- Home Assistant 2026.7 remains the minimum. Existing integration entries and
+  card configurations can be kept.
 
 ## v2.1.1 - 2026-11-10
 

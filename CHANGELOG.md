@@ -85,8 +85,11 @@
   that is still waiting for permission, so a late permission cannot restart
   the call. A Home Call can no longer take over a doorstation answer that is
   still waiting for the microphone.
-- Native agent deadlines, retries and grace windows use the monotonic clock, so
-  setting or correcting the device clock no longer shortens or extends them.
+- The native agent measures its call, media, command and ringer deadlines on
+  the monotonic clock, so setting or correcting the device clock no longer
+  shortens or extends them. Its MQTT reconnect and keepalive timers, the
+  network recheck, mDNS announcements and the display's long-poll waits still
+  follow the device clock.
 - Voicemail and memo downloads no longer block the agent. They are sent in
   small steps from its poll loop, at most four at a time; a fifth is answered
   with `503 media_transfers_busy`. A download that makes no progress for two

@@ -257,14 +257,21 @@ async def _display_bridge_stair_light(context: _DisplayBridgeContext) -> dict[st
 async def _display_bridge_alarm_command(
     context: _DisplayBridgeContext,
 ) -> dict[str, Any]:
-    return await async_execute_alarm_command(
+    code = optional_string(context.payload.get("code"))
+    result = await async_execute_alarm_command(
         context.hass,
         context.entry,
         str(context.payload.get("command", "")),
-        optional_string(context.payload.get("code")),
+        code,
         force=context.payload.get("force") is True,
         check=context.payload.get("check") is True,
     )
+    # Some alarm providers ignore a wrong code without raising, so the keypad
+    # would only see an unchanged state. Service callers get the neutral error;
+    # the display keeps its "PIN wrong" hint.
+    if code and result.get("ok") is False and result.get("error") == "alarm_state_unchanged":
+        return {**result, "error": "invalid_code"}
+    return result
 
 
 _DISPLAY_BRIDGE_HANDLERS: dict[str, _DisplayBridgeHandler] = {

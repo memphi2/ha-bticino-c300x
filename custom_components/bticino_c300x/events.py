@@ -129,6 +129,7 @@ class _AgentEventRegistration:
         self._retry_delay_seconds = _REGISTRATION_RETRY_SECONDS
         self._task: Task[Any] | None = None
         self._active_tasks: set[Task[Any]] = set()
+        self._registration_pending = False
         self._registration_stage = "callback_url"
 
     def start(self) -> Callable[[], None]:
@@ -145,6 +146,7 @@ class _AgentEventRegistration:
         """Stop timers, registry listeners and every in-flight registration."""
 
         self._stopped = True
+        self._registration_pending = False
         if self._task is not None and not self._task.done():
             self._task.cancel()
         for task in self._active_tasks:
@@ -156,16 +158,26 @@ class _AgentEventRegistration:
             self._entity_registry_cancel()
 
     async def _register(self, now: Any = None) -> None:
-        if not self._begin_register_attempt():
+        if self._stopped:
+            return
+        if self._active_tasks:
+            # A registry change must be re-read after the current request,
+            # never race it and let its older event selection win last.
+            self._registration_pending = True
             return
         # HA creates separate tasks for timer callbacks, not just start().
         task = asyncio.current_task()
         assert task is not None
         self._active_tasks.add(task)
         try:
-            await self._register_once()
-        except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
-            self._handle_registration_failure(err)
+            while self._begin_register_attempt():
+                self._registration_pending = False
+                try:
+                    await self._register_once()
+                except Exception as err:  # noqa: BLE001 - keep HA running if agent is offline
+                    self._handle_registration_failure(err)
+                if not self._registration_pending:
+                    break
         finally:
             self._active_tasks.discard(task)
 

@@ -1,12 +1,12 @@
 #include "time_util.h"
 
-#include <stddef.h>
-#include <sys/time.h>
+#include <time.h>
 
 long long c300x_monotonic_ms(void)
 {
-    struct timeval now;
-
-    gettimeofday(&now, NULL);
-    return ((long long)now.tv_sec * 1000LL) + ((long long)now.tv_usec / 1000LL);
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+    return ((long long)now.tv_sec * 1000LL) + ((long long)now.tv_nsec / 1000000LL);
 }

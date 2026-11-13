@@ -88,11 +88,11 @@ action is inserted automatically. Buttons, switches, scenes and scripts can be
 operated directly; other supported selections remain read-only on this page.
 The selected entity's name is used, including an existing display-name override.
 
-The revised page is included in `2.1.0b1`. Update the bundled agent and apply
-the Display patch to install it. No new background polling or device-file history
-is added. Reconnect attempts run only after a failed event connection while the
-page is active. Device rendering and interruption by a physical Ring Call still
-need confirmation during beta testing.
+The revised page is part of 2.1.0 and later. Update the bundled agent and
+apply the Display patch to install it. No new background polling or device-file
+history is added. Reconnect attempts run only after a failed event connection
+while the page is active. Device rendering and interruption by a physical Ring
+Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
@@ -200,8 +200,9 @@ Unavailable controls are disabled and commands are validated again in HA against
 the current selection and entity capabilities. Timeout and reconnect handling
 only runs while the page is active. Display changes require the matching bundled
 agent files and reapplying the Display patch after an update. Device rendering
-and physical Ring Call interruption remain beta checks. No additional polling,
-refresh timers or device-file writes are introduced by these detail views.
+and physical Ring Call interruption are not yet confirmed on hardware. No
+additional polling, refresh timers or device-file writes are introduced by these
+detail views.
 
 ## Display Settings
 

@@ -2,8 +2,8 @@
 
 ## Supported Release Line
 
-- `2.0.x`: current stable
-- `2.1.x`: opt-in beta, starting with `2.1.0b1`
+- `2.1.x`: current stable
+- `2.0.x` and older: no longer maintained; update to `2.1.x`
 
 ## Compatibility Baseline
 

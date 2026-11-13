@@ -27,8 +27,8 @@ ends a line at some that JavaScript keeps inside a string, such as form feed.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +42,28 @@ DEVICE_SOURCE_FILES = (
     "js/c300x_memos.js",
 )
 STRIPPED_SUFFIXES = frozenset({".qml", ".js"})
-_CONTROL_CHARACTER = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]")
+_ALLOWED_CONTROL_CHARACTERS = frozenset("\t\n\r")
+_LINE_SEPARATORS = frozenset("\u2028\u2029")
+
+
+def _is_unsupported_character(character: str) -> bool:
+    """Tell whether a device file may not contain ``character``.
+
+    Control characters other than tab, line feed and carriage return are
+    refused, as are the Unicode line separators, which a JavaScript engine
+    counts as line ends.
+    """
+
+    if character in _LINE_SEPARATORS:
+        return True
+    return unicodedata.category(character) == "Cc" and character not in _ALLOWED_CONTROL_CHARACTERS
+
+
+def _find_unsupported_character(text: str) -> int | None:
+    for index, character in enumerate(text):
+        if _is_unsupported_character(character):
+            return index
+    return None
 
 
 class DeviceFileStripError(ValueError):
@@ -52,11 +73,11 @@ class DeviceFileStripError(ValueError):
 def strip_device_source(text: str, *, name: str = "<source>") -> str:
     """Return ``text`` without comment-only lines, blank lines and line padding."""
 
-    control = _CONTROL_CHARACTER.search(text)
+    control = _find_unsupported_character(text)
     if control is not None:
-        number = text.count("\n", 0, control.start()) + 1
+        number = text.count("\n", 0, control) + 1
         raise DeviceFileStripError(
-            f"{name}:{number}: control character U+{ord(control.group()):04X}"
+            f"{name}:{number}: control character U+{ord(text[control]):04X}"
             " is not supported in device files"
         )
     kept: list[str] = []

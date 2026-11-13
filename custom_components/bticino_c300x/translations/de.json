@@ -537,6 +537,18 @@
     },
     "voice_memo_not_available": {
       "message": "Es ist kein C300X-Sprach-Memo verfuegbar."
+    },
+    "alarm_not_ready": {
+      "message": "Die Alarmanlage kann nicht scharfgeschaltet werden, weil mindestens ein Sensor dies verhindert."
+    },
+    "alarm_invalid_code": {
+      "message": "Der Alarmcode wurde abgelehnt."
+    },
+    "alarm_state_unconfirmed": {
+      "message": "Der angeforderte Alarmzustand wurde nicht bestätigt. Prüfe den Alarmzustand vor einem erneuten Versuch."
+    },
+    "alarm_command_rejected": {
+      "message": "Der Alarmbefehl wurde abgelehnt. Prüfe den Alarmzustand und die zugehörige Integration für weitere Informationen."
     }
   },
   "issues": {

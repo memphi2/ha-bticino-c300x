@@ -224,10 +224,7 @@ function dashboardExpectationMatches(item, expected) {
     if (expected.command === "close_cover") return activity === "closing" || activity === "closed"
     if (expected.command === "stop_cover") return activity === "open" || activity === "closed"
     var controls = listOrEmpty(item.controls)
-    if (expected.playing !== undefined) {
-        var player = dashboardControlByCommand(item, expected.command)
-        return player ? (player.playing === true) === expected.playing : true
-    }
+    if (expected.playing !== undefined) return Boolean(item.details) && item.details.playing === expected.playing
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
         if (control.command !== expected.command || control.value === null || control.value === undefined) continue

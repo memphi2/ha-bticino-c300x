@@ -65,6 +65,9 @@ def entity_details(
                 value = round(max(0, min(255, value)) * 100 / 255)
             details.update(value=_display_number(value), unit="%", label="brightness" if domain == "light" else "percentage")
     elif domain == "media_player":
+        # Play/pause is confirmed on this; its button comes and goes with the
+        # features a player reports in each state.
+        details["playing"] = state.state == "playing"
         # What is playing is the reading; without a title the state stands.
         title = attrs.get("media_title")
         if isinstance(title, str) and title.strip() and state.state in {"playing", "paused", "buffering"}:

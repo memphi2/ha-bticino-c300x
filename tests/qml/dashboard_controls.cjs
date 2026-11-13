@@ -506,7 +506,7 @@ p.dashboardPages = []; p.items = [];
 console.log("Weather placement passed");
 // A media player tile carries transport buttons and confirms play/pause.
 const playerItem = {entity_id: "media_player.kitchen", domain: "c300x", available: true, state: true,
-    details: {type: "media_player"}, controls: [
+    details: {type: "media_player", playing: true}, controls: [
     {command: "toggle", kind: "button"},
     {command: "media_previous_track", kind: "button"},
     {command: "media_play_pause", kind: "button", playing: true},
@@ -532,16 +532,24 @@ assert.deepEqual(Array.from(Api.dashboardVisibleControls(playerItem, ""), c => c
 const pauseExpected = Api.dashboardExpectation(playerItem, playerItem.controls[2], null);
 assert.equal(pauseExpected.playing, false);
 assert.equal(Api.dashboardExpectationMatches(playerItem, pauseExpected), false, "still playing is not a confirmation");
-const pausedItem = JSON.parse(JSON.stringify(playerItem)); pausedItem.controls[2].playing = false;
+const pausedItem = JSON.parse(JSON.stringify(playerItem));
+pausedItem.controls[2].playing = false; pausedItem.details.playing = false;
 assert.equal(Api.dashboardExpectationMatches(pausedItem, pauseExpected), true);
-const withoutPlayButton = JSON.parse(JSON.stringify(playerItem)); withoutPlayButton.controls.splice(2, 1);
+const withoutPlayButton = JSON.parse(JSON.stringify(pausedItem)); withoutPlayButton.controls.splice(2, 1);
 assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, pauseExpected), true,
-    "a player that cannot play loses the button once paused, which confirms the pause");
+    "a player that cannot play loses the button once paused, and HA reports it paused");
 const playExpected = Api.dashboardExpectation(pausedItem, pausedItem.controls[2], null);
 assert.equal(playExpected.playing, true);
 assert.equal(Api.dashboardExpectationMatches(pausedItem, playExpected), false, "still paused is not a confirmation");
-assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, playExpected), true,
-    "a player that cannot pause loses the button once playing, which confirms the play");
+const withoutPauseButton = JSON.parse(JSON.stringify(playerItem)); withoutPauseButton.controls.splice(2, 1);
+assert.equal(Api.dashboardExpectationMatches(withoutPauseButton, playExpected), true,
+    "a player that cannot pause loses the button once playing, and HA reports it playing");
+assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, playExpected), false,
+    "a lost button is no confirmation: a cast player whose session ended is not playing");
+const switchedOff = JSON.parse(JSON.stringify(withoutPlayButton)); switchedOff.state = false;
+assert.equal(Api.dashboardExpectationMatches(switchedOff, playExpected), false, "a player switched off is not playing");
+assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPauseButton, {details: {type: "media_player"}}), playExpected), false,
+    "without the reported playback state nothing is confirmed");
 assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPlayButton, {available: false}), pauseExpected), false,
     "an unavailable player confirms nothing");
 for (const skip of [playerItem.controls[1], playerItem.controls[3]]) {

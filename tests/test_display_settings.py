@@ -676,16 +676,19 @@ def test_media_player_is_a_display_tile_but_not_an_alarm_quick_action():
 
 
 @pytest.mark.parametrize(
-    ("player_state", "attributes", "is_on", "reading"),
+    ("player_state", "attributes", "is_on", "reading", "playing"),
     [
-        ("playing", {"media_title": "  Evening news  "}, True, "Evening news"),
-        ("paused", {"media_title": "x" * 80}, True, "x" * 60),
-        ("idle", {"media_title": "Stale title"}, True, "Ready"),
-        ("off", {}, False, "Off"),
-        ("standby", {}, False, "Standby"),
+        ("playing", {"media_title": "  Evening news  "}, True, "Evening news", True),
+        ("paused", {"media_title": "x" * 80}, True, "x" * 60, False),
+        ("buffering", {"media_title": "Evening news"}, True, "Evening news", False),
+        ("idle", {"media_title": "Stale title"}, True, "Ready", False),
+        ("off", {}, False, "Off", False),
+        ("standby", {}, False, "Standby", False),
     ],
 )
-def test_media_player_item_reports_power_and_what_is_playing(player_state, attributes, is_on, reading):
+def test_media_player_item_reports_power_and_what_is_playing(
+    player_state, attributes, is_on, reading, playing
+):
     states = {
         "media_player.kitchen": SimpleNamespace(
             state=player_state,
@@ -711,6 +714,9 @@ def test_media_player_item_reports_power_and_what_is_playing(player_state, attri
     # The tile shows its state line, so that line carries what is playing.
     assert item["state_label"] == reading
     assert "media_play_pause" in [control["command"] for control in item["controls"]]
+    # Play/pause is confirmed on the playback state, which the item carries
+    # whether or not the player offers the button in that state.
+    assert item["details"]["playing"] is playing
 
 
 @pytest.mark.parametrize(("secondary", "line"), [("none", ""), ("entity_id", "media_player.kitchen")])

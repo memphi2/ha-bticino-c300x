@@ -554,11 +554,17 @@ p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue
 p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0});
 assert.match(queue[0].url, /media_player.kitchen%3Amedia_next_track$/);
 p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
-for (const key of ["volume_level", "volume_mute", "source", "sound_mode", "media_previous_track", "media_play_pause", "media_next_track"]) {
-    for (const language of ["en", "de", "fr", "it"]) {
-        assert.notEqual(I18n.text(language, key), key, language + " label for " + key);
+const everyPlayerControl = playerItem.controls.concat([{command: "sound_mode", kind: "choice", value: "Movie", options: ["Movie"]}]);
+for (const language of ["en", "de", "fr", "it"]) {
+    p.uiLanguage = language;
+    for (const control of everyPlayerControl) {
+        assert.notEqual(p.controlLabel(control), control.command, language + " label for " + control.command);
+    }
+    for (const key of ["media_previous_track", "media_play_pause", "media_next_track"]) {
+        assert.equal(I18n.text(language, key), key, "the " + key + " button draws a symbol, so no text ships for it");
     }
 }
+p.uiLanguage = "en";
 console.log("Media player controls passed");
 
 

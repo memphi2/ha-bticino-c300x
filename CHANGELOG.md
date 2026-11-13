@@ -48,7 +48,8 @@
 
 - Fan speed minus/plus moves to the fan's next speed. It stepped by one
   percent, and a fan rounds a percentage up to its next speed, so on a fan with
-  few speeds minus never lowered it.
+  few speeds minus never lowered it. Until the display files are updated, the
+  display shows the speed with decimals, for example 66.666666 %.
 - On a number with a fractional step, such as 0.05 to 1 in steps of 0.05, the
   slider reaches the top of the range and plus at the top no longer lowers the
   value.

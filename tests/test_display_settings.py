@@ -508,6 +508,41 @@ def test_placing_the_weather_card_keeps_the_order_of_the_pages():
     assert [page["title"] for page in payload["data"]["pages"]] == ["C300X", "Living", "Garden", "Outside"]
 
 
+def test_placing_the_weather_card_keeps_the_order_of_action_pages():
+    """Pages that only configured actions use keep their order as well."""
+
+    states = {
+        "weather.home": SimpleNamespace(
+            state="sunny", attributes={"temperature": 12, "temperature_unit": "C"}
+        ),
+        "light.one": SimpleNamespace(state="on", attributes={"supported_color_modes": ["onoff"]}),
+        "light.two": SimpleNamespace(state="off", attributes={"supported_color_modes": ["onoff"]}),
+        "switch.pump": SimpleNamespace(state="off", attributes={}),
+        "switch.gate": SimpleNamespace(state="off", attributes={}),
+    }
+    hass = SimpleNamespace(
+        states=SimpleNamespace(get=states.get),
+        config=SimpleNamespace(language="en"),
+        services=SimpleNamespace(has_service=lambda *_: True),
+    )
+    actions = {
+        "pump": {"domain": "switch", "service": "toggle",
+                 "target": {"entity_id": "switch.pump"}, "dashboard": {"page": "Lights"}},
+        "gate": {"domain": "switch", "service": "toggle",
+                 "target": {"entity_id": "switch.gate"}, "dashboard": {"page": "Garden"}},
+    }
+
+    def titles(overrides):
+        entry = _weather_entry(overrides)
+        entry.options["actions"] = actions
+        payload = asyncio.run(async_dashboard_payload(hass, entry))
+        return [page["title"] for page in payload["data"]["pages"]]
+
+    assert titles({}) == ["C300X", "", "Lights", "Garden"]
+    assert titles({"weather.home": {"page": "Garden"}}) == ["C300X", "", "Lights", "Garden"]
+    assert titles({"weather.home": {"page": "Outside"}}) == ["C300X", "", "Lights", "Garden", "Outside"]
+
+
 def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
     schema = dashboard_entity_display_schema(["light.one"], {}, weather_entity_id="weather.home")
     posted = post_like_home_assistant(schema)

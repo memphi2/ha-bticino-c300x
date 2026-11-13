@@ -237,7 +237,7 @@ With a weather entity selected, the dialog also offers **Weather - Page** and
 status page. A position sorts it among the tiles of its page exactly like an
 entity's position, so 15 places it between tiles at 10 and 20. A page name
 moves the card to that page without changing the order of the pages; a page
-that no entity uses is created after the entities' pages.
+that no entity or action uses is created after theirs.
 The card always spans the full width.
 
 The optional Alarmo quick entity also gets its name and secondary-line settings,

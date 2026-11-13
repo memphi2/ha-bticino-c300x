@@ -308,7 +308,7 @@ Page {
         }
         var controls = item.controls || []
         for (var i = 0; i < controls.length; i++) {
-            if (controls[i].command === "temperature" || controls[i].command === "brightness" || controls[i].command === "position") {
+            if (controls[i].command === "temperature" || controls[i].command === "brightness" || controls[i].command === "position" || controls[i].command === "percentage") {
                 values.push(controlLabel(controls[i]) + ": " + controlValue(controls[i]))
             }
         }

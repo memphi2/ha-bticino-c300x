@@ -139,7 +139,8 @@ common action needs no submenu:
 | Select | previous/next option, wrapping at either end |
 | Media player | on/off switch, previous, play/pause, next (those it supports) |
 
-Minus/plus are dimmed while there is no value to step from, such as the
+A fan's tile shows its speed next to on/off, as a light's shows its
+brightness. Minus/plus are dimmed while there is no value to step from, such as the
 brightness of a light that is off or a thermostat without a target; tapping
 them then opens the submenu. A press while the previous command is still on its
 way is ignored. The tile background still opens the submenu, and

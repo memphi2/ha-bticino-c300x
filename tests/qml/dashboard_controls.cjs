@@ -583,6 +583,17 @@ const fanItem = {entity_id: "fan.three", domain: "c300x", available: true, state
 assert.deepEqual(commands(Api.dashboardQuickControls(fanItem)), ["percentage:-1", "percentage:1"],
     "a three-speed fan moves one speed per tile press");
 assert.equal(p.controlValue(fanItem.controls[0]), "66 %", "the speed reads like HA's own percentage");
+// A fan is a switch-kind item; its tile shows the speed its minus and plus step.
+const fanTile = Object.assign(JSON.parse(JSON.stringify(fanItem)), {kind: "switch"});
+assert.equal(p.itemDetail(fanTile), "On   Speed: 66 %", "a fan tile reads the speed it steps");
+const offFanTile = JSON.parse(JSON.stringify(fanTile)); offFanTile.state = false; offFanTile.controls[0].value = 0;
+assert.equal(p.itemDetail(offFanTile), "Off   Speed: 0 %", "an off fan reads speed 0");
+for (const language of ["en", "de", "fr", "it"]) {
+    p.uiLanguage = language;
+    assert.equal(p.itemDetail(fanTile), p.uiText("on") + "   " + p.uiText("percentage") + ": 66 %", language + " fan tile reading");
+    assert.notEqual(p.uiText("percentage"), "percentage", language + " names the fan speed");
+}
+p.uiLanguage = "en";
 assert.equal(p.controlValue({command: "percentage", value: 99.999999, unit: "%"}), "100 %");
 assert.equal(p.controlValue({command: "temperature", value: 20.5, unit: "C"}), "20.5 C", "other numbers are shown as sent");
 p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;

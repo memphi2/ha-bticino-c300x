@@ -9,7 +9,8 @@
   carries the entity's own buttons: up/stop/down for a cover, minus/plus for a
   thermostat target, light brightness, fan speed or number, and previous/next
   for a select. Brightness steps by ten percent on the tile, fan speed by
-  about ten percent and at least one of the fan's own speeds.
+  about ten percent and at least one of the fan's own speeds. A fan's tile
+  shows its speed next to on/off, as a light's shows its brightness.
   Sensors, switches and buttons can be resized the same way. Automatic keeps
   the size each type had before, so existing dashboards do not change.
   Requires updated display files on the device.

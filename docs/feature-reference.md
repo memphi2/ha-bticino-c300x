@@ -119,10 +119,12 @@ Select lights, covers, climate entities, fans, media players and sensors under
 with sensors.
 A chevron marks every tile that has a submenu: tap anywhere on such a tile to
 open its supported controls, or tap a sensor tile for its read-only details.
-Lights and fans keep an on/off switch on the tile itself. Covers and climate
-entities are operated from their submenu, because neither has a single on/off
-action. Back returns to the same overview page and scroll position; a state
-refresh that arrives while the list is moving is applied once it settles.
+Lights, fans and media players keep an on/off switch on the tile itself where
+the entity supports one. Covers and climate entities have none, because neither
+has a single on/off action: a full-height tile carries their buttons, and a
+compact one leaves them to the submenu. Back returns to the same overview page
+and scroll position; a state refresh that arrives while the list is moving is
+applied once it settles.
 
 Each tile's size is set per entity in the entity-display dialog. **Width** is
 half or full. **Height** is half, the compact 64 px tile, or full, a 94 px tile
@@ -139,14 +141,15 @@ common action needs no submenu:
 | Select | previous/next option, wrapping at either end |
 | Media player | on/off switch, previous, play/pause, next (those it supports) |
 
-A fan's tile shows its speed next to on/off, as a light's shows its
-brightness. Minus/plus are dimmed while there is no value to step from, such as the
-brightness of a light that is off or a thermostat without a target; tapping
-them then opens the submenu. A press while the previous command is still on its
-way is ignored. The tile background still opens the submenu, and
-every other control stays there. **Automatic** keeps the size of the type: sensors full height, all other
-entities half height, both half width. A dashboard configured before these
-settings existed therefore looks the same until a size is chosen.
+A fan's tile shows its speed next to on/off, as a light's shows its brightness.
+Minus/plus are dimmed while there is no value to step from, such as the
+brightness of a light that is off or a thermostat without a target; tapping them
+then opens the submenu. A press while the previous command is still on its way
+is ignored. The tile background still opens the submenu, and every other control
+stays there. **Automatic** keeps the size of the type, at half width: sensors
+full height, switches their slimmer 58 px tile, which **Half** raises to 64 px,
+and all other entities the 64 px half height. A dashboard configured before
+these settings existed therefore looks the same until a size is chosen.
 
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
@@ -247,8 +250,9 @@ With a weather entity selected, the dialog also offers **Weather - Page** and
 status page. A position sorts it among the tiles of its page exactly like an
 entity's position, so 15 places it between tiles at 10 and 20. A page name
 moves the card to that page without changing the order of the pages; a page
-that no entity or action uses is created after theirs.
-The card always spans the full width.
+that no entity or action uses is created after theirs. The unnamed page cannot
+take the card, because an empty **Weather - Page** means the status page. The
+card always spans the full width.
 
 The optional Alarmo quick entity also gets its name and secondary-line settings,
 even if it is not selected for an overview page. Selecting it does not add it to

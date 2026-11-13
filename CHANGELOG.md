@@ -20,9 +20,9 @@
   and no command can start arbitrary media. Requires updated display files on
   the device.
 - Place the weather card on the native display: **Weather - Page** and
-  **Weather - Position** in the entity-display dialog move it to any page and
-  sort it among that page's tiles. Unplaced, it stays at the top of the status
-  page. A display that has not been updated yet keeps showing it on top.
+  **Weather - Position** in the entity-display dialog move it to a named page
+  and sort it among that page's tiles; the unnamed page of entities without a
+  page name cannot take it. Unplaced, it stays at the top of the status page.
 - Record the doorstation without a ring: `capture_doorbell_call` gains
   `capture_mode: on_demand`, which captures video with or without audio while
   media is idle and no other camera client is active. Until the capture ends,
@@ -49,8 +49,7 @@
 
 - Fan speed minus/plus moves to the fan's next speed. It stepped by one
   percent, and a fan rounds a percentage up to its next speed, so on a fan with
-  few speeds minus never lowered it. Until the display files are updated, the
-  display shows the speed with decimals, for example 66.666666 %.
+  few speeds minus never lowered it.
 - On a number with a fractional step, such as 0.05 to 1 in steps of 0.05, the
   slider reaches the top of the range and plus at the top no longer lowers the
   value.

@@ -230,6 +230,7 @@ Agent binary reuse is allowed only if none of these paths changed:
 - `device_qml`
 - `custom_components/bticino_c300x/device_agent/init`
 - `scripts/stage_device_agent_bundle.py`
+- `scripts/device_file_strip.py`
 
 If any path above changed, do not release with a reused native-agent binary.
 Build with a verified `C300X_DEVICE_SYSROOT`, run the ABI/stack gates, and keep

@@ -86,6 +86,44 @@ def _load_repo_checker():
     return module
 
 
+def test_every_script_the_bundle_stager_imports_is_a_bundle_input() -> None:
+    """A helper that shapes the agent bundle must force a rebuild when it changes.
+
+    The release workflow reuses the previous release's agent assets unless a
+    listed bundle input changed, so an unlisted helper would ship a bundle built
+    by its old version.
+    """
+
+    import ast
+
+    stager = ast.parse(STAGE_SCRIPT.read_text(encoding="utf-8"))
+    imported = {
+        alias.name for node in ast.walk(stager) if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module for node in ast.walk(stager)
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level
+    }
+    helpers = sorted(
+        f"scripts/{name}.py" for name in imported if (ROOT / "scripts" / f"{name}.py").is_file()
+    )
+    assert "scripts/device_file_strip.py" in helpers
+
+    checker = _load_repo_checker()
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    documents = {
+        name: (ROOT / name).read_text(encoding="utf-8")
+        for name in ("docs/release-validation.md", "docs/native-agent.md", "SUPPORT.md")
+    }
+    for helper in helpers:
+        assert helper in checker.NATIVE_AGENT_BUNDLE_INPUT_PATHS
+        assert helper in workflow
+        for name, text in documents.items():
+            assert f"`{helper}`" in text, name
+    # The strip changes only the display files, never the agent binary.
+    assert checker._path_is_bundle_content_only("scripts/device_file_strip.py")
+
+
 def test_hacs_release_zip_uses_component_root_layout(
     tmp_path: Path,
     monkeypatch,

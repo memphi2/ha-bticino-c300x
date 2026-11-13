@@ -12,6 +12,10 @@
   Sensors, switches and buttons can be resized the same way. Automatic keeps
   the size each type had before, so existing dashboards do not change.
   Requires updated display files on the device.
+- Place the weather card on the native display: **Weather - Page** and
+  **Weather - Position** in the entity-display dialog move it to any page and
+  sort it among that page's tiles. Unplaced, it stays at the top of the status
+  page. A display that has not been updated yet keeps showing it on top.
 
 ### Changed
 

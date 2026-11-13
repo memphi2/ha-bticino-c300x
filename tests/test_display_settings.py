@@ -228,3 +228,106 @@ def test_tile_sizes_reach_the_display_only_when_configured():
     # Automatic sends nothing, so an unconfigured dashboard payload is unchanged.
     assert "tile_width" not in items["light.one"]
     assert "tile_height" not in items["light.one"]
+
+
+def _weather_entry(overrides):
+    return SimpleNamespace(
+        entry_id="entry",
+        title="Door",
+        data={},
+        options={
+            "device_ui_enabled": True,
+            "weather_entity_id": "weather.home",
+            "dashboard_entities": ["light.one", "light.two"],
+            "dashboard_entity_display_overrides": overrides,
+        },
+    )
+
+
+def _weather_hass():
+    states = {
+        "weather.home": SimpleNamespace(
+            state="sunny", attributes={"temperature": 12, "temperature_unit": "C"}
+        ),
+        "light.one": SimpleNamespace(state="on", attributes={"supported_color_modes": ["onoff"]}),
+        "light.two": SimpleNamespace(state="off", attributes={"supported_color_modes": ["onoff"]}),
+    }
+    return SimpleNamespace(
+        states=SimpleNamespace(get=states.get),
+        config=SimpleNamespace(language="en"),
+        services=SimpleNamespace(has_service=lambda *_: False),
+    )
+
+
+def _kinds(page):
+    return [item.get("entity_id", item["kind"]) for item in page.get("items", [])]
+
+
+def test_weather_card_stays_on_the_status_page_until_placed():
+    """Unplaced, the card is alone on the first page, as before the setting."""
+
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry({})))
+    pages = {page["title"]: page for page in payload["data"]["pages"]}
+    assert list(pages) == ["C300X", ""]
+    assert "weather" in pages["C300X"]
+    assert _kinds(pages["C300X"]) == ["weather"]
+    assert _kinds(pages[""]) == ["light.one", "light.two"]
+
+
+def test_weather_card_takes_a_position_among_the_tiles_and_a_page():
+    # Tiles join the status page by its name; the card then sorts with them.
+    shared = {
+        "light.one": {"page": "C300X"},
+        "light.two": {"page": "C300X"},
+        "weather.home": {"order": "15"},
+    }
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(shared)))
+    pages = payload["data"]["pages"]
+    assert [page["title"] for page in pages] == ["C300X"]
+    assert _kinds(pages[0]) == ["light.one", "weather", "light.two"]
+
+    moved = {"weather.home": {"page": "Outside", "order": "5"}, "light.two": {"page": "Outside"}}
+    payload = asyncio.run(async_dashboard_payload(_weather_hass(), _weather_entry(moved)))
+    pages = {page["title"]: page for page in payload["data"]["pages"]}
+    assert "weather" not in pages["C300X"]
+    assert "items" not in pages["C300X"]
+    assert "weather" in pages["Outside"]
+    assert _kinds(pages["Outside"]) == ["weather", "light.two"]
+    assert _kinds(pages[""]) == ["light.one"]
+
+
+def test_weather_layout_fields_roundtrip_and_store_only_a_real_placement():
+    schema = dashboard_entity_display_schema(["light.one"], {}, weather_entity_id="weather.home")
+    posted = schema({})
+    assert posted["Weather - Page"] == ""
+    assert posted["Weather - Position"] == 0
+    assert dashboard_entity_display_overrides_from_fields(
+        posted, ["light.one"], {}, weather_entity_id="weather.home"
+    ) == {}
+
+    posted["Weather - Page"] = "Outside"
+    posted["Weather - Position"] = 25
+    saved = dashboard_entity_display_overrides_from_fields(
+        posted, ["light.one"], {}, weather_entity_id="weather.home"
+    )
+    assert saved == {"weather.home": {"page": "Outside", "order": "25"}}
+    assert normalize_dashboard_entity_display_overrides(saved, strict=True) == saved
+    reopened = dashboard_entity_display_schema(["light.one"], saved, weather_entity_id="weather.home")({})
+    assert (reopened["Weather - Page"], reopened["Weather - Position"]) == ("Outside", 25)
+
+    # No weather entity: no fields, and a layout saved for an old one is dropped.
+    assert "Weather - Page" not in dashboard_entity_display_schema(["light.one"], saved)({})
+    assert dashboard_entity_display_overrides_from_fields({}, ["light.one"], saved) == {}
+
+
+def test_weather_layout_key_carries_a_place_and_nothing_else():
+    cleaned = normalize_dashboard_entity_display_overrides(
+        {"weather.home": {"page": "Outside", "order": 5, "width": "full", "name": "custom", "custom_name": "x"}},
+        strict=True,
+    )
+    assert cleaned == {"weather.home": {"page": "Outside", "order": "5"}}
+    with pytest.raises(ValueError):
+        normalize_dashboard_entity_display_overrides({"weather.home": {"order": -1}}, strict=True)
+    # Only a weather entity may be a non-dashboard key.
+    with pytest.raises(ValueError):
+        normalize_dashboard_entity_display_overrides({"camera.door": {"page": "x"}}, strict=True)

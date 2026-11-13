@@ -824,6 +824,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     {},
                 ),
                 layout_entity_ids=self._setup_dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
+                weather_entity_id=str(self._setup_dashboard_input.get(CONF_WEATHER_ENTITY_ID) or ""),
             ),
             errors=errors,
         )
@@ -1229,6 +1230,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
                 ),
                 layout_entity_ids=self._reconfigure_dashboard_input.get(CONF_DASHBOARD_ENTITIES, []),
+                weather_entity_id=str(self._reconfigure_dashboard_input.get(CONF_WEATHER_ENTITY_ID) or ""),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(
@@ -1618,6 +1620,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                     feature_defaults[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES],
                 ),
                 layout_entity_ids=self._dashboard_options.get(CONF_DASHBOARD_ENTITIES, []),
+                weather_entity_id=str(self._dashboard_options.get(CONF_WEATHER_ENTITY_ID) or ""),
             ),
             errors=errors,
             description_placeholders=await _async_qml_patch_description_placeholders(

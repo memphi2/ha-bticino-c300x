@@ -89,7 +89,7 @@
       },
       "user_dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
       },
       "reconfigure": {
         "title": "Reconfigure BTicino C300X",
@@ -158,7 +158,7 @@
       },
       "reconfigure_dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
       }
     },
     "abort": {
@@ -253,7 +253,7 @@
       },
       "dashboard_entity_display": {
         "title": "Dashboard entity display",
-        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. The optional Alarmo action has its own display name; it is not added to the overview."
+        "description": "Set page, position, tile width and height, name and secondary line for the selected entities. Full height puts an entity's own buttons on its tile; Automatic keeps the size of its type. With a weather entity selected, Weather - Page and Weather - Position place the weather card among the tiles. The optional Alarmo action has its own display name; it is not added to the overview."
       }
     },
     "error": {

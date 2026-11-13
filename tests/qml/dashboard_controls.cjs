@@ -505,6 +505,16 @@ assert.equal(pauseExpected.playing, false);
 assert.equal(Api.dashboardExpectationMatches(playerItem, pauseExpected), false, "still playing is not a confirmation");
 const pausedItem = JSON.parse(JSON.stringify(playerItem)); pausedItem.controls[2].playing = false;
 assert.equal(Api.dashboardExpectationMatches(pausedItem, pauseExpected), true);
+const withoutPlayButton = JSON.parse(JSON.stringify(playerItem)); withoutPlayButton.controls.splice(2, 1);
+assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, pauseExpected), true,
+    "a player that cannot play loses the button once paused, which confirms the pause");
+const playExpected = Api.dashboardExpectation(pausedItem, pausedItem.controls[2], null);
+assert.equal(playExpected.playing, true);
+assert.equal(Api.dashboardExpectationMatches(pausedItem, playExpected), false, "still paused is not a confirmation");
+assert.equal(Api.dashboardExpectationMatches(withoutPlayButton, playExpected), true,
+    "a player that cannot pause loses the button once playing, which confirms the play");
+assert.equal(Api.dashboardExpectationMatches(Object.assign({}, withoutPlayButton, {available: false}), pauseExpected), false,
+    "an unavailable player confirms nothing");
 assert.equal(Api.dashboardExpectation(playerItem, playerItem.controls[3], null), null, "a track skip has no state to confirm");
 p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
 p.quickAction(playerItem, {command: "media_next_track", kind: "button", steps: 0});

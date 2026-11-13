@@ -221,7 +221,7 @@ function dashboardExpectationMatches(item, expected) {
     var controls = listOrEmpty(item.controls)
     if (expected.playing !== undefined) {
         var player = dashboardControlByCommand(item, expected.command)
-        return player ? (player.playing === true) === expected.playing : false
+        return player ? (player.playing === true) === expected.playing : true
     }
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]

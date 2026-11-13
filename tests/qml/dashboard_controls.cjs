@@ -519,3 +519,22 @@ console.log("Media player controls passed");
 
 
 
+// A fan steps by one of its speeds: HA sends the speed grid, rounded down.
+const fanItem = {entity_id: "fan.three", domain: "c300x", available: true, state: true, details: {type: "fan"},
+    controls: [{command: "percentage", kind: "number", value: 66.666666, min: 0, max: 100, step: 33.333333, unit: "%"}]};
+assert.deepEqual(commands(Api.dashboardQuickControls(fanItem)), ["percentage:-1", "percentage:1"],
+    "a three-speed fan moves one speed per tile press");
+assert.equal(p.controlValue(fanItem.controls[0]), "66 %", "the speed reads like HA's own percentage");
+assert.equal(p.controlValue({command: "percentage", value: 99.999999, unit: "%"}), "100 %");
+assert.equal(p.controlValue({command: "temperature", value: 20.5, unit: "C"}), "20.5 C", "other numbers are shown as sent");
+p.pendingEntity = ""; p.controlInFlight = false; p.dashboardOnline = true; queue.length = 0;
+p.adjustControl(fanItem, fanItem.controls[0], 1);
+assert.match(queue[0].url, /fan.three%3Apercentage&option=99.999999$/, "plus reaches the top speed");
+const topExpected = Api.dashboardExpectation(fanItem, fanItem.controls[0], "99.999999");
+const topItem = JSON.parse(JSON.stringify(fanItem)); topItem.controls[0].value = 99.999999;
+assert.equal(Api.dashboardExpectationMatches(topItem, topExpected), true, "HA's next state confirms the press");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+p.adjustControl(fanItem, fanItem.controls[0], -1);
+assert.match(queue[0].url, /fan.three%3Apercentage&option=33.333333$/, "minus leaves the current speed");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+console.log("Fan speed steps passed");

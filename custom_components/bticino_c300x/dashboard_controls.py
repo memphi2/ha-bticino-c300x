@@ -14,6 +14,10 @@ from homeassistant.components.light.const import (
 )
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.core import HomeAssistant
+from homeassistant.util.percentage import (
+    percentage_to_ranged_value,
+    ranged_value_to_percentage,
+)
 
 HA_FAN_FEATURE_IN_CONST = hasattr(fan_const, "FanEntityFeature")
 if HA_FAN_FEATURE_IN_CONST:
@@ -104,6 +108,53 @@ def _number(
         "step": increment,
         "unit": unit,
     }
+
+
+def _fan_speed_count(attrs: Any) -> int | None:
+    """Return how many speeds the fan has, when that is fewer than 100."""
+
+    step = finite_number(attrs.get("percentage_step"))
+    if step is None or not 1 < step <= 100:
+        return None
+    count = round(100 / step)
+    return count if 1 <= count < 100 else None
+
+
+def _fan_speed_control(attrs: Any) -> dict[str, Any] | None:
+    """Offer a fan's speed in percent, on the grid of its own speeds.
+
+    A fan rounds a requested percentage up to its next speed and reports a
+    speed truncated (2 of 3 is 66 %), so neither 1 % steps nor the reported
+    value step it reliably. With fewer than 100 speeds the step is one speed
+    and the value is the current speed on that grid. The step is rounded down
+    to six decimals because the display finds the last step as
+    floor(100 / step), which the exact quotient misses for some fans.
+    """
+
+    percentage = finite_number(attrs.get("percentage"))
+    count = _fan_speed_count(attrs)
+    if count is None:
+        return _number("percentage", percentage, 0, 100, 1, "%")
+    step = math.floor(100 / count * 1_000_000) / 1_000_000
+    value = None
+    if percentage is not None and 0 <= percentage <= 100:
+        speed = (
+            math.ceil(percentage_to_ranged_value((1, count), percentage))
+            if percentage
+            else 0
+        )
+        value = round(speed * step, 6)
+    return _number("percentage", value, 0, 100, step, "%")
+
+
+def _fan_percentage(attrs: Any, value: float) -> int:
+    """Return the percentage Home Assistant itself uses for the chosen speed."""
+
+    count = _fan_speed_count(attrs)
+    if count is None:
+        return int(value)
+    speed = round(value * count / 100)
+    return ranged_value_to_percentage((1, count), speed) if speed else 0
 
 
 def _choice(command: str, value: Any, options: Any) -> dict[str, Any] | None:
@@ -220,7 +271,7 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
         if features & toggle_feature:
             controls.append({"command": "toggle", "kind": "button"})
         if features & FanEntityFeature.SET_SPEED:
-            controls.append(_number("percentage", attrs.get("percentage"), 0, 100, 1, "%"))
+            controls.append(_fan_speed_control(attrs))
         if features & FanEntityFeature.OSCILLATE:
             oscillating = attrs.get("oscillating")
             controls.append({
@@ -372,7 +423,11 @@ async def async_execute_control(
             "direction": "set_direction",
         }[command]
         if command != "toggle":
-            data[command] = int(value) if command == "percentage" else value
+            data[command] = (
+                _fan_percentage(state.attributes, value)
+                if command == "percentage"
+                else value
+            )
     elif domain == "media_player":
         service = {
             "volume_level": "volume_set", "volume_mute": "volume_mute",

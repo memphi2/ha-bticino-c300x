@@ -8,7 +8,8 @@
   half or full; height is half (the compact tile) or full. A full-height tile
   carries the entity's own buttons: up/stop/down for a cover, minus/plus for a
   thermostat target, light brightness, fan speed or number, and previous/next
-  for a select. Brightness and fan speed step by ten percent on the tile.
+  for a select. Brightness steps by ten percent on the tile, fan speed by
+  about ten percent and at least one of the fan's own speeds.
   Sensors, switches and buttons can be resized the same way. Automatic keeps
   the size each type had before, so existing dashboards do not change.
   Requires updated display files on the device.
@@ -45,6 +46,9 @@
 
 ### Fixed
 
+- Fan speed minus/plus moves to the fan's next speed. It stepped by one
+  percent, and a fan rounds a percentage up to its next speed, so on a fan with
+  few speeds minus never lowered it.
 - A delayed status answer during camera reconciliation can no longer close a
   doorbell session that is just starting. Closing a go2rtc session also closes
   its websocket on current Home Assistant versions, which wrap it.

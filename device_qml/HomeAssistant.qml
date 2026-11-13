@@ -151,7 +151,12 @@ Page {
     }
 
     function controlValue(control) {
-        return controlValueUnset(control) ? "?" : String(control.value) + (control.unit ? " " + control.unit : "")
+        return controlValueUnset(control) ? "?" : numberText(control, control.value)
+    }
+
+    function numberText(control, value) {
+        var shown = control.command === "percentage" ? Math.floor(Number(value) + 0.0001) : value
+        return String(shown) + (control.unit ? " " + control.unit : "")
     }
 
     function optionLabel(control, option) {
@@ -904,7 +909,7 @@ Page {
                         visible: !controlRow.paletteTab
                         width: parent.width
                         height: 24
-                        text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? preview + " " + (control.unit || "") : controlValue(control)) : "")
+                        text: controlLabel(control) + (control.kind === "number" ? ": " + (sliderMouse.pressed ? numberText(control, preview) : controlValue(control)) : "")
                         textFormat: Text.PlainText
                         font.pixelSize: 18
                         color: "white"

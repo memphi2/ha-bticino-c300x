@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import math
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.util.percentage import (
+    percentage_to_ordered_list_item,
+    percentage_to_ranged_value,
+    ranged_value_to_percentage,
+)
 
 from custom_components.bticino_c300x.dashboard_controls import (
     FanEntityFeature,
@@ -430,6 +436,85 @@ def test_fan_toggle_respects_current_state_and_capability(value, features, allow
         with pytest.raises(ValueError):
             asyncio.run(async_execute_control(hass, "fan.room", "toggle", None))
         hass.services.async_call.assert_not_awaited()
+
+
+def _js_round(number):
+    return math.floor(number + 0.5)
+
+
+def _display_adjust(control, direction):
+    """The value device_qml's adjustControl sends for a -/+ press."""
+
+    steps = _js_round((control["value"] - control["min"]) / control["step"]) + direction
+    last = math.floor((control["max"] - control["min"]) / control["step"])
+    steps = max(0, min(last, steps))
+    return f"{control['min'] + steps * control['step']:.6f}"
+
+
+def _fan_after(speed_count, percentage):
+    """What a fan with ``speed_count`` speeds reports after set_percentage."""
+
+    speed_range = (1, speed_count)
+    if percentage == 0:
+        return 0, 0
+    speed = math.ceil(percentage_to_ranged_value(speed_range, percentage))
+    listed = percentage_to_ordered_list_item(list(range(1, speed_count + 1)), percentage)
+    assert speed == listed
+    return speed, ranged_value_to_percentage(speed_range, speed)
+
+
+def test_fan_minus_and_plus_move_exactly_one_speed():
+    """A fan rounds a percentage up to its next speed and reports it truncated
+    (2 of 3 speeds is 66 %), so 1 % steps and the reported value could not move
+    it reliably. For every fan size and speed, a submenu press must reach the
+    neighbouring speed, a tile press about ten percent, and HA's resulting
+    state must confirm exactly the value the display sent."""
+
+    failures = []
+
+    async def press_everywhere():
+        for speed_count in range(1, 101):
+            for speed in range(speed_count + 1):
+                percentage = (
+                    ranged_value_to_percentage((1, speed_count), speed) if speed else 0
+                )
+                attrs = {"percentage_step": 100 / speed_count}
+                snapshot = state("on" if speed else "off", supported_features=1,
+                                 percentage=percentage, **attrs)
+                control = entity_controls("fan.room", snapshot)[0]
+                tile = max(1, _js_round(10 / control["step"]))
+                for direction in (1, -1, tile, -tile):
+                    sent = _display_adjust(control, direction)
+                    hass = hass_for(snapshot)
+                    await async_execute_control(hass, "fan.room", "percentage", sent)
+                    applied = hass.services.async_call.await_args.args[2]["percentage"]
+                    reached, reported = _fan_after(speed_count, applied)
+                    jump = abs(direction)
+                    want = max(0, min(speed_count, speed + (jump if direction > 0 else -jump)))
+                    confirmed = entity_controls("fan.room", state(
+                        "on" if reached else "off", supported_features=1,
+                        percentage=reported, **attrs,
+                    ))[0]["value"]
+                    if reached != want or abs(confirmed - float(sent)) >= 0.000001:
+                        failures.append((speed_count, speed, direction, sent, reached, confirmed))
+
+    asyncio.run(press_everywhere())
+    assert failures == []
+
+
+@pytest.mark.parametrize("attrs,step,value", [
+    ({}, 1.0, 66), ({"percentage_step": 1.0}, 1.0, 66),
+    ({"percentage_step": 100 / 3}, 33.333333, 66.666666),
+    ({"percentage_step": 100 / 3, "percentage": 100}, 33.333333, 99.999999),
+    ({"percentage_step": 100 / 3, "percentage": 0}, 33.333333, 0),
+    ({"percentage_step": 100 / 3, "percentage": None}, 33.333333, None),
+    ({"percentage_step": 0}, 1.0, 66), ({"percentage_step": 250}, 1.0, 66),
+    ({"percentage_step": "fast"}, 1.0, 66), ({"percentage_step": 0.5}, 1.0, 66),
+])
+def test_fan_speed_step_comes_from_the_fan(attrs, step, value):
+    attrs = {"percentage": 66, **attrs}
+    control = entity_controls("fan.room", state(supported_features=1, **attrs))[0]
+    assert (control["command"], control["step"], control["value"]) == ("percentage", step, value)
 
 
 def test_climate_choices_require_capability_and_reported_options():

@@ -134,7 +134,7 @@ common action needs no submenu:
 | Cover | up, stop, down (those it supports) |
 | Climate | target temperature minus/plus, by the entity's step |
 | Light | on/off switch, brightness minus/plus in 10 % steps |
-| Fan | on/off switch, speed minus/plus in 10 % steps |
+| Fan | on/off switch, speed minus/plus by about 10 %, at least one of the fan's speeds |
 | Number | minus/plus, by the entity's step |
 | Select | previous/next option, wrapping at either end |
 | Media player | on/off switch, previous, play/pause, next (those it supports) |

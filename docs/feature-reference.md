@@ -141,7 +141,8 @@ common action needs no submenu:
 
 Minus/plus are dimmed while there is no value to step from, such as the
 brightness of a light that is off or a thermostat without a target; tapping
-them then opens the submenu. The tile background still opens the submenu, and
+them then opens the submenu. A press while the previous command is still on its
+way is ignored. The tile background still opens the submenu, and
 every other control stays there. **Automatic** keeps the size of the type: sensors full height, all other
 entities half height, both half width. A dashboard configured before these
 settings existed therefore looks the same until a size is chosen.

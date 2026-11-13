@@ -636,8 +636,8 @@ Page {
                         BeepingMouseArea {
                             id: quickMouse
                             anchors.fill: parent
-                            enabled: usable
-                            onClicked: quickAction(tallTile.tileItem, quick)
+                            enabled: quickUsable(quick, control)
+                            onClicked: if (usable) quickAction(tallTile.tileItem, quick)
                         }
                     }
                 }

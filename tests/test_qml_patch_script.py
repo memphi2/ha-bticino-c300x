@@ -226,7 +226,7 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "a58297094169cc6aac62b934d21eed74e2d45a99689db6e9f6db71750d170455",
+    "HomeAssistant.qml": "c1f0c9fa0932d72839be5876469d4218b7c94ed2c9b57a10995972712e670509",
     "js/c300x_ha.js": "cb3d71b7d545e6da52a1d40316e89bf0f62d5ec688664ad27d0331c3104cc7e9",
     "js/c300x_i18n.js": "237efa044aa942a6299a950289ac5939336aa30290a70466b315a1afe561f55f",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
@@ -689,13 +689,17 @@ def test_home_assistant_full_height_control_tile_carries_its_buttons() -> None:
     assert "property variant quickButtons: Api.dashboardQuickControls(tileItem)" in tall
     assert "model: tallTile.quickButtons.length" in tall
     assert "property variant quick: tallTile.quickButtons[index] || ({})" in tall
-    assert "onClicked: quickAction(tallTile.tileItem, quick)" in tall
-    # Buttons obey the same gate as the switch, are dimmed while their step
-    # has nothing to start from, and show a registered touch.
+    assert "onClicked: if (usable) quickAction(tallTile.tileItem, quick)" in tall
+    # Buttons obey the same gate as the switch and are dimmed while it is
+    # closed or their step has nothing to start from. Only the latter lets the
+    # touch through to the background and its submenu: a quick second press
+    # while a command is in flight is taken and ignored, not turned into a
+    # submenu. They show a registered touch.
     assert tall.count("enabled: tallTile.controlsEnabled") == 1
     assert "property bool usable: tallTile.controlsEnabled && quickUsable(quick, control)" in tall
     assert "opacity: usable ? 1 : 0.45" in tall
-    assert "enabled: usable" in tall
+    assert "enabled: quickUsable(quick, control)" in tall
+    assert "enabled: usable" not in tall
     assert "quickMouse.pressed ?" in tall
     # The reading stays a reading: feedback reaches it as colour only.
     assert "text: itemDetail(tallTile.tileItem) + trsl.empty" in tall

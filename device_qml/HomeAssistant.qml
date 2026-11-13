@@ -243,10 +243,14 @@ Page {
         details.contentY = 0
     }
 
+    function controlLastStep(control) {
+        return Math.floor((control.max - control.min) / control.step + 0.000000001)
+    }
+
     function adjustControl(item, control, direction) {
         if (controlValueUnset(control)) return
         var steps = Math.round((Number(control.value) - control.min) / control.step) + direction
-        steps = Math.max(0, Math.min(Math.floor((control.max - control.min) / control.step), steps))
+        steps = Math.max(0, Math.min(controlLastStep(control), steps))
         var value = control.min + steps * control.step
         Api.dashboardControl(item, control, String(Number(value.toFixed(6))), status, page)
     }
@@ -976,7 +980,7 @@ Page {
                             anchors.fill: parent
                             function updatePreview(x) {
                                 var ratio = Math.max(0, Math.min(1, x / width))
-                                var steps = Math.min(Math.floor((control.max - control.min) / control.step), Math.round(ratio * (control.max - control.min) / control.step))
+                                var steps = Math.min(controlLastStep(control), Math.round(ratio * (control.max - control.min) / control.step))
                                 preview = Number((control.min + steps * control.step).toFixed(6))
                             }
                             onPressed: { interactionActive = true; updatePreview(mouse.x) }

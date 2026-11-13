@@ -582,3 +582,18 @@ p.adjustControl(fanItem, fanItem.controls[0], -1);
 assert.match(queue[0].url, /fan.three%3Apercentage&option=33.333333$/, "minus leaves the current speed");
 p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
 console.log("Fan speed steps passed");
+// A fractional step can leave the range's quotient just under a whole number.
+for (const [min, max, step, top] of [[0.05, 1, 0.05, "1"], [-0.7, 0.7, 0.1, "0.7"], [0.1, 0.7, 0.1, "0.7"]]) {
+    const ranged = {entity_id: "number.mix", domain: "c300x", available: true,
+        controls: [{command: "value", kind: "number", value: Number(top), min, max, step}]};
+    p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0;
+    p.adjustControl(ranged, ranged.controls[0], 1);
+    assert.match(queue[0].url, new RegExp("number.mix%3Avalue&option=" + top.replace(".", "\\.") + "$"),
+        "plus at the top of " + min + ".." + max + " stays at the top");
+}
+assert.equal(p.controlLastStep({min: -0.7, max: 0.7, step: 0.1}), 14);
+assert.equal(p.controlLastStep({min: 7, max: 35, step: 0.5}), 56);
+assert.equal(p.controlLastStep({min: 0, max: 100, step: 33.333333}), 3, "a fan keeps its own speeds");
+assert.equal(p.controlLastStep({min: 0, max: 1, step: 0.3}), 3, "a range off the grid ends at its last whole step");
+p.pendingEntity = ""; p.controlInFlight = false; queue.length = 0; p.controlFeedback = [];
+console.log("Fractional ranges passed");

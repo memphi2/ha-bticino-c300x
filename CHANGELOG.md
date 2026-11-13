@@ -49,6 +49,9 @@
 - Fan speed minus/plus moves to the fan's next speed. It stepped by one
   percent, and a fan rounds a percentage up to its next speed, so on a fan with
   few speeds minus never lowered it.
+- On a number with a fractional step, such as 0.05 to 1 in steps of 0.05, the
+  slider reaches the top of the range and plus at the top no longer lowers the
+  value.
 - Setting a light's brightness or a fan's speed to 0 on the display is
   confirmed once it is off, instead of ending as unconfirmed.
 - Emptying a page name or a custom name in the entity-display dialog clears it.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import reprlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -173,13 +174,18 @@ def _short_session_id(session_id: str) -> str:
 
 
 def _format_debug_value(value: Any) -> str:
+    # Any logged-in user can send this value: keep it on one line and short,
+    # and never render more of it than is logged. A string is cut by slicing;
+    # anything else (a nested list or dict from the client) goes through
+    # reprlib, which stops after a few items and levels instead of building
+    # the whole text first.
     if isinstance(value, float):
-        return f"{value:.3f}"
-    # Any logged-in user can send this text: keep it on one line and short.
-    # Cut before looking at every character: the value can be a huge nested
-    # structure from the client.
+        raw = f"{value:.3f}"
+    elif isinstance(value, str):
+        raw = value
+    else:
+        raw = reprlib.repr(value)
     text = "".join(
-        char if char.isprintable() else "?"
-        for char in str(value)[:_MAX_DEBUG_VALUE_LENGTH]
+        char if char.isprintable() else "?" for char in raw[:_MAX_DEBUG_VALUE_LENGTH]
     )
     return text.replace(" ", "_")

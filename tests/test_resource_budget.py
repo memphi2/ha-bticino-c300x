@@ -82,9 +82,10 @@ def test_native_agent_media_bridge_stays_within_interim_budget() -> None:
     # (#55). (A teardown settle window briefly pushed this to 237_000 in 1.9.7;
     # it was removed again in 1.9.8 — hardware showed it did not stop the
     # reboot.) Then to 236_000 for the codec-aware on-demand SDP offer (PCMU-only
-    # in PCMU mode, #55/#58). Splitting this monolith is a separate backlog
+    # in PCMU mode, #55/#58), then to 237_200 for bounded unauthenticated RTSP
+    # connections and clearing inbound SRTP keys. Splitting is a separate backlog
     # refactor; this interim ceiling keeps pressure on unrelated growth.
-    assert path.stat().st_size <= 236_000
+    assert path.stat().st_size <= 237_200
     assert path.read_text(encoding="utf-8").count("\n") <= 6_940
 
 

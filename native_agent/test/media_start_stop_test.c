@@ -88,6 +88,8 @@ int main(void) {
     g_bridge.video = c300x_video_create(&config, NULL, 0);
     assert(g_bridge.video);
     g_bridge.running = true;
+    memset(g_bridge.ondemand_audio_srtp_in_key, 0xA5, sizeof(g_bridge.ondemand_audio_srtp_in_key));
+    memset(g_bridge.ondemand_video_srtp_in_key, 0xA5, sizeof(g_bridge.ondemand_video_srtp_in_key));
     g_srtp_api.initialized = g_srtp_api.available = 1;
     test_partial_srtp_cleanup();
     pthread_t start, stop;
@@ -108,6 +110,9 @@ int main(void) {
     assert(!g_bridge.media_active && !g_bridge.media_starting);
     assert(!g_bridge.sip_monitor_started && !g_bridge.ondemand_media_started);
     assert(g_bridge.sip_fd == -1 && g_bridge.rtp_fd == -1);
+    for (size_t i = 0; i < sizeof(g_bridge.ondemand_audio_srtp_in_key); i++) {
+        assert(g_bridge.ondemand_audio_srtp_in_key[i] == 0 && g_bridge.ondemand_video_srtp_in_key[i] == 0);
+    }
     close(peer);
     g_bridge.running = false;
     c300x_video_destroy(g_bridge.video);

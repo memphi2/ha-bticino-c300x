@@ -5666,8 +5666,10 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     g_bridge.ondemand_last_talkback_ms = 0;
     g_bridge.ondemand_srtp_state = NULL;
     reset_backchannel_talkback_locked(&g_bridge);
-    memset(g_bridge.ondemand_audio_srtp_key, 0, sizeof(g_bridge.ondemand_audio_srtp_key));
-    memset(g_bridge.ondemand_video_srtp_key, 0, sizeof(g_bridge.ondemand_video_srtp_key));
+    secure_zero(g_bridge.ondemand_audio_srtp_key, sizeof(g_bridge.ondemand_audio_srtp_key));
+    secure_zero(g_bridge.ondemand_video_srtp_key, sizeof(g_bridge.ondemand_video_srtp_key));
+    secure_zero(g_bridge.ondemand_audio_srtp_in_key, sizeof(g_bridge.ondemand_audio_srtp_in_key));
+    secure_zero(g_bridge.ondemand_video_srtp_in_key, sizeof(g_bridge.ondemand_video_srtp_in_key));
     g_bridge.stop_in_progress = false;
     pthread_mutex_unlock(&g_bridge.mutex);
 }

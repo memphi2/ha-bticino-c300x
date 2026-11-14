@@ -106,16 +106,14 @@ function stopEventWatch() {
 }
 
 function prepareEventRetry(pageItem) {
-    if (!pageItem || (eventRetryTimer && eventOwner === pageItem)) return
-    if (eventRetryTimer) {
-        stopEventWatch()
-        eventRetryTimer.destroy()
-    }
+    if (!pageItem) return
+    var timer = pageItem.memoEventRetryTimer || null
+    if (eventOwner === pageItem && eventRetryTimer === timer) return
+    if (eventOwner) stopEventWatch()
     eventOwner = pageItem
-    // HomePage already supplies its lifetime owner before starting the watch.
-    // A child Timer keeps recovery local without changing the firmware patch.
-    eventRetryTimer = Qt.createQmlObject('import QtQuick 1.1; Timer { repeat: false; running: false }', pageItem, "MemoEventRetry")
-    eventRetryTimer.triggered.connect(retryEventWatch)
+    // Qt 4 crashes when a shared script dynamically creates a QML object.
+    // The page owns the declarative timer and its triggered handler instead.
+    eventRetryTimer = timer
 }
 
 function scheduleEventRetry() {

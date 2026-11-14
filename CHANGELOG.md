@@ -1,6 +1,18 @@
 # Changelog
 
-## v2.2.0 - 2026-11-14
+## Unreleased
+
+### Fixed
+
+- Prevent a display startup crash and repeated device restarts introduced in
+  2.2.0. The memo notification retry timer is now owned by the QML page instead
+  of being dynamically created from a shared JavaScript library, which crashes
+  the device's Qt 4 runtime.
+
+## v2.2.0 - 2026-11-14 (withdrawn)
+
+Withdrawn because the display update can crash the device GUI and cause
+repeated device restarts. The latest published stable release is 2.1.3.
 
 ### Added
 

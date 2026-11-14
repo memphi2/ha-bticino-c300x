@@ -99,6 +99,7 @@ full_patch_present() {
         && file_contains "$GUI_DIR/MainApp.qml" 'haPage,' \
         && home_page_feature_patch_present \
         && file_contains "$GUI_DIR/HomePage.qml" 'MemoSync.syncHomeNotifications(page)' \
+        && file_contains "$GUI_DIR/HomePage.qml" 'property alias memoEventRetryTimer: memoRetryTimer' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "alarmButton"' \
         && file_contains "$GUI_DIR/HomePage.qml" 'objectName: "haButton"' \
         && file_contains "$GUI_DIR/HomePage.qml" 'images/call/icon_call-home.svg' \
@@ -349,6 +350,14 @@ patch_home_page() {
             print ""
             print "    property int externalUnreadMessages: -1"
             print "    property int externalUnreadMemos: -1"
+            print "    property alias memoEventRetryTimer: memoRetryTimer"
+            print ""
+            print "    Timer {"
+            print "        id: memoRetryTimer"
+            print "        repeat: false"
+            print "        running: false"
+            print "        onTriggered: MemoSync.retryEventWatch()"
+            print "    }"
             print ""
             print "    function unreadMessagesCount() {"
             print "        return externalUnreadMessages >= 0 ? externalUnreadMessages : answeringModel.obj.unreadMessages"
@@ -604,6 +613,8 @@ patch_home_page() {
             'import "js/c300x_memos.js" as MemoSync' \
             'import "js/c300x_ha.js" as HAConfig' \
             'function refreshMessageNotifications()' \
+            'property alias memoEventRetryTimer: memoRetryTimer' \
+            'onTriggered: MemoSync.retryEventWatch()' \
             'function displayBridgeButtonCount()' \
             'HAConfig.homeButtons' \
             '+ 2 + page.displayBridgeButtonCount()' \
@@ -618,6 +629,8 @@ patch_home_page() {
             "HomePage.qml" \
             'import "js/c300x_memos.js" as MemoSync' \
             'function refreshMessageNotifications()' \
+            'property alias memoEventRetryTimer: memoRetryTimer' \
+            'onTriggered: MemoSync.retryEventWatch()' \
             'function startMessageNotificationWatch()' \
             'MemoSync.syncHomeNotifications(page)' \
             'id: homeAssistantButtonRow' \

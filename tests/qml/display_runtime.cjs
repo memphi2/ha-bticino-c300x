@@ -49,11 +49,8 @@ function runtime(name = "c300x_ha.js") {
     };
     const clock = {now: () => now};
     const Api = vm.createContext({Date: clock, XMLHttpRequest: Request, Qt: {
-        createQmlObject(source, parent) {
-            assert.ok(parent);
-            assert.match(source, /import QtQuick 1\.1/);
-            assert.match(source, /repeat: false; running: false/);
-            return timer();
+        createQmlObject() {
+            assert.fail("Qt 4 cannot create QML objects from a shared script library");
         },
     }});
     vm.runInContext(fs.readFileSync(path.join(jsRoot, name), "utf8")
@@ -283,6 +280,7 @@ console.log("Demand-driven feedback binding expiry passed");
 
 function memoPage(r) {
     const p = {externalUnreadMessages: -1, externalUnreadMemos: -1};
+    p.memoEventRetryTimer = r.timer(() => r.Api.retryEventWatch());
     r.Api.syncHomeNotifications(p);
     r.request("/ui/answering-machine/messages").finish(200, {unread: 1});
     r.request("/ui/memos").finish(200, {unread: 2});
@@ -398,3 +396,27 @@ function memoPage(r) {
     assert.equal(r.Api.connections.length, 0);
 }
 console.log("Memo watch backoff, resync and cancellation passed");
+
+// Switching owners stops the old QML-owned timer; JS must never destroy it.
+{
+    const r = runtime("c300x_memos.js"), oldPage = memoPage(r);
+    oldPage.memoEventRetryTimer.destroy = () => assert.fail("QML owns the timer");
+    r.Api.startEventWatch(() => {});
+    r.request("/ui/events/next").finish(0, "");
+    const newPage = memoPage(r);
+    assert.equal(oldPage.memoEventRetryTimer.running, false);
+    assert.equal(r.Api.eventRetryTimer, newPage.memoEventRetryTimer);
+    assert.equal(r.Api.eventWatching, false);
+    r.Api.startEventWatch(() => {});
+    r.request("/ui/events/next").finish(0, "");
+    assert.equal(newPage.memoEventRetryTimer.running, true);
+}
+
+// An older HomePage without the alias must not crash during an update.
+{
+    const r = runtime("c300x_memos.js");
+    r.Api.syncHomeNotifications({externalUnreadMessages: -1, externalUnreadMemos: -1});
+    assert.equal(r.Api.eventRetryTimer, null);
+    assert.equal(r.timers.length, 0);
+    assert.equal(r.sent.length, 2);
+}

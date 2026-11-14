@@ -222,14 +222,14 @@ SOURCE_INSTALLED_FILES = (
 )
 PATCH_OUTPUT_SHA256 = {
     "MainApp.qml": "b755ebd730bd5b3f7a70dc301542b21119ef4f5b88463d3bc853314609fbcad2",
-    "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
+    "HomePage.qml": "e516cd1fab0cbdf7bbcbbd0c32635c66e033286998fb661f42061fb015b77de8",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "37270f903ee17d00332445d149921dbb13bffc48574a78772277faae19edfa40",
     "HomeAssistant.qml": "66f83f36fc45d1b82d7d45e9ccfc320d53873c13a66bfe63fbcdb8e873075270",
     "js/c300x_ha.js": "1dda5f70fcce7c78284220a97ac822d0bddc777cbf4c52f20bac1a4cff81e42d",
     "js/c300x_i18n.js": "fc06da394fa0d766a9fed4af79204da37f827aa08880e602184acffd9f304375",
-    "js/c300x_memos.js": "b00878d55d0cc27f21a4b2603b1b3bed40cb80161d603d20121e49c3bba2c924",
+    "js/c300x_memos.js": "4d7c36842de9372c12ad09e2bcdfca8e842518156c53e7da0068de1ab9e86a30",
 }
 
 
@@ -487,6 +487,33 @@ def test_qml_patch_generated_output_hashes_are_stable(tmp_path: Path) -> None:
         relative_path: _sha256(gui_dir / relative_path)
         for relative_path in PATCH_OUTPUT_SHA256
     } == PATCH_OUTPUT_SHA256
+
+
+def test_shared_qml_scripts_do_not_create_qml_objects() -> None:
+    # Qt 4 segfaults in createQmlObject from a .pragma library context.
+    for script in (ROOT / "device_qml/js").glob("*.js"):
+        source = script.read_text(encoding="utf-8")
+        if ".pragma library" in source:
+            assert "Qt.createQmlObject" not in source, script.name
+
+
+def test_qml_patch_upgrades_home_page_retry_timer(tmp_path: Path) -> None:
+    gui_dir = tmp_path / "gui"
+    backup_dir = tmp_path / "backups"
+    gui_dir.mkdir()
+    _write_original_gui(gui_dir)
+    _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")
+    home_page = gui_dir / "HomePage.qml"
+    home_page.write_text(
+        home_page.read_text().replace(
+            "    property alias memoEventRetryTimer: memoRetryTimer\n", ""
+        )
+    )
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "status")["state"] == "partial"
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["state"] == "patched"
+    assert home_page.read_text().count("id: memoRetryTimer") == 1
+    assert "onTriggered: MemoSync.retryEventWatch()" in home_page.read_text()
+    assert _run_qml_patch(tmp_path, gui_dir, backup_dir, "apply")["changed_files"] == 0
 
 
 def test_home_assistant_qml_keeps_empty_state_label_blank() -> None:

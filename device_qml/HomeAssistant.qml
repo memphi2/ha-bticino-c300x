@@ -900,23 +900,23 @@ Page {
                 }
             }
             Row {
-                id: transportRow
-                property variant transport: Api.dashboardTransportControls(selectedItem)
-                visible: transport.length > 0
+                id: actionRow
+                property variant actions: Api.dashboardActionControls(selectedItem)
+                visible: actions.length > 0
                 width: parent.width
                 height: visible ? 56 : 0
                 spacing: 8
                 Repeater {
-                    model: transportRow.transport.length
+                    model: actionRow.actions.length
                     Item {
-                        property variant control: transportRow.transport[index]
-                        width: (transportRow.width - (transportRow.transport.length - 1) * 8) / transportRow.transport.length
+                        property variant control: actionRow.actions[index]
+                        width: (actionRow.width - (actionRow.actions.length - 1) * 8) / actionRow.actions.length
                         height: 56
                         opacity: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0 ? 1 : 0.45
-                        Image { anchors.fill: parent; source: transportMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
-                        UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: 28; color: "white" }
+                        Image { anchors.fill: parent; source: actionMouse.pressed ? "images/settings/list_btn_p.svg" : "images/settings/list_btn.svg"; fillMode: Image.Stretch }
+                        UbuntuLightText { anchors.centerIn: parent; text: controlLabel(control); font.pixelSize: text.length <= 3 ? 28 : 18; color: "white" }
                         BeepingMouseArea {
-                            id: transportMouse
+                            id: actionMouse
                             anchors.fill: parent
                             enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0
                             onClicked: Api.dashboardControl(selectedItem, control, null, status, page)

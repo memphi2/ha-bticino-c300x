@@ -1014,9 +1014,18 @@ function dashboardVisibleControls(item, section) {
     return result
 }
 
-function dashboardTransportControls(item) {
-    var controls = item && item.details && item.details.type === "media_player" ? listOrEmpty(item.controls) : []
-    var commands = ["media_previous_track", "media_play_pause", "media_next_track"]
+var ACTION_ROWS = {
+    "media_player": ["media_previous_track", "media_play_pause", "media_next_track"]
+}
+
+function dashboardActionCommands(item) {
+    var type = item && item.details ? item.details.type : ""
+    return ACTION_ROWS.hasOwnProperty(type) ? ACTION_ROWS[type] : []
+}
+
+function dashboardActionControls(item) {
+    var commands = dashboardActionCommands(item)
+    var controls = commands.length > 0 ? listOrEmpty(item.controls) : []
     var result = []
     for (var i = 0; i < commands.length; i++) {
         for (var j = 0; j < controls.length; j++) {
@@ -1028,11 +1037,15 @@ function dashboardTransportControls(item) {
 
 function dashboardListControls(item, section) {
     var visible = dashboardVisibleControls(item, section)
-    if (dashboardTransportControls(item).length === 0) return visible
+    var commands = dashboardActionCommands(item)
+    if (commands.length === 0 || dashboardActionControls(item).length === 0) return visible
     var result = []
     for (var i = 0; i < visible.length; i++) {
-        var command = visible[i].command
-        if (command !== "media_previous_track" && command !== "media_play_pause" && command !== "media_next_track") result.push(visible[i])
+        var inRow = false
+        for (var j = 0; j < commands.length; j++) {
+            if (visible[i].command === commands[j]) inRow = true
+        }
+        if (!inRow) result.push(visible[i])
     }
     return result
 }

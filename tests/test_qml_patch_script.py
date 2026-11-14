@@ -226,8 +226,8 @@ PATCH_OUTPUT_SHA256 = {
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
     "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "438796b6362b00191c5610cdcbde747a3b08b7ac2f8b6c5cb9fda972c937da64",
-    "js/c300x_ha.js": "0899667e8808c5a8e0739ff3cf69ac7f300ac0c4b8a10ebd42bea076f291a54e",
+    "HomeAssistant.qml": "d746c9a37bb2a1d1c26b475450bfd005c4ecad980517b46e667db70acc9bd620",
+    "js/c300x_ha.js": "58767ff69435f688eec56fa5492ea5fd3b54f51b44238475534cd5cfaa572b02",
     "js/c300x_i18n.js": "a6bef910f559e4d4219ac4a318f02481db491bde1081ad83f1b0d9e933a29417",
     "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
 }
@@ -864,7 +864,7 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
     for mouse_id in (
         "notificationActionMouse",
         "coverControlMouse",
-        "transportMouse",
+        "actionMouse",
         "controlButtonMouse",
         "adjustMouse",
         "notificationBannerMouse",
@@ -873,7 +873,7 @@ def test_home_assistant_buttons_show_that_a_touch_registered() -> None:
         assert f"{mouse_id}.pressed ?" in home_assistant_qml
 
 
-def test_the_media_player_page_has_one_row_of_transport_buttons() -> None:
+def test_the_media_player_page_has_one_row_of_action_buttons() -> None:
     """Previous, play/pause and next sit side by side, centred, above the rest.
 
     They used to be three full-width bars with a small glyph at the top left.
@@ -883,7 +883,7 @@ def test_the_media_player_page_has_one_row_of_transport_buttons() -> None:
         encoding="utf-8"
     )
 
-    assert "Api.dashboardTransportControls(selectedItem)" in home_assistant_qml
+    assert "Api.dashboardActionControls(selectedItem)" in home_assistant_qml
     assert (
         "property variant detailControls: Api.dashboardListControls("
         in home_assistant_qml

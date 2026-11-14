@@ -494,6 +494,15 @@ int main(int argc, char **argv) {
         unauth_trickle_test(&config);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
+    } else if (strcmp(argv[1], "read_timeout") == 0) {
+        extern long long c300x_monotonic_ms(void);
+        long long now = c300x_monotonic_ms();
+        assert(c300x_rtsp_read_timeout(0, 0, 0) == 30);
+        assert(c300x_rtsp_read_timeout(0, RTSP_IDLE_TIMEOUT_SECONDS, 0) == 180);
+        assert(c300x_rtsp_read_timeout(RTSP_TEARDOWN_CLOSE_WAIT_SECONDS, 180, 0) == 3);
+        assert(c300x_rtsp_read_timeout(0, 180, now + 5000) == 5);
+        assert(c300x_rtsp_read_timeout(0, 180, now + 400000) == 180);
+        assert(c300x_rtsp_read_timeout(0, 180, now - 1) == 0);
     } else if (strcmp(argv[1], "talkback_stop_race") == 0) {
         talkback_stop_race_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {

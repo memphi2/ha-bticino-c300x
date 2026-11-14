@@ -50,7 +50,7 @@ def test_stop_cancels_inflight_sip_setup(media_binaries):
 
 
 @pytest.mark.parametrize("case", [
-    "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client", "interleaved", "unauth_rejections", "unauth_lifetime", "unauth_trickle", "talkback_stop_race", "sip_join", "sip_renew",
+    "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client", "interleaved", "unauth_rejections", "unauth_lifetime", "unauth_trickle", "talkback_stop_race", "read_timeout", "sip_join", "sip_renew",
 ])
 def test_media_lifecycle(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_lifecycle"), case],
@@ -89,3 +89,22 @@ def test_ffprobe_basic_challenge(media_binaries, password, expected_plays):
         if server.poll() is None:
             server.kill()
             server.communicate(timeout=5)
+
+
+def test_a_playing_ring_or_home_call_client_gets_the_advertised_timeout():
+    """The SETUP answer promises the session timeout to every client.
+
+    The read timeout used to follow ``media_started``, which is only set for
+    an on-demand session. A ring or home-call client that sent nothing for
+    30 seconds was closed, although it was told 180.
+    """
+
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / "native_agent/src/media_bridge.c").read_text()
+    handler = source[source.index("handle_rtsp_client("):]
+    call = handler[handler.index("c300x_rtsp_read_timeout("):][:240]
+    assert "playing ? RTSP_IDLE_TIMEOUT_SECONDS : 0" in call
+    assert "media_started" not in call
+    play = handler[handler.index("media_started = !ring_session && !home_call_session;"):][:120]
+    assert play.split(";")[1].strip() == "playing = true"

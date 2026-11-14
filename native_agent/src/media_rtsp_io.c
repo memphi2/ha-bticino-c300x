@@ -115,6 +115,19 @@ int c300x_rtsp_wait_readable(int fd, int timeout_seconds, long long deadline_ms)
     }
 }
 
+int c300x_rtsp_read_timeout(int teardown_seconds, int session_seconds, long long deadline_ms)
+{
+    int seconds = teardown_seconds > 0 ? teardown_seconds
+        : (session_seconds > 0 ? session_seconds : 30);
+    if (deadline_ms > 0) {
+        long long remaining_ms = deadline_ms - c300x_monotonic_ms();
+        if (remaining_ms <= 0) return 0;
+        long long remaining_seconds = (remaining_ms + 999) / 1000;
+        if (remaining_seconds < seconds) seconds = (int)remaining_seconds;
+    }
+    return seconds;
+}
+
 static ssize_t send_all(int fd, const void *buf, size_t len)
 {
     const char *p = buf;

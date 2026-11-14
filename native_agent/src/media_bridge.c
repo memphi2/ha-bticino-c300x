@@ -5941,6 +5941,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     char transport[512];
     char session_id[32];
     bool media_started = false;
+    bool playing = false;
     bool teardown_seen = false;
     int slot_index = -1;
     int remaining_clients = 0;
@@ -5973,20 +5974,15 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
     while (g_bridge.running) {
         int interleaved_channel = -1;
         size_t interleaved_len = 0;
-        int read_timeout_seconds = teardown_seen
-            ? RTSP_TEARDOWN_CLOSE_WAIT_SECONDS
-            : (media_started ? RTSP_IDLE_TIMEOUT_SECONDS : 30);
-        if (!ever_authenticated) {
-            long long remaining_ms = unauth_deadline - c300x_monotonic_ms();
-            if (remaining_ms <= 0) {
-                break;
-            }
-            int remaining_seconds = (int)((remaining_ms + 999) / 1000);
-            if (remaining_seconds < read_timeout_seconds) {
-                read_timeout_seconds = remaining_seconds;
-            }
-        }
         read_buffer.deadline_ms = ever_authenticated ? 0 : unauth_deadline;
+        int read_timeout_seconds = c300x_rtsp_read_timeout(
+            teardown_seen ? RTSP_TEARDOWN_CLOSE_WAIT_SECONDS : 0,
+            playing ? RTSP_IDLE_TIMEOUT_SECONDS : 0,
+            read_buffer.deadline_ms
+        );
+        if (read_timeout_seconds <= 0) {
+            break;
+        }
         rtsp_read_result_t read_result = read_rtsp_request_or_interleaved(
             &read_buffer,
             fd,
@@ -6344,6 +6340,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 }
             }
             media_started = !ring_session && !home_call_session;
+            playing = true;
             char headers[256];
             snprintf(
                 headers,
@@ -6406,6 +6403,7 @@ static void handle_rtsp_client(int fd, struct sockaddr_storage *peer) {
                 c300x_video_bridge_media_stopped(g_bridge.video);
             }
             media_started = false;
+            playing = false;
             teardown_seen = true;
         } else {
             send_rtsp_response(fd, 404, cseq, NULL, NULL);

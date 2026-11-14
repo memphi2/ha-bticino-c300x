@@ -517,7 +517,7 @@ static void mqtt_handle_publish(struct c300x_mqtt *mqtt, const unsigned char *pa
 static void mqtt_process_rx(struct c300x_mqtt *mqtt)
 {
     size_t offset = 0;
-    while (offset + 2 <= mqtt->rx_len) {
+    while (!mqtt->has_pending_command && offset + 2 <= mqtt->rx_len) {
         size_t header_len = 0;
         size_t remaining = mqtt_remaining_length(mqtt->rx_buffer + offset, mqtt->rx_len - offset, &header_len);
         size_t packet_len;
@@ -584,7 +584,7 @@ void c300x_mqtt_handle_poll(
             }
             mqtt->rx_len += (size_t)received;
             mqtt_process_rx(mqtt);
-            if ((size_t)received == 0) {
+            if (mqtt->has_pending_command) {
                 break;
             }
         }
@@ -633,6 +633,8 @@ void c300x_mqtt_publish_event(
 
 int c300x_mqtt_take_command(struct c300x_mqtt *mqtt, char *out, size_t out_len)
 {
+    if (out_len == 0) return 0;
+    if (!mqtt->has_pending_command) mqtt_process_rx(mqtt);
     if (!mqtt->has_pending_command || out_len == 0) {
         return 0;
     }

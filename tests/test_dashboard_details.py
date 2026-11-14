@@ -158,3 +158,26 @@ def test_a_timestamp_shows_in_the_local_time_zone():
     finally:
         dt_util.set_default_time_zone(dt_util.UTC)
     assert item["state_label"] == "14.11. 10:30"
+
+
+def test_a_text_that_is_cut_to_fit_ends_in_three_dots():
+    from custom_components.bticino_c300x.dashboard import _dashboard_text
+
+    assert _dashboard_text("short", "x", 60) == "short"
+    assert _dashboard_text("a" * 60, "x", 60) == "a" * 60
+    cut = _dashboard_text("word " * 30, "x", 20)
+    assert cut == "word word word wo..."
+    assert len(cut) == 20
+    assert _dashboard_text("  spaced \n out  ", "x", 60) == "spaced out"
+    assert _dashboard_text("", "fallback", 60) == "fallback"
+    assert _dashboard_text(None, "z" * 100, 60) == "z" * 60
+    # A long sensor text reaches the tile marked as cut.
+    item = _dashboard_item_for_entity(
+        SimpleNamespace(
+            states=SimpleNamespace(get=lambda _entity: snapshot("w" * 90)),
+            config=SimpleNamespace(language="en"),
+        ),
+        "sensor.note",
+        10,
+    )
+    assert item["state_label"] == "w" * 57 + "..."

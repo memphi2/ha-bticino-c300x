@@ -911,10 +911,14 @@ def _dashboard_choice_payload(state: Any | None) -> dict[str, Any]:
 
 
 def _dashboard_text(value: Any, fallback: str, max_length: int) -> str:
+    """Return a bounded one-line text; a cut one ends in three dots."""
+
     if isinstance(value, str):
         text = " ".join(value.split())
         if text:
-            return text[:max_length]
+            if len(text) > max_length:
+                return text[: max_length - 3].rstrip() + "..."
+            return text
     return fallback[:max_length]
 
 

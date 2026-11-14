@@ -4084,7 +4084,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         instance_uuid
     );
     if (send_all(fd, request, strlen(request)) <= 0 || read_message(fd, response, sizeof(response), 3) <= 0) {
-        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "invite_io");
+        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "register_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4096,7 +4096,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
     }
     if (c300x_media_sip_status_code(response) >= 300) {
         snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail),
-                 "invite_%d", c300x_media_sip_status_code(response));
+                 "register_%d", c300x_media_sip_status_code(response));
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -4221,7 +4221,7 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
         sdp
     );
     if (send_all(fd, request, strlen(request)) <= 0) {
-        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "ack_io");
+        snprintf(bridge->ondemand_sip_fail, sizeof(bridge->ondemand_sip_fail), "invite_io");
         secure_zero(audio_key_raw, sizeof(audio_key_raw));
         secure_zero(video_key_raw, sizeof(video_key_raw));
         close(fd);
@@ -5107,7 +5107,13 @@ static void *home_call_thread_func(void *arg) {
             next_audio = now + MEDIA_AUDIO_PACKET_MS;
         }
         if (next_rtcp == 0 || now >= next_rtcp) {
-            send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio, srtp.audio_ssrc);
+            /* The talkback proxy protects packets on this session under the
+             * mutex; an SRTP session is not safe for two threads at once. */
+            pthread_mutex_lock(&bridge->mutex);
+            if (bridge->home_call_srtp_state == &srtp) {
+                send_srtcp_receiver_report(audio_rtcp_fd, target_audio_port + 1, srtp.audio, srtp.audio_ssrc);
+            }
+            pthread_mutex_unlock(&bridge->mutex);
             next_rtcp = now + 1000;
         }
         if (next_sip_keepalive == 0 || now >= next_sip_keepalive) {

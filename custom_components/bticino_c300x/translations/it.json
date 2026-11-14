@@ -105,7 +105,7 @@
           "alarm_entity_id": "Centrale di allarme Alarmo",
           "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
           "weather_entity_id": "Meteo",
-          "dashboard_dynamic_homepage": "Modalità dinamica della pagina iniziale",
+          "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
@@ -204,7 +204,7 @@
           "alarm_entity_id": "Centrale di allarme Alarmo",
           "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
           "weather_entity_id": "Meteo",
-          "dashboard_dynamic_homepage": "Modalità dinamica della pagina iniziale",
+          "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },
@@ -488,7 +488,7 @@
           "connection": "Indirizzo, chiave di accesso e chiave di manutenzione del C300X, indirizzo di Home Assistant.",
           "features": "Immagine dal vivo, conversazione, volumi e accesso video e audio sul C300X.",
           "device_activations": "Serrature e luci aggiuntive dell'impianto che Home Assistant può attivare, e l'indirizzo della luce scale.",
-          "dashboard": "Pagine Home Assistant sul display, modalità dinamica della pagina iniziale, allarme, meteo e azioni.",
+          "dashboard": "Pagine Home Assistant sul display, quando compaiono i pulsanti della pagina iniziale, allarme, meteo e azioni.",
           "dashboard_pages": "Quali entità compaiono sul display, su quale pagina e in quale ordine.",
           "dashboard_entity_display": "Dimensione, nome e riga secondaria di ogni riquadro."
         }
@@ -573,7 +573,7 @@
           "alarm_entity_id": "Centrale di allarme Alarmo",
           "alarm_page_entity_id": "Azione rapida nella pagina Allarme",
           "weather_entity_id": "Meteo",
-          "dashboard_dynamic_homepage": "Modalità dinamica della pagina iniziale",
+          "dashboard_dynamic_homepage": "Mostrare i pulsanti della pagina iniziale solo se servono",
           "actions_json": "Azioni consentite (per esperti)",
           "dashboard_prevent_return": "Restare sulla pagina dopo un'azione"
         },

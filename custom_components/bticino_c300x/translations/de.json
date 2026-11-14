@@ -105,7 +105,7 @@
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
@@ -204,7 +204,7 @@
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },
@@ -488,7 +488,7 @@
           "connection": "Adresse, Zugangs- und Wartungsschlüssel des C300X, Adresse von Home Assistant.",
           "features": "Livebild, Gegensprechen, Lautstärken und der Zugang für Video und Ton auf dem C300X.",
           "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann, und die Adresse des Treppenlichts.",
-          "dashboard": "Home-Assistant-Seiten auf dem Display, dynamischer Startseiten-Modus, Alarm, Wetter und Aktionen.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display, wann die Startseiten-Buttons erscheinen, Alarm, Wetter und Aktionen.",
           "dashboard_pages": "Welche Entitäten auf dem Display erscheinen, auf welcher Seite und in welcher Reihenfolge.",
           "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel."
         }
@@ -573,7 +573,7 @@
           "alarm_entity_id": "Alarmo-Alarmzentrale",
           "alarm_page_entity_id": "Schnellaktion auf der Alarm-Seite",
           "weather_entity_id": "Wetter",
-          "dashboard_dynamic_homepage": "Dynamischer Startseiten-Modus",
+          "dashboard_dynamic_homepage": "Startseiten-Buttons nur bei Bedarf zeigen",
           "actions_json": "Erlaubte Aktionen (für Fortgeschrittene)",
           "dashboard_prevent_return": "Nach einer Aktion auf der Seite bleiben"
         },

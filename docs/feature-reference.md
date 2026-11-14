@@ -102,7 +102,7 @@ Call are not yet confirmed on hardware.
 
 ## Display Home Page Buttons
 
-**Dynamic home page mode** under **Display and Display patch** decides how the
+**Show home page buttons only when needed** under **Display and Display patch** decides how the
 Alarm and Home Assistant buttons reach the device's home page.
 
 | Setting | Home page |

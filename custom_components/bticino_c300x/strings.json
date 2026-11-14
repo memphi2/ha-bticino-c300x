@@ -105,7 +105,7 @@
           "alarm_entity_id": "Alarmo alarm panel",
           "alarm_page_entity_id": "Quick action on the Alarm page",
           "weather_entity_id": "Weather",
-          "dashboard_dynamic_homepage": "Dynamic home page mode",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Stay on the page after an action"
         },
@@ -204,7 +204,7 @@
           "alarm_entity_id": "Alarmo alarm panel",
           "alarm_page_entity_id": "Quick action on the Alarm page",
           "weather_entity_id": "Weather",
-          "dashboard_dynamic_homepage": "Dynamic home page mode",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Stay on the page after an action"
         },
@@ -488,7 +488,7 @@
           "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
           "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
           "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
-          "dashboard": "Home Assistant pages on the display, dynamic home page mode, alarm, weather and actions.",
+          "dashboard": "Home Assistant pages on the display, when the home page buttons appear, alarm, weather and actions.",
           "dashboard_pages": "Which entities appear on the display, on which page and in which order.",
           "dashboard_entity_display": "Size, name and secondary line of each tile."
         }
@@ -573,7 +573,7 @@
           "alarm_entity_id": "Alarmo alarm panel",
           "alarm_page_entity_id": "Quick action on the Alarm page",
           "weather_entity_id": "Weather",
-          "dashboard_dynamic_homepage": "Dynamic home page mode",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
           "actions_json": "Allowed actions (for experts)",
           "dashboard_prevent_return": "Stay on the page after an action"
         },

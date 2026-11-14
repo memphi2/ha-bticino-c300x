@@ -105,7 +105,7 @@
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide sur la page Alarme",
           "weather_entity_id": "Météo",
-          "dashboard_dynamic_homepage": "Mode dynamique de la page d'accueil",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
@@ -204,7 +204,7 @@
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide sur la page Alarme",
           "weather_entity_id": "Météo",
-          "dashboard_dynamic_homepage": "Mode dynamique de la page d'accueil",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
@@ -488,7 +488,7 @@
           "connection": "Adresse, clé d'accès et clé de maintenance du C300X, adresse de Home Assistant.",
           "features": "Image en direct, parole, volumes et accès vidéo et audio sur le C300X.",
           "device_activations": "Serrures et lumières supplémentaires de l'installation que Home Assistant peut déclencher, et l'adresse de l'éclairage d'escalier.",
-          "dashboard": "Pages Home Assistant sur l'écran, mode dynamique de la page d'accueil, alarme, météo et actions.",
+          "dashboard": "Pages Home Assistant sur l'écran, quand les boutons d'accueil apparaissent, alarme, météo et actions.",
           "dashboard_pages": "Quelles entités apparaissent sur l'écran, sur quelle page et dans quel ordre.",
           "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile."
         }
@@ -573,7 +573,7 @@
           "alarm_entity_id": "Centrale d'alarme Alarmo",
           "alarm_page_entity_id": "Action rapide sur la page Alarme",
           "weather_entity_id": "Météo",
-          "dashboard_dynamic_homepage": "Mode dynamique de la page d'accueil",
+          "dashboard_dynamic_homepage": "Afficher les boutons d'accueil seulement si nécessaire",
           "actions_json": "Actions autorisées (pour experts)",
           "dashboard_prevent_return": "Rester sur la page après une action"
         },

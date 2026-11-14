@@ -16,7 +16,7 @@
   their settings. Pages and tiles are offered while the Display patch is on.
 - Settings fields use plain names in place of technical ones: access key and
   maintenance key, address of Home Assistant for the C300X, video and audio
-  access. The home page setting is called **Dynamic home page mode**.
+  access.
 - The display tiles form has one collapsible section per tile, in display
   order and titled "Page › Entity" with the entity's Home Assistant name. Each
   has width, height, name and secondary line; the name is one field that takes

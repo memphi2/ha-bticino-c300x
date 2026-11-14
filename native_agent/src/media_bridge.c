@@ -272,6 +272,13 @@ typedef struct {
 static bool start_talkback_proxy(media_bridge_t *bridge);
 
 static pthread_mutex_t media_lifecycle_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* A call thread must not start the proxy while a session stop joins it */
+static bool start_call_talkback(media_bridge_t *bridge) {
+    pthread_mutex_lock(&media_lifecycle_mutex);
+    bool started = start_talkback_proxy(bridge);
+    pthread_mutex_unlock(&media_lifecycle_mutex);
+    return started;
+}
 static media_bridge_t g_bridge = {
     .mutex = PTHREAD_MUTEX_INITIALIZER,
     .ready_cond = PTHREAD_COND_INITIALIZER,
@@ -2827,7 +2834,7 @@ static void handle_ring_invite(
     audio_rtcp_fd = -1;
     video_fd = -1;
     video_rtcp_fd = -1;
-    if (!start_talkback_proxy(bridge)) {
+    if (!start_call_talkback(bridge)) {
         c300x_video_bridge_set_error(bridge->video, "ring_talkback_start_failed");
     }
 
@@ -5009,7 +5016,7 @@ static void *home_call_thread_func(void *arg) {
         bridge->home_call_last_talkback_ms = 0;
         bridge->home_call_srtp_state = &srtp;
         pthread_mutex_unlock(&bridge->mutex);
-        if (!start_talkback_proxy(bridge)) {
+        if (!start_call_talkback(bridge)) {
             c300x_video_bridge_set_error(bridge->video, "home_call_talkback_start_failed");
         }
         dispatch_home_call_state_event(bridge, "home_call.answered");
@@ -5637,10 +5644,6 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     if (g_bridge.ondemand_video_rtcp_fd >= 0) {
         close(g_bridge.ondemand_video_rtcp_fd);
         g_bridge.ondemand_video_rtcp_fd = -1;
-    }
-    if (g_bridge.talkback_fd >= 0) {
-        close(g_bridge.talkback_fd);
-        g_bridge.talkback_fd = -1;
     }
     g_bridge.domain[0] = '\0';
     g_bridge.from_aor[0] = '\0';

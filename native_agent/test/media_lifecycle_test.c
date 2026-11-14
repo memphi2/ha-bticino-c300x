@@ -1,5 +1,6 @@
 /* Real RTSP handlers and thread ownership; device/SIP I/O is never invoked. */
 #include <assert.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
 
@@ -77,8 +78,20 @@ static int tracked_create(pthread_t *thread, const pthread_attr_t *attr,
     return pthread_create(thread, attr, worker, arg);
 }
 
+static atomic_bool race_talkback_start;
+static pthread_t racing_call;
+static void *racing_call_worker(void *arg) {
+    assert(start_call_talkback(arg));
+    return NULL;
+}
+
 static int tracked_join(pthread_t thread, void **result) {
     atomic_fetch_add(&joins, 1);
+    if (atomic_exchange(&race_talkback_start, false)) {
+        /* A ring arrives while the session stop waits for the old proxy. */
+        assert(pthread_create(&racing_call, NULL, racing_call_worker, &g_bridge) == 0);
+        usleep(50000);
+    }
     return pthread_join(thread, result);
 }
 
@@ -422,6 +435,36 @@ static void serve_ffprobe(struct c300x_config *config, struct c300x_video *video
     printf("describes=%llu plays=%llu\n", g_bridge.rtsp_describe_requests, g_bridge.rtsp_play_requests);
 }
 
+/* A call that starts its talkback proxy during a session stop must end with
+ * one running proxy that owns an open socket, and the stop must return. */
+static void talkback_stop_race_test(void) {
+    alarm(10);
+    assert(start_talkback_proxy(&g_bridge));
+    for (;;) {
+        pthread_mutex_lock(&g_bridge.mutex);
+        bool bound = g_bridge.talkback_fd >= 0;
+        pthread_mutex_unlock(&g_bridge.mutex);
+        if (bound) break;
+        usleep(1000);
+    }
+    atomic_store(&race_talkback_start, true);
+    stop_media_session(false, false);
+    assert(pthread_join(racing_call, NULL) == 0);
+    for (int i = 0; i < 2000; i++) {
+        pthread_mutex_lock(&g_bridge.mutex);
+        bool bound = g_bridge.talkback_fd >= 0;
+        pthread_mutex_unlock(&g_bridge.mutex);
+        if (bound) break;
+        usleep(1000);
+    }
+    pthread_mutex_lock(&g_bridge.mutex);
+    assert(g_bridge.talkback_started && !g_bridge.talkback_stop);
+    assert(g_bridge.talkback_fd >= 0 && fcntl(g_bridge.talkback_fd, F_GETFD) != -1);
+    pthread_mutex_unlock(&g_bridge.mutex);
+    stop_media_session(false, false);
+    assert(!g_bridge.talkback_started && g_bridge.talkback_fd < 0);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     struct c300x_config config;
@@ -451,6 +494,8 @@ int main(int argc, char **argv) {
         unauth_trickle_test(&config);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
+    } else if (strcmp(argv[1], "talkback_stop_race") == 0) {
+        talkback_stop_race_test();
     } else if (strcmp(argv[1], "sip_join") == 0) {
         sip_join_test();
     } else if (strcmp(argv[1], "sip_renew") == 0) {

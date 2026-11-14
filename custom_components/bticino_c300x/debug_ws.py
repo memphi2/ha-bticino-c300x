@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(f"custom_components.{DOMAIN}.camera")
+_MAX_DEBUG_VALUE_LENGTH = 200
 
 _WsCommand = Callable[..., Any]
 _WsCommandDecorator = Callable[[_WsCommand], _WsCommand]
@@ -174,4 +175,6 @@ def _short_session_id(session_id: str) -> str:
 def _format_debug_value(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.3f}"
-    return str(value).replace(" ", "_")
+    # Any logged-in user can send this text: keep it on one line and short.
+    text = "".join(char if char.isprintable() else "?" for char in str(value))
+    return text[:_MAX_DEBUG_VALUE_LENGTH].replace(" ", "_")

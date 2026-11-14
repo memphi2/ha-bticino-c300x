@@ -115,6 +115,30 @@ def test_home_call_ws_reports_missing_camera(monkeypatch: pytest.MonkeyPatch) ->
     ]
 
 
+def test_home_call_ws_reports_an_entity_that_is_not_loaded_as_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    registered = _install_home_call_ws_stubs(monkeypatch, None)
+
+    def _missing(_hass: object, _entity_id: str) -> None:
+        raise HomeAssistantError("Entity camera.other not found")
+
+    sys.modules["homeassistant.components.camera.helper"].get_camera_from_entity_id = _missing
+    hass = object()
+
+    async_register_home_call_ws(hass, _FakeHomeCallCamera)  # type: ignore[arg-type]
+    connection = _FakeConnection()
+    asyncio.run(
+        registered[1](hass, connection, {"id": 4, "entity_id": "camera.other", "offer": "v=0"})
+    )
+
+    assert connection.errors == [
+        (4, "home_call_webrtc_not_found", "C300X doorbell camera entity not found"),
+    ]
+
+
 def test_home_call_ws_offer_reports_missing_camera(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

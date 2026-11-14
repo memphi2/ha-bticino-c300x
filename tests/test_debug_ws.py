@@ -221,3 +221,14 @@ def _install_debug_ws_stubs(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
         websocket_api,
     )
     return registered
+
+
+def test_debug_values_from_the_client_stay_on_one_short_line() -> None:
+    forged = "ok\r\n2026-01-01 ERROR forged entry\x1b[31m"
+
+    formatted = debug_ws._format_debug_value(forged)
+
+    assert "\n" not in formatted and "\r" not in formatted and "\x1b" not in formatted
+    assert len(debug_ws._format_debug_value("x" * 5000)) == debug_ws._MAX_DEBUG_VALUE_LENGTH
+    assert debug_ws._format_debug_value(1.23456) == "1.235"
+    assert debug_ws._format_debug_value("a b") == "a_b"

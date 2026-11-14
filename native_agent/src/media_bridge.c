@@ -162,7 +162,9 @@ typedef struct {
     bool startup_ok;
     bool relay_started;
     bool sip_monitor_started;
+    bool sip_monitor_joinable;
     bool ondemand_media_started;
+    bool ondemand_media_joinable;
     bool talkback_started;
     bool ring_started;
     bool home_call_started;
@@ -1863,7 +1865,7 @@ static void send_sip_ack(
         }
     }
     char request[1024];
-    snprintf(
+    int length = snprintf(
         request,
         sizeof(request),
         "ACK %s SIP/2.0\r\n"
@@ -1886,6 +1888,7 @@ static void send_sip_ack(
         call_id,
         cseq
     );
+    if (length < 0 || length >= (int)sizeof(request)) return;
     (void)send_all(fd, request, strlen(request));
 }
 
@@ -4436,7 +4439,9 @@ static bool send_sip_setup(media_bridge_t *bridge, unsigned long generation) {
     snprintf(bridge->contact_uri, sizeof(bridge->contact_uri), "%s", contact_uri);
     bridge->invite_cseq = 21;
     bridge->sip_monitor_started = pthread_create(&bridge->sip_thread, NULL, sip_monitor_thread, bridge) == 0;
+    bridge->sip_monitor_joinable = bridge->sip_monitor_started;
     bridge->ondemand_media_started = pthread_create(&bridge->ondemand_media_thread, NULL, ondemand_media_thread, bridge) == 0;
+    bridge->ondemand_media_joinable = bridge->ondemand_media_started;
     bool monitor_started = bridge->sip_monitor_started;
     bool ondemand_media_started = bridge->ondemand_media_started;
     pthread_mutex_unlock(&bridge->mutex);
@@ -5618,7 +5623,9 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
         && !g_bridge.media_starting
         && !g_bridge.relay_started
         && !g_bridge.sip_monitor_started
+        && !g_bridge.sip_monitor_joinable
         && !g_bridge.ondemand_media_started
+        && !g_bridge.ondemand_media_joinable
         && !g_bridge.talkback_started
         && g_bridge.rtp_fd < 0
         && g_bridge.audio_rtp_fd < 0
@@ -5645,8 +5652,8 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     g_bridge.talkback_stop = true;
     send_media_stop = g_bridge.media_active || g_bridge.relay_started;
     relay_started = g_bridge.relay_started;
-    sip_monitor_started = g_bridge.sip_monitor_started;
-    ondemand_media_started = g_bridge.ondemand_media_started;
+    sip_monitor_started = g_bridge.sip_monitor_joinable;
+    ondemand_media_started = g_bridge.ondemand_media_joinable;
     talkback_started = g_bridge.talkback_started;
     sip_thread = g_bridge.sip_thread;
     ondemand_media_thread_id = g_bridge.ondemand_media_thread;
@@ -5706,6 +5713,8 @@ static void stop_media_session_locked(bool close_client, bool explicit_stop) {
     g_bridge.talkback_stop = false;
     g_bridge.sip_monitor_started = false;
     g_bridge.ondemand_media_started = false;
+    if (sip_monitor_started && !pthread_equal(sip_thread, pthread_self())) g_bridge.sip_monitor_joinable = false;
+    if (ondemand_media_started && !pthread_equal(ondemand_media_thread_id, pthread_self())) g_bridge.ondemand_media_joinable = false;
     if (g_bridge.rtp_fd >= 0) {
         close(g_bridge.rtp_fd);
         g_bridge.rtp_fd = -1;

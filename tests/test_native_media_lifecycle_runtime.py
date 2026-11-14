@@ -50,7 +50,7 @@ def test_stop_cancels_inflight_sip_setup(media_binaries):
 
 
 @pytest.mark.parametrize("case", [
-    "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client",
+    "auth", "legacy", "pending_stop", "home_stop", "home_restart", "home_concurrent", "stalled_client", "sip_join",
 ])
 def test_media_lifecycle(media_binaries, case):
     result = subprocess.run([str(media_binaries / "media_lifecycle"), case],

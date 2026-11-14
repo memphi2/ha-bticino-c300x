@@ -185,6 +185,30 @@ static void auth_test(struct c300x_config *config, bool legacy, bool pending_sto
 
 static void *stop_worker(void *arg) { c300x_media_home_call_stop(arg); return NULL; }
 
+static void sip_join_test(void) {
+    for (int i = 0; i < 20; i++) {
+        int pair[2];
+        assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+        pthread_mutex_lock(&g_bridge.mutex);
+        g_bridge.sip_fd = pair[0];
+        g_bridge.sip_monitor_started = g_bridge.sip_monitor_joinable = true;
+        assert(pthread_create(&g_bridge.sip_thread, NULL, sip_monitor_thread, &g_bridge) == 0);
+        pthread_mutex_unlock(&g_bridge.mutex);
+        shutdown(pair[1], SHUT_RDWR);
+        close(pair[1]);
+        for (;;) {
+            pthread_mutex_lock(&g_bridge.mutex);
+            bool running = g_bridge.sip_monitor_started;
+            pthread_mutex_unlock(&g_bridge.mutex);
+            if (!running) break;
+            usleep(1000);
+        }
+        stop_media_session(false, false);
+        assert(atomic_load(&joins) == i + 1);
+        assert(!g_bridge.sip_monitor_joinable);
+    }
+}
+
 static void *forward_worker(void *arg) {
     (void)arg;
     unsigned char packet[12] = {0x80, 96};
@@ -284,6 +308,8 @@ int main(int argc, char **argv) {
         serve_ffprobe(&config, video);
     } else if (strcmp(argv[1], "stalled_client") == 0) {
         stalled_client_test();
+    } else if (strcmp(argv[1], "sip_join") == 0) {
+        sip_join_test();
     } else if (strncmp(argv[1], "home_", 5) == 0) {
         home_test(&config, video, argv[1]);
     } else {

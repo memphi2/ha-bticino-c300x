@@ -52,7 +52,7 @@ def alarm_schema(dashboard_input: dict[str, Any]) -> vol.Schema:
             _optional_suggested(
                 CONF_ALARM_PAGE_ENTITY_ID,
                 dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID),
-            ): _alarm_page_entity_selector(),
+            ): _alarm_page_entity_selector(dashboard_input.get(CONF_ALARM_PAGE_ENTITY_ID)),
         }
     )
 

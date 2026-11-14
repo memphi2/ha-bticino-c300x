@@ -17,6 +17,7 @@ from .const import (
 )
 from .dashboard_entities import (
     ALARM_PAGE_ACTION_DOMAINS,
+    ALARM_PAGE_ENTITY_DOMAINS,
     DASHBOARD_ENTITY_DOMAINS,
     DASHBOARD_TILE_SIZE_AUTO,
     DASHBOARD_TILE_SIZES,
@@ -65,12 +66,19 @@ def dashboard_entity_selector() -> Any:
     )
 
 
-def alarm_page_entity_selector() -> Any:
-    """Return a single-entity selector for the alarm page quick tile."""
+def alarm_page_entity_selector(saved: Any = "") -> Any:
+    """Return a single-entity selector for the alarm page quick tile.
 
-    return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain=list(ALARM_PAGE_ACTION_DOMAINS)),
-    )
+    It offers the domains a tap can act on. A value saved earlier from another
+    domain is offered too, because the selector rejects a prefilled entity
+    outside its domains and the form could then not be saved at all.
+    """
+
+    domains = list(ALARM_PAGE_ACTION_DOMAINS)
+    saved_domain = str(saved or "").split(".", 1)[0]
+    if saved_domain in ALARM_PAGE_ENTITY_DOMAINS and saved_domain not in domains:
+        domains.append(saved_domain)
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domains))
 
 
 def _translated_choice(

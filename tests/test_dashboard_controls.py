@@ -1511,3 +1511,18 @@ def test_alarm_page_picker_offers_only_domains_a_plain_tap_can_act_on() -> None:
     assert set(ALARM_PAGE_ACTION_DOMAINS) <= set(ALARM_PAGE_ENTITY_DOMAINS)
     for domain in ("lock", "vacuum", "valve", "water_heater", "person", "device_tracker"):
         assert domain not in ALARM_PAGE_ACTION_DOMAINS
+
+
+def test_alarm_page_picker_still_accepts_a_value_saved_from_another_domain() -> None:
+    """The selector rejects a prefilled entity outside its domains, which would
+    make the whole alarm form impossible to save."""
+
+    from custom_components.bticino_c300x.config_flow_forms import (
+        alarm_page_entity_selector,
+    )
+
+    assert "lock" not in alarm_page_entity_selector().config["domain"]
+    assert "lock" not in alarm_page_entity_selector("switch.lamp").config["domain"]
+    assert "lock" in alarm_page_entity_selector("lock.front").config["domain"]
+    # A domain the picker never knew is not let in through the saved value.
+    assert "camera" not in alarm_page_entity_selector("camera.door").config["domain"]

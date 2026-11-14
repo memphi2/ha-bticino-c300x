@@ -672,6 +672,15 @@ assert.equal(Api.dashboardExpectationMatches(closedItem, closeExpectation), true
 for (const lang of ["en", "de", "fr", "it"]) {
     for (const key of ["open_valve", "stop_valve", "close_valve"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
 }
+const humidifierItem = {entity_id: "humidifier.room", domain: "c300x", available: true, state: true, kind: "switch",
+    details: {type: "humidifier", value: "48", unit: "%"}, controls: [
+    {command: "toggle", kind: "button"}, {command: "target_humidity", kind: "number", value: 55, min: 30, max: 80, step: 1, unit: "%"}]};
+assert.deepEqual(Array.from(Api.dashboardVisibleControls(humidifierItem, ""), c => c.command), ["target_humidity"],
+    "the power switch of a humidifier lives in the summary, not in the control list");
+for (const lang of ["en", "de", "fr", "it"]) {
+    for (const key of ["mode", "target_humidity", "operation_mode"]) assert.notEqual(I18n.text(lang, key), key, key + " in " + lang);
+}
+assert.equal(I18n.text("en", "humidity"), "Humidity", "the weather label is not the target label");
 console.log("Media player controls passed");
 
 

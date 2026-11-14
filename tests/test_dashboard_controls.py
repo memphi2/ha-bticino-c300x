@@ -1323,3 +1323,140 @@ def test_a_valve_is_a_tile_that_reads_its_position_or_its_state():
     without = tile(None)
     assert without["details"]["value"] == "Open"
     assert "position" not in without["details"]
+
+
+def test_a_humidifier_offers_power_target_humidity_and_modes():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("humidifier.room", state(
+            "on", supported_features=1, humidity=55, min_humidity=30, max_humidity=80,
+            mode="eco", available_modes=["eco", "sleep", ""],
+        ))
+    }
+
+    assert list(controls) == ["toggle", "target_humidity", "mode"]
+    assert controls["target_humidity"] == {
+        "command": "target_humidity", "kind": "number", "value": 55,
+        "min": 30.0, "max": 80.0, "step": 1.0, "unit": "%",
+    }
+    assert controls["mode"]["options"] == ["eco", "sleep"]
+    # Without the MODES feature there is no mode picker; the range defaults to 0-100.
+    plain = {
+        control["command"]: control
+        for control in entity_controls("humidifier.room", state("off", humidity=40))
+    }
+    assert list(plain) == ["toggle", "target_humidity"]
+    assert (plain["target_humidity"]["min"], plain["target_humidity"]["max"]) == (0.0, 100.0)
+
+
+@pytest.mark.parametrize(
+    ("command", "option", "service", "data"),
+    [
+        ("toggle", None, "toggle", {}),
+        ("target_humidity", "60", "set_humidity", {"humidity": 60}),
+        ("mode", "sleep", "set_mode", {"mode": "sleep"}),
+    ],
+)
+def test_a_humidifier_sends_its_explicit_services(command, option, service, data):
+    hass = hass_for(state("on", supported_features=1, humidity=55, mode="eco", available_modes=["eco", "sleep"]))
+
+    asyncio.run(async_execute_control(hass, "humidifier.room", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "humidifier", service, {"entity_id": "humidifier.room", **data}, blocking=True,
+    )
+
+
+def test_a_humidifier_rejects_a_target_out_of_its_range_and_an_unknown_mode():
+    hass = hass_for(state("on", supported_features=1, humidity=55, min_humidity=30, max_humidity=80,
+                          mode="eco", available_modes=["eco"]))
+
+    for command, option, message in (
+        ("target_humidity", "90", "invalid_dashboard_value"),
+        ("target_humidity", "10", "invalid_dashboard_value"),
+        ("mode", "turbo", "invalid_dashboard_option"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            asyncio.run(async_execute_control(hass, "humidifier.room", command, option))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_humidifier_is_a_switch_tile_that_reads_the_room_humidity():
+    hass = hass_for(state("on", supported_features=1, humidity=55, current_humidity=48, mode="eco", available_modes=["eco"]))
+    hass.config = SimpleNamespace(language="en")
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["humidifier.room"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "switch"
+    assert item["state"] is True
+    assert item["glyph"] == "☔"
+    assert item["details"]["type"] == "humidifier"
+    assert (item["details"]["value"], item["details"]["unit"]) == ("48", "%")
+    asyncio.run(async_execute_dashboard_action(hass, entry, "humidifier.room"))
+    hass.services.async_call.assert_awaited_once_with(
+        "humidifier", "toggle", {"entity_id": "humidifier.room"}, blocking=True,
+    )
+
+
+def test_a_water_heater_offers_target_temperature_and_operation_mode():
+    controls = {
+        control["command"]: control
+        for control in entity_controls("water_heater.boiler", state(
+            "eco", supported_features=1 | 2, temperature=55, min_temp=35, max_temp=65,
+            target_temp_step=1, operation_mode="eco", operation_list=["off", "eco", "electric"],
+        ), "C")
+    }
+
+    assert list(controls) == ["temperature", "operation_mode"]
+    assert controls["temperature"] == {
+        "command": "temperature", "kind": "number", "value": 55,
+        "min": 35.0, "max": 65.0, "step": 1.0, "unit": "C",
+    }
+    assert controls["operation_mode"]["value"] == "eco"
+    assert controls["operation_mode"]["options"] == ["off", "eco", "electric"]
+    assert entity_controls("water_heater.boiler", state("eco", supported_features=0)) == []
+
+
+@pytest.mark.parametrize(
+    ("command", "option", "data"),
+    [("temperature", "60", {"temperature": 60.0}), ("operation_mode", "electric", {"operation_mode": "electric"})],
+)
+def test_a_water_heater_sends_its_explicit_services(command, option, data):
+    hass = hass_for(state(
+        "eco", supported_features=1 | 2, temperature=55, min_temp=35, max_temp=65, target_temp_step=1,
+        operation_mode="eco", operation_list=["off", "eco", "electric"],
+    ))
+    service = "set_temperature" if command == "temperature" else "set_operation_mode"
+
+    asyncio.run(async_execute_control(hass, "water_heater.boiler", command, option))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "water_heater", service, {"entity_id": "water_heater.boiler", **data}, blocking=True,
+    )
+    hass.services.async_call.reset_mock()
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "water_heater.boiler", "temperature", "99"))
+    with pytest.raises(ValueError, match="invalid_dashboard_option"):
+        asyncio.run(async_execute_control(hass, "water_heater.boiler", "operation_mode", "boom"))
+    hass.services.async_call.assert_not_awaited()
+
+
+def test_a_water_heater_is_a_tile_that_reads_the_water_temperature():
+    hass = hass_for(state("eco", supported_features=1 | 2, current_temperature=48.6, temperature=55,
+                          min_temp=35, max_temp=65, operation_mode="eco", operation_list=["eco"]))
+    hass.config = SimpleNamespace(language="en", units=SimpleNamespace(temperature_unit="C"))
+    entry = SimpleNamespace(
+        data={}, options={"device_ui_enabled": True, "dashboard_entities": ["water_heater.boiler"]}, entry_id="entry",
+    )
+
+    payload = asyncio.run(async_dashboard_payload(hass, entry))
+    item = next(item for page in payload["data"]["pages"] for item in page["items"])
+
+    assert item["kind"] == "entity"
+    assert item["glyph"] == "♨"
+    assert item["details"]["type"] == "water_heater"
+    assert (item["details"]["value"], item["details"]["unit"]) == ("48.6", "C")

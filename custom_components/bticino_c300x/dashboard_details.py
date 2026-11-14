@@ -8,7 +8,7 @@ from .dashboard_controls import finite_number
 
 DETAIL_DOMAINS = frozenset({
     "light", "cover", "climate", "fan", "sensor", "binary_sensor", "media_player",
-    "lock", "vacuum", "valve",
+    "lock", "vacuum", "valve", "humidifier", "water_heater",
 })
 _VACUUM_ACTIVITIES = frozenset({"cleaning", "docked", "idle", "paused", "returning", "error"})
 _LOCK_ACTIVITIES = frozenset({
@@ -80,6 +80,16 @@ def entity_details(
         details["activity"] = state.state if state.state in _LOCK_ACTIVITIES else ""
     elif domain == "vacuum":
         details["activity"] = state.state if state.state in _VACUUM_ACTIVITIES else ""
+    elif domain == "humidifier":
+        # The reading is the humidity in the room; the target is a control.
+        humidity = _percentage(attrs.get("current_humidity"))
+        if humidity is not None:
+            details.update(value=_display_number(humidity), unit="%", label="humidity")
+    elif domain == "water_heater":
+        details.update(
+            value=_display_number(attrs.get("current_temperature")),
+            unit=temperature_unit, label="current_temperature",
+        )
     elif domain == "valve":
         position = _percentage(attrs.get("current_position"))
         activity = state.state if state.state in {"opening", "closing", "open", "closed"} else ""

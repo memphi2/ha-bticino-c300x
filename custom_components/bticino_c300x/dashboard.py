@@ -478,6 +478,7 @@ def _dashboard_item_for_state(
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
     if domain in {
         "light", "cover", "climate", "fan", "media_player", "lock", "vacuum", "valve",
+        "humidifier", "water_heater",
         "number", "input_number", "select", "input_select",
     }:
         item["controls"] = entity_controls(entity_id, state, unit)
@@ -485,7 +486,7 @@ def _dashboard_item_for_state(
         if domain == "climate" and state is not None:
             item["current_temperature"] = state.attributes.get("current_temperature")
             item["temperature_unit"] = unit
-        if domain in {"cover", "climate", "lock", "vacuum", "valve"}:
+        if domain in {"cover", "climate", "lock", "vacuum", "valve", "water_heater"}:
             item["_kind"] = "entity"
             if domain == "lock":
                 # Locked is good, unlocked and jammed are not.

@@ -218,6 +218,12 @@ these settings existed therefore looks the same until a size is chosen.
   none, and open a detail page with open, stop and close in one row and, for a
   valve that can, a position slider. The display sends the explicit valve
   service, and a position only from 0 to 100.
+- Humidifiers are switch tiles that read the humidity in the room. Their detail
+  page has the target humidity, within the range the humidifier reports, and the
+  modes of a humidifier that has them.
+- Water heaters are tiles that read the water temperature. Their detail page has
+  the target temperature and the operation mode, each where the heater reports
+  the feature.
 - Automations and sirens are switch tiles. Persons and device trackers are
   read-only tiles that say home, away or the name of the zone.
 - Sensor and binary-sensor tiles use larger readings and read-only details.

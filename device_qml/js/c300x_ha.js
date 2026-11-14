@@ -1026,7 +1026,7 @@ function dashboardVisibleControls(item, section) {
     var result = []
     for (var i = 0; i < controls.length; i++) {
         var control = controls[i]
-        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player") && control.command === "toggle") continue
+        if (item && item.details && (item.details.type === "light" || item.details.type === "fan" || item.details.type === "media_player" || item.details.type === "humidifier") && control.command === "toggle") continue
         if (sections.length > 0 && item.details.type === "light") {
             if (section === "color_mode" && control.command === "color_temp_kelvin") continue
             if (section !== "color_mode" && control.command === "color") continue

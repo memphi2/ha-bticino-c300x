@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.cover.const import CoverEntityFeature
 from homeassistant.components.fan import const as fan_const
+from homeassistant.components.humidifier.const import HumidifierEntityFeature
 from homeassistant.components.light.const import (
     COLOR_MODES_BRIGHTNESS,
     COLOR_MODES_COLOR,
@@ -18,6 +19,7 @@ from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.components.vacuum.const import VacuumEntityFeature
 from homeassistant.components.valve.const import ValveEntityFeature
+from homeassistant.components.water_heater.const import WaterHeaterEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
@@ -384,6 +386,25 @@ def entity_controls(entity_id: str, state: Any, unit: str = "") -> list[dict[str
             controls.append({"command": "unlock", "kind": "button"})
         if features & LockEntityFeature.OPEN:
             controls.append({"command": "open", "kind": "button"})
+    elif domain == "humidifier":
+        controls.append({"command": "toggle", "kind": "button"})
+        controls.append(_number(
+            "target_humidity", attrs.get("humidity"),
+            attrs.get("min_humidity", 0), attrs.get("max_humidity", 100), 1, "%",
+        ))
+        if features & HumidifierEntityFeature.MODES:
+            controls.append(_choice("mode", attrs.get("mode"), attrs.get("available_modes")))
+    elif domain == "water_heater":
+        if features & WaterHeaterEntityFeature.TARGET_TEMPERATURE:
+            controls.append(_number(
+                "temperature", attrs.get("temperature"),
+                attrs.get("min_temp"), attrs.get("max_temp"),
+                attrs.get("target_temp_step", 0.5), unit,
+            ))
+        if features & WaterHeaterEntityFeature.OPERATION_MODE:
+            controls.append(_choice(
+                "operation_mode", attrs.get("operation_mode"), attrs.get("operation_list"),
+            ))
     elif domain == "valve":
         for valve_command, valve_feature in (
             ("open_valve", ValveEntityFeature.OPEN),
@@ -541,6 +562,17 @@ async def async_execute_control(
             data["shuffle"] = value
     elif domain == "lock":
         service = command
+    elif domain == "humidifier":
+        service = {
+            "toggle": "toggle", "target_humidity": "set_humidity", "mode": "set_mode",
+        }[command]
+        if command == "target_humidity":
+            data["humidity"] = int(value)
+        elif command == "mode":
+            data["mode"] = value
+    elif domain == "water_heater":
+        service = "set_temperature" if command == "temperature" else "set_operation_mode"
+        data[command] = value
     elif domain == "valve":
         service = "set_valve_position" if command == "position" else command
         if command == "position":

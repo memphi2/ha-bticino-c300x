@@ -811,7 +811,7 @@ Page {
             BasicButton {
                 id: summaryToggle
                 property bool hasToggle: Api.dashboardControlByCommand(selectedItem, "toggle") ? true : false
-                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player")
+                visible: hasToggle && (entitySummary.summary.type === "light" || entitySummary.summary.type === "fan" || entitySummary.summary.type === "media_player" || entitySummary.summary.type === "humidifier")
                 anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: 22
                 width: 86; height: 36
                 enabled: dashboardOnline && selectedItem && selectedItem.available !== false && pendingEntity.length === 0

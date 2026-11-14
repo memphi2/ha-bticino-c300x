@@ -40,7 +40,9 @@ _DASHBOARD_SWITCH_DOMAINS = {"fan", "input_boolean", "light", "switch"}
 _DASHBOARD_SWITCH_SERVICES = {"toggle"}
 
 
-_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {"automation", "fan", "input_boolean", "light", "siren", "switch"}
+_DASHBOARD_TOGGLE_ENTITY_DOMAINS = {
+    "automation", "fan", "humidifier", "input_boolean", "light", "siren", "switch",
+}
 
 
 _DASHBOARD_BUTTON_ENTITY_DOMAINS = {"button", "input_button", "scene", "script"}

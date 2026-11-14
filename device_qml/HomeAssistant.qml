@@ -74,7 +74,7 @@ Page {
     property bool notificationsOpen: false
 
     function notificationAction(item, actionId) {
-        var command = {revision: item.revision, action_id: actionId}
+        var command = {revision: item.revision, action_id: actionId === undefined ? null : actionId}
         Api.dashboardControl({entity_id: "notification." + item.id}, {command: ""}, JSON.stringify(command), status, page)
     }
 

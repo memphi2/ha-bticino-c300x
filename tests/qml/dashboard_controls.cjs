@@ -105,9 +105,10 @@ queue.shift().success({...payload("five"), notifications: [
 ]});
 assert.equal(p.notifications.length, 1);
 p.notificationsOpen = true;
-p.notificationAction(p.notifications[0], null);
+p.notificationAction(p.notifications[0], undefined);
 assert.match(queue[0].url, /entities=notification.calendar&option=/);
 assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).revision, 12);
+assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).action_id, null);
 p.notificationAction(p.notifications[0], null);
 assert.equal(queue.length, 1, "notification actions are single-flight too");
 queue.shift().success({ok: true});

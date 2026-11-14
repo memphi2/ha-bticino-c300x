@@ -75,13 +75,12 @@
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.\n\nLorsque le patch display est applique, l'etape suivante configure les pages de l'ecran et leurs entites.",
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
           "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
@@ -144,13 +143,12 @@
       },
       "reconfigure_dashboard": {
         "title": "Reconfigurer le dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.\n\nLorsque le patch display est applique, l'etape suivante configure les pages de l'ecran et leurs entites.",
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
           "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
@@ -162,138 +160,218 @@
       },
       "user_dashboard_pages": {
         "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran. Chaque page est une section :\n\n- **Nom** : affiche comme titre de la page sur l'ecran.\n- **Position** : ordre des pages, 1 est la premiere. Laissee vide, le numero de la section s'applique.\n- **Entites** : affichees comme tuiles dans l'ordre choisi ; faites-les glisser pour les reordonner. Une entite ne peut figurer que sur une page.\n\nUne section sans nom ni entites reste inutilisee.",
         "sections": {
           "page_1": {
             "name": "Page d'etat",
+            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte meteo, puis les entites de cette page. Son titre sur l'ecran est Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran. Chaque page est une section :\n\n- **Nom** : affiche comme titre de la page sur l'ecran.\n- **Position** : ordre des pages, 1 est la premiere. Laissee vide, le numero de la section s'applique.\n- **Entites** : affichees comme tuiles dans l'ordre choisi ; faites-les glisser pour les reordonner. Une entite ne peut figurer que sur une page.\n\nUne section sans nom ni entites reste inutilisee.",
         "sections": {
           "page_1": {
             "name": "Page d'etat",
+            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte meteo, puis les entites de cette page. Son titre sur l'ecran est Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           }
         }
@@ -325,7 +403,8 @@
       "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
       "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
-      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
+      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran.",
+      "dashboard_page_name_missing": "Une page avec des entites a besoin d'un nom ; l'ecran l'affiche comme titre de la page."
     }
   },
   "options": {
@@ -382,13 +461,12 @@
       },
       "dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.",
+        "description": "Configurez le dashboard optionnel de l'ecran C300X et le patch display.\n\nEtat actuel du patch display de l'appareil : {qml_patch_status}.\n\nL'application ou la restauration du patch display ecrit des fichiers display sur l'appareil, recharge l'interface et peut prendre jusqu'a environ 60 secondes. L'etat ne change qu'apres confirmation du resultat par l'agent.\n\nLorsque le patch display est applique, l'etape suivante configure les pages de l'ecran et leurs entites.",
         "data": {
           "device_ui_enabled": "Appliquer le patch display",
           "alarm_entity_id": "Entite Alarmo",
           "alarm_page_entity_id": "Entite de la page alarme",
           "weather_entity_id": "Entite meteo",
-          "dashboard_entities": "Entites du tableau de bord",
           "dashboard_dynamic_homepage": "Utiliser les boutons dynamiques sur l'accueil",
           "actions_json": "JSON de la liste autorisee des actions dashboard",
           "dashboard_prevent_return": "Garder la page dashboard ouverte apres les actions"
@@ -400,69 +478,109 @@
       },
       "dashboard_pages": {
         "title": "Pages de l'ecran",
-        "description": "Configurez jusqu'a 8 pages pour l'ecran natif. La page d'etat porte les indicateurs HA, alarme et heure ainsi que la carte meteo ; donnez un nom a chaque autre page. Les pages s'affichent par position, la plus petite d'abord. Choisissez les entites d'une page dans l'ordre ou elles doivent apparaitre ; faites-les glisser pour le changer. Une entite ne peut figurer que sur une page.",
+        "description": "Configurez jusqu'a 8 pages pour l'ecran. Chaque page est une section :\n\n- **Nom** : affiche comme titre de la page sur l'ecran.\n- **Position** : ordre des pages, 1 est la premiere. Laissee vide, le numero de la section s'applique.\n- **Entites** : affichees comme tuiles dans l'ordre choisi ; faites-les glisser pour les reordonner. Une entite ne peut figurer que sur une page.\n\nUne section sans nom ni entites reste inutilisee.",
         "sections": {
           "page_1": {
             "name": "Page d'etat",
+            "description": "Affiche en haut les indicateurs HA, alarme et heure et la carte meteo, puis les entites de cette page. Son titre sur l'ecran est Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Nom",
               "position": "Position",
               "entities": "Entites"
+            },
+            "data_description": {
+              "name": "Titre de cette page sur l'ecran",
+              "position": "1 = premiere page",
+              "entities": "Ordre des tuiles ; faites glisser pour reordonner"
             }
           }
         }
@@ -483,7 +601,8 @@
       "dashboard_page_name_duplicate": "Deux pages ont le meme nom ; donnez a chaque page le sien.",
       "dashboard_entity_on_several_pages": "Une entite est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrees de l'ecran ne sont pas valides ; configurez les pages a nouveau.",
-      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran."
+      "invalid_dashboard_entities": "Une entite ne peut pas etre affichee sur l'ecran.",
+      "dashboard_page_name_missing": "Une page avec des entites a besoin d'un nom ; l'ecran l'affiche comme titre de la page."
     }
   },
   "entity": {

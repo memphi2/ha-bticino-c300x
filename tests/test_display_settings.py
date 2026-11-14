@@ -20,6 +20,8 @@ from custom_components.bticino_c300x.config_flow_dashboard import (
 )
 from custom_components.bticino_c300x.config_flow_dashboard_pages import (
     dashboard_page_layout,
+    dashboard_pages_input,
+    dashboard_pages_placeholders,
 )
 from custom_components.bticino_c300x.dashboard import (
     async_dashboard_payload,
@@ -189,6 +191,9 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
 
     form = asyncio.run(dashboard_step({"device_ui_enabled": True}))
     assert form["step_id"].endswith("dashboard_pages")
+    # The section of a named page carries its name in its title.
+    assert form["description_placeholders"]["page_2_name"] == ": Study"
+    assert form["description_placeholders"]["page_3_name"] == ""
     form = asyncio.run(pages_step(post_pages_like_home_assistant(form["data_schema"])))
     posted = post_like_home_assistant(form["data_schema"], {"1. Room - Custom name": ""})
     result = asyncio.run(display_step(posted))
@@ -196,8 +201,8 @@ def test_flows_store_emptied_text_fields_empty(monkeypatch, flow_kind):
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["dashboard_entity_display_overrides"] == {"light.room": {"page": "Study"}}
     assert result["data"]["dashboard_pages"] == [
-        {"name": "C300X", "order": 0},
-        {"name": "Study", "order": 10},
+        {"name": "C300X", "order": 1},
+        {"name": "Study", "order": 2},
     ]
 
 
@@ -210,18 +215,18 @@ def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
     form = asyncio.run(dashboard_step(dict(dashboard)))
     assert form["step_id"].endswith("dashboard_pages")
     posted = post_pages_like_home_assistant(form["data_schema"], {
-        "page_1": {"position": 20, "entities": ["sensor.temp"]},
-        "page_2": {"name": "  Living\troom ", "position": 30, "entities": ["light.two", "light.one"]},
-        "page_4": {"name": "Garden", "position": 5, "entities": ["cover.shade"]},
+        "page_1": {"position": 2, "entities": ["sensor.temp"]},
+        "page_2": {"name": "  Living\troom ", "position": 3, "entities": ["light.two", "light.one"]},
+        "page_4": {"name": "Garden", "position": 1, "entities": ["cover.shade"]},
     })
     form = asyncio.run(pages_step(posted))
     result = asyncio.run(display_step(post_like_home_assistant(form["data_schema"])))
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["dashboard_pages"] == [
-        {"name": "Garden", "order": 5},
-        {"name": "C300X", "order": 20},
-        {"name": "Living room", "order": 30},
+        {"name": "Garden", "order": 1},
+        {"name": "C300X", "order": 2},
+        {"name": "Living room", "order": 3},
     ]
     assert result["data"]["dashboard_entities"] == [
         "cover.shade", "sensor.temp", "light.two", "light.one",
@@ -248,6 +253,12 @@ def test_the_pages_form_places_and_orders_the_pages(monkeypatch, flow_kind):
             {"page_2": "dashboard_entity_on_several_pages"},
         ),
         ({"page_2": {"entities": ["camera.door"]}}, {"page_2": "invalid_dashboard_entities"}),
+        # A page with tiles is shown with its name as the heading.
+        ({"page_2": {"entities": ["light.one"]}}, {"page_2": "dashboard_page_name_missing"}),
+        (
+            {"page_2": {"name": "Room"}, "page_3": {"name": " room "}},
+            {"page_3": "dashboard_page_name_duplicate"},
+        ),
     ],
 )
 def test_the_pages_form_rejects_what_the_display_cannot_show(
@@ -286,8 +297,8 @@ def test_an_emptied_page_position_returns_to_the_place_of_its_section(monkeypatc
 
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["dashboard_pages"] == [
-        {"name": "C300X", "order": 0},
-        {"name": "Room", "order": 20},
+        {"name": "C300X", "order": 1},
+        {"name": "Room", "order": 2},
     ]
 
 
@@ -316,7 +327,7 @@ def test_emptying_the_entities_of_every_page_stores_none(monkeypatch, flow_kind)
     assert result["type"] == "finished", result.get("errors")
     assert result["data"]["dashboard_entities"] == []
     assert result["data"]["dashboard_entity_display_overrides"] == {}
-    assert result["data"]["dashboard_pages"] == [{"name": "C300X", "order": 0}]
+    assert result["data"]["dashboard_pages"] == [{"name": "C300X", "order": 1}]
 
 
 @pytest.mark.parametrize("flow_kind", ["options", "reconfigure"])
@@ -767,9 +778,9 @@ def test_legacy_entries_open_the_pages_form_with_their_pages():
         },
     }
     assert dashboard_page_layout(settings) == [
-        {"name": "C300X", "order": 0, "entities": ["light.d"]},
-        {"name": "", "order": 10, "entities": ["light.a"]},
-        {"name": "Room", "order": 20, "entities": ["light.c", "light.b"]},
+        {"name": "C300X", "order": 1, "entities": ["light.d"]},
+        {"name": "", "order": 2, "entities": ["light.a"]},
+        {"name": "Room", "order": 3, "entities": ["light.c", "light.b"]},
     ]
 
     many = {
@@ -908,8 +919,49 @@ def test_the_pages_form_reaches_the_frontend_as_sections():
     assert [(field["name"], field["type"]) for field in fields] == [
         (f"page_{slot}", "expandable") for slot in range(1, 9)
     ]
-    # Used pages are open, the free ones collapsed.
-    assert [field["expanded"] for field in fields] == [True, True] + [False] * 6
+    # Used pages are open, and so is the first free one to add a page.
+    assert [field["expanded"] for field in fields] == [True, True, True] + [False] * 5
     assert [item["name"] for item in fields[0]["schema"]] == ["position", "entities"]
     assert [item["name"] for item in fields[1]["schema"]] == ["name", "position", "entities"]
     assert fields[1]["schema"][0]["description"] == {"suggested_value": "Room"}
+
+
+@pytest.mark.parametrize(
+    ("status_position", "page_position", "first"),
+    [
+        # Out of range: 8 and 1.
+        (20, 0, "Room"),
+        # Rounded: 3 and 2.
+        (2.6, 2.4, "Room"),
+        # Invalid or empty: the numbers of the sections, 1 and 2.
+        (float("nan"), None, "C300X"),
+        # The same position keeps the order of the sections.
+        (2, 2, "C300X"),
+    ],
+)
+def test_page_positions_are_whole_numbers_from_one_to_eight(status_position, page_position, first):
+    result, errors = dashboard_pages_input({}, {
+        "page_1": {"position": status_position},
+        "page_2": {"name": "Room", "position": page_position, "entities": ["light.one"]},
+    })
+
+    assert errors == {}
+    assert result["dashboard_pages"][0]["name"] == first
+    # Stored positions count the pages in display order.
+    assert [page["order"] for page in result["dashboard_pages"]] == [1, 2]
+
+
+def test_section_titles_carry_the_page_names():
+    settings = {
+        "dashboard_entities": ["light.a"],
+        "dashboard_entity_display_overrides": {"light.a": {"page": "Room"}},
+    }
+
+    assert dashboard_pages_placeholders(settings) == {
+        "page_2_name": ": Room",
+        **{f"page_{slot}_name": "" for slot in range(3, 9)},
+    }
+    # Shown again after an error, the titles follow the names that were sent.
+    sent = {"page_2": {"name": " Hall "}, "page_3": {"entities": ["light.a"]}}
+    assert dashboard_pages_placeholders(settings, sent)["page_2_name"] == ": Hall"
+    assert dashboard_pages_placeholders(settings, sent)["page_3_name"] == ""

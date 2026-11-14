@@ -75,13 +75,12 @@
       },
       "user_dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.",
+        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nCon il patch display applicato, il passo successivo imposta le pagine del display e le loro entita.",
         "data": {
           "device_ui_enabled": "Applica patch display C300X",
           "alarm_entity_id": "Entità Alarmo",
           "alarm_page_entity_id": "Entità pagina allarme",
           "weather_entity_id": "Entità meteo",
-          "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
@@ -144,13 +143,12 @@
       },
       "reconfigure_dashboard": {
         "title": "Riconfigura dashboard display C300X",
-        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.",
+        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nCon il patch display applicato, il passo successivo imposta le pagine del display e le loro entita.",
         "data": {
           "device_ui_enabled": "Applica patch display C300X",
           "alarm_entity_id": "Entità Alarmo",
           "alarm_page_entity_id": "Entità pagina allarme",
           "weather_entity_id": "Entità meteo",
-          "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
@@ -162,138 +160,218 @@
       },
       "user_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina e una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 e la prima. Se vuota, vale il numero della sezione.\n- **Entita**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entita puo stare su una sola pagina.\n\nUna sezione senza nome ne entita resta inutilizzata.",
         "sections": {
           "page_1": {
             "name": "Pagina di stato",
+            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entita di questa pagina. Il suo titolo sul display e Home Assistant.",
             "data": {
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_2": {
-            "name": "Pagina 2",
+            "name": "Pagina 2{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_3": {
-            "name": "Pagina 3",
+            "name": "Pagina 3{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_4": {
-            "name": "Pagina 4",
+            "name": "Pagina 4{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_5": {
-            "name": "Pagina 5",
+            "name": "Pagina 5{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_6": {
-            "name": "Pagina 6",
+            "name": "Pagina 6{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_7": {
-            "name": "Pagina 7",
+            "name": "Pagina 7{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_8": {
-            "name": "Pagina 8",
+            "name": "Pagina 8{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina e una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 e la prima. Se vuota, vale il numero della sezione.\n- **Entita**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entita puo stare su una sola pagina.\n\nUna sezione senza nome ne entita resta inutilizzata.",
         "sections": {
           "page_1": {
             "name": "Pagina di stato",
+            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entita di questa pagina. Il suo titolo sul display e Home Assistant.",
             "data": {
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_2": {
-            "name": "Pagina 2",
+            "name": "Pagina 2{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_3": {
-            "name": "Pagina 3",
+            "name": "Pagina 3{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_4": {
-            "name": "Pagina 4",
+            "name": "Pagina 4{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_5": {
-            "name": "Pagina 5",
+            "name": "Pagina 5{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_6": {
-            "name": "Pagina 6",
+            "name": "Pagina 6{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_7": {
-            "name": "Pagina 7",
+            "name": "Pagina 7{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_8": {
-            "name": "Pagina 8",
+            "name": "Pagina 8{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           }
         }
@@ -325,7 +403,8 @@
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
       "dashboard_entity_on_several_pages": "Un'entita e scelta su piu pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
-      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display."
+      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display.",
+      "dashboard_page_name_missing": "Una pagina con entita ha bisogno di un nome; il display lo mostra come titolo della pagina."
     }
   },
   "options": {
@@ -382,13 +461,12 @@
       },
       "dashboard": {
         "title": "Dashboard display C300X",
-        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.",
+        "description": "Configura la dashboard opzionale del display C300X e il patch display.\n\nStato attuale patch display del dispositivo: {qml_patch_status}.\n\nApplicare o ripristinare il patch display scrive file display sul dispositivo, ricarica l'interfaccia del dispositivo e puo richiedere fino a circa 60 secondi. Lo stato cambia solo dopo la conferma dello stato risultante da parte dell'agent.\n\nCon il patch display applicato, il passo successivo imposta le pagine del display e le loro entita.",
         "data": {
           "device_ui_enabled": "Applica patch display C300X",
           "alarm_entity_id": "Entità Alarmo",
           "alarm_page_entity_id": "Entità pagina allarme",
           "weather_entity_id": "Entità meteo",
-          "dashboard_entities": "Entità dashboard",
           "dashboard_dynamic_homepage": "Usa pulsanti dinamici nella home",
           "actions_json": "JSON allowlist azioni dashboard",
           "dashboard_prevent_return": "Mantieni aperta la pagina dashboard dopo le azioni"
@@ -400,69 +478,109 @@
       },
       "dashboard_pages": {
         "title": "Pagine del display",
-        "description": "Imposta fino a 8 pagine per il display nativo. La pagina di stato mostra gli indicatori HA, allarme e ora e la scheda meteo; dai un nome a ogni altra pagina. Le pagine compaiono per posizione, la piu bassa per prima. Scegli le entita di una pagina nell'ordine in cui devono apparire; trascinale per cambiarlo. Un'entita puo stare su una sola pagina.",
+        "description": "Imposta fino a 8 pagine per il display. Ogni pagina e una sezione:\n\n- **Nome**: appare sul display come titolo della pagina.\n- **Posizione**: ordine delle pagine, 1 e la prima. Se vuota, vale il numero della sezione.\n- **Entita**: appaiono come riquadri nell'ordine scelto; trascinale per riordinarle. Un'entita puo stare su una sola pagina.\n\nUna sezione senza nome ne entita resta inutilizzata.",
         "sections": {
           "page_1": {
             "name": "Pagina di stato",
+            "description": "Mostra in alto gli indicatori HA, allarme e ora e la scheda meteo, poi le entita di questa pagina. Il suo titolo sul display e Home Assistant.",
             "data": {
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_2": {
-            "name": "Pagina 2",
+            "name": "Pagina 2{page_2_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_3": {
-            "name": "Pagina 3",
+            "name": "Pagina 3{page_3_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_4": {
-            "name": "Pagina 4",
+            "name": "Pagina 4{page_4_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_5": {
-            "name": "Pagina 5",
+            "name": "Pagina 5{page_5_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_6": {
-            "name": "Pagina 6",
+            "name": "Pagina 6{page_6_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_7": {
-            "name": "Pagina 7",
+            "name": "Pagina 7{page_7_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           },
           "page_8": {
-            "name": "Pagina 8",
+            "name": "Pagina 8{page_8_name}",
             "data": {
               "name": "Nome",
               "position": "Posizione",
               "entities": "Entita"
+            },
+            "data_description": {
+              "name": "Titolo di questa pagina sul display",
+              "position": "1 = prima pagina",
+              "entities": "Ordine dei riquadri; trascina per riordinare"
             }
           }
         }
@@ -483,7 +601,8 @@
       "dashboard_page_name_duplicate": "Due pagine hanno lo stesso nome; dai a ogni pagina il suo.",
       "dashboard_entity_on_several_pages": "Un'entita e scelta su piu pagine; lasciala su una sola pagina.",
       "invalid_dashboard_pages": "Le pagine salvate del display non sono valide; imposta di nuovo le pagine.",
-      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display."
+      "invalid_dashboard_entities": "Un'entita non puo essere mostrata sul display.",
+      "dashboard_page_name_missing": "Una pagina con entita ha bisogno di un nome; il display lo mostra come titolo della pagina."
     }
   },
   "entity": {

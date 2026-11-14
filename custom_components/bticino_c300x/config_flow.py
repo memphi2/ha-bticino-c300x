@@ -78,6 +78,9 @@ from .config_flow_dashboard_pages import (
     dashboard_pages_input as _dashboard_pages_input,
 )
 from .config_flow_dashboard_pages import (
+    dashboard_pages_placeholders as _dashboard_pages_placeholders,
+)
+from .config_flow_dashboard_pages import (
     dashboard_pages_schema as _dashboard_pages_schema,
 )
 from .config_flow_features import (
@@ -765,6 +768,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user_dashboard_pages",
             data_schema=schema,
             errors=errors,
+            description_placeholders=_dashboard_pages_placeholders(
+                self._setup_dashboard_input, user_input
+            ),
         )
 
     async def async_step_user_dashboard_entity_display(
@@ -1172,6 +1178,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reconfigure_dashboard_pages",
             data_schema=schema,
             errors=errors,
+            description_placeholders=_dashboard_pages_placeholders(
+                self._reconfigure_dashboard_input, user_input
+            ),
         )
 
     async def async_step_reconfigure_dashboard_entity_display(
@@ -1595,6 +1604,9 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             step_id="dashboard_pages",
             data_schema=schema,
             errors=errors,
+            description_placeholders=_dashboard_pages_placeholders(
+                self._dashboard_options, user_input
+            ),
         )
 
     async def async_step_dashboard_entity_display(

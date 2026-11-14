@@ -75,13 +75,12 @@
       },
       "user_dashboard": {
         "title": "C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
           "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
-          "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
@@ -144,13 +143,12 @@
       },
       "reconfigure_dashboard": {
         "title": "Reconfigure C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
           "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
-          "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
@@ -162,138 +160,218 @@
       },
       "user_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused.",
         "sections": {
           "page_1": {
             "name": "Status page",
+            "description": "Shows the HA, alarm and time badges and the weather card at the top, then this page's entities. Its heading on the display is Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused.",
         "sections": {
           "page_1": {
             "name": "Status page",
+            "description": "Shows the HA, alarm and time badges and the weather card at the top, then this page's entities. Its heading on the display is Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           }
         }
@@ -325,7 +403,8 @@
       "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
-      "invalid_dashboard_entities": "An entity cannot be shown on the display."
+      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
+      "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading."
     }
   },
   "options": {
@@ -382,13 +461,12 @@
       },
       "dashboard": {
         "title": "C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.",
+        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
         "data": {
           "device_ui_enabled": "Apply Display patch",
           "alarm_entity_id": "Alarmo entity",
           "alarm_page_entity_id": "Alarm page entity",
           "weather_entity_id": "Weather entity",
-          "dashboard_entities": "Dashboard entities",
           "dashboard_dynamic_homepage": "Use dynamic home page buttons",
           "actions_json": "Dashboard action allowlist JSON",
           "dashboard_prevent_return": "Keep dashboard page open after actions"
@@ -400,69 +478,109 @@
       },
       "dashboard_pages": {
         "title": "Display pages",
-        "description": "Set up to 8 pages for the native display. The status page carries the HA, alarm and time badges and the weather card; give each other page a name. Pages are shown by position, lowest first. Pick the entities of a page in the order they should appear; drag them to change it. An entity can be on one page only.",
+        "description": "Set up to 8 pages for the display. Each page is one section:\n\n- **Name**: shown as the page heading on the display.\n- **Position**: order of the pages, 1 is the first. Left empty, the section's number is used.\n- **Entities**: shown as tiles in the order they are picked; drag them to reorder. An entity can be on one page only.\n\nA section without a name and entities stays unused.",
         "sections": {
           "page_1": {
             "name": "Status page",
+            "description": "Shows the HA, alarm and time badges and the weather card at the top, then this page's entities. Its heading on the display is Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_2": {
-            "name": "Page 2",
+            "name": "Page 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_3": {
-            "name": "Page 3",
+            "name": "Page 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_4": {
-            "name": "Page 4",
+            "name": "Page 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_5": {
-            "name": "Page 5",
+            "name": "Page 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_6": {
-            "name": "Page 6",
+            "name": "Page 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_7": {
-            "name": "Page 7",
+            "name": "Page 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           },
           "page_8": {
-            "name": "Page 8",
+            "name": "Page 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entities"
+            },
+            "data_description": {
+              "name": "Heading of this page on the display",
+              "position": "1 = first page",
+              "entities": "Order of the tiles; drag to reorder"
             }
           }
         }
@@ -483,7 +601,8 @@
       "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
-      "invalid_dashboard_entities": "An entity cannot be shown on the display."
+      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
+      "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading."
     }
   },
   "entity": {

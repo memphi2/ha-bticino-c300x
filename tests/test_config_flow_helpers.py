@@ -1051,7 +1051,7 @@ def test_manual_setup_reachable_agent_creates_entry_after_dashboard_display(
             "page": "C300X",
         }
     }
-    assert result["options"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 0}]
+    assert result["options"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 1}]
     assert calls == [
         "unique:bticino_c300x:c300x.local:8091",
         "abort_check",
@@ -2453,8 +2453,8 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
         "switch.entry": {"name": "custom", "custom_name": "Entry", "page": "Doors"}
     }
     assert result["data"][CONF_DASHBOARD_PAGES] == [
-        {"name": "C300X", "order": 0},
-        {"name": "Doors", "order": 5},
+        {"name": "C300X", "order": 1},
+        {"name": "Doors", "order": 2},
     ]
     assert result["data"][CONF_ACTIONS] == {
         "standby": {
@@ -2634,7 +2634,7 @@ def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
         }
     }
     assert result["data_updates"][CONF_DASHBOARD_ENTITIES] == ["select.forwarding"]
-    assert result["data_updates"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 0}]
+    assert result["data_updates"][CONF_DASHBOARD_PAGES] == [{"name": "C300X", "order": 1}]
     assert calls == ["unique:c300x-stable-id", "mismatch_check", "update"]
 
 

@@ -17,7 +17,6 @@ from .const import (
 from .dashboard_entities import (
     ALARM_PAGE_ENTITY_DOMAINS,
     DASHBOARD_ENTITY_DOMAINS,
-    DASHBOARD_POSITION_MAX,
 )
 from .schema_compat import vol
 
@@ -90,13 +89,6 @@ def dashboard_entity_custom_name_selector() -> Any:
     """Return the text selector for one custom dashboard entity title."""
 
     return selector.TextSelector(selector.TextSelectorConfig())
-
-
-def dashboard_entity_order_selector() -> Any:
-    """Return a bounded position input for a native display page."""
-    return selector.NumberSelector(selector.NumberSelectorConfig(
-        min=0, max=DASHBOARD_POSITION_MAX, step=1, mode=selector.NumberSelectorMode.BOX,
-    ))
 
 
 def dashboard_entity_tile_size_selector() -> Any:

@@ -75,13 +75,12 @@
       },
       "user_dashboard": {
         "title": "C300X-Display-Dashboard",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.\n\nIst der Display-Patch angewendet, folgen im naechsten Schritt die Display-Seiten und ihre Entitaeten.",
         "data": {
           "device_ui_enabled": "Display-Patch anwenden",
           "alarm_entity_id": "Alarmo-Entitaet",
           "alarm_page_entity_id": "Entitaet auf der Alarmseite",
           "weather_entity_id": "Wetter-Entitaet",
-          "dashboard_entities": "Dashboard-Entitaeten",
           "dashboard_dynamic_homepage": "Dynamische Hauptseiten-Buttons nutzen",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
@@ -144,13 +143,12 @@
       },
       "reconfigure_dashboard": {
         "title": "C300X-Display-Dashboard neu konfigurieren",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.\n\nIst der Display-Patch angewendet, folgen im naechsten Schritt die Display-Seiten und ihre Entitaeten.",
         "data": {
           "device_ui_enabled": "Display-Patch anwenden",
           "alarm_entity_id": "Alarmo-Entitaet",
           "alarm_page_entity_id": "Entitaet auf der Alarmseite",
           "weather_entity_id": "Wetter-Entitaet",
-          "dashboard_entities": "Dashboard-Entitaeten",
           "dashboard_dynamic_homepage": "Dynamische Hauptseiten-Buttons nutzen",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
@@ -162,138 +160,218 @@
       },
       "user_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "description": "Lege bis zu 8 Seiten fuer das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Ueberschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitaeten**: erscheinen als Kacheln in der gewaehlten Reihenfolge; zum Umsortieren ziehen. Eine Entitaet kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitaeten bleibt unbenutzt.",
         "sections": {
           "page_1": {
             "name": "Statusseite",
+            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitaeten dieser Seite. Ihre Ueberschrift auf dem Display ist Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_2": {
-            "name": "Seite 2",
+            "name": "Seite 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_3": {
-            "name": "Seite 3",
+            "name": "Seite 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_4": {
-            "name": "Seite 4",
+            "name": "Seite 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_5": {
-            "name": "Seite 5",
+            "name": "Seite 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_6": {
-            "name": "Seite 6",
+            "name": "Seite 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_7": {
-            "name": "Seite 7",
+            "name": "Seite 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_8": {
-            "name": "Seite 8",
+            "name": "Seite 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           }
         }
       },
       "reconfigure_dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "description": "Lege bis zu 8 Seiten fuer das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Ueberschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitaeten**: erscheinen als Kacheln in der gewaehlten Reihenfolge; zum Umsortieren ziehen. Eine Entitaet kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitaeten bleibt unbenutzt.",
         "sections": {
           "page_1": {
             "name": "Statusseite",
+            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitaeten dieser Seite. Ihre Ueberschrift auf dem Display ist Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_2": {
-            "name": "Seite 2",
+            "name": "Seite 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_3": {
-            "name": "Seite 3",
+            "name": "Seite 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_4": {
-            "name": "Seite 4",
+            "name": "Seite 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_5": {
-            "name": "Seite 5",
+            "name": "Seite 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_6": {
-            "name": "Seite 6",
+            "name": "Seite 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_7": {
-            "name": "Seite 7",
+            "name": "Seite 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_8": {
-            "name": "Seite 8",
+            "name": "Seite 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           }
         }
@@ -325,7 +403,8 @@
       "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
       "dashboard_entity_on_several_pages": "Eine Entitaet ist auf mehreren Seiten gewaehlt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungueltig; richte die Seiten neu ein.",
-      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden."
+      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden.",
+      "dashboard_page_name_missing": "Eine Seite mit Entitaeten braucht einen Namen; das Display zeigt ihn als Ueberschrift."
     }
   },
   "options": {
@@ -382,13 +461,12 @@
       },
       "dashboard": {
         "title": "C300X-Display-Dashboard",
-        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.",
+        "description": "Konfiguriert das optionale C300X-Display-Dashboard und den Display-Patch.\n\nAktueller Display-Patch-Status des Geraets: {qml_patch_status}.\n\nAnwenden oder Zuruecksetzen des Display-Patches schreibt Display-Dateien auf dem Geraet, laedt die Geraeteoberflaeche neu und kann bis zu etwa 60 Sekunden dauern. Der Status wechselt erst, wenn der Agent den Ergebniszustand bestaetigt.\n\nIst der Display-Patch angewendet, folgen im naechsten Schritt die Display-Seiten und ihre Entitaeten.",
         "data": {
           "device_ui_enabled": "Display-Patch anwenden",
           "alarm_entity_id": "Alarmo-Entitaet",
           "alarm_page_entity_id": "Entitaet auf der Alarmseite",
           "weather_entity_id": "Wetter-Entitaet",
-          "dashboard_entities": "Dashboard-Entitaeten",
           "dashboard_dynamic_homepage": "Dynamische Hauptseiten-Buttons nutzen",
           "actions_json": "Dashboard-Action-Allowlist JSON",
           "dashboard_prevent_return": "Dashboard-Seite nach Aktionen offen halten"
@@ -400,69 +478,109 @@
       },
       "dashboard_pages": {
         "title": "Display-Seiten",
-        "description": "Richte bis zu 8 Seiten fuer das native Display ein. Die Statusseite traegt die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte; gib jeder anderen Seite einen Namen. Die Seiten erscheinen nach Position, die kleinste zuerst. Waehle die Entitaeten einer Seite in der Reihenfolge, in der sie erscheinen sollen; ziehe sie, um sie umzusortieren. Eine Entitaet kann nur auf einer Seite stehen.",
+        "description": "Lege bis zu 8 Seiten fuer das Display fest. Jede Seite ist ein Abschnitt:\n\n- **Name**: steht auf dem Display als Ueberschrift der Seite.\n- **Position**: Reihenfolge der Seiten, 1 ist die erste. Bleibt sie leer, gilt die Nummer des Abschnitts.\n- **Entitaeten**: erscheinen als Kacheln in der gewaehlten Reihenfolge; zum Umsortieren ziehen. Eine Entitaet kann nur auf einer Seite stehen.\n\nEin Abschnitt ohne Name und Entitaeten bleibt unbenutzt.",
         "sections": {
           "page_1": {
             "name": "Statusseite",
+            "description": "Zeigt oben die HA-, Alarm- und Uhrzeit-Anzeigen und die Wetterkarte, darunter die Entitaeten dieser Seite. Ihre Ueberschrift auf dem Display ist Home Assistant.",
             "data": {
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_2": {
-            "name": "Seite 2",
+            "name": "Seite 2{page_2_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_3": {
-            "name": "Seite 3",
+            "name": "Seite 3{page_3_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_4": {
-            "name": "Seite 4",
+            "name": "Seite 4{page_4_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_5": {
-            "name": "Seite 5",
+            "name": "Seite 5{page_5_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_6": {
-            "name": "Seite 6",
+            "name": "Seite 6{page_6_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_7": {
-            "name": "Seite 7",
+            "name": "Seite 7{page_7_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           },
           "page_8": {
-            "name": "Seite 8",
+            "name": "Seite 8{page_8_name}",
             "data": {
               "name": "Name",
               "position": "Position",
               "entities": "Entitaeten"
+            },
+            "data_description": {
+              "name": "Ueberschrift dieser Seite auf dem Display",
+              "position": "1 = erste Seite",
+              "entities": "Reihenfolge der Kacheln; zum Umsortieren ziehen"
             }
           }
         }
@@ -483,7 +601,8 @@
       "dashboard_page_name_duplicate": "Zwei Seiten haben denselben Namen; gib jeder Seite einen eigenen.",
       "dashboard_entity_on_several_pages": "Eine Entitaet ist auf mehreren Seiten gewaehlt; lass sie auf einer Seite.",
       "invalid_dashboard_pages": "Die gespeicherten Display-Seiten sind ungueltig; richte die Seiten neu ein.",
-      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden."
+      "invalid_dashboard_entities": "Eine Entitaet kann auf dem Display nicht angezeigt werden.",
+      "dashboard_page_name_missing": "Eine Seite mit Entitaeten braucht einen Namen; das Display zeigt ihn als Ueberschrift."
     }
   },
   "entity": {

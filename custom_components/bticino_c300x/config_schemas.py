@@ -226,24 +226,23 @@ def audio_gain_db_selector() -> Any:
     )
 
 
-def _device_activation_action_selector(*, has_items: bool) -> Any:
-    options = [
-        SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_DONE, label="Done"),
-        SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_ADD, label="Add"),
-    ]
-    if has_items:
-        options.extend(
-            [
-                SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_EDIT, label="Edit"),
-                SelectOptionDict(value=DEVICE_ACTIVATION_FLOW_ACTION_REMOVE, label="Remove"),
-            ]
-        )
+def _translated_select(translation_key: str, options: list[str]) -> Any:
+    """Return a dropdown whose choices the frontend translates."""
+
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=options,
+            translation_key=translation_key,
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )
+
+
+def _device_activation_action_selector(*, has_items: bool) -> Any:
+    options = [DEVICE_ACTIVATION_FLOW_ACTION_DONE, DEVICE_ACTIVATION_FLOW_ACTION_ADD]
+    if has_items:
+        options += [DEVICE_ACTIVATION_FLOW_ACTION_EDIT, DEVICE_ACTIVATION_FLOW_ACTION_REMOVE]
+    return _translated_select("device_activation_flow_action", options)
 
 
 def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
@@ -261,16 +260,7 @@ def _device_activation_target_selector(items: list[dict[str, Any]]) -> Any:
 
 
 def _device_activation_type_selector() -> Any:
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="lock", label="Door lock"),
-                SelectOptionDict(value="light", label="Light"),
-                SelectOptionDict(value="stair_light", label="Stair light"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_select("device_activation_item_type", ["lock", "light", "stair_light"])
 
 
 def _device_activation_mode_default(value: Any) -> str:
@@ -281,15 +271,7 @@ def _device_activation_mode_default(value: Any) -> str:
 
 
 def _device_activation_mode_selector() -> Any:
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value="automatic", label="Automatic"),
-                SelectOptionDict(value="manual", label="Manual"),
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_select("device_activation_mode", ["automatic", "manual"])
 
 
 def _stair_light_part_default(value: Any, *, default: str) -> str:
@@ -317,26 +299,10 @@ def _activation_item_required(
     )
 
 
-_WEBRTC_ICE_POLICY_LABELS = {
-    "all": "All candidates (no filtering)",
-    "drop_link_local": "Drop link-local only (fe80::/169.254.x.x)",
-    "prefer_ipv4_ula": "Prefer IPv4 + IPv6 ULA (drop global/SLAAC + link-local)",
-    "ipv4_only": "IPv4 only (drop all IPv6)",
-}
-
-
 def webrtc_ice_policy_selector() -> Any:
-    """Return the WebRTC ICE candidate filter policy selector."""
+    """Return the WebRTC ICE candidate filter choice."""
 
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value=policy, label=_WEBRTC_ICE_POLICY_LABELS.get(policy, policy))
-                for policy in WEBRTC_ICE_POLICIES
-            ],
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
+    return _translated_select("webrtc_ice_policy", list(WEBRTC_ICE_POLICIES))
 
 
 def _media_feature_schema(

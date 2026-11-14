@@ -346,3 +346,34 @@ def test_tiles_form_labels_and_choices_are_translated_in_every_language() -> Non
     assert _load_json(INTEGRATION / "strings.json")["selector"][
         TILE_LABEL_TRANSLATION_KEY
     ]["options"] == TILE_LABELS
+
+
+def test_settings_choices_are_translated_in_every_language() -> None:
+    from custom_components.bticino_c300x.config_schemas import (
+        _device_activation_action_selector,
+        _device_activation_mode_selector,
+        _device_activation_type_selector,
+        webrtc_ice_policy_selector,
+    )
+
+    for field in (
+        _device_activation_action_selector(has_items=True),
+        _device_activation_mode_selector(),
+        _device_activation_type_selector(),
+        webrtc_ice_policy_selector(),
+    ):
+        key = field.config["translation_key"]
+        for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+            translated = _load_json(path)["selector"][key]["options"]
+            assert set(field.config["options"]) == set(translated), (path.name, key)
+            assert all(text.strip() for text in translated.values()), (path.name, key)
+
+
+def test_every_settings_field_has_a_help_text() -> None:
+    """Each field of the options forms says what it does, in every language."""
+
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        steps = _load_json(path)["options"]["step"]
+        for step_id, step in steps.items():
+            data = step.get("data", {})
+            assert set(data) <= set(step.get("data_description", {})), (path.name, step_id)

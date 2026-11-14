@@ -6,11 +6,13 @@
         "description": "Enter the C300X address first. If the native device agent is not reachable, Home Assistant can guide a one-shot agent install before collecting tokens and feature options.",
         "data": {
           "name": "Name",
-          "agent_host": "Device agent host",
-          "agent_port": "Device agent HTTP port",
+          "agent_host": "Device address",
+          "agent_port": "Device agent port",
           "callback_base_url": "Callback base URL override (optional)"
         },
         "data_description": {
+          "agent_host": "IP address or host name of the C300X the device agent runs on.",
+          "agent_port": "HTTP port of the device agent. The default is 8091.",
           "callback_base_url": "Leave empty for the existing behavior. HTTP does not initialize TLS. An explicit HTTPS URL enables verified TLS, requires an updated agent and a trusted matching certificate, and adds device load. Changing HTTP/HTTPS modes restarts only the agent, deferred while media is active."
         }
       },
@@ -33,22 +35,31 @@
         "title": "Device agent credentials",
         "description": "Enter the token details for the reachable native agent. Leave the API token empty only while the agent is still in noAuth bootstrap mode.",
         "data": {
-          "agent_token": "Device agent API token",
-          "maintenance_token": "Device agent maintenance token"
+          "agent_token": "API token",
+          "maintenance_token": "Maintenance token"
+        },
+        "data_description": {
+          "agent_token": "Token Home Assistant sends with every request to the device agent.",
+          "maintenance_token": "Separate token for maintenance actions such as updates, patches and reboot."
         }
       },
       "user_features": {
         "title": "BTicino C300X features",
         "description": "Select the Home Assistant media features exposed by this C300X installation.",
         "data": {
-          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
-          "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "video_enabled": "Door station video and audio",
+          "create_homeassistant_user": "Set up the media user on the device",
+          "doorstation_audio_gain_db": "Live audio level (dB)",
+          "ring_capture_audio_gain_db": "Ring Capture audio level (dB)",
+          "webrtc_ice_policy": "Network addresses for the live stream",
           "native_two_way_audio": "Two-way audio in the HA camera player"
         },
         "data_description": {
+          "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
+          "create_homeassistant_user": "Video and audio need a local user on the C300X. With this on, the integration sets it up during setup or through its Repair.",
+          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
+          "ring_capture_audio_gain_db": "Level of the sound in Ring Capture recordings. -20 to +20 dB; the default is 6.",
+          "webrtc_ice_policy": "Which addresses are offered to the browser for the live stream. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
@@ -56,34 +67,56 @@
         "title": "Additional device activations",
         "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address",
-          "device_activation_flow_action": "Action",
+          "device_activation_mode": "Stair light address",
+          "device_activation_stair_light_p": "Stair light P",
+          "device_activation_stair_light_n": "Stair light N",
+          "device_activation_flow_action": "What to do",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatic uses the activations as set up here or reported by the device. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
+          "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
+          "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",
+          "device_activation_flow_target": "The activation to edit or remove."
         }
       },
       "user_device_activation_item": {
         "title": "Device activation",
         "description": "Configure one address-based activation button.",
         "data": {
-          "device_activation_item_id": "Button ID",
-          "device_activation_item_name": "Button name",
-          "device_activation_item_type": "Button type",
-          "device_activation_item_address": "Activation address"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Name",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Address"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letters, numbers, _ and -, up to 32 characters. Each ID can be used once.",
+          "device_activation_item_name": "Name of the button in Home Assistant, up to 63 characters.",
+          "device_activation_item_type": "What the address triggers: a door lock, a light or the stair light.",
+          "device_activation_item_address": "OpenWebNet address (where) the activation is sent to, up to 31 characters."
         }
       },
       "user_dashboard": {
         "title": "C300X display dashboard",
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
         "data": {
-          "device_ui_enabled": "Apply Display patch",
-          "alarm_entity_id": "Alarmo entity",
-          "alarm_page_entity_id": "Alarm page entity",
-          "weather_entity_id": "Weather entity",
-          "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "actions_json": "Dashboard action allowlist JSON",
-          "dashboard_prevent_return": "Keep dashboard page open after actions"
+          "device_ui_enabled": "Home Assistant pages on the display (Display patch)",
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action on the Alarm page",
+          "weather_entity_id": "Weather",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
+          "actions_json": "Allowed actions (JSON)",
+          "dashboard_prevent_return": "Stay on the page after an action"
+        },
+        "data_description": {
+          "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X. Off: restores the original display files and discards the alarm, weather, page and tile settings.",
+          "alarm_entity_id": "Alarm panel the Alarm page of the display shows and operates. Leave empty if you do not use Alarmo.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it.",
+          "weather_entity_id": "Weather entity for the weather card on the status page. Leave empty for no weather card.",
+          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page only while they have something to open. Off: both are always shown as a fixed pair. A change re-applies the Display patch and restarts the display once.",
+          "actions_json": "Actions the display and its notifications may run: one entry per action ID with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
         }
       },
       "user_dashboard_entity_display": {
@@ -94,14 +127,18 @@
         "title": "Reconfigure BTicino C300X",
         "description": "Update device agent connection, maintenance token, or rotate webhook credentials.",
         "data": {
-          "agent_host": "Device agent host",
-          "agent_port": "Device agent HTTP port",
-          "agent_token": "Device agent API token",
-          "maintenance_token": "Device agent maintenance token",
+          "agent_host": "Device address",
+          "agent_port": "Device agent port",
+          "agent_token": "API token",
+          "maintenance_token": "Maintenance token",
           "callback_base_url": "Callback base URL override (optional)",
           "rotate_shared_secret": "Rotate shared secret"
         },
         "data_description": {
+          "agent_host": "IP address or host name of the C300X the device agent runs on.",
+          "agent_port": "HTTP port of the device agent. The default is 8091.",
+          "agent_token": "Token Home Assistant sends with every request to the device agent.",
+          "maintenance_token": "Separate token for maintenance actions such as updates, patches and reboot.",
           "callback_base_url": "Leave empty for the existing behavior. HTTP does not initialize TLS. An explicit HTTPS URL enables verified TLS, requires an updated agent and a trusted matching certificate, and adds device load. Changing HTTP/HTTPS modes restarts only the agent, deferred while media is active."
         }
       },
@@ -109,14 +146,19 @@
         "title": "Reconfigure BTicino C300X features",
         "description": "Update media and Home Assistant media user settings.",
         "data": {
-          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
-          "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "video_enabled": "Door station video and audio",
+          "create_homeassistant_user": "Set up the media user on the device",
+          "doorstation_audio_gain_db": "Live audio level (dB)",
+          "ring_capture_audio_gain_db": "Ring Capture audio level (dB)",
+          "webrtc_ice_policy": "Network addresses for the live stream",
           "native_two_way_audio": "Two-way audio in the HA camera player"
         },
         "data_description": {
+          "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
+          "create_homeassistant_user": "Video and audio need a local user on the C300X. With this on, the integration sets it up during setup or through its Repair.",
+          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
+          "ring_capture_audio_gain_db": "Level of the sound in Ring Capture recordings. -20 to +20 dB; the default is 6.",
+          "webrtc_ice_policy": "Which addresses are offered to the browser for the live stream. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
@@ -124,34 +166,56 @@
         "title": "Additional device activations",
         "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
         "data": {
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address",
-          "device_activation_flow_action": "Action",
+          "device_activation_mode": "Stair light address",
+          "device_activation_stair_light_p": "Stair light P",
+          "device_activation_stair_light_n": "Stair light N",
+          "device_activation_flow_action": "What to do",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatic uses the activations as set up here or reported by the device. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
+          "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
+          "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",
+          "device_activation_flow_target": "The activation to edit or remove."
         }
       },
       "reconfigure_device_activation_item": {
         "title": "Device activation",
         "description": "Configure one address-based activation button.",
         "data": {
-          "device_activation_item_id": "Button ID",
-          "device_activation_item_name": "Button name",
-          "device_activation_item_type": "Button type",
-          "device_activation_item_address": "Activation address"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Name",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Address"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letters, numbers, _ and -, up to 32 characters. Each ID can be used once.",
+          "device_activation_item_name": "Name of the button in Home Assistant, up to 63 characters.",
+          "device_activation_item_type": "What the address triggers: a door lock, a light or the stair light.",
+          "device_activation_item_address": "OpenWebNet address (where) the activation is sent to, up to 31 characters."
         }
       },
       "reconfigure_dashboard": {
         "title": "Reconfigure C300X display dashboard",
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
         "data": {
-          "device_ui_enabled": "Apply Display patch",
-          "alarm_entity_id": "Alarmo entity",
-          "alarm_page_entity_id": "Alarm page entity",
-          "weather_entity_id": "Weather entity",
-          "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "actions_json": "Dashboard action allowlist JSON",
-          "dashboard_prevent_return": "Keep dashboard page open after actions"
+          "device_ui_enabled": "Home Assistant pages on the display (Display patch)",
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action on the Alarm page",
+          "weather_entity_id": "Weather",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
+          "actions_json": "Allowed actions (JSON)",
+          "dashboard_prevent_return": "Stay on the page after an action"
+        },
+        "data_description": {
+          "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X. Off: restores the original display files and discards the alarm, weather, page and tile settings.",
+          "alarm_entity_id": "Alarm panel the Alarm page of the display shows and operates. Leave empty if you do not use Alarmo.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it.",
+          "weather_entity_id": "Weather entity for the weather card on the status page. Leave empty for no weather card.",
+          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page only while they have something to open. Off: both are always shown as a fixed pair. A change re-applies the Display patch and restarts the display once.",
+          "actions_json": "Actions the display and its notifications may run: one entry per action ID with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
         }
       },
       "reconfigure_dashboard_entity_display": {
@@ -417,7 +481,7 @@
           "dashboard_entity_display": "Display tiles",
           "dashboard": "Display and Display patch",
           "features": "Video and audio",
-          "device_activations": "Door openers and stair light",
+          "device_activations": "Activations: locks, lights, stair light",
           "connection": "Connection to the device"
         },
         "menu_option_descriptions": {
@@ -425,71 +489,102 @@
           "dashboard_entity_display": "Size, name and secondary line of each tile.",
           "dashboard": "Switch the Home Assistant pages on the display on or off, alarm, weather and standby actions.",
           "features": "Camera stream, two-way audio, audio levels and the media user on the device.",
-          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger.",
+          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
           "connection": "Address and tokens of the device agent, callback address of Home Assistant."
         }
       },
       "connection": {
-        "title": "BTicino C300X connection",
-        "description": "Configure the local device-agent connection and maintenance token.",
+        "title": "Connection to the device",
+        "description": "How Home Assistant reaches the device agent on the C300X.",
         "data": {
-          "agent_host": "Device agent host",
-          "agent_port": "Device agent HTTP port",
-          "agent_token": "Device agent API token",
-          "maintenance_token": "Device agent maintenance token",
+          "agent_host": "Device address",
+          "agent_port": "Device agent port",
+          "agent_token": "API token",
+          "maintenance_token": "Maintenance token",
           "callback_base_url": "Callback base URL override (optional)"
         },
         "data_description": {
+          "agent_host": "IP address or host name of the C300X the device agent runs on.",
+          "agent_port": "HTTP port of the device agent. The default is 8091.",
+          "agent_token": "Token Home Assistant sends with every request to the device agent.",
+          "maintenance_token": "Separate token for maintenance actions such as updates, patches and reboot.",
           "callback_base_url": "Leave empty for the existing behavior. HTTP does not initialize TLS. An explicit HTTPS URL enables verified TLS, requires an updated agent and a trusted matching certificate, and adds device load. Changing HTTP/HTTPS modes restarts only the agent, deferred while media is active."
         }
       },
       "features": {
-        "title": "BTicino C300X features",
-        "description": "Configure media and Home Assistant media user settings.",
+        "title": "Video and audio",
+        "description": "Picture and sound of the door station in Home Assistant.",
         "data": {
-          "video_enabled": "Enable doorstation media (ring, on-demand, Home Call)",
-          "create_homeassistant_user": "Create Home Assistant media user for these features",
-          "doorstation_audio_gain_db": "Doorstation live audio gain (dB)",
-          "ring_capture_audio_gain_db": "Ring capture audio gain (dB)",
-          "webrtc_ice_policy": "WebRTC ICE candidate filter",
+          "video_enabled": "Door station video and audio",
+          "create_homeassistant_user": "Set up the media user on the device",
+          "doorstation_audio_gain_db": "Live audio level (dB)",
+          "ring_capture_audio_gain_db": "Ring Capture audio level (dB)",
+          "webrtc_ice_policy": "Network addresses for the live stream",
           "native_two_way_audio": "Two-way audio in the HA camera player"
         },
         "data_description": {
+          "video_enabled": "Picture and sound of the door station in Home Assistant: on a ring, on demand and for Home Call.",
+          "create_homeassistant_user": "Video and audio need a local user on the C300X. With this on, the integration sets it up during setup or through its Repair.",
+          "doorstation_audio_gain_db": "Level of the door station's sound in the live view and during a call. -20 to +20 dB; 0 leaves the sound unchanged.",
+          "ring_capture_audio_gain_db": "Level of the sound in Ring Capture recordings. -20 to +20 dB; the default is 6.",
+          "webrtc_ice_policy": "Which addresses are offered to the browser for the live stream. Change this only when the live picture does not connect.",
           "native_two_way_audio": "Optional, off by default. Requires HA 2026.11+, Two-way audio enabled under Settings > System > Labs, WebRTC, HTTPS and browser microphone permission. Answer incoming calls through the C300X card first; this option does not answer them automatically. Card talkback remains unchanged. No additional idle polling or agent update is needed."
         }
       },
       "device_activations": {
-        "title": "Additional device activations",
-        "description": "Configured additional activations: {device_activation_count}\n\n{device_activation_items}\n\nAdd, edit, or remove changes only the pending Home Assistant configuration. The device agent is synchronized after saving and only when its activation config differs.",
+        "title": "Activations: locks, lights, stair light",
+        "description": "Additional activations: {device_activation_count}\n\n{device_activation_items}\n\nPick what to do and submit. Changes are collected here first; with **Finish and save** they are saved and the device is updated, and only if its activations differ.",
         "data": {
-          "device_activation_mode": "Device activation address mode",
-          "device_activation_stair_light_p": "Stair light P address",
-          "device_activation_stair_light_n": "Stair light N address",
-          "device_activation_flow_action": "Action",
+          "device_activation_mode": "Stair light address",
+          "device_activation_stair_light_p": "Stair light P",
+          "device_activation_stair_light_n": "Stair light N",
+          "device_activation_flow_action": "What to do",
           "device_activation_flow_target": "Activation"
+        },
+        "data_description": {
+          "device_activation_mode": "Automatic uses the activations as set up here or reported by the device. Manual adds a stair-light activation built from the P and N values below.",
+          "device_activation_stair_light_p": "Manual mode only: P part of the stair-light address, 0 to 99.",
+          "device_activation_stair_light_n": "Manual mode only: N part of the stair-light address, 0 to 99.",
+          "device_activation_flow_action": "Add, edit or remove an activation - or finish and save.",
+          "device_activation_flow_target": "The activation to edit or remove."
         }
       },
       "device_activation_item": {
-        "title": "Device activation",
-        "description": "Configure one address-based activation button.",
+        "title": "Activation",
+        "description": "One activation of the door system, shown in Home Assistant as a button.",
         "data": {
-          "device_activation_item_id": "Button ID",
-          "device_activation_item_name": "Button name",
-          "device_activation_item_type": "Button type",
-          "device_activation_item_address": "Activation address"
+          "device_activation_item_id": "ID",
+          "device_activation_item_name": "Name",
+          "device_activation_item_type": "Type",
+          "device_activation_item_address": "Address"
+        },
+        "data_description": {
+          "device_activation_item_id": "Letters, numbers, _ and -, up to 32 characters. Each ID can be used once.",
+          "device_activation_item_name": "Name of the button in Home Assistant, up to 63 characters.",
+          "device_activation_item_type": "What the address triggers: a door lock, a light or the stair light.",
+          "device_activation_item_address": "OpenWebNet address (where) the activation is sent to, up to 31 characters."
         }
       },
       "dashboard": {
-        "title": "C300X display dashboard",
-        "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages and their entities.",
+        "title": "Display and Display patch",
+        "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** and **Display tiles**.",
         "data": {
-          "device_ui_enabled": "Apply Display patch",
-          "alarm_entity_id": "Alarmo entity",
-          "alarm_page_entity_id": "Alarm page entity",
-          "weather_entity_id": "Weather entity",
-          "dashboard_dynamic_homepage": "Use dynamic home page buttons",
-          "actions_json": "Dashboard action allowlist JSON",
-          "dashboard_prevent_return": "Keep dashboard page open after actions"
+          "device_ui_enabled": "Home Assistant pages on the display (Display patch)",
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action on the Alarm page",
+          "weather_entity_id": "Weather",
+          "dashboard_dynamic_homepage": "Show home page buttons only when needed",
+          "actions_json": "Allowed actions (JSON)",
+          "dashboard_prevent_return": "Stay on the page after an action"
+        },
+        "data_description": {
+          "device_ui_enabled": "On: installs the Home Assistant pages on the display of the C300X. Off: restores the original display files and discards the alarm, weather, page and tile settings.",
+          "alarm_entity_id": "Alarm panel the Alarm page of the display shows and operates. Leave empty if you do not use Alarmo.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page, for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it.",
+          "weather_entity_id": "Weather entity for the weather card on the status page. Leave empty for no weather card.",
+          "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page only while they have something to open. Off: both are always shown as a fixed pair. A change re-applies the Display patch and restarts the display once.",
+          "actions_json": "Actions the display and its notifications may run: one entry per action ID with domain and service, optionally target and data. Leave empty if you use none.",
+          "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
         }
       },
       "dashboard_entity_display": {
@@ -1113,6 +1208,35 @@
         "last_changed": "Last changed",
         "last_updated": "Last updated",
         "none": "Nothing"
+      }
+    },
+    "device_activation_flow_action": {
+      "options": {
+        "done": "Finish and save",
+        "add": "Add an activation",
+        "edit": "Edit an activation",
+        "remove": "Remove an activation"
+      }
+    },
+    "device_activation_item_type": {
+      "options": {
+        "lock": "Door lock",
+        "light": "Light",
+        "stair_light": "Stair light"
+      }
+    },
+    "device_activation_mode": {
+      "options": {
+        "automatic": "Automatic",
+        "manual": "Manual (P and N)"
+      }
+    },
+    "webrtc_ice_policy": {
+      "options": {
+        "all": "All addresses",
+        "drop_link_local": "Without link-local addresses (fe80::, 169.254.x.x)",
+        "prefer_ipv4_ula": "IPv4 and local IPv6 (ULA) - recommended",
+        "ipv4_only": "IPv4 only"
       }
     }
   },

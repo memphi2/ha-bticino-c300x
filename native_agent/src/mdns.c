@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <time.h>
@@ -136,6 +137,68 @@ time_t c300x_mdns_next_announce_at(const struct c300x_mdns *mdns)
     return mdns->next_announce_at;
 }
 
+static int mdns_read_name(const unsigned char *packet, size_t size, size_t *offset,
+                          char *name, size_t capacity)
+{
+    size_t cursor = *offset, written = 0;
+    int jumped = 0;
+    /* Bound compression traversal, including cyclic or forward pointers. */
+    for (size_t hops = 0; hops < size; hops++) {
+        if (cursor >= size) return 0;
+        unsigned int length = packet[cursor++];
+        if ((length & 0xc0) == 0xc0) {
+            if (cursor >= size) return 0;
+            size_t target = ((length & 0x3f) << 8) | packet[cursor++];
+            if (!jumped) *offset = cursor;
+            jumped = 1;
+            cursor = target;
+            continue;
+        }
+        if (length > 63 || cursor + length > size) return 0;
+        if (length == 0) {
+            if (!jumped) *offset = cursor;
+            name[written] = '\0';
+            return 1;
+        }
+        if (written + length + 1 >= capacity) return 0;
+        if (written) name[written++] = '.';
+        for (unsigned int index = 0; index < length; index++) {
+            unsigned char ch = packet[cursor++];
+            if (ch == 0 || ch == '.') return 0;
+            name[written++] = (char)ch;
+        }
+    }
+    return 0;
+}
+
+static int mdns_relevant_query(const unsigned char *packet, size_t size,
+                               const struct c300x_config *config)
+{
+    if (size < 12 || packet[2] != 0 || packet[3] != 0) return 0;
+    unsigned int questions = ((unsigned int)packet[4] << 8) | packet[5];
+    if (questions == 0 || questions > 32) return 0;
+    char device_id[64], label[64], instance[160], host[80];
+    c300x_mdns_device_id(device_id, sizeof(device_id));
+    mdns_instance_name(config, device_id, label, sizeof(label));
+    snprintf(instance, sizeof(instance), "%s.%s", label, C300X_MDNS_SERVICE);
+    snprintf(host, sizeof(host), "%s.local", device_id);
+    size_t offset = 12;
+    int relevant = 0;
+    for (unsigned int index = 0; index < questions; index++) {
+        char name[256];
+        if (!mdns_read_name(packet, size, &offset, name, sizeof(name)) || offset + 4 > size) return 0;
+        unsigned int type = ((unsigned int)packet[offset] << 8) | packet[offset + 1];
+        unsigned int cls = (((unsigned int)packet[offset + 2] << 8) | packet[offset + 3]) & 0x7fff;
+        offset += 4;
+        if (cls != 1 && cls != 255) continue;
+        if (((type == 12 || type == 255) &&
+             (strcasecmp(name, C300X_MDNS_ENUMERATION) == 0 || strcasecmp(name, C300X_MDNS_SERVICE) == 0)) ||
+            ((type == 16 || type == 33 || type == 255) && strcasecmp(name, instance) == 0) ||
+            ((type == 1 || type == 28 || type == 255) && strcasecmp(name, host) == 0)) relevant = 1;
+    }
+    return relevant;
+}
+
 void c300x_mdns_handle_query(
     struct c300x_mdns *mdns,
     const struct c300x_config *config
@@ -143,16 +206,19 @@ void c300x_mdns_handle_query(
 {
     unsigned char buffer[512];
 
-    while (mdns->fd >= 0) {
-        ssize_t read_size = recv(mdns->fd, buffer, sizeof(buffer), 0);
+    int respond = 0;
+    for (unsigned int count = 0; count < 16 && mdns->fd >= 0; count++) {
+        ssize_t read_size = recv(mdns->fd, buffer, sizeof(buffer), MSG_TRUNC);
         if (read_size < 0 && errno == EINTR) {
             continue;
         }
         if (read_size <= 0) {
             break;
         }
-        mdns_send_response(mdns, config, 120);
+        if ((size_t)read_size <= sizeof(buffer) &&
+            mdns_relevant_query(buffer, (size_t)read_size, config)) respond = 1;
     }
+    if (respond) mdns_send_response(mdns, config, 120);
 }
 
 void c300x_mdns_announce_if_due(

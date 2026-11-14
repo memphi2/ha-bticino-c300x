@@ -1,13 +1,13 @@
 import {
   c300xLanguage,
   c300xLocalize,
-} from "./c300x-translations.js?v=2c27c3abb9b3f604";
+} from "./c300x-translations.js?v=cff8390bf24fff10";
 import {
   C300X_CAMERA_OBJECT_ID,
   C300X_DEFAULT_CONFIG,
   c300xEntityId,
   c300xFirstEntity,
-} from "./c300x-entity-resolver.js?v=2c27c3abb9b3f604";
+} from "./c300x-entity-resolver.js?v=cff8390bf24fff10";
 
 export const C300X_CARD_EDITOR_TAG = "c300x-doorbell-call-card-editor";
 
@@ -33,8 +33,12 @@ function c300xFireConfigChanged(element, config) {
 
 export class C300XDoorbellCallCardEditor extends HTMLElement {
   setConfig(config) {
+    const stub = c300xDoorbellCardStubConfig(this._hass);
+    // A card may name its device by entry_id alone. The entity shown in the
+    // form is then only the default; it must not be written into the card.
+    this._defaultEntity = config && config.entity ? "" : stub.entity || "";
     this._config = {
-      ...c300xDoorbellCardStubConfig(this._hass),
+      ...stub,
       ...config,
     };
     this._render();
@@ -158,6 +162,11 @@ export class C300XDoorbellCallCardEditor extends HTMLElement {
     }
     delete nextConfig.home_call_entity;
     delete nextConfig.doorbell_state_entity;
+    if (this._defaultEntity && nextConfig.entity === this._defaultEntity) {
+      delete nextConfig.entity;
+    } else {
+      this._defaultEntity = "";
+    }
     if (JSON.stringify(this._config) === JSON.stringify(nextConfig)) {
       return;
     }

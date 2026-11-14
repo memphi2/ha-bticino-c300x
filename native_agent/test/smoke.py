@@ -708,7 +708,7 @@ def run_smoke(
                         "textRoot": str(text_memos_root),
                         "voiceRoot": str(voice_memos_root),
                         "watch": True,
-                        "maxMemos": 16,
+                        "maxMemos": 64,
                     },
                     "systemMetrics": {
                         "enabled": True,
@@ -2044,7 +2044,7 @@ def run_smoke(
             assert_json_field(diagnostics, "last_write_reason", "voice")
             # A full memo store with long texts must still be listed.
             long_text = "\x01" * 500
-            for index in range(16):
+            for index in range(64):
                 write_memo(text_memos_root, f"long_{index:02d}", kind="text", read=True,
                            unix_time=1710001000 + index)
                 (text_memos_root / f"long_{index:02d}" / "message.txt").write_text(
@@ -2052,12 +2052,12 @@ def run_smoke(
             deadline = time.monotonic() + 10
             while True:
                 memos = api_get(api_port, "/api/v1/memos")
-                if memos.get("text_total") == 16 or time.monotonic() > deadline:
+                if memos.get("text_total") == 64 or time.monotonic() > deadline:
                     break
                 time.sleep(0.2)
-            assert_json_field(memos, "text_total", 16)
+            assert_json_field(memos, "text_total", 64)
             listed = [memo.get("text") for memo in memos.get("memos", [])]
-            if listed.count(long_text) != 16:
+            if listed.count(long_text) != 64:
                 raise AssertionError("a full memo store was not listed completely")
             sys.stdout.write("native agent smoke passed\n")
             return 0

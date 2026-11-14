@@ -47,10 +47,15 @@ static void clear_output(struct http_output *output, int failed)
 int c300x_http_write(int fd, const char *data, size_t size)
 {
     struct http_output *slot = NULL;
+    size_t queued = 0;
+    for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
+        queued += outputs[i].size;
+    }
     for (int i = 0; i < C300X_HTTP_MAX_OUTPUTS; i++) {
         struct http_output *output = &outputs[i];
         if (output->data != NULL && output->fd == fd) {
-            if (size > C300X_HTTP_OUTPUT_LIMIT - output->size) {
+            if (size > C300X_HTTP_OUTPUT_LIMIT - output->size
+                || size > C300X_HTTP_OUTPUT_QUEUE_LIMIT - queued) {
                 clear_output(output, 1);
                 return 0;
             }
@@ -84,6 +89,10 @@ int c300x_http_write(int fd, const char *data, size_t size)
         return 0;
     }
     size_t used = sent > 0 ? (size_t)sent : 0;
+    if (size - used > C300X_HTTP_OUTPUT_QUEUE_LIMIT - queued) {
+        (void)shutdown(fd, SHUT_RDWR);
+        return 0;
+    }
     char *pending = slot != NULL ? malloc(size - used) : NULL;
     if (pending == NULL) {
         (void)shutdown(fd, SHUT_RDWR);

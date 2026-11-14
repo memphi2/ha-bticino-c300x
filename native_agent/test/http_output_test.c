@@ -36,6 +36,60 @@ static int output_count(void)
     return count;
 }
 
+static void test_large_response(void)
+{
+    int pair[2];
+    const size_t size = 100000;
+    char *body = malloc(size);
+    char *received = malloc(size);
+    struct pollfd fds[C300X_HTTP_MAX_OUTPUTS];
+    assert(body && received);
+    memset(body, 'm', size);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
+    blocked = 1;
+    assert(c300x_http_write(pair[0], body, size));
+    close_agent_socket(pair[0]);
+    blocked = 0;
+    short_writes = 0;
+    size_t used = 0;
+    while (used < size) {
+        c300x_http_outputs_prepare(fds);
+        assert(poll(fds, C300X_HTTP_MAX_OUTPUTS, 10) >= 0);
+        c300x_http_outputs_handle(fds);
+        ssize_t n = recv(pair[1], received + used, size - used, MSG_DONTWAIT);
+        if (n > 0) used += (size_t)n;
+        else assert(n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK));
+    }
+    assert(memcmp(body, received, size) == 0);
+    assert(output_count() == 0);
+    close(pair[1]);
+    free(body);
+    free(received);
+}
+
+static void test_queue_memory_budget(void)
+{
+    int first[2], second[2];
+    const size_t size = 300000;
+    char *body = calloc(size, 1);
+    assert(body);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, first) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, second) == 0);
+    blocked = 1;
+    assert(c300x_http_write(first[0], body, size));
+    assert(!c300x_http_write(second[0], body, size));
+    assert(output_count() == 1);
+    /* Growing an existing response is subject to the same total limit. */
+    assert(!c300x_http_write(first[0], body, size));
+    assert(output_count() == 0);
+    close_agent_socket(first[0]);
+    close_agent_socket(second[0]);
+    close(first[1]);
+    close(second[1]);
+    free(body);
+    blocked = 0;
+}
+
 int main(void)
 {
     int pair[2];
@@ -108,5 +162,7 @@ int main(void)
     assert(output_count() == 0);
     assert(recv(pair[1], response, sizeof(response), 0) == 0);
     close(pair[1]);
+    test_large_response();
+    test_queue_memory_budget();
     return 0;
 }

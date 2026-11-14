@@ -44,7 +44,9 @@ void c300x_http_send_json(int client_fd, int status, const char *reason, const c
 /* Main-loop HTTP responses only; outbound clients retain send_all_bytes().
  * close_agent_socket() transfers a queued response's fd to the output queue. */
 #define C300X_HTTP_MAX_OUTPUTS 8
-#define C300X_HTTP_OUTPUT_LIMIT 65536
+#define C300X_HTTP_OUTPUT_LIMIT (512 * 1024)
+/* Preserve the former eight-times-64-KiB total despite larger memo lists. */
+#define C300X_HTTP_OUTPUT_QUEUE_LIMIT (512 * 1024)
 #define C300X_HTTP_OUTPUT_TIMEOUT_MS 2000
 int c300x_http_write(int fd, const char *data, size_t size);
 int c300x_http_outputs_prepare(struct pollfd *fds);

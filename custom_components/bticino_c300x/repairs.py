@@ -402,6 +402,21 @@ class DeviceCoreQmlHookRepairFlow(RepairsFlow):
         return self.async_create_entry(data={})
 
 
+def _install_error_log_text(err: BaseException) -> str:
+    """Return the log text of a failed SSH install, with the kind of its cause.
+
+    The installer reports every SSH and OS error as "device_install_failed".
+    The type of the original error tells a wrong password from a timeout or a
+    failed command; its text is left out, it can name the host.
+    """
+
+    text = compact_error_text(cast(Exception, err))
+    cause = err.__cause__
+    if cause is None:
+        return text
+    return f"{text} (cause: {type(cause).__name__})"
+
+
 class DeviceAgentUpdateRepairFlow(RepairsFlow):
     """Explicit user-confirmed native-agent update repair flow."""
 
@@ -603,7 +618,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
         except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
-            _LOGGER.warning("C300X SSH install failed: %s", compact_error_text(err))
+            _LOGGER.warning("C300X SSH install failed: %s", _install_error_log_text(err))
             return self.async_show_form(
                 step_id="ssh_install",
                 data_schema=_ssh_install_schema(),

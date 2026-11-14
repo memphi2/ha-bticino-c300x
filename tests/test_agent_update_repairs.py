@@ -2647,3 +2647,20 @@ def test_core_qml_hook_repair_clears_the_failed_status_read_that_raised_the_issu
 
     assert result["type"] == "create_entry"
     assert status_read.last_error is None
+
+
+def test_ssh_install_log_text_names_the_kind_of_the_cause_but_not_its_text() -> None:
+    from custom_components.bticino_c300x.repairs import _install_error_log_text
+
+    try:
+        try:
+            raise TimeoutError("timed out talking to 192.0.2.60")
+        except TimeoutError as cause:
+            raise RuntimeError("device_install_failed") from cause
+    except RuntimeError as err:
+        text = _install_error_log_text(err)
+
+    assert text == "RuntimeError: device_install_failed (cause: TimeoutError)"
+    assert _install_error_log_text(RuntimeError("invalid_ssh_username")) == (
+        "RuntimeError: invalid_ssh_username"
+    )

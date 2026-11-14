@@ -14,7 +14,12 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
     pageItem.statusGeneration = request
     getJsonShared("/ui/state", function(data) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
-        if (!pageItem.commandInFlight) pageItem.commandPending = false
+        var awaitedState = pageItem.commandAwaitedState
+        if (awaitedState && !(data.alarm && data.alarm.state === awaitedState)) {
+            awaitedState = ""
+            pageItem.commandAwaitedState = ""
+        }
+        if (!pageItem.commandInFlight && !awaitedState) pageItem.commandPending = false
         pageItem.alarmOnline = !!(data.alarm && data.alarm.state
             && data.alarm.state !== "unavailable" && data.alarm.state !== "unknown")
         if (pageItem.clearCommandFeedback) {
@@ -74,6 +79,7 @@ function status(statusItem, pageItem, alarmStateItem, activeSinceItem) {
         pageItem.alarmPageItem = alarmPageItem(data.alarm_page_entity)
     }, function(error) {
         if (generation !== pageItem.runtimeGeneration || request !== pageItem.statusGeneration) return
+        pageItem.commandAwaitedState = ""
         if (!pageItem.commandInFlight) pageItem.commandPending = false
         pageItem.alarmOnline = false
         pageItem.watchFailed = true
@@ -463,6 +469,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         return
     }
     var generation = pageItem.runtimeGeneration
+    var sentState = pageItem.alarmRawState
     pageItem.commandPending = true
     pageItem.commandInFlight = true
     var path = "/ui/alarm/command?command=" + encodeURIComponent(command)
@@ -476,11 +483,13 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.commandInFlight = false
         pageItem.commandPending = false
+        pageItem.commandAwaitedState = ""
         if (applyAlarmCommandResult(data, command, statusItem, pageItem)) {
             return
         }
         if (data.ok) {
             pageItem.commandPending = true
+            if (pageItem.alarmRawState === sentState) pageItem.commandAwaitedState = sentState
             if (pageItem.setCommandFeedback) {
                 pageItem.setCommandFeedback("sending", command, "#f1c40f")
             } else {
@@ -503,6 +512,7 @@ function alarmCommand(command, code, statusItem, pageItem, alarmStateItem, activ
         if (generation !== pageItem.runtimeGeneration) return
         pageItem.commandInFlight = false
         pageItem.commandPending = false
+        pageItem.commandAwaitedState = ""
         setErrorFeedback(command, statusItem, pageItem)
     }, commandScope(pageItem, ""))
 }

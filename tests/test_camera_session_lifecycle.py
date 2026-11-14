@@ -189,3 +189,30 @@ def test_repeated_close_waits_for_cleanup_without_recancelling_or_touching_other
         assert not tasks._tasks
 
     asyncio.run(run())
+
+
+def test_candidates_that_arrive_while_the_session_waits_are_handed_to_it(monkeypatch):
+    monkeypatch.setattr(session_lifecycle, "MAX_PRESESSION_WEBRTC_CANDIDATES", 3)
+
+    async def run():
+        tasks = CameraBackgroundTasks()
+        sessions = CameraWebRTCSessions(tasks)
+        session = _session()
+        session.pending_candidates = ["early"]
+        # Buffered under the id while the session still waits for its lock.
+        await sessions.on_candidate("offer", "late-1")
+        await sessions.on_candidate("offer", "late-2")
+        await sessions.on_candidate("offer", "late-3")
+
+        sessions.activate("offer", session)
+
+        assert sessions.active["offer"] is session
+        assert session.pending_candidates == ["early", "late-1", "late-2"]
+        assert "offer" not in sessions.candidates
+        session.ready = True
+        await sessions.flush_candidates("offer")
+        send = session.provider.async_on_webrtc_candidate
+        assert send.await_args_list == [call("offer", v) for v in ("early", "late-1", "late-2")]
+        await tasks.close()
+
+    asyncio.run(run())

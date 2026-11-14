@@ -78,6 +78,21 @@ class CameraWebRTCSessions:
             offer is None or not offer.task.cancelling()
         )
 
+    def activate(self, session_id: str, session: ProviderWebRTCSession) -> None:
+        """Make a session active and take over candidates that arrived meanwhile.
+
+        The session is built before it waits for the prepare lock, and
+        candidates the browser trickles in that window are buffered under the
+        session id because no session is active yet. They would never reach
+        the provider if they were left there.
+        """
+
+        self.active[session_id] = session
+        room = MAX_PRESESSION_WEBRTC_CANDIDATES - len(session.pending_candidates)
+        late = self.candidates.pop(session_id, [])
+        if room > 0:
+            session.pending_candidates.extend(late[:room])
+
     async def on_candidate(self, session_id: str, candidate: Any) -> None:
         """Forward ICE or buffer it within the pre-session resource limits."""
         if self._tasks.closing:

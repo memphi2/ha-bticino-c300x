@@ -650,7 +650,7 @@ class C300XDoorbellCamera(WebRTCDebugMixin, C300XEntity, Camera):
             stream_context.ring_preview = session.ring_preview
             async with self._rtsp_prepare_lock:
                 raise_if_on_demand_capture_active(self._runtime_data.resources)
-                self._webrtc_sessions.active[session_id] = session
+                self._webrtc_sessions.activate(session_id, session)
                 if _owner_is_home_call(owner):
                     # Keep admission and device start indivisible with respect
                     # to the final close of a previous Home Call session.

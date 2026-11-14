@@ -780,9 +780,7 @@ def test_feature_input_collects_activation_and_dashboard_errors() -> None:
         CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity",
         CONF_WEATHER_ENTITY_ID: "invalid_weather_entity",
         CONF_DASHBOARD_ENTITIES: "invalid_dashboard_entities",
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: (
-            "invalid_dashboard_entity_display_overrides"
-        ),
+        "base": "invalid_dashboard_entity_display_overrides",
     }
     assert data[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
     assert data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P

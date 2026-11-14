@@ -163,7 +163,9 @@
     },
     "abort": {
       "already_configured": "BTicino C300X is already configured.",
-      "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials."
+      "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials.",
+      "cannot_connect": "The device agent could not be reached. Check the address and that the agent is running.",
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
     },
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
@@ -185,7 +187,8 @@
       "required": "This field is required.",
       "invalid_dashboard_entities": "Select only entities the display can show.",
       "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode.",
-      "invalid_action_map": "The action allowlist JSON is invalid."
+      "invalid_action_map": "The action allowlist JSON is invalid.",
+      "invalid_dashboard_entity_display_overrides": "A display setting is not valid. Check the custom names and the page names (up to 60 characters)."
     }
   },
   "options": {
@@ -271,7 +274,8 @@
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "invalid_dashboard_entities": "Select only entities the display can show.",
-      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode."
+      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode.",
+      "invalid_dashboard_entity_display_overrides": "A display setting is not valid. Check the custom names and the page names (up to 60 characters)."
     }
   },
   "entity": {

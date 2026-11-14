@@ -163,7 +163,9 @@
     },
     "abort": {
       "already_configured": "BTicino C300X è già configurato.",
-      "reconfigure_successful": "BTicino C300X è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali."
+      "reconfigure_successful": "BTicino C300X è stato riconfigurato. Aggiorna la configurazione locale del device agent o del display bridge se hai ruotato le credenziali.",
+      "cannot_connect": "Impossibile raggiungere il device agent. Controlla l'indirizzo e che l'agent sia in esecuzione.",
+      "unique_id_mismatch": "Questo è un dispositivo diverso da quello configurato. Riconfigura la voce corrispondente oppure aggiungi il dispositivo come nuova voce."
     },
     "error": {
       "agent_bundle_missing": "Il bundle ARMHF dell'agent non e incluso. Compila/prepara il bundle di release prima di usare l'installer.",
@@ -185,7 +187,8 @@
       "required": "Questo campo è obbligatorio.",
       "invalid_dashboard_entities": "Seleziona solo entità che il display può mostrare.",
       "invalid_device_activation_mode": "Scegli automatico o manuale per la modalità indirizzo delle attivazioni.",
-      "invalid_action_map": "Il JSON della allowlist delle azioni non è valido."
+      "invalid_action_map": "Il JSON della allowlist delle azioni non è valido.",
+      "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri)."
     }
   },
   "options": {
@@ -271,7 +274,8 @@
       "invalid_device_activations": "Controlla ID, nome, tipo e indirizzo dell'attivazione. Gli ID devono essere unici; la modalita luce scale manuale riserva gia stair_light.",
       "invalid_stair_light_part": "Inserisci un valore P/N numerico da 0 a 99.",
       "invalid_dashboard_entities": "Seleziona solo entità che il display può mostrare.",
-      "invalid_device_activation_mode": "Scegli automatico o manuale per la modalità indirizzo delle attivazioni."
+      "invalid_device_activation_mode": "Scegli automatico o manuale per la modalità indirizzo delle attivazioni.",
+      "invalid_dashboard_entity_display_overrides": "Un'impostazione del display non è valida. Controlla i nomi personalizzati e i nomi delle pagine (al massimo 60 caratteri)."
     }
   },
   "entity": {

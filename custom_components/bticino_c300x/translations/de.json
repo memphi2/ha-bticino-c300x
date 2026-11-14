@@ -163,7 +163,9 @@
     },
     "abort": {
       "already_configured": "BTicino C300X ist bereits konfiguriert.",
-      "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden."
+      "reconfigure_successful": "BTicino C300X wurde neu konfiguriert. Aktualisiere die lokale Device-Agent- oder Display-Bridge-Konfiguration, falls Zugangsdaten rotiert wurden.",
+      "cannot_connect": "Der Device-Agent ist nicht erreichbar. Pruefe die Adresse und ob der Agent laeuft.",
+      "unique_id_mismatch": "Das ist ein anderes Geraet als das eingerichtete. Konfiguriere den passenden Eintrag neu oder fuege das Geraet als neuen Eintrag hinzu."
     },
     "error": {
       "agent_bundle_missing": "Das paketierte ARMHF-Agent-Bundle fehlt. Baue/paketiere das Release-Bundle, bevor der Installer genutzt wird.",
@@ -185,7 +187,8 @@
       "required": "Dieses Feld ist erforderlich.",
       "invalid_dashboard_entities": "Waehle nur Entitaeten, die das Display anzeigen kann.",
       "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen.",
-      "invalid_action_map": "Das JSON der erlaubten Aktionen ist ungueltig."
+      "invalid_action_map": "Das JSON der erlaubten Aktionen ist ungueltig.",
+      "invalid_dashboard_entity_display_overrides": "Eine Display-Einstellung ist ungueltig. Pruefe die eigenen Namen und die Seitennamen (hoechstens 60 Zeichen)."
     }
   },
   "options": {
@@ -271,7 +274,8 @@
       "invalid_device_activations": "Pruefe Aktivierungs-ID, Name, Typ und Adresse. IDs muessen eindeutig sein; der manuelle Treppenlichtmodus reserviert bereits stair_light.",
       "invalid_stair_light_part": "Gib einen numerischen P/N-Wert von 0 bis 99 ein.",
       "invalid_dashboard_entities": "Waehle nur Entitaeten, die das Display anzeigen kann.",
-      "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen."
+      "invalid_device_activation_mode": "Waehle automatisch oder manuell fuer den Adressmodus der Aktivierungen.",
+      "invalid_dashboard_entity_display_overrides": "Eine Display-Einstellung ist ungueltig. Pruefe die eigenen Namen und die Seitennamen (hoechstens 60 Zeichen)."
     }
   },
   "entity": {

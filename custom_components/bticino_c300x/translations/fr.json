@@ -163,7 +163,9 @@
     },
     "abort": {
       "already_configured": "BTicino C300X est deja configure.",
-      "reconfigure_successful": "BTicino C300X a ete reconfigure. Mettez a jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvele les identifiants."
+      "reconfigure_successful": "BTicino C300X a ete reconfigure. Mettez a jour la configuration locale de l'agent appareil ou du display bridge si vous avez renouvele les identifiants.",
+      "cannot_connect": "L'agent appareil est injoignable. Verifiez l'adresse et que l'agent fonctionne.",
+      "unique_id_mismatch": "Ce n'est pas l'appareil configure. Reconfigurez l'entree correspondante ou ajoutez l'appareil comme nouvelle entree."
     },
     "error": {
       "agent_bundle_missing": "Le bundle agent ARMHF package est manquant. Construisez/packagez le bundle de release avant d'utiliser l'installateur.",
@@ -185,7 +187,8 @@
       "required": "Ce champ est obligatoire.",
       "invalid_dashboard_entities": "Selectionnez uniquement des entites que l'ecran peut afficher.",
       "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations.",
-      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide."
+      "invalid_action_map": "Le JSON de la liste autorisee d'actions est invalide.",
+      "invalid_dashboard_entity_display_overrides": "Un reglage de l'ecran n'est pas valide. Verifiez les noms personnalises et les noms de page (60 caracteres au plus)."
     }
   },
   "options": {
@@ -271,7 +274,8 @@
       "invalid_device_activations": "Verifiez l'ID, le nom, le type et l'adresse d'activation. Les ID doivent etre uniques; le mode lumiere escalier manuel reserve deja stair_light.",
       "invalid_stair_light_part": "Saisissez une valeur P/N numerique de 0 a 99.",
       "invalid_dashboard_entities": "Selectionnez uniquement des entites que l'ecran peut afficher.",
-      "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations."
+      "invalid_device_activation_mode": "Choisissez automatique ou manuel pour le mode d'adresse des activations.",
+      "invalid_dashboard_entity_display_overrides": "Un reglage de l'ecran n'est pas valide. Verifiez les noms personnalises et les noms de page (60 caracteres au plus)."
     }
   },
   "entity": {

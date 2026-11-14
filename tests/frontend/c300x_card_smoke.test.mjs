@@ -68,6 +68,8 @@ function installFakeDom() {
           "audio",
           ".media",
           ".empty",
+          ".snapshot-preview",
+          ".snapshot-label",
           ".body",
           ".row-action",
           ".action-icon",
@@ -180,6 +182,79 @@ function fakeHass({ cameraEntity, connection } = {}) {
     },
   };
 }
+
+test("snapshot wiring uses device settings, marks archives and hides them during live video", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?snapshot-wiring");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const hass = fakeHass();
+  const attrs = hass.states["camera.bticino_c300x_doorbell_camera"].attributes;
+  attrs.stream_snapshots = true;
+  hass.language = "en";
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  try {
+    card.hass = hass;
+    assert.equal(card._snapshotEl.hidden, true);
+    const updates = [];
+    card._snapshots.update = (args) => updates.push(args);
+    const capturedAt = 1800000000;
+    card._snapshots.showPreview("blob:archive", capturedAt);
+    assert.equal(card._snapshotEl.hidden, false);
+    assert.match(card._snapshotLabelEl.textContent, /Archived image \(not live\)/);
+    assert.ok(card._snapshotLabelEl.textContent.includes(new Date(capturedAt * 1000).toLocaleString("en")));
+    assert.equal(updates.at(-1).entryId, "entry-1");
+    assert.equal(updates.at(-1).attributes, attrs);
+    card._webrtc = { remoteStream: {}, running: true, close() {} };
+    card._updateState();
+    assert.equal("active" in updates.at(-1), false);
+    assert.equal(card._snapshotEl.hidden, true);
+    card._lifecycle.activeHomeCallSession = true;
+    card._updateState();
+    card._webrtc.remoteStream = null;
+    attrs.stream_snapshots = false;
+    card._updateState();
+    assert.equal(card._snapshotEl.hidden, true);
+    assert.equal(card._snapshotLabelEl.hidden, true);
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
+test("reattaching an idle card reloads its cancelled archive without starting video", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?snapshot-reattach");
+  const card = new (registry.get("c300x-doorbell-call-card"))();
+  const hass = fakeHass();
+  const requests = [];
+  const resolvers = [];
+  hass.fetchWithAuth = (url, options) => {
+    requests.push({ url, ...options });
+    return new Promise((resolve) => resolvers.push(resolve));
+  };
+  Object.assign(hass.states["camera.bticino_c300x_doorbell_camera"].attributes, {
+    stream_snapshots: true, snapshot_latest: "image", snapshot_captured_at: Date.now() / 1000,
+  });
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  try {
+    card.hass = hass;
+    assert.equal(requests.length, 1);
+    assert.equal(card._webrtc.running, false);
+    card.disconnectedCallback();
+    assert.equal(requests[0].signal.aborted, true);
+    card.connectedCallback();
+    assert.equal(requests.length, 2);
+    hass.devices = { "device-1": { config_entry_id: "entry-2" } };
+    card.hass = hass;
+    assert.equal(requests.length, 3);
+    assert.match(requests[2].url, /\/entry-2\/image$/);
+    assert.equal(requests[1].signal.aborted, true);
+    assert.equal(card._webrtc.running, false);
+  } finally {
+    card.disconnectedCallback();
+    for (const resolve of resolvers) resolve({ ok: false });
+    await new Promise(setImmediate);
+  }
+});
 
 test("doorbell card custom element renders with fake Home Assistant state", async () => {
   const registry = installFakeDom();

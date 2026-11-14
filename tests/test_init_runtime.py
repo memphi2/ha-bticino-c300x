@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -43,6 +44,16 @@ from custom_components.bticino_c300x.data import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def snapshot_runtime_boundary(monkeypatch):
+    """Runtime tests delegate snapshot storage/lifecycle to its focused tests."""
+    from custom_components.bticino_c300x import snapshots
+
+    setup = AsyncMock()
+    monkeypatch.setattr(snapshots, "async_setup_snapshots", setup)
+    return setup
 
 
 def test_migrate_entry_generates_missing_setup_fields(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,6 +172,7 @@ def test_payload_recovery_marker_does_not_reload_active_update(marker) -> None:
 
 def test_setup_entry_builds_runtime_and_forwards_platforms(
     monkeypatch: pytest.MonkeyPatch,
+    snapshot_runtime_boundary,
 ) -> None:
     calls: list[str] = []
     from homeassistant.helpers import aiohttp_client, dispatcher
@@ -279,6 +291,7 @@ def test_setup_entry_builds_runtime_and_forwards_platforms(
         await task
 
     asyncio.run(setup())
+    snapshot_runtime_boundary.assert_awaited_once_with(hass, entry)
     assert len(signals) == 1
 
     assert entry.runtime_data.agent_info["version"] == "1.2.0"
@@ -312,7 +325,7 @@ def test_setup_entry_rejects_missing_required_fields() -> None:
 @pytest.mark.parametrize("cancelled", [False, True])
 @pytest.mark.parametrize("cleanup_error", [False, True])
 def test_setup_failure_releases_callbacks_and_allows_retry(
-    monkeypatch, stage, cancelled, cleanup_error
+    monkeypatch, stage, cancelled, cleanup_error, snapshot_runtime_boundary
 ):
     from custom_components.bticino_c300x import events, repair_issues, services, webhook
 

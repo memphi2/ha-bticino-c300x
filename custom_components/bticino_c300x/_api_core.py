@@ -101,7 +101,13 @@ class _C300XApiCore:
         method: str,
         path: str,
         extra_headers: dict[str, str] | None = None,
+        *,
+        max_bytes: int | None = None,
     ) -> tuple[bytes, str]:
+        media_limit = (
+            _MAX_MEDIA_RESPONSE_BYTES
+            if max_bytes is None else min(max_bytes, _MAX_MEDIA_RESPONSE_BYTES)
+        )
         try:
             async with self._session.request(
                 method,
@@ -112,7 +118,7 @@ class _C300XApiCore:
                 content = await read_capped_body(
                     response.content,
                     response.content_length,
-                    _MAX_MEDIA_RESPONSE_BYTES
+                    media_limit
                     if 200 <= response.status < 300
                     else _MAX_JSON_RESPONSE_BYTES,
                 )

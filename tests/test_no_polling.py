@@ -90,7 +90,12 @@ def test_device_home_page_buttons_do_not_poll() -> None:
     assert "function startMessageNotificationWatch()" in text
     assert "MemoSync.startEventWatch(handleMessageNotificationEvent)" in text
     assert "function homeButtons(callback)" in helper
-    assert "Timer" not in text
+    # The page owns a one-shot notification reconnect timer for Qt 4 safety;
+    # it must never become a periodic status poll.
+    assert "id: memoRetryTimer" in text
+    assert "repeat: false" in text
+    assert "onTriggered: MemoSync.retryEventWatch()" in text
+    assert "repeat: true" not in text
     assert "setInterval" not in text
     assert "Timer" not in helper
     assert "setInterval" not in helper

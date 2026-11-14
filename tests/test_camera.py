@@ -6,6 +6,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, cast
+from uuid import UUID
 
 import pytest
 from homeassistant.components.camera import _async_get_image as ha_async_get_image
@@ -346,6 +347,173 @@ def test_doorbell_camera_proxy_still_uses_local_fallback() -> None:
     assert entry.runtime_data.api.activate_calls == []
 
 
+def test_doorbell_camera_uses_cached_snapshot_without_device_io(monkeypatch) -> None:
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)
+    camera.entity_id = "camera.doorbell"
+    camera.hass = SimpleNamespace(data={})
+    manager = SimpleNamespace(preview=b"cached-jpeg")
+    monkeypatch.setattr(camera_module, "get_snapshots", lambda *_: manager)
+
+    assert camera.camera_image() == b"cached-jpeg"
+    assert asyncio.run(camera.async_camera_image()) == b"cached-jpeg"
+    assert camera.content_type == "image/jpeg"
+    assert camera.entity_picture.startswith("/api/camera_proxy/camera.doorbell")
+    manager.preview = None
+    assert camera.camera_image() == STILL_IMAGE_BYTES
+    assert camera.content_type == STILL_IMAGE_CONTENT_TYPE
+    assert camera.entity_picture is None
+    assert entry.runtime_data.api.activate_calls == []
+
+
+@pytest.fixture
+def snapshot_camera(monkeypatch):
+    """Exercise camera transitions without starting manager acquisition tasks."""
+
+    entry = _FakeEntry()
+    camera = C300XDoorbellCamera(entry)
+    camera.hass = SimpleNamespace(data={})
+    calls = []
+    manager = SimpleNamespace(
+        enabled=True,
+        latest=None,
+        preview=None,
+        capture_requested=lambda key: calls.append(("start", key)),
+        capture_ended=lambda key: calls.append(("end", key)),
+    )
+    camera.hass.data = {"bticino_c300x": {"stream_snapshots": {entry.entry_id: manager}}}
+    return camera, manager, calls
+
+
+@pytest.mark.parametrize("start", ["status", "event"])
+@pytest.mark.parametrize("end", ["status", "event", "closed", "clear", "home_call"])
+def test_snapshot_capture_follows_video_window_edges(snapshot_camera, start, end) -> None:
+    camera, _manager, calls = snapshot_camera
+    status = {"available": True, "window_available": True, "media_owner": "home_call"}
+    event = SimpleNamespace(data={
+        "entry_id": camera._entry.entry_id,
+        "event_key": "doorbell_view_requested",
+        "video_window_available": True,
+        "video_available": True,
+        "media_owner": "home_call",
+    })
+    if start == "status":
+        camera._apply_status(status)
+    else:
+        camera._handle_agent_event(event)
+    assert len(calls) == 1
+    key = calls[0][1]
+    assert calls[0][0] == "start"
+    assert UUID(key).version == 4
+    assert camera._snapshot_capture_key == key
+    assert "snapshot_session" not in camera.extra_state_attributes
+    assert key not in repr(camera.extra_state_attributes)
+
+    # Status/event duplicates share one identity, even when ownership changes.
+    camera._apply_status({**status, "media_owner": "ring"})
+    camera._handle_agent_event(event)
+    assert calls == [("start", key)]
+    if end == "status":
+        camera._apply_status({"window_available": False})
+    elif end == "event":
+        camera._handle_agent_event(SimpleNamespace(data={
+            **event.data, "video_window_available": False,
+        }))
+    elif end == "closed":
+        camera._handle_agent_event(SimpleNamespace(data={
+            "entry_id": camera._entry.entry_id, "event_key": "doorbell_media_closed",
+        }))
+    elif end == "clear":
+        camera._clear_video_window()
+    else:
+        camera._apply_home_call_ended({})
+    assert calls == [("start", key), ("end", key)]
+    assert camera._snapshot_capture_key is None
+    assert camera._video_window_available is False
+    camera._clear_video_window()
+    camera._apply_status({"window_available": False})
+    assert len(calls) == 2
+    camera._apply_status(status)
+    next_key = calls[-1][1]
+    assert calls[-1][0] == "start"
+    assert UUID(next_key).version == 4
+    assert next_key != key
+    api = camera._runtime_data.api
+    assert api.activate_calls == []
+    assert api.home_call_start_calls == []
+    assert api.stop_calls == api.home_call_stop_calls == api.hangup_calls == 0
+
+
+def test_snapshot_capture_ignores_nonvideo_events_and_still_requests(snapshot_camera) -> None:
+    camera, manager, calls = snapshot_camera
+    camera._apply_status({"available": True, "window_available": False})
+    for event_key in ["doorbell_pressed", "doorbell_view_requested", "home_call_answered"]:
+        camera._handle_agent_event(SimpleNamespace(data={
+            "entry_id": camera._entry.entry_id, "event_key": event_key,
+            "video_available": True,
+        }))
+    camera._handle_agent_event(SimpleNamespace(data={
+        "entry_id": "other-entry", "event_key": "doorbell_view_requested",
+        "video_window_available": True,
+    }))
+    camera._apply_home_call_status({"active": True, "running": True, "answered": True})
+    for preview in [None, b"cached-jpeg"]:
+        manager.preview = preview
+        assert camera.camera_image() == (preview or STILL_IMAGE_BYTES)
+        assert asyncio.run(camera.async_camera_image()) == (preview or STILL_IMAGE_BYTES)
+    assert calls == []
+    assert camera._snapshot_capture_key is None
+    assert camera._runtime_data.api.activate_calls == []
+    assert camera._runtime_data.api.home_call_start_calls == []
+
+
+def test_snapshot_capture_home_call_end_preserves_unrelated_video(snapshot_camera) -> None:
+    camera, _manager, calls = snapshot_camera
+    camera._apply_status({"window_available": True, "media_owner": "ring"})
+    camera._apply_home_call_ended({})
+    assert camera._video_window_available is True
+    assert len(calls) == 1
+    assert calls[0][0] == "start"
+
+
+def test_snapshot_capture_removal_ends_before_cleanup_and_rejects_late_status(snapshot_camera, monkeypatch) -> None:
+    camera, _manager, calls = snapshot_camera
+
+    async def scenario() -> None:
+        camera._apply_status({"window_available": True})
+        key = calls[0][1]
+        close = camera._background_tasks.close
+
+        async def close_with_late_status() -> None:
+            assert calls == [("start", key), ("end", key)]
+            await close()
+            camera._apply_status({"window_available": True})
+            camera._handle_agent_event(SimpleNamespace(data={
+                "entry_id": camera._entry.entry_id, "event_key": "doorbell_view_requested",
+                "video_window_available": True,
+            }))
+
+        monkeypatch.setattr(camera._background_tasks, "close", close_with_late_status)
+        await camera.async_will_remove_from_hass()
+        assert calls == [("start", key), ("end", key)]
+        assert camera._snapshot_capture_key is None
+        assert camera._runtime_data.api.activate_calls == []
+        # Preserve the existing removal stop, without adding any new API write.
+        assert camera._runtime_data.api.stop_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_snapshot_capture_identity_is_unique_across_camera_instances(snapshot_camera) -> None:
+    camera, _manager, calls = snapshot_camera
+    replacement = C300XDoorbellCamera(camera._entry)
+    replacement.hass = camera.hass
+    camera._apply_status({"window_available": True})
+    replacement._apply_status({"window_available": True})
+    assert len(calls) == 2
+    assert calls[0][1] != calls[1][1]
+
+
 def test_doorbell_camera_exposes_native_webrtc_offer_handler() -> None:
     assert "async_handle_async_webrtc_offer" in C300XDoorbellCamera.__dict__
     assert "async_handle_home_call_webrtc_offer" in C300XDoorbellCamera.__dict__
@@ -377,6 +545,11 @@ def test_doorbell_camera_exposes_only_user_facing_media_attributes() -> None:
     attrs = camera.extra_state_attributes
 
     assert attrs == {
+        "stream_snapshots": False,
+        "snapshot_delay_seconds": 5,
+        "snapshot_retention_days": 14,
+        "snapshot_latest": None,
+        "snapshot_captured_at": None,
         "media_state": "unknown",
         "media_primary_action": "refresh",
         "video_window_available": True,

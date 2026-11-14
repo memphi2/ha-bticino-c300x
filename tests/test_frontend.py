@@ -38,6 +38,7 @@ CARD_MEDIA_ATTACH_SOURCE = FRONTEND_DIR / "c300x-media-attach.js"
 CARD_RINGBACK_SOURCE = FRONTEND_DIR / "c300x-ringback-tone.js"
 CARD_RING_PREVIEW_STATE_SOURCE = FRONTEND_DIR / "c300x-ring-preview-state.js"
 CARD_STATE_SOURCE = FRONTEND_DIR / "c300x-state-model.js"
+CARD_SNAPSHOTS_SOURCE = FRONTEND_DIR / "c300x-stream-snapshots.js"
 CARD_TRANSLATIONS_SOURCE = FRONTEND_DIR / "c300x-translations.js"
 CARD_WEBRTC_SOURCE = FRONTEND_DIR / "c300x-webrtc-client.js"
 CARD_WEBRTC_DEBUG_SOURCE = FRONTEND_DIR / "c300x-webrtc-debug.js"
@@ -54,6 +55,7 @@ FRONTEND_MODULE_SOURCES = (
     CARD_RINGBACK_SOURCE,
     CARD_RING_PREVIEW_STATE_SOURCE,
     CARD_STATE_SOURCE,
+    CARD_SNAPSHOTS_SOURCE,
     CARD_TRANSLATIONS_SOURCE,
     CARD_WEBRTC_SOURCE,
     CARD_WEBRTC_DEBUG_SOURCE,
@@ -977,6 +979,7 @@ def test_frontend_internal_imports_use_bundle_hash_not_release_version() -> None
         "c300x-card-lifecycle.js",
         "c300x-card-template.js",
         "c300x-state-model.js",
+        "c300x-stream-snapshots.js",
         "c300x-ringback-tone.js",
         "c300x-webrtc-client.js",
     ):

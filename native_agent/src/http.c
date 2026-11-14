@@ -38,6 +38,7 @@
 #include "ui_events.h"
 #include "video_audio_settings.h"
 #include "video_rtsp.h"
+#include "video_snapshot.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -5981,6 +5982,30 @@ static void api_state(
     send_json(client_fd, 200, "OK", body);
 }
 
+static void handle_doorbell_snapshot(int client_fd)
+{
+    unsigned char *data = NULL;
+    size_t size = 0;
+    char header[256];
+    enum c300x_snapshot_result result = c300x_video_snapshot(&data, &size);
+    if (result != C300X_SNAPSHOT_OK) {
+        send_json(client_fd, result == C300X_SNAPSHOT_THROTTLED ? 429 : 503,
+                  result == C300X_SNAPSHOT_THROTTLED ? "Too Many Requests" : "Service Unavailable",
+                  result == C300X_SNAPSHOT_THROTTLED
+                      ? "{\"ok\":false,\"error\":\"snapshot_throttled\"}\n"
+                      : "{\"ok\":false,\"error\":\"snapshot_unavailable\"}\n");
+        return;
+    }
+    int length = snprintf(header, sizeof(header),
+        "HTTP/1.1 200 OK\r\nContent-Type: image/bmp\r\nContent-Length: %zu\r\n"
+        "Cache-Control: no-store\r\nConnection: close\r\n\r\n", size);
+    if (length > 0 && (size_t)length < sizeof(header)
+        && c300x_http_write(client_fd, header, (size_t)length)) {
+        (void)c300x_http_write(client_fd, (const char *)data, size);
+    }
+    free(data);
+}
+
 static void handle_doorbell_video_get(
     int client_fd,
     const struct c300x_config *config,
@@ -10145,6 +10170,10 @@ static void handle_api_request(
             || strcmp(request->path, "/api/v1/video/doorbell/status") == 0)
     ) {
         handle_doorbell_video_get(client_fd, config, runtime);
+        return;
+    }
+    if (strcmp(request->method, "GET") == 0 && strcmp(request->path, "/api/v1/video/doorbell/snapshot") == 0) {
+        handle_doorbell_snapshot(client_fd);
         return;
     }
     if (strcmp(request->method, "POST") == 0 && strcmp(request->path, "/api/v1/video/doorbell/actions/activate") == 0) {

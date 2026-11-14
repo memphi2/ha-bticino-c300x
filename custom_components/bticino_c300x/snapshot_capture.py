@@ -1,0 +1,194 @@
+"""Event-driven reads of an already active doorbell framebuffer."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from io import BytesIO
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
+
+from aiohttp import ClientConnectionError
+from homeassistant.core import callback
+from PIL import Image, UnidentifiedImageError
+
+from .api_errors import C300XAgentApiConnectionError, C300XAgentApiError
+from .config_snapshots import snapshot_options
+from .const import EVENT_AGENT_EVENT_RECEIVED
+from .entity import entry_video_enabled, supports_capability
+from .event_payload import agent_event_key
+from .snapshot_store import MAX_SNAPSHOT_BYTES
+
+if TYPE_CHECKING:
+    from .snapshots import StreamSnapshots
+
+_LOGGER = logging.getLogger(__name__)
+MAX_FRAMEBUFFER_PIXELS = 512 * 512
+CAPTURE_TIMEOUT = 12
+RETRY_DELAY = 1
+MAX_ATTEMPTS = 3
+
+
+def framebuffer_jpeg(content: bytes, content_type: str) -> bytes:
+    """Validate a bounded BMP and encode a metadata-free JPEG on the executor."""
+
+    if (content_type.partition(";")[0].strip().lower() != "image/bmp"
+            or not content or len(content) > MAX_SNAPSHOT_BYTES):
+        raise ValueError("Expected a bounded BMP framebuffer")
+    try:
+        with Image.open(BytesIO(content)) as image:
+            if image.format != "BMP" or image.width * image.height > MAX_FRAMEBUFFER_PIXELS:
+                raise ValueError("Invalid framebuffer dimensions or format")
+            image.load()
+            rgb = image.convert("RGB")
+            rgb.info.clear()
+            output = BytesIO()
+            rgb.save(output, format="JPEG", quality=85)
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as err:
+        raise ValueError("Invalid framebuffer") from err
+    result = output.getvalue()
+    if len(result) > MAX_SNAPSHOT_BYTES:
+        raise ValueError("Converted framebuffer exceeds image limit")
+    return result
+
+
+class SnapshotCapture:
+    """One delayed acquisition per physical ring/view/stream cycle, no polling."""
+
+    def __init__(self, manager: StreamSnapshots) -> None:
+        self.manager = manager
+        self.blocked = False
+        self.generation = 0
+        self.task: asyncio.Task[None] | None = None
+        self.pending: tuple[int, str] | None = None
+        self.identity: str | None = None
+        self.stream_key: str | None = None
+        self.ring_seen = False
+        self.last_ring: str | None = None
+        self.unsubscribe: Any = None
+
+    def start(self) -> None:
+        """Subscribe only after persisted settings and preview have loaded."""
+
+        if not self._supported() or self.unsubscribe is not None:
+            return
+        bus = getattr(self.manager.hass, "bus", None)
+        if bus is not None:
+            self.unsubscribe = bus.async_listen(EVENT_AGENT_EVENT_RECEIVED, self._event)
+
+    @callback
+    def _event(self, event: Any) -> None:
+        if event.data.get("entry_id") != self.manager.entry.entry_id:
+            return
+        key = agent_event_key(event.data)
+        if key in {"doorbell_media_closed", "agent_restarted"}:
+            self.cancel()
+        elif key == "doorbell_pressed":
+            stamp = event.data.get("event_at")
+            if stamp and stamp == self.last_ring:
+                return
+            self.last_ring = stamp
+            if self.identity is not None and self.ring_seen:
+                self.cancel()
+            self._request()
+            self.ring_seen = True
+        elif key == "doorbell_view_requested":
+            self._request()
+
+    @callback
+    def capture_requested(self, session_key: str) -> None:
+        """Join a ring cycle or request one image for an actual HA stream start."""
+
+        if not session_key:
+            return
+        self._request()
+        if self.identity is not None:
+            self.stream_key = session_key
+
+    @callback
+    def capture_ended(self, session_key: str) -> None:
+        """Ignore stale stream-close notifications for an older session."""
+
+        if session_key == self.stream_key:
+            self.cancel()
+
+    def _request(self) -> None:
+        if (self.blocked or self.manager.closed or not self.manager.enabled
+                or not self._supported() or self.identity is not None):
+            return
+        self.identity = uuid4().hex
+        self.generation += 1
+        if self.task is not None and not self.task.done():
+            # Keep only the newest request while cancelled executor work drains.
+            self.pending = (self.generation, self.identity)
+        else:
+            self._launch(self.generation, self.identity)
+
+    def _launch(self, generation: int, identity: str) -> None:
+        self.task = asyncio.create_task(self._capture(generation, identity))
+        self.task.add_done_callback(self._completed)
+
+    def _completed(self, task: asyncio.Task[None]) -> None:
+        if not task.cancelled() and (error := task.exception()) is not None:
+            _LOGGER.error("Unexpected snapshot acquisition failure: %s", error)
+        if self.task is not task:
+            return
+        self.task = None
+        pending, self.pending = self.pending, None
+        if pending is not None and self._current(pending[0]):
+            self._launch(*pending)
+
+    def cancel(self) -> None:
+        self.generation += 1
+        self.identity = None
+        self.stream_key = None
+        self.ring_seen = False
+        self.pending = None
+        if self.task is not None and not self.task.done():
+            self.task.cancel()
+
+    def close(self) -> None:
+        self.blocked = True
+        self.cancel()
+        if self.unsubscribe is not None:
+            self.unsubscribe()
+            self.unsubscribe = None
+
+    def _current(self, generation: int) -> bool:
+        return (generation == self.generation and not self.blocked
+                and not self.manager.closed and self.manager.enabled and self._supported())
+
+    def _supported(self) -> bool:
+        entry = self.manager.entry
+        return entry_video_enabled(entry) and supports_capability(entry, "doorbell_video")
+
+    async def _capture(self, generation: int, identity: str) -> None:
+        try:
+            await asyncio.sleep(snapshot_options(self.manager.entry).delay_seconds)
+            # The configurable settling delay is separate from the bounded
+            # acquisition budget (including retries, conversion and save).
+            async with asyncio.timeout(CAPTURE_TIMEOUT):
+                for attempt in range(MAX_ATTEMPTS):
+                    if not self._current(generation):
+                        return
+                    try:
+                        content, content_type = await self.manager.entry.runtime_data.api.async_doorbell_snapshot()
+                        break
+                    except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError) as err:
+                        retry = isinstance(err, (C300XAgentApiConnectionError, ClientConnectionError, OSError, TimeoutError))
+                        retry = retry or getattr(err, "status", None) in (409, 503)
+                        if not retry or attempt == MAX_ATTEMPTS - 1:
+                            raise
+                        # Three attempts at t=0,1,2 allow the native two-second
+                        # throttle to clear without an unbounded retry loop.
+                        await asyncio.sleep(RETRY_DELAY)
+                if not self._current(generation):
+                    return
+                image = await self.manager.disk_job(framebuffer_jpeg, content, content_type)
+                if self._current(generation):
+                    await self.manager.save(image, identity, is_current=lambda: self._current(generation))
+        except asyncio.CancelledError:
+            raise
+        except (C300XAgentApiError, ClientConnectionError, OSError, TimeoutError, ValueError):
+            # Failed reads must never replace a previously useful preview.
+            _LOGGER.debug("Could not acquire C300X framebuffer snapshot", exc_info=True)

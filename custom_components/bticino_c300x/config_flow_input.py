@@ -35,6 +35,7 @@ from .config_flow_forms import optional_suggested as _optional_suggested
 from .config_flow_forms import password_selector as _password_selector
 from .config_schemas import stair_light_n as _stair_light_n
 from .config_schemas import stair_light_p as _stair_light_p
+from .config_snapshots import SNAPSHOT_DEFAULTS, snapshot_values
 from .const import (
     ALARM_DOMAIN,
     CONF_ACTIONS,
@@ -521,6 +522,11 @@ def _feature_input(
     """Validate common feature page input."""
 
     errors: dict[str, str] = {}
+    try:
+        snapshots = snapshot_values(user_input)
+    except ValueError as err:
+        errors[str(err)] = "invalid_snapshot_option"
+        snapshots = dict(SNAPSHOT_DEFAULTS)
     dashboard = _dashboard_feature_input(user_input, errors)
     (
         device_activation_mode,
@@ -536,6 +542,7 @@ def _feature_input(
     )
     return (
         {
+            **snapshots,
             CONF_ALARM_ENTITY_ID: dashboard[CONF_ALARM_ENTITY_ID],
             CONF_ALARM_PAGE_ENTITY_ID: dashboard[CONF_ALARM_PAGE_ENTITY_ID],
             CONF_WEATHER_ENTITY_ID: dashboard[CONF_WEATHER_ENTITY_ID],

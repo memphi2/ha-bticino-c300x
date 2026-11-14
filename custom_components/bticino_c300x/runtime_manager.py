@@ -133,20 +133,30 @@ class C300XRuntimeManager:
             return await self._async_prepare_runtime()
         except (Exception, asyncio.CancelledError):
             try:
-                if self._setup_runtime_data is not None:
-                    cleanup_entry_runtime_resources(
-                        self.hass, self.entry, self._setup_runtime_data
-                    )
-                else:
-                    # Registration can fail before runtime_data owns the callbacks.
-                    C300XRuntimeResources(
-                        unregister_webhook=self.unregister_webhook,
-                        unregister_event_webhook=self.unregister_event_webhook,
-                        unregister_event_registration=self.unregister_event_registration,
-                    ).close()
-            except Exception:
-                _LOGGER.exception("Failed to clean up interrupted C300X setup")
+                from .snapshots import async_shutdown_snapshots
+
+                await async_shutdown_snapshots(self.hass, self.entry.entry_id)
+            finally:
+                self._cleanup_interrupted_setup()
             raise
+
+    def _cleanup_interrupted_setup(self) -> None:
+        """Release synchronous callbacks after awaited snapshot shutdown."""
+
+        try:
+            if self._setup_runtime_data is not None:
+                cleanup_entry_runtime_resources(
+                    self.hass, self.entry, self._setup_runtime_data
+                )
+            else:
+                # Registration can fail before runtime_data owns the callbacks.
+                C300XRuntimeResources(
+                    unregister_webhook=self.unregister_webhook,
+                    unregister_event_webhook=self.unregister_event_webhook,
+                    unregister_event_registration=self.unregister_event_registration,
+                ).close()
+        except Exception:
+            _LOGGER.exception("Failed to clean up interrupted C300X setup")
 
     async def _async_prepare_runtime(self) -> bool:
         """Acquire runtime resources within the setup rollback boundary."""
@@ -158,12 +168,14 @@ class C300XRuntimeManager:
 
         from .repair_issues import async_sync_entry_repair_issues
         from .services import async_setup_services
+        from .snapshots import async_setup_snapshots
 
         async_sync_entry_repair_issues(self.hass, self.entry)
         self.entry.async_on_unload(
             self.entry.add_update_listener(_entry_update_listener(self.entry))
         )
         await async_setup_services(self.hass)
+        await async_setup_snapshots(self.hass, self.entry)
         await self.async_sync_platform_gate_state()
         # After the gate state, never before: the cleanup asks whether the
         # Display patch is active, and _store_runtime_data has just replaced
@@ -348,7 +360,12 @@ class C300XRuntimeManager:
             runtime_data.loaded_platforms,
         )
         if unload_ok:
-            cleanup_entry_runtime_resources(self.hass, self.entry, runtime_data)
+            from .snapshots import async_shutdown_snapshots
+
+            try:
+                await async_shutdown_snapshots(self.hass, self.entry.entry_id)
+            finally:
+                cleanup_entry_runtime_resources(self.hass, self.entry, runtime_data)
         return unload_ok
 
     def _build_agent_api(self) -> C300XAgentApi:

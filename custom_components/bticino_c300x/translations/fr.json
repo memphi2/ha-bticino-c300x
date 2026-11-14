@@ -52,7 +52,9 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -60,7 +62,9 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
         }
       },
       "user_device_activations": {
@@ -145,7 +149,9 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -153,7 +159,9 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
         }
       },
       "reconfigure_device_activations": {
@@ -489,7 +497,8 @@
       "dashboard_page_name_duplicate": "Deux pages ont le même nom ; donnez à chaque page le sien.",
       "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
-      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page."
+      "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes et 1-365 jours."
     }
   },
   "options": {
@@ -521,7 +530,9 @@
           "doorstation_audio_gain_db": "Niveau audio en direct (dB)",
           "ring_capture_audio_gain_db": "Volume des enregistrements d'appel (dB)",
           "webrtc_ice_policy": "Chemins de connexion de l'image en direct",
-          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant"
+          "native_two_way_audio": "Parler depuis la vue caméra de Home Assistant",
+          "snapshot_delay_seconds": "Délai de capture (secondes)",
+          "snapshot_retention_days": "Conservation (jours)"
         },
         "data_description": {
           "video_enabled": "Image et son du poste de porte dans Home Assistant : lors d'un appel, à la demande et pour Home Call.",
@@ -529,7 +540,9 @@
           "doorstation_audio_gain_db": "Niveau du son du poste de porte en direct et pendant un appel. De -20 à +20 dB ; 0 laisse le son inchangé.",
           "ring_capture_audio_gain_db": "Volume du son des enregistrements faits lorsqu'on sonne. De -20 à +20 dB ; la valeur par défaut est 6.",
           "webrtc_ice_policy": "Quelles adresses réseau le navigateur peut utiliser pour l'image en direct. À modifier seulement si l'image en direct ne se connecte pas.",
-          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé."
+          "native_two_way_audio": "Facultatif, désactivé par défaut. Nécessite Home Assistant 2026.11 ou plus récent, « Two-way audio » activé dans Paramètres > Système > Labs, l'image en direct via WebRTC, un accès en HTTPS et le microphone autorisé dans le navigateur. Répondez d'abord à un appel dans la carte C300X ; cette option n'y répond pas. Parler dans la carte C300X reste inchangé.",
+          "snapshot_delay_seconds": "Capture après une sonnerie ou le début d'un flux vidéo ; 5 secondes par défaut. Aucune carte ouverte requise.",
+          "snapshot_retention_days": "14 jours par défaut. Suppression des images expirées même si l'enregistrement est désactivé. Limite : 1 000 images ou 128 Mio par appareil, les plus anciennes sont supprimées en premier."
         }
       },
       "device_activations": {
@@ -752,7 +765,8 @@
       "dashboard_entity_on_several_pages": "Une entité est choisie sur plusieurs pages ; gardez-la sur une seule page.",
       "invalid_dashboard_pages": "Les pages enregistrées de l'écran ne sont pas valides ; configurez les pages à nouveau.",
       "dashboard_page_name_missing": "Une page avec des entités a besoin d'un nom ; l'écran l'affiche comme titre de la page.",
-      "required": "Ce champ est obligatoire."
+      "required": "Ce champ est obligatoire.",
+      "invalid_snapshot_option": "Saisissez des entiers : 1-300 secondes et 1-365 jours."
     }
   },
   "entity": {
@@ -972,6 +986,9 @@
       },
       "homeassistant_media_user_setup": {
         "name": "Patch utilisateur Home Assistant"
+      },
+      "stream_snapshots": {
+        "name": "Enregistrer les images"
       }
     }
   },

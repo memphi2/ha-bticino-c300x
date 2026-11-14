@@ -318,7 +318,7 @@ class _AgentEventRegistration:
     def _schedule_registry_refresh(self, event: Any = None) -> None:
         if self._stopped or self._registry_refresh_cancel is not None:
             return
-        if not _entity_registry_update_affects_entry(event, self._entry):
+        if not _entity_registry_update_affects_entry(self._hass, event, self._entry):
             return
         self._registry_refresh_cancel = async_call_later(
             self._hass,
@@ -363,7 +363,9 @@ def _async_listen_entity_registry_updates(
     return cast(CALLBACK_TYPE, async_listen(event_type, callback))
 
 
-def _entity_registry_update_affects_entry(event: Any, entry: BticinoC300XConfigEntry) -> bool:
+def _entity_registry_update_affects_entry(
+    hass: HomeAssistant, event: Any, entry: BticinoC300XConfigEntry
+) -> bool:
     """Return false only when a registry update is clearly unrelated."""
 
     data = getattr(event, "data", None)
@@ -373,7 +375,29 @@ def _entity_registry_update_affects_entry(event: Any, entry: BticinoC300XConfigE
     if isinstance(platform, str) and platform != DOMAIN:
         return False
     config_entry_id = data.get("config_entry_id")
-    return not (isinstance(config_entry_id, str) and config_entry_id != entry.entry_id)
+    if isinstance(config_entry_id, str) and config_entry_id != entry.entry_id:
+        return False
+    # Home Assistant's event names the entity only (action, entity_id,
+    # changes), so the owner has to be looked up. Without this every registry
+    # change of any integration started a registration cycle on the device.
+    entity_id = data.get("entity_id")
+    if not isinstance(entity_id, str):
+        return True
+    try:
+        from homeassistant.helpers import entity_registry as er
+    except ImportError:
+        return True
+    registry = er.async_get(hass) or getattr(hass, "entity_registry", None)
+    if registry is None or not hasattr(registry, "async_get"):
+        return True
+    registered = registry.async_get(entity_id)
+    if registered is None:
+        # Removed entities are gone from the registry: cannot be ruled out.
+        return True
+    return bool(
+        getattr(registered, "platform", DOMAIN) == DOMAIN
+        and getattr(registered, "config_entry_id", entry.entry_id) == entry.entry_id
+    )
 
 
 def _active_events_for_capabilities(

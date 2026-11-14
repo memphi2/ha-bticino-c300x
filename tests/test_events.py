@@ -1351,3 +1351,32 @@ def test_rediscovery_of_an_entry_set_up_offline_reloads_it_and_keeps_the_recover
     assert reloads == [entry.entry_id]
     assert cancelled == []
     assert entry.runtime_data.resources.unregister_event_registration is not None
+
+
+def test_registry_filter_looks_the_entity_up_because_the_event_names_only_the_entity() -> None:
+    """Home Assistant sends action, entity_id and changes; no platform, no entry id."""
+
+    registered = {
+        "light.kitchen": types.SimpleNamespace(platform="hue", config_entry_id="hue-1"),
+        "switch.c300x_other": types.SimpleNamespace(
+            platform="bticino_c300x", config_entry_id="other-entry"
+        ),
+        "switch.c300x_mine": types.SimpleNamespace(
+            platform="bticino_c300x", config_entry_id="entry-1"
+        ),
+    }
+    hass = _FakeHass()
+    hass.entity_registry = types.SimpleNamespace(async_get=registered.get)
+    entry = _FakeEntry()
+
+    def affects(entity_id: str, action: str = "update") -> bool:
+        event = types.SimpleNamespace(
+            data={"action": action, "entity_id": entity_id, "changes": {"name": "x"}}
+        )
+        return events_module._entity_registry_update_affects_entry(hass, event, entry)  # type: ignore[arg-type]
+
+    assert affects("light.kitchen") is False
+    assert affects("switch.c300x_other") is False
+    assert affects("switch.c300x_mine") is True
+    # A removed entity is no longer registered and cannot be ruled out.
+    assert affects("switch.gone", "remove") is True

@@ -74,6 +74,15 @@ def async_request_agent_event_registration(
     connection_state = getattr(runtime, "connection_state", None)
     if api is None or not isinstance(capabilities, dict) or connection_state is None:
         return False
+    agent_info = getattr(runtime, "agent_info", None)
+    if isinstance(agent_info, dict) and "offline_error" in agent_info:
+        # The entry was set up while the agent was offline: it has no
+        # capabilities and no entities for them, and the callback stored below
+        # is the timer that reloads it. A registration made from this state
+        # would report "connected" and cancel the only thing that sets the
+        # entry up properly, so reload now instead.
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+        return True
     if hasattr(runtime, "system_metrics"):
         invalidate_system_metrics(entry)
 

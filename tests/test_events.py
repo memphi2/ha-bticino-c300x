@@ -1325,3 +1325,29 @@ def test_unload_cancels_inflight_timer_registration(monkeypatch) -> None:
             await asyncio.gather(task, return_exceptions=True)
 
     asyncio.run(run())
+
+
+def test_rediscovery_of_an_entry_set_up_offline_reloads_it_and_keeps_the_recovery() -> None:
+    """The recovery timer is what sets such an entry up; a registration must not replace it."""
+
+    reloads: list[str] = []
+    cancelled: list[bool] = []
+    hass = types.SimpleNamespace(
+        config_entries=types.SimpleNamespace(async_schedule_reload=reloads.append)
+    )
+    entry = _FakeEntry()
+    entry.runtime_data = types.SimpleNamespace(
+        api=object(),
+        capabilities={},
+        agent_info={"capabilities": {}, "offline_error": "timeout"},
+        connection_state=_FakeConnectionState(),
+        resources=C300XRuntimeResources(
+            unregister_event_registration=lambda: cancelled.append(True)
+        ),
+    )
+
+    assert async_request_agent_event_registration(hass, entry) is True  # type: ignore[arg-type]
+
+    assert reloads == [entry.entry_id]
+    assert cancelled == []
+    assert entry.runtime_data.resources.unregister_event_registration is not None

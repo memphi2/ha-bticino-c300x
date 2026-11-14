@@ -176,5 +176,10 @@ def _format_debug_value(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.3f}"
     # Any logged-in user can send this text: keep it on one line and short.
-    text = "".join(char if char.isprintable() else "?" for char in str(value))
-    return text[:_MAX_DEBUG_VALUE_LENGTH].replace(" ", "_")
+    # Cut before looking at every character: the value can be a huge nested
+    # structure from the client.
+    text = "".join(
+        char if char.isprintable() else "?"
+        for char in str(value)[:_MAX_DEBUG_VALUE_LENGTH]
+    )
+    return text.replace(" ", "_")

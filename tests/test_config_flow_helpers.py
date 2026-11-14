@@ -2314,7 +2314,39 @@ def test_qml_patch_status_flow_forms_pass_description_placeholders() -> None:
     assert missing_placeholders == []
 
 
-def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
+def _options_area(entry, step_id, user_input=None):
+    """Open one area of the options menu on a flow of its own."""
+
+    flow = BticinoC300XOptionsFlow(entry)
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+    flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
+        "type": "create_entry",
+        **kwargs,
+    }
+    return flow, asyncio.run(getattr(flow, f"async_step_{step_id}")(user_input))
+
+
+def _save_options_area(entry, result) -> None:
+    """Store what an area saved, as Home Assistant does before the next one."""
+
+    assert result["type"] == "create_entry", result
+    entry.options = dict(result["data"])
+
+
+def _options_menu_of(entry) -> list[str]:
+    menu = asyncio.run(BticinoC300XOptionsFlow(entry).async_step_init())
+    assert (menu["type"], menu["step_id"]) == ("menu", "init")
+    return list(menu["menu_options"])
+
+
+def test_options_flow_saves_each_area_and_keeps_the_others() -> None:
+    """The options menu leads to areas that each save on their own.
+
+    An area writes all settings, so the ones it does not show have to come
+    out as they were saved. After every area was saved once, the entry holds
+    what each of them set.
+    """
+
     entry = SimpleNamespace(
         data={
             CONF_AGENT_HOST: "old-agent.local",
@@ -2338,43 +2370,35 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
         options={},
         runtime_data=None,
     )
-    flow = BticinoC300XOptionsFlow(entry)
-    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
-    flow.async_create_entry = lambda **kwargs: {  # type: ignore[method-assign]
-        "type": "create_entry",
-        **kwargs,
-    }
+    # Without the Display patch there are no pages or tiles to set up.
+    assert _options_menu_of(entry) == [
+        "dashboard", "features", "device_activations", "connection",
+    ]
 
-    connection_form = asyncio.run(
-        flow.async_step_connection(
-            {
-                CONF_AGENT_HOST: "agent.local",
-                CONF_AGENT_PORT: 8092,
-                CONF_AGENT_TOKEN: "agent-token",
-                CONF_MAINTENANCE_TOKEN: "maintenance-token",
-                CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
-            }
-        )
-    )
-    activation_form = asyncio.run(
-        flow.async_step_features(
-            {
-                CONF_VIDEO_ENABLED: True,
-                CONF_CREATE_HOMEASSISTANT_USER: False,
-                CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
-            }
-        )
-    )
-    activation_item_form = asyncio.run(
-        flow.async_step_device_activations(
-            {
-                CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
-                CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
-                CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD,
-            }
-        )
-    )
+    _flow, result = _options_area(entry, "connection", {
+        CONF_AGENT_HOST: "agent.local",
+        CONF_AGENT_PORT: 8092,
+        CONF_AGENT_TOKEN: "agent-token",
+        CONF_MAINTENANCE_TOKEN: "maintenance-token",
+        CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+    })
+    _save_options_area(entry, result)
+
+    _flow, result = _options_area(entry, "features", {
+        CONF_VIDEO_ENABLED: True,
+        CONF_CREATE_HOMEASSISTANT_USER: False,
+        CONF_RING_CAPTURE_AUDIO_GAIN_DB: 2.5,
+    })
+    _save_options_area(entry, result)
+
+    # The activations are edited over several forms of one flow.
+    flow, activation_item_form = _options_area(entry, "device_activations", {
+        CONF_DEVICE_ACTIVATION_MODE: DEVICE_ACTIVATION_MODE_MANUAL,
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P: "02",
+        CONF_DEVICE_ACTIVATION_STAIR_LIGHT_N: "01",
+        CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_ADD,
+    })
+    assert activation_item_form["step_id"] == "device_activation_item"
     activation_manage_form = asyncio.run(
         flow.async_step_device_activation_item(
             {
@@ -2385,28 +2409,36 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             }
         )
     )
-    dashboard_form = asyncio.run(
+    assert activation_manage_form["step_id"] == "device_activations"
+    _save_options_area(entry, asyncio.run(
         flow.async_step_device_activations(
             {CONF_DEVICE_ACTIVATION_FLOW_ACTION: DEVICE_ACTIVATION_FLOW_ACTION_DONE}
         )
-    )
-    pages_form = asyncio.run(
-        flow.async_step_dashboard(
-            {
-                CONF_DEVICE_UI_ENABLED: True,
-                CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
-                CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
-                CONF_WEATHER_ENTITY_ID: "weather.home",
-                CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
-                CONF_DASHBOARD_PREVENT_RETURN: True,
-            }
-        )
-    )
-    entity_options_form = asyncio.run(
-        flow.async_step_dashboard_pages(
-            {"page_1": {}, "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]}}
-        )
-    )
+    ))
+
+    _flow, result = _options_area(entry, "dashboard", {
+        CONF_DEVICE_UI_ENABLED: True,
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
+        CONF_WEATHER_ENTITY_ID: "weather.home",
+        CONF_ACTIONS_JSON: '{"standby":{"domain":"button","service":"press"}}',
+        CONF_DASHBOARD_PREVENT_RETURN: True,
+    })
+    _save_options_area(entry, result)
+    # The patch is on and the Alarmo quick entity has a name to set.
+    assert _options_menu_of(entry) == [
+        "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "features", "device_activations", "connection",
+    ]
+
+    _flow, result = _options_area(entry, "dashboard_pages", {
+        "page_1": {},
+        "page_2": {"name": "Doors", "position": 5, "entities": ["switch.entry"]},
+    })
+    _save_options_area(entry, result)
+
+    flow, entity_options_form = _options_area(entry, "dashboard_entity_display")
+    assert entity_options_form["step_id"] == "dashboard_entity_display"
     result = asyncio.run(
         flow.async_step_dashboard_entity_display(
             entity_options_form["data_schema"]({
@@ -2416,17 +2448,13 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             })
         )
     )
+    _save_options_area(entry, result)
 
-    assert connection_form["step_id"] == "features"
-    assert activation_form["step_id"] == "device_activations"
-    assert activation_item_form["step_id"] == "device_activation_item"
-    assert activation_manage_form["step_id"] == "device_activations"
-    assert dashboard_form["step_id"] == "dashboard"
-    assert pages_form["step_id"] == "dashboard_pages"
-    assert entity_options_form["step_id"] == "dashboard_entity_display"
-    assert result["type"] == "create_entry"
     assert result["data"][CONF_AGENT_HOST] == "agent.local"
     assert result["data"][CONF_AGENT_PORT] == 8092
+    assert result["data"][CONF_AGENT_TOKEN] == "agent-token"
+    assert result["data"][CONF_MAINTENANCE_TOKEN] == "maintenance-token"
+    assert result["data"][CONF_CALLBACK_BASE_URL] == "http://192.0.2.10:8123"
     assert result["data"][CONF_VIDEO_ENABLED] is True
     assert result["data"][CONF_CREATE_HOMEASSISTANT_USER] is False
     assert result["data"][CONF_DOORSTATION_AUDIO_GAIN_DB] == DEFAULT_DOORSTATION_AUDIO_GAIN_DB
@@ -2464,6 +2492,23 @@ def test_options_flow_runs_connection_features_and_dashboard_pages() -> None:
             "target": {},
         }
     }
+
+    # Saving an area again without a change stores the same settings.
+    saved = dict(entry.options)
+    for step_id in ("connection", "features", "dashboard"):
+        flow, form = _options_area(entry, step_id)
+        # The form posts a prefilled field as it is shown.
+        shown = {
+            str(key): key.description["suggested_value"]
+            for key in form["data_schema"].schema
+            if isinstance(getattr(key, "description", None), dict)
+            and "suggested_value" in key.description
+        }
+        result = asyncio.run(
+            getattr(flow, f"async_step_{step_id}")(form["data_schema"](shown))
+        )
+        assert result["type"] == "create_entry", (step_id, result)
+        assert result["data"] == saved, step_id
 
 
 def test_reconfigure_flow_runs_connection_features_and_dashboard_pages(
@@ -2735,7 +2780,13 @@ def test_reconfigure_finish_rotates_secrets_and_clears_stale_options(
     assert CONF_ROTATE_SHARED_SECRET not in result["data_updates"]
 
 
-def test_options_flow_init_and_missing_state_redirect_to_current_pages() -> None:
+def test_options_flow_opens_every_area_from_the_saved_settings() -> None:
+    """An area opened from the menu shows its own form, not another one.
+
+    The flow used to be one chain, and a step reached without the steps
+    before it sent the user back to the start.
+    """
+
     entry = SimpleNamespace(
         data={
             CONF_AGENT_HOST: "agent.local",
@@ -2751,28 +2802,34 @@ def test_options_flow_init_and_missing_state_redirect_to_current_pages() -> None
             CONF_ALARM_ENTITY_ID: "",
             CONF_ALARM_PAGE_ENTITY_ID: "",
             CONF_WEATHER_ENTITY_ID: "",
-            CONF_DASHBOARD_ENTITIES: [],
+            CONF_DASHBOARD_ENTITIES: ["light.room"],
             CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: {},
             CONF_ACTIONS: {},
             CONF_DASHBOARD_PREVENT_RETURN: False,
             CONF_DASHBOARD_DYNAMIC_HOMEPAGE: True,
             CONF_VIDEO_PORT: 6554,
             CONF_VIDEO_STREAM_PATH: DEFAULT_VIDEO_STREAM_PATH,
-            CONF_DEVICE_UI_ENABLED: False,
+            CONF_DEVICE_UI_ENABLED: True,
         },
         options={},
         runtime_data=None,
     )
-    flow = BticinoC300XOptionsFlow(entry)
-    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
 
-    init_form = asyncio.run(flow.async_step_init())
-    dashboard_redirect = asyncio.run(flow.async_step_dashboard())
-    entity_redirect = asyncio.run(flow.async_step_dashboard_entity_display())
+    menu = _options_menu_of(entry)
+    assert menu == [
+        "dashboard_pages", "dashboard_entity_display",
+        "dashboard", "features", "device_activations", "connection",
+    ]
+    for step_id in menu:
+        _flow, form = _options_area(entry, step_id)
+        assert form["step_id"] == step_id
+        assert not form.get("errors")
 
-    assert init_form["step_id"] == "connection"
-    assert dashboard_redirect["step_id"] == "features"
-    assert entity_redirect["step_id"] == "features"
+    # Tiles need something to show: without an entity the menu leaves them out.
+    entry.data[CONF_DASHBOARD_ENTITIES] = []
+    assert _options_menu_of(entry) == [
+        "dashboard_pages", "dashboard", "features", "device_activations", "connection",
+    ]
 
 
 def test_options_flow_invalid_feature_input_stays_on_features_page() -> None:

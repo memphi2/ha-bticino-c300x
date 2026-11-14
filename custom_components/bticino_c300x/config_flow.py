@@ -1363,8 +1363,30 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return BticinoC300XOptionsFlow(config_entry)
 
 
+def _options_menu(config_entry: BticinoC300XConfigEntry) -> list[str]:
+    """Return the settings areas the options menu offers, most used first.
+
+    Pages need the Display patch, which the dashboard area switches on. The
+    tiles need something to show as well: an entity on a page or the Alarmo
+    quick entity.
+    """
+
+    saved = _current_feature_options(config_entry)
+    menu: list[str] = []
+    if saved[CONF_DEVICE_UI_ENABLED]:
+        menu.append("dashboard_pages")
+        if _dashboard_entity_display_has_fields(_dashboard_input_defaults({}, saved)):
+            menu.append("dashboard_entity_display")
+    return [*menu, "dashboard", "features", "device_activations", "connection"]
+
+
 class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
-    """Handle C300X options."""
+    """Handle C300X options.
+
+    The flow opens with a menu of the settings areas. Each area is a form of
+    its own and saves when it is submitted; the areas that were not opened
+    keep their saved values.
+    """
 
     def __init__(self, config_entry: BticinoC300XConfigEntry) -> None:
         self._config_entry = config_entry
@@ -1378,9 +1400,38 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Start the two-page options flow."""
+        """Show the settings areas."""
 
-        return await self.async_step_connection(user_input)
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=_options_menu(self._config_entry),
+        )
+
+    def _load_saved(self) -> dict[str, Any]:
+        """Start the opened area from the saved settings and return them.
+
+        Every area saves all settings, so the ones it does not show are taken
+        from the entry as they are.
+        """
+
+        feature_defaults = _current_feature_options(self._config_entry)
+        if not self._connection_options:
+            self._connection_options = _current_connection_options(self._config_entry)
+        if not self._feature_options:
+            # The features form always posts whether media is enabled; without
+            # it the saved setting would read as disabled.
+            self._feature_options, _ = _feature_input(
+                _feature_input_defaults(
+                    {CONF_VIDEO_ENABLED: feature_defaults[CONF_VIDEO_ENABLED]},
+                    feature_defaults,
+                )
+            )
+            self._device_activations = _activation_items_from_feature_data(
+                self._feature_options
+            )
+        if not self._dashboard_options:
+            self._dashboard_options = _dashboard_input_defaults({}, feature_defaults)
+        return feature_defaults
 
     async def async_step_connection(
         self,
@@ -1388,15 +1439,19 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage agent connection and token options."""
 
+        feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
+        schema = _options_connection_schema(self._config_entry)
         if user_input is not None:
-            self._connection_options, errors = _connection_input(user_input)
+            connection_options, errors = _connection_input(user_input)
             if not errors:
-                return await self.async_step_features()
+                self._connection_options = connection_options
+                return await self._async_save_options(feature_defaults)
+            schema = self.add_suggested_values_to_schema(schema, user_input)
 
         return self.async_show_form(
             step_id="connection",
-            data_schema=_options_connection_schema(self._config_entry),
+            data_schema=schema,
             errors=errors,
         )
 
@@ -1404,14 +1459,11 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage integration media and display feature options."""
+        """Manage integration media and audio options."""
 
-        if not self._connection_options:
-            self._connection_options = _current_connection_options(self._config_entry)
-
+        feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
-            feature_defaults = _current_feature_options(self._config_entry)
             feature_input = _feature_input_defaults(user_input, feature_defaults)
             feature_data, errors = _feature_input(feature_input)
             if errors:
@@ -1442,10 +1494,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                     ),
             )
             self._feature_options = feature_data
-            self._device_activations = _activation_items_from_feature_data(
-                feature_data
-            )
-            return await self.async_step_device_activations()
+            return await self._async_save_options(feature_defaults)
 
         return self.async_show_form(
             step_id="features",
@@ -1462,9 +1511,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage additional C300X device activations in the options flow."""
 
-        if not self._feature_options:
-            return await self.async_step_features()
-
+        feature_defaults = self._load_saved()
         self._feature_options, setting_errors = _activation_settings_step(
             user_input,
             self._feature_options,
@@ -1487,7 +1534,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self._activation_edit_id = result.edit_id
         if result.next_step == _ACTIVATION_STEP_DONE:
             self._feature_options[CONF_DEVICE_ACTIVATIONS] = list(result.items)
-            return await self.async_step_dashboard()
+            return await self._async_save_options(feature_defaults)
         if result.next_step == _ACTIVATION_STEP_ITEM:
             return _activation_item_form(
                 self.async_show_form,
@@ -1511,9 +1558,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Add or edit one C300X device activation in the options flow."""
 
-        if not self._feature_options:
-            return await self.async_step_features()
-
+        self._load_saved()
         result = _activation_item_step(
             user_input,
             self._device_activations,
@@ -1537,23 +1582,16 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage C300X display dashboard options."""
+        """Manage the Display patch and what the display shows besides pages."""
 
-        feature_defaults = _current_feature_options(self._config_entry)
-        if not self._feature_options:
-            return await self.async_step_features()
+        feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
             self._dashboard_options = _dashboard_input_defaults(
                 _dashboard_form_input(user_input),
                 feature_defaults,
             )
-            if self._dashboard_options[CONF_DEVICE_UI_ENABLED]:
-                return self._async_show_options_dashboard_pages_form(None, errors)
-            return await self._async_create_options_entry_from_dashboard(
-                feature_defaults,
-                errors,
-            )
+            return await self._async_save_options(feature_defaults)
 
         return await self._async_show_options_dashboard_form(
             user_input,
@@ -1567,9 +1605,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage the pages of the C300X display dashboard."""
 
-        feature_defaults = _current_feature_options(self._config_entry)
-        if not self._dashboard_options:
-            return await self.async_step_dashboard()
+        feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
             dashboard_input, errors = _dashboard_pages_input(
@@ -1578,16 +1614,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
             if errors:
                 return self._async_show_options_dashboard_pages_form(user_input, errors)
             self._dashboard_options = dashboard_input
-            if _dashboard_entity_display_has_fields(self._dashboard_options):
-                return await self._async_show_options_dashboard_entity_display_form(
-                    None,
-                    feature_defaults,
-                    errors,
-                )
-            return await self._async_create_options_entry_from_dashboard(
-                feature_defaults,
-                errors,
-            )
+            return await self._async_save_options(feature_defaults)
         return self._async_show_options_dashboard_pages_form(None, errors)
 
     def _async_show_options_dashboard_pages_form(
@@ -1615,9 +1642,7 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage per-entity display labels for C300X dashboard options."""
 
-        feature_defaults = _current_feature_options(self._config_entry)
-        if not self._dashboard_options:
-            return await self.async_step_dashboard()
+        feature_defaults = self._load_saved()
         errors: dict[str, str] = {}
         if user_input is not None:
             if not _dashboard_entity_display_form_complete(
@@ -1638,22 +1663,22 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
                     feature_defaults,
                 )[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES]
             )
-            return await self._async_create_options_entry_from_dashboard(
-                feature_defaults,
-                errors,
-            )
+            return await self._async_save_options(feature_defaults)
         return await self._async_show_options_dashboard_entity_display_form(
             user_input,
             feature_defaults,
             errors,
         )
 
-    async def _async_create_options_entry_from_dashboard(
+    async def _async_save_options(
         self,
         feature_defaults: dict[str, Any],
-        errors: dict[str, str],
     ) -> FlowResult:
-        """Create the options entry from collected dashboard pages."""
+        """Save all settings as this flow holds them.
+
+        A setting that does not validate is reported on the dashboard form,
+        which shows the fields the validation covers.
+        """
 
         feature_data, errors = _feature_input(
             {**self._feature_options, **self._dashboard_options}

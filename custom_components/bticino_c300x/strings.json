@@ -409,6 +409,26 @@
   },
   "options": {
     "step": {
+      "init": {
+        "title": "C300X settings",
+        "description": "Choose what to change. Each area saves on its own when you submit it; the other areas keep their settings.",
+        "menu_options": {
+          "dashboard_pages": "Display pages",
+          "dashboard_entity_display": "Display tiles",
+          "dashboard": "Display and Display patch",
+          "features": "Video and audio",
+          "device_activations": "Door openers and stair light",
+          "connection": "Connection to the device"
+        },
+        "menu_option_descriptions": {
+          "dashboard_pages": "Which entities appear on the display, on which page and in which order.",
+          "dashboard_entity_display": "Size, name and secondary line of each tile.",
+          "dashboard": "Switch the Home Assistant pages on the display on or off, alarm, weather and standby actions.",
+          "features": "Camera stream, two-way audio, audio levels and the media user on the device.",
+          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger.",
+          "connection": "Address and tokens of the device agent, callback address of Home Assistant."
+        }
+      },
       "connection": {
         "title": "BTicino C300X connection",
         "description": "Configure the local device-agent connection and maintenance token.",

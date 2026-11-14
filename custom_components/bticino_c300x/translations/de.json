@@ -409,6 +409,26 @@
   },
   "options": {
     "step": {
+      "init": {
+        "title": "C300X-Einstellungen",
+        "description": "Wähle, was du ändern möchtest. Jeder Bereich speichert für sich, sobald du ihn absendest; die anderen Bereiche behalten ihre Einstellungen.",
+        "menu_options": {
+          "dashboard_pages": "Display-Seiten",
+          "dashboard_entity_display": "Display-Kacheln",
+          "dashboard": "Display und Display-Patch",
+          "features": "Video und Audio",
+          "device_activations": "Türöffner und Treppenlicht",
+          "connection": "Verbindung zum Gerät"
+        },
+        "menu_option_descriptions": {
+          "dashboard_pages": "Welche Entitäten auf dem Display erscheinen, auf welcher Seite und in welcher Reihenfolge.",
+          "dashboard_entity_display": "Größe, Name und Zusatzzeile jeder Kachel.",
+          "dashboard": "Home-Assistant-Seiten auf dem Display ein- oder ausschalten, Alarm, Wetter und Standby-Aktionen.",
+          "features": "Kamerastream, Gegensprechen, Lautstärken und der Media-Benutzer auf dem Gerät.",
+          "device_activations": "Zusätzliche Schlösser und Lichter der Türanlage, die Home Assistant auslösen kann.",
+          "connection": "Adresse und Tokens des Device-Agents, Callback-Adresse von Home Assistant."
+        }
+      },
       "connection": {
         "title": "BTicino C300X Verbindung",
         "description": "Konfiguriert die lokale Device-Agent-Verbindung und den Maintenance-Token.",

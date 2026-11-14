@@ -127,6 +127,45 @@ def test_emptied_text_fields_are_stored_empty():
     assert kept["dashboard_entity_display_overrides"] == saved
 
 
+class _OptionsAreas:
+    """Open the areas of the options menu one after the other, as a user does.
+
+    Each area saves on its own and the next one starts from what was saved.
+    So the steps that the setup and reconfigure flows chain are separate
+    flows here: after an area saved, the next area is opened if the menu of
+    a new flow offers it.
+    """
+
+    def __init__(self, entry):
+        self._entry = entry
+
+    def _flow(self):
+        flow = BticinoC300XOptionsFlow(self._entry)
+        flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
+        flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
+        flow.add_suggested_values_to_schema = lambda schema, _values: schema
+        return flow
+
+    async def _area(self, step_id, user_input, next_step_id=None):
+        result = await getattr(self._flow(), f"async_step_{step_id}")(user_input)
+        if result["type"] != "finished" or next_step_id is None:
+            return result
+        self._entry.options = dict(result["data"])
+        menu = (await self._flow().async_step_init())["menu_options"]
+        if next_step_id not in menu:
+            return result
+        return await getattr(self._flow(), f"async_step_{next_step_id}")(None)
+
+    async def dashboard(self, user_input=None):
+        return await self._area("dashboard", user_input, "dashboard_pages")
+
+    async def pages(self, user_input=None):
+        return await self._area("dashboard_pages", user_input, "dashboard_entity_display")
+
+    async def entity_display(self, user_input=None):
+        return await self._area("dashboard_entity_display", user_input)
+
+
 def _display_flow(monkeypatch, flow_kind, entry):
     """Return a flow's dashboard, pages and entity-display steps.
 
@@ -145,16 +184,9 @@ def _display_flow(monkeypatch, flow_kind, entry):
         placeholders,
     )
     if flow_kind == "options":
-        flow = BticinoC300XOptionsFlow(entry)
-        flow._feature_options = {"video_enabled": False}
-        flow._connection_options = {}
-        flow.async_create_entry = lambda **kwargs: {"type": "finished", "data": kwargs["data"]}
-        steps = (
-            flow.async_step_dashboard,
-            flow.async_step_dashboard_pages,
-            flow.async_step_dashboard_entity_display,
-        )
-    elif flow_kind == "reconfigure":
+        areas = _OptionsAreas(entry)
+        return areas.dashboard, areas.pages, areas.entity_display
+    if flow_kind == "reconfigure":
         flow = BticinoC300XConfigFlow()
         flow._get_reconfigure_entry = lambda: entry
         flow._reconfigure_feature_data = {"video_enabled": False}

@@ -288,3 +288,22 @@ def _translation_placeholders(
     for key, child in value.items():
         placeholders.update(_translation_placeholders(child, (*prefix, key)))
     return placeholders
+
+
+def test_options_menu_names_and_explains_every_area() -> None:
+    """Each area of the options menu has a label and a line saying what it holds."""
+
+    areas = {
+        "dashboard_pages", "dashboard_entity_display", "dashboard",
+        "features", "device_activations", "connection",
+    }
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        steps = _load_json(path)["options"]["step"]
+        menu = steps["init"]
+        assert menu["title"] and menu["description"], path.name
+        assert set(menu["menu_options"]) == areas, path.name
+        assert set(menu["menu_option_descriptions"]) == areas, path.name
+        assert all(menu["menu_options"].values()), path.name
+        assert all(menu["menu_option_descriptions"].values()), path.name
+        # A menu entry leads to a step of the same name.
+        assert areas <= set(steps), path.name

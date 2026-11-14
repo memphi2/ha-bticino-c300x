@@ -409,6 +409,26 @@
   },
   "options": {
     "step": {
+      "init": {
+        "title": "Réglages C300X",
+        "description": "Choisissez ce que vous voulez modifier. Chaque rubrique s'enregistre séparément à la validation ; les autres rubriques conservent leurs réglages.",
+        "menu_options": {
+          "dashboard_pages": "Pages de l'écran",
+          "dashboard_entity_display": "Tuiles de l'écran",
+          "dashboard": "Écran et patch display",
+          "features": "Vidéo et audio",
+          "device_activations": "Ouvre-portes et éclairage d'escalier",
+          "connection": "Connexion à l'appareil"
+        },
+        "menu_option_descriptions": {
+          "dashboard_pages": "Quelles entités apparaissent sur l'écran, sur quelle page et dans quel ordre.",
+          "dashboard_entity_display": "Taille, nom et ligne secondaire de chaque tuile.",
+          "dashboard": "Activer ou désactiver les pages Home Assistant sur l'écran, alarme, météo et actions de veille.",
+          "features": "Flux caméra, audio bidirectionnel, niveaux audio et utilisateur média sur l'appareil.",
+          "device_activations": "Serrures et éclairages supplémentaires de l'installation que Home Assistant peut déclencher.",
+          "connection": "Adresse et tokens de l'agent appareil, adresse de rappel de Home Assistant."
+        }
+      },
       "connection": {
         "title": "Connexion BTicino C300X",
         "description": "Configurez la connexion locale a l'agent appareil et le token de maintenance.",

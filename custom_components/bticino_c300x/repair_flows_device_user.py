@@ -38,7 +38,7 @@ class DeviceUserRepairFlow(RepairsFlow):
         """Create or repair the Home Assistant Flexisip user."""
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None:
+        if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         if user_input is None:
             return self.async_show_form(step_id="confirm")

@@ -244,13 +244,9 @@ def test_native_agent_external_detection_is_event_state_based() -> None:
 
 
 def test_native_agent_rtsp_response_does_not_send_truncated_stack_buffer() -> None:
-    media_bridge = (ROOT / "native_agent" / "src" / "media_bridge.c").read_text(
+    response_body = (ROOT / "native_agent" / "src" / "media_rtsp_io.c").read_text(
         encoding="utf-8"
     )
-    response_body = media_bridge[
-        media_bridge.index("static void send_rtsp_response") :
-        media_bridge.index("static void handle_rtsp_client")
-    ]
 
     assert "int n = snprintf(" in response_body
     assert "n > 0 && n < (int)sizeof(response)" in response_body
@@ -273,7 +269,10 @@ def test_native_agent_rtsp_rejects_incompatible_parallel_paths_before_state_upda
     assert "active_clients > 0 && !rtsp_client_sharing_allowed_locked(bridge)" not in register_body
     assert "active_clients >= C300X_VIDEO_RING_PREVIEW_MAX_RTSP_CLIENTS" in register_body
     assert "evict_parked_rtsp_client_locked(bridge)" in register_body
-    assert "bool accepted = register_rtsp_client_locked(" in client_body
+    assert "bool accepted = g_bridge.running && register_rtsp_client_locked(" in client_body
+    assert client_body.index("c300x_media_rtsp_authorized(") < client_body.index(
+        "register_rtsp_client_locked("
+    )
     assert "&evicted_clients" in client_body
     assert "send_rtsp_response(fd, 453" in client_body
     assert client_body.index("if (!accepted)") < client_body.index(

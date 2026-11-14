@@ -290,6 +290,56 @@ def _translation_placeholders(
     return placeholders
 
 
+def test_every_error_the_shared_flow_helpers_report_has_a_message_in_each_flow() -> None:
+    """A form error without a translation shows its raw key to the user.
+
+    The helpers that setup, reconfigure and options share report errors by key.
+    The setup and reconfigure forms look the key up under ``config.error``, the
+    options forms under ``options.error``, so each key needs both.
+    """
+
+    emitted = set()
+    for name in (
+        "config_flow_input.py", "config_flow_activations.py", "config_flow_dashboard.py",
+        "config_flow_dashboard_pages.py", "config_flow_alarm.py", "config_flow_tiles.py",
+    ):
+        path = INTEGRATION / name
+        if not path.exists():
+            continue
+        emitted |= set(
+            re.findall(
+                r'(?:errors\[[^\]]+\]\s*=\s*|"base":\s*|errors\.setdefault\([^,]+,\s*)"([a-z_]+)"',
+                path.read_text(encoding="utf-8"),
+            )
+        )
+    # A key the setup flow alone reports is not shared.
+    emitted -= {"required"}
+    assert "invalid_action_map" in emitted
+    # An error on a field the form does not have is not shown; it is a base error.
+    assert "invalid_dashboard_entity_display_overrides" in emitted
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        data = _load_json(path)
+        for area in ("config", "options"):
+            missing = emitted - set(data[area]["error"])
+            assert not missing, (path.name, area, sorted(missing))
+
+
+def test_every_reason_the_flows_abort_with_has_a_message() -> None:
+    """An abort reason without a translation shows its raw key.
+
+    The setup and reconfigure flows abort with reasons of their own and with
+    the default of Home Assistant's unique id check.
+    """
+
+    reasons = {"unique_id_mismatch"}
+    for path in INTEGRATION.glob("config_flow*.py"):
+        reasons |= set(re.findall(r'async_abort\(\s*reason="([a-z_]+)"', path.read_text(encoding="utf-8")))
+    assert {"already_configured", "cannot_connect", "unique_id_mismatch"} <= reasons
+    for path in (INTEGRATION / "strings.json", *TRANSLATIONS.glob("*.json")):
+        missing = reasons - set(_load_json(path)["config"]["abort"])
+        assert not missing, (path.name, sorted(missing))
+
+
 def test_options_menu_names_and_explains_every_area() -> None:
     """Each area of the options menu has a label and a line saying what it holds."""
 

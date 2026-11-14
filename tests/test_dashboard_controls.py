@@ -661,6 +661,14 @@ def test_media_player_controls_carry_bounded_values():
     assert entity_controls("media_player.room", state("playing", supported_features=2048)) == []
 
 
+@pytest.mark.parametrize("value,features", [("playing", 16384), ("paused", 1), ("idle", 1)])
+def test_media_player_rejects_playback_command_without_required_state_feature(value, features):
+    hass = hass_for(state(value, supported_features=features))
+    with pytest.raises(ValueError):
+        asyncio.run(async_execute_control(hass, "media_player.room", "media_play_pause", None))
+    hass.services.async_call.assert_not_awaited()
+
+
 def test_a_choice_offers_its_first_options_that_fit_the_response():
     """A list of hundreds of favourites is cut to its first options.
 
@@ -1007,6 +1015,30 @@ def test_media_player_states_are_compared_as_strings():
     assert "MediaPlayerState" not in source
     off = entity_controls("media_player.room", state("standby", supported_features=128 | 256))
     assert [control["command"] for control in off] == ["toggle"]
+
+
+@pytest.mark.parametrize(
+    "modes",
+    [
+        [["brightness"], "brightness"],
+        [{"mode": "x"}, None, 5, "brightness"],
+        "brightness",
+        None,
+        5,
+    ],
+)
+def test_odd_supported_color_modes_never_break_the_light_controls(modes) -> None:
+    """One custom light with an odd attribute must not blank the whole display.
+
+    A set built from an unhashable item raised TypeError, and the payload has
+    no per-entity guard.
+    """
+
+    controls = entity_controls("light.strip", state("on", supported_color_modes=modes))
+
+    assert [control["command"] for control in controls][0] == "toggle"
+    if isinstance(modes, list) and "brightness" in modes:
+        assert "brightness" in [control["command"] for control in controls]
 
 
 def test_a_media_player_offers_shuffle_and_repeat_where_it_reports_them():

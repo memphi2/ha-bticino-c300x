@@ -136,6 +136,35 @@ def test_runtime_resources_close_continues_after_unsubscribe_failure():
     asyncio.run(run())
 
 
+def test_runtime_close_does_not_interrupt_capture_cancellation_cleanup():
+    async def run():
+        cleanup_started, release = asyncio.Event(), asyncio.Event()
+
+        async def capture():
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleanup_started.set()
+                await release.wait()
+
+        task = asyncio.create_task(capture())
+        resources = C300XRuntimeResources(ring_capture_task=task)
+        await asyncio.sleep(0)
+        task.cancel()
+        await cleanup_started.wait()
+        try:
+            resources.close()
+            assert task.cancelling() == 1
+            assert not task.done()
+            assert resources.ring_capture_task is None
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+        assert task.cancelled()
+
+    asyncio.run(run())
+
+
 def test_runtime_diagnostics_are_not_shared_between_entries():
     first = C300XRuntimeDiagnostics()
     second = C300XRuntimeDiagnostics()

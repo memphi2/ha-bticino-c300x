@@ -97,18 +97,6 @@
           "device_activation_item_address": "Address in the door system the activation is sent to (OpenWebNet \"where\"), up to 31 characters."
         }
       },
-      "user_dashboard_alarm": {
-        "title": "Alarm (Alarmo)",
-        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
-        "data": {
-          "alarm_entity_id": "Alarmo alarm panel",
-          "alarm_page_entity_id": "Quick action"
-        },
-        "data_description": {
-          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
-          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
-        }
-      },
       "user_dashboard": {
         "title": "C300X display dashboard",
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
@@ -202,18 +190,6 @@
           "device_activation_item_address": "Address in the door system the activation is sent to (OpenWebNet \"where\"), up to 31 characters."
         }
       },
-      "reconfigure_dashboard_alarm": {
-        "title": "Alarm (Alarmo)",
-        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
-        "data": {
-          "alarm_entity_id": "Alarmo alarm panel",
-          "alarm_page_entity_id": "Quick action"
-        },
-        "data_description": {
-          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
-          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
-        }
-      },
       "reconfigure_dashboard": {
         "title": "Reconfigure C300X display dashboard",
         "description": "Configure the optional C300X display dashboard and Display patch.\n\nCurrent Display patch status: {qml_patch_status}.\n\nApplying or restoring the Display patch writes display files on the device, reloads the device UI, and can take up to about 60 seconds. The status changes only after the agent confirms the resulting state.\n\nWith the Display patch applied, the next step sets up the display pages: the weather and the entities on each page.",
@@ -233,6 +209,30 @@
       "reconfigure_dashboard_entity_display": {
         "title": "Display tiles",
         "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+      },
+      "user_dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
+      },
+      "reconfigure_dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
+        }
       },
       "user_dashboard_pages": {
         "title": "Display pages",
@@ -459,7 +459,9 @@
     },
     "abort": {
       "already_configured": "BTicino C300X is already configured.",
-      "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials."
+      "reconfigure_successful": "BTicino C300X was reconfigured. Update the local device-agent or display-bridge config if you rotated credentials.",
+      "cannot_connect": "The device agent could not be reached. Check the address and that the agent is running.",
+      "unique_id_mismatch": "This is a different device than the one set up. Reconfigure the entry that belongs to it, or add the device as a new entry."
     },
     "error": {
       "agent_bundle_missing": "The packaged ARMHF agent bundle is missing. Build/package the release bundle before using the installer.",
@@ -479,38 +481,19 @@
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
       "required": "This field is required.",
+      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
+      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode.",
+      "invalid_action_map": "The action allowlist JSON is invalid.",
+      "invalid_dashboard_entity_display_overrides": "A display setting is not valid. Check the custom names and the page names (up to 60 characters).",
       "dashboard_page_name_reserved": "C300X is the internal name of the status page; choose another page name.",
       "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
-      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading."
     }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "C300X settings",
-        "description": "Choose what to change. Each area saves on its own when you submit it; the other areas keep their settings.",
-        "menu_options": {
-          "connection": "Connection to the C300X",
-          "features": "Video and audio",
-          "device_activations": "Activations: locks, lights, stair light",
-          "dashboard_alarm": "Alarm (Alarmo)",
-          "dashboard": "Display and Display patch",
-          "dashboard_pages": "Display pages",
-          "dashboard_entity_display": "Display tiles"
-        },
-        "menu_option_descriptions": {
-          "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
-          "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
-          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
-          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
-          "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
-          "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
-          "dashboard_entity_display": "Size, name and secondary line of each tile."
-        }
-      },
       "connection": {
         "title": "Connection to the C300X",
         "description": "How Home Assistant and the C300X reach each other.",
@@ -583,18 +566,6 @@
           "device_activation_item_address": "Address in the door system the activation is sent to (OpenWebNet \"where\"), up to 31 characters."
         }
       },
-      "dashboard_alarm": {
-        "title": "Alarm (Alarmo)",
-        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
-        "data": {
-          "alarm_entity_id": "Alarmo alarm panel",
-          "alarm_page_entity_id": "Quick action"
-        },
-        "data_description": {
-          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
-          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
-        }
-      },
       "dashboard": {
         "title": "Display and Display patch",
         "description": "Home Assistant pages on the display of the C300X.\n\nDisplay patch on the device: {qml_patch_status}.\n\nSwitching the Display patch on or off writes display files on the device and reloads its screen; that can take up to about 60 seconds. The status changes once the device confirms it.\n\nWith the Display patch on, the settings menu also offers **Display pages** (weather and what is shown where) and **Display tiles**.",
@@ -609,6 +580,44 @@
           "dashboard_dynamic_homepage": "On: the Alarm and Home Assistant buttons appear on the home page of the C300X only while they have something to open, next to the original buttons. Off: both are always shown as a fixed pair. A change applies the Display patch again and restarts the display once.",
           "actions_json": "Actions the display and its notifications may run, written as JSON: one entry per action with domain and service, optionally target and data. Leave empty if you use none.",
           "dashboard_prevent_return": "On: the display stays on the Home Assistant page after an action instead of returning to the home page."
+        }
+      },
+      "dashboard_entity_display": {
+        "title": "Display tiles",
+        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
+      },
+      "init": {
+        "title": "C300X settings",
+        "description": "Choose what to change. Each area saves on its own when you submit it; the other areas keep their settings.",
+        "menu_options": {
+          "connection": "Connection to the C300X",
+          "features": "Video and audio",
+          "device_activations": "Activations: locks, lights, stair light",
+          "dashboard_alarm": "Alarm (Alarmo)",
+          "dashboard": "Display and Display patch",
+          "dashboard_pages": "Display pages",
+          "dashboard_entity_display": "Display tiles"
+        },
+        "menu_option_descriptions": {
+          "connection": "Address, access key and maintenance key of the C300X, address of Home Assistant.",
+          "features": "Live picture, talking, volumes and the video and audio access on the C300X.",
+          "device_activations": "Additional locks and lights of the door system that Home Assistant can trigger, and the stair-light address.",
+          "dashboard_alarm": "Alarmo alarm panel and the quick action of the Alarm page.",
+          "dashboard": "Home Assistant pages on the display on or off, home page buttons, behaviour after an action and allowed actions.",
+          "dashboard_pages": "Weather, and which entities appear on which page and in which order.",
+          "dashboard_entity_display": "Size, name and secondary line of each tile."
+        }
+      },
+      "dashboard_alarm": {
+        "title": "Alarm (Alarmo)",
+        "description": "Alarmo drives the alarm commands and the Alarm page of the display, which opens from the Alarm button on the home page of the C300X. Choose the Alarmo alarm panel and, if you like, a quick action beside it on the Alarm page.",
+        "data": {
+          "alarm_entity_id": "Alarmo alarm panel",
+          "alarm_page_entity_id": "Quick action"
+        },
+        "data_description": {
+          "alarm_entity_id": "Alarm panel that Home Assistant arms and disarms from the C300X and the Alarm page shows. Leave empty if you do not use Alarmo: the Alarm button then does not appear.",
+          "alarm_page_entity_id": "Optional entity on the Alarm page of the display (Display patch), for example the stair light. Buttons, switches, scenes and scripts can be operated there, other entities are only shown. Leave empty to hide it."
         }
       },
       "dashboard_pages": {
@@ -721,10 +730,6 @@
             }
           }
         }
-      },
-      "dashboard_entity_display": {
-        "title": "Display tiles",
-        "description": "Each tile has its own section, in the order the display shows them: first the page, then the entity. Open a section to change its tile.\n\n- **Width** and **Height**: half or full. Automatic uses the usual size of the entity type. At full height the tile carries the entity's own buttons.\n- **Name**: the name from Home Assistant or the entity ID - or simply type a text of your own.\n- **Secondary line**: the second line below the name.\n\nThe Alarmo quick action is on no page; it has a name and a secondary line only."
       }
     },
     "error": {
@@ -738,11 +743,13 @@
       "invalid_audio_gain": "Choose an audio gain between -20 dB and +20 dB.",
       "invalid_device_activations": "Check the activation ID, name, type, and address. IDs must be unique; manual stair light mode already reserves stair_light.",
       "invalid_stair_light_part": "Enter a numeric P/N value from 0 to 99.",
+      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
+      "invalid_device_activation_mode": "Choose automatic or manual for the activation address mode.",
+      "invalid_dashboard_entity_display_overrides": "A display setting is not valid. Check the custom names and the page names (up to 60 characters).",
       "dashboard_page_name_reserved": "C300X is the internal name of the status page; choose another page name.",
       "dashboard_page_name_duplicate": "Two pages have the same name; give each page its own.",
       "dashboard_entity_on_several_pages": "An entity is picked on more than one page; keep it on one page.",
       "invalid_dashboard_pages": "The saved display pages are invalid; set the pages again.",
-      "invalid_dashboard_entities": "An entity cannot be shown on the display.",
       "dashboard_page_name_missing": "A page with entities needs a name; the display shows it as the page heading."
     }
   },

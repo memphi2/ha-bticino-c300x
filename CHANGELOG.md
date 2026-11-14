@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.1.4 - Unreleased
+## v2.2.0 - 2026-11-14
 
 ### Added
 
@@ -70,17 +70,77 @@
 
 ### Fixed
 
+- Preserve device-owned configuration during SSH reinstalls and sync saved
+  configuration, update files and private SIP account files before publishing
+  them. Restore routing only from a verified stock backup.
+- Reserve local-display HTTP capacity, bound unauthenticated RTSP connections,
+  and clear inbound SRTP keys after on-demand media stops.
+- Bound Wyoming transcription duration and data size, remove failed capture
+  output, and keep late talkback keepalive errors from failing completed clips.
+- Validate non-finite numbers, addresses and message IDs; keep token fingerprints
+  admin-only. Log repair failures, avoid reloads for internal bookkeeping, and
+  retain the Alarmo command tap guard until the alarm state changes.
+- Reject malformed webhook credentials without an unhandled error, and release
+  webhook registrations when integration setup fails or is cancelled.
+- Do not send saved agent credentials to newly discovered addresses or replace
+  an existing entry's address from an unsolicited discovery announcement. Use
+  **Reconfigure** to confirm an address change.
+- Clearing optional display-dashboard fields now removes their saved values.
+  Media-player play/pause controls require the capability needed for the
+  player's current state.
+- Enforce explicitly configured RTSP credentials before admitting media clients,
+  and collect completed home-call threads before starting another call.
+  Empty RTSP credentials retain the existing local-network setup; see the
+  [RTSP access limitations](SECURITY.md#rtsp-access) before configuring credentials.
+- Discard queued display commands after timeout or page exit, refresh alarm
+  state after events that arrive during a read, and expire command feedback
+  with a one-shot timer. Already sent actions cannot be recalled.
+- Reconnect memo and message updates after transport failures with bounded
+  backoff and refresh unread counts after recovery. No additional idle polling.
+- Cancel ring captures when their integration runtime is unloaded and avoid
+  hanging up a replacement runtime or an observed replacement call. Stop
+  announcement workers cooperatively before releasing capture ownership.
+- Keep a shared on-demand stream alive when another WebRTC offer fails.
+- Preserve complete HTTP requests delayed by another handler and finish partial
+  responses through bounded nonblocking output buffers.
+- Decode JSON escapes consistently in HTTP inputs, saved configuration and
+  update manifests. Create temporary configuration files with private
+  permissions before writing credentials.
+- Bound mDNS query processing and ignore responses and unrelated queries.
+- Reject duplicate device endpoints before starting installation, preserve
+  customized obsolete blueprints, and resume unfinished display-update steps
+  when retrying an agent update.
+- Refresh message details before deleting the latest item. Extract capture
+  images using the video's actual duration and clear unavailable image aliases.
+- Keep RTSP probe errors scoped to their request and suppress automatic
+  preview retries after failure until a new ring.
+- Cancel in-flight media setup on stop, bound socket-write delays, reclaim
+  completed SIP workers and partially initialized SRTP sessions, and match
+  SDES keys to their own crypto attribute. Run device-media renewal outside
+  the audio worker.
+- Preserve pending configuration during MQTT changes and normalization,
+  retain coalesced MQTT commands until consumed, and round-trip activations
+  without an optional address.
+- Honor custom agent installation paths in maintenance scripts and normalize
+  absent notification action IDs for the device's Qt runtime.
+- Validate release ZIP contents against the checkout, stop local HA installation
+  on copy errors, correlate RTSP capture responses by connection and CSeq, and
+  prevent routing-patch output from overwriting its input.
+
+
 - A light or fan that is off shows 0 % on its display tile in place of `?`.
 - Saving the pages kept no display settings of the Alarmo quick entity, so
   its name and secondary line were lost.
 
 ### Upgrade Notes
 
-- The native agent stays at `2.1.2`; only the display files change. Their
-  new bundle hash makes the agent-update Repair offer them, it installs the
-  display files alone, and the integration re-applies an active Display patch
-  itself, which restarts the device GUI once. The page name in the heading
-  and the status in the header bar need these display files.
+- Update the native agent to **2.2.0** through the offered Repair after updating
+  the integration. The package includes a rebuilt agent and new display files.
+  Reapplying an active Display patch restarts the device GUI once.
+- RTSP supports TCP interleaving only. UDP requests are explicitly rejected;
+  Home Assistant already uses TCP.
+- Home Assistant 2026.7 remains the minimum. Existing entries and cards can
+  be kept.
 
 ## v2.1.3 - 2026-11-13
 

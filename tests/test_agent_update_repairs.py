@@ -418,7 +418,7 @@ def test_agent_update_repair_self_update_confirm_flow(monkeypatch, bootstrap) ->
 
 
 @pytest.mark.parametrize("bootstrap", [False, True])
-def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap) -> None:
+def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
@@ -438,6 +438,11 @@ def test_agent_update_repair_self_update_reports_failures(monkeypatch, bootstrap
     assert result["step_id"] == "confirm"
     assert result["errors"] == {"base": "update_failed"}
     assert entry.data.get("agent_update_payload_pending", False) is bootstrap
+    # The user sees a translated form; the cause has to be in the log.
+    assert any(
+        "agent update failed" in record.getMessage() and "upload failed" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_failed_second_transaction_remains_repairable_after_reload(monkeypatch) -> None:
@@ -653,7 +658,7 @@ def test_agent_update_repair_ssh_install_success(monkeypatch) -> None:
     assert hass.config_entries.reloads == ["entry-1"]
 
 
-def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
+def test_agent_update_repair_ssh_install_reports_failures(monkeypatch, caplog) -> None:
     import custom_components.bticino_c300x.repairs as repairs
 
     entry = FakeEntry(
@@ -693,6 +698,12 @@ def test_agent_update_repair_ssh_install_reports_failures(monkeypatch) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "ssh_install"
     assert result["errors"] == {"base": "ssh_install_failed"}
+    assert any(
+        "SSH install failed" in record.getMessage() and "ssh failed" in record.getMessage()
+        for record in caplog.records
+    )
+    # The password the user typed is never part of the log.
+    assert not any("secret" in record.getMessage() for record in caplog.records)
 
 
 def test_capture_external_patch_state_tolerates_agent_status_errors() -> None:
@@ -2329,6 +2340,37 @@ def test_capture_external_patch_state_marks_unknown_firewall_status() -> None:
     assert patch_state.firewall_status_known is False
 
 
+def test_failed_qml_followup_survives_same_bundle_retry(monkeypatch):
+    import custom_components.bticino_c300x.repairs as repairs
+
+    entry = FakeEntry(runtime_data=FakeRuntimeData(FakePatchApi()))
+    hass = FakeHass(entry)
+    state = _ExternalPatchState(qml_patch_required=True, firewall_patched=False,
+                               firewall_status_known=True, ipv6_firewall_patched=False)
+    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": True})
+    calls = []
+
+    async def restore(_entry, *, apply_full_patch):
+        calls.append(apply_full_patch)
+        if len(calls) == 1:
+            raise RuntimeError("temporary failure")
+
+    monkeypatch.setattr(repairs, "async_restore_qml_patches_after_update", restore)
+    with pytest.raises(RuntimeError, match="temporary failure"):
+        asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._remember_qml_followup(hass, entry, state, {"qml_patch_changed": False})
+    assert entry.data["agent_update_qml_pending"] is True
+    update = repairs.compare_agent_bundle(
+        {"version": "1.0", "agent": {"self_update_supported": True}},
+        {"agent_version": "1.0"}, qml_patch_pending=True,
+    )
+    assert update.update_required and update.self_update_repair_supported
+    asyncio.run(_async_restore_external_patch_state(entry, state, _ExternalPatchChanges()))
+    repairs._clear_qml_followup(hass, entry)
+    assert "agent_update_qml_pending" not in entry.data
+    assert calls == [True, True]
+
+
 def test_restore_external_patch_state_skips_active_patches_without_source_changes() -> None:
     api = FakePatchApi()
     entry = FakeEntry(runtime_data=FakeRuntimeData(api))
@@ -2545,3 +2587,24 @@ def test_restore_external_patch_state_skips_inactive_changed_patches() -> None:
     )
 
     assert api.calls == ["apply_qml_core", "reload_gui", "qml_status"]
+
+
+@pytest.mark.parametrize("flow_class", [DeviceUserRepairFlow, MediaSetupRepairFlow])
+def test_repair_flows_abort_cleanly_when_the_entry_never_set_up(flow_class) -> None:
+    """A failed or disabled entry has no runtime data; Fix must not raise.
+
+    The issue can still be listed, and the user can press Fix on it.
+    """
+
+    entry = types.SimpleNamespace(entry_id="entry-1", data={}, options={})
+    assert not hasattr(entry, "runtime_data")
+    flow = flow_class(FakeHass(entry), "entry-1")  # type: ignore[arg-type]
+    flow.async_abort = lambda **kwargs: {"type": "abort", **kwargs}  # type: ignore[method-assign]
+    flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}  # type: ignore[method-assign]
+
+    assert asyncio.run(flow.async_step_confirm()) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }
+    assert asyncio.run(flow.async_step_confirm({})) == {
+        "type": "abort", "reason": "entry_not_loaded",
+    }

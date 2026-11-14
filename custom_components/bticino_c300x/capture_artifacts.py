@@ -66,6 +66,7 @@ def publish_capture_aliases(root: Path, work_dir: Path) -> None:
     for name in names:
         source = work_dir / name
         if not source.is_file():
+            (root / name).unlink(missing_ok=True)
             continue
         publish_alias(source, root / name)
 

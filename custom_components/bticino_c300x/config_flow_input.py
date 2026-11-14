@@ -383,9 +383,8 @@ def _dashboard_feature_input(
                 user_input.get(CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES, "")
             )
         except vol.Invalid:
-            errors[CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES] = (
-                "invalid_dashboard_entity_display_overrides"
-            )
+            # Not a field of the form, where an error would not be shown.
+            errors["base"] = "invalid_dashboard_entity_display_overrides"
         dashboard_dynamic_homepage = bool(
             user_input.get(
                 CONF_DASHBOARD_DYNAMIC_HOMEPAGE,

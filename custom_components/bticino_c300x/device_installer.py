@@ -168,10 +168,13 @@ def _install_device_agent_sync(
             if client.put_file(payload.source, payload.remote_path, payload.mode):
                 changed_files.append(payload.remote_path)
 
+        config_path = f"{request.remote_dir}/{REMOTE_CONFIG_NAME}"
         if _write_remote_file_sync(
             client,
-            f"{request.remote_dir}/{REMOTE_CONFIG_NAME}",
-            config_bytes,
+            config_path,
+            _merge_existing_device_config(
+                config_bytes, _read_remote_config_sync(client, config_path)
+            ),
             mode="600",
         ):
             changed_files.append(f"{request.remote_dir}/{REMOTE_CONFIG_NAME}")
@@ -429,6 +432,41 @@ def _device_config_json(
         "displayBridge": {"enabled": False},
     }
     return json.dumps(config, indent=2, sort_keys=True) + "\n"
+
+
+# Sections of the agent config that Home Assistant does not own. They are set
+# on the device (legacy MQTT migration, display bridge, setup page) and a
+# repair reinstall must not reset them to the template defaults.
+_DEVICE_OWNED_CONFIG_SECTIONS = (
+    "mqtt",
+    "mdns",
+    "events",
+    "answeringMachine",
+    "memos",
+    "systemMetrics",
+    "video",
+    "displayBridge",
+)
+
+
+def _read_remote_config_sync(client: _DeviceSshClient, remote_path: str) -> Any:
+    try:
+        output = client.run(f"cat {_quote(remote_path)}")
+        return json.loads(output)
+    except (C300XDeviceInstallError, ValueError, TypeError):
+        return None
+
+
+def _merge_existing_device_config(template: bytes, existing: Any) -> bytes:
+    """Return the template with the device-owned sections of the old config."""
+
+    if not isinstance(existing, dict):
+        return template
+    config = json.loads(template)
+    for section in _DEVICE_OWNED_CONFIG_SECTIONS:
+        if isinstance(existing.get(section), dict):
+            config[section] = existing[section]
+    return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
 def _device_activation_config(

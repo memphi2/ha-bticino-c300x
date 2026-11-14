@@ -13,6 +13,7 @@ import pytest
 import voluptuous as vol
 import voluptuous_serialize
 from homeassistant.helpers import aiohttp_client
+from homeassistant.data_entry_flow import AbortFlow
 
 from custom_components.bticino_c300x.config_flow import (  # noqa: E402
     BticinoC300XOptionsFlow,
@@ -775,9 +776,7 @@ def test_feature_input_collects_activation_and_dashboard_errors() -> None:
         CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity",
         CONF_WEATHER_ENTITY_ID: "invalid_weather_entity",
         CONF_DASHBOARD_ENTITIES: "invalid_dashboard_entities",
-        CONF_DASHBOARD_ENTITY_DISPLAY_OVERRIDES: (
-            "invalid_dashboard_entity_display_overrides"
-        ),
+        "base": "invalid_dashboard_entity_display_overrides",
     }
     assert data[CONF_DEVICE_ACTIVATION_MODE] == DEVICE_ACTIVATION_MODE_AUTO
     assert data[CONF_DEVICE_ACTIVATION_STAIR_LIGHT_P] == DEFAULT_STAIR_LIGHT_P
@@ -848,6 +847,36 @@ def test_feature_input_rejects_unsupported_alarm_page_entity() -> None:
     )
 
     assert errors == {CONF_ALARM_PAGE_ENTITY_ID: "invalid_alarm_page_entity"}
+
+
+@pytest.fixture(autouse=True)
+def default_current_entries(monkeypatch):
+    monkeypatch.setattr(BticinoC300XConfigFlow, "_async_current_entries", lambda self: [])
+
+
+def test_bootstrap_stable_identity_duplicate_before_mutation(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow._setup_connection = {CONF_AGENT_HOST: "C300X.local.", CONF_AGENT_PORT: 8091}
+    entry = SimpleNamespace(unique_id="c300x-stable-id", data={}, options={
+        CONF_AGENT_HOST: "c300x.local", CONF_AGENT_PORT: 8091,
+    })
+    flow._async_current_entries = lambda: [entry]
+
+    async def set_id(*args, **kwargs):
+        pass
+
+    flow.async_set_unique_id = set_id
+    flow._abort_if_unique_id_configured = lambda: None
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("duplicate setup must not touch device")
+
+    monkeypatch.setattr(config_flow_module, "async_install_device_agent", forbidden)
+    with pytest.raises(AbortFlow, match="already_configured"):
+        asyncio.run(flow.async_step_bootstrap_install({
+            CONF_BOOTSTRAP_SSH_USERNAME: "user", CONF_BOOTSTRAP_SSH_PASSWORD: "password",
+        }))
 
 
 def test_manual_setup_duplicate_aborts_before_agent_probe(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1547,8 +1576,17 @@ def test_zeroconf_preserves_stable_unique_id_at_entry_creation(
     ]
 
 
-def test_zeroconf_merges_existing_manual_entry_when_token_matches(
+@pytest.mark.parametrize("host,port,merge", [
+    ("192.0.2.60", 8091, True),
+    ("192.0.2.99", 8091, False),
+    ("192.0.2.60", 8092, False),
+    ("c300x-agent.local.", 8091, False),
+])
+def test_zeroconf_only_merges_the_known_endpoint_without_disclosing_token(
     monkeypatch: pytest.MonkeyPatch,
+    host: str,
+    port: int,
+    merge: bool,
 ) -> None:
     calls: list[str] = []
     entry = SimpleNamespace(
@@ -1586,8 +1624,9 @@ def test_zeroconf_merges_existing_manual_entry_when_token_matches(
         *,
         api_token: str = "",
     ) -> str:
+        assert api_token == "", "Discovery must never disclose saved credentials"
         calls.append(f"probe:{connection[CONF_AGENT_HOST]}:{api_token}")
-        return "reachable" if api_token == "known-token" else "missing"
+        return "missing"
 
     flow.async_set_unique_id = async_set_unique_id  # type: ignore[method-assign]
     flow._abort_if_unique_id_configured = abort_if_unique_id_configured  # type: ignore[method-assign]
@@ -1601,22 +1640,51 @@ def test_zeroconf_merges_existing_manual_entry_when_token_matches(
     result = asyncio.run(
         flow.async_step_zeroconf(
             SimpleNamespace(
-                host="c300x-agent.local.",
-                port=8091,
+                host=host,
+                port=port,
                 properties={"id": "c300x-aabbcc001122", "name": "Door Station"},
                 name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
             )
         )
     )
 
-    assert result == {"type": "abort", "reason": "already_configured"}
+    assert result == {"type": "abort", "reason": "already_configured" if merge else "cannot_connect"}
     assert calls == [
         "unique:c300xaabbcc001122",
         "abort_check",
-        "probe:c300x-agent.local.:known-token",
-        "update:bticino_c300x:192.0.2.60:8091:c300xaabbcc001122",
-        "abort:already_configured",
+        *([
+            "update:bticino_c300x:192.0.2.60:8091:c300xaabbcc001122",
+            "abort:already_configured",
+        ] if merge else [f"probe:{host}:", "abort:cannot_connect"]),
     ]
+
+
+def test_zeroconf_identity_cannot_redirect_an_existing_entry(monkeypatch):
+    flow = BticinoC300XConfigFlow()
+    flow.hass = SimpleNamespace()
+    flow.context = {}
+
+    async def set_identity(*args, **kwargs):
+        pass
+
+    def abort_existing(**kwargs):
+        assert "updates" not in kwargs
+        raise RuntimeError("already configured")
+
+    flow.async_set_unique_id = set_identity
+    flow._abort_if_unique_id_configured = abort_existing
+    flow._async_current_entries = lambda: []
+
+    async def forbid_probe(*args, **kwargs):
+        pytest.fail("A rediscovered identity must not probe the announced endpoint")
+
+    monkeypatch.setattr(config_flow_module, "_async_probe_agent", forbid_probe)
+    with pytest.raises(RuntimeError, match="already configured"):
+        asyncio.run(flow.async_step_zeroconf(SimpleNamespace(
+            host="192.0.2.99", port=8091,
+            properties={"id": "c300x-aabbcc001122"},
+            name="BTicino C300X Agent._bticino-c300x-agent._tcp.local.",
+        )))
 
 
 def test_zeroconf_rediscovery_requests_runtime_event_registration(
@@ -2170,6 +2238,39 @@ def test_dashboard_input_defaults_preserve_existing_keep_page_open() -> None:
 
     assert result[CONF_DASHBOARD_PREVENT_RETURN] is True
     assert result[CONF_ALARM_PAGE_ENTITY_ID] == "button.stair_light"
+
+
+def test_submitted_dashboard_clears_omitted_optional_fields():
+    from custom_components.bticino_c300x.config_flow_alarm import alarm_input
+    from custom_components.bticino_c300x.config_flow_dashboard import dashboard_form_input
+    from custom_components.bticino_c300x.config_flow_dashboard_pages import dashboard_pages_input
+
+    defaults = {
+        CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+        CONF_ALARM_PAGE_ENTITY_ID: "button.stair_light",
+        CONF_WEATHER_ENTITY_ID: "weather.home",
+        CONF_DASHBOARD_ENTITIES: ["light.room"],
+        CONF_ACTIONS: {"open": {"service": "button.press", "entity_id": "button.door"}},
+        CONF_DASHBOARD_PREVENT_RETURN: True,
+    }
+    # Only fields shown in the submitted settings area are cleared.
+    result = _dashboard_input_defaults(dashboard_form_input(_dashboard_schema()({})), defaults)
+    assert result[CONF_ACTIONS_JSON] == ""
+    assert result[CONF_ALARM_ENTITY_ID] == defaults[CONF_ALARM_ENTITY_ID]
+    assert result[CONF_WEATHER_ENTITY_ID] == defaults[CONF_WEATHER_ENTITY_ID]
+    assert result[CONF_DASHBOARD_ENTITIES] == defaults[CONF_DASHBOARD_ENTITIES]
+
+    cleared_alarm, errors = alarm_input(defaults, {})
+    assert errors == {}
+    assert cleared_alarm[CONF_ALARM_ENTITY_ID] == ""
+    assert cleared_alarm[CONF_ALARM_PAGE_ENTITY_ID] == ""
+    assert cleared_alarm[CONF_WEATHER_ENTITY_ID] == defaults[CONF_WEATHER_ENTITY_ID]
+
+    cleared_pages, errors = dashboard_pages_input(defaults, {"page_1": {}})
+    assert errors == {}
+    assert cleared_pages[CONF_WEATHER_ENTITY_ID] == ""
+    assert cleared_pages[CONF_DASHBOARD_ENTITIES] == []
+    assert cleared_pages[CONF_ALARM_ENTITY_ID] == defaults[CONF_ALARM_ENTITY_ID]
 
 
 @pytest.mark.parametrize(
@@ -2935,6 +3036,69 @@ class _FakeQmlPatchApi:
 
 def _schema_key_names(schema: vol.Schema) -> list[str]:
     return [getattr(key, "schema", key) for key in schema.schema]
+
+
+@pytest.mark.parametrize("value", ["nan", "NaN", float("nan"), "inf", "-inf", float("inf")])
+def test_audio_gain_rejects_values_that_are_not_finite(value) -> None:
+    """NaN is neither below nor above the range, so a plain range check passes it."""
+
+    from custom_components.bticino_c300x.config_audio import (
+        audio_gain_db,
+        audio_gain_db_or_default,
+    )
+
+    with pytest.raises(vol.Invalid):
+        audio_gain_db(value)
+    assert audio_gain_db_or_default(value, 6.0) == 6.0
+    assert audio_gain_db("0") == 0.0
+    assert audio_gain_db(-20) == -20.0
+    assert audio_gain_db("20.0") == 20.0
+
+
+def test_alarmo_is_kept_when_the_display_patch_is_switched_off() -> None:
+    """The alarm commands read the alarm entity without the display.
+
+    Switching the Display patch off used to clear it, and the alarm service
+    then failed with "alarm entity is not configured". What only the display
+    uses, the weather, the entities and the actions, still goes with the patch.
+    """
+
+    data, errors = _feature_input(
+        {
+            CONF_DEVICE_UI_ENABLED: False,
+            CONF_ALARM_ENTITY_ID: "alarm_control_panel.home",
+            CONF_ALARM_PAGE_ENTITY_ID: "switch.stair_light",
+            CONF_WEATHER_ENTITY_ID: "weather.home",
+            CONF_DASHBOARD_ENTITIES: ["light.room"],
+        }
+    )
+
+    assert errors == {}
+    assert data[CONF_ALARM_ENTITY_ID] == "alarm_control_panel.home"
+    assert data[CONF_ALARM_PAGE_ENTITY_ID] == "switch.stair_light"
+    assert data[CONF_WEATHER_ENTITY_ID] == ""
+    assert data[CONF_DASHBOARD_ENTITIES] == []
+    # A wrong entity is refused with the patch off as well.
+    _data, errors = _feature_input(
+        {CONF_DEVICE_UI_ENABLED: False, CONF_ALARM_ENTITY_ID: "light.hall"}
+    )
+    assert errors == {CONF_ALARM_ENTITY_ID: "invalid_alarm_entity"}
+
+
+@pytest.mark.parametrize("value", ["²", "٣", "¹²", "1²", "１"])
+def test_a_stair_light_part_with_a_digit_that_int_cannot_read_is_invalid(value) -> None:
+    """str.isdigit() is true for a superscript two, but int() cannot read it.
+
+    The ValueError that followed was not a vol.Invalid, so typing such a
+    character ended the flow step in an unhandled exception.
+    """
+
+    from custom_components.bticino_c300x.activation_address import normalize_stair_light_part
+
+    with pytest.raises(vol.Invalid):
+        normalize_stair_light_part(value, default="00")
+    assert normalize_stair_light_part("7", default="00") == "07"
+    assert normalize_stair_light_part("", default="03") == "03"
 
 
 def test_alarmo_has_its_own_step_after_the_activations_and_is_kept_without_the_patch() -> None:

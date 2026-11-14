@@ -3,7 +3,9 @@
 ## HTTP and Callback Resource Limits
 
 Incoming HTTP requests use at most eight pending buffers, allocated only while
-needed, with a 500 ms total receive deadline. Incomplete clients are polled
+needed, with a 500 ms total receive deadline. Two of the eight are kept for the
+loopback UI listener, so connections to the API port cannot lock the display
+out. Incomplete clients are polled
 without blocking other incoming requests. HTTP parsing rejects incomplete or
 ambiguous message framing.
 
@@ -48,7 +50,7 @@ zip under `.release/`.
 The bootstrap installer puts the following files on the C300X:
 
 - `c300x-agent-native`
-- generated `config.json` with generated API and maintenance tokens
+- generated `config.json` with generated API and maintenance tokens (a reinstall keeps the sections of an existing file that Home Assistant does not own: MQTT, mDNS, events, voicemail, memos, metrics, video and display bridge)
 - `/etc/init.d/c300x-native-agent` and `/etc/rc5.d/S40c300x-native-agent`
 - display support files under the agent directory
 - `qml_patch.sh`
@@ -160,6 +162,10 @@ uses a per-device TXT `id` and host name derived from the device MAC address
 when available, with a hostname fallback, and is controlled by the `mdns.enabled`
 config flag and the HA mDNS maintenance switch.
 
+Discovery announcements never receive stored access tokens or change an existing
+entry's host and port. If the device address changes, use **Reconfigure** in Home
+Assistant to confirm the new address. A DHCP reservation avoids address changes.
+
 The Display patch and Display reload maintenance paths are intentionally narrow: the
 agent can only run the configured local UI helper with fixed `status`, `apply`,
 `restore`, or `reload` arguments. The patch is a complete Display patch, not just two extra pages: it wires MainApp navigation, transforms the
@@ -207,6 +213,14 @@ errors, not power loss or storage failure during rollback. Recovery backups
 left by an interrupted update are not overwritten; inspect and recover that
 installation before trying another update. No update checks or backup writes
 are added to idle operation.
+
+If an update is refused after an interrupted one, look for files named
+`<file>.update-backup` next to the installed agent files, the init script and
+the init link. Each is a hard link to the file as it was before the update.
+When the installed file next to it works, delete the `.update-backup` file;
+when the installed file is missing or broken, move the backup over it first.
+The agent does not do this by itself: it never rewrites system files on its own
+at start-up, and this path cannot be tested without a power cut on a device.
 
 ## Release agent reuse
 

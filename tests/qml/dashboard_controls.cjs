@@ -105,9 +105,10 @@ queue.shift().success({...payload("five"), notifications: [
 ]});
 assert.equal(p.notifications.length, 1);
 p.notificationsOpen = true;
-p.notificationAction(p.notifications[0], null);
+p.notificationAction(p.notifications[0], undefined);
 assert.match(queue[0].url, /entities=notification.calendar&option=/);
 assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).revision, 12);
+assert.equal(JSON.parse(decodeURIComponent(queue[0].url.split("&option=")[1])).action_id, null);
 p.notificationAction(p.notifications[0], null);
 assert.equal(queue.length, 1, "notification actions are single-flight too");
 queue.shift().success({ok: true});
@@ -147,6 +148,15 @@ p.dashboardOnline = true;
 assert.equal(p.optionLabel({command: "color"}, "red"), "Red");
 assert.equal(p.optionLabel({command: "fan_mode"}, "custom mode"), "custom mode");
 assert.equal(p.optionLabel({command: "preset_mode"}, "auto"), "auto", "custom preset names remain unchanged");
+for (const lang of ["en", "de", "fr", "it"]) {
+    const modeLabels = {};
+    for (const key of Object.keys(I18n.DETAIL_LABELS[lang])) {
+        if (key.indexOf("mode_") !== 0) continue;
+        const label = I18n.DETAIL_LABELS[lang][key];
+        assert.equal(modeLabels[label], undefined, lang + ": " + key + " and " + modeLabels[label] + " read the same, two buttons could not be told apart");
+        modeLabels[label] = key;
+    }
+}
 for (const lang of ["de", "fr", "it"]) {
     assert.deepEqual(Object.keys(I18n.DETAIL_LABELS[lang]).sort(), Object.keys(I18n.DETAIL_LABELS.en).sort());
     for (const key of Object.keys(I18n.DETAIL_LABELS.en)) assert.notEqual(I18n.text(lang, key), key);
@@ -155,7 +165,8 @@ Api.dashboardControl(normalized, normalized.controls[0], "green", p.status, p);
 assert.equal(queue.length, 1, "a swatch sends one atomic color command");
 assert.match(queue.shift().url, /light.room%3Acolor&option=green$/);
 p.aboutToHide();
-assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 2, "entity details introduce no periodic timers");
+assert.equal((qml.match(/\bTimer\s*\{/g) || []).length, 3, "recovery, command watchdog and feedback expiry only");
+assert.equal((qml.match(/repeat: false/g) || []).length, 3, "all dashboard timers are one-shot");
 assert.match(qml, /anchors.top: entitySummary.bottom/);
 console.log("Entity detail controls and translations passed");
 
@@ -376,6 +387,48 @@ assert.equal(p.feedbackKey(stuck), "state_unconfirmed", "the warning stays long 
 clock += 1;
 assert.equal(p.feedbackKey(stuck), "", "a settled entry stops being reported");
 assert.equal(p.readingColor(stuck), "#c7d0d9");
+// A light reports what it converted a command into: a color temperature in
+// mired, a hue and saturation through its own color space. Close counts.
+function lightWith(command, value) {
+    return {entity_id: "light.lamp", available: true, state: true, controls: [
+        {command: command, kind: "number", value: value, min: 0, max: 7000, step: 1}]};
+}
+function confirmed(command, sent, reported) {
+    const expected = Api.dashboardExpectation(lightWith(command, 0), {command: command, kind: "number"}, String(sent));
+    return Api.dashboardExpectationMatches(lightWith(command, reported), expected);
+}
+assert.equal(confirmed("color_temp_kelvin", 2700, 2703), true, "a color temperature a few kelvin off is the one that was sent");
+assert.equal(confirmed("color_temp_kelvin", 2700, 2730), true);
+assert.equal(confirmed("color_temp_kelvin", 2700, 2731), false, "but not one that is clearly another");
+assert.equal(confirmed("hue", 120, 122), true);
+assert.equal(confirmed("hue", 120, 124), false);
+assert.equal(confirmed("saturation", 80, 78), true);
+assert.equal(confirmed("brightness", 50, 51), false, "a brightness is still compared exactly");
+assert.equal(confirmed("brightness", 50, 50), true);
+// A one-shot action (a script, scene or button, a track skip) has no state that
+// Home Assistant could reflect, so it has nothing to be unconfirmed about.
+const oneShot = {entity_id: "script.leave", available: true};
+Api.setDashboardFeedback(p, oneShot.entity_id, "action_sent", null);
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === oneShot.entity_id)), 60000, "it is only forgotten, not turned into a warning");
+clock += 15000;
+assert.equal(p.feedbackKey(oneShot), "action_sent", "a one-shot action is not called unconfirmed");
+clock += 44999;
+assert.equal(p.feedbackKey(oneShot), "action_sent");
+clock += 1;
+assert.equal(p.feedbackKey(oneShot), "", "and it is forgotten after the lifetime of other feedback");
+// The quick action on the Alarm page shows a failed request in the user's
+// language, with the code, never the raw transport string.
+const quickStatus = {text: "", color: ""};
+p.quickActionPending = false;
+p.quickActionGeneration = 0;
+queue.length = 0;
+Api.dashboardAction({domain: "light", entity_id: "light.hall"}, quickStatus, p, false);
+assert.equal(queue.length, 1);
+queue.shift().error("API error: 503");
+assert.equal(quickStatus.text, "Status failed (503)", "a failed quick action is not shown as the raw English string");
+assert.equal(quickStatus.color, "#ff6b6b");
+Api.setDashboardFeedback(p, "light.hall", "action_sent", {command: "toggle", value: true});
+assert.equal(Api.nextFeedbackDelay(p.controlFeedback.filter(e => e.entity_id === "light.hall")), 15000, "a command with an expectation still gets its warning");
 
 // A late confirmation still lands, and is stamped again so it reads as fresh.
 p.controlFeedback = [];

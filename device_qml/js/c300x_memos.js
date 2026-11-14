@@ -6,6 +6,14 @@ var eventRevision = 0
 var eventRequest = null
 var eventWatching = false
 var eventCallback = null
+var eventOwner = null
+var eventRetryTimer = null
+var eventRetryDelay = 1000
+var eventRecovering = false
+var eventConnected = false
+var eventRefreshInFlight = false
+var eventGeneration = 0
+var notificationGeneration = 0
 
 function syncMemoModel(pageItem, textMemoType, callback) {
     syncMemoObjectModel(pageItem.model, textMemoType, callback)
@@ -25,6 +33,9 @@ function syncMemoObjectModel(model, textMemoType, callback) {
 }
 
 function syncHomeNotifications(pageItem, callback) {
+    prepareEventRetry(pageItem)
+    var generation = ++notificationGeneration
+    var watchGeneration = eventGeneration
     var pending = 2
     var success = true
 
@@ -32,12 +43,12 @@ function syncHomeNotifications(pageItem, callback) {
         success = success && ok
         pending--
         if (pending === 0 && callback) {
-            callback(success)
+            callback(success && generation === notificationGeneration && watchGeneration === eventGeneration)
         }
     }
 
     getJson("/ui/answering-machine/messages", function(data) {
-        if (pageItem) {
+        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
             pageItem.externalUnreadMessages = unreadCountFromData(data)
         }
         done(true)
@@ -45,7 +56,7 @@ function syncHomeNotifications(pageItem, callback) {
         done(false)
     })
     getJson("/ui/memos", function(data) {
-        if (pageItem) {
+        if (pageItem && generation === notificationGeneration && watchGeneration === eventGeneration) {
             pageItem.externalUnreadMemos = unreadCountFromData(data)
         }
         done(true)
@@ -71,6 +82,8 @@ function startEventWatch(callback) {
     if (eventWatching === true) {
         return
     }
+    if (eventRetryTimer) eventRetryTimer.stop()
+    eventRetryDelay = 1000
     eventWatching = true
     requestNextEvent()
 }
@@ -78,13 +91,70 @@ function startEventWatch(callback) {
 function stopEventWatch() {
     eventWatching = false
     eventCallback = null
-    if (eventRequest && eventRequest.readyState < 4) {
-        eventRequest.abort()
-    }
-    if (eventRequest) {
-        removeConnection(eventRequest)
-    }
+    eventGeneration += 1
+    eventRecovering = false
+    eventConnected = false
+    eventRefreshInFlight = false
+    if (eventRetryTimer) eventRetryTimer.stop()
+    var request = eventRequest
     eventRequest = null
+    if (request) {
+        request.onreadystatechange = function() {}
+        removeConnection(request)
+        if (request.readyState < 4) request.abort()
+    }
+}
+
+function prepareEventRetry(pageItem) {
+    if (!pageItem || (eventRetryTimer && eventOwner === pageItem)) return
+    if (eventRetryTimer) {
+        stopEventWatch()
+        eventRetryTimer.destroy()
+    }
+    eventOwner = pageItem
+    // HomePage already supplies its lifetime owner before starting the watch.
+    // A child Timer keeps recovery local without changing the firmware patch.
+    eventRetryTimer = Qt.createQmlObject('import QtQuick 1.1; Timer { repeat: false; running: false }', pageItem, "MemoEventRetry")
+    eventRetryTimer.triggered.connect(retryEventWatch)
+}
+
+function scheduleEventRetry() {
+    if (!eventWatching || !eventRetryTimer || eventRetryTimer.running) return
+    eventRetryTimer.interval = eventRetryDelay
+    eventRetryDelay = Math.min(eventRetryDelay * 2, 30000)
+    eventRetryTimer.restart()
+}
+
+function retryEventWatch() {
+    if (!eventWatching) return
+    if (!eventRequest) requestNextEvent()
+    else if (eventConnected && eventRecovering) refreshAfterReconnect()
+}
+
+function eventWatchFailed() {
+    eventConnected = false
+    eventRecovering = true
+    scheduleEventRetry()
+}
+
+function refreshAfterReconnect() {
+    if (!eventOwner || eventRefreshInFlight || !eventWatching) return
+    eventRefreshInFlight = true
+    var generation = eventGeneration
+    // Events missed during an outage need a full unread-count snapshot, even
+    // when the first successful long poll reports changed=false.
+    syncHomeNotifications(eventOwner, function(ok) {
+        if (generation !== eventGeneration || !eventWatching) return
+        eventRefreshInFlight = false
+        if (!ok || !eventConnected) {
+            scheduleEventRetry()
+            return
+        }
+        eventRecovering = false
+        eventRetryDelay = 1000
+        if (eventRetryTimer) eventRetryTimer.stop()
+        if (eventCallback) eventCallback({topic: "notifications"})
+    })
 }
 
 function unreadCountFromData(data) {
@@ -186,6 +256,7 @@ function requestNextEvent() {
             return
         }
         removeConnection(xhr)
+        if (eventRequest !== xhr || !eventWatching) return
         eventRequest = null
         if (xhr.status === 200 && eventWatching === true) {
             try {
@@ -193,15 +264,17 @@ function requestNextEvent() {
                 if (data && data.revision !== undefined) {
                     eventRevision = Number(data.revision)
                 }
+                eventConnected = true
+                if (eventRecovering && (!eventRetryTimer || !eventRetryTimer.running)) refreshAfterReconnect()
                 if (data && data.changed === true && eventCallback) {
                     eventCallback(data)
                 }
                 requestNextEvent()
             } catch (error) {
-                eventWatching = false
+                eventWatchFailed()
             }
         } else if (eventWatching === true) {
-            eventWatching = false
+            eventWatchFailed()
         }
     }
     xhr.open("GET", BASE_URL + "/ui/events/next?since=" + eventRevision)
@@ -219,16 +292,16 @@ function removeConnection(xhr) {
 }
 
 function cleanupConnections() {
-    var index = connections.length
+    var pending = connections.slice(0)
+    var index = pending.length
     while (index--) {
-        if (connections[index].longPoll === true && connections[index] === eventRequest && eventWatching === true) {
+        var request = pending[index]
+        if (request.longPoll === true && request === eventRequest && eventWatching === true) {
             continue
         }
-        if (Date.now() - connections[index].startTime > 3000) {
-            if (connections[index].readyState < 4) {
-                connections[index].abort()
-            }
-            connections.splice(index, 1)
+        if (Date.now() - request.startTime > 3000) {
+            if (request.readyState < 4) request.abort()
+            removeConnection(request)
         }
     }
 }

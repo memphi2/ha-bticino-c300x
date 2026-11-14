@@ -179,7 +179,7 @@ void c300x_ringer_control_request(
                       "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                       "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n%s",
                       strlen(body), body);
-    if (!send_all_bytes(control->gui_fd, response, (size_t)length)) {
+    if (!c300x_http_write(control->gui_fd, response, (size_t)length)) {
         close_agent_socket(control->gui_fd);
         control->gui_fd = -1;
         fail(fd, 503, "ringer_gui_unavailable");

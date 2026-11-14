@@ -12,9 +12,9 @@ to:
 ```
 
 They then appear in Home Assistant under **Settings -> Automations & scenes ->
-Blueprints**. Existing current blueprint files are not overwritten. Obsolete
-C300X blueprint files that were bundled by earlier releases can be removed from
-this integration's blueprint folder during startup.
+Blueprints**. Unmodified bundled files receive updates; customized files are
+preserved. Obsolete bundled files are removed at startup only when their content
+matches a known original. Customized or unrecognized old files are preserved.
 
 ## Included Blueprints
 

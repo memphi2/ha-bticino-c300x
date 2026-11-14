@@ -173,7 +173,7 @@ def test_native_mqtt_config_is_saved_before_legacy_bridge_disable() -> None:
         http.rindex("static void handle_subscription_delete")
     ]
 
-    assert handler.index("c300x_save_config_if_changed") < handler.index(
+    assert handler.index("c300x_save_mqtt_config") < handler.index(
         "legacy_mqtt_disable_patch"
     )
 
@@ -185,6 +185,6 @@ def test_native_mqtt_migration_saves_config_before_legacy_bridge_disable() -> No
         http.rindex("static int maybe_json_mqtt_string")
     ]
 
-    assert handler.index("c300x_save_config_if_changed") < handler.index(
+    assert handler.index("c300x_save_mqtt_config") < handler.index(
         "legacy_mqtt_disable_patch"
     )

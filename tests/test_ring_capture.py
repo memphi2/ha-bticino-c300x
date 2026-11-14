@@ -917,10 +917,13 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -948,8 +951,9 @@ def test_capture_ffmpeg_audio_uses_mp4_safe_normalized_aac(
     assert command[command.index("-b:a") + 1] == "128k"
     assert str(tmp_path / "work" / "latest.raw.wav") in command
     assert commands[1][-1] == str(tmp_path / "work" / "latest.processed.wav")
-    assert len(commands) == 5
-    frame_commands = commands[2:]
+    assert len(commands) == 6
+    assert commands[2][0] == "ffprobe"
+    frame_commands = commands[3:]
     assert [cmd[-1] for cmd in frame_commands] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),
@@ -972,10 +976,13 @@ def test_capture_ffmpeg_audio_uses_configured_gain(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -1005,10 +1012,13 @@ def test_capture_ffmpeg_video_only_disables_audio(
         returncode = 0
 
         async def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+            return b'{"streams":[{"duration":"4"}]}', b""
 
     async def _create_subprocess_exec(*command: str, **_kwargs: Any) -> _Process:
         commands.append(list(command))
+        if command[-1].endswith(".jpg"):
+            Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(Path(command[-1]).write_bytes, b"jpeg")
         return _Process()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _create_subprocess_exec)
@@ -1024,8 +1034,8 @@ def test_capture_ffmpeg_video_only_disables_audio(
     )
 
     assert "-an" in commands[0]
-    assert len(commands) == 4
-    assert [cmd[-1] for cmd in commands[1:]] == [
+    assert len(commands) == 5
+    assert [cmd[-1] for cmd in commands[2:]] == [
         str(tmp_path / "work" / "frame_01.jpg"),
         str(tmp_path / "work" / "frame_02.jpg"),
         str(tmp_path / "work" / "frame_03.jpg"),
@@ -1424,3 +1434,194 @@ def test_talkback_codec_is_pcmu_rejects_unresolved_codec() -> None:
 
     with pytest.raises(HomeAssistantError, match="talkback codec is unknown"):
         asyncio.run(_async_talkback_codec_is_pcmu(entry, {}))
+
+
+def test_a_symlinked_capture_outside_the_allowed_roots_is_skipped_not_fatal(tmp_path: Path) -> None:
+    """A link in the capture directory must not break the listing or the player.
+
+    The target is refused by the path check. That used to raise out of the
+    media path lookup, which ended the HTTP view in an error and skipped the
+    other directories, and the listing offered the link as a playable item.
+    """
+
+    hass = _FakeHass(tmp_path / "config")
+    local_dir = tmp_path / "config" / "media" / "c300x"
+    local_dir.mkdir(parents=True)
+    good = local_dir / "doorbell_20260719_100000.mp4"
+    good.write_bytes(b"clip")
+    outside = tmp_path / "elsewhere" / "secret.mp4"
+    outside.parent.mkdir()
+    outside.write_bytes(b"not a capture")
+    evil = local_dir / "doorbell_20260719_100001.mp4"
+    evil.symlink_to(outside)
+
+    assert [item["id"] for item in ring_capture_media_items(hass)] == [good.name]
+    assert ring_capture_media_path(hass, evil.name) is None
+    assert ring_capture_media_path(hass, good.name) == good
+
+
+def _capture_fakes(monkeypatch: pytest.MonkeyPatch, ffmpeg) -> None:
+    async def _ready(_rtsp_url: str) -> None:
+        return None
+
+    async def _talkback(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    for name, value in (
+        ("_async_wait_rtsp_ready", _ready),
+        ("_async_run_ffmpeg", ffmpeg),
+        ("_async_keep_talkback_alive_when_ready", _talkback),
+    ):
+        monkeypatch.setattr(f"custom_components.bticino_c300x.ring_capture.{name}", value)
+
+
+def _capture_workspaces(tmp_path: Path) -> list[Path]:
+    return [
+        child
+        for captures in tmp_path.rglob("captures")
+        for child in captures.iterdir()
+        if child.is_dir()
+    ]
+
+
+def test_a_failed_capture_removes_its_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A failed run used to leave its directory until the one hour expiry.
+
+    With a retrying automation 64 of them fill the limit, and every later
+    capture is then refused until the oldest expires.
+    """
+
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _failing_ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("ffmpeg failed")
+
+    _capture_fakes(monkeypatch, _failing_ffmpeg)
+
+    for _ in range(3):
+        with pytest.raises(HomeAssistantError, match="ffmpeg failed"):
+            asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    assert _capture_workspaces(tmp_path) == []
+
+
+def test_a_failed_capture_leaves_no_partial_clip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    def _write_partial(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"partial")
+
+    async def _half_written_ffmpeg(_url: Any, path: Path, **_kwargs: Any) -> None:
+        await asyncio.to_thread(_write_partial, path)
+        raise HomeAssistantError("ffmpeg failed")
+
+    _capture_fakes(monkeypatch, _half_written_ffmpeg)
+
+    with pytest.raises(HomeAssistantError, match="ffmpeg failed"):
+        asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    assert not target.exists()
+
+
+def _talkback_failure_entry(tmp_path: Path) -> tuple[Any, Any, Path]:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    return (
+        _FakeHass(tmp_path / "config"),
+        _FakeEntry(
+            runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+            data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+        ),
+        target,
+    )
+
+
+def test_a_talkback_failure_does_not_fail_a_finished_recording(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    hass, entry, target = _talkback_failure_entry(tmp_path)
+
+    async def _ffmpeg(_url: Any, path: Path, **_kwargs: Any) -> None:
+        await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_bytes, b"clip")
+
+    async def _failing_talkback(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("C300X talkback was not ready for announcement playback")
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_keep_talkback_alive_when_ready",
+        _failing_talkback,
+    )
+
+    metadata = asyncio.run(
+        async_capture_doorbell_ring_call(hass, entry, output_path=str(target), include_audio=True)
+    )
+
+    assert metadata["output_path"] == str(target)
+    assert target.read_bytes() == b"clip"
+    assert "talkback keepalive ended with an error" in caplog.text
+
+
+def test_an_announcement_failure_still_fails_the_capture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hass, entry, target = _talkback_failure_entry(tmp_path)
+    announcement = target.parent / "announce.wav"
+    announcement.parent.mkdir(parents=True)
+    announcement.write_bytes(b"fake")
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _failing_talkback(*_args: Any, **_kwargs: Any) -> None:
+        raise HomeAssistantError("C300X announcement playback failed")
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+    monkeypatch.setattr(
+        "custom_components.bticino_c300x.ring_capture._async_keep_talkback_alive_when_ready",
+        _failing_talkback,
+    )
+
+    with pytest.raises(HomeAssistantError, match="announcement playback failed"):
+        asyncio.run(
+            async_capture_doorbell_ring_call(
+                hass, entry, output_path=str(target), include_audio=True,
+                announcement_path=str(announcement),
+            )
+        )
+
+
+def test_a_finished_capture_keeps_its_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "config" / "www" / "c300x" / "clip.mp4"
+    hass = _FakeHass(tmp_path / "config")
+    entry = _FakeEntry(
+        runtime_data=_FakeRuntimeData(_FakeApi({"audio_stream_path": "/doorbell"})),
+        data={CONF_AGENT_HOST: "192.0.2.10", CONF_VIDEO_PORT: 6554},
+    )
+
+    async def _ffmpeg(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    _capture_fakes(monkeypatch, _ffmpeg)
+
+    metadata = asyncio.run(async_capture_doorbell_ring_call(hass, entry, output_path=str(target)))
+
+    workspaces = _capture_workspaces(tmp_path)
+    assert [path.name for path in workspaces] == [metadata["capture_id"]]

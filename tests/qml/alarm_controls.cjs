@@ -27,7 +27,7 @@ function page() {
         selectedCommand: "arm_home", selectedCommandReady: true,
         selectedCommandBlockedBySensors: false, selectedCommandStatus: "",
         bypassOffered: false, activeFeedbackCommand: "", commandFeedback: "",
-        commandFeedbackColor: "", commandPending: false, commandInFlight: false,
+        commandFeedbackColor: "", commandPending: false, commandInFlight: false, commandAwaitedState: "",
         runtimeGeneration: 0, statusGeneration: 0, lastStatusRefreshMs: 0,
         alarmPageItem: null, pageActive: true, watchFailed: false,
         preventReturnToHomepage: false, status: {}, alarmState: {}, activeSince: {},
@@ -73,6 +73,10 @@ p.selectCommand("arm_home");
 assert.equal(pending.length, 0, "no duplicate or competing command");
 command.success({ok: true, state: "arming"});
 assert.equal(p.commandPending, true, "wait for confirmed status, not just ACK");
+state(p);
+assert.equal(p.commandPending, true, "an unchanged state is no confirmation of the command");
+p.selectCommand("arm_home");
+assert.equal(pending.length, 0, "no second command while the first one is not confirmed");
 state(p, "arming");
 assert.equal(p.commandPending, false);
 assert.equal(p.keypadVisible(), false);
@@ -290,3 +294,18 @@ assert.equal(stopped.forwardActive, null);
 assert.equal(stoppedSent.length, 1, "no queued request is started by the teardown");
 assert.equal(stopped.connections.length, 0);
 console.log("Alarm QML production controls passed");
+require("./display_runtime.cjs");
+
+{
+const early = page();
+early.alarmCommandDetails = [{command: "arm_home", code_required: false}];
+early.selectCommand("arm_home");
+const sent = pending.shift();
+assert.match(sent.url, /command=arm_home$/);
+state(early, "armed_home");
+assert.equal(early.commandPending, true, "the state read during the request cannot unlock it");
+sent.success({ok: true, state: "armed_home"});
+assert.equal(early.commandAwaitedState, "", "a state that already changed is not waited for");
+state(early, "armed_home");
+assert.equal(early.commandPending, false, "nothing left to wait for after the change was seen");
+}

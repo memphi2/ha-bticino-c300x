@@ -4,6 +4,11 @@
 #include "http_request.h"
 
 #define C300X_HTTP_MAX_CLIENTS 8
+#define C300X_HTTP_KIND_API 1
+#define C300X_HTTP_KIND_UI 2
+/* Slots only the loopback-bound UI listener may take, so a flood of idle LAN
+ * connections to the API cannot lock the display out. */
+#define C300X_HTTP_UI_RESERVED_SLOTS 2
 
 struct c300x_http_client {
     int fd;

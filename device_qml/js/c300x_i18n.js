@@ -404,7 +404,7 @@ var DETAIL_LABELS = {
         activity_off: "Aus", activity_idle: "Bereit", activity_heating: "Heizt", activity_cooling: "Kuehlt", activity_drying: "Entfeuchtet", activity_fan: "Lueftet", activity_defrosting: "Taut ab", activity_preheating: "Heizt vor", activity_unknown: "Aktivitaet unbekannt",
         activity_opening: "Oeffnet", activity_closing: "Schliesst", activity_open: "Offen", activity_closed: "Geschlossen",
         mode_all: "Alle", mode_one: "Titel", mode_off: "Aus", mode_on: "Ein", mode_auto: "Automatisch", mode_heat: "Heizen", mode_cool: "Kuehlen", mode_heat_cool: "Heizen / Kuehlen", mode_dry: "Entfeuchten", mode_fan_only: "Nur Luefter",
-        mode_low: "Niedrig", mode_medium: "Mittel", mode_high: "Hoch", mode_quiet: "Leise", mode_silent: "Leise", mode_vertical: "Vertikal", mode_horizontal: "Horizontal", mode_both: "Beide", mode_forward: "Vorwaerts", mode_reverse: "Rueckwaerts"
+        mode_low: "Niedrig", mode_medium: "Mittel", mode_high: "Hoch", mode_quiet: "Leise", mode_silent: "Lautlos", mode_vertical: "Vertikal", mode_horizontal: "Horizontal", mode_both: "Beide", mode_forward: "Vorwaerts", mode_reverse: "Rueckwaerts"
     },
     fr: {
         stale_state: "Hors ligne - dernier etat connu", state_confirmed: "Etat confirme par HA", state_unconfirmed: "Non confirme - verifier l'etat",
@@ -418,7 +418,7 @@ var DETAIL_LABELS = {
         activity_off: "Arret", activity_idle: "En attente", activity_heating: "Chauffage actif", activity_cooling: "Refroidissement actif", activity_drying: "Deshumidification", activity_fan: "Ventilation", activity_defrosting: "Degivrage", activity_preheating: "Prechauffage", activity_unknown: "Activite inconnue",
         activity_opening: "Ouverture", activity_closing: "Fermeture", activity_open: "Ouvert", activity_closed: "Ferme",
         mode_all: "Tout", mode_one: "Piste", mode_off: "Arret", mode_on: "Marche", mode_auto: "Automatique", mode_heat: "Chauffer", mode_cool: "Refroidir", mode_heat_cool: "Chaud / Froid", mode_dry: "Deshumidifier", mode_fan_only: "Ventilation seule",
-        mode_low: "Faible", mode_medium: "Moyen", mode_high: "Fort", mode_quiet: "Silencieux", mode_silent: "Silencieux", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Les deux", mode_forward: "Avant", mode_reverse: "Inverse"
+        mode_low: "Faible", mode_medium: "Moyen", mode_high: "Fort", mode_quiet: "Silencieux", mode_silent: "Muet", mode_vertical: "Vertical", mode_horizontal: "Horizontal", mode_both: "Les deux", mode_forward: "Avant", mode_reverse: "Inverse"
     },
     it: {
         stale_state: "Offline - ultimo stato noto", state_confirmed: "Stato confermato da HA", state_unconfirmed: "Non confermato - verificare lo stato",
@@ -432,7 +432,7 @@ var DETAIL_LABELS = {
         activity_off: "Spento", activity_idle: "In attesa", activity_heating: "Riscaldamento attivo", activity_cooling: "Raffreddamento attivo", activity_drying: "Deumidificazione", activity_fan: "Ventilazione", activity_defrosting: "Sbrinamento", activity_preheating: "Preriscaldamento", activity_unknown: "Attivita sconosciuta",
         activity_opening: "Apertura", activity_closing: "Chiusura", activity_open: "Aperto", activity_closed: "Chiuso",
         mode_all: "Tutto", mode_one: "Brano", mode_off: "Spento", mode_on: "Acceso", mode_auto: "Automatico", mode_heat: "Riscaldare", mode_cool: "Raffreddare", mode_heat_cool: "Caldo / Freddo", mode_dry: "Deumidificare", mode_fan_only: "Solo ventola",
-        mode_low: "Bassa", mode_medium: "Media", mode_high: "Alta", mode_quiet: "Silenzioso", mode_silent: "Silenzioso", mode_vertical: "Verticale", mode_horizontal: "Orizzontale", mode_both: "Entrambi", mode_forward: "Avanti", mode_reverse: "Indietro"
+        mode_low: "Bassa", mode_medium: "Media", mode_high: "Alta", mode_quiet: "Silenzioso", mode_silent: "Muto", mode_vertical: "Verticale", mode_horizontal: "Orizzontale", mode_both: "Entrambi", mode_forward: "Avanti", mode_reverse: "Indietro"
     }
 }
 

@@ -48,7 +48,7 @@ from .dashboard_config import (
     configured_dashboard_prevent_return,
     configured_weather_entity_id,
 )
-from .dashboard_controls import choice_options, entity_controls
+from .dashboard_controls import choice_options, entity_controls, finite_number
 from .dashboard_details import DETAIL_DOMAINS, entity_details
 from .dashboard_entities import (
     dashboard_entity_custom_name_override,
@@ -484,7 +484,9 @@ def _dashboard_item_for_state(
         item["controls"] = entity_controls(entity_id, state, unit)
         item["available"] = state is not None and state.state not in {"unknown", "unavailable"}
         if domain == "climate" and state is not None:
-            item["current_temperature"] = state.attributes.get("current_temperature")
+            item["current_temperature"] = finite_number(
+                state.attributes.get("current_temperature")
+            )
             item["temperature_unit"] = unit
         if domain in {"cover", "climate", "lock", "vacuum", "valve", "water_heater"}:
             item["_kind"] = "entity"
@@ -503,6 +505,13 @@ def _dashboard_item_for_state(
             if secondary_info == DASHBOARD_ENTITY_SECONDARY_INFO_STATE:
                 # The tile shows its state line; for a player that is what is playing.
                 item["state_label"] = item["details"]["value"]
+            return item
+        if domain == "media_player":
+            item["_kind"] = "entity"
+            # Idle and paused are switched on; only off and standby are not.
+            item["state"] = state is not None and state.state not in {
+                "off", "standby", "unknown", "unavailable",
+            }
             return item
     if domain in _DASHBOARD_TOGGLE_ENTITY_DOMAINS:
         item["_kind"] = "switch"

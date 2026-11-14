@@ -34,6 +34,8 @@ RTSP_PATH_RE = re.compile(
     r"(?:rtsp://[^/\s]+)?(/[A-Za-z0-9._~/-]+)"
 )
 RTSP_STATUS_RE = re.compile(r"RTSP/1\.0\s+(?P<code>[0-9]{3})\b")
+RTSP_CSEQ_RE = re.compile(r"(?im)^CSeq:\s*(\d+)\s*\r?$")
+PACKET_ENDPOINTS_RE = re.compile(r"\bIP6?\s+(\S+) > (\S+): ")
 DEVICE_MEDIA_START_RE = re.compile(
     r"\*7\*300#127#0#0#1#(?P<port>\d+)#(?P<mode>\d+)\*##"
 )
@@ -1252,12 +1254,20 @@ def _rtsp_play_packets(packets: list[Packet]) -> list[Packet]:
 
 
 def _first_rtsp_response_after(packets: list[Packet], start: Packet) -> Packet | None:
-    if start.timestamp is None:
+    endpoints = PACKET_ENDPOINTS_RE.search(start.text)
+    cseq = RTSP_CSEQ_RE.findall(start.text)
+    if start.timestamp is None or endpoints is None or len(cseq) != 1:
         return None
     for packet in packets:
         if packet.timestamp is None or packet.timestamp <= start.timestamp:
             continue
-        if RTSP_STATUS_RE.search(packet.text):
+        peer = PACKET_ENDPOINTS_RE.search(packet.text)
+        if (
+            peer is not None
+            and peer.groups() == tuple(reversed(endpoints.groups()))
+            and RTSP_CSEQ_RE.findall(packet.text) == cseq
+            and len(RTSP_STATUS_RE.findall(packet.text)) == 1
+        ):
             return packet
     return None
 

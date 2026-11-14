@@ -2,8 +2,10 @@
 
 ## Supported Release Line
 
-- `2.1.x`: current stable
-- `2.0.x` and older: no longer maintained; update to `2.1.x`
+- `2.2.x`: current stable
+- Pre-release versions containing `b` or `rc` are opt-in testing releases,
+  not replacements for the latest stable release. Enable beta versions in HACS
+  only when you want to test them.
 
 ## Compatibility Baseline
 

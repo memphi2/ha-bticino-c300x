@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from typing import Any, cast
 
@@ -33,6 +34,7 @@ from .const import (
     CONF_AGENT_PORT,
     CONF_AGENT_TOKEN,
     CONF_AGENT_UPDATE_PAYLOAD_PENDING,
+    CONF_AGENT_UPDATE_QML_PENDING,
     CONF_BOOTSTRAP_SSH_PASSWORD,
     CONF_BOOTSTRAP_SSH_USERNAME,
     CONF_CALLBACK_BASE_URL,
@@ -58,6 +60,7 @@ from .device_installer import (
 )
 from .device_user import homeassistant_account_label
 from .entry_config import entry_config_value
+from .error_text import compact_error_text
 from .media_readiness import media_readiness
 from .mqtt_migration import async_migrate_legacy_mqtt_if_available
 from .qml_patch import (
@@ -77,6 +80,8 @@ from .repair_issues import (
     repair_issue_id,
 )
 from .schema_compat import vol
+
+_LOGGER = logging.getLogger(__name__)
 
 _AGENT_UPDATE_RESTART_SETTLE_SECONDS = 1.0
 
@@ -165,7 +170,7 @@ class MediaSetupRepairFlow(RepairsFlow):
         """Repair explicitly confirmed media setup prerequisites."""
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is None:
+        if entry is None or not hasattr(entry, "runtime_data"):
             return self.async_abort(reason="entry_not_loaded")
         readiness = media_readiness(entry)
         placeholders = _media_setup_repair_placeholders(readiness)
@@ -434,6 +439,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 self.hass,
                 entry.runtime_data.api,
             )
+            _remember_qml_followup(self.hass, entry, patch_state, update_result)
             setup_data = await _async_verify_agent_after_update(
                 self.hass,
                 entry.runtime_data.api,
@@ -450,6 +456,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 completion = await async_apply_packaged_agent_update(
                     self.hass, entry.runtime_data.api
                 )
+                _remember_qml_followup(self.hass, entry, patch_state, completion)
                 setup_data = await _async_verify_agent_after_update(
                     self.hass, entry.runtime_data.api, completion
                 )
@@ -470,9 +477,11 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 patch_state,
                 changes,
             )
+            _clear_qml_followup(self.hass, entry)
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
-        except Exception:  # noqa: BLE001 - Repairs shows a translated failure
+        except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
+            _LOGGER.warning("C300X agent update failed: %s", compact_error_text(err))
             return self.async_show_form(
                 step_id="confirm",
                 data_schema=vol.Schema({}),
@@ -569,15 +578,21 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                     entry_config_value(entry, CONF_MAINTENANCE_TOKEN, "")
                 ),
             )
+            changes = _ExternalPatchChanges.from_install_result(install_result)
+            _remember_qml_followup(self.hass, entry, patch_state, {
+                "qml_patch_changed": changes.qml_patch_changed,
+            })
             setup_data = await _async_wait_for_agent_after_update(entry.runtime_data.api)
             await _async_restore_external_patch_state(
                 entry,
                 patch_state,
-                _ExternalPatchChanges.from_install_result(install_result),
+                changes,
             )
+            _clear_qml_followup(self.hass, entry)
             await async_migrate_legacy_mqtt_if_available(entry.runtime_data.api)
             setup_data = await entry.runtime_data.api.async_validate_setup()
-        except Exception:  # noqa: BLE001 - Repairs shows a translated failure
+        except Exception as err:  # noqa: BLE001 - Repairs shows a translated failure
+            _LOGGER.warning("C300X SSH install failed: %s", compact_error_text(err))
             return self.async_show_form(
                 step_id="ssh_install",
                 data_schema=_ssh_install_schema(),
@@ -693,6 +708,7 @@ async def _async_apply_repaired_agent_setup(
         payload_bootstrap_pending=(
             entry.data.get(CONF_AGENT_UPDATE_PAYLOAD_PENDING) is True
         ),
+        qml_patch_pending=CONF_AGENT_UPDATE_QML_PENDING in entry.data,
     )
     async_dispatcher_send(hass, SIGNAL_AGENT_INFO_CHANGED, entry.entry_id)
 
@@ -783,6 +799,24 @@ class _ExternalPatchChanges:
         )
 
 
+def _remember_qml_followup(hass: HomeAssistant, entry: Any,
+                           state: _ExternalPatchState, result: dict[str, Any]) -> None:
+    if result.get("qml_patch_changed") is True:
+        hass.config_entries.async_update_entry(entry, data={
+            **entry.data,
+            CONF_AGENT_UPDATE_QML_PENDING: (
+                state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
+            ),
+        })
+
+
+def _clear_qml_followup(hass: HomeAssistant, entry: Any) -> None:
+    if CONF_AGENT_UPDATE_QML_PENDING in entry.data:
+        data = dict(entry.data)
+        data.pop(CONF_AGENT_UPDATE_QML_PENDING)
+        hass.config_entries.async_update_entry(entry, data=data)
+
+
 async def _async_capture_external_patch_state(entry: Any) -> _ExternalPatchState:
     """Capture active patch state without mutating the device."""
 
@@ -834,10 +868,12 @@ async def _async_restore_external_patch_state(
         with suppress(C300XAgentApiError):
             await api.async_set_ipv6_firewall_enabled(True)
         await api.async_apply_ipv6_firewall()
-    if changed.qml_patch_changed:
+    if changed.qml_patch_changed or CONF_AGENT_UPDATE_QML_PENDING in entry.data:
         await async_restore_qml_patches_after_update(
             entry,
-            apply_full_patch=patch_state.qml_patch_required,
+            apply_full_patch=(
+                patch_state.qml_patch_required or entry.data.get(CONF_AGENT_UPDATE_QML_PENDING) is True
+            ),
         )
     elif changed.runtime_changed and patch_state.qml_patch_required:
         await api.async_reload_gui()

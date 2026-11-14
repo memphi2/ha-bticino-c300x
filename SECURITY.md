@@ -50,6 +50,19 @@ token is supplied through the `C300X_AGENT_TOKEN` environment variable.
 The setup page and diagnostics only report whether tokens are configured. They
 do not echo token values back.
 
+### RTSP Access
+
+The agent enforces `video.rtsp.username` and `video.rtsp.password` when both
+are configured. Partial credentials deny access; leaving both empty retains
+unauthenticated RTSP for the normal local integration setup. API tokens do not
+protect the RTSP port. Restrict that port to trusted clients with network rules.
+
+RTSP Basic authentication does not encrypt credentials or media. External
+clients must support the authentication challenge. Home Assistant's automatic
+RTSP readiness probe and ring capture do not yet fully support these separate
+credentials; configuring them manually can disable those integration features.
+Do not treat an absolute credential-bearing stream URL as a complete workaround.
+
 ## Legacy SSH Bootstrap
 
 From 2.1.0b2, first installation and explicit SSH recovery use

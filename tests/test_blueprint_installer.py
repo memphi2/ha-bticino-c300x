@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import subprocess
 from hashlib import sha256
@@ -167,11 +168,28 @@ def test_install_bundled_blueprints_removes_obsolete_bundles(tmp_path: Path) -> 
     }
     for obsolete in obsolete_files:
         obsolete.write_text("old bundled blueprint\n", encoding="utf-8")
+    (target / ".bticino_c300x_blueprints.json").write_text(json.dumps({
+        "files": {path.name: sha256(path.read_bytes()).hexdigest() for path in obsolete_files},
+    }))
 
     result = install_bundled_blueprints(target)
 
     assert all(not obsolete.exists() for obsolete in obsolete_files)
     assert set(result.removed) == obsolete_files
+
+
+def test_preserve_customized_and_untracked_obsolete_blueprints(tmp_path):
+    target = tmp_path / "blueprints"
+    target.mkdir()
+    files = [target / "doorbell_call_mobile_dashboard.yaml", target / "doorbell_call_notification.yaml"]
+    for path in files:
+        path.write_text("user customization\n")
+    (target / ".bticino_c300x_blueprints.json").write_text(json.dumps({
+        "files": {files[0].name: sha256(b"original").hexdigest()},
+    }))
+    result = install_bundled_blueprints(target)
+    assert result.removed == []
+    assert all(path.read_text() == "user customization\n" for path in files)
 
 
 def test_async_install_bundled_blueprints_reloads_running_automations(

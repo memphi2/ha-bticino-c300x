@@ -184,7 +184,7 @@ def test_native_agent_allows_compatible_ondemand_audio_rtsp_start_sharing() -> N
         media_bridge.index("static void rtsp_note_request")
     ]
     describe_body = media_bridge[
-        media_bridge.index('} else if (strcmp(method, "DESCRIBE") == 0)') :
+        media_bridge.index('if (strcmp(method, "DESCRIBE") == 0)') :
         media_bridge.index('} else if (strcmp(method, "SETUP") == 0)')
     ]
     sharing_body = media_bridge[
@@ -861,7 +861,7 @@ def test_native_agent_ring_lifecycle_status_and_stop_paths_are_explicit() -> Non
     assert "ring_sleep_seconds(bridge, RING_RETRY_SECONDS)" in media_bridge
     assert "pthread_join(ring_thread, NULL)" in media_bridge
     assert (
-        "if (!g_bridge.ring_started && !g_bridge.home_call_started && !g_bridge.home_call_active)"
+        "if (!g_bridge.ring_started && !g_bridge.home_call_joinable && !g_bridge.home_call_active)"
         in bridge_stop_body
     )
     for field in (

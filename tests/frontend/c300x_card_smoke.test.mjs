@@ -527,6 +527,34 @@ test("reconfiguration rejects an old subscription resolving after the new one", 
   assert.deepEqual(removed, ["old", "new"]);
 });
 
+test("failed automatic preview waits for a new ring lifecycle", async () => {
+  const registry = installFakeDom();
+  await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?failed-preview");
+  const Card = registry.get("c300x-doorbell-call-card");
+  const card = new Card();
+  card.setConfig({ entity: "camera.bticino_c300x_doorbell_camera" });
+  let starts = 0;
+  card._webrtc.start = async () => { starts++; throw new Error("provider unavailable"); };
+  const ringing = fakeHass({cameraEntity: {state: "idle", attributes: {
+    media_state: "ring_pending", media_primary_action: "answer_ring",
+  }}});
+  try {
+    card.hass = ringing;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 1);
+    for (let i = 0; i < 5; i++) card._updateState();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 1);
+    assert.equal(card._error, "provider unavailable");
+    card.hass = fakeHass();
+    card.hass = ringing;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(starts, 2);
+  } finally {
+    card.disconnectedCallback();
+  }
+});
+
 test("microphone permission resolving after disposal cannot restart media", async () => {
   const registry = installFakeDom();
   await import("../../custom_components/bticino_c300x/frontend/c300x-doorbell-call-card.js?late-microphone");

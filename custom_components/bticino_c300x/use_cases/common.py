@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -112,12 +113,13 @@ async def latest_item_id_for_entry(
     refresh: Callable[[], Awaitable[dict[str, Any]]],
     latest: Callable[[dict[str, Any]], str | None],
     unavailable_error: str,
+    refresh_before_lookup: bool = False,
 ) -> str:
     """Return a cached latest id, refreshing once if the cache has none."""
 
     payload = getattr(entry.runtime_data, cache_attr, {})
     item_id = latest(payload) if isinstance(payload, dict) else None
-    if item_id is not None:
+    if item_id is not None and not refresh_before_lookup:
         return item_id
     try:
         payload = await refresh()
@@ -129,6 +131,9 @@ async def latest_item_id_for_entry(
     return item_id
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
 async def async_refresh_after_message_mutation(
     hass: HomeAssistant,
     entry: Any,
@@ -136,12 +141,20 @@ async def async_refresh_after_message_mutation(
     refresh: Callable[[], Awaitable[dict[str, Any]]],
     signal: str,
 ) -> None:
-    """Refresh a message-backed cache and notify HA listeners."""
+    """Refresh a message-backed cache and notify HA listeners.
+
+    The write this follows has already succeeded, so a failed refresh is
+    logged and not reported: a caller that retried a "failed" create would
+    add the memo twice, a retried delete would find nothing to delete.
+    Listeners are notified either way and reload the cache themselves.
+    """
 
     try:
         await refresh()
-    except Exception as err:
-        raise service_validation_error("agent_command_failed") from err
+    except Exception as err:  # noqa: BLE001 - the write itself went through
+        _LOGGER.warning(
+            "Refreshing the C300X message cache after a change failed: %s", err
+        )
     async_dispatcher_send(hass, signal, entry.entry_id)
     await async_refresh_agent_diagnostics(hass, entry)
 

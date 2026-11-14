@@ -12,6 +12,7 @@
 #include "sha256.h"
 #include "string_util.h"
 #include <errno.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -534,13 +535,31 @@ static int agent_update_manifest_sha_for_path(
     size_t sha256_len
 )
 {
-    const char *found;
-
+    const char *entry;
+    const char *end = manifest + strlen(manifest);
     if (sha256_len > 0) { sha256[0] = '\0'; }
-    found = strstr(manifest, bundle_path);
-    if (found == NULL) { return 0; }
-    c300x_json_string_field(found, "sha256", sha256, sha256_len);
-    return sha256[0] != '\0';
+    if (!c300x_json_find_member(manifest, end, "files", &entry) || *entry++ != '[') {
+        return 0;
+    }
+    while (entry < end) {
+        while (entry < end && isspace((unsigned char)*entry)) { entry++; }
+        if (entry >= end || *entry != '{') { return 0; }
+        const char *after = c300x_json_skip_value(entry, end);
+        const char *value;
+        char path[C300X_MAX_PATH_LEN];
+        if (after == NULL) { return 0; }
+        if (c300x_json_find_member(entry, after, "path", &value)
+            && c300x_json_decode_string(value, after, path, sizeof(path), NULL)
+            && strcmp(path, bundle_path) == 0) {
+            return c300x_json_find_member(entry, after, "sha256", &value)
+                && c300x_json_decode_string(value, after, sha256, sha256_len, NULL)
+                && sha256[0] != '\0';
+        }
+        entry = after;
+        while (entry < end && isspace((unsigned char)*entry)) { entry++; }
+        if (entry >= end || *entry++ != ',') { return 0; }
+    }
+    return 0;
 }
 
 static int running_agent_binary_differs_from_update_manifest(const char *manifest)

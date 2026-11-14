@@ -361,6 +361,13 @@ def test_dashboard_payload_normalization_helpers() -> None:
         )
     )
     assert slider == {"value": 5.5, "min": 1.0, "max": 10.0, "step": 1.0}
+    odd = _dashboard_slider_payload(
+        FakeState(
+            "nan",
+            attributes={"min": "nan", "max": float("inf"), "step": float("nan")},
+        )
+    )
+    assert odd == {"value": 0.0, "min": 0.0, "max": 100.0, "step": 1.0}
     assert _dashboard_slider_payload(None) == {
         "value": 0.0,
         "min": 0.0,
@@ -390,6 +397,11 @@ def test_dashboard_payload_normalization_helpers() -> None:
     assert len(choice["options"]) == 12
 
     assert _dashboard_float("bad", 7.0) == 7.0
+    assert _dashboard_float("nan", 7.0) == 7.0
+    assert _dashboard_float(float("inf"), 7.0) == 7.0
+    assert _dashboard_float("1e999", None) is None
+    assert _dashboard_float(10**400, 7.0) == 7.0
+    assert _dashboard_float(True, 7.0) == 7.0
     assert _dashboard_first_attribute({"min": "", "native_min": 0}, "min", "native_min") == 0
     assert _dashboard_text("  a   b   c  ", "fallback", 80) == "a b c"
     assert _dashboard_text("", "fallback", 4) == "fall"

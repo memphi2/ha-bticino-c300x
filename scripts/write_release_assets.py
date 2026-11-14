@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from check_release_contents import validate_release_contents
 from manifest_version import read_integration_version
 from sbom_runtime import runtime_inventory
 
@@ -100,6 +101,11 @@ def write_release_assets(
 ) -> None:
     if not zip_path.exists():
         raise ReleaseAssetError(f"release zip does not exist: {zip_path}")
+
+    try:
+        validate_release_contents(zip_path)
+    except (ValueError, KeyError, OSError, zipfile.BadZipFile) as err:
+        raise ReleaseAssetError(f"release content validation failed: {err}") from err
 
     zip_entries = _zip_entries(zip_path)
     zip_sha1 = _sha1_file(zip_path)

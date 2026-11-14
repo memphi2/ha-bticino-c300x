@@ -15,6 +15,7 @@ def test_native_capabilities_contract(tmp_path: Path) -> None:
             str(root / "test" / "capabilities_test.c"),
             str(root / "src" / "capabilities.c"),
             str(root / "src" / "json_util.c"),
+            str(root / "src" / "json_parse.c"),
             "-o", str(binary),
         ],
         check=True, capture_output=True, text=True,

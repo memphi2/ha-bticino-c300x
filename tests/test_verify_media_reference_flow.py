@@ -124,11 +124,30 @@ def _on_demand_flow(
         f"{device_media_reply}\n"
         "2026-06-12 18:00:01.300000 IP 198.51.100.20.2 > 192.0.2.60.6554: RTSP, length 80\n"
         "PLAY rtsp://192.0.2.60:6554/doorbell/ RTSP/1.0\r\n"
+        "CSeq: 3\r\n"
         + media_closed
         + early_rtp
         + "2026-06-12 18:00:01.600000 IP 192.0.2.60.6554 > 198.51.100.20.2: RTSP, length 80\n"
         f"RTSP/1.0 {play_response}\r\n"
+        "CSeq: 3\r\n"
     )
+
+
+def test_rtsp_response_pairing_ignores_other_connections_and_cseq():
+    module = _script_module()
+    text = _on_demand_flow(play_response="503 Unavailable")
+    unrelated = (
+        "2026-06-12 18:00:01.400000 IP 192.0.2.60.6554 > 198.51.100.20.9: RTSP, length 80\n"
+        "RTSP/1.0 200 OK\r\nCSeq: 3\r\n"
+        "2026-06-12 18:00:01.450000 IP 192.0.2.60.6554 > 198.51.100.20.2: RTSP, length 80\n"
+        "RTSP/1.0 200 OK\r\nCSeq: 2\r\n"
+    )
+    text = text.replace("2026-06-12 18:00:01.600000", unrelated + "2026-06-12 18:00:01.600000")
+    packets = module.parse_tcpdump_ascii(text)
+    response = module._first_rtsp_response_after(packets, module._rtsp_play_packets(packets)[0])
+    assert module._rtsp_response_code(response) == "503"
+    missing_cseq = module.parse_tcpdump_ascii(text.replace("CSeq: 3\r\n", ""))
+    assert module._first_rtsp_response_after(missing_cseq, module._rtsp_play_packets(missing_cseq)[0]) is None
 
 
 def test_code_reference_checks_cover_all_media_modes() -> None:

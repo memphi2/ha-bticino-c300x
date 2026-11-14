@@ -3,8 +3,8 @@ set -eu
 
 ACTION="${1:-status}"
 GUI_DIR="${C300X_QML_GUI_DIR:-/home/bticino/bin/gui/skins/default}"
-SOURCE_DIR="${C300X_QML_SOURCE_DIR:-/home/bticino/cfg/extra/c300x-native-agent/qml}"
-BACKUP_DIR="${C300X_QML_BACKUP_DIR:-/home/bticino/cfg/extra/c300x-device-file-backups/original/gui/skins/default}"
+SOURCE_DIR="${C300X_QML_SOURCE_DIR:-${C300X_AGENT_DIR:-/home/bticino/cfg/extra/c300x-native-agent}/qml}"
+BACKUP_DIR="${C300X_QML_BACKUP_DIR:-${C300X_BACKUP_ROOT:-/home/bticino/cfg/extra/c300x-device-file-backups}/original/gui/skins/default}"
 NO_REMOUNT="${C300X_QML_NO_REMOUNT:-0}"
 RELOAD_GUI="${C300X_QML_RELOAD_GUI:-1}"
 GUI_ROOT="${C300X_QML_GUI_ROOT:-/home/bticino}"

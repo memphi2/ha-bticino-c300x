@@ -164,6 +164,26 @@ full height, switches their slimmer 58 px tile, which **Half** raises to 64 px,
 and all other entities the 64 px half height. A dashboard configured before
 these settings existed therefore looks the same until a size is chosen.
 
+Each tile's size is set per entity in the entity-display dialog. **Width** is
+half or full. **Height** is half, the compact 64 px tile, or full, a 94 px tile
+like a sensor's. A full-height tile carries the entity's own buttons, so the
+common action needs no submenu:
+
+| Entity | Buttons on a full-height tile |
+| --- | --- |
+| Cover | up, stop, down (those it supports) |
+| Climate | target temperature minus/plus, by the entity's step |
+| Light | on/off switch, brightness minus/plus in 10 % steps |
+| Fan | on/off switch, speed minus/plus in 10 % steps |
+| Number | minus/plus, by the entity's step |
+| Select | previous/next option, wrapping at either end |
+| Media player | on/off switch, previous, play/pause, next (those it supports) |
+
+The tile background still opens the submenu, and every other control stays
+there. **Automatic** keeps the size of the type: sensors full height, all other
+entities half height, both half width. A dashboard configured before these
+settings existed therefore looks the same until a size is chosen.
+
 - Lights show brightness, eight color swatches and warm/neutral/cool white
   presets where supported. White presets stay within the light's Kelvin range;
   the Kelvin slider remains available for fine adjustment. Selecting a color
@@ -444,6 +464,12 @@ the active Ring Call before recording. To record without ringing the doorbell,
 explicitly select `capture_mode: on_demand`. This starts an idle doorstation live
 view and records video with optional audio; it does not answer a Ring Call.
 
+Ring capture does not take over an already answered call. Unloading the
+integration or observing a replacement call cancels the capture. Automatic
+hangup is skipped when the captured call cannot be identified reliably. The
+device API has no atomic call-specific hangup, so a call change between the last
+status check and the hangup request cannot be excluded entirely.
+
 Example action for a script or automation; replace `YOUR_C300X_ENTRY_ID` with the
 integration entry id:
 
@@ -505,6 +531,9 @@ agent exposes RTSP sources for:
 - answered Ring Call audio/video with talkback backchannel,
 - on-demand doorstation audio/video,
 - Home Call audio.
+
+These sources support interleaved RTP over RTSP/TCP. UDP transport is not
+supported; external clients must select TCP.
 
 Audio gain options:
 

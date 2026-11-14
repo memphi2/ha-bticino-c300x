@@ -45,7 +45,7 @@ class MessagesUseCase:
         """Delete the newest stored video message."""
 
         await async_ensure_gui_function_patch(self._entry)
-        message_id = await self._latest_video_message_id()
+        message_id = await self._latest_video_message_id(refresh_before_lookup=True)
         await raise_agent_command_failed(
             self._entry.runtime_data.api.async_delete_answering_machine_message(
                 message_id
@@ -61,7 +61,7 @@ class MessagesUseCase:
             signal=SIGNAL_VIDEO_MESSAGES_CHANGED,
         )
 
-    async def _latest_video_message_id(self) -> str:
+    async def _latest_video_message_id(self, *, refresh_before_lookup: bool = False) -> str:
         return await latest_item_id_for_entry(
             self._entry,
             cache_attr="answering_machine_messages",
@@ -71,4 +71,5 @@ class MessagesUseCase:
             ),
             latest=latest_video_message_id,
             unavailable_error="video_message_not_available",
+            refresh_before_lookup=refresh_before_lookup,
         )

@@ -23,10 +23,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef C300X_DEVICE_PATCH_TARGET_DIR
 #define C300X_DEVICE_PATCH_TARGET_DIR "/home/bticino/bin"
+#endif
+#ifndef C300X_DEVICE_PATCH_BACKUP_DIR
 #define C300X_DEVICE_PATCH_BACKUP_DIR "/home/bticino/cfg/extra/c300x-device-file-backups/original/home/bticino/bin"
+#endif
 #define C300X_DEVICE_PATCH_TARGET_MASK "b?_a?sw?rin?_?ac?ine"
+#ifndef C300X_DEVICE_PATCH_STOCK_SHA256
 #define C300X_DEVICE_PATCH_STOCK_SHA256 "605a808f1ed0c826c06bbf1eb4131b9198007a7ab822e7541a6666e79816c810"
+#endif
 
 #define ARRAY_LEN(values) (sizeof(values) / sizeof((values)[0]))
 
@@ -205,6 +211,27 @@ static int all_patch_ranges_match(
     return 1;
 }
 
+/* A backup is only worth restoring when it is the stock file: a truncated copy,
+ * one of another firmware, or a patched one must never replace the target. */
+static int backup_is_stock(const char *backup_path)
+{
+    char sha256[65];
+    unsigned char *data = NULL;
+    size_t len = 0;
+    int stock;
+
+    if (c300x_sha256_file_hex(backup_path, sha256, sizeof(sha256))
+        && strcmp(sha256, C300X_DEVICE_PATCH_STOCK_SHA256) == 0) {
+        return 1;
+    }
+    if (!c300x_patch_read_file(backup_path, &data, &len)) {
+        return 0;
+    }
+    stock = all_patch_ranges_match(data, len, 0);
+    free(data);
+    return stock;
+}
+
 int c300x_device_routing_read_status(
     struct c300x_device_routing_status *status
 )
@@ -305,7 +332,10 @@ int c300x_device_routing_apply(
         set_error(error, error_len, "routing_target_stat_failed");
         return 0;
     }
-    if (!status->backup_present && !c300x_patch_copy_file_exact(target_path, backup_path, original_mode)) {
+    if (
+        (!status->backup_present || !backup_is_stock(backup_path))
+        && !c300x_patch_copy_file_exact(target_path, backup_path, original_mode)
+    ) {
         set_error(error, error_len, "routing_backup_failed");
         return 0;
     }
@@ -405,6 +435,10 @@ int c300x_device_routing_restore(
     }
     if (!c300x_patch_file_mode(backup_path, &backup_mode, NULL, NULL)) {
         set_error(error, error_len, "routing_backup_stat_failed");
+        return 0;
+    }
+    if (!backup_is_stock(backup_path)) {
+        set_error(error, error_len, "routing_backup_invalid");
         return 0;
     }
     if (!c300x_patch_remount_root("rw")) {

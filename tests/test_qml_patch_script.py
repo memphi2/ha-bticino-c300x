@@ -225,11 +225,11 @@ PATCH_OUTPUT_SHA256 = {
     "HomePage.qml": "21e67af70cdde0ed2809ba7ac7ffbd8d36c70979c12c1f231d6a05d1fa488032",
     "MemoPage.qml": "ec3b78970cd70a9ff1d48513b6658bc57323237258f4850b57bd42a5994a2e6a",
     "EventManager.qml": "0e0f7c38f08643c57b2d24d1c21f400a7104489c1f2c76ec406cda1a30e46d38",
-    "Alarm.qml": "5052e346cbb8cb198ed3c8deb906b19437dfeddfeb33e877005b3d9f0241a573",
-    "HomeAssistant.qml": "bd4df06802b7faa9819a1f5e5747dbdff3bd4576857ab5b0fa19eb25a898227e",
-    "js/c300x_ha.js": "0d774ae2ef90fee1ec13812a8b21ea9c1bcee7e98dac3f327f136711edf50622",
-    "js/c300x_i18n.js": "f56508742d0663f50b8a37996d57a64cc4651cd1c60fde82ee2eb7157519470a",
-    "js/c300x_memos.js": "13161e58509b6589bba6e689d7da08dff2c428722dcb51cbc25a785ffedbaba0",
+    "Alarm.qml": "37270f903ee17d00332445d149921dbb13bffc48574a78772277faae19edfa40",
+    "HomeAssistant.qml": "cd47a80ad39526540b42c788b257ddaf86333a4422689ae4a38cbcbeed419ff2",
+    "js/c300x_ha.js": "835d549d96343960edc6f8d1548ee19f07446e744067b4800740bfaf9e70ff31",
+    "js/c300x_i18n.js": "fc06da394fa0d766a9fed4af79204da37f827aa08880e602184acffd9f304375",
+    "js/c300x_memos.js": "b00878d55d0cc27f21a4b2603b1b3bed40cb80161d603d20121e49c3bba2c924",
 }
 
 
@@ -1547,7 +1547,7 @@ def test_only_idempotent_reads_share_a_display_round_trip() -> None:
         dashboard_js.index("function getJson(") :
         dashboard_js.index("function getJsonShared(")
     ]
-    assert 'forwardRequest(path, callback, errorCallback, "")' in plain
+    assert 'forwardRequest(path, callback, errorCallback, "", scope)' in plain
 
     # Exactly the two /ui/state producers opt in: Api.status for the alarm and
     # dashboard pages, homeButtons for the patched home page.

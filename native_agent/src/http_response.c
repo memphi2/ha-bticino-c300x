@@ -29,8 +29,8 @@ void send_response(
     );
 
     if (header_len <= 0 || (size_t)header_len >= sizeof(header)
-        || !send_all_bytes(client_fd, header, (size_t)header_len)) {
+        || !c300x_http_write(client_fd, header, (size_t)header_len)) {
         return;
     }
-    (void)send_all_bytes(client_fd, body, body_len);
+    (void)c300x_http_write(client_fd, body, body_len);
 }

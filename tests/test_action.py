@@ -165,3 +165,21 @@ def test_alarm_service_for_command_rejects_unknown_command() -> None:
         alarm_service_for_command("panic")
     with pytest.raises(ActionValidationError):
         alarm_service_for_command(None)
+
+
+@pytest.mark.parametrize("number", ["Infinity", "-Infinity", "NaN", "1e999"])
+@pytest.mark.parametrize("key", ["order", "width", "height"])
+def test_parse_actions_json_rejects_a_non_finite_dashboard_number(key: str, number: str) -> None:
+    """json.loads accepts Infinity and NaN; the int() that follows must not escape.
+
+    An OverflowError out of the parser ended the flow step in an unhandled
+    exception in place of the "invalid action map" form error.
+    """
+
+    text = (
+        '{"go": {"domain": "light", "service": "toggle", '
+        f'"dashboard": {{"{key}": {number}}}}}}}'
+    )
+
+    with pytest.raises(ActionValidationError):
+        parse_actions_json(text)

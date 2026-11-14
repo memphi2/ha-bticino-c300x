@@ -84,6 +84,25 @@ from custom_components.bticino_c300x.webhook import (  # noqa: E402
 _REQUEST_CONTENT_LENGTH_AUTO = object()
 
 
+@pytest.mark.parametrize("event", [False, True])
+@pytest.mark.parametrize(
+    ("expected", "supplied"),
+    [("secret", ""), ("secret", "wrong"), ("secret", "\u00e4"),
+     ("\u00e4", "\u00e4"), (None, "secret"), (123, "secret")],
+)
+def test_webhook_rejects_malformed_credentials(event, expected, supplied):
+    key = CONF_EVENT_WEBHOOK_TOKEN if event else CONF_SHARED_SECRET
+    header = HEADER_EVENT_TOKEN if event else HEADER_SHARED_SECRET
+    entry = SimpleNamespace(data={key: expected})
+    # No body reader: rejected authentication must not read or process the payload.
+    request = SimpleNamespace(headers={header: supplied})
+    if event:
+        response = asyncio.run(_async_handle_agent_event(None, entry, C300XEventState(), request))
+    else:
+        response = asyncio.run(_async_handle_webhook(None, entry, request))
+    assert response.status == 401
+
+
 @pytest.fixture(autouse=True)
 def webhook_ha_boundary(monkeypatch):
     from homeassistant.helpers import dispatcher, event
@@ -1258,9 +1277,8 @@ def test_snapshot_memo_event_refreshes_memo_entities_without_public_event() -> N
     assert event_state.event_sequence == 0
     assert event_state.last_event_data == {}
     assert runtime_data.memos["total"] == 1
-    assert runtime_data.memos["memos"][0]["id"] == "memo-1"
-    assert runtime_data.memos["memos"][0]["kind"] == "text"
-    assert runtime_data.memos_updated_at is not None
+    assert runtime_data.memos["memos"] == []
+    assert runtime_data.memos_updated_at is None
     assert signals == [(SIGNAL_MEMOS_CHANGED, "entry-1")]
 
 
@@ -1320,8 +1338,8 @@ def test_snapshot_voicemail_event_refreshes_message_entities_without_public_even
     assert hass.bus.events == []
     assert event_state.event_sequence == 0
     assert runtime_data.answering_machine_messages["total"] == 1
-    assert runtime_data.answering_machine_messages["messages"][0]["id"] == "message_1"
-    assert runtime_data.answering_machine_messages_updated_at is not None
+    assert runtime_data.answering_machine_messages["messages"] == []
+    assert runtime_data.answering_machine_messages_updated_at is None
     assert signals == [(SIGNAL_VIDEO_MESSAGES_CHANGED, "entry-1")]
 
 

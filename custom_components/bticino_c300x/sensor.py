@@ -19,6 +19,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
+    async_dispatcher_send,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -1094,6 +1095,15 @@ class C300XStoredItemsSensor(C300XEntity, SensorEntity):
     _attr_should_poll = False
     _items_spec: ClassVar[StoredItemsSpec]
 
+    def __init__(self, entry: BticinoC300XConfigEntry, key: str) -> None:
+        super().__init__(entry, key)
+        # A failed first read at setup is only recorded in the store. Take it
+        # over, so the entity is unavailable instead of "unknown" and reads
+        # again once the agent answers.
+        items = getattr(entry.runtime_data, self._items_spec.payload_attr, None)
+        if isinstance(items, dict) and items.get("available") is False:
+            self._attr_available = False
+
     async def async_added_to_hass(self) -> None:
         """Subscribe to item change events."""
 
@@ -1115,12 +1125,18 @@ class C300XStoredItemsSensor(C300XEntity, SensorEntity):
     async def async_update(self) -> None:
         """Refresh item metadata on explicit HA update requests."""
 
+        # The record of a failed read counts as a fresh cache entry: ask the
+        # agent itself while this entity is unavailable.
+        retry = getattr(self, "_attr_available", True) is False
         try:
-            items = await self._items_spec.fetch(self._entry)
+            items = await self._items_spec.fetch(self._entry, force_refresh=retry)
         except C300XAgentApiError:
             self._attr_available = False
             return
         self._apply_items(items)
+        if retry and hasattr(self, "hass"):
+            # The delete buttons and the sibling sensors show the same store.
+            async_dispatcher_send(self.hass, self._items_spec.signal, self._entry.entry_id)
 
     @property
     def _items(self) -> dict[str, Any]:

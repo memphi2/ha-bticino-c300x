@@ -2589,3 +2589,29 @@ def test_media_readiness_treats_the_unknown_sentinel_as_no_reading() -> None:
     assert blocked["status"] == "warning"
     assert blocked["failed_checks"] == []
     assert "forwarding_homeassistant" in blocked["warnings"]
+
+
+def test_stored_items_sensor_reads_again_after_a_failed_first_read() -> None:
+    """A failed first read must not leave the sensors "unknown" until the next memo."""
+
+    import custom_components.bticino_c300x.sensor as sensor_module
+
+    async def _run() -> None:
+        entry = _FakeEntry(runtime_data=_FakeRuntimeData())
+        entry.runtime_data.api.memos_error = C300XAgentApiError("timeout")
+        await sensor_module._async_refresh_initial_memos(entry)  # type: ignore[arg-type]
+        entity = C300XTextMemosSensor(entry)  # type: ignore[arg-type]
+        entity.async_write_ha_state = lambda: None  # type: ignore[method-assign]
+
+        assert entity._attr_available is False
+
+        # The agent answers again; the failure record is still "fresh".
+        entry.runtime_data.api.memos_error = None
+        calls = entry.runtime_data.api.memos_calls
+        await entity.async_update()
+
+        assert entry.runtime_data.api.memos_calls == calls + 1
+        assert entity._attr_available is True
+        assert entity.native_value == 1
+
+    asyncio.run(_run())

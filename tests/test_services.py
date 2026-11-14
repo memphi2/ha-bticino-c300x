@@ -2754,7 +2754,21 @@ def test_common_refresh_after_message_mutation_notifies_listeners(monkeypatch) -
     assert diagnostics_refreshes == ["entry-id"]
 
 
-def test_common_refresh_after_message_mutation_translates_refresh_failures() -> None:
+def test_common_refresh_after_message_mutation_survives_refresh_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatcher_calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        common_use_cases,
+        "async_dispatcher_send",
+        lambda *args: dispatcher_calls.append(args),
+    )
+
+    async def _diagnostics(*_args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(common_use_cases, "async_refresh_agent_diagnostics", _diagnostics)
+
     async def _run() -> None:
         hass = _FakeHass([])
         entry = _FakeEntry(_FakeRuntimeData())
@@ -2762,19 +2776,16 @@ def test_common_refresh_after_message_mutation_translates_refresh_failures() -> 
         async def _refresh() -> dict[str, Any]:
             raise RuntimeError("agent failed")
 
-        try:
-            await common_use_cases.async_refresh_after_message_mutation(
-                hass,  # type: ignore[arg-type]
-                entry,
-                refresh=_refresh,
-                signal="signal-name",
-            )
-        except SERVICE_VALIDATION_ERROR as err:
-            assert _translation_key(err) == "agent_command_failed"
-        else:
-            raise AssertionError("refresh failure was not translated")
+        await common_use_cases.async_refresh_after_message_mutation(
+            hass,  # type: ignore[arg-type]
+            entry,
+            refresh=_refresh,
+            signal="signal-name",
+        )
 
     asyncio.run(_run())
+
+    assert [call[1:] for call in dispatcher_calls] == [("signal-name", "entry-id")]
 
 
 def test_common_play_media_calls_home_assistant_media_player() -> None:

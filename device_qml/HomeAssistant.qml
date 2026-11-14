@@ -296,7 +296,7 @@ Page {
     }
 
     function itemName(item) {
-        return item.name || item.entity_id || uiText("action")
+        return (item.glyph ? item.glyph + " " : "") + (item.name || item.entity_id || uiText("action"))
     }
 
     function itemDetail(item) {

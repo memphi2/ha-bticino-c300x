@@ -2952,7 +2952,17 @@ def test_async_dashboard_payload_includes_selected_dashboard_entities() -> None:
         "select.forwarding",
         "input_select.scene",
     ]
-    assert page["items"] == [
+    # Each tile carries the symbol of its type next to what it shows.
+    assert {item["entity_id"]: item.get("glyph") for item in page["items"]} == {
+        "switch.entry": "\u26a1",
+        "sensor.temperature": None,
+        "binary_sensor.window": "\u25a3",
+        "button.restart": "\u25c9",
+        "input_number.target": "\u25d0",
+        "select.forwarding": "\u2630",
+        "input_select.scene": "\u2630",
+    }
+    assert [{key: value for key, value in item.items() if key != "glyph"} for item in page["items"]] == [
         {
             "domain": "c300x",
             "entity_id": "switch.entry",

@@ -1001,7 +1001,8 @@ def test_media_player_is_a_display_tile_but_not_an_alarm_quick_action():
     ("player_state", "attributes", "is_on", "reading", "playing"),
     [
         ("playing", {"media_title": "  Evening news  "}, True, "Evening news", True),
-        ("paused", {"media_title": "x" * 80}, True, "x" * 60, False),
+        ("paused", {"media_title": "x" * 80}, True, "x" * 57 + "...", False),
+        ("playing", {"media_title": "Song", "media_artist": "Band"}, True, "Band - Song", True),
         ("playing", {"media_title": "Morning Show\nLive from Studio 2"}, True, "Morning Show Live from Studio 2", True),
         ("playing", {"media_title": "A\r\n\t B  C\n"}, True, "A B C", True),
         ("playing", {"media_title": " \n "}, True, "Active", True),

@@ -189,7 +189,18 @@ these settings existed therefore looks the same until a size is chosen.
   feature. The same symbols are on the tile's buttons. The on/off switch
   and play/pause appear only when the player reports the step its current state
   needs, and send that explicit service: turn on or off, play or pause. A
-  media player cannot be chosen as the alarm page's quick entity.
+  media player cannot be chosen as the alarm page's quick entity. The line
+  names the artist before the title, and a player that reports them also gets
+  a shuffle switch and a repeat choice (off, all, one).
+- Lights that report effects get an effect choice below their other controls.
+- A tile carries a small symbol before its name for its type or device class,
+  for example a sun for a light, an up-down arrow for a cover or a note for a
+  media player. The symbols are characters of the fonts on the device (DejaVu
+  Sans); no image file is added to it. Types and classes without a fitting
+  symbol, such as a plain sensor, have none.
+- Sensors with the device class timestamp or date show a short local time such
+  as `14.11. 10:30` or `14.11.2026`, not the ISO text. A text that had to be
+  cut ends in three dots.
 - Sensor and binary-sensor tiles use larger readings and read-only details.
   Numeric sensors retain their unit and reported display precision. Details may
   show the entity's numeric battery level, humidity and illuminance attributes;

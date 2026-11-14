@@ -936,6 +936,7 @@ function dashboardMixedItems(source) {
         }
         if (normalized.length > 0) {
             normalized[0].available = source[i].available !== false
+            if (source[i].glyph) normalized[0].glyph = source[i].glyph
             if (source[i].tile_width) normalized[0].tile_width = source[i].tile_width
             if (source[i].tile_height) normalized[0].tile_height = source[i].tile_height
             if (source[i].details) normalized[0].details = source[i].details

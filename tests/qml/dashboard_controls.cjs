@@ -537,6 +537,11 @@ assert.deepEqual(Array.from(Api.dashboardTransportControls({details: {type: "med
     {command: "media_next_track", kind: "button"}, {command: "media_previous_track", kind: "button"}]}), c => c.command),
     ["media_previous_track", "media_next_track"], "the row keeps its fixed order");
 assert.equal(p.optionLabel({command: "source"}, "off"), "off", "a source name is never translated as a mode");
+assert.equal(p.itemName({name: "Lamp", glyph: "\u2600"}), "\u2600 Lamp", "the symbol leads the name");
+assert.equal(p.itemName({name: "Lamp"}), "Lamp");
+assert.equal(p.itemName({entity_id: "light.room"}), "light.room");
+assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room", glyph: "\u2600"}])[0].glyph, "\u2600");
+assert.equal(Api.dashboardMixedItems([{kind: "entity", domain: "c300x", entity_id: "light.room", name: "Room"}])[0].glyph, undefined);
 assert.equal(p.optionLabel({command: "effect"}, "off"), "off", "an effect name is never translated as a mode");
 for (const lang of ["en", "de", "fr", "it"]) {
     for (const key of ["shuffle", "repeat", "effect", "mode_all", "mode_one"]) {

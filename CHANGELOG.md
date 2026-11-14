@@ -34,6 +34,11 @@
   after an action and the allowed actions. Saved values carry over.
 - The status page, the first page, is left out when it has no weather and no
   tile, and its HA, alarm and time badges with it. Its section explains this.
+- Tiles carry a small symbol for their type or device class, drawn from the
+  fonts on the device only. Sensors with the device class timestamp or date
+  show a short local time, a text that had to be cut ends in three dots, a
+  media player's line names the artist, and players and lights offer shuffle,
+  repeat and effects where they report them.
 - A media player's submenu shows previous, play/pause and next side by side
   in one row of equal buttons with centred symbols, in place of three
   full-width bars with a small glyph at the top left. A mute switch has its

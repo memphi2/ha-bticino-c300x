@@ -55,6 +55,7 @@ from .dashboard_entities import (
     dashboard_entity_name_display_override,
     dashboard_entity_secondary_info_override,
 )
+from .dashboard_glyphs import dashboard_glyph
 from .dashboard_labels import (
     _BINARY_SENSOR_DEVICE_CLASS_COLORS,
     _BINARY_SENSOR_DEVICE_CLASS_LABELS_BY_LANGUAGE,
@@ -364,6 +365,8 @@ def _alarm_page_entity(
             "color": _DASHBOARD_COLOR_WARNING,
         }
     payload = dict(item)
+    # The Alarm page draws its quick action without the symbol of a tile.
+    payload.pop("glyph", None)
     payload["kind"] = str(payload.pop("_kind", "entity"))
     payload.pop("_page", None)
     payload.pop("_order", None)
@@ -416,6 +419,34 @@ def dashboard_item_for_state(
     language: str = "en",
 ) -> dict[str, Any] | None:
     """Render a snapshot without looking up newer state during an event comparison."""
+    item = _dashboard_item_for_state(
+        hass,
+        entity_id,
+        state,
+        order,
+        name_display=name_display,
+        custom_name=custom_name,
+        secondary_info=secondary_info,
+        language=language,
+    )
+    if item is not None:
+        glyph = dashboard_glyph(entity_id, getattr(state, "attributes", None))
+        if glyph:
+            item["glyph"] = glyph
+    return item
+
+
+def _dashboard_item_for_state(
+    hass: HomeAssistant,
+    entity_id: str,
+    state: Any,
+    order: int = 0,
+    *,
+    name_display: str = DASHBOARD_ENTITY_NAME_DISPLAY_FRIENDLY_NAME,
+    custom_name: str = "",
+    secondary_info: str = DASHBOARD_ENTITY_SECONDARY_INFO_STATE,
+    language: str = "en",
+) -> dict[str, Any] | None:
     domain = entity_id.split(".", 1)[0]
     if domain not in _DASHBOARD_SUPPORTED_ENTITY_DOMAINS:
         return None

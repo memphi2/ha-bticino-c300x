@@ -29,16 +29,18 @@ case "$1" in
         start-stop-daemon --start --quiet --oknodo --background \
             --make-pidfile --pidfile "$AGENT_PID" \
             --exec "$AGENT_BIN" -- --config "$AGENT_CONFIG"
+        exit $?
         ;;
     stop)
         start-stop-daemon --stop --quiet --oknodo \
-            --pidfile "$AGENT_PID" --retry=TERM/3/KILL/2
-        rm -f "$AGENT_PID"
+            --pidfile "$AGENT_PID" --retry=TERM/3/KILL/2 || exit $?
+        rm -f "$AGENT_PID" || exit $?
         ;;
     restart)
-        "$0" stop
+        "$0" stop || exit $?
         usleep 150000 >/dev/null 2>&1 || sleep 1
         "$0" start
+        exit $?
         ;;
     status)
         if [ -f "$AGENT_PID" ] && kill -0 "$(cat "$AGENT_PID")" >/dev/null 2>&1; then

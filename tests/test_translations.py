@@ -46,8 +46,13 @@ def test_display_patch_help_says_that_the_alarmo_settings_are_kept() -> None:
             data["config"]["step"]["reconfigure_dashboard"]["data_description"]["device_ui_enabled"],
             data["options"]["step"]["dashboard"]["data_description"]["device_ui_enabled"],
         ]
+        actions_word = {"de": "Aktionen", "fr": "actions", "it": "azioni"}.get(
+            path.stem, "action"
+        )
         for text in texts:
             assert "Alarmo" in text, (path.name, text)
+            # The display actions are discarded with the patch off as well.
+            assert actions_word in text, (path.name, text)
 
 
 def test_doorbell_state_translations_cover_all_raw_agent_values() -> None:

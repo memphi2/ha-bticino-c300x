@@ -107,7 +107,7 @@
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
-          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages et de tuiles. Les réglages Alarmo sont conservés.",
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
@@ -200,7 +200,7 @@
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
-          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages et de tuiles. Les réglages Alarmo sont conservés.",
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."
@@ -576,7 +576,7 @@
           "dashboard_prevent_return": "Rester sur la page après une action"
         },
         "data_description": {
-          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages et de tuiles. Les réglages Alarmo sont conservés.",
+          "device_ui_enabled": "Activé : installe les pages Home Assistant sur l'écran du C300X (patch display). Désactivé : restaure l'écran d'origine et supprime les réglages de météo, de pages, de tuiles et d'actions. Les réglages Alarmo sont conservés.",
           "dashboard_dynamic_homepage": "Activé : les boutons Alarme et Home Assistant n'apparaissent sur la page d'accueil du C300X que s'ils ont quelque chose à ouvrir, à côté des boutons d'origine. Désactivé : les deux sont toujours affichés en paire fixe. Un changement réapplique le patch display et redémarre l'écran une fois.",
           "actions_json": "Actions que l'écran et ses notifications peuvent exécuter, en JSON : une entrée par action avec domain et service, éventuellement target et data. Laissez vide si vous n'en utilisez pas.",
           "dashboard_prevent_return": "Activé : l'écran reste sur la page Home Assistant après une action au lieu de revenir à la page d'accueil."

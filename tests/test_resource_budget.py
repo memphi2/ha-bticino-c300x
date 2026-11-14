@@ -30,7 +30,8 @@ def test_extracted_http_modules_have_separate_budgets() -> None:
     limits = {
         "http_request.c": (7_000, 240),
         "http_response.c": (3_000, 110),
-        "http_clients.c": (4_000, 130),
+        # Reserve loopback GUI slots even when network clients fill the pool.
+        "http_clients.c": (4_300, 135),
         "callback_queue.c": (6_500, 220),
     }
     for name, (size, lines) in limits.items():

@@ -314,6 +314,21 @@ def _connection_input(
     return data, errors
 
 
+def _actions_json_errors(values: dict[str, Any]) -> dict[str, str]:
+    """Return the form error for an action list that does not parse.
+
+    The dashboard step checks its own field before the flow moves on. The
+    final validation would report it too, but only after the pages and tiles
+    forms, whose input is then lost.
+    """
+
+    try:
+        parse_actions_json(values.get(CONF_ACTIONS_JSON, ""))
+    except ActionValidationError:
+        return {CONF_ACTIONS_JSON: "invalid_action_map"}
+    return {}
+
+
 def _device_activation_input(
     user_input: dict[str, Any],
     errors: dict[str, str],

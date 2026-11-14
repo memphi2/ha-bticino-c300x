@@ -3171,3 +3171,29 @@ def test_connection_input_checks_the_address_and_the_port(host, port, errors) ->
 
     assert _initial_connection_input(values)[1] == errors
     assert _connection_input(values)[1] == errors
+
+
+def test_user_dashboard_reports_a_broken_action_list_before_the_pages_form() -> None:
+    """Reported at the end, the error cost the user the pages and tiles just entered."""
+
+    flow = BticinoC300XConfigFlow()
+    flow._setup_connection = {
+        CONF_NAME: "Door",
+        CONF_AGENT_HOST: "c300x.local",
+        CONF_AGENT_PORT: 8091,
+    }
+    flow._setup_feature_data = {CONF_VIDEO_ENABLED: True}
+    flow.async_show_form = lambda **kwargs: kwargs  # type: ignore[method-assign]
+
+    broken = asyncio.run(
+        flow.async_step_user_dashboard(
+            {CONF_DEVICE_UI_ENABLED: True, CONF_ACTIONS_JSON: "{not json"}
+        )
+    )
+    fine = asyncio.run(
+        flow.async_step_user_dashboard({CONF_DEVICE_UI_ENABLED: True, CONF_ACTIONS_JSON: ""})
+    )
+
+    assert broken["step_id"] == "user_dashboard"
+    assert broken["errors"] == {CONF_ACTIONS_JSON: "invalid_action_map"}
+    assert fine["step_id"] == "user_dashboard_pages"

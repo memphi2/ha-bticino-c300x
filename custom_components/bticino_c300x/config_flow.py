@@ -106,6 +106,7 @@ from .config_flow_forms import (
     actions_json as _actions_json,
 )
 from .config_flow_input import (
+    _actions_json_errors,
     _agent_auth_input,
     _agent_auth_schema,
     _agent_host,
@@ -746,6 +747,9 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 **self._setup_alarm,
             }
             if self._setup_dashboard_input[CONF_DEVICE_UI_ENABLED]:
+                errors = _actions_json_errors(self._setup_dashboard_input)
+                if errors:
+                    return self._async_show_user_dashboard_form(user_input, errors)
                 return self._async_show_user_dashboard_pages_form(None, errors)
             return await self._async_create_setup_entry_from_dashboard(errors)
 
@@ -1148,6 +1152,13 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 **self._reconfigure_alarm,
             }
             if self._reconfigure_dashboard_input[CONF_DEVICE_UI_ENABLED]:
+                errors = _actions_json_errors(self._reconfigure_dashboard_input)
+                if errors:
+                    return await self._async_show_reconfigure_dashboard_form(
+                        user_input,
+                        feature_defaults,
+                        errors,
+                    )
                 return self._async_show_reconfigure_dashboard_pages_form(None, errors)
             return await self._async_finish_reconfigure_from_dashboard(
                 feature_defaults,

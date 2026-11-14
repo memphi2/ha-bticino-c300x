@@ -32,9 +32,10 @@ forwarding controls, messages and optional display pages.
   controls.
 - Stored video messages, voice memos and text memos when the agent reports
   those capabilities.
-- Optional C300X display pages for Alarmo, weather and selected Home Assistant
-  entities, with controls for lights, covers, climate, fans and media players,
-  and HA-driven notifications.
+- Optional native C300X display with up to eight configurable pages, weather,
+  Alarmo and HA-driven notifications. Control lights, covers, climate, media,
+  locks and other supported entities, with configurable tile sizes and labels.
+  See [Display setup](docs/quickstart.md#9-optional-native-display).
 - Media readiness diagnostics with guided Repairs for the common setup problems.
 - Optional automation blueprints for notifications, Ring Capture, local Wyoming
   transcription and strict phrase decisions.

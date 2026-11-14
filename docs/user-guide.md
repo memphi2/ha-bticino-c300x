@@ -26,6 +26,7 @@ Most users only need:
 | Check why Answer, Talkback or Home Call does not work | [Media readiness](media-readiness.md) |
 | Fix stream/call/capture problems | [Media troubleshooting](media-troubleshooting.md) |
 | Add notification or capture automations | [Blueprints](blueprints.md) |
+| Set up native display pages, tiles and Alarmo | [Display setup](quickstart.md#9-optional-native-display) |
 | Update, remove or repair the device agent | [Advanced maintenance](advanced-maintenance.md) |
 
 ## Daily Use
@@ -53,7 +54,7 @@ Most users only need:
 | Home Call | Auto card, dedicated Home Call mode or `start_home_call` / `stop_home_call`. |
 | Device actions | Door unlock, stair light and configured Device activation buttons/services. |
 | Messages and memos | Video-message, text-memo and voice-memo sensors plus playback/write/delete services. |
-| Display pages | Optional Display patch with Alarmo, weather and selected dashboard entities. |
+| Display pages | Up to eight ordered native pages, weather, configurable tiles and supported entity controls; a separate Alarmo subpage with an optional quick action. |
 | Maintenance | Agent update/remove, SSH/noAuth, firewall, mDNS, GUI reload and reboot controls. |
 
 See [Feature reference](feature-reference.md) for the full entity and service

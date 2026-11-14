@@ -216,3 +216,17 @@ def test_candidates_that_arrive_while_the_session_waits_are_handed_to_it(monkeyp
         await tasks.close()
 
     asyncio.run(run())
+
+
+def test_the_camera_hands_a_provider_session_over_through_activate() -> None:
+    """The offer builds the session before it waits for the prepare lock; the
+    candidates that arrive meanwhile only reach it through activate()."""
+
+    from pathlib import Path
+
+    source = (
+        Path(session_lifecycle.__file__).resolve().parents[1] / "camera.py"
+    ).read_text(encoding="utf-8")
+
+    assert "self._webrtc_sessions.activate(session_id, session)" in source
+    assert "self._webrtc_sessions.active[session_id] = session" not in source

@@ -17,9 +17,11 @@ from .agent_update import (
     agent_update_repair_placeholders,
     async_apply_packaged_agent_update,
     async_load_packaged_bundle_metadata,
+    async_retry_update_maintenance_busy,
     compare_agent_bundle,
 )
 from .api import C300XAgentApiError
+from .api_errors import C300XAgentApiUnsupportedError
 from .callback_url import async_suggest_callback_base_url
 from .callback_url import (
     validated_callback_base_url as _validated_callback_base_url,
@@ -505,7 +507,7 @@ class DeviceAgentUpdateRepairFlow(RepairsFlow):
                 description_placeholders=placeholders,
             )
         try:
-            patch_state = await _async_capture_external_patch_state(entry)
+            patch_state = await _async_capture_external_patch_state(entry, require_reliable=True)
             if getattr(update_state, "payload_bootstrap_required", False):
                 self.hass.config_entries.async_update_entry(
                     entry, data={**entry.data, CONF_AGENT_UPDATE_PAYLOAD_PENDING: True}
@@ -928,31 +930,54 @@ def _clear_qml_followup(hass: HomeAssistant, entry: Any) -> None:
         hass.config_entries.async_update_entry(entry, data=data)
 
 
-async def _async_capture_external_patch_state(entry: Any) -> _ExternalPatchState:
+async def _async_capture_external_patch_state(
+    entry: Any, *, require_reliable: bool = False,
+) -> _ExternalPatchState:
     """Capture active patch state without mutating the device."""
 
     api = entry.runtime_data.api
     qml_status = getattr(entry.runtime_data, "qml_patch_status", {})
     try:
-        qml_status = await api.async_qml_patch_status()
+        qml_status = (
+            await async_retry_update_maintenance_busy(api.async_qml_patch_status)
+            if require_reliable else await api.async_qml_patch_status()
+        )
         entry.runtime_data.qml_patch_status = qml_status
+    except C300XAgentApiUnsupportedError:
+        pass
     except C300XAgentApiError:
+        if require_reliable:
+            raise
         pass
 
     firewall_patched = False
     firewall_status_known = False
     try:
-        firewall_status = await api.async_firewall_status()
+        firewall_status = (
+            await async_retry_update_maintenance_busy(api.async_firewall_status)
+            if require_reliable else await api.async_firewall_status()
+        )
         firewall_patched = firewall_status.get("patched") is True
         firewall_status_known = firewall_status.get("patched") is not None
+    except C300XAgentApiUnsupportedError:
+        pass
     except C300XAgentApiError:
+        if require_reliable:
+            raise
         pass
 
     ipv6_firewall_patched = False
     try:
-        ipv6_firewall_status = await api.async_ipv6_firewall_status()
+        ipv6_firewall_status = (
+            await async_retry_update_maintenance_busy(api.async_ipv6_firewall_status)
+            if require_reliable else await api.async_ipv6_firewall_status()
+        )
         ipv6_firewall_patched = ipv6_firewall_status.get("patched") is True
+    except C300XAgentApiUnsupportedError:
+        pass
     except C300XAgentApiError:
+        if require_reliable:
+            raise
         pass
 
     return _ExternalPatchState(

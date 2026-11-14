@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from time import monotonic
 from typing import Any, cast
 
+from .api_errors import C300XAgentApiConnectionError
 from .const import DOMAIN
 
 COMPONENT_DIR = Path(__file__).resolve().parent
 BUNDLE_MANIFEST = COMPONENT_DIR / "device_agent" / "bundle.json"
 UPLOAD_CHUNK_SIZE = 2048
+MAINTENANCE_BUSY_WAIT_SECONDS = 12.0  # Native job deadline (10s) plus reap margin.
 
 UPDATE_STATE_UP_TO_DATE = "up_to_date"
 UPDATE_STATE_UPDATE_AVAILABLE = "update_available"
@@ -234,9 +238,11 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
     if not bundle_hash or not agent_version or not isinstance(files, list):
         raise RuntimeError("packaged native-agent bundle metadata is incomplete")
 
-    await api.async_prepare_agent_update(
-        bundle_hash=bundle_hash,
-        agent_version=agent_version,
+    await async_retry_update_maintenance_busy(
+        lambda: api.async_prepare_agent_update(
+            bundle_hash=bundle_hash,
+            agent_version=agent_version,
+        )
     )
     for entry in files:
         if not isinstance(entry, dict):
@@ -253,6 +259,32 @@ async def async_apply_packaged_agent_update(hass: Any, api: Any) -> dict[str, An
         },
     )
     return cast(dict[str, Any], await api.async_apply_agent_update(bundle_hash=bundle_hash))
+
+
+async def async_retry_update_maintenance_busy(
+    action: Callable[[], Awaitable[Any]],
+) -> Any:
+    """Retry only explicit pre-execution busy rejection, never transport loss."""
+
+    deadline: float | None = None
+    while True:
+        try:
+            # Each admitted request retains its own timeout, even past the deadline.
+            return await action()
+        except C300XAgentApiConnectionError as err:
+            # The API currently exposes HTTP status/code only in this exact text.
+            if err.__cause__ is not None or str(err) != (
+                "device agent returned HTTP 409: maintenance_busy"
+            ):
+                raise
+            if deadline is None:
+                deadline = monotonic() + MAINTENANCE_BUSY_WAIT_SECONDS
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise
+            await asyncio.sleep(min(1.0, remaining))
+            if monotonic() >= deadline:
+                raise
 
 
 async def _async_upload_bundle_file(hass: Any, api: Any, entry: dict[str, Any]) -> None:

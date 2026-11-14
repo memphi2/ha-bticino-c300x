@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.const import CONF_NAME
@@ -279,13 +280,31 @@ def _agent_auth_input(
     )
 
 
+def _key_or_saved(
+    user_input: Mapping[str, Any],
+    saved: Mapping[str, Any] | None,
+    key: str,
+) -> str:
+    """Return the entered key, or the saved one when the field is empty."""
+
+    entered = str(user_input.get(key, "")).strip()
+    if entered or saved is None:
+        return entered
+    return str(saved.get(key, "") or "").strip()
+
+
 def _connection_input(
     user_input: dict[str, Any],
     *,
     include_name: bool = False,
     include_rotate: bool = False,
+    saved: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate common connection page input."""
+    """Validate common connection page input.
+
+    The forms of an existing entry do not show the saved keys. With ``saved``
+    an empty key field keeps the saved key.
+    """
 
     errors: dict[str, str] = {}
     try:
@@ -293,16 +312,16 @@ def _connection_input(
     except vol.Invalid:
         errors[CONF_AGENT_HOST] = "invalid_agent_host"
         agent_host = ""
-    agent_token = str(user_input.get(CONF_AGENT_TOKEN, "")).strip()
+    agent_token = _key_or_saved(user_input, saved, CONF_AGENT_TOKEN)
     callback_base_url = _validated_callback_base_url(user_input, errors)
 
     data: dict[str, Any] = {
         CONF_AGENT_HOST: agent_host,
         CONF_AGENT_PORT: _agent_port(user_input, errors),
         CONF_AGENT_TOKEN: agent_token,
-        CONF_MAINTENANCE_TOKEN: str(
-            user_input.get(CONF_MAINTENANCE_TOKEN, "")
-        ).strip(),
+        CONF_MAINTENANCE_TOKEN: _key_or_saved(
+            user_input, saved, CONF_MAINTENANCE_TOKEN
+        ),
         CONF_CALLBACK_BASE_URL: callback_base_url,
     }
     if include_name:

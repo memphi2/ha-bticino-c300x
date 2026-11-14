@@ -101,14 +101,10 @@ def options_connection_schema(config_entry: BticinoC300XConfigEntry) -> vol.Sche
                     DEFAULT_AGENT_PORT,
                 ),
             ): int,
-            vol.Required(
-                CONF_AGENT_TOKEN,
-                default=_config_default(config_entry, CONF_AGENT_TOKEN, ""),
-            ): str,
-            vol.Optional(
-                CONF_MAINTENANCE_TOKEN,
-                default=_config_default(config_entry, CONF_MAINTENANCE_TOKEN, ""),
-            ): str,
+            # The saved keys are never sent to the browser. An empty field
+            # keeps the saved key.
+            vol.Optional(CONF_AGENT_TOKEN, default=""): str,
+            vol.Optional(CONF_MAINTENANCE_TOKEN, default=""): str,
             _optional_suggested(
                 CONF_CALLBACK_BASE_URL,
                 _config_default(config_entry, CONF_CALLBACK_BASE_URL, ""),
@@ -318,8 +314,8 @@ def reconfigure_connection_schema_from_current(
     return _reconfigure_connection_schema(
         current[CONF_AGENT_HOST],
         int(current[CONF_AGENT_PORT]),
-        current[CONF_AGENT_TOKEN],
-        current[CONF_MAINTENANCE_TOKEN],
+        "",
+        "",
         current[CONF_CALLBACK_BASE_URL],
     )
 

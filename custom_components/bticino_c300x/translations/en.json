@@ -131,8 +131,8 @@
         "data_description": {
           "agent_host": "IP address or host name of your C300X.",
           "agent_port": "Port the C300X answers Home Assistant on. Leave it at 8091 unless you changed it during installation.",
-          "agent_token": "Key Home Assistant signs in to the C300X with. It was created during installation.",
-          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts.",
+          "agent_token": "Key Home Assistant signs in to the C300X with. It was created during installation. Leave empty to keep the saved key.",
+          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts. Leave empty to keep the saved key.",
           "callback_base_url": "The C300X reports rings and other events to this address. Leave it empty to use the address Home Assistant knows for itself. An https address encrypts the connection; it needs a valid certificate and puts more load on the C300X. Switching between http and https restarts the service on the C300X once no call or stream is running."
         }
       },
@@ -507,8 +507,8 @@
         "data_description": {
           "agent_host": "IP address or host name of your C300X.",
           "agent_port": "Port the C300X answers Home Assistant on. Leave it at 8091 unless you changed it during installation.",
-          "agent_token": "Key Home Assistant signs in to the C300X with. It was created during installation.",
-          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts.",
+          "agent_token": "Key Home Assistant signs in to the C300X with. It was created during installation. Leave empty to keep the saved key.",
+          "maintenance_token": "Separate key for maintenance: updates, display changes and restarts. Leave empty to keep the saved key.",
           "callback_base_url": "The C300X reports rings and other events to this address. Leave it empty to use the address Home Assistant knows for itself. An https address encrypts the connection; it needs a valid certificate and puts more load on the C300X. Switching between http and https restarts the service on the C300X once no call or stream is running."
         }
       },

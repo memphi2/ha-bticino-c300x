@@ -131,8 +131,8 @@
         "data_description": {
           "agent_host": "IP-Adresse oder Hostname deines C300X.",
           "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
-          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
-          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
           "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
         }
       },
@@ -507,8 +507,8 @@
         "data_description": {
           "agent_host": "IP-Adresse oder Hostname deines C300X.",
           "agent_port": "Port, auf dem der C300X Home Assistant antwortet. Bei 8091 lassen, außer du hast ihn bei der Installation geändert.",
-          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt.",
-          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts.",
+          "agent_token": "Schlüssel, mit dem sich Home Assistant beim C300X anmeldet. Er wurde bei der Installation erzeugt. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+          "maintenance_token": "Eigener Schlüssel für Wartung: Updates, Änderungen am Display und Neustarts. Leer lassen, um den gespeicherten Schlüssel zu behalten.",
           "callback_base_url": "An diese Adresse meldet der C300X Klingeln und andere Ereignisse. Leer lassen, dann gilt die Adresse, die Home Assistant für sich selbst kennt. Eine https-Adresse verschlüsselt die Verbindung; sie braucht ein gültiges Zertifikat und belastet den C300X stärker. Ein Wechsel zwischen http und https startet den Dienst auf dem C300X neu, sobald kein Anruf und kein Stream läuft."
         }
       },

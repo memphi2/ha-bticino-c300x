@@ -952,6 +952,7 @@ class BticinoC300XConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._reconfigure_connection, errors = _connection_input(
                 user_input,
                 include_rotate=True,
+                saved=_current_connection_options(entry),
             )
             if errors:
                 return self.async_show_form(
@@ -1435,7 +1436,10 @@ class BticinoC300XOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         schema = _options_connection_schema(self._config_entry)
         if user_input is not None:
-            connection_options, errors = _connection_input(user_input)
+            connection_options, errors = _connection_input(
+                user_input,
+                saved=_current_connection_options(self._config_entry),
+            )
             if not errors:
                 self._connection_options = connection_options
                 return await self._async_save_options(feature_defaults)

@@ -1944,7 +1944,7 @@ def test_reconfigure_schema_uses_effective_option_overrides() -> None:
 
     assert connection[CONF_AGENT_HOST] == "agent.local"
     assert connection[CONF_AGENT_PORT] == 8092
-    assert connection[CONF_AGENT_TOKEN] == "option-token"
+    assert connection[CONF_AGENT_TOKEN] == ""
     assert connection[CONF_MAINTENANCE_TOKEN] == ""
     assert connection_with_callback[CONF_CALLBACK_BASE_URL] == (
         "http://192.0.2.11:8123"
@@ -3197,3 +3197,55 @@ def test_user_dashboard_reports_a_broken_action_list_before_the_pages_form() -> 
     assert broken["step_id"] == "user_dashboard"
     assert broken["errors"] == {CONF_ACTIONS_JSON: "invalid_action_map"}
     assert fine["step_id"] == "user_dashboard_pages"
+
+
+def _entry_with_saved_keys() -> SimpleNamespace:
+    return SimpleNamespace(
+        data={
+            CONF_AGENT_HOST: "agent.local",
+            CONF_AGENT_PORT: 8091,
+            CONF_AGENT_TOKEN: "saved-agent-key",
+            CONF_MAINTENANCE_TOKEN: "saved-maintenance-key",
+            CONF_CALLBACK_BASE_URL: "http://192.0.2.10:8123",
+        },
+        options={},
+    )
+
+
+def test_connection_forms_do_not_show_the_saved_keys() -> None:
+    entry = _entry_with_saved_keys()
+
+    for schema in (
+        _options_connection_schema(entry),
+        _reconfigure_connection_schema_from_current(entry),
+    ):
+        shown = schema({CONF_AGENT_HOST: "agent.local"})
+        assert shown[CONF_AGENT_TOKEN] == ""
+        assert shown[CONF_MAINTENANCE_TOKEN] == ""
+        assert "saved-agent-key" not in repr(schema.schema)
+        assert "saved-maintenance-key" not in repr(schema.schema)
+        for key in schema.schema:
+            default = getattr(key, "default", None)
+            value = default() if callable(default) else default
+            assert value not in ("saved-agent-key", "saved-maintenance-key")
+
+
+def test_connection_input_keeps_a_saved_key_for_an_empty_field() -> None:
+    saved = _current_connection_options(_entry_with_saved_keys())
+    page = {CONF_AGENT_HOST: "agent.local", CONF_AGENT_PORT: 8091}
+
+    kept, errors = _connection_input(
+        {**page, CONF_AGENT_TOKEN: "", CONF_MAINTENANCE_TOKEN: "  "},
+        saved=saved,
+    )
+    assert errors == {}
+    assert kept[CONF_AGENT_TOKEN] == "saved-agent-key"
+    assert kept[CONF_MAINTENANCE_TOKEN] == "saved-maintenance-key"
+
+    changed, errors = _connection_input(
+        {**page, CONF_AGENT_TOKEN: "new-agent", CONF_MAINTENANCE_TOKEN: "new-maint"},
+        saved=saved,
+    )
+    assert errors == {}
+    assert changed[CONF_AGENT_TOKEN] == "new-agent"
+    assert changed[CONF_MAINTENANCE_TOKEN] == "new-maint"

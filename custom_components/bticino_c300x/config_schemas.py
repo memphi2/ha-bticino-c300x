@@ -89,7 +89,7 @@ def reconfigure_connection_schema(
         {
             vol.Required(CONF_AGENT_HOST, default=default_agent_host): str,
             vol.Optional(CONF_AGENT_PORT, default=default_agent_port): int,
-            vol.Required(CONF_AGENT_TOKEN, default=default_agent_token): str,
+            vol.Optional(CONF_AGENT_TOKEN, default=default_agent_token): str,
             vol.Optional(
                 CONF_MAINTENANCE_TOKEN,
                 default=default_maintenance_token,

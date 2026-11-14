@@ -131,8 +131,8 @@
         "data_description": {
           "agent_host": "Indirizzo IP o nome host del tuo C300X.",
           "agent_port": "Porta su cui il C300X risponde a Home Assistant. Lasciala a 8091 se non l'hai cambiata durante l'installazione.",
-          "agent_token": "Chiave con cui Home Assistant accede al C300X. È stata creata durante l'installazione.",
-          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii.",
+          "agent_token": "Chiave con cui Home Assistant accede al C300X. È stata creata durante l'installazione. Lasciare vuoto per mantenere la chiave salvata.",
+          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii. Lasciare vuoto per mantenere la chiave salvata.",
           "callback_base_url": "Il C300X segnala chiamate e altri eventi a questo indirizzo. Lascia vuoto per usare l'indirizzo che Home Assistant conosce per sé. Un indirizzo https cifra la connessione; richiede un certificato valido e carica di più il C300X. Passare tra http e https riavvia il servizio sul C300X quando non ci sono chiamate né stream in corso."
         }
       },
@@ -507,8 +507,8 @@
         "data_description": {
           "agent_host": "Indirizzo IP o nome host del tuo C300X.",
           "agent_port": "Porta su cui il C300X risponde a Home Assistant. Lasciala a 8091 se non l'hai cambiata durante l'installazione.",
-          "agent_token": "Chiave con cui Home Assistant accede al C300X. È stata creata durante l'installazione.",
-          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii.",
+          "agent_token": "Chiave con cui Home Assistant accede al C300X. È stata creata durante l'installazione. Lasciare vuoto per mantenere la chiave salvata.",
+          "maintenance_token": "Chiave separata per la manutenzione: aggiornamenti, modifiche al display e riavvii. Lasciare vuoto per mantenere la chiave salvata.",
           "callback_base_url": "Il C300X segnala chiamate e altri eventi a questo indirizzo. Lascia vuoto per usare l'indirizzo che Home Assistant conosce per sé. Un indirizzo https cifra la connessione; richiede un certificato valido e carica di più il C300X. Passare tra http e https riavvia il servizio sul C300X quando non ci sono chiamate né stream in corso."
         }
       },

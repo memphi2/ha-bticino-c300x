@@ -3802,9 +3802,11 @@ static void handle_auth_config_post(
         && (
             updated->maintenance_ssh_start_enabled
             || updated->maintenance_reboot_enabled
+            || updated->maintenance_agent_remove_enabled
             || updated->maintenance_gui_reload_enabled
             || updated->maintenance_qml_patch_enabled
             || updated->maintenance_firewall_enabled
+            || updated->maintenance_ipv6_firewall_enabled
         )
         && updated->maintenance_admin_token[0] == '\0'
         && !(updated->api_no_auth && updated->maintenance_no_auth_allowed)

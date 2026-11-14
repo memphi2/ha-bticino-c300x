@@ -91,6 +91,7 @@ def stage_bundle(
     *,
     version: str,
     skip_build: bool = False,
+    agent_binary: Path | None = None,
 ) -> None:
     """Stage all native-agent files required by the config-flow installer."""
 
@@ -98,7 +99,8 @@ def stage_bundle(
     if not skip_build:
         _run(["make", "-C", str(ROOT / "native_agent"), "clean"])
         _run(["make", "-C", str(ROOT / "native_agent"), "armhf", "armhf-abi-check"])
-    if not AGENT_BINARY.exists():
+    binary = agent_binary or AGENT_BINARY
+    if not binary.exists():
         raise BundleStageError(
             "Missing ARMHF agent binary. Run native_agent armhf build first."
         )
@@ -142,7 +144,7 @@ def stage_bundle(
     )
     script_files.append(init_script)
     runtime_files.append(
-        _copy_agent_binary(AGENT_BINARY, component_dir / "device_agent/armhf/c300x-agent-native")
+        _copy_agent_binary(binary, component_dir / "device_agent/armhf/c300x-agent-native")
     )
     _set_file_modes(qml_files, 0o644)
     _set_file_modes(script_files, 0o700)

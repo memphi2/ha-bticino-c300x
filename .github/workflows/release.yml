@@ -334,6 +334,7 @@ jobs:
                 sha256sum -c SHA256SUMS
               )
               mkdir -p .release
+              python scripts/check_release_contents.py .release/reuse-current/ha-bticino-c300x.zip
               cp .release/reuse-current/ha-bticino-c300x.zip "$RELEASE_ZIP"
               cp .release/reuse-current/SHA256SUMS "$RELEASE_SHA256SUMS"
               cp .release/reuse-current/build-metadata.json "$RELEASE_METADATA"

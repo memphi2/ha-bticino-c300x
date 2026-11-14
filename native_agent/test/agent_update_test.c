@@ -4,12 +4,32 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include "../src/agent_update.h"
 #include "../src/file_io.h"
 
 static char test_init_script[512], test_init_link[512];
 static char fail_target[512];
 static int activation_calls;
+static int fail_link_create, fail_link_unlink;
+
+static int test_symlink(const char *target, const char *path)
+{
+    if (fail_link_create && strcmp(path, test_init_link) == 0) {
+        errno = EEXIST;
+        return -1;
+    }
+    return symlink(target, path);
+}
+
+static int test_unlink(const char *path)
+{
+    if (fail_link_unlink && strcmp(path, test_init_link) == 0) {
+        errno = EACCES;
+        return -1;
+    }
+    return unlink(path);
+}
 
 static int test_copy(const char *source, const char *target, mode_t mode)
 {
@@ -43,7 +63,11 @@ static int simulated_remount(const char *command)
 #define copy_binary_file test_copy
 #define copy_binary_file_if_changed test_copy_if_changed
 #define system simulated_remount
+#define symlink test_symlink
+#define unlink test_unlink
 #include "../src/agent_update.c"
+#undef symlink
+#undef unlink
 #undef system
 #undef copy_binary_file
 #undef copy_binary_file_if_changed
@@ -65,7 +89,7 @@ static int fail_activation_once(const struct c300x_config *config, struct agent_
     return ++activation_calls > 1;
 }
 
-static void assert_original_bundle(const struct c300x_config *config)
+static void assert_original_bundle(const struct c300x_config *config, int regular_link)
 {
     char path[C300X_MAX_PATH_LEN], content[64], backup[C300X_MAX_PATH_LEN + 24];
     for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
@@ -76,6 +100,14 @@ static void assert_original_bundle(const struct c300x_config *config)
         assert(access(backup, F_OK) != 0 && errno == ENOENT);
         struct stat info;
         assert(stat(path, &info) == 0 && (info.st_mode & 0777) == 0600);
+    }
+    if (regular_link) {
+        struct stat info;
+        assert(lstat(test_init_link, &info) == 0 && S_ISREG(info.st_mode));
+        assert((info.st_mode & 0777) == 0640);
+        assert(read_bounded_text_file(test_init_link, content, sizeof(content), NULL));
+        assert(strcmp(content, "invalid-boot-entry") == 0);
+        return;
     }
     ssize_t length = readlink(test_init_link, content, sizeof(content) - 1);
     assert(length > 0);
@@ -96,12 +128,12 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
         assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, fail_target, sizeof(fail_target)));
         assert(!apply_agent_update_files(config, manifest, "{}", &summary, NULL));
         assert(summary.changed_files == 0);
-        assert_original_bundle(config);
+        assert_original_bundle(config, 0);
     }
     fail_target[0] = '\0';
     assert(!apply_agent_update_files(config, manifest, "{}", &summary, fail_activation_once));
     assert(activation_calls == 2 && summary.changed_files == 0);
-    assert_original_bundle(config);
+    assert_original_bundle(config, 0);
 
     /* A newly introduced support file must disappear on a later failure. */
     assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[1].path, path, sizeof(path)));
@@ -129,6 +161,43 @@ static void rollback_test(const struct c300x_config *config, const char *manifes
     assert(unlink(backup) == 0);
     assert(apply_agent_update_files(config, manifest, manifest, &summary, NULL));
     assert(summary.changed_files == 0);
+}
+
+static void regular_boot_entry_test(const struct c300x_config *config, const char *manifest)
+{
+    char path[C300X_MAX_PATH_LEN], backup[sizeof(test_init_link) + 24];
+    struct agent_update_change_summary summary;
+    struct stat info;
+    assert(snprintf(backup, sizeof(backup), "%s.update-backup", test_init_link) < (int)sizeof(backup));
+    for (int failure = 0; failure < 5; failure++) {
+        for (size_t i = 0; i < C300X_AGENT_UPDATE_FILE_COUNT; i++) {
+            assert(agent_update_target_path(config, C300X_AGENT_UPDATE_FILES[i].path, path, sizeof(path)));
+            assert(write_binary_chunk(path, (const unsigned char *)"original", 8, 0, 0600));
+        }
+        assert(unlink(test_init_link) == 0);
+        assert(write_binary_chunk(test_init_link, (const unsigned char *)"invalid-boot-entry", 18, 0, 0640));
+        fail_link_unlink = failure == 0;
+        fail_link_create = failure == 1;
+        activation_calls = 0;
+        if (failure == 3) {
+            assert(agent_bundle_manifest_path(config, fail_target, sizeof(fail_target)));
+        }
+        int ok = apply_agent_update_files(config, manifest, "{}", &summary,
+            failure == 2 ? fail_activation_once : NULL);
+        fail_link_unlink = fail_link_create = 0;
+        fail_target[0] = '\0';
+        if (failure < 4) {
+            assert(!ok && summary.changed_files == 0);
+            assert_original_bundle(config, 1);
+            if (failure == 2) {
+                assert(activation_calls == 2);
+            }
+        } else {
+            assert(ok && summary.script_changed && summary.changed_files > 0);
+            assert(agent_init_link_matches());
+        }
+        assert(lstat(backup, &info) != 0 && errno == ENOENT);
+    }
 }
 
 static void whole_bundle_preflight_test(struct c300x_config *config)
@@ -173,6 +242,7 @@ static void whole_bundle_preflight_test(struct c300x_config *config)
     }
     assert(validate_agent_update_files(config, manifest));
     rollback_test(config, manifest);
+    regular_boot_entry_test(config, manifest);
 }
 
 int main(int argc, char **argv)
